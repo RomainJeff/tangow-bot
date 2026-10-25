@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-26
+
+#### Added
+
+- **Tangow guides your first source deployment from configuration to verified startup.** Run `./tangow setup` to generate private secrets, deploy the current checkout, and open Rakazo for account and model setup. Retries preserve saved credentials, and E2B can continue through the existing provider setup ([getting started](README.md#getting-started)).
+
 ### 2026-10-25
 
 #### Added

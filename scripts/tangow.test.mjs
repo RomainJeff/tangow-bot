@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { parseEnv } from "node:util";
 
 const source = fileURLToPath(new URL("./tangow.mjs", import.meta.url));
 function fixture(t, { e2b = false } = {}) {
@@ -30,7 +31,12 @@ function fixture(t, { e2b = false } = {}) {
     fileURLToPath(new URL("./tangow-options.mjs", import.meta.url)),
     path.join(root, "scripts/tangow-options.mjs"),
   );
-  for (const name of ["tangow-builds.mjs", "tangow-deployment.mjs", "tangow-docker.mjs"])
+  for (const name of [
+    "tangow-builds.mjs",
+    "tangow-deployment.mjs",
+    "tangow-docker.mjs",
+    "tangow-setup.mjs",
+  ])
     copyFileSync(
       fileURLToPath(new URL(`./${name}`, import.meta.url)),
       path.join(root, "scripts", name),
@@ -38,7 +44,7 @@ function fixture(t, { e2b = false } = {}) {
   writeFileSync(path.join(root, "infra/compose/docker-compose.yml"), "services: {}\n");
   writeFileSync(
     path.join(root, "infra/compose/setup-e2b.mjs"),
-    `import {writeFileSync} from 'node:fs';writeFileSync('setup-args.json',JSON.stringify(process.argv.slice(2)));`,
+    `import {writeFileSync} from 'node:fs';writeFileSync('data/setup-args.json',JSON.stringify(process.argv.slice(2)));`,
   );
   writeFileSync(path.join(root, ".gitignore"), ".env*\nbackups/\ndata/\n");
   mkdirSync(path.join(root, "data"));
@@ -96,8 +102,13 @@ if(name==='sudo'){
 if(name==='tar'){fs.writeFileSync(args[args.indexOf('-czf')+1],'fixture-data-backup');process.exit(0);}
 const provider=args.includes('.env.e2b.compose.json')||args.includes('.env.tangow.docker.source.json')?'e2b':'docker';
 if(name==='pnpm'){if(args.includes('template:build')&&process.env.E2B_API_KEY!=='fake-test-secret')process.exit(1);process.exit(0);}
+if(args[0]==='info'&&process.env.NO_DOCKER)process.exit(1);
+if(args[0]==='volume'||args[0]==='ps'){if(process.env.EXISTING_SETUP)console.log('existing-state');process.exit(0);}
 if(args.includes('build')&&process.env.FAIL_BUILD){console.error('fake-test-secret');process.exit(1);}
 if(args.includes('config')){console.log(JSON.stringify({services:{api:{environment:{SANDBOX_PROVIDER:provider,SANDBOX_SUPERVISOR_TOKEN:process.env.NO_TOKEN?'':'fake-token',E2B_API_KEY:process.env.NO_KEY?'':'fake-test-secret',AGENT_RUNTIME:process.env.SCRIPTED?'scripted':undefined}},worker:{environment:{SANDBOX_PROVIDER:provider,SANDBOX_SUPERVISOR_TOKEN:process.env.NO_TOKEN?'':'fake-token',E2B_API_KEY:process.env.NO_KEY?'':'fake-test-secret'}}}}));process.exit(0);}
+if(args.includes('pull')&&args.includes('postgres')&&args.includes('data-init'))fs.writeFileSync(process.env.RUNTIME_IMAGES,'cached');
+if(args.includes('up')&&args.includes('migrate')&&process.env.FRESH_IMAGES&&!fs.existsSync(process.env.RUNTIME_IMAGES))process.exit(1);
+if(args.includes('scripts/tangow-signup-policy.mjs')&&process.env.FAIL_POLICY)process.exit(1);
 if(args.includes('wait')&&process.env.FAIL_MIGRATE)process.exit(1);
 if(args.includes('scripts/migrate-e2b-to-docker.ts')){if(args.includes('--inspect')){console.log(JSON.stringify({blockers:{runs:process.env.DOCKER_MIGRATION_BUSY?1:0}}));process.exit(0);}if(process.env.FAIL_DOCKER_COPY){console.error('fake-test-secret');process.exit(1);}console.log(JSON.stringify({outcome:'migrated',volumes:3,computers:1}));process.exit(0);}
 if(args.includes('up')&&args.includes('api')&&process.env.FAIL_DOCKER_START)process.exit(1);
@@ -114,12 +125,20 @@ else if(args[0]==='inspect')console.log(args.includes('{{.Image}}')?'sha256:app'
 `;
   for (const name of ["docker", "sudo", "pnpm", "tar"])
     writeFileSync(path.join(bin, name), fake, { mode: 0o755 });
-  const invoke = (args, env = {}) =>
+  const network = path.join(directory, "network.mjs");
+  writeFileSync(
+    network,
+    `import {appendFileSync} from 'node:fs'; globalThis.fetch = async (url) => { appendFileSync(process.env.CALLS,JSON.stringify(['fetch',String(url)])+'\\n'); if(String(url)!=='https://app.example.com') throw new Error('Unexpected network request'); return {ok: !process.env.FAIL_PUBLIC}; };`,
+  );
+  const invoke = (args, env = {}, input) =>
     spawnSync(process.execPath, [source, "--path", root, ...args], {
       encoding: "utf8",
+      input,
       env: {
         ...process.env,
         PATH: `${bin}${path.delimiter}${process.env.PATH}`,
+        NODE_OPTIONS: `--import=${network}`,
+        RUNTIME_IMAGES: path.join(directory, "runtime-images"),
         CALLS: calls,
         TARGET: target,
         PROVIDER: e2b ? "e2b" : "docker",
@@ -127,6 +146,8 @@ else if(args[0]==='inspect')console.log(args.includes('{{.Image}}')?'sha256:app'
       },
     });
   return {
+    bin,
+    callPath: calls,
     root,
     before,
     target,
@@ -140,7 +161,12 @@ else if(args[0]==='inspect')console.log(args.includes('{{.Image}}')?'sha256:app'
 test("help, dry-run and invalid command options execute nothing and change nothing", (t) => {
   const f = fixture(t);
   const env = readFileSync(path.join(f.root, ".env"), "utf8");
-  for (const args of [["--help"], ["update", "--dry-run"], ["cleanup", "--dry-run"]])
+  for (const args of [
+    ["--help"],
+    ["update", "--dry-run"],
+    ["cleanup", "--dry-run"],
+    ["setup", "--dry-run"],
+  ])
     assert.equal(f.invoke(args).status, 0);
   for (const args of [
     ["update", "--yes"],
@@ -231,10 +257,14 @@ test("incomplete migration and concurrent operations block mutations", (t) => {
   for (const lock of [".env.e2b.upgrade.json", ".env.e2b.setup.lock", ".env.tangow.lock"]) {
     const f = fixture(t);
     writeFileSync(path.join(f.root, lock), "{}");
-    const result = f.invoke(["restart"]);
-    assert.notEqual(result.status, 0);
-    assert.deepEqual(f.calls(), []);
-    assert.equal(readFileSync(path.join(f.root, lock), "utf8"), "{}");
+    for (const command of ["restart", "setup"]) {
+      const env = readFileSync(path.join(f.root, ".env"), "utf8");
+      const result = f.invoke([command], {}, "\n\n\n");
+      assert.notEqual(result.status, 0);
+      assert.deepEqual(f.calls(), []);
+      assert.equal(readFileSync(path.join(f.root, lock), "utf8"), "{}");
+      assert.equal(readFileSync(path.join(f.root, ".env"), "utf8"), env);
+    }
   }
 });
 
@@ -263,7 +293,7 @@ test("provider setup forwards sudo and requires consent before migrating E2B hom
     "registry.example.com/computer:local",
   ]);
   assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(JSON.parse(readFileSync(path.join(f.root, "setup-args.json"), "utf8")), [
+  assert.deepEqual(JSON.parse(readFileSync(path.join(f.root, "data/setup-args.json"), "utf8")), [
     "--computer-image",
     "registry.example.com/computer:local",
     "--sudo",
@@ -505,4 +535,233 @@ test("invalid production provider credentials and scripted runtime refuse update
     assert.ok(f.calls().every((c) => !c.includes("build") && !c.includes("up")));
     assert.doesNotMatch(result.stdout + result.stderr, /fake-test-secret/);
   }
+});
+
+test("setup creates private configuration, deploys HEAD and preserves secrets on retry", (t) => {
+  const f = fixture(t);
+  rmSync(path.join(f.root, ".env"));
+  f.git("switch", "-c", "pinned-release");
+  const result = f.invoke(["setup"], { TARGET: f.before, FRESH_IMAGES: "1" }, "\n\n\n");
+  assert.equal(result.status, 0, result.stderr);
+  const filename = path.join(f.root, ".env");
+  const first = parseEnv(readFileSync(filename, "utf8"));
+  assert.equal(first.WEB_ORIGIN, "http://127.0.0.1:5173");
+  assert.equal(first.RAKAZO_HOST, "127.0.0.1");
+  assert.equal(first.GIT_SHA, f.before);
+  assert.match(first.ENCRYPTION_KEY, /^[a-f0-9]{64}$/);
+  const secretNames = [
+    "POSTGRES_PASSWORD",
+    "BETTER_AUTH_SECRET",
+    "ENCRYPTION_KEY",
+    "SANDBOX_SUPERVISOR_TOKEN",
+    "SCREEN_PROXY_SECRET",
+  ];
+  assert.equal(new Set(secretNames.map((name) => first[name])).size, secretNames.length);
+  for (const name of secretNames) {
+    assert.ok(first[name].length >= 32);
+    assert.ok(!result.stdout.includes(first[name]));
+    assert.ok(!result.stderr.includes(first[name]));
+  }
+  assert.equal(statSync(filename).mode & 0o777, 0o600);
+  assert.equal(f.git("rev-parse", "HEAD"), f.before);
+  assert.equal(f.git("branch", "--show-current"), "pinned-release");
+  assert.match(result.stdout, /Ready:.*docker/);
+  assert.match(result.stdout, /Create.*account/i);
+  writeFileSync(
+    filename,
+    `${readFileSync(filename, "utf8")}# keep this comment\nCUSTOM_OPTION=keep-me\n`,
+  );
+  const retry = f.invoke(["setup"], { TARGET: f.before, EXISTING_SETUP: "1" }, "\n\n\n");
+  assert.equal(retry.status, 0, retry.stderr);
+  const secondText = readFileSync(filename, "utf8");
+  const second = parseEnv(secondText);
+  for (const name of secretNames) assert.equal(second[name], first[name]);
+  assert.equal(second.CUSTOM_OPTION, "keep-me");
+  assert.match(secondText, /# keep this comment/);
+  assert.equal(existsSync(path.join(f.root, ".env.tangow.lock")), false);
+});
+
+test("setup refuses missing credentials with deployed state, cancellation and unavailable Docker without writing", (t) => {
+  for (const [env, input, message] of [
+    [{ EXISTING_SETUP: "1" }, "\n", /credentials|secret/i],
+    [{}, "", /cancel|input|terminal/i],
+    [{}, "\n\nno\n", /cancel/i],
+    [{}, "http://app.example.com\n", /HTTPS/i],
+    [{}, "https://app.example.com\n\n", /SMTP/i],
+    [
+      {},
+      "https://app.example.com\nsmtps://user:fake-password@smtp.example.com:465\nmail@example.com\nexample.com\n",
+      /allowlist/i,
+    ],
+    [{ NO_DOCKER: "1" }, "\n", /Docker/i],
+  ]) {
+    const f = fixture(t);
+    const before = readFileSync(path.join(f.root, ".env"), "utf8");
+    const result = f.invoke(["setup"], { TARGET: f.before, ...env }, input);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, message);
+    assert.equal(readFileSync(path.join(f.root, ".env"), "utf8"), before);
+    assert.equal(existsSync(path.join(f.root, ".env.tangow.lock")), false);
+    assert.ok(!f.calls().some((call) => call.includes("build") || call.includes("up")));
+  }
+});
+
+test("setup configures public hostname and email policy before building without exposing credentials", (t) => {
+  const f = fixture(t);
+  rmSync(path.join(f.root, ".env"));
+  const smtp = "smtps://user:fake-$pass'\"%23@example.com:465";
+  const result = f.invoke(
+    ["setup"],
+    { TARGET: f.before },
+    `https://app.example.com\n${smtp}\nRakazo <mail@example.com>\nowner@example.com\n\n\n`,
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Ready:/);
+  assert.deepEqual(
+    f.calls().filter((call) => call[0] === "fetch"),
+    [["fetch", "https://app.example.com"]],
+  );
+  const saved = parseEnv(readFileSync(path.join(f.root, ".env"), "utf8"));
+  assert.equal(saved.WEB_ORIGIN, "https://app.example.com");
+  assert.equal(saved.BETTER_AUTH_URL, "https://app.example.com");
+  assert.equal(saved.API_URL, "https://app.example.com");
+  assert.equal(saved.RAKAZO_HOST, "app.example.com");
+  assert.equal(saved.SIGNUP_ALLOWLIST, "owner@example.com");
+  const compose = spawnSync(
+    "docker",
+    [
+      "compose",
+      "--env-file",
+      path.join(f.root, ".env"),
+      "-f",
+      path.join(f.root, "infra/compose/docker-compose.yml"),
+      "config",
+      "--environment",
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(compose.status, 0, compose.stderr);
+  assert.ok(
+    compose.stdout.split("\n").includes(`SMTP_URL=${smtp}`),
+    "Compose must preserve the literal SMTP credential",
+  );
+  assert.ok(!result.stdout.includes("fake-$pass"));
+  assert.ok(!result.stderr.includes("fake-$pass"));
+  assert.ok(!f.calls().some((call) => call.some((arg) => arg.includes("fake-$pass"))));
+  assert.ok(f.calls().some((call) => call.includes("scripts/tangow-signup-policy.mjs")));
+  const retry = f.invoke(
+    ["setup"],
+    { TARGET: f.before, EXISTING_SETUP: "1", FAIL_PUBLIC: "1" },
+    "\n\n\n\n\n\n",
+  );
+  assert.notEqual(retry.status, 0);
+  assert.match(retry.stderr, /Public web reachability/);
+  assert.doesNotMatch(retry.stdout, /Open https/);
+  const retried = spawnSync(
+    "docker",
+    [
+      "compose",
+      "--env-file",
+      path.join(f.root, ".env"),
+      "-f",
+      path.join(f.root, "infra/compose/docker-compose.yml"),
+      "config",
+      "--environment",
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(retried.status, 0, retried.stderr);
+  assert.ok(retried.stdout.split("\n").includes(`SMTP_URL=${smtp}`));
+});
+
+test("setup continues to E2B only after Docker is ready and keeps provider settings on retry", (t) => {
+  const f = fixture(t);
+  rmSync(path.join(f.root, ".env"));
+  const first = f.invoke(
+    ["setup", "--sudo"],
+    { TARGET: f.before },
+    "\ne2b\nregistry.example.com/computer:local\nyes\n",
+  );
+  assert.equal(first.status, 0, first.stderr);
+  assert.match(first.stdout, /Ready:.*docker[\s\S]*Ready:.*e2b/);
+  assert.deepEqual(JSON.parse(readFileSync(path.join(f.root, "data/setup-args.json"), "utf8")), [
+    "--computer-image",
+    "registry.example.com/computer:local",
+    "--sudo",
+  ]);
+  const config = JSON.parse(readFileSync(path.join(f.root, ".env.tangow.json"), "utf8"));
+  assert.deepEqual(config, { sudo: true, computerImage: "registry.example.com/computer:local" });
+  const environment = {
+    SANDBOX_PROVIDER: "e2b",
+    E2B_API_KEY: "fake-test-secret",
+    E2B_DOMAIN: "e2b.example.com",
+  };
+  writeFileSync(
+    path.join(f.root, ".env.e2b.compose.json"),
+    JSON.stringify({ services: { api: { environment }, worker: { environment } } }),
+  );
+  const retry = f.invoke(["setup"], { TARGET: f.before, EXISTING_SETUP: "1" }, "\n\n");
+  assert.equal(retry.status, 0, retry.stderr);
+  assert.match(retry.stdout, /Ready:.*e2b/);
+  assert.ok(!retry.stdout.includes("Computer provider"));
+});
+
+test("public setup refuses startup when the database signup policy cannot be applied", (t) => {
+  const f = fixture(t);
+  rmSync(path.join(f.root, ".env"));
+  const result = f.invoke(
+    ["setup"],
+    { TARGET: f.before, FAIL_POLICY: "1" },
+    "https://app.example.com\nsmtps://user:fake-password@smtp.example.com:465\nmail@example.com\nowner@example.com\n\n\n",
+  );
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /signup policy/i);
+  assert.ok(!f.calls().some((call) => call.includes("up") && call.includes("api")));
+});
+
+test("terminal secret entry hides input and Ctrl+C restores echo and releases the lock", (t) => {
+  const f = fixture(t);
+  const original = readFileSync(path.join(f.root, ".env"), "utf8");
+  const program = String.raw`
+import os, pty, select, signal, sys, termios, time
+pid, fd = pty.fork()
+if pid == 0:
+    os.environ['PATH'] = sys.argv[4] + os.pathsep + os.environ['PATH']
+    os.environ['CALLS'] = sys.argv[5]
+    os.execv(sys.argv[1], [sys.argv[1], sys.argv[2], '--path', sys.argv[3], 'setup'])
+output = b''
+deadline = time.monotonic() + 5
+sent = False
+try:
+    while b'SMTP URL' not in output and time.monotonic() < deadline:
+        if select.select([fd], [], [], 0.1)[0]:
+            output += os.read(fd, 4096)
+            if not sent and b'Web origin' in output:
+                os.write(fd, b'https://app.example.com\n'); sent = True
+    if b'SMTP URL' not in output: raise RuntimeError('No secret prompt')
+    if termios.tcgetattr(fd)[3] & termios.ECHO: raise RuntimeError('Secret echo enabled')
+    os.write(fd, b'fake-hidden-secret')
+    os.kill(pid, signal.SIGINT)
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline:
+        ended, code = os.waitpid(pid, os.WNOHANG)
+        if ended:
+            if os.waitstatus_to_exitcode(code) != 130: raise RuntimeError('Unexpected cancel exit')
+            if not termios.tcgetattr(fd)[3] & termios.ECHO: raise RuntimeError('Echo not restored')
+            sys.exit(0)
+        time.sleep(0.05)
+    raise RuntimeError('Ctrl+C did not cancel')
+finally:
+    try: os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError: pass
+    os.close(fd)
+`;
+  const result = spawnSync(
+    "python3",
+    ["-c", program, process.execPath, source, f.root, f.bin, f.callPath],
+    { encoding: "utf8", timeout: 12000 },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(readFileSync(path.join(f.root, ".env"), "utf8"), original);
+  assert.equal(existsSync(path.join(f.root, ".env.tangow.lock")), false);
 });

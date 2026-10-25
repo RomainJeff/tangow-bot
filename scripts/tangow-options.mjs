@@ -4,6 +4,7 @@ export const help = `Tangow — operate a Rakazo source deployment
 
 Usage: tangow [--path <checkout>] [--sudo] <command>
 
+  setup                     Configure, build and verify the current checkout
   status                    Show running revision, provider and services
   update                    Update main, build for the configured provider and restart
   restart                   Restart application services and check readiness
@@ -47,7 +48,7 @@ export function mainOptions() {
   const [command, subcommand, ...rest] = positionals;
   if (
     rest.length ||
-    !["status", "update", "restart", "logs", "computers", "provider", "cleanup"].includes(
+    !["setup", "status", "update", "restart", "logs", "computers", "provider", "cleanup"].includes(
       command,
     ) ||
     (command === "computers"
@@ -60,7 +61,7 @@ export function mainOptions() {
           : subcommand !== undefined)
   )
     throw new Error("Unknown command. Run tangow --help.");
-  const build = command === "computers" || command === "update";
+  const build = command === "computers" || command === "update" || command === "setup";
   const setup = command === "provider" && subcommand === "e2b";
   const migration = command === "provider";
   if (

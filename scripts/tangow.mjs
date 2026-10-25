@@ -14,6 +14,7 @@ import {
 } from "./tangow-deployment.mjs";
 import { dockerMigrationJournal, migrateProviderToDocker } from "./tangow-docker.mjs";
 import { help, mainOptions, services } from "./tangow-options.mjs";
+import { configureSetup } from "./tangow-setup.mjs";
 
 function writePrivate(filename, contents) {
   const temporary = `${filename}.tangow-${randomUUID()}`;
@@ -38,6 +39,8 @@ async function main() {
   const root = path.resolve(values.path ?? fileURLToPath(new URL("../", import.meta.url)));
   if (values["dry-run"]) {
     const descriptions = {
+      setup:
+        "collect private deployment settings; generate missing secrets; build the current checkout without fetching or switching branches; start and verify services; optionally continue through existing E2B setup",
       update:
         "fetch origin/main; fast-forward a clean checkout to main; detect the private provider configuration; build the application and Docker worker/computer/supervisor or E2B worker/desktop templates; restart services; verify readiness",
       restart: "restart api/worker/web with the existing E2B override and verify readiness",
@@ -55,7 +58,7 @@ async function main() {
     return;
   }
   if (
-    !existsSync(path.join(root, ".env")) ||
+    (command !== "setup" && !existsSync(path.join(root, ".env"))) ||
     !existsSync(path.join(root, "infra/compose/docker-compose.yml"))
   )
     throw new Error(
@@ -265,6 +268,16 @@ async function main() {
   const release = () => rmSync(lock, { force: true });
   process.once("exit", release);
   try {
+    const initial =
+      command === "setup"
+        ? await configureSetup({ root, values, provider, run, dock, git, writePrivate })
+        : null;
+    if (initial) {
+      writePrivate(
+        configPath,
+        `${JSON.stringify({ ...config, sudo: values.sudo, ...(values["computer-image"] ? { computerImage: values["computer-image"] } : {}) }, null, 2)}\n`,
+      );
+    }
     if (toDocker) {
       await migrateProviderToDocker({
         root,
@@ -291,7 +304,7 @@ async function main() {
       });
       return;
     }
-    const needsComputers = command === "computers" || command === "update";
+    const needsComputers = command === "computers" || command === "update" || command === "setup";
     if ((setup || (needsComputers && provider === "e2b")) && !values["computer-image"]) {
       const image = dock(
         "Existing computer image lookup",
@@ -378,37 +391,45 @@ async function main() {
       buildComputers({ provider, values, override, run, dock });
       return;
     }
-    if (command === "update") {
+    if (command === "update" || command === "setup") {
       validateConfiguration(comp, provider);
-      console.log("Checking checkout and fetching origin/main...");
-      if (git(["status", "--porcelain"]))
-        throw new Error("Checkout has local changes. Commit or move them before updating.");
-      git(["fetch", "origin", "main"]);
-      const target = git(["rev-parse", "origin/main"]);
-      const ancestor = run(
-        "Fast-forward check",
-        "git",
-        ["merge-base", "--is-ancestor", "HEAD", target],
-        { allowFailure: true },
-      );
-      const mainExists = run(
-        "Main branch lookup",
-        "git",
-        ["rev-parse", "--verify", "refs/heads/main"],
-        { allowFailure: true },
-      );
-      const mainAncestor =
-        mainExists.status === 0
-          ? run("Main fast-forward check", "git", ["merge-base", "--is-ancestor", "main", target], {
-              allowFailure: true,
-            })
-          : { status: 0 };
-      if (ancestor.status !== 0 || mainAncestor.status !== 0)
-        throw new Error(
-          "Checkout or main has commits outside origin/main. Resolve them manually; Tangow never resets history.",
+      let target = sha();
+      if (command === "update") {
+        console.log("Checking checkout and fetching origin/main...");
+        if (git(["status", "--porcelain"]))
+          throw new Error("Checkout has local changes. Commit or move them before updating.");
+        git(["fetch", "origin", "main"]);
+        target = git(["rev-parse", "origin/main"]);
+        const ancestor = run(
+          "Fast-forward check",
+          "git",
+          ["merge-base", "--is-ancestor", "HEAD", target],
+          { allowFailure: true },
         );
-      git(["switch", "main"]);
-      git(["merge", "--ff-only", "origin/main"]);
+        const mainExists = run(
+          "Main branch lookup",
+          "git",
+          ["rev-parse", "--verify", "refs/heads/main"],
+          { allowFailure: true },
+        );
+        const mainAncestor =
+          mainExists.status === 0
+            ? run(
+                "Main fast-forward check",
+                "git",
+                ["merge-base", "--is-ancestor", "main", target],
+                {
+                  allowFailure: true,
+                },
+              )
+            : { status: 0 };
+        if (ancestor.status !== 0 || mainAncestor.status !== 0)
+          throw new Error(
+            "Checkout or main has commits outside origin/main. Resolve them manually; Tangow never resets history.",
+          );
+        git(["switch", "main"]);
+        git(["merge", "--ff-only", "origin/main"]);
+      }
       console.log(`Building application ${target}...`);
       comp("Application build (running services have not been restarted)", [
         "build",
@@ -443,9 +464,23 @@ async function main() {
           : replacement;
       writePrivate(filename, next);
       const guestImage = provider === "docker" ? workerImage(dock, target) : null;
+      if (initial) comp("Database and data-init image download", ["pull", "postgres", "data-init"]);
       runMigrations(comp, dock, appImage);
       if (provider === "e2b") inspectHomes(comp, provider);
       buildComputers({ provider, values, override, run, dock });
+      if (initial && !initial.loopback) {
+        comp("Public signup policy", [
+          "run",
+          "--rm",
+          "--no-deps",
+          "-T",
+          "api",
+          "pnpm",
+          "exec",
+          "tsx",
+          "scripts/tangow-signup-policy.mjs",
+        ]);
+      }
       console.log("Starting application services...");
       comp("Application start", [
         "up",
@@ -462,9 +497,54 @@ async function main() {
       if (guestImage) verifyExited(comp, dock, "worker-image", guestImage);
       await verify(target, expectedImages);
       if (provider === "docker") inspectHomes(comp, provider);
-      console.log(
-        `Updated application and ${provider === "e2b" ? "E2B templates" : "Docker worker/computer/supervisor images"}. Existing computers can be updated from Settings > Computer.`,
-      );
+      if (initial) {
+        if (initial.selectedProvider === "e2b" && provider === "docker") {
+          run("E2B build dependencies", "pnpm", ["install", "--frozen-lockfile"], {
+            env: {
+              ...process.env,
+              CI: "true",
+              ELECTRON_SKIP_BINARY_DOWNLOAD: "1",
+              PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1",
+            },
+          });
+          run(
+            "E2B setup",
+            process.execPath,
+            [
+              "infra/compose/setup-e2b.mjs",
+              "--computer-image",
+              values["computer-image"],
+              ...(values.sudo ? ["--sudo"] : []),
+            ],
+            { inherit: true },
+          );
+          provider = "e2b";
+          compose.push("-f", ".env.e2b.compose.json");
+          delete expectedImages.supervisor;
+          await verify(target, expectedImages);
+        }
+        if (!initial.loopback) {
+          run(
+            "Public web reachability (check DNS and your HTTPS reverse proxy)",
+            process.execPath,
+            [
+              "--input-type=module",
+              "-e",
+              `const r=await fetch(${JSON.stringify(initial.origin)}, {signal:AbortSignal.timeout(10000)}); if(!r.ok)process.exit(1);`,
+            ],
+          );
+        }
+        console.log(
+          `Open ${initial.origin}. ${initial.deployed ? "Sign in to your account" : "Create your first owner account"} and connect a model.`,
+        );
+        console.log(
+          "Service readiness is verified. After connecting a model, send a bot a message to verify a real run.",
+        );
+      } else {
+        console.log(
+          `Updated application and ${provider === "e2b" ? "E2B templates" : "Docker worker/computer/supervisor images"}. Existing computers can be updated from Settings > Computer.`,
+        );
+      }
     } else {
       validateConfiguration(comp, provider);
       if (provider === "e2b") inspectHomes(comp, provider);
