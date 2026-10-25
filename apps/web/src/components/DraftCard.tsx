@@ -24,21 +24,9 @@ import { authClient } from "../lib/auth";
 import { draftEdits } from "../lib/draft-edits";
 import { messageTimeLabel } from "../lib/message-time";
 import { userInitials } from "../lib/user-initials";
+import { AppLogo } from "./AppLogo";
 import type { CardEdits } from "./AskCard";
 import { RecipientLine, SubjectLine } from "./DraftLines";
-
-function AppLogo({ app }: { app: AskDraft["app"] }) {
-  return app.logo ? (
-    <img src={app.logo} alt="" className="size-5 shrink-0 rounded-chip object-contain" />
-  ) : (
-    <span
-      aria-hidden="true"
-      className="grid size-5 shrink-0 place-items-center rounded-chip bg-well text-label text-foreground"
-    >
-      {app.name.slice(0, 1).toUpperCase()}
-    </span>
-  );
-}
 
 /**
  * The text with its sender in front of it: the mail leaves in the run owner's name. The viewer's own
@@ -207,7 +195,7 @@ export function DraftCard({
   const app = draft.app.name;
   const header = {
     who: draft.app.account ? `${app} · ${draft.app.account}` : app,
-    icon: <AppLogo app={draft.app} />,
+    icon: <AppLogo app={draft.app} chat={Boolean(draft.conversation)} />,
   };
   if (view.kind === "sent") {
     const time = messageTimeLabel(view.at, i18n.locale);
@@ -264,7 +252,7 @@ export function DraftCard({
         data-testid="draft-card"
         answered={
           <span className="inline-flex items-center gap-2">
-            <AppLogo app={draft.app} />
+            <AppLogo app={draft.app} chat={Boolean(draft.conversation)} />
             <span>{state}</span>
           </span>
         }

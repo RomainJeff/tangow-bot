@@ -24,7 +24,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { AppLogo } from "../components/draft-card";
+import { AppLogo } from "../components/app-logo";
 import { MoreRecipientsRow, RecipientRow, SubjectRow } from "../components/draft-lines";
 import { mobileTokens } from "../lib/appearance";
 import type { DraftEditTarget } from "../lib/draft-edit";
@@ -211,7 +211,7 @@ export default function EditDraft() {
           </View>
         ) : (
           <View style={styles.to}>
-            <AppLogo app={draft.app} />
+            <AppLogo app={draft.app} chat={Boolean(draft.conversation)} />
             <Text style={styles.toText}>
               <Text style={styles.toLabel}>{t("To")}</Text>{" "}
               {chat ? chat.name : draftAddresses(draft, "to")}
