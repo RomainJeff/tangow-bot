@@ -176,6 +176,28 @@ describe("ComposioEmulator", () => {
       "GMAIL_LIST_LABELS",
       "SLACK_EMULATED_ACTION",
     ]);
+    expect(tools.find((tool) => tool.name === "GMAIL_FETCH_EMAILS")).toMatchObject({
+      appName: "Gmail",
+      readOnly: true,
+      route: {
+        connectorId: "composio",
+        resourceId: "GMAIL",
+        resourceRevision: "emulated",
+        toolName: "GMAIL_FETCH_EMAILS",
+        catalogGroup: "gmail",
+      },
+    });
+    expect(tools.find((tool) => tool.name === "GMAIL_SEND_EMAIL")?.readOnly).toBeUndefined();
+    expect(tools.find((tool) => tool.name === "SLACK_EMULATED_ACTION")).toMatchObject({
+      appName: "Slack",
+      route: {
+        connectorId: "composio",
+        resourceId: "SLACK",
+        resourceRevision: "emulated",
+        toolName: "SLACK_EMULATED_ACTION",
+        catalogGroup: "slack",
+      },
+    });
     expect(tools.find((tool) => tool.name === "GMAIL_SEND_EMAIL")?.inputSchema).toMatchObject({
       type: "object",
       properties: expect.objectContaining({

@@ -387,16 +387,27 @@ export class ComposioEmulator implements ComposioProvider {
       [];
     const tools: ConnectorTool[] = [];
     for (const slug of new Set(connected)) {
-      if (slug === "GMAIL") {
-        this.ensureMailbox(composioEntityId(context));
-        tools.push(...GMAIL_TOOLS);
-        continue;
-      }
-      if (slug === "GITHUB") {
-        tools.push(...githubReleaseTools());
-        continue;
-      }
-      tools.push(thinEmulatedTool(slug));
+      if (slug === "GMAIL") this.ensureMailbox(composioEntityId(context));
+      const toolkitTools =
+        slug === "GMAIL"
+          ? GMAIL_TOOLS
+          : slug === "GITHUB"
+            ? githubReleaseTools()
+            : [thinEmulatedTool(slug)];
+      tools.push(
+        ...toolkitTools.map((tool) => ({
+          ...tool,
+          appName: DEFAULT_CATALOG.find((item) => item.slug === slug)?.name ?? slug,
+          readOnly: /_(FETCH|GET|LIST)_/.test(tool.name) || undefined,
+          route: {
+            connectorId: "composio",
+            resourceId: slug,
+            resourceRevision: "emulated",
+            toolName: tool.name,
+            catalogGroup: slug.toLowerCase(),
+          },
+        })),
+      );
     }
     return tools;
   }
