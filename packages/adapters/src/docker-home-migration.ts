@@ -212,6 +212,30 @@ export async function moveIdleDockerHomes(
 /** In `DATA_DIR/skills/user/<space>`, which no computer mounts: the space's copy ran. */
 const SKILLS_COPIED_MARKER = ".copied-to-shared-volume";
 
+/** Read-only inventory of homes still deferred after the startup migration. */
+export async function listDeferredDockerHomes(deps: { prisma: PrismaClient; dataDir: string }) {
+  const computers = await deps.prisma.computer.findMany({
+    where: { kind: "docker" },
+    select: {
+      id: true,
+      state: true,
+      homeKey: true,
+      homeStorage: true,
+      bots: { where: { archivedAt: null }, select: { name: true } },
+    },
+    orderBy: { id: "asc" },
+  });
+  const pending = await Promise.all(
+    computers.map(async ({ homeKey, ...computer }) => {
+      const marker = await homeMovePending(path.join(path.resolve(deps.dataDir), "homes", homeKey));
+      return marker || computer.homeStorage !== "volumes"
+        ? { ...computer, reason: marker ? "move_pending" : "snapshot" }
+        : null;
+    }),
+  );
+  return pending.filter((computer) => computer !== null);
+}
+
 /**
  * Copies a space's legacy user skills, `DATA_DIR/skills/user/<space>/<user>/<skill>`, to
  * `skills/` on its shared volume, once, as the E2B upgrade does: worker runs read only managed,

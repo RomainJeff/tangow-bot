@@ -17,6 +17,9 @@ provider, or run the complete stack locally.
 - Docker and E2B
 - Composio, Pipedream Connect, MCP, and OpenAPI integrations
 
+For an existing source deployment, use [Tangow](./docs/tangow.md) on the server to update Rakazo,
+inspect services, rebuild workers and computers, or migrate Docker homes to E2B.
+
 ## Quick start (source checkout)
 
 You need Node.js 22.22.2 or newer in the 22.x line, Node.js 24.x, or Node.js 26+;

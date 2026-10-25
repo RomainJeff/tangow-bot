@@ -12,12 +12,17 @@
  * Reads DATABASE_URL, DATA_DIR and SANDBOX_PROVIDER. Another provider than docker has nothing to move.
  */
 import { existsSync } from "node:fs";
-import { moveIdleDockerHomes } from "../packages/adapters/src/docker-home-migration.js";
+import { parseArgs } from "node:util";
+import {
+  listDeferredDockerHomes,
+  moveIdleDockerHomes,
+} from "../packages/adapters/src/docker-home-migration.js";
 import { DockerWorkerProvider } from "../packages/adapters/src/docker-worker.js";
 import { createWorkerLifecycle } from "../packages/adapters/src/worker-lifecycle.js";
 import { createDb } from "../packages/db/src/client.js";
 
 async function main() {
+  const { values } = parseArgs({ options: { inspect: { type: "boolean" } } });
   if (!process.env.DATABASE_URL && existsSync(".env")) process.loadEnvFile(".env");
   if ((process.env.SANDBOX_PROVIDER?.trim() || "docker") !== "docker") return;
   const url = process.env.DATABASE_URL;
@@ -25,6 +30,10 @@ async function main() {
   const dataDir = process.env.DATA_DIR ?? "./data";
   const { prisma, pool } = createDb(url);
   try {
+    if (values.inspect) {
+      console.log(JSON.stringify({ deferred: await listDeferredDockerHomes({ prisma, dataDir }) }));
+      return;
+    }
     // Only its volume methods run here, on DATA_DIR: the move never calls the supervisor.
     const provider = new DockerWorkerProvider({
       supervisorUrl: process.env.SANDBOX_SUPERVISOR_URL ?? "http://127.0.0.1:7091",

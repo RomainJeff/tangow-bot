@@ -21,6 +21,7 @@ import { provisionComputer } from "./computer-lifecycle.js";
 import {
   copyLegacyUserSkills,
   homeMovePending,
+  listDeferredDockerHomes,
   moveDockerHomeToVolumes,
   moveIdleDockerHomes,
 } from "./docker-home-migration.js";
@@ -403,6 +404,13 @@ describe("moving every idle Docker home", () => {
       (await own.prisma.computer.findUniqueOrThrow({ where: { id } })).homeStorage;
     expect(await storage(conflicting.computer.id)).toBe("snapshot");
     expect(await storage(clean.computer.id)).toBe("volumes");
+    expect(
+      (await listDeferredDockerHomes({ prisma: own.prisma, dataDir })).map((c) => c.id),
+    ).toEqual([conflicting.computer.id]);
+    await put(`homes/${clean.computer.homeKey}/.rakazo-move-pending`, "");
+    const pending = await listDeferredDockerHomes({ prisma: own.prisma, dataDir });
+    expect(pending.find((c) => c.id === clean.computer.id)?.reason).toBe("move_pending");
+    expect(pending).toHaveLength(2);
     expect(
       await readdir(path.join(dataDir, "homes", conflicting.computer.homeKey, "bots", bot!.id)),
     ).toEqual(["notes.md"]);

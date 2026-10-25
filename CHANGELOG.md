@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
+- **Tangow manages an existing source deployment from the server command line.** Update Rakazo and automatically rebuild matching Docker worker images or E2B templates, verify startup migrations and report deferred computer homes, inspect services and logs, clean unused Docker builds, or migrate Docker computer homes to E2B with the existing backup and recovery flow ([usage](docs/tangow.md)).
 - **Docker installs now run each bot run in its own short-lived, isolated container, with the same agent as E2B.** Bot and space files live on volumes the bot's computer shares, and existing homes move onto them automatically when you upgrade; a computer still running at upgrade time can't do file work until it next goes to sleep ([self-hosting guide](docs/self-host.md#choosing-a-computer-provider)).
 
 #### Changed
