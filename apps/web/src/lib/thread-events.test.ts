@@ -11,7 +11,6 @@ import {
   clearBusyWhileWaitingTakeover,
   computerPanelAutoBoot,
   computerPanelAutoUsesBoot,
-  computerPanelNeedsMaintenance,
   computerTakeoverBlocked,
   reconcileRefreshedThread,
   reduceComputerStatus,
@@ -873,14 +872,6 @@ describe("computer event reduction", () => {
     expect(computerPanelAutoUsesBoot("recover-screen")).toBe(true);
     expect(computerPanelAutoUsesBoot("boot")).toBe(true);
     expect(computerPanelAutoUsesBoot("wait")).toBe(false);
-  });
-
-  it("shows maintenance only after a stopped or errored computer finishes booting", () => {
-    expect(computerPanelNeedsMaintenance("error", false)).toBe(true);
-    expect(computerPanelNeedsMaintenance("stopped", false)).toBe(true);
-    expect(computerPanelNeedsMaintenance("error", true)).toBe(false);
-    expect(computerPanelNeedsMaintenance("running", false)).toBe(false);
-    expect(computerPanelNeedsMaintenance(undefined, false)).toBe(false);
   });
 });
 

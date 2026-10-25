@@ -81,6 +81,15 @@ tags:
 - takeScreenshot: "10b-change-password"
 - back
 
+- scrollUntilVisible:
+    element: "Computer"
+    direction: DOWN
+- tapOn: "Computer"
+- extendedWaitUntil:
+    visible: "Update all computers|No computers"
+    timeout: 10000
+- takeScreenshot: "10c-computer-settings"
+
 - openLink: "rakazo:///models"
 - extendedWaitUntil:
     visible: "Active model"

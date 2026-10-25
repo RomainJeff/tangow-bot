@@ -9,7 +9,6 @@ import {
   SafeAreaView,
 } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
-import { ComputerMaintenanceActions } from "../components/computer-maintenance-actions";
 import { ComputerModePicker } from "../components/computer-mode-picker";
 import { NativeSymbol } from "../components/native-symbol";
 import { ScreenLinkOverlay } from "../components/screen-link-overlay";
@@ -75,7 +74,6 @@ export default function Computer() {
       }),
     [botId],
   );
-  const refresh = refreshController.refresh;
   const screenEffects = useMemo(
     () => screenLinkEffects(refreshController.refresh),
     [refreshController],
@@ -296,15 +294,6 @@ export default function Computer() {
           </Pressable>
         )}
       </View>
-      {computer ? (
-        <ComputerMaintenanceActions
-          botId={botId ?? ""}
-          computer={computer}
-          onChanged={async () => {
-            await refresh();
-          }}
-        />
-      ) : null}
       <ComputerModePicker
         value={computer?.mode}
         disabled={switching}

@@ -1,6 +1,69 @@
-import type { ComputerUpdate } from "@rakazo/contracts";
-import { activeBotId, captureScreenshot, completeOnboarding, signup } from "./helpers";
+import type { ComputerStatus, ComputerUpdate, ComputerUpdateAllResult } from "@rakazo/contracts";
+import {
+  activeBotId,
+  captureScreenshot,
+  completeOnboarding,
+  createNamedBot,
+  openUserSettings,
+  rpc,
+  signup,
+} from "./helpers";
 import { expect, test } from "./test";
+
+test("global Computer settings updates idle computers without taking control and reports busy ones", async ({
+  page,
+}, testInfo) => {
+  await signup(page, `computer-batch-${Date.now()}@rakazo.test`, "password12", "Computer Batch");
+  await completeOnboarding(page);
+  await createNamedBot(page, "Planner");
+  const busyBotId = await createNamedBot(page, "Scout", { computerMode: "dedicated" });
+  await rpc(page, "computer/boot", { botId: busyBotId });
+  await rpc(page, "computer/takeover", { botId: busyBotId });
+  const controlRequests: string[] = [];
+  page.on("request", (request) => {
+    if (/\/rpc\/computer\/(boot|takeover)$/.test(new URL(request.url()).pathname)) {
+      controlRequests.push(request.url());
+    }
+  });
+  const settings = await openUserSettings(page, "computer");
+  await expect(settings.getByTestId("computer-settings-row")).toHaveCount(2);
+  const team = settings.getByTestId("computer-settings-row").filter({ hasText: "Team Computer" });
+  await expect(team).toContainText("Chief");
+  await expect(team).toContainText("Planner");
+  const privateComputer = settings
+    .getByTestId("computer-settings-row")
+    .filter({ hasText: "Private Computer" });
+  await expect(privateComputer).toContainText("Bots: Scout");
+  for (const name of ["Update computer", "Recover computer", "Reset computer"]) {
+    await expect(team.getByRole("button", { name, exact: true })).toBeVisible();
+    await expect(privateComputer.getByRole("button", { name, exact: true })).toBeDisabled();
+  }
+  await team.getByRole("button", { name: "Reset computer", exact: true }).click();
+  const reset = page.getByRole("alertdialog");
+  await expect(
+    reset.getByText("Restore the last saved workspace. Unsaved work on the computer is lost."),
+  ).toBeVisible();
+  await reset.getByRole("button", { name: "Cancel", exact: true }).click();
+  await captureScreenshot(page, testInfo, "computer-settings-desktop");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await captureScreenshot(page, testInfo, "computer-settings-phone");
+  const response = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === "/rpc/computer/updateAll",
+  );
+  await settings.getByRole("button", { name: "Update all computers", exact: true }).click();
+  const result: { json: ComputerUpdateAllResult } = await (await response).json();
+  expect(result.json.queued).toHaveLength(1);
+  expect(result.json.skipped).toEqual([{ botId: busyBotId, name: "Scout", reason: "busy" }]);
+  await expect(settings.getByRole("status")).toContainText("Updates queued: 1");
+  await expect(settings.getByRole("status")).toContainText("Busy. Try again when idle.");
+  expect(controlRequests).toEqual([]);
+  expect(await rpc<ComputerStatus>(page, "computer/status", { botId: busyBotId })).toMatchObject({
+    controlHolder: "user",
+    controlBotId: busyBotId,
+  });
+  await captureScreenshot(page, testInfo, "computer-settings-batch-result");
+  await rpc(page, "computer/release", { botId: busyBotId });
+});
 
 test("computer maintenance shows durable background progress and failure recovery", async ({
   page,
@@ -10,6 +73,26 @@ test("computer maintenance shows durable background progress and failure recover
   await completeOnboarding(page);
   const botId = activeBotId(page);
   let updates: ComputerUpdate[] = [];
+  const status = await rpc<ComputerStatus>(page, "computer/status", { botId });
+  await page.route("**/rpc/computer/list", (route) =>
+    route.fulfill({
+      json: {
+        json: [
+          {
+            botId,
+            name: "Chief",
+            bots: [{ id: botId, name: "Chief" }],
+            status: {
+              ...status,
+              state: updates.some((item) => item.status !== "failed" && item.status !== "completed")
+                ? "booting"
+                : "stopped",
+            },
+          },
+        ],
+      },
+    }),
+  );
   const updating: ComputerUpdate = {
     id: "update-example",
     botId,
@@ -39,12 +122,8 @@ test("computer maintenance shows durable background progress and failure recover
     updates = [{ ...updating, status: "failed" }];
     return route.fulfill({ json: { json: { ok: true } } });
   });
-  await page.getByTestId("open-computer-panel").click();
-  await expect(page.getByTestId("computer-preview")).toBeVisible();
-  await page.getByTestId("computer-preview").hover();
-  await page.getByTestId("computer-preview-open").click();
-  await page.getByTestId("computer-more-button").click();
-  await page.getByRole("menuitem", { name: "Update computer", exact: true }).click();
+  const settings = await openUserSettings(page, "computer");
+  await settings.getByRole("button", { name: "Update computer", exact: true }).click();
   const dialog = page.getByTestId("computer-update-dialog");
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("heading")).toHaveText("Updating Team Computer");
@@ -52,7 +131,15 @@ test("computer maintenance shows durable background progress and failure recover
   await captureScreenshot(page, testInfo, "computer-update-progress");
   await dialog.getByRole("button", { name: "Continue in Background" }).click();
   await expect(dialog).not.toBeVisible();
+  await expect(
+    settings.getByRole("button", { name: "Recover computer", exact: true }),
+  ).toBeDisabled();
   await captureScreenshot(page, testInfo, "computer-update-background");
+  updates = [];
+  await expect(
+    settings.getByRole("button", { name: "Recover computer", exact: true }),
+  ).toBeEnabled();
+  updates = [updating];
   await page.reload();
   await page.getByRole("button", { name: /Updating Team Computer/ }).click();
   await expect(dialog).toBeVisible();

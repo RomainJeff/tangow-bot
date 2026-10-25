@@ -15,11 +15,12 @@ import {
 import { type ComponentType, useEffect, useRef, useState } from "react";
 import { computersAreUnavailable } from "../components/ComputersUnavailableHint";
 import {
-  ComputerSettingsPanel,
+  ComputerSettingsPanel as ComputerSetupSettingsPanel,
   GeneralSettingsPanels,
   UpdatesSettingsPanel,
   UsageSettingsPanel,
 } from "./AccountSettingsOverlay";
+import { ComputerSettingsPanel } from "./ComputerSettingsPanel";
 import { DecisionModelSettingsPanel } from "./DecisionModelSettingsPanel";
 import { MemorySettingsOverlay } from "./MemorySettingsOverlay";
 import { ModelSettingsOverlay } from "./ModelSettingsOverlay";
@@ -81,7 +82,7 @@ export function SettingsOverlay({
   const [memoryBusy, setMemoryBusy] = useState(false);
   const [decisionModelBusy, setDecisionModelBusy] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState(false);
-  const showComputer = isDeploymentOwner && computersAreUnavailable(sandboxProvider);
+  const showComputerSetup = isDeploymentOwner && computersAreUnavailable(sandboxProvider);
   const panelBusy = memoryBusy || decisionModelBusy || voiceBusy;
 
   useEffect(() => {
@@ -101,7 +102,7 @@ export function SettingsOverlay({
     { id: "decision-model", label: t`Decision Model`, icon: Signpost },
     { id: "voice", label: t`Voice`, icon: Volume2 },
     { id: "usage", label: t`Usage`, icon: Gauge },
-    ...(showComputer ? [{ id: "computer" as const, label: t`Computer`, icon: Monitor }] : []),
+    { id: "computer", label: t`Computer`, icon: Monitor },
     { id: "updates", label: t`Updates`, icon: CloudDownload },
   ];
 
@@ -232,7 +233,13 @@ export function SettingsOverlay({
               {section === "usage" ? (
                 <UsageSettingsPanel usage={usage} panelRef={usageRef} />
               ) : null}
-              {section === "computer" && showComputer ? <ComputerSettingsPanel /> : null}
+              {section === "computer" ? (
+                showComputerSetup ? (
+                  <ComputerSetupSettingsPanel />
+                ) : (
+                  <ComputerSettingsPanel />
+                )
+              ) : null}
               {section === "updates" ? (
                 <UpdatesSettingsPanel isDeploymentOwner={isDeploymentOwner} />
               ) : null}

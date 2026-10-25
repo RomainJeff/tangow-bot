@@ -21,7 +21,6 @@ import { TeachComputerOverlayControl } from "../../components/teach/TeachCompute
 import { TeachRecordingChrome, TeachStopButton } from "../../components/teach/TeachRecordingChrome";
 import { desktopBridge } from "../../lib/desktop";
 import { rpc } from "../../lib/rpc";
-import { computerPanelNeedsMaintenance } from "../../lib/thread-events";
 import { BotPage } from "../bot-page/BotPage";
 import { CreateGroupForm, GroupSettings } from "../GroupPanel";
 import { WindowChrome } from "../WindowChrome";
@@ -54,7 +53,6 @@ export function SidePanel({
   computerScreenError,
   screenLink,
   openComputer,
-  refreshThread,
   refreshGroupThread,
   refreshBots,
   activeRoutines,
@@ -89,7 +87,6 @@ export function SidePanel({
   computerScreenError: ReactNode;
   screenLink: ScreenLinkHandlers;
   openComputer: () => Promise<void>;
-  refreshThread: (id: string, signal?: AbortSignal) => Promise<ThreadSnapshot>;
   refreshGroupThread: (id: string, signal?: AbortSignal) => Promise<ThreadSnapshot>;
   refreshBots: (includeArchived?: boolean, replaceBotOrder?: boolean) => Promise<void>;
   /** `null` until the open bot's routines are read. */
@@ -154,18 +151,6 @@ export function SidePanel({
             <>
               <div className="flex shrink-0 items-center justify-end px-5 pt-4 pb-3">
                 <div className="flex gap-1">
-                  {active &&
-                  panel === "computer" &&
-                  !computerOpen &&
-                  computerPanelNeedsMaintenance(computer?.state, booting) ? (
-                    <ComputerMaintenanceActions
-                      botId={active.id}
-                      computer={computer}
-                      onChanged={async () => {
-                        await refreshThread(active.id);
-                      }}
-                    />
-                  ) : null}
                   <Button
                     variant="ghost"
                     size="icon-sm"
@@ -379,7 +364,7 @@ export function ComputerOverlay({
                 {(teach) => (
                   <ComputerMaintenanceActions
                     botId={active.id}
-                    computer={computer}
+                    computer={null}
                     teach={teach}
                     onChanged={async () => {
                       await refreshThread(active.id);

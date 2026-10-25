@@ -448,6 +448,16 @@ export default function Account() {
         <Pressable
           accessibilityRole="button"
           disabled={pending}
+          onPress={() => router.push("/computer-settings")}
+          style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
+        >
+          <Text style={styles.settingsTitle}>{t("Computer")}</Text>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          disabled={pending}
           onPress={() => router.push("/voice")}
           style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
         >
