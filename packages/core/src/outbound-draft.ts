@@ -6,8 +6,9 @@ import {
   DRAFT_GONE,
   draftFieldsError,
   isPath,
+  isRecipientRole,
   isRecord,
-  RECIPIENT_ROLES,
+  LINE_BREAKS,
   readDraftSlots,
   slotRecipients,
   valueAt,
@@ -90,7 +91,7 @@ function readDraftFields(value: unknown): DraftFields | undefined {
   const recipients = proposed.recipients.filter(
     (recipient): recipient is AskDraftRecipient =>
       isRecord(recipient) &&
-      RECIPIENT_ROLES.includes(recipient.role as AskDraftRecipient["role"]) &&
+      isRecipientRole(recipient.role) &&
       typeof recipient.address === "string",
   );
   if (recipients.length !== proposed.recipients.length) return undefined;
@@ -191,7 +192,7 @@ export function draftSentResult(
     ok: true,
     sent: {
       recipients: message.recipients ?? card?.recipients ?? [],
-      subject: draft.fields ? message.subject : card?.subject,
+      subject: draft.fields?.subject ? message.subject : card?.subject,
       body: message.body,
     },
     editedByUser: draftEditedFields(draft, message),
@@ -234,9 +235,6 @@ export function draftTextError(text: string): string | undefined {
   }
   return undefined;
 }
-
-/** Every line break a client may render, so a card can indent each one. */
-export const LINE_BREAKS = /\r\n|[\n\v\f\r\u0085\u2028\u2029]/g;
 
 /** The card's text lines for a draft, read by clients that do not know drafts. */
 export function askDraftDetail(draft: AskDraft): string {

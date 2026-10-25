@@ -5,9 +5,13 @@ import type { DraftPath, DraftSlots, RecipientRole, RecipientSlot } from "./draf
 import {
   addressesIn,
   isMailAddress,
+  isRecipientRole,
   isRecord,
+  LINE_BREAKS,
   OUTBOUND_RECIPIENTS_MAX_LENGTH,
+  RECIPIENT_ROLES,
   serializedLength,
+  slotRecipients,
 } from "./draft-fields.js";
 import { draftTextError } from "./outbound-draft.js";
 
@@ -185,6 +189,8 @@ function readOutbound(action: OutboundAction, connectorKinds: string[]): Outboun
     texts.length !== 1 ||
     reading.subjects.length > 1 ||
     reading.subjects.some((subject) => subject.length > ASK_DRAFT_SUBJECT_MAX_LENGTH) ||
+    // A subject the card shows on one line could hide what follows a break.
+    reading.subjects.some((subject) => subject.search(LINE_BREAKS) !== -1) ||
     !reading.recipients.some((recipient) => recipient.role === "to")
   ) {
     if (reading.buried) {
@@ -205,7 +211,7 @@ function readOutbound(action: OutboundAction, connectorKinds: string[]): Outboun
       account: reading.sender,
       args,
       textPath,
-      fields: draftSlots(args, action.schema),
+      fields: draftSlots(args, action.schema, reading.recipients),
     },
   };
 }
@@ -248,7 +254,7 @@ function readValue(
       Object.entries(value).map(([key, child]) => {
         if (INHERITED_ROLES.has(role)) return [key, readValue(child, role, reading, depth + 1)];
         const childRole = FIELD_ROLES[fieldKey(key)];
-        if (childRole === "to" || childRole === "cc" || childRole === "bcc") {
+        if (isRecipientRole(childRole)) {
           reading.recipientValues.push(child);
           if (depth > 0) reading.buried = true;
         }
@@ -299,8 +305,7 @@ function readString(value: string, role: FieldRole | undefined, reading: Reading
 
 /** Whether an argument name carries recipients, so a card never shortens it. */
 export function isRecipientField(key: string): boolean {
-  const role = FIELD_ROLES[fieldKey(key)];
-  return role === "to" || role === "cc" || role === "bcc";
+  return isRecipientRole(FIELD_ROLES[fieldKey(key)]);
 }
 
 /** Arguments a card shows whole: recipients, and the items of a batch it cannot read. */
@@ -359,7 +364,7 @@ function fieldLeaves(value: unknown, path: DraftPath = []): FieldLeaf[] {
       : [];
   return children.flatMap(([key, child]) => {
     const role = typeof key === "string" ? FIELD_ROLES[fieldKey(key)] : undefined;
-    if (role === "to" || role === "cc" || role === "bcc" || role === "subject") {
+    if (isRecipientRole(role) || role === "subject") {
       return [{ role, path: [...path, key], value: child }];
     }
     return role === undefined ? fieldLeaves(child, [...path, key]) : [];
@@ -375,6 +380,7 @@ function fieldLeaves(value: unknown, path: DraftPath = []): FieldLeaf[] {
 function draftSlots(
   args: Record<string, unknown>,
   schema: Record<string, unknown> | undefined,
+  shown: OutboundRecipient[],
 ): DraftSlots | undefined {
   const leaves = fieldLeaves(args);
   const present: RecipientSlot[] = [];
@@ -386,11 +392,11 @@ function draftSlots(
   }
   const offered = Object.entries(schemaProperties(schema)).flatMap(([key, property]) => {
     const role = FIELD_ROLES[fieldKey(key)];
-    if ((role !== "to" && role !== "cc" && role !== "bcc") || key in args) return [];
+    if (!isRecipientRole(role) || key in args) return [];
     const slot = slotOf(role, [key], emptyOf(property), property);
     return slot ? [slot] : [];
   });
-  const recipients = (["to", "cc", "bcc"] as const).flatMap((role) => {
+  const recipients = RECIPIENT_ROLES.flatMap((role) => {
     const own = present.filter((slot) => slot.role === role);
     const absent = offered.filter((slot) => slot.role === role);
     const extra = own.some((slot) => slot.shape !== "one")
@@ -404,10 +410,17 @@ function draftSlots(
   const subjects = leaves.filter(
     (leaf) => leaf.role === "subject" && typeof leaf.value === "string",
   );
-  return {
-    recipients,
-    ...(subjects.length === 1 ? { subject: subjects[0]!.path } : {}),
-  };
+  const slots = { recipients, ...(subjects.length === 1 ? { subject: subjects[0]!.path } : {}) };
+  // The slots must read back exactly what the card shows, or an edit would write a shape the tool
+  // did not use and the bot would read a different list.
+  return recipientKey(slotRecipients(args, slots)) === recipientKey(shown) ? slots : undefined;
+}
+
+function recipientKey(recipients: OutboundRecipient[]): string {
+  return recipients
+    .map((recipient) => `${recipient.role} ${recipient.address}`)
+    .sort()
+    .join("\n");
 }
 
 /** How `value` holds a role's addresses, or undefined when it cannot be written back as is. */

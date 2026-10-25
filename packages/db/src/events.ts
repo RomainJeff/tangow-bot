@@ -15,6 +15,7 @@ import {
   blocksToAgentHistoryText,
   DISMISSABLE_EFFECT_KINDS,
   DISMISSED_EFFECT_RESULT,
+  DRAFT_GONE,
   draftMessage,
   draftWithState,
   editDraftRequest,
@@ -1545,9 +1546,10 @@ export async function dismissProposalWithTextInTransaction(
           subject: input.draft.subject,
         })
       : { request: effect.request };
+  // A request with no place for the text is no longer this draft's: the usual rule applies.
+  if ("error" in left && left.error === DRAFT_GONE) return { outcome: "keep" };
   if ("error" in left) throw new InvalidAnswerError(left.error);
   const { request } = left;
-  if (replacing && request === undefined) return { outcome: "keep" };
   const replaced = replacing ? draftWithState(draft, { state: "replaced" }) : undefined;
   const dismissed = await tx.externalEffect.updateMany({
     where: replaced
