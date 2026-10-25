@@ -1,10 +1,13 @@
 import type { AskDraft } from "@rakazo/contracts";
 import { appIcon } from "@rakazo/core";
 import { Mail, MessageSquare } from "lucide-react";
+import { useState } from "react";
 
 /** The app a draft goes through: its catalog logo, else the bundled mark, else a neutral glyph. */
 export function AppLogo({ app, chat }: { app: AskDraft["app"]; chat: boolean }) {
-  const icon = appIcon(app, chat);
+  // A logo that fails to load gives way to the next one.
+  const [failed, setFailed] = useState<string | null>(null);
+  const icon = appIcon({ ...app, logo: app.logo === failed ? null : app.logo }, chat);
   switch (icon.kind) {
     case "logo":
       return <img src={icon.uri} alt="" className="size-4 shrink-0 rounded-chip object-contain" />;

@@ -1949,7 +1949,7 @@ msgstr "Düzenle"
 msgid "Edit and resend"
 msgstr "Düzenle ve yeniden gönder"
 
-#: src/components/DraftCard.tsx:395
+#: src/components/DraftCard.tsx:397
 msgid "Edit message"
 msgstr ""
 
@@ -3377,7 +3377,7 @@ msgstr "Kaldır"
 msgid "Remove {0}"
 msgstr "{0} kaldır"
 
-#: src/components/DraftLines.tsx:151
+#: src/components/DraftLines.tsx:159
 msgid "Remove {address}"
 msgstr ""
 
@@ -3984,8 +3984,8 @@ msgstr "Güvenle saklanır. Burada gösterilmez."
 msgid "subagent"
 msgstr "alt ajan"
 
-#: src/components/DraftCard.tsx:379
-#: src/components/DraftCard.tsx:385
+#: src/components/DraftCard.tsx:380
+#: src/components/DraftCard.tsx:387
 msgid "Subject"
 msgstr ""
 

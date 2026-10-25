@@ -81,6 +81,7 @@ export function RecipientLine({
   more = [],
   strong,
   editing,
+  sending,
   onEdit,
 }: {
   id: string;
@@ -96,6 +97,8 @@ export function RecipientLine({
   more?: { label: string; open: () => void }[];
   strong?: boolean;
   editing: boolean;
+  /** A send is on its way: the line keeps its shape, read-only. */
+  sending: boolean;
   /** Starts editing the card's lines, when the line has no field to focus. */
   onEdit: () => void;
 }) {
@@ -105,6 +108,7 @@ export function RecipientLine({
   // A full line keeps its field while it has focus, so focus never falls out of the card.
   const [focused, setFocused] = useState(false);
   const full = room !== null && addresses.length >= room;
+  const hasInput = !(full && !typed && !focused);
 
   /** Moves every address finished by a separator into the line, or every one when `final`. */
   function take(value: string, final: boolean) {
@@ -115,7 +119,7 @@ export function RecipientLine({
 
   return (
     <>
-      <RowLabel htmlFor={id} editing={editing}>
+      <RowLabel htmlFor={hasInput ? id : undefined} editing={editing}>
         {label}
       </RowLabel>
       {/* biome-ignore lint/a11y/noStaticElementInteractions: a click on the line's blank space focuses its field, which keeps its own keyboard access. */}
@@ -123,7 +127,11 @@ export function RecipientLine({
       <div
         ref={cell}
         data-draft-field
+        // A full line has no field to tab to: the line itself is the stop, and focusing it
+        // starts editing, which brings each address's remove button.
+        {...(hasInput ? {} : { tabIndex: 0, role: "group", "aria-label": label })}
         onClick={() => {
+          if (sending) return;
           if (input.current) return input.current.focus();
           // A full line has no field: pressing it starts editing and focuses its first remove button.
           flushSync(onEdit);
@@ -149,6 +157,7 @@ export function RecipientLine({
               <button
                 type="button"
                 aria-label={t`Remove ${address}`}
+                disabled={sending}
                 onClick={(event) => {
                   event.stopPropagation();
                   // A full line shows its field only once the address is gone.
@@ -162,10 +171,11 @@ export function RecipientLine({
             ) : null}
           </span>
         ))}
-        {full && !typed && !focused ? null : (
+        {hasInput ? (
           <input
             ref={input}
             id={id}
+            readOnly={sending}
             inputMode="email"
             dir="auto"
             autoComplete="off"
@@ -191,7 +201,7 @@ export function RecipientLine({
               editing ? "px-2 text-body" : ""
             } aria-invalid:text-destructive aria-invalid:underline aria-invalid:decoration-destructive aria-invalid:decoration-wavy`}
           />
-        )}
+        ) : null}
         {editing && more.length && !typed ? (
           // They fold away once typing starts, so the field keeps its width.
           <span className="ms-auto flex gap-0.5">
@@ -199,6 +209,7 @@ export function RecipientLine({
               <button
                 key={line.label}
                 type="button"
+                disabled={sending}
                 // Keeps the line focused, and so these buttons shown, while one is pressed.
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={(event) => {
@@ -223,11 +234,14 @@ export function SubjectLine({
   subject,
   onChange,
   editing,
+  sending,
 }: {
   label: string;
   subject: string;
   onChange: (subject: string) => void;
   editing: boolean;
+  /** A send is on its way: the line keeps its shape, read-only. */
+  sending: boolean;
 }) {
   const id = useId();
   return (
@@ -244,6 +258,7 @@ export function SubjectLine({
           dir="auto"
           rows={1}
           value={subject}
+          readOnly={sending}
           maxLength={ASK_DRAFT_SUBJECT_MAX_LENGTH}
           // The server takes a subject on one line.
           onKeyDown={(event) => {

@@ -1949,7 +1949,7 @@ msgstr "수정"
 msgid "Edit and resend"
 msgstr "편집 후 다시 보내기"
 
-#: src/components/DraftCard.tsx:395
+#: src/components/DraftCard.tsx:397
 msgid "Edit message"
 msgstr ""
 
@@ -3377,7 +3377,7 @@ msgstr "삭제"
 msgid "Remove {0}"
 msgstr "{0} 삭제"
 
-#: src/components/DraftLines.tsx:151
+#: src/components/DraftLines.tsx:159
 msgid "Remove {address}"
 msgstr ""
 
@@ -3984,8 +3984,8 @@ msgstr "안전하게 저장됩니다. 이 화면에 표시되지 않습니다."
 msgid "subagent"
 msgstr "보조 에이전트"
 
-#: src/components/DraftCard.tsx:379
-#: src/components/DraftCard.tsx:385
+#: src/components/DraftCard.tsx:380
+#: src/components/DraftCard.tsx:387
 msgid "Subject"
 msgstr ""
 
