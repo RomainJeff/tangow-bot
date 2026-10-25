@@ -353,6 +353,9 @@ export const MessageBlock = z.discriminatedUnion("kind", [
               /** The helper session a `run_subagent` call ran, once its answer landed. Branded
                   as `SessionId` here, since `session-log.ts` imports this module. */
               sessionId: Id.brand<"SessionId">().optional(),
+              /** The result is the outcome of a card the call raised, which a short replay of
+                  past steps reads whole: it holds what the person decided or wrote. */
+              outcome: z.literal(true).optional(),
             }),
           )
           .optional(),

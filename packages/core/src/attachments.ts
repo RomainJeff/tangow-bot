@@ -8,7 +8,6 @@ import {
   type MessageBlock,
 } from "@rakazo/contracts";
 import { humanizeToolName } from "./events.js";
-import { isReplacedDraftOutput } from "./outbound-draft.js";
 
 export class AttachmentValidationError extends Error {
   constructor(message: string) {
@@ -115,7 +114,7 @@ function toolStepsToHistoryText(steps: Extract<MessageBlock, { kind: "steps" }>[
     const stepLines = step.calls?.length
       ? step.calls.map((call) => {
           const input = abbreviateToolPayload(call.input, TOOL_TRACE_INPUT_MAX_CHARS);
-          const whole = isReplacedDraftOutput(call.output);
+          const whole = call.outcome === true;
           const output = whole
             ? call.output.replace(/\s+/g, " ").trim()
             : abbreviateToolPayload(call.output, TOOL_TRACE_OUTPUT_MAX_CHARS);
@@ -133,7 +132,8 @@ function toolStepsToHistoryText(steps: Extract<MessageBlock, { kind: "steps" }>[
         dropped += 1;
         continue;
       }
-      budget -= line.length;
+      // A card's outcome is read whole and leaves the budget to the lines after it.
+      if (!whole) budget -= line.length;
       lines.push(line);
     }
   }

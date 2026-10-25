@@ -2,6 +2,7 @@ import { APPROVAL_WAITING_TEXT, HELPER_STOPPED_FOR_PAUSE } from "@rakazo/contrac
 import { describe, expect, it } from "vitest";
 import { linkEntries } from "./fixtures/read-fixture.js";
 import { projectInferenceTurns } from "./project-inference.js";
+import { projectThreadItems } from "./project-ui.js";
 import { pendingPauseOfEffect } from "./run-fold.js";
 
 const run = { botId: "bot_ada", runId: "run_1" };
@@ -109,6 +110,23 @@ describe("a draft call's pause and its outcome", () => {
       result("sub", "Sent.", "h-2"),
     ]);
     expect(outputsOf(entries)).toEqual([["sub", "run_subagent", "Sent."]]);
+  });
+});
+
+describe("a helper's draft in the thread", () => {
+  const helperChain = (outcome: boolean) =>
+    linkEntries("t", [
+      call("sub", "run_subagent", { name: "mailer" }),
+      requested("effect_a"),
+      helperStopped("sub"),
+      ...(outcome ? [result("sub", "Sent.", "t-2")] : []),
+    ]);
+  const kinds = (entries: ReturnType<typeof linkEntries>) =>
+    projectThreadItems(entries).map((item) => item.kind);
+
+  it("still shows the helper once its outcome replaced its answer", () => {
+    expect(kinds(helperChain(false))).toEqual(["message", "subagent", "effect"]);
+    expect(kinds(helperChain(true))).toEqual(["message", "subagent", "effect"]);
   });
 });
 

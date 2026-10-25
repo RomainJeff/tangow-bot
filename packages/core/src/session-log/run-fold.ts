@@ -23,6 +23,8 @@ export type ToolAnswer = ThreadEntryOf<"tool.result" | "subagent">;
 export type ToolAnswers = {
   answerOf: ReadonlyMap<EntryId, ToolAnswer>;
   callOf: ReadonlyMap<EntryId, EntryId>;
+  /** The answer a later result replaced, by the call's entry id: a pause, or a helper's stop. */
+  replacedOf: ReadonlyMap<EntryId, ToolAnswer>;
 };
 const STRETCH_TYPES = new Set<SessionEntryType>([...FOLDED_TYPES, ...CARD_STATE_TYPES, "subagent"]);
 
@@ -108,6 +110,7 @@ export function foldRuns(
           output: answer ? outputOf(answer) : "",
           id: callId,
           ...(answer?.payload.sessionId ? { sessionId: answer.payload.sessionId } : {}),
+          ...(answer?.type === "tool.result" && answer.payload.replaces ? { outcome: true } : {}),
         });
         holderOf.set(entry.id, message);
         break;
@@ -137,6 +140,7 @@ export function toolAnswers(entries: readonly ThreadEntry[]): ToolAnswers {
   const unanswered = new Map<string, EntryId[]>();
   const answerOf = new Map<EntryId, ToolAnswer>();
   const callOf = new Map<EntryId, EntryId>();
+  const replacedOf = new Map<EntryId, ToolAnswer>();
   for (const entry of entries) {
     if (entry.type !== "tool.call" && entry.type !== "tool.result" && entry.type !== "subagent") {
       continue;
@@ -151,10 +155,12 @@ export function toolAnswers(entries: readonly ThreadEntry[]): ToolAnswers {
     const replaced = entry.type === "tool.result" ? entry.payload.replaces : undefined;
     const call = replaced === undefined ? calls.pop() : callOf.get(replaced);
     if (call === undefined) continue;
+    const replacedAnswer = replaced === undefined ? undefined : answerOf.get(call);
+    if (replacedAnswer) replacedOf.set(call, replacedAnswer);
     answerOf.set(call, entry);
     callOf.set(entry.id, call);
   }
-  return { answerOf, callOf };
+  return { answerOf, callOf, replacedOf };
 }
 
 /**

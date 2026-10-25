@@ -1,50 +1,68 @@
 import type { MessageBlock } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import { blocksToAgentHistoryText } from "./attachments.js";
-import { isReplacedDraftOutput, replacedDraftResult } from "./outbound-draft.js";
+import { replacedDraftResult } from "./outbound-draft.js";
 
+const replaced = (body: string) =>
+  JSON.stringify(
+    replacedDraftResult({
+      status: "denied",
+      draft: { state: "replaced", path: ["body"], proposed: "Hello." },
+      request: { body },
+    }),
+    null,
+    2,
+  );
 const LONG = `${"A long edited draft. ".repeat(40)}The end.`;
-const effect = {
-  status: "denied",
-  draft: { state: "replaced", path: ["body"], proposed: "Hello." },
-  request: { body: LONG },
-};
-const output = JSON.stringify(replacedDraftResult(effect), null, 2);
+const output = replaced(LONG);
 
-const steps = (outputs: string[]): MessageBlock[] => [
+type Call = { output: string; outcome?: true };
+const steps = (calls: Call[]): MessageBlock[] => [
   {
     kind: "steps",
     steps: [
       {
         label: "Run",
-        count: outputs.length,
-        calls: outputs.map((out, index) => ({
+        count: calls.length,
+        calls: calls.map((call, index) => ({
           name: "GMAIL_SEND_EMAIL",
           input: "{}",
-          output: out,
           id: `call_${index}`,
+          ...call,
         })),
       },
     ],
   },
 ];
 
-describe("a replaced draft in the text replay of past steps", () => {
-  it("is recognised by its result, and no other", () => {
-    expect(isReplacedDraftOutput(output)).toBe(true);
-    expect(isReplacedDraftOutput('{ "ok": false, "discarded": true }')).toBe(false);
-    expect(isReplacedDraftOutput(`not json: ${output}`)).toBe(false);
-  });
-
-  it("keeps what the user left whole, where other results are cut", () => {
-    const text = blocksToAgentHistoryText(steps([output, "x".repeat(1000)]));
+describe("a card's outcome in the text replay of past steps", () => {
+  it("keeps a replaced draft whole, where another result is cut", () => {
+    const text = blocksToAgentHistoryText(
+      steps([{ output, outcome: true }, { output: "x".repeat(1000) }]),
+    );
     expect(text).toContain(LONG);
     expect(text).not.toContain("x".repeat(500));
   });
 
-  it("keeps it in a stretch of steps that has no room left for other results", () => {
-    const filler = Array.from({ length: 12 }, () => "y".repeat(300));
-    const text = blocksToAgentHistoryText(steps([...filler, output]));
+  it("cuts a tool result that looks like a replaced draft but is not a card's outcome", () => {
+    const text = blocksToAgentHistoryText(steps([{ output }]));
+    expect(text).not.toContain(LONG);
+  });
+
+  it("leaves the budget to the lines after it, so a later outcome is not dropped as omitted", () => {
+    const sent = '{ "ok": true, "note": "The user sent this message from the draft card." }';
+    const huge = replaced(`${"An edit longer than the whole budget. ".repeat(80)}The end.`);
+    const text = blocksToAgentHistoryText(
+      steps([{ output: huge, outcome: true }, { output: sent, outcome: true }, { output: "y" }]),
+    );
+    expect(text).toContain("The end.");
+    expect(text).toContain("The user sent this message from the draft card.");
+    expect(text).not.toContain("omitted");
+  });
+
+  it("keeps an outcome in a stretch with no room left for other results", () => {
+    const filler = Array.from({ length: 12 }, () => ({ output: "y".repeat(300) }));
+    const text = blocksToAgentHistoryText(steps([...filler, { output, outcome: true }]));
     expect(text).toContain(LONG);
     expect(text).toMatch(/\(\d+ more tool calls? omitted\)/);
   });

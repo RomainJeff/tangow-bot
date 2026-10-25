@@ -62,6 +62,7 @@ export type ToolCallDetail = {
   output: string;
   id?: string;
   sessionId?: SessionId;
+  outcome?: true;
 };
 export type ToolStep = { label: string; count: number; calls?: ToolCallDetail[] };
 
