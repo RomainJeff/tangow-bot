@@ -34,4 +34,8 @@ export class MemoryVolumeFiles implements VolumeFiles {
     if (!file) throw new Error(`No file ${path} on volume ${volumeRef}`);
     return file.content.slice();
   }
+
+  async remove(volumeRef: string, path: string, _context: AdapterContext): Promise<void> {
+    this.volumes.get(volumeRef)?.delete(path);
+  }
 }

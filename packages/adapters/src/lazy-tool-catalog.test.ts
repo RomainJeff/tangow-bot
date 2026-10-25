@@ -1,16 +1,15 @@
 import type { ConnectorTool } from "@rakazo/adapter-kit";
 import { describe, expect, it, vi } from "vitest";
+import corpus from "./fixtures/composio-search-corpus.json" with { type: "json" };
 import {
   assertConnectorToolArgs,
   catalogEntries,
   catalogGroupLabel,
-  DIRECT_TOOL_LIMIT,
+  catalogIndexText,
   disambiguateInstalledToolNames,
   executeLazyCatalogControl,
-  formatNameIndexText,
   lazyCatalogTools,
   loadCatalogEntry,
-  NAME_INDEX_MAX_NAMES,
   resolveCatalogCall,
   SELECTED_SCHEMA_MAX_BYTES,
   searchCatalog,
@@ -97,9 +96,19 @@ function multiGroupTools(): ConnectorTool[] {
 }
 
 describe("lazy tool catalog", () => {
-  it("exposes tools directly at the limit and switches to lazy wrappers above it", () => {
-    expect(tools(DIRECT_TOOL_LIMIT)).toHaveLength(20);
-    expect(tools(DIRECT_TOOL_LIMIT + 1)).toHaveLength(21);
+  it.each(Object.entries(corpus.queries))("finds the expected tool for %s", (query, expected) => {
+    const entries = catalogEntries(
+      corpus.tools.map(({ group, name, description }) => ({
+        name,
+        description,
+        inputSchema: { type: "object" },
+        route: { connectorId: "test", toolName: name, catalogGroup: group },
+      })),
+    );
+    const result = searchCatalog(entries, { query });
+    expect("tools" in result && result.tools.map((tool) => tool.name)).toContain(expected);
+  });
+  it("offers the fallback search, load and execute controls", () => {
     expect(lazyCatalogTools("mcp", "mcp", "MCP")).toHaveLength(3);
     expect(lazyCatalogTools("installed", "installed", "API").map((tool) => tool.name)).toEqual([
       "installed_search_tools",
@@ -119,15 +128,97 @@ describe("lazy tool catalog", () => {
     });
   });
 
-  it("embeds a compact name index in the search description when it fits", () => {
+  it("lists every exposed name in groups of at most 100, with catalog discovery guidance", () => {
+    const members = [...tools(100), ...multiGroupTools()];
+    const catalogs = lazyCatalogTools("mcp", "mcp", "MCP", catalogEntries(members));
+    const text = catalogIndexText(catalogs);
+    expect(text).toContain("mcp: use the tool search of your harness or mcp_load_tool");
+    expect(text).toContain("source: 100 tools.");
+    expect(text).toContain("gmail: 3 tools.");
+    expect(text).toContain("hubspot: 2 tools.");
+    for (const tool of members) expect(text).toContain(tool.name);
+    expect(text).not.toContain("Send mail");
+    expect(catalogs[0]?.description).not.toContain("mcp__gmail__send");
+    expect(catalogIndexText(members)).toBe("");
+  });
+
+  it("shows only featured names above 100, or just the total when none are featured", () => {
+    const members = tools(101);
+    members[0]!.featured = true;
+    const text = catalogIndexText(lazyCatalogTools("mcp", "mcp", "MCP", catalogEntries(members)));
+    expect(text).toContain("source: 101 tools.");
+    expect(text).toContain("tool_00");
+    expect(text).not.toContain("tool_01");
+    const unfeatured = catalogIndexText(
+      lazyCatalogTools("mcp", "mcp", "MCP", catalogEntries(tools(101))),
+    );
+    expect(unfeatured).toContain("source: 101 tools.");
+    expect(unfeatured).not.toContain("tool_00");
+    expect(unfeatured).toContain("tool search");
+  });
+
+  it("trims the largest name lists to fit 16 KiB without removing loadable tools", () => {
+    const large = tools(100, "large").map((tool) => ({
+      ...tool,
+      name: `${tool.name}_${"é".repeat(100)}`,
+    }));
+    const members = [...large, ...multiGroupTools()];
+    const entries = catalogEntries(members);
+    const catalogs = lazyCatalogTools("mcp", "mcp", "MCP", entries);
+    const text = catalogIndexText(catalogs);
+    expect(Buffer.byteLength(text, "utf8")).toBeLessThanOrEqual(16_384);
+    expect(text).toContain("large: 100 tools.");
+    expect(text).not.toContain(large[0]!.name);
+    expect(text).toContain("mcp__gmail__send");
+    expect(loadCatalogEntry(entries, { id: large[99]!.name }).tool.name).toBe(large[99]!.name);
+    expect(catalogs[2]?.catalog).toHaveLength(105);
+  });
+
+  it("bounds even total-only indexes when many groups exceed the byte cap", () => {
+    const members = tools(100).map((tool, index) => ({
+      ...tool,
+      route: { ...tool.route!, catalogGroup: `${index}_${"é".repeat(190)}` },
+    }));
+    const text = catalogIndexText(lazyCatalogTools("mcp", "mcp", "MCP", catalogEntries(members)));
+    expect(Buffer.byteLength(text, "utf8")).toBeLessThanOrEqual(16_384);
+    expect(text).toContain("Additional groups omitted");
+  });
+
+  it("orders catalogs, groups and names independently of discovery order", () => {
+    const members = multiGroupTools();
+    const first = [
+      ...lazyCatalogTools("mcp", "mcp", "MCP", catalogEntries(members)),
+      ...lazyCatalogTools("installed", "installed", "API", catalogEntries(tools(3))),
+    ];
+    const second = [
+      ...lazyCatalogTools("installed", "installed", "API", catalogEntries(tools(3).reverse())),
+      ...lazyCatalogTools("mcp", "mcp", "MCP", catalogEntries(members.reverse())),
+    ];
+    const text = catalogIndexText(first);
+    expect(catalogIndexText(second.reverse())).toBe(text);
+    expect(text.indexOf("installed:")).toBeLessThan(text.indexOf("mcp:"));
+    expect(text.indexOf("gmail:")).toBeLessThan(text.indexOf("hubspot:"));
+    expect(text.indexOf("mcp__gmail__list")).toBeLessThan(text.indexOf("mcp__gmail__send"));
+  });
+
+  it.each(["searches", "search", "an issue", "issues", "SEND EMAIL", "sendEmail"])(
+    "tokenizes and stems %s without searching schema text",
+    (query) => {
+      const entries = catalogEntries([
+        { name: "search_issue_send_email", description: "Find records", inputSchema: {} },
+        { name: "unrelated", description: "Unrelated", inputSchema: { description: query } },
+      ]);
+      const result = searchCatalog(entries, { query });
+      expect("tools" in result && result.tools.map((tool) => tool.name)).toEqual([
+        "search_issue_send_email",
+      ]);
+    },
+  );
+
+  it("returns no hits for unmatched or stop-word-only queries", () => {
     const entries = catalogEntries(multiGroupTools());
-    const [search] = lazyCatalogTools("mcp", "mcp", "MCP", entries);
-    expect(search?.description).toContain("gmail:");
-    expect(search?.description).toContain("list, read, send");
-    expect(search?.description).toContain("hubspot:");
-    expect(search?.description).toContain("get_deal, list_contacts");
-    expect(search?.description).not.toContain("inputSchema");
-    expect(search?.description).not.toContain("Send mail");
+    expect(searchCatalog(entries, { query: "the and an" })).toEqual({ tools: [] });
+    expect(searchCatalog(entries, { query: "unmatched" })).toEqual({ tools: [] });
   });
 
   it("returns an empty catalog as an empty tool list", () => {
@@ -191,14 +282,14 @@ describe("lazy tool catalog", () => {
   });
 
   it("returns a group count when expanding an over-budget source", () => {
-    const oversized = Array.from({ length: NAME_INDEX_MAX_NAMES + 5 }, (_, index) => ({
+    const oversized = Array.from({ length: 205 }, (_, index) => ({
       name: `tool_${index}`,
       description: "x".repeat(40),
       inputSchema: { type: "object", properties: { secretShape: { type: "string" } } },
       route: {
         connectorId: "test",
         resourceId: "big",
-        toolName: `tool_${index}`,
+        toolName: `tool_${index}_${"x".repeat(100)}`,
         catalogGroup: "huge",
       },
     }));
@@ -206,24 +297,24 @@ describe("lazy tool catalog", () => {
     const result = searchCatalog(entries, { group: "huge" });
     expect(result).toEqual({
       group: "huge",
-      count: NAME_INDEX_MAX_NAMES + 5,
+      count: 205,
       hint: "Pass query to search within this source.",
     });
     expect(JSON.stringify(result)).not.toContain("secretShape");
     expect(JSON.stringify(result)).not.toContain("tool_0");
     const searched = searchCatalog(entries, { group: "huge", query: "tool_0" });
-    expect("tools" in searched && searched.tools.map((item) => item.name)).toEqual(["tool_0"]);
+    expect("tools" in searched && searched.tools[0]?.name).toBe("tool_0");
   });
 
   it("returns groups with counts when the name index exceeds budget", () => {
-    const oversized = Array.from({ length: NAME_INDEX_MAX_NAMES + 5 }, (_, index) => ({
+    const oversized = Array.from({ length: 205 }, (_, index) => ({
       name: `tool_${index}`,
       description: "x".repeat(40),
       inputSchema: { type: "object", properties: { secretShape: { type: "string" } } },
       route: {
         connectorId: "test",
         resourceId: `src-${index}`,
-        toolName: `tool_${index}`,
+        toolName: `tool_${index}_${"x".repeat(100)}`,
         catalogGroup: `group_${Math.floor(index / 50)}`,
       },
     }));
@@ -441,14 +532,5 @@ describe("lazy tool catalog", () => {
     expect(catalogGroupLabel("Gmail", "api", "abcdefghij")).toBe("Gmail");
     expect(catalogGroupLabel("  ", "api", "abcdefghij")).toBe("api-abcdefgh");
     expect(catalogGroupLabel(undefined, "mcp", "xyz")).toBe("mcp-xyz");
-  });
-
-  it("formats a compact text index for descriptions", () => {
-    expect(
-      formatNameIndexText([
-        { group: "gmail", names: ["list", "read", "send"] },
-        { group: "hubspot", names: ["get_deal", "list_contacts"] },
-      ]),
-    ).toBe("gmail:\n  list, read, send\nhubspot:\n  get_deal, list_contacts");
   });
 });

@@ -202,6 +202,8 @@ export interface ConnectorTool {
   route?: ConnectorRoute;
   /** Display name of the connected app, for the live activity line only. Never exposed to the model. */
   appName?: string;
+  /** Highlight this tool in large catalog indexes. Metadata only, never exposed to the model. */
+  featured?: boolean;
   /** On a lazy catalog's execute tool: the tools it runs by id. Never exposed to the model. */
   catalog?: ReadonlyArray<{ id: string; tool: ConnectorTool }>;
 }

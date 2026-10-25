@@ -96,7 +96,13 @@ describe("a run whose bot runs in a guest", () => {
         ...(await guest()),
         steps: [
           {
-            expect() {},
+            expect(request) {
+              const system = String(
+                request.messages.find((message) => message.role === "system")?.content,
+              );
+              expect(system).toContain("After all work and any mcp__rakazo__message_user calls");
+              expect(system).not.toContain("After all work and any message_user calls");
+            },
             response: {
               type: "tool",
               id: "sh",

@@ -77,9 +77,15 @@ const isBlock = (value: unknown): value is McpBlock =>
 function resultBlocks(output: unknown): { blocks: McpBlock[]; isError: boolean } {
   if (typeof output === "string")
     return { blocks: [{ type: "text", text: output }], isError: false };
-  const result = output as { content?: unknown; isError?: unknown; error?: unknown } | null;
+  const result = output as {
+    content?: unknown;
+    isError?: unknown;
+    error?: unknown;
+    kind?: unknown;
+  } | null;
   if (typeof result?.error === "string" && result.error) {
-    return { blocks: [{ type: "text", text: result.error }], isError: true };
+    const text = typeof result.kind === "string" ? JSON.stringify(output) : result.error;
+    return { blocks: [{ type: "text", text }], isError: true };
   }
   if (Array.isArray(result?.content) && result.content.every(isBlock)) {
     return { blocks: result.content, isError: result.isError === true };

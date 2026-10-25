@@ -3,6 +3,18 @@ import type { AdapterContext, PortableFile, VolumeEntry, VolumeFiles } from "@ra
 import { fileMode, isPortablePath } from "@rakazo/adapter-kit";
 import { type ConnectionOpts, Sandbox, SandboxNotFoundError, TimeoutError } from "e2b";
 
+const STAGED_PREFIX = ".rakazo-";
+const STAGED_NAME =
+  /(?:^|\/)\.rakazo-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * Whether `path` has the name `write` stages a file under. A killed process, or a sandbox that
+ * died mid-write, leaves that file behind.
+ */
+export function isStagedWrite(path: string): boolean {
+  return STAGED_NAME.test(path);
+}
+
 /** Where a volume-files sandbox mounts the volume it serves. */
 export const VOLUME_FILES_MOUNT = "/mnt/rakazo-volume";
 
@@ -165,7 +177,7 @@ export class E2BVolumeFiles implements VolumeFiles {
           .catch(() => undefined);
       // Left by an attempt on a sandbox that died.
       for (const path of staged.splice(0)) await remove(path);
-      const temporary = `${directory}.rakazo-${randomUUID()}`;
+      const temporary = `${directory}${STAGED_PREFIX}${randomUUID()}`;
       staged.push(temporary);
       try {
         await sandbox.run(
@@ -193,6 +205,14 @@ export class E2BVolumeFiles implements VolumeFiles {
   async read(volumeRef: string, path: string, context: AdapterContext): Promise<Uint8Array> {
     const target = volumePath(path);
     return this.withSandbox(volumeRef, (sandbox) => sandbox.read(target, context.signal));
+  }
+
+  /** Removes a file, or a link without following it; nothing when the path is absent. */
+  async remove(volumeRef: string, path: string, context: AdapterContext): Promise<void> {
+    const target = volumePath(path);
+    await this.withSandbox(volumeRef, (sandbox) =>
+      sandbox.run(`rm -f ${quoted(target)}`, context.signal, "root"),
+    );
   }
 
   /** Destroys every sandbox opened, and reports the first failure once all were tried. */
