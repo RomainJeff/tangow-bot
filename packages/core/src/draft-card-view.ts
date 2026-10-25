@@ -102,6 +102,18 @@ export function draftSentTo(draft: AskDraft): string {
   return draftAddresses(draft, "to") || draftAddresses(draft);
 }
 
+/** The one line a sent draft keeps of its message: a mail's subject, else the text's first line. */
+export function draftSentLine(draft: AskDraft): string {
+  const subject = draft.subject?.trim();
+  if (subject) return subject;
+  return (
+    draft.body
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find(Boolean) ?? ""
+  );
+}
+
 /**
  * What the person changed on a draft card, kept on the device until Send: only the parts that
  * differ from what the card shows, so an empty object means nothing changed.

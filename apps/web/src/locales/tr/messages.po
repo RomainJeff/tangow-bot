@@ -103,7 +103,7 @@ msgstr ""
 msgid "{0}'s screen"
 msgstr "{0} adlı botun ekranı"
 
-#: src/components/DraftCard.tsx:271
+#: src/components/DraftCard.tsx:263
 msgid "{app} is disconnected."
 msgstr ""
 
@@ -681,7 +681,7 @@ msgstr "Oturum açmaya geri dön"
 msgid "Base URL"
 msgstr "Temel URL"
 
-#: src/components/DraftCard.tsx:264
+#: src/components/DraftCard.tsx:256
 msgid "Bcc"
 msgstr ""
 
@@ -811,7 +811,7 @@ msgstr "Yanıtı iptal et"
 msgid "Cancelled"
 msgstr "İptal edildi"
 
-#: src/components/DraftCard.tsx:264
+#: src/components/DraftCard.tsx:256
 msgid "Cc"
 msgstr ""
 
@@ -1177,7 +1177,7 @@ msgstr "E-posta ile devam et"
 msgid "Conversation cleared"
 msgstr ""
 
-#: src/components/DraftCard.tsx:309
+#: src/components/DraftCard.tsx:301
 #: src/pages/shell/message-actions-sheet.tsx:75
 #: src/pages/shell/message-hover-actions.tsx:98
 #: src/pages/shell/message-hover-actions.tsx:169
@@ -1835,12 +1835,12 @@ msgstr ""
 msgid "Disabled"
 msgstr "Devre dışı"
 
-#: src/components/DraftCard.tsx:300
+#: src/components/DraftCard.tsx:292
 msgid "Discard"
 msgstr ""
 
-#: src/components/DraftCard.tsx:231
-#: src/components/DraftCard.tsx:241
+#: src/components/DraftCard.tsx:223
+#: src/components/DraftCard.tsx:233
 msgid "Discarded"
 msgstr ""
 
@@ -1949,7 +1949,7 @@ msgstr "Düzenle"
 msgid "Edit and resend"
 msgstr "Düzenle ve yeniden gönder"
 
-#: src/components/DraftCard.tsx:403
+#: src/components/DraftCard.tsx:395
 msgid "Edit message"
 msgstr ""
 
@@ -1957,11 +1957,11 @@ msgstr ""
 msgid "Edit Profile"
 msgstr "Profili Düzenle"
 
-#: src/components/DraftCard.tsx:268
+#: src/components/DraftCard.tsx:260
 msgid "Edited"
 msgstr ""
 
-#: src/components/DraftCard.tsx:267
+#: src/components/DraftCard.tsx:259
 msgid "Editing"
 msgstr ""
 
@@ -2151,7 +2151,7 @@ msgstr "Parolanızı mı unuttunuz?"
 msgid "Free"
 msgstr "Ücretsiz"
 
-#: src/components/DraftCard.tsx:345
+#: src/components/DraftCard.tsx:337
 msgid "From"
 msgstr ""
 
@@ -2873,7 +2873,7 @@ msgstr "Henüz kurulu entegrasyon yok."
 
 #: src/components/ask/AskSettled.tsx:28
 #: src/components/AskCard.tsx:260
-#: src/components/DraftCard.tsx:248
+#: src/components/DraftCard.tsx:240
 msgid "No longer active"
 msgstr "Artık etkin değil"
 
@@ -2960,7 +2960,7 @@ msgstr "Eklenti kataloğunda değil"
 msgid "Not now"
 msgstr "Şimdi değil"
 
-#: src/components/DraftCard.tsx:266
+#: src/components/DraftCard.tsx:258
 msgid "Not sent"
 msgstr ""
 
@@ -3276,7 +3276,7 @@ msgstr ""
 msgid "Recommended · {description}"
 msgstr ""
 
-#: src/components/DraftCard.tsx:325
+#: src/components/DraftCard.tsx:317
 msgid "Reconnect {app}"
 msgstr ""
 
@@ -3446,7 +3446,7 @@ msgstr "API anahtarını değiştir"
 msgid "Replace key"
 msgstr "Anahtarı değiştir"
 
-#: src/components/DraftCard.tsx:245
+#: src/components/DraftCard.tsx:237
 msgid "Replaced"
 msgstr ""
 
@@ -3720,7 +3720,7 @@ msgstr "Bir bot seç"
 
 #: src/components/ask/QuestionCard.tsx:205
 #: src/components/ask/QuestionCard.tsx:306
-#: src/components/DraftCard.tsx:336
+#: src/components/DraftCard.tsx:328
 #: src/pages/shell/composer.tsx:407
 msgid "Send"
 msgstr "Gönder"
@@ -3734,12 +3734,12 @@ msgid "Send reset link"
 msgstr "Sıfırlama bağlantısı gönder"
 
 #: src/components/AskCard.tsx:304
-#: src/components/DraftCard.tsx:336
+#: src/components/DraftCard.tsx:328
 msgid "Sending…"
 msgstr "Gönderiliyor…"
 
-#: src/components/DraftCard.tsx:218
-msgid "Sent to {recipient} · {time}"
+#: src/components/DraftSent.tsx:22
+msgid "Sent"
 msgstr ""
 
 #: src/components/integrations/IntegrationSetup.tsx:132
@@ -3984,8 +3984,8 @@ msgstr "Güvenle saklanır. Burada gösterilmez."
 msgid "subagent"
 msgstr "alt ajan"
 
-#: src/components/DraftCard.tsx:387
-#: src/components/DraftCard.tsx:393
+#: src/components/DraftCard.tsx:379
+#: src/components/DraftCard.tsx:385
 msgid "Subject"
 msgstr ""
 
@@ -4127,8 +4127,12 @@ msgstr "Günün saati"
 msgid "Title"
 msgstr "Başlık"
 
-#: src/components/DraftCard.tsx:264
+#: src/components/DraftCard.tsx:256
 msgid "To"
+msgstr ""
+
+#: src/components/DraftSent.tsx:25
+msgid "to <0>{recipient}</0>"
 msgstr ""
 
 #: src/pages/shell/bot-picker.tsx:50
@@ -4157,7 +4161,7 @@ msgstr ""
 msgid "Treg token"
 msgstr "Treg token'ı"
 
-#: src/components/DraftCard.tsx:336
+#: src/components/DraftCard.tsx:328
 #: src/pages/Onboarding.tsx:685
 msgid "Try again"
 msgstr "Tekrar dene"
@@ -4174,7 +4178,7 @@ msgstr "Atanmamış"
 msgid "Unavailable"
 msgstr "Kullanılamıyor"
 
-#: src/components/DraftCard.tsx:237
+#: src/components/DraftCard.tsx:229
 msgid "Undo"
 msgstr ""
 

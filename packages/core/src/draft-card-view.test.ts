@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { DraftCard, DraftLocal } from "./draft-card-view.js";
-import { draftCardView, draftPrimaryAction, draftSentTo } from "./draft-card-view.js";
+import {
+  draftCardView,
+  draftPrimaryAction,
+  draftSentLine,
+  draftSentTo,
+} from "./draft-card-view.js";
 
 const draft: DraftCard["draft"] = {
   app: { name: "Mail", logo: null, account: "ana@example.com" },
@@ -159,6 +164,18 @@ describe("draftSentTo", () => {
     ).toBe("Marie Dupont");
     expect(draftSentTo({ ...chat, conversation: { kind: "channel", name: "general" } })).toBe(
       "#general",
+    );
+  });
+});
+
+describe("draftSentLine", () => {
+  it("keeps a mail's subject, and a message's first line when it has none", () => {
+    expect(draftSentLine(draft)).toBe("Thursday");
+    expect(
+      draftSentLine({ ...draft, subject: undefined, body: "\n  Hey Marie,\nThursday instead?" }),
+    ).toBe("Hey Marie,");
+    expect(draftSentLine({ ...draft, subject: "  ", body: "Thursday instead?" })).toBe(
+      "Thursday instead?",
     );
   });
 });

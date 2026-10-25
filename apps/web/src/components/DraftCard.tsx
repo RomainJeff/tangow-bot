@@ -10,13 +10,12 @@ import {
   draftCardView,
   draftChanges,
   draftPrimaryAction,
-  draftSentTo,
   foldedRoles,
   heldBack,
   RECIPIENT_ROLES,
 } from "@rakazo/core";
 import { Button, FramedBlock, Textarea, UserAvatar } from "@rakazo/ui-web";
-import { Check, Copy, Trash2 } from "lucide-react";
+import { Copy, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -27,6 +26,7 @@ import { userInitials } from "../lib/user-initials";
 import { AppLogo } from "./AppLogo";
 import type { CardEdits } from "./AskCard";
 import { ReadRow, RecipientLine, RowLabel, SubjectLine } from "./DraftLines";
+import { DraftSent } from "./DraftSent";
 
 /**
  * Who the mail leaves as, in the card's grid: the run owner's name and the sending account. The
@@ -205,19 +205,11 @@ export function DraftCard({
     icon: <AppLogo app={draft.app} chat={Boolean(draft.conversation)} />,
   };
   if (view.kind === "sent") {
-    const time = messageTimeLabel(view.at, i18n.locale);
-    const recipient = draftSentTo(draft);
     return (
       <FramedBlock
         data-testid="draft-card"
-        header={header}
-        question={<p className="whitespace-pre-wrap break-words font-normal">{draft.body}</p>}
-        answered={
-          <span className="inline-flex items-center gap-1">
-            <Check className="size-3.5 shrink-0" aria-hidden="true" />
-            {t`Sent to ${recipient} · ${time}`}
-          </span>
-        }
+        className="min-w-80"
+        answered={<DraftSent draft={draft} time={messageTimeLabel(view.at, i18n.locale)} />}
       />
     );
   }
