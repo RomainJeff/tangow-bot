@@ -450,6 +450,15 @@ function replayParts(
       calls: block.steps
         .flatMap((step) => step.calls ?? [])
         .map((call) => {
+          // A card's outcome is read whole: it holds what the user left, with no other copy.
+          if (call.outcome) {
+            return {
+              id: call.id ?? "",
+              name: call.name,
+              args: replayedToolArgs(call.input),
+              output: call.output,
+            };
+          }
           let output =
             call.output.length > REPLAY_OUTPUT_MAX_CHARS
               ? `${call.output.slice(0, REPLAY_OUTPUT_MAX_CHARS)}\n… truncated`

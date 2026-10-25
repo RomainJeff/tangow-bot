@@ -24,7 +24,7 @@ describe("outboundDraftIdentity", () => {
     });
   });
 
-  it("is the same for a mail issued again with other notes, flags or thread ids", () => {
+  it("is the same for a mail issued again with other notes or flags", () => {
     const first = identityOf("GMAIL_SEND_EMAIL", mail);
     expect(
       identityOf("GMAIL_SEND_EMAIL", {
@@ -32,9 +32,46 @@ describe("outboundDraftIdentity", () => {
         thought: "Retrying the mail.",
         is_html: false,
         include_signature: false,
-        thread_id: "t-1",
       }),
     ).toEqual(first);
+  });
+
+  it.each([
+    ["Gmail thread", "GMAIL_REPLY_TO_THREAD", { thread_id: "t-1" }, { thread_id: "t-2" }],
+    ["message", "GMAIL_SEND_EMAIL", { message_id: "m-1" }, { message_id: "m-2" }],
+    [
+      "Slack thread",
+      "SLACK_SEND_MESSAGE",
+      { channel: "C0OPS", markdown_text: "Done", thread_ts: "1.1" },
+      { channel: "C0OPS", markdown_text: "Done", thread_ts: "2.2" },
+    ],
+    [
+      "Slack broadcast",
+      "SLACK_SEND_MESSAGE",
+      { channel: "C0OPS", markdown_text: "Done", thread_ts: "1.1", reply_broadcast: false },
+      { channel: "C0OPS", markdown_text: "Done", thread_ts: "1.1", reply_broadcast: true },
+    ],
+  ])("tells the same text in another %s apart", (_, tool, first, second) => {
+    const base = tool === "GMAIL_SEND_EMAIL" || tool === "GMAIL_REPLY_TO_THREAD" ? mail : {};
+    const read = (extra: Record<string, unknown>) => {
+      const call = readOutboundCall(
+        [{ toolName: tool, args: { ...base, ...extra } }],
+        [],
+        new Set(["slack"]),
+      );
+      if (call.kind === "none" || call.kind === "refuse") throw new Error(`${tool}: ${call.kind}`);
+      if (call.kind === "classic") throw new Error(`${tool}: classic`);
+      return outboundDraftIdentity(call.draft);
+    };
+    expect(read(first)).not.toEqual(read(second));
+  });
+
+  it("tells the same message sent by another tool of a batch apart", () => {
+    const call = readOutboundCall([{ toolName: "GMAIL_SEND_EMAIL", args: mail }]);
+    if (call.kind !== "draft") throw new Error("not a draft");
+    expect(outboundDraftIdentity(call.draft, "GMAIL_SEND_EMAIL")).not.toEqual(
+      outboundDraftIdentity(call.draft, "GMAIL_REPLY_TO_THREAD"),
+    );
   });
 
   it("is the same whatever order and case the recipients come in", () => {

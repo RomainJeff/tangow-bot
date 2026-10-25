@@ -2924,6 +2924,35 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
         };
 
+        /**
+         * The key a draft's effect is recorded under: `base`, unless that draft was discarded or
+         * replaced and a person has typed in the thread since, when the same mail may be wanted
+         * after all and gets the next key. Without a newer message the stored outcome stands. The
+         * log keeps no author on a message, so another member of a group thread counts too.
+         */
+        const keyPastAnsweredDrafts = async (base: string) => {
+          let key = base;
+          for (let generation = 1; ; generation += 1) {
+            const existing = await deps.prisma.externalEffect.findUnique({
+              where: { idempotencyKey: key },
+              select: { status: true, draft: true, answeredAt: true },
+            });
+            const state = existing && readDraft(existing.status, existing.draft)?.state;
+            if (!existing?.answeredAt || (state !== "discarded" && state !== "replaced"))
+              return key;
+            const written = await deps.prisma.sessionEntry.count({
+              where: {
+                sessionId: thread.sessionId,
+                type: "user.message",
+                // Typed in the app: not a channel contact's, a routine's, or an answer inside a card.
+                payload: { path: ["source"], equals: "app" },
+                createdAt: { gt: existing.answeredAt },
+              },
+            });
+            if (written === 0) return key;
+            key = `${base}:${generation}`;
+          }
+        };
         const mutatingEffectOccurrences = new Map<string, number>();
         const consumedEffectIds = new Set<string>();
         const nextMutatingEffectOccurrence = (toolName: string, args: Record<string, unknown>) => {
@@ -3333,7 +3362,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
             requiresApprovalByDefault;
           // A draft is one effect per message it would send: the bot's own words in the call's
           // other arguments, a `thought` or a step note, change on every retry.
-          const keyArgs = outbound.kind === "draft" ? outboundDraftIdentity(outbound.draft) : args;
+          const keyArgs =
+            outbound.kind === "draft"
+              ? outboundDraftIdentity(outbound.draft, innerActions?.[0]?.toolName)
+              : args;
           // Count before choosing a key so an approved replay (occurrence 0 / base
           // key) cannot collide with a later identical-args call in this attempt.
           // request_secret stays single-use: retries must reuse the same card.
@@ -3341,12 +3373,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
             name === "request_secret"
               ? 0
               : nextMutatingEffectOccurrence(replayEffectToolName, keyArgs);
-          const effectKey =
+          const calledKey =
             approvedReplayConsumed && nextApprovedKey
               ? nextApprovedKey
               : usesApprovalKey && occurrence === 0
                 ? approvalEffectKey(runId, replayEffectToolName, keyArgs)
                 : toolEffectIdempotencyKey(runId, replayEffectToolName, keyArgs, occurrence);
+          // A draft the user discarded or replaced, then wrote to the bot again, no longer stands
+          // for the same mail: the identical call opens a new card, under the next key.
+          const effectKey =
+            outbound.kind === "draft" && !approvedReplayConsumed
+              ? await keyPastAnsweredDrafts(calledKey)
+              : calledKey;
           // A first call is validated and rate-limited before it can record an effect or show a
           // card. A resumed approval, or an effect that already exists for this key, returns its
           // stored outcome instead: it must never trip over a name it took itself.
@@ -5148,56 +5186,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
           return true;
         };
 
-        /**
-         * Gives each call a draft card paused the outcome of its card, as the result the model
-         * reads from then on, in every later attempt of the run. Written once under the thread
-         * lock: a call whose pause the log already replaced is left alone, so a crash between
-         * the send and this write only delays it to the next attempt.
-         */
-        const logDraftOutcomes = async (): Promise<SessionEntry[]> => {
-          const effects = await deps.prisma.externalEffect.findMany({
-            where: {
-              runId,
-              draft: { not: Prisma.DbNull },
-              status: { in: ["completed", "denied"] },
-            },
-            orderBy: APPROVED_EFFECT_REPLAY_ORDER,
-            select: {
-              id: true,
-              kind: true,
-              status: true,
-              request: true,
-              result: true,
-              draft: true,
-            },
-          });
-          if (effects.length === 0) return [];
-          return deps.prisma.$transaction(async (tx) => {
-            await tx.$queryRaw`SELECT id FROM threads WHERE id = ${thread.id} FOR UPDATE`;
-            if (!(await renewRunLease({ prisma: tx }, runId, workerId, fence))) {
-              throw new Error("This attempt no longer holds the run.");
-            }
-            const outcomes = endedDraftOutcomes(effects, await deps.sessionLog.readRun(runId));
-            const logged: SessionEntry[] = [];
-            for (const { callId, result } of outcomes) {
-              const shown = redactConnectorPayload(result, runSecrets);
-              logged.push(
-                await deps.sessionLog.append(tx, {
-                  ...runLog,
-                  type: "tool.result",
-                  payload: {
-                    callId,
-                    output: describeToolPayload(shown, runSecrets),
-                    isError: isFailedToolResult(shown),
-                    artifactIds: [],
-                  },
-                }),
-              );
-            }
-            return logged;
-          });
-        };
-
         const settleSentDraft = async (
           effect: { id: string; request: unknown },
           draft: DraftRecord,
@@ -5298,7 +5286,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
             )}\n\n${taskPrompt}`
           : taskPrompt;
         if (!(await sendApprovedDrafts())) return;
-        const draftOutcomes = await logDraftOutcomes();
+        const draftOutcomes = await logDraftOutcomes(
+          deps,
+          { runId, threadId: thread.id },
+          runSecrets,
+          { holdsRun: (tx) => renewRunLease({ prisma: tx }, runId, workerId, fence) },
+        );
         const approvalContinuation = buildApprovalContinuation(
           replayedEffects,
           (request) => redactSecrets(JSON.stringify(request), runSecrets),
@@ -7712,6 +7705,7 @@ async function failStrandedRoutineCards(
     where: { runId: target.runId, status: { in: ["approved", "executing"] } },
     select: { id: true, kind: true, status: true, draft: true },
   });
+  const unsentDrafts: string[] = [];
   for (const { id, kind, status, draft } of stranded) {
     const unsent = readDraft(status, draft);
     if (!unsent && status !== "approved") continue;
@@ -7725,6 +7719,7 @@ async function failStrandedRoutineCards(
       : (PROPOSAL_EFFECT_KINDS as string[]).includes(kind) &&
         (await completeExternalEffect(deps.prisma, id, "approved", ROUTINE_NOT_CREATED_RESULT));
     // A draft stopped mid-send may have left: the card asks the user to check, never resends.
+    if (settled && unsent) unsentDrafts.push(id);
     if (settled) {
       await settleRoutineCard(deps, target, id, {
         failed: true,
@@ -7732,6 +7727,72 @@ async function failStrandedRoutineCards(
       });
     }
   }
+  if (unsentDrafts.length > 0) {
+    // A cancelled run writes nothing to its log: its pause stays what its later readers see.
+    await logDraftOutcomes(deps, target, [], { only: unsentDrafts }).catch((error: unknown) => {
+      if (!(error instanceof RunHistoryWriteError)) throw error;
+    });
+  }
+}
+
+/**
+ * Gives each call a draft card paused the outcome of its card, as the result the model reads from
+ * then on, in every later attempt of the run: sent, discarded, replaced, or, for a send the run
+ * ended on, unknown. A shown-again Not sent draft is still pending and has none yet. Written under
+ * the thread lock, and only for a call still answered by its pause, so a retry or a crash writes it
+ * once or late, never twice. One function for every runtime, so the paths cannot diverge.
+ */
+export async function logDraftOutcomes(
+  deps: Pick<ExecutorDeps, "prisma" | "sessionLog">,
+  target: { runId: string; threadId: string },
+  secrets: string[],
+  options: {
+    only?: readonly string[];
+    holdsRun?: (tx: Prisma.TransactionClient) => Promise<boolean>;
+  } = {},
+): Promise<SessionEntry[]> {
+  const effects = await deps.prisma.externalEffect.findMany({
+    where: {
+      runId: target.runId,
+      draft: { not: Prisma.DbNull },
+      status: { in: ["completed", "denied"] },
+      ...(options.only ? { id: { in: [...options.only] } } : {}),
+    },
+    orderBy: APPROVED_EFFECT_REPLAY_ORDER,
+    select: { id: true, kind: true, status: true, request: true, result: true, draft: true },
+  });
+  if (effects.length === 0) return [];
+  const run = await deps.prisma.run.findUniqueOrThrow({
+    where: { id: target.runId },
+    select: { sessionId: true, botId: true },
+  });
+  return deps.prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
+    if (options.holdsRun && !(await options.holdsRun(tx))) {
+      throw new Error("This attempt no longer holds the run.");
+    }
+    const outcomes = endedDraftOutcomes(effects, await deps.sessionLog.readRun(target.runId));
+    const logged: SessionEntry[] = [];
+    for (const { callId, pauseId, result } of outcomes) {
+      const shown = redactConnectorPayload(result, secrets);
+      logged.push(
+        await deps.sessionLog.append(tx, {
+          sessionId: run.sessionId as SessionId,
+          botId: run.botId,
+          runId: target.runId,
+          type: "tool.result",
+          payload: {
+            callId,
+            output: describeToolPayload(shown, secrets),
+            isError: isFailedToolResult(shown),
+            artifactIds: [],
+            replaces: pauseId,
+          },
+        }),
+      );
+    }
+    return logged;
+  });
 }
 
 type RoutineCardOutcome =

@@ -45,6 +45,7 @@ type Effect = {
   runId?: string;
   run?: { threadId: string; botId: string; status: string };
   draft?: unknown;
+  answeredAt?: Date;
 };
 
 function fixture({
@@ -167,6 +168,8 @@ function fixture({
     ),
   };
   const log = recordingSessionLog();
+  /** When the person wrote in the thread, as the executor counts the messages after a card. */
+  const userMessages: Array<{ at: Date; source: string }> = [];
   const pauseRunForInput = vi.fn(
     async (input: { blocks: unknown[]; effect?: { id: string; reopen?: unknown } }) => {
       if (input.effect?.reopen) {
@@ -202,6 +205,12 @@ function fixture({
         },
       ),
       findUnique: vi.fn(async () => ({ sessionId: "session-main" })),
+      count: vi.fn(
+        async ({ where }: { where: { createdAt: { gt: Date }; payload: { equals: string } } }) =>
+          userMessages.filter(
+            (message) => message.at > where.createdAt.gt && message.source === where.payload.equals,
+          ).length,
+      ),
     },
     $queryRaw: log.queryRaw,
     $transaction: async (work: (tx: unknown) => unknown) => work(prisma),
@@ -336,6 +345,7 @@ function fixture({
     events,
     log,
     runRow: run,
+    userMessages,
     disconnect() {
       connected = false;
     },
@@ -1624,6 +1634,98 @@ describe("connector read-only metadata and approval enforcement", () => {
           expect(f.pauseRunForInput).not.toHaveBeenCalled();
         },
       );
+
+      describe("after the person wrote in the thread", () => {
+        const answeredAt = new Date("2026-10-25T10:00:00Z");
+        const before = new Date("2026-10-25T09:59:00Z");
+        const after = new Date("2026-10-25T10:05:00Z");
+        const answered = async (state: "discarded" | "replaced") => {
+          const f = await drafted();
+          f.effects[0]!.status = "denied";
+          f.effects[0]!.answeredAt = answeredAt;
+          f.effects[0]!.draft = { ...(f.effects[0]!.draft as DraftRecord), state };
+          f.pauseRunForInput.mockClear();
+          return f;
+        };
+
+        it.each(["discarded", "replaced"] as const)(
+          "opens a new card for the same mail whose draft was %s",
+          async (state) => {
+            const f = await answered(state);
+            f.userMessages.push({ at: after, source: "app" });
+            f.setCalls([{ args: send, executionId: "c2" }]);
+            await f.run();
+            expect(f.effects.map((effect) => effect.status)).toEqual(["denied", "intended"]);
+            expect(f.effects[1]!.idempotencyKey).toBe(`${f.effects[0]!.idempotencyKey}:1`);
+            expect(f.pauseRunForInput).toHaveBeenCalledOnce();
+          },
+        );
+
+        it("keeps the stored outcome when the person wrote only before the card was answered", async () => {
+          const f = await answered("discarded");
+          f.userMessages.push({ at: before, source: "app" });
+          f.setCalls([{ args: { ...send, thought: "Again." }, executionId: "c2" }]);
+          await f.run();
+          expect(f.results.at(-1)).toMatchObject({ ok: false, discarded: true });
+          expect(f.effects).toHaveLength(1);
+          expect(f.pauseRunForInput).not.toHaveBeenCalled();
+        });
+
+        it.each(["channel", "routine", "card", "steering"])(
+          "keeps the stored outcome when what came after was a %s message, not one typed in the app",
+          async (source) => {
+            const f = await answered("discarded");
+            f.userMessages.push({ at: after, source });
+            f.setCalls([{ args: send, executionId: "c2" }]);
+            await f.run();
+            expect(f.results.at(-1)).toMatchObject({ ok: false, discarded: true });
+            expect(f.effects).toHaveLength(1);
+          },
+        );
+
+        it("keeps the stored outcome of the new card once it was discarded with nothing written since", async () => {
+          const f = await answered("discarded");
+          f.userMessages.push({ at: after, source: "app" });
+          f.setCalls([{ args: send, executionId: "c2" }]);
+          await f.run();
+          f.effects[1]!.status = "denied";
+          f.effects[1]!.answeredAt = new Date("2026-10-25T10:10:00Z");
+          f.effects[1]!.draft = { ...(f.effects[1]!.draft as DraftRecord), state: "discarded" };
+          f.pauseRunForInput.mockClear();
+          f.setCalls([{ args: send, executionId: "c3" }]);
+          await f.run();
+          expect(f.results.at(-1)).toMatchObject({ ok: false, discarded: true });
+          expect(f.effects).toHaveLength(2);
+          expect(f.pauseRunForInput).not.toHaveBeenCalled();
+        });
+
+        it("does not reopen a draft that was sent", async () => {
+          const f = await drafted();
+          f.effects[0]!.status = "completed";
+          f.effects[0]!.answeredAt = answeredAt;
+          f.effects[0]!.result = { ok: true, note: "The user sent this message." };
+          f.effects[0]!.draft = { ...(f.effects[0]!.draft as DraftRecord), state: "sent", at: "x" };
+          f.userMessages.push({ at: after, source: "app" });
+          f.pauseRunForInput.mockClear();
+          f.setCalls([{ args: send, executionId: "c2" }]);
+          await f.run();
+          expect(f.results.at(-1)).toMatchObject({ ok: true });
+          expect(f.effects).toHaveLength(1);
+        });
+      });
+
+      it("opens a new card for the same text in another thread, whose reply is not the one sent", async () => {
+        const f = await drafted({ ...send, thread_id: "thread-x" });
+        f.effects[0]!.status = "completed";
+        f.effects[0]!.result = { ok: true, note: "The user sent this message." };
+        f.effects[0]!.draft = { ...(f.effects[0]!.draft as DraftRecord), state: "sent", at: "x" };
+        f.setCalls([{ args: { ...send, thread_id: "thread-y" }, executionId: "c2" }]);
+        await f.run();
+        expect(f.effects.map((effect) => effect.status)).toEqual(["completed", "intended"]);
+        f.setCalls([{ args: { ...send, thread_id: "thread-x" }, executionId: "c3" }]);
+        await f.run();
+        expect(f.results.at(-1)).toMatchObject({ ok: true });
+      });
 
       it("opens a new card for a mail with another text", async () => {
         const f = await drafted();

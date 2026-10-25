@@ -380,6 +380,9 @@ export const MessageBlock = z.discriminatedUnion("kind", [
               /** Provider tool-call id: lets a later turn replay the call as a real tool
                   turn. Absent on blocks recorded before it was stored. */
               id: z.string().optional(),
+              /** The result is the outcome of a card the call raised, which a short replay of
+                  past steps reads whole: it holds what the person decided or wrote. */
+              outcome: z.literal(true).optional(),
             }),
           )
           .optional(),
