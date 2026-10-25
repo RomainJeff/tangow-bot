@@ -1,6 +1,12 @@
 import type { AdapterContext, ConnectorEvent, ConnectorTool } from "@rakazo/adapter-kit";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  approvalReplayResourceError,
+  approvedReplayArgs,
+  boundDirectApprovalRequest,
+  createApprovedEffectReplayQueue,
+} from "./approval-effect.js";
 import { composioToolkitDirectory, composioToolSchemas } from "./composio-catalog-cache.js";
 import {
   ComposioConnector,
@@ -17,10 +23,12 @@ import {
   sanitizeComposioError,
 } from "./composio-connector.js";
 import { DestinationEmulator } from "./destination-emulator.js";
+import { catalogEntries } from "./lazy-tool-catalog.js";
 
 const composioSdkState = vi.hoisted(() => ({
   created: [] as Array<{ userId: string; config: Record<string, unknown> }>,
   directoryFails: false,
+  directorySlug: "GITHUB",
   rawTools:
     vi.fn<
       (_query: { toolkits: string[]; important?: boolean; limit: number }) => Promise<
@@ -99,7 +107,7 @@ vi.mock("@composio/core", () => ({
             return {
               items: [
                 {
-                  slug: "GITHUB",
+                  slug: composioSdkState.directorySlug,
                   name: "GitHub",
                   logo: null,
                   isNoAuth: false,
@@ -151,6 +159,12 @@ function contextWith(
   };
 }
 
+function approvalRoute(tool: ConnectorTool) {
+  const route = tool.route;
+  if (!route?.resourceId) throw new Error("Expected a bound connector route");
+  return { ...route, resourceId: route.resourceId };
+}
+
 async function executeEvents(
   connector: ComposioConnector,
   tool: ConnectorTool,
@@ -170,6 +184,7 @@ beforeEach(() => {
   composioToolkitDirectory.invalidate();
   composioToolSchemas.clear();
   composioSdkState.directoryFails = false;
+  composioSdkState.directorySlug = "GITHUB";
   composioSdkState.rawTools.mockReset().mockResolvedValue([rawTool()]);
   composioSdkState.execute
     .mockReset()
@@ -199,8 +214,8 @@ describe("native Composio tools", () => {
         featured: true,
         route: {
           connectorId: "composio",
-          resourceId: "GITHUB",
-          resourceRevision: "20261023_00",
+          resourceId: "github",
+          resourceRevision: "ca-work",
           toolName: "GITHUB_GET_REPOS",
           catalogGroup: "github",
         },
@@ -238,13 +253,13 @@ describe("native Composio tools", () => {
         }),
       }),
     );
-    const loaded = await executeEvents(connector, tools[1]!, { id: "GITHUB:GITHUB_ACTION_20" });
+    const loaded = await executeEvents(connector, tools[1]!, { id: "github:GITHUB_ACTION_20" });
     expect(loaded[0]).toMatchObject({ type: "result" });
     const resolved = await connector.resolveCall(
       {
         tool: tools[2]!.name,
         route: tools[2]!.route,
-        args: { id: "GITHUB:GITHUB_ACTION_20", arguments: { owner: "example" } },
+        args: { id: "github:GITHUB_ACTION_20", arguments: { owner: "example" } },
         executionId: "test",
       },
       context,
@@ -254,7 +269,7 @@ describe("native Composio tools", () => {
       call: {
         tool: "GITHUB_ACTION_20",
         args: { owner: "example" },
-        route: { resourceId: "GITHUB", resourceRevision: "20261023_00" },
+        route: { resourceId: "github", resourceRevision: "ca-work" },
       },
     });
     await executeEvents(connector, resolved!.tool, resolved!.call.args, context);
@@ -279,8 +294,10 @@ describe("native Composio tools", () => {
     ]);
     const [tool] = await connector.discoverTools(context);
     expect(tool!.inputSchema).toMatchObject({
-      properties: { account: { type: "string", enum: ["Work (1111)", "Work (2222)", "Personal"] } },
-      required: ["owner", "account"],
+      properties: {
+        composio_account: { type: "string", enum: ["Work (1111)", "Work (2222)", "Personal"] },
+      },
+      required: ["owner", "composio_account"],
     });
     expect(raw.inputParameters).toEqual({
       type: "object",
@@ -293,7 +310,12 @@ describe("native Composio tools", () => {
     });
     expect(single!.inputSchema).toEqual(raw.inputParameters);
     expect(
-      await executeEvents(connector, tool!, { owner: "example", account: "Work (2222)" }, context),
+      await executeEvents(
+        connector,
+        tool!,
+        { owner: "example", composio_account: "Work (2222)" },
+        context,
+      ),
     ).toEqual([{ type: "result", data: { data: { ok: true }, logId: "log-result" } }]);
     expect(composioSdkState.execute).toHaveBeenCalledWith("GITHUB_GET_REPOS", {
       userId: "workspace__user-1",
@@ -302,7 +324,7 @@ describe("native Composio tools", () => {
       version: "20261023_00",
     });
     composioSdkState.execute.mockClear();
-    for (const args of [{ owner: "example", account: "Unknown" }, { owner: "example" }]) {
+    for (const args of [{ owner: "example", composio_account: "Unknown" }, { owner: "example" }]) {
       expect(await executeEvents(connector, tool!, args, context)).toEqual([
         expect.objectContaining({
           type: "error",
@@ -320,6 +342,7 @@ describe("native Composio tools", () => {
       const connector = new ComposioConnector();
       const context = contextWith([{ name: "Public", ref }]);
       const [tool] = await connector.discoverTools(context);
+      expect(tool!.route).not.toHaveProperty("resourceRevision");
       await executeEvents(connector, tool!, { owner: "example" }, context);
       expect(composioSdkState.execute).toHaveBeenCalledWith("GITHUB_GET_REPOS", {
         userId: "workspace__user-1",
@@ -328,6 +351,147 @@ describe("native Composio tools", () => {
       });
     },
   );
+
+  it("replays an approved action after schema version A refreshes to version B", async () => {
+    const connector = new ComposioConnector();
+    const context = contextWith();
+    composioSdkState.rawTools.mockResolvedValue([{ ...rawTool(), version: "version-A" }]);
+    const [before] = await connector.discoverTools(context);
+    const marker = "__rakazoCatalogTool";
+    const request = boundDirectApprovalRequest(
+      approvalRoute(before!),
+      { owner: "example" },
+      marker,
+    );
+    const queue = createApprovedEffectReplayQueue([{ kind: before!.name, request }]);
+    composioToolSchemas.clear();
+    composioSdkState.rawTools.mockResolvedValue([{ ...rawTool(), version: "version-B" }]);
+    const restarted = new ComposioConnector();
+    const [after] = await restarted.discoverTools(context);
+    expect(
+      approvalReplayResourceError(
+        after!.name,
+        false,
+        queue.nextRequest(),
+        approvalRoute(after!),
+        marker,
+      ),
+    ).toBeUndefined();
+    const args = approvedReplayArgs(queue.take(after!.name), {}, marker);
+    expect(await executeEvents(restarted, after!, args, context)).toContainEqual(
+      expect.objectContaining({ type: "result" }),
+    );
+    expect(queue.assertDrained).not.toThrow();
+    expect(composioSdkState.execute).toHaveBeenCalledWith("GITHUB_GET_REPOS", {
+      userId: "workspace__user-1",
+      connectedAccountId: "ca-work",
+      arguments: { owner: "example" },
+      version: "version-B",
+    });
+  });
+
+  it("refuses approval replay when the connected account set changes", async () => {
+    const connector = new ComposioConnector();
+    const accounts = [
+      { name: "Work", ref: "ca-work" },
+      { name: "Personal", ref: "ca-personal" },
+    ];
+    const [before] = await connector.discoverTools(contextWith(accounts));
+    const marker = "__rakazoCatalogTool";
+    const request = boundDirectApprovalRequest(
+      approvalRoute(before!),
+      { owner: "example", composio_account: "Work" },
+      marker,
+    );
+    const [reordered] = await connector.discoverTools(contextWith([...accounts].reverse()));
+    expect(
+      approvalReplayResourceError(before!.name, false, request, approvalRoute(reordered!), marker),
+    ).toBeUndefined();
+    const [changed] = await connector.discoverTools(
+      contextWith([{ name: "Work", ref: "ca-replaced" }, accounts[1]!]),
+    );
+    expect(
+      approvalReplayResourceError(before!.name, false, request, approvalRoute(changed!), marker),
+    ).toContain("different connector resource");
+    expect(composioSdkState.execute).not.toHaveBeenCalled();
+  });
+
+  it("preserves a tool's own account argument while selecting the Composio connection", async () => {
+    composioSdkState.rawTools.mockResolvedValue([
+      {
+        ...rawTool("STRIPE_GET_ACCOUNT_PERSONS"),
+        inputParameters: {
+          type: "object",
+          properties: { account: { type: "string" } },
+          required: ["account"],
+        },
+      },
+    ]);
+    const connector = new ComposioConnector();
+    const context = contextWith([
+      { name: "Work", ref: "ca-work", toolkit: "stripe" },
+      { name: "Personal", ref: "ca-personal", toolkit: "stripe" },
+    ]);
+    const [tool] = await connector.discoverTools(context);
+    expect(tool!.inputSchema).toMatchObject({
+      properties: {
+        account: { type: "string" },
+        composio_account: { type: "string", enum: ["Work", "Personal"] },
+      },
+      required: ["account", "composio_account"],
+    });
+    await executeEvents(
+      connector,
+      tool!,
+      { account: "acct-example", composio_account: "Personal" },
+      context,
+    );
+    expect(composioSdkState.execute).toHaveBeenCalledWith("STRIPE_GET_ACCOUNT_PERSONS", {
+      userId: "workspace__user-1",
+      connectedAccountId: "ca-personal",
+      arguments: { account: "acct-example" },
+      version: "20261023_00",
+    });
+  });
+
+  it("keeps route, cache and catalog identities stable when the directory recovers with different casing", async () => {
+    composioSdkState.directoryFails = true;
+    const connector = new ComposioConnector();
+    const [before] = await connector.discoverTools(contextWith());
+    composioSdkState.directoryFails = false;
+    composioSdkState.directorySlug = "github";
+    const [after] = await connector.discoverTools(contextWith());
+    expect(approvalRoute(before!).resourceId).toBe("github");
+    expect(approvalRoute(after!)).toEqual(approvalRoute(before!));
+    expect(catalogEntries([before!])[0]?.id).toBe("github:GITHUB_GET_REPOS");
+    expect(catalogEntries([after!])[0]?.id).toBe("github:GITHUB_GET_REPOS");
+    expect(composioSdkState.rawTools).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps toolkit actions available when the optional important list fails", async () => {
+    composioSdkState.rawTools.mockImplementation(async (query) => {
+      if (query.important) throw new Error("important unavailable");
+      return [rawTool()];
+    });
+    const connector = new ComposioConnector();
+    const [tool] = await connector.discoverTools(contextWith());
+    expect(tool).toMatchObject({ name: "GITHUB_GET_REPOS", featured: undefined });
+    expect(await executeEvents(connector, tool!, { owner: "example" })).toContainEqual(
+      expect.objectContaining({ type: "result" }),
+    );
+  });
+
+  it("loads a tool's version on an execution cache miss", async () => {
+    const connector = new ComposioConnector();
+    const [tool] = await connector.discoverTools(contextWith());
+    composioToolSchemas.clear();
+    composioSdkState.rawTools.mockResolvedValue([{ ...rawTool(), version: "version-B" }]);
+    await executeEvents(new ComposioConnector(), tool!, { owner: "example" });
+    expect(composioSdkState.execute).toHaveBeenCalledWith(
+      "GITHUB_GET_REPOS",
+      expect.objectContaining({ version: "version-B" }),
+    );
+  });
 
   it("keeps other toolkit tools when one toolkit fails", async () => {
     composioSdkState.rawTools.mockImplementation(async (query) => {
@@ -343,12 +507,9 @@ describe("native Composio tools", () => {
     expect(tools.map((tool) => tool.name)).toEqual(["GITHUB_GET_REPOS"]);
   });
 
-  it("requires a toolkit and pinned version before executing", async () => {
+  it("requires a toolkit route before executing", async () => {
     const connector = new ComposioConnector();
-    for (const route of [
-      undefined,
-      { connectorId: "composio", toolName: "GITHUB_GET_REPOS", resourceId: "GITHUB" },
-    ]) {
+    for (const route of [undefined, { connectorId: "composio", toolName: "GITHUB_GET_REPOS" }]) {
       expect(
         await executeEvents(
           connector,

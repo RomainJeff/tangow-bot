@@ -68,7 +68,12 @@ export function createToolkitDirectoryCache<T = ToolkitDirectoryEntry>(opts?: {
 
 export const composioToolkitDirectory = createToolkitDirectoryCache();
 
+export type ComposioToolSchema = {
+  tool: ConnectorTool & { route: NonNullable<ConnectorTool["route"]> };
+  version: string;
+};
+
 export const composioToolSchemas = new Map<
   string,
-  ReturnType<typeof createToolkitDirectoryCache<ConnectorTool>>
+  ReturnType<typeof createToolkitDirectoryCache<ComposioToolSchema>>
 >();

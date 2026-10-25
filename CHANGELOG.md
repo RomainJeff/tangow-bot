@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
-- Bots on web, desktop and iPhone call the actions of apps connected through Composio directly, and activity and approvals name the real action.
+- Bots on web, desktop and iPhone call the actions of apps connected through Composio directly, and activity and approvals name the real action; saved "always allow" rules on the old Composio batch tool no longer apply, so those actions may ask for approval again.
 
 - Bots on web, desktop and iPhone find the right tools of connected apps that expose many tools more reliably.
 

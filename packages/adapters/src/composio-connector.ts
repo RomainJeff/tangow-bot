@@ -10,7 +10,7 @@ import type {
   ManagedConnectorProvider,
 } from "@rakazo/adapter-kit";
 import { getLogger } from "@rakazo/logging";
-import type { ToolkitDirectoryEntry } from "./composio-catalog-cache.js";
+import type { ComposioToolSchema, ToolkitDirectoryEntry } from "./composio-catalog-cache.js";
 import {
   composioToolkitDirectory,
   composioToolSchemas,
@@ -260,74 +260,90 @@ export class ComposioConnector implements ComposioProvider {
     return resolveCatalogCall(call, catalogEntries(await this.authorizedTools(context)));
   }
 
+  private async toolSchemas(toolkit: string): Promise<ComposioToolSchema[]> {
+    const key = composioSlugKey(toolkit);
+    let cache = composioToolSchemas.get(key);
+    if (!cache) {
+      cache = createToolkitDirectoryCache<ComposioToolSchema>();
+      composioToolSchemas.set(key, cache);
+    }
+    return cache.get(async () => {
+      const directory = await this.directory().catch(() => []);
+      const [raw, important] = await Promise.all([
+        this.sdk().tools.getRawComposioTools({ toolkits: [toolkit], limit: 1000 }),
+        this.sdk()
+          .tools.getRawComposioTools({ toolkits: [toolkit], important: true, limit: 1000 })
+          .catch(() => []),
+      ]);
+      const featured = new Set(important.map((tool) => tool.slug));
+      const appName = directory.find((item) => composioSlugKey(item.slug) === key)?.name ?? toolkit;
+      return raw.flatMap((tool): ComposioToolSchema[] => {
+        if (tool.isDeprecated) return [];
+        if (!tool.version) {
+          getLogger().warn("composio tool has no version", { tool: tool.slug });
+          return [];
+        }
+        return [
+          {
+            version: tool.version,
+            tool: {
+              name: tool.slug,
+              description: tool.description ?? tool.slug,
+              inputSchema: tool.inputParameters ?? { type: "object", properties: {} },
+              appName,
+              readOnly: tool.tags?.includes("readOnlyHint") || undefined,
+              featured: featured.has(tool.slug) || undefined,
+              route: {
+                connectorId: "composio",
+                resourceId: key,
+                toolName: tool.slug,
+                catalogGroup: key,
+              },
+            },
+          },
+        ];
+      });
+    });
+  }
+
   private async authorizedTools(context: AdapterContext): Promise<ConnectorTool[]> {
     const connections = connectedComposioConnections(context);
     if (!connections.length) return [];
     const toolkits = await this.canonicalizeToolkits(
       connections.map((connection) => connection.externalId),
     );
-    const directory = await this.directory().catch(() => []);
     const groups = await Promise.all(
       toolkits.map(async (toolkit): Promise<ConnectorTool[]> => {
         try {
-          let cache = composioToolSchemas.get(toolkit);
-          if (!cache) {
-            cache = createToolkitDirectoryCache<ConnectorTool>();
-            composioToolSchemas.set(toolkit, cache);
-          }
-          const tools = await cache.get(async () => {
-            const [raw, important] = await Promise.all([
-              this.sdk().tools.getRawComposioTools({ toolkits: [toolkit], limit: 1000 }),
-              this.sdk().tools.getRawComposioTools({
-                toolkits: [toolkit],
-                important: true,
-                limit: 1000,
-              }),
-            ]);
-            const featured = new Set(important.map((tool) => tool.slug));
-            const appName =
-              directory.find((item) => composioSlugKey(item.slug) === composioSlugKey(toolkit))
-                ?.name ?? toolkit;
-            return raw.flatMap((tool): ConnectorTool[] => {
-              if (tool.isDeprecated) return [];
-              if (!tool.version) {
-                getLogger().warn("composio tool has no version", { tool: tool.slug });
-                return [];
-              }
-              return [
-                {
-                  name: tool.slug,
-                  description: tool.description ?? tool.slug,
-                  inputSchema: tool.inputParameters ?? { type: "object", properties: {} },
-                  appName,
-                  readOnly: tool.tags?.includes("readOnlyHint") || undefined,
-                  featured: featured.has(tool.slug) || undefined,
-                  route: {
-                    connectorId: "composio",
-                    resourceId: toolkit,
-                    resourceRevision: tool.version,
-                    toolName: tool.slug,
-                    catalogGroup: toolkit.toLowerCase(),
-                  },
-                },
-              ];
-            });
-          });
+          const schemas = await this.toolSchemas(toolkit);
           const accounts = toolkitAccounts(toolkit, context);
-          if (accounts.length < 2) return tools;
-          return tools.map((tool) => ({
+          const resourceRevision =
+            accounts
+              .map((account) => account.id)
+              .sort()
+              .join(",") || undefined;
+          return schemas.map(({ tool }) => ({
             ...tool,
-            inputSchema: {
-              ...tool.inputSchema,
-              properties: {
-                ...schemaProperties(tool.inputSchema.properties),
-                account: { type: "string", enum: accounts.map((account) => account.label) },
-              },
-              required: [
-                ...(Array.isArray(tool.inputSchema.required) ? tool.inputSchema.required : []),
-                "account",
-              ],
-            },
+            route: { ...tool.route, ...(resourceRevision ? { resourceRevision } : {}) },
+            inputSchema:
+              accounts.length < 2
+                ? tool.inputSchema
+                : {
+                    ...tool.inputSchema,
+                    properties: {
+                      ...schemaProperties(tool.inputSchema.properties),
+                      composio_account: {
+                        type: "string",
+                        enum: accounts.map((account) => account.label),
+                      },
+                    },
+                    required: [
+                      ...(Array.isArray(tool.inputSchema.required)
+                        ? tool.inputSchema.required
+                        : []),
+                      "composio_account",
+                    ],
+                  },
           }));
         } catch (error) {
           getLogger().error(
@@ -351,14 +367,12 @@ export class ComposioConnector implements ComposioProvider {
         );
         return;
       }
-      if (!call.route?.resourceId || !call.route.resourceRevision) {
-        throw new ConnectorError(
-          "invalid_arguments",
-          "Composio toolkit and tool version are required",
-        );
+      if (!call.route?.resourceId) {
+        throw new ConnectorError("invalid_arguments", "Composio toolkit route is required");
       }
-      const { account, ...args } = call.args ?? {};
-      const accounts = toolkitAccounts(call.route.resourceId, context);
+      const { resourceId, toolName } = call.route;
+      const { composio_account: account, ...args } = call.args ?? {};
+      const accounts = toolkitAccounts(resourceId, context);
       const selected =
         account === undefined && accounts.length < 2
           ? accounts[0]
@@ -369,11 +383,14 @@ export class ComposioConnector implements ComposioProvider {
           "Select a valid account for this Composio toolkit",
         );
       }
-      const result = await this.sdk().tools.execute(call.route.toolName, {
+      const schemas = await this.toolSchemas(resourceId);
+      const schema = schemas.find(({ tool }) => tool.name === toolName);
+      if (!schema) throw new ConnectorError("unsupported", "Composio tool is no longer available");
+      const result = await this.sdk().tools.execute(toolName, {
         userId: composioEntityId(context),
         ...(selected ? { connectedAccountId: selected.id } : {}),
         arguments: args,
-        version: String(call.route.resourceRevision),
+        version: schema.version,
       });
       if (result.error) {
         yield { ...connectorError(result.error), message: sanitizeComposioError(result.error) };
