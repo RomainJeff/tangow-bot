@@ -41,6 +41,7 @@ Fix configuration rather than disabling workers or using the scripted runtime.
 | Inspect a failure | `./tangow status`, `./tangow logs worker` or `./tangow logs api` | Failed stage and checkout/runtime mismatch. |
 | Rebuild only computers/templates | `./tangow computers build` | Source must match the running API and worker; use `update` for a new revision. |
 | Move Docker homes to E2B | `./tangow provider e2b` | Existing setup completes backups, home migration and provider readiness. |
+| Move E2B volumes to Docker | `./tangow provider docker --migrate-existing` | Verified bot/private and shared copies, preserved IDs, Docker readiness; source E2B volumes retained. |
 | Remove unused Docker builds | `./tangow cleanup --yes` | Cache and unused images pruned; containers and volumes retained. |
 
 `--dry-run` describes an operation; it does not prove prerequisites or connectivity. Keep mutations
@@ -80,8 +81,14 @@ bots must sign in again. Reuse the setup flow instead of writing a custom copy p
   deployment of newer code. No rollback is allowed. Retain the current configuration and recover forward; do not restore old configuration, code, templates or database.
 - For `.env.tangow.lock` or `.env.e2b.setup.lock`, inspect its PID on that server. Remove a stale
   lock only after confirming the owner process has ended; retain an active lock.
-- E2B-to-Docker home migration is unsupported. `provider docker` only confirms Docker mode and
-  refuses existing E2B volumes. Report this limit rather than deleting the private override.
+- If `.env.tangow.docker.json` exists, keep API/worker stopped and rerun `./tangow provider docker`
+  from the same checkout revision. Keep the saved source override and `data/docker-provider-migration/`
+  journal. Never delete the active override manually to switch providers. The command copies and
+  verifies every E2B private/shared volume before adoption and retains sources and backups.
+  It destroys source computer VMs to release mounts, so browser state outside volumes is lost.
+  Snapshot homes, differing old Docker copies, links, special files and files over 256 MiB block
+  migration rather than being silently skipped. After service readiness, verify a real bot run
+  and computer mounts separately. See the operator guide before performing the migration.
 
 ## Verify computers separately
 

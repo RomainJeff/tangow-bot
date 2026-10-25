@@ -142,6 +142,10 @@ async function main() {
     );
     return;
   }
+  if (existsSync(path.join(root, ".env.tangow.docker.json")))
+    throw new Error(
+      "A Docker provider migration is incomplete. Resume tangow provider docker; keep services stopped.",
+    );
   const [major, minor, patch] = process.versions.node.split(".").map(Number);
   if (
     !(

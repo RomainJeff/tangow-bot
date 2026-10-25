@@ -10,14 +10,14 @@ Usage: tangow [--path <checkout>] [--sudo] <command>
   logs [service] [--follow] Show the last 100 log lines (default: api)
   computers build           Rebuild Docker worker/computer or E2B worker/desktop builds
   provider e2b              Configure E2B and migrate existing computer homes
-  provider docker           Check Docker mode; reverse E2B migration is unsupported
+  provider docker           Migrate E2B bot/shared volumes and switch to Docker
   cleanup --yes             Remove unused build cache and images, never volumes
 
 Options:
   --path <checkout>         Deployment checkout (default: this repository)
   --sudo                    Use sudo -n for Docker/private config, never Git
   --computer-image <image>  Pushable registry/repository:tag for E2B builds/setup
-  --migrate-existing        Consent to the one-way home move during E2B setup
+  --migrate-existing        Consent to stopping computers and migrating provider data
   --dry-run                 Describe the operation without changing anything
   --help                    Show this help
 
@@ -62,9 +62,10 @@ export function mainOptions() {
     throw new Error("Unknown command. Run tangow --help.");
   const build = command === "computers" || command === "update";
   const setup = command === "provider" && subcommand === "e2b";
+  const migration = command === "provider";
   if (
     (values["computer-image"] && !build && !setup) ||
-    (values["migrate-existing"] && !setup) ||
+    (values["migrate-existing"] && !migration) ||
     (values.follow && command !== "logs") ||
     (values.yes && command !== "cleanup")
   )

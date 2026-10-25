@@ -12,6 +12,7 @@ import {
   verifyExited,
   workerImage,
 } from "./tangow-deployment.mjs";
+import { dockerMigrationJournal, migrateProviderToDocker } from "./tangow-docker.mjs";
 import { help, mainOptions, services } from "./tangow-options.mjs";
 
 function writePrivate(filename, contents) {
@@ -48,7 +49,7 @@ async function main() {
       provider:
         subcommand === "e2b"
           ? "run existing E2B setup, backups and resumable home migration"
-          : "check Docker mode; never reverse an E2B volume migration",
+          : "back up deployment; stop E2B computers; copy and verify bot/shared volumes; switch to Docker with resumable recovery",
     };
     console.log(`Dry run: ${descriptions[command]}. No files, commands or services changed.`);
     return;
@@ -119,7 +120,7 @@ async function main() {
     )
       throw new Error("Private E2B override must configure both api and worker for E2B.");
   }
-  const provider = override ? "e2b" : "docker";
+  let provider = override ? "e2b" : "docker";
   const docker = values.sudo ? ["sudo", "-n", "docker"] : ["docker"];
   const compose = [
     "compose",
@@ -235,14 +236,11 @@ async function main() {
     );
     return;
   }
-  if (command === "provider" && subcommand === "docker") {
-    if (override)
-      throw new Error(
-        "E2B homes use volumes. Migration back to Docker is unsupported; settings were not changed.",
-      );
-    console.log("Docker is already configured.");
-    return;
-  }
+  const toDocker = command === "provider" && subcommand === "docker";
+  if (!toDocker && existsSync(path.join(root, dockerMigrationJournal)))
+    throw new Error(
+      "A Docker provider migration is incomplete. Keep services stopped and rerun provider docker to resume.",
+    );
   if (command === "cleanup" && !values.yes)
     throw new Error(
       "Run cleanup --dry-run to inspect, then cleanup --yes to remove unused cache and images.",
@@ -267,6 +265,32 @@ async function main() {
   const release = () => rmSync(lock, { force: true });
   process.once("exit", release);
   try {
+    if (toDocker) {
+      await migrateProviderToDocker({
+        root,
+        values,
+        override,
+        dock,
+        run,
+        git,
+        sha,
+        writePrivate,
+        verify,
+        activateDocker() {
+          provider = "docker";
+          compose.splice(
+            0,
+            compose.length,
+            "compose",
+            "--env-file",
+            ".env",
+            "-f",
+            "infra/compose/docker-compose.yml",
+          );
+        },
+      });
+      return;
+    }
     const needsComputers = command === "computers" || command === "update";
     if ((setup || (needsComputers && provider === "e2b")) && !values["computer-image"]) {
       const image = dock(
