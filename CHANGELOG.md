@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
+- Bots on web, desktop and iPhone reliably load a connected app's tool when they ask for it by name.
+
 - Bots on web, desktop and iPhone find the right tools of connected apps that expose many tools more reliably.
 
 - Bots on web, desktop and iPhone now prefer suitable connected tools and direct page reads before browser interaction, and distinguish connector failures before choosing another method.

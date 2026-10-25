@@ -5,7 +5,6 @@ import type { AgentSession, ExtensionAPI } from "@earendil-works/pi-coding-agent
 import {
   createAgentSession,
   createMcpExtension,
-  createToolSearchExtension,
   DefaultResourceLoader,
   defineTool,
   SessionManager,
@@ -28,6 +27,7 @@ import { skillReadName } from "@rakazo/adapters/volume-skills";
 import type { DoneBody, GuestHarness, HarnessHost } from "../harness.js";
 import { rakazoMcpTools } from "../rakazo-mcp.js";
 import { durableBashTool } from "./durable-bash.js";
+import { exactToolSearchExtension } from "./exact-tool-search.js";
 import { relayModelRuntime } from "./pi-session.js";
 import { rakazoMcpTransport } from "./rakazo-mcp.js";
 
@@ -183,7 +183,7 @@ export const piNativeHarness: GuestHarness = {
         noPromptTemplates: true,
         noThemes: true,
         extensionFactories: [
-          createToolSearchExtension(),
+          exactToolSearchExtension(),
           (pi) =>
             createMcpExtension({
               loadConfig: () => ({
