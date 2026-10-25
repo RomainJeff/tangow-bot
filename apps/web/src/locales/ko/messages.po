@@ -22,7 +22,7 @@ msgid "(empty)"
 msgstr "(비어 있음)"
 
 #. placeholder {0}: group.entries.length
-#: src/pages/ModelSettingsOverlay.tsx:126
+#: src/pages/ModelSettingsOverlay.tsx:122
 msgid "{0, plural, one {# model} other {# models}}"
 msgstr "{0, plural, one {모델 #개} other {모델 #개}}"
 
@@ -215,7 +215,7 @@ msgstr ""
 msgid "About spaces"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:310
+#: src/components/integrations/IntegrationSetup.tsx:305
 msgid "Access token"
 msgstr ""
 
@@ -266,7 +266,7 @@ msgstr ""
 msgid "Active"
 msgstr "활성"
 
-#: src/pages/ModelSettingsOverlay.tsx:81
+#: src/pages/ModelSettingsOverlay.tsx:77
 msgid "Active model"
 msgstr "현재 모델"
 
@@ -336,7 +336,7 @@ msgstr "GraphQL 엔드포인트 추가"
 msgid "Add item"
 msgstr "항목 추가"
 
-#: src/components/integrations/IntegrationSetup.tsx:132
+#: src/components/integrations/IntegrationSetup.tsx:129
 #: src/pages/plugins/advanced-integrations.tsx:190
 msgid "Add MCP server"
 msgstr "MCP 서버 추가"
@@ -358,7 +358,7 @@ msgstr "원격 MCP 서버 추가"
 msgid "Add server"
 msgstr "서버 추가"
 
-#: src/components/integrations/IntegrationSetup.tsx:278
+#: src/components/integrations/IntegrationSetup.tsx:273
 msgid "Add server URL"
 msgstr ""
 
@@ -502,7 +502,7 @@ msgid "API is back, but the update did not finish. Check the host logs."
 msgstr "API가 다시 작동하지만 업데이트가 완료되지 않았습니다. 호스트 로그를 확인하세요."
 
 #: src/components/AskCard.tsx:123
-#: src/components/integrations/IntegrationSetup.tsx:194
+#: src/components/integrations/IntegrationSetup.tsx:189
 #: src/lib/localized-provider-hint.ts:9
 #: src/pages/model-settings/model-detail.tsx:281
 #: src/pages/model-settings/model-detail.tsx:284
@@ -599,7 +599,7 @@ msgstr "결제하기 전에 확인"
 msgid "Ask before sending external email"
 msgstr "외부 이메일을 보내기 전에 확인"
 
-#: src/components/integrations/IntegrationSetup.tsx:228
+#: src/components/integrations/IntegrationSetup.tsx:223
 msgid "Ask the server owner to configure this provider."
 msgstr ""
 
@@ -762,7 +762,7 @@ msgstr ""
 msgid "Busy. Try again when idle."
 msgstr ""
 
-#: src/App.tsx:168
+#: src/App.tsx:161
 msgid "Can't reach the server."
 msgstr "서버에 연결할 수 없습니다."
 
@@ -878,7 +878,7 @@ msgstr "Bot 선택…"
 msgid "Choose a new password"
 msgstr "새 비밀번호 선택"
 
-#: src/pages/ModelSettingsOverlay.tsx:52
+#: src/pages/ModelSettingsOverlay.tsx:48
 msgid "Choose which connected model Rakazo uses."
 msgstr "Rakazo에서 기본으로 사용할 연결된 모델을 선택하세요."
 
@@ -909,11 +909,11 @@ msgstr "지침을 비울까요?"
 msgid "Clearing…"
 msgstr "비우는 중…"
 
-#: src/components/integrations/IntegrationSetup.tsx:172
+#: src/components/integrations/IntegrationSetup.tsx:167
 msgid "Client ID"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:194
+#: src/components/integrations/IntegrationSetup.tsx:189
 msgid "Client secret"
 msgstr ""
 
@@ -956,7 +956,7 @@ msgstr "기억 설정 닫기"
 msgid "Close messaging settings"
 msgstr "메시징 설정 닫기"
 
-#: src/pages/ModelSettingsOverlay.tsx:68
+#: src/pages/ModelSettingsOverlay.tsx:64
 #: src/pages/SettingsOverlay.tsx:110
 msgid "Close model settings"
 msgstr "AI 모델 설정 닫기"
@@ -1045,7 +1045,7 @@ msgstr "컴퓨터를 사용할 수 없음"
 msgid "Computer updated"
 msgstr ""
 
-#: src/pages/ModelSettingsOverlay.tsx:88
+#: src/pages/ModelSettingsOverlay.tsx:84
 msgid "Configured by deployment"
 msgstr "서버에서 설정됨"
 
@@ -1063,10 +1063,10 @@ msgstr "삭제 확인"
 msgid "Confirm password"
 msgstr "비밀번호 확인"
 
-#: src/components/integrations/IntegrationSetup.tsx:222
-#: src/components/integrations/IntegrationSetup.tsx:267
-#: src/components/integrations/IntegrationSetup.tsx:291
-#: src/components/integrations/IntegrationSetup.tsx:324
+#: src/components/integrations/IntegrationSetup.tsx:217
+#: src/components/integrations/IntegrationSetup.tsx:262
+#: src/components/integrations/IntegrationSetup.tsx:286
+#: src/components/integrations/IntegrationSetup.tsx:319
 #: src/pages/DecisionModelSettingsPanel.tsx:176
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
@@ -1102,12 +1102,12 @@ msgstr "이 AI 서비스를 연결하면 내 기본 모델로 사용할 수 있�
 msgid "Connect Treg"
 msgstr "Treg 연결"
 
-#: src/components/integrations/IntegrationSetup.tsx:164
-#: src/components/integrations/IntegrationSetup.tsx:267
+#: src/components/integrations/IntegrationSetup.tsx:159
+#: src/components/integrations/IntegrationSetup.tsx:262
 #: src/pages/DecisionModelSettingsPanel.tsx:98
 #: src/pages/McpOAuthCallback.tsx:54
 #: src/pages/MemorySettingsOverlay.tsx:191
-#: src/pages/ModelSettingsOverlay.tsx:133
+#: src/pages/ModelSettingsOverlay.tsx:129
 #: src/pages/shell/message-cards.tsx:196
 #: src/pages/VoiceSettingsOverlay.tsx:226
 msgid "Connected"
@@ -1134,8 +1134,8 @@ msgstr "{0}에 연결하고 기본 모델로 설정했습니다."
 msgid "Connected. Its tools are available from your next message."
 msgstr "연결되었습니다. 다음 메시지부터 이 도구를 사용할 수 있습니다."
 
-#: src/components/integrations/IntegrationSetup.tsx:222
-#: src/components/integrations/IntegrationSetup.tsx:361
+#: src/components/integrations/IntegrationSetup.tsx:217
+#: src/components/integrations/IntegrationSetup.tsx:356
 #: src/pages/DecisionModelSettingsPanel.tsx:176
 #: src/pages/McpServersOverlay.tsx:38
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
@@ -1160,7 +1160,7 @@ msgstr ""
 msgid "Context limit"
 msgstr "컨텍스트 한도"
 
-#: src/components/integrations/IntegrationSetup.tsx:361
+#: src/components/integrations/IntegrationSetup.tsx:356
 #: src/pages/Onboarding.tsx:664
 msgid "Continue"
 msgstr "계속"
@@ -1232,7 +1232,7 @@ msgstr "OAuth 인증을 완료하지 못했습니다."
 msgid "Could not complete the update. Try again."
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:79
+#: src/components/integrations/IntegrationSetup.tsx:76
 #: src/pages/plugins/use-integrations.ts:235
 msgid "Could not connect"
 msgstr "연결하지 못했습니다."
@@ -1376,7 +1376,7 @@ msgstr ""
 msgid "Could not load decision model settings"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:70
+#: src/components/integrations/IntegrationSetup.tsx:67
 #: src/pages/plugins/use-integrations.ts:109
 #: src/pages/PluginsOverlay.tsx:173
 msgid "Could not load integrations"
@@ -1416,10 +1416,6 @@ msgstr "업데이트 상태를 불러올 수 없습니다"
 #: src/pages/VoiceSettingsOverlay.tsx:205
 msgid "Could not load voice settings"
 msgstr "음성 설정을 불러오지 못했습니다."
-
-#: src/pages/LocalSettings.tsx:26
-msgid "Could not open local settings. Start the local server and create its owner account, then try again."
-msgstr ""
 
 #: src/pages/VoiceSettingsOverlay.tsx:158
 msgid "Could not play a test clip"
@@ -1794,7 +1790,7 @@ msgstr "거부됨"
 msgid "Deny"
 msgstr "거부"
 
-#: src/pages/ModelSettingsOverlay.tsx:84
+#: src/pages/ModelSettingsOverlay.tsx:80
 msgid "Deployment default"
 msgstr "서버 기본값"
 
@@ -1826,7 +1822,7 @@ msgstr ""
 msgid "Dictating"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:43
+#: src/components/integrations/IntegrationSetup.tsx:40
 msgid "Direct MCP"
 msgstr ""
 
@@ -1915,7 +1911,7 @@ msgstr "{name} 다운로드"
 msgid "Download as markdown"
 msgstr "마크다운으로 다운로드"
 
-#: src/components/integrations/IntegrationSetup.tsx:336
+#: src/components/integrations/IntegrationSetup.tsx:331
 msgid "Download Executor"
 msgstr ""
 
@@ -2168,7 +2164,7 @@ msgstr ""
 msgid "General"
 msgstr "일반"
 
-#: src/components/integrations/IntegrationSetup.tsx:214
+#: src/components/integrations/IntegrationSetup.tsx:209
 msgid "Get credentials"
 msgstr ""
 
@@ -2340,7 +2336,7 @@ msgstr "지침"
 msgid "Integration domain"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:136
+#: src/components/integrations/IntegrationSetup.tsx:133
 msgid "Integration options"
 msgstr ""
 
@@ -2454,7 +2450,7 @@ msgid "Loading memory settings…"
 msgstr "기억 설정을 불러오는 중…"
 
 #: src/pages/model-settings/model-detail.tsx:365
-#: src/pages/ModelSettingsOverlay.tsx:48
+#: src/pages/ModelSettingsOverlay.tsx:46
 msgid "Loading model catalog…"
 msgstr "모델 목록을 불러오는 중…"
 
@@ -2474,7 +2470,7 @@ msgstr ""
 msgid "Loading voice providers…"
 msgstr "음성 서비스를 불러오는 중…"
 
-#: src/App.tsx:74
+#: src/App.tsx:67
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
@@ -2486,10 +2482,6 @@ msgstr "불러오는 중…"
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:39
 msgid "Local"
 msgstr "로컬"
-
-#: src/pages/LocalSettings.tsx:22
-msgid "Local Server Settings"
-msgstr ""
 
 #: src/pages/shell/sidebar-footer.tsx:235
 msgid "Log out"
@@ -2700,15 +2692,10 @@ msgstr "모델 사용 비용은 연결한 서비스의 API 키로 청구됩니�
 msgid "Model updated."
 msgstr "모델이 변경되었습니다."
 
-#: src/pages/LocalSettings.tsx:36
-#: src/pages/ModelSettingsOverlay.tsx:61
+#: src/pages/ModelSettingsOverlay.tsx:57
 #: src/pages/SettingsOverlay.tsx:95
 msgid "Models"
 msgstr "AI 모델"
-
-#: src/pages/ModelSettingsOverlay.tsx:50
-msgid "Models for the server owner’s default space."
-msgstr ""
 
 #: src/pages/model-settings/model-detail.tsx:122
 #: src/pages/Onboarding.tsx:450
@@ -2905,11 +2892,11 @@ msgstr "사용 가능한 모델 목록이 없습니다."
 msgid "No model connected"
 msgstr "연결된 모델 없음"
 
-#: src/pages/ModelSettingsOverlay.tsx:141
+#: src/pages/ModelSettingsOverlay.tsx:137
 msgid "No providers found."
 msgstr "검색된 AI 서비스가 없습니다."
 
-#: src/components/integrations/IntegrationSetup.tsx:273
+#: src/components/integrations/IntegrationSetup.tsx:268
 msgid "No remote MCP servers found"
 msgstr ""
 
@@ -3074,7 +3061,7 @@ msgstr "대화가 만들어졌습니다."
 msgid "Opening chat…"
 msgstr "채팅 여는 중…"
 
-#: src/App.tsx:210
+#: src/App.tsx:203
 msgid "Opening your Space…"
 msgstr "작업공간을 여는 중…"
 
@@ -3210,7 +3197,7 @@ msgstr ""
 msgid "Profile photo"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:182
+#: src/components/integrations/IntegrationSetup.tsx:177
 msgid "Project ID"
 msgstr ""
 
@@ -3220,7 +3207,7 @@ msgstr ""
 msgid "Provider"
 msgstr "서비스"
 
-#: src/pages/ModelSettingsOverlay.tsx:96
+#: src/pages/ModelSettingsOverlay.tsx:92
 #: src/pages/VoiceSettingsOverlay.tsx:186
 msgid "Providers"
 msgstr "서비스"
@@ -3284,7 +3271,7 @@ msgstr ""
 msgid "Reconnect OAuth"
 msgstr "OAuth 다시 연결"
 
-#: src/App.tsx:166
+#: src/App.tsx:159
 #: src/components/ComputerUpdateProgress.tsx:58
 #: src/pages/shell/screen-frame.tsx:44
 msgid "Reconnecting"
@@ -3526,7 +3513,7 @@ msgstr ""
 msgid "Retry"
 msgstr "다시 시도"
 
-#: src/App.tsx:180
+#: src/App.tsx:173
 #: src/pages/PeerMessagesOverlay.tsx:153
 #: src/pages/shell/session-view.tsx:103
 msgid "Retry now"
@@ -3676,8 +3663,8 @@ msgstr "화면"
 msgid "Search"
 msgstr "검색"
 
-#: src/components/integrations/IntegrationSetup.tsx:250
-#: src/components/integrations/IntegrationSetup.tsx:251
+#: src/components/integrations/IntegrationSetup.tsx:245
+#: src/components/integrations/IntegrationSetup.tsx:246
 #: src/pages/PluginsOverlay.tsx:150
 #: src/pages/PluginsOverlay.tsx:151
 msgid "Search apps"
@@ -3691,7 +3678,7 @@ msgstr "봇 검색 및 대화 전환"
 msgid "Search by domain"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:256
+#: src/components/integrations/IntegrationSetup.tsx:251
 msgid "Search integrations.sh"
 msgstr ""
 
@@ -3699,8 +3686,8 @@ msgstr ""
 msgid "Search models"
 msgstr "모델 검색"
 
-#: src/pages/ModelSettingsOverlay.tsx:99
-#: src/pages/ModelSettingsOverlay.tsx:105
+#: src/pages/ModelSettingsOverlay.tsx:95
+#: src/pages/ModelSettingsOverlay.tsx:101
 msgid "Search providers"
 msgstr "AI 서비스 검색"
 
@@ -3742,9 +3729,8 @@ msgstr "보내는 중…"
 msgid "Sent"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:132
+#: src/components/integrations/IntegrationSetup.tsx:129
 #: src/pages/AccountSettingsOverlay.tsx:186
-#: src/pages/LocalSettings.tsx:42
 msgid "Server integrations"
 msgstr ""
 
@@ -3752,8 +3738,8 @@ msgstr ""
 msgid "Server name"
 msgstr "서버 이름"
 
-#: src/components/integrations/IntegrationSetup.tsx:282
-#: src/components/integrations/IntegrationSetup.tsx:300
+#: src/components/integrations/IntegrationSetup.tsx:277
+#: src/components/integrations/IntegrationSetup.tsx:295
 #: src/pages/McpServersOverlay.tsx:330
 #: src/pages/model-settings/model-detail.tsx:77
 #: src/pages/Onboarding.tsx:411
@@ -3777,7 +3763,7 @@ msgstr "설정: 일반"
 msgid "Settings: Usage"
 msgstr "설정: 사용량"
 
-#: src/components/integrations/IntegrationSetup.tsx:328
+#: src/components/integrations/IntegrationSetup.tsx:323
 #: src/pages/model-settings/model-detail.tsx:90
 msgid "Setup help"
 msgstr "설정 도움말"
@@ -3875,7 +3861,7 @@ msgid "Skills"
 msgstr "스킬"
 
 #: src/components/ask/QuestionCard.tsx:194
-#: src/components/integrations/IntegrationSetup.tsx:364
+#: src/components/integrations/IntegrationSetup.tsx:359
 #: src/pages/shell/side-panel.tsx:441
 msgid "Skip"
 msgstr "건너뛰기"

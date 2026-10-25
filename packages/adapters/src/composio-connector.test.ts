@@ -486,7 +486,7 @@ describe("composio tool mapping", () => {
     } finally {
       composioSdkState.executeFails = undefined;
     }
-    expect(events).toEqual([{ type: "error", message: "Request timed out" }]);
+    expect(events).toEqual([{ type: "error", kind: "unknown", message: "Request timed out" }]);
   });
 
   it("scopes the Composio entity id to the space, not just the user", () => {

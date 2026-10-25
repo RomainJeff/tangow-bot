@@ -22,7 +22,7 @@ msgid "(empty)"
 msgstr "(leer)"
 
 #. placeholder {0}: group.entries.length
-#: src/pages/ModelSettingsOverlay.tsx:126
+#: src/pages/ModelSettingsOverlay.tsx:122
 msgid "{0, plural, one {# model} other {# models}}"
 msgstr "{0, plural, one {# Modell} other {# Modelle}}"
 
@@ -215,7 +215,7 @@ msgstr ""
 msgid "About spaces"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:310
+#: src/components/integrations/IntegrationSetup.tsx:305
 msgid "Access token"
 msgstr ""
 
@@ -266,7 +266,7 @@ msgstr ""
 msgid "Active"
 msgstr "Aktiv"
 
-#: src/pages/ModelSettingsOverlay.tsx:81
+#: src/pages/ModelSettingsOverlay.tsx:77
 msgid "Active model"
 msgstr "Aktives Modell"
 
@@ -336,7 +336,7 @@ msgstr "GraphQL-Endpunkt hinzufügen"
 msgid "Add item"
 msgstr "Element hinzufügen"
 
-#: src/components/integrations/IntegrationSetup.tsx:132
+#: src/components/integrations/IntegrationSetup.tsx:129
 #: src/pages/plugins/advanced-integrations.tsx:190
 msgid "Add MCP server"
 msgstr "MCP-Server hinzufügen"
@@ -358,7 +358,7 @@ msgstr "Remote-MCP-Server hinzufügen"
 msgid "Add server"
 msgstr "Server hinzufügen"
 
-#: src/components/integrations/IntegrationSetup.tsx:278
+#: src/components/integrations/IntegrationSetup.tsx:273
 msgid "Add server URL"
 msgstr ""
 
@@ -502,7 +502,7 @@ msgid "API is back, but the update did not finish. Check the host logs."
 msgstr "Die API ist wieder da, aber das Update wurde nicht abgeschlossen. Prüfe die Host-Logs."
 
 #: src/components/AskCard.tsx:123
-#: src/components/integrations/IntegrationSetup.tsx:194
+#: src/components/integrations/IntegrationSetup.tsx:189
 #: src/lib/localized-provider-hint.ts:9
 #: src/pages/model-settings/model-detail.tsx:281
 #: src/pages/model-settings/model-detail.tsx:284
@@ -599,7 +599,7 @@ msgstr "Vor Käufen nachfragen"
 msgid "Ask before sending external email"
 msgstr "Vor dem Senden externer E-Mails nachfragen"
 
-#: src/components/integrations/IntegrationSetup.tsx:228
+#: src/components/integrations/IntegrationSetup.tsx:223
 msgid "Ask the server owner to configure this provider."
 msgstr ""
 
@@ -762,7 +762,7 @@ msgstr ""
 msgid "Busy. Try again when idle."
 msgstr ""
 
-#: src/App.tsx:168
+#: src/App.tsx:161
 msgid "Can't reach the server."
 msgstr "Server nicht erreichbar."
 
@@ -878,7 +878,7 @@ msgstr "Bot auswählen …"
 msgid "Choose a new password"
 msgstr "Wähle ein neues Passwort"
 
-#: src/pages/ModelSettingsOverlay.tsx:52
+#: src/pages/ModelSettingsOverlay.tsx:48
 msgid "Choose which connected model Rakazo uses."
 msgstr "Wähle das verbundene Modell aus, das Rakazo verwendet."
 
@@ -909,11 +909,11 @@ msgstr "Anweisungen leeren?"
 msgid "Clearing…"
 msgstr "Wird geleert…"
 
-#: src/components/integrations/IntegrationSetup.tsx:172
+#: src/components/integrations/IntegrationSetup.tsx:167
 msgid "Client ID"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:194
+#: src/components/integrations/IntegrationSetup.tsx:189
 msgid "Client secret"
 msgstr ""
 
@@ -956,7 +956,7 @@ msgstr "Erinnerungseinstellungen schließen"
 msgid "Close messaging settings"
 msgstr "Nachrichteneinstellungen schließen"
 
-#: src/pages/ModelSettingsOverlay.tsx:68
+#: src/pages/ModelSettingsOverlay.tsx:64
 #: src/pages/SettingsOverlay.tsx:110
 msgid "Close model settings"
 msgstr "Modelleinstellungen schließen"
@@ -1045,7 +1045,7 @@ msgstr "Computer nicht verfügbar"
 msgid "Computer updated"
 msgstr ""
 
-#: src/pages/ModelSettingsOverlay.tsx:88
+#: src/pages/ModelSettingsOverlay.tsx:84
 msgid "Configured by deployment"
 msgstr "Durch die Bereitstellung konfiguriert"
 
@@ -1063,10 +1063,10 @@ msgstr "Löschen bestätigen"
 msgid "Confirm password"
 msgstr "Passwort bestätigen"
 
-#: src/components/integrations/IntegrationSetup.tsx:222
-#: src/components/integrations/IntegrationSetup.tsx:267
-#: src/components/integrations/IntegrationSetup.tsx:291
-#: src/components/integrations/IntegrationSetup.tsx:324
+#: src/components/integrations/IntegrationSetup.tsx:217
+#: src/components/integrations/IntegrationSetup.tsx:262
+#: src/components/integrations/IntegrationSetup.tsx:286
+#: src/components/integrations/IntegrationSetup.tsx:319
 #: src/pages/DecisionModelSettingsPanel.tsx:176
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
@@ -1102,12 +1102,12 @@ msgstr "Verbinde diesen Anbieter, um ihn als persönliches Modell zu verwenden."
 msgid "Connect Treg"
 msgstr "Treg verbinden"
 
-#: src/components/integrations/IntegrationSetup.tsx:164
-#: src/components/integrations/IntegrationSetup.tsx:267
+#: src/components/integrations/IntegrationSetup.tsx:159
+#: src/components/integrations/IntegrationSetup.tsx:262
 #: src/pages/DecisionModelSettingsPanel.tsx:98
 #: src/pages/McpOAuthCallback.tsx:54
 #: src/pages/MemorySettingsOverlay.tsx:191
-#: src/pages/ModelSettingsOverlay.tsx:133
+#: src/pages/ModelSettingsOverlay.tsx:129
 #: src/pages/shell/message-cards.tsx:196
 #: src/pages/VoiceSettingsOverlay.tsx:226
 msgid "Connected"
@@ -1134,8 +1134,8 @@ msgstr "Verbunden, {0} wird verwendet."
 msgid "Connected. Its tools are available from your next message."
 msgstr "Verbunden. Die Tools sind ab deiner nächsten Nachricht verfügbar."
 
-#: src/components/integrations/IntegrationSetup.tsx:222
-#: src/components/integrations/IntegrationSetup.tsx:361
+#: src/components/integrations/IntegrationSetup.tsx:217
+#: src/components/integrations/IntegrationSetup.tsx:356
 #: src/pages/DecisionModelSettingsPanel.tsx:176
 #: src/pages/McpServersOverlay.tsx:38
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
@@ -1160,7 +1160,7 @@ msgstr ""
 msgid "Context limit"
 msgstr "Kontextlimit"
 
-#: src/components/integrations/IntegrationSetup.tsx:361
+#: src/components/integrations/IntegrationSetup.tsx:356
 #: src/pages/Onboarding.tsx:664
 msgid "Continue"
 msgstr "Weiter"
@@ -1232,7 +1232,7 @@ msgstr "OAuth konnte nicht abgeschlossen werden"
 msgid "Could not complete the update. Try again."
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:79
+#: src/components/integrations/IntegrationSetup.tsx:76
 #: src/pages/plugins/use-integrations.ts:235
 msgid "Could not connect"
 msgstr "Verbindung fehlgeschlagen"
@@ -1376,7 +1376,7 @@ msgstr ""
 msgid "Could not load decision model settings"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:70
+#: src/components/integrations/IntegrationSetup.tsx:67
 #: src/pages/plugins/use-integrations.ts:109
 #: src/pages/PluginsOverlay.tsx:173
 msgid "Could not load integrations"
@@ -1416,10 +1416,6 @@ msgstr "Update-Status konnte nicht geladen werden"
 #: src/pages/VoiceSettingsOverlay.tsx:205
 msgid "Could not load voice settings"
 msgstr "Stimmeinstellungen konnten nicht geladen werden"
-
-#: src/pages/LocalSettings.tsx:26
-msgid "Could not open local settings. Start the local server and create its owner account, then try again."
-msgstr ""
 
 #: src/pages/VoiceSettingsOverlay.tsx:158
 msgid "Could not play a test clip"
@@ -1794,7 +1790,7 @@ msgstr "Abgelehnt"
 msgid "Deny"
 msgstr "Ablehnen"
 
-#: src/pages/ModelSettingsOverlay.tsx:84
+#: src/pages/ModelSettingsOverlay.tsx:80
 msgid "Deployment default"
 msgstr "Bereitstellungsstandard"
 
@@ -1826,7 +1822,7 @@ msgstr ""
 msgid "Dictating"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:43
+#: src/components/integrations/IntegrationSetup.tsx:40
 msgid "Direct MCP"
 msgstr ""
 
@@ -1915,7 +1911,7 @@ msgstr "{name} herunterladen"
 msgid "Download as markdown"
 msgstr "Als Markdown herunterladen"
 
-#: src/components/integrations/IntegrationSetup.tsx:336
+#: src/components/integrations/IntegrationSetup.tsx:331
 msgid "Download Executor"
 msgstr ""
 
@@ -2168,7 +2164,7 @@ msgstr ""
 msgid "General"
 msgstr "Allgemein"
 
-#: src/components/integrations/IntegrationSetup.tsx:214
+#: src/components/integrations/IntegrationSetup.tsx:209
 msgid "Get credentials"
 msgstr ""
 
@@ -2340,7 +2336,7 @@ msgstr "Anweisungen"
 msgid "Integration domain"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:136
+#: src/components/integrations/IntegrationSetup.tsx:133
 msgid "Integration options"
 msgstr ""
 
@@ -2454,7 +2450,7 @@ msgid "Loading memory settings…"
 msgstr "Erinnerungseinstellungen werden geladen…"
 
 #: src/pages/model-settings/model-detail.tsx:365
-#: src/pages/ModelSettingsOverlay.tsx:48
+#: src/pages/ModelSettingsOverlay.tsx:46
 msgid "Loading model catalog…"
 msgstr "Modellkatalog wird geladen…"
 
@@ -2474,7 +2470,7 @@ msgstr ""
 msgid "Loading voice providers…"
 msgstr "Stimmanbieter werden geladen…"
 
-#: src/App.tsx:74
+#: src/App.tsx:67
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
@@ -2486,10 +2482,6 @@ msgstr "Wird geladen…"
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:39
 msgid "Local"
 msgstr "Lokal"
-
-#: src/pages/LocalSettings.tsx:22
-msgid "Local Server Settings"
-msgstr ""
 
 #: src/pages/shell/sidebar-footer.tsx:235
 msgid "Log out"
@@ -2700,15 +2692,10 @@ msgstr "Modellkosten werden über deine Anbieterschlüssel abgerechnet."
 msgid "Model updated."
 msgstr "Modell aktualisiert."
 
-#: src/pages/LocalSettings.tsx:36
-#: src/pages/ModelSettingsOverlay.tsx:61
+#: src/pages/ModelSettingsOverlay.tsx:57
 #: src/pages/SettingsOverlay.tsx:95
 msgid "Models"
 msgstr "Modelle"
-
-#: src/pages/ModelSettingsOverlay.tsx:50
-msgid "Models for the server owner’s default space."
-msgstr ""
 
 #: src/pages/model-settings/model-detail.tsx:122
 #: src/pages/Onboarding.tsx:450
@@ -2905,11 +2892,11 @@ msgstr "Kein Modellkatalog verfügbar."
 msgid "No model connected"
 msgstr "Kein Modell verbunden"
 
-#: src/pages/ModelSettingsOverlay.tsx:141
+#: src/pages/ModelSettingsOverlay.tsx:137
 msgid "No providers found."
 msgstr "Keine Anbieter gefunden."
 
-#: src/components/integrations/IntegrationSetup.tsx:273
+#: src/components/integrations/IntegrationSetup.tsx:268
 msgid "No remote MCP servers found"
 msgstr ""
 
@@ -3074,7 +3061,7 @@ msgstr "Thread geöffnet."
 msgid "Opening chat…"
 msgstr "Chat wird geöffnet…"
 
-#: src/App.tsx:210
+#: src/App.tsx:203
 msgid "Opening your Space…"
 msgstr "Dein Arbeitsbereich wird geöffnet…"
 
@@ -3210,7 +3197,7 @@ msgstr ""
 msgid "Profile photo"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:182
+#: src/components/integrations/IntegrationSetup.tsx:177
 msgid "Project ID"
 msgstr ""
 
@@ -3220,7 +3207,7 @@ msgstr ""
 msgid "Provider"
 msgstr "Anbieter"
 
-#: src/pages/ModelSettingsOverlay.tsx:96
+#: src/pages/ModelSettingsOverlay.tsx:92
 #: src/pages/VoiceSettingsOverlay.tsx:186
 msgid "Providers"
 msgstr "Anbieter"
@@ -3284,7 +3271,7 @@ msgstr ""
 msgid "Reconnect OAuth"
 msgstr "OAuth erneut verbinden"
 
-#: src/App.tsx:166
+#: src/App.tsx:159
 #: src/components/ComputerUpdateProgress.tsx:58
 #: src/pages/shell/screen-frame.tsx:44
 msgid "Reconnecting"
@@ -3526,7 +3513,7 @@ msgstr ""
 msgid "Retry"
 msgstr "Erneut versuchen"
 
-#: src/App.tsx:180
+#: src/App.tsx:173
 #: src/pages/PeerMessagesOverlay.tsx:153
 #: src/pages/shell/session-view.tsx:103
 msgid "Retry now"
@@ -3676,8 +3663,8 @@ msgstr "Bildschirm"
 msgid "Search"
 msgstr "Suchen"
 
-#: src/components/integrations/IntegrationSetup.tsx:250
-#: src/components/integrations/IntegrationSetup.tsx:251
+#: src/components/integrations/IntegrationSetup.tsx:245
+#: src/components/integrations/IntegrationSetup.tsx:246
 #: src/pages/PluginsOverlay.tsx:150
 #: src/pages/PluginsOverlay.tsx:151
 msgid "Search apps"
@@ -3691,7 +3678,7 @@ msgstr "Bots suchen und Unterhaltungen wechseln"
 msgid "Search by domain"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:256
+#: src/components/integrations/IntegrationSetup.tsx:251
 msgid "Search integrations.sh"
 msgstr ""
 
@@ -3699,8 +3686,8 @@ msgstr ""
 msgid "Search models"
 msgstr "Modelle suchen"
 
-#: src/pages/ModelSettingsOverlay.tsx:99
-#: src/pages/ModelSettingsOverlay.tsx:105
+#: src/pages/ModelSettingsOverlay.tsx:95
+#: src/pages/ModelSettingsOverlay.tsx:101
 msgid "Search providers"
 msgstr "Anbieter suchen"
 
@@ -3742,9 +3729,8 @@ msgstr "Wird gesendet…"
 msgid "Sent"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:132
+#: src/components/integrations/IntegrationSetup.tsx:129
 #: src/pages/AccountSettingsOverlay.tsx:186
-#: src/pages/LocalSettings.tsx:42
 msgid "Server integrations"
 msgstr ""
 
@@ -3752,8 +3738,8 @@ msgstr ""
 msgid "Server name"
 msgstr "Servername"
 
-#: src/components/integrations/IntegrationSetup.tsx:282
-#: src/components/integrations/IntegrationSetup.tsx:300
+#: src/components/integrations/IntegrationSetup.tsx:277
+#: src/components/integrations/IntegrationSetup.tsx:295
 #: src/pages/McpServersOverlay.tsx:330
 #: src/pages/model-settings/model-detail.tsx:77
 #: src/pages/Onboarding.tsx:411
@@ -3777,7 +3763,7 @@ msgstr "Einstellungen: Allgemein"
 msgid "Settings: Usage"
 msgstr "Einstellungen: Nutzung"
 
-#: src/components/integrations/IntegrationSetup.tsx:328
+#: src/components/integrations/IntegrationSetup.tsx:323
 #: src/pages/model-settings/model-detail.tsx:90
 msgid "Setup help"
 msgstr "Einrichtungshilfe"
@@ -3875,7 +3861,7 @@ msgid "Skills"
 msgstr "Skills"
 
 #: src/components/ask/QuestionCard.tsx:194
-#: src/components/integrations/IntegrationSetup.tsx:364
+#: src/components/integrations/IntegrationSetup.tsx:359
 #: src/pages/shell/side-panel.tsx:441
 msgid "Skip"
 msgstr "Überspringen"

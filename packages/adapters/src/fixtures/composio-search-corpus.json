@@ -1,0 +1,1038 @@
+{
+  "queries": {
+    "send an email": "GMAIL_SEND_EMAIL",
+    "create issue": "GITHUB_CREATE_AN_ISSUE",
+    "create a linear issue": "LINEAR_CREATE_LINEAR_ISSUE",
+    "list events": "GOOGLECALENDAR_EVENTS_LIST",
+    "find free slots": "GOOGLECALENDAR_FIND_FREE_SLOTS",
+    "post a message in slack channel": "SLACK_SEND_MESSAGE",
+    "reply to email thread": "GMAIL_REPLY_TO_THREAD"
+  },
+  "tools": [
+    {
+      "group": "gmail",
+      "name": "GMAIL_ADD_LABEL_TO_EMAIL",
+      "description": "Adds and/or removes specified Gmail labels for a message; ensure `message_id` and all `label_ids` are valid (use 'listLabels' for custom label IDs)."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_CREATE_EMAIL_DRAFT",
+      "description": "Creates a Gmail email draft. While all fields are optional per the Gmail API, practical validation requires at least one of recipient_email, cc, or bcc and at least one of subject or body. Supports To/Cc/Bcc recipients, subject, plain/HTML body (ensure `is_html=True` for HTML), attachments, and threading. Returns a draft_id that must be used as-is with GMAIL_SEND_DRAFT — synthetic or stale IDs will fail. When creating a draft reply to an existing thread (thread_id provided), leave subject empty to stay in the same thread; setting a subject will create a NEW thread instead. HTTP 429 may occur on rapid creation/send sequences; apply exponential backoff."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_CREATE_LABEL",
+      "description": "Creates a new label with a unique name in the specified user's Gmail account. Returns a labelId (e.g., 'Label_123') required for downstream tools like GMAIL_ADD_LABEL_TO_EMAIL, GMAIL_BATCH_MODIFY_MESSAGES, and GMAIL_MODIFY_THREAD_LABELS — those tools do not accept display names."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_DELETE_MESSAGE",
+      "description": "Permanently deletes a specific email message by its ID from a Gmail mailbox; for `user_id`, use 'me' for the authenticated user or an email address to which the authenticated user has delegated access."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_DELETE_THREAD",
+      "description": "Tool to immediately and permanently delete a specified thread and all its messages. This operation cannot be undone. Use threads.trash instead for reversible deletion."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_FETCH_EMAILS",
+      "description": "Fetches a list of email messages from a Gmail account, supporting filtering, pagination, and optional full content retrieval. Results are NOT sorted by recency; sort by internalDate client-side. The messages field may be absent or empty (valid no-results state); always null-check before accessing messageId or threadId. Null-check subject and header fields before string operations. For large result sets, prefer ids_only=true or metadata-only listing, then hydrate via GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_FETCH_MESSAGE_BY_THREAD_ID",
+      "description": "Retrieves messages from a Gmail thread using its `thread_id`, where the thread must be accessible by the specified `user_id`. Returns a `messages` array; `thread_id` is not echoed in the response. Message order is not guaranteed — sort by `internalDate` to find oldest/newest. Check `labelIds` per message to filter drafts. Concurrent bulk calls may trigger 403 `userRateLimitExceeded` or 429; cap concurrency ~10 and use exponential backoff."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_GET_DRAFT",
+      "description": "Retrieves a single Gmail draft by its ID. Use this to fetch and inspect draft content before sending via GMAIL_SEND_DRAFT. The format parameter controls the level of detail returned."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_GET_PROFILE",
+      "description": "Retrieves Gmail profile information (email address, aggregate messagesTotal/threadsTotal, historyId) for a user. messagesTotal counts individual emails; threadsTotal counts conversations; neither is per-label — use GMAIL_FETCH_EMAILS with label filters for label-specific counts. The returned historyId seeds incremental sync via GMAIL_LIST_HISTORY; if historyIdTooOld is returned, rescan with GMAIL_FETCH_EMAILS before resuming. Response may be wrapped under a top-level data field; unwrap before reading fields. A successful call confirms mailbox connectivity but not full mailbox access if granted scopes are narrow. Use the returned email address to dynamically identify the authenticated account rather than hard-coding it."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_GET_VACATION_SETTINGS",
+      "description": "Tool to retrieve vacation responder settings for a Gmail user. Use when you need to check if out-of-office auto-replies are configured and view their content."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_IMPORT_MESSAGE",
+      "description": "Tool to import a message into the user's mailbox with standard email delivery scanning and classification. Use when you need to add an existing email to a Gmail account without sending it through SMTP. This method doesn't perform SPF checks, so it might not work for some spam messages."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_INSERT_MESSAGE",
+      "description": "Tool to insert a message into the user's mailbox similar to IMAP APPEND. Use when you need to add an email directly to a mailbox bypassing most scanning and classification. This does not send a message."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_LIST_SEND_AS",
+      "description": "Lists the send-as aliases for a Gmail account, including the primary address and custom 'from' aliases. Use when you need to retrieve available sending addresses for composing emails."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_LIST_SMIME_INFO",
+      "description": "Lists S/MIME configs for the specified send-as alias. Use when you need to retrieve all S/MIME certificate configurations associated with a specific send-as email address."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_LIST_THREADS",
+      "description": "Retrieves a list of email threads from a Gmail account, identified by `user_id` (email address or 'me'), supporting filtering and pagination. Spam and trash are excluded by default unless explicitly targeted via `label:spam` or `label:trash` in the query."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_MODIFY_THREAD_LABELS",
+      "description": "Adds or removes specified existing label IDs from a Gmail thread, affecting all its messages; ensure the thread ID is valid. To modify a single message only, use a message-level tool instead."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_MOVE_THREAD_TO_TRASH",
+      "description": "Moves the specified thread to the trash. Any messages that belong to the thread are also moved to the trash."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_PATCH_SEND_AS",
+      "description": "Tool to patch the specified send-as alias for a Gmail user. Use when you need to update properties of an existing send-as email address such as display name, reply-to address, signature, default status, or SMTP configuration."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_REPLY_TO_THREAD",
+      "description": "Sends a reply within a specific Gmail thread using the original thread's subject; do not provide a custom subject as it will start a new conversation instead of replying in-thread. Requires a valid `thread_id` and at least one of `recipient_email`, `cc`, or `bcc`. Supports optional file attachments."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_SEARCH_PEOPLE",
+      "description": "Searches contacts by matching the query against names, nicknames, emails, phone numbers, and organizations, optionally including 'Other Contacts'. Only searches the authenticated user's contact directory — people existing solely in message headers won't appear; use GMAIL_FETCH_EMAILS for those. Results may be zero or multiple; never auto-select from ambiguous results. Results paginate via next_page_token; follow until empty and deduplicate by email. Many records lack emailAddresses or names even when requested — handle missing keys. Directory/organization policies may suppress entries."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_SEND_DRAFT",
+      "description": "Sends an existing draft email AS-IS to recipients already defined within the draft. IMPORTANT: This action does NOT accept recipient parameters (to, cc, bcc). The Gmail API's drafts/send endpoint sends drafts to whatever recipients are already set in the draft's To, Cc, and Bcc headers - it cannot add or override recipients. If the draft has no recipients, you must either: 1. Create a new draft with recipients using GMAIL_CREATE_EMAIL_DRAFT, then send it 2. Use GMAIL_SEND_EMAIL to send a new email directly with recipients. Send is immediate and irreversible — confirm recipients and content before calling. No scheduling support; trigger at the desired UTC time externally. Gmail enforces ~25 MB message size limit and daily send caps (~500 recipients/day personal, ~2,000/day Workspace)."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_SEND_EMAIL",
+      "description": "Sends an email via Gmail API using the authenticated user's Google profile display name. Sends immediately and is irreversible — confirm recipients, subject, body, and attachments before calling. At least one of 'to' (or 'recipient_email'), 'cc', or 'bcc' must be provided. At least one of subject or body must be provided. Requires `is_html=True` if the body contains HTML. All common file types including PNG, JPG, PDF, MP4, etc. are supported as attachments. Gmail API limits total message size to ~25 MB after base64 encoding. To reply in an existing thread, use GMAIL_REPLY_TO_THREAD instead. No scheduled send support; enforce timing externally."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_SETTINGS_SEND_AS_GET",
+      "description": "Tool to retrieve a specific send-as alias configuration for a Gmail user. Use when you need to get details about a send-as email address including display name, signature, SMTP settings, and verification status. Fails with HTTP 404 if the specified address is not a member of the send-as collection."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_UNTRASH_MESSAGE",
+      "description": "Tool to remove a message from trash in Gmail. Use when you need to restore a previously trashed email message."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_UNTRASH_THREAD",
+      "description": "Tool to remove a thread from trash in Gmail. Use when you need to restore a deleted thread and its messages."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_UPDATE_SEND_AS",
+      "description": "Tool to update a send-as alias for a Gmail user. Use when you need to modify display name, signature, reply-to address, or SMTP settings for a send-as email address. Gmail sanitizes HTML signatures before saving. Addresses other than the primary can only be updated by service accounts with domain-wide authority."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_UPDATE_VACATION_SETTINGS",
+      "description": "Tool to update vacation responder settings for a Gmail user. Use when you need to configure out-of-office auto-replies."
+    },
+    {
+      "group": "gmail",
+      "name": "GMAIL_WHO_AM_I",
+      "description": "Return the identity (email, name) of the connected Gmail account."
+    },
+    {
+      "group": "googlecalendar",
+      "name": "GOOGLECALENDAR_BATCH_EVENTS",
+      "description": "Execute up to 1000 event mutations (create/patch/delete) in one Google Calendar HTTP batch request with per-item status/results. Use this to materially reduce round-trips for bulk operations like migrations, cleanup, or large-scale updates."
+    },
+    {
+      "group": "googlecalendar",
+      "name": "GOOGLECALENDAR_CALENDARS_DELETE",
+      "description": "Deletes a secondary calendar that you own or have delete permissions on. Deletion is permanent and irreversible — verify the correct calendar_id before calling. You cannot delete your primary calendar or calendars you only have read/write access to. Use calendarList.list to find calendars with owner accessRole. For primary calendars, use calendars.clear instead. Parallel calls may trigger userRateLimitExceeded; sequence bulk deletions."
+    },
+    {
+      "group": "googlecalendar",
+      "name": "GOOGLECALENDAR_CLEAR_CALENDAR",
+      "description": "Clears a primary calendar by deleting all events from it. The calendar itself is preserved; only its events are removed. Primary calendars cannot be deleted entirely."
+    },
+    {
+      "group": "googlecalendar",
+      "name": "GOOGLECALENDAR_COLORS_GET",
+      "description": "Returns the color definitions for calendars and events. Use when you need to retrieve the available color palette for styling calendars or events."
+    },
+    {
+      "group": "googlecalendar",
+      "name": "GOOGLECALENDAR_CREATE_EVENT",
+      "description": "Creates a timed event using start_datetime and either end_datetime or duration fields, or an all-day event using an inclusive start_date and exclusive end_date. send_updates defaults to \"all\", which emails all attendees; choose \"externalOnly\" or \"none\" to control notifications. The organizer is added as an attendee unless exclude_organizer is true, and a Google Meet link is requested by default. No conflict checking is performed; use GOOGLECALENDAR_FREE_BUSY_QUERY first when conflicts matter. Returns the created event under response_data."
+    },
+    {
+      "group": "googlecalendar",
+      "name": "GOOGLECALENDAR_DELETE_EVENT",
+      "description": "Deletes an event from the specified calendar. Only Google's HTTP 204 confirms deletion; 404 or 410 can also mean the event belongs to a different calendar. Bulk deletions may trigger `rateLimitExceeded` or `userRateLimitExceeded`; cap concurrency to 5–10 requests and apply exponential backoff."
+    },
+    {
+      "group": "googlecalendar",
+      "name": "GOOGLECALENDAR_EVENTS_GET",
+      "description": "Retrieves a SINGLE event by its unique event_id (REQUIRED). This action does NOT list or search events - it fetches ONE specific event when you already know its ID. If you want to list events within a time range, search for events, or filter by criteria like time_min/time_max, use GOOGLECALENDAR_EVENTS_LIST instead."
+    },
+    {
+      "group": "googlecalendar",
+      "name": "GOOGLECALENDAR_EVENTS_IMPORT",
+      "description": "Tool to import an event as a private copy to a calendar. Use when you need to add an existing event to a calendar using its iCalUID. Only events with eventType='default' can be imported."
+    },
+    {
+      "group": "googlecalendar",
+      "name": "GOOGLECALENDAR_EVENTS_INSTANCES",
+      "description": "Returns instances of the specified recurring event. Use timeMin/timeMax to constrain the window; omitting bounds can return large result sets and is quota-heavy. On high-volume calls, 403 rateLimitExceeded or 429 too_many_requests may occur; apply exponential backoff (1s, 2s, 4s) before retrying."
+    },
+    {
+      "group": "googlecalendar",
+      "name": "GOOGLECALENDAR_EVENTS_LIST",
+      "description": "Lists or incrementally synchronizes events from one calendar, defaulting to the connected user's primary calendar. Use timeMin/timeMax for a time window, singleEvents to expand recurring series, showDeleted to include cancelled events, query for text search, orderBy to sort, pageToken to continue a page sequence, and syncToken to retrieve changes after a completed full sync. A sync token cannot be combined with event, text, property, time, update-time, or ordering filters; keep other parameters unchanged across sync pages. The final page returns nextSyncToken, and an expired token requires a new full sync after Google returns HTTP 410. Use fields to request a smaller partial response, including continuation tokens needed by the workflow."
+    },
+    {
+      "group": "googlecalendar",
+      "name": "GOOGLECALENDAR_EVENTS_LIST_ALL_CALENDARS",
+      "description": "Return a unified event list across all calendars in the user's calendar list for a given time range. Use when you need a single view of all events across multiple calendars. An inverted or incorrect time range silently returns empty results rather than an error. An empty `items` list means no events matched the filters—adjust `time_min`, `time_max`, or `q` before concluding no events exist."
+    },
+    {
+      "group": "googlecalendar",
+      "name": "GOOGLECALENDAR_EVENTS_MOVE",
+      "description": "Moves an event to another calendar, i.e., changes an event's organizer."
+    },
+    {
+      "group": "googlecalendar",
+      "name": "GOOGLECALENDAR_EVENTS_WATCH",
+      "description": "Watch for changes to Events resources. Watch channels expire; persist the channel `id` per `calendarId` to re-establish watches after expiration or restarts."
+    },
+    {
+      "group": "googlecalendar",
+      "name": "GOOGLECALENDAR_FIND_EVENT",
+      "description": "Finds events in a specified Google Calendar using text query, time ranges (event start/end, last modification), and event types. Ensure `timeMin` is not chronologically after `timeMax` if both are provided. Results may span multiple pages; always follow `nextPageToken` until absent to avoid silently missing events. Validate the correct match from results by checking summary, start.dateTime, and organizer.email before using event_id for mutations. An empty `items` array means no events matched — widen filters rather than treating it as an error."
+    },
+    {
+      "group": "googlecalendar",
+      "name": "GOOGLECALENDAR_FIND_FREE_SLOTS",
+      "description": "Finds both free and busy time slots in Google Calendars for specified calendars within a defined time range. If `time_min` is not provided, defaults to the current timestamp in the specified timezone. If `time_max` is not provided, defaults to 23:59:59 of the day specified in `time_min` (if provided), otherwise defaults to 23:59:59 of the current day in the specified timezone. Returns busy intervals and calculates free slots by finding gaps between busy periods; `time_min` must precede `time_max` if both are provided. This action retrieves free and busy time slots for the specified calendars over a given time period. It analyzes the busy intervals from the calendars and provides calculated free slots based on the gaps in the busy periods. Returned free slots are unfiltered by duration; callers must filter intervals to those fully containing the required meeting length. No event metadata (titles, descriptions, links) is returned; use GOOGLECALENDAR_EVENTS_LIST for event details."
+    },
+    {
+      "group": "googlecalendar",
+      "name": "GOOGLECALENDAR_FREE_BUSY_QUERY",
+      "description": "Queries raw busy intervals for one or more calendars or groups over an exact time range. Returns per-calendar and per-group availability and errors, without event titles or details. Use GOOGLECALENDAR_FIND_FREE_SLOTS when you want default time bounds and computed free intervals; use GOOGLECALENDAR_EVENTS_LIST when you need event records."
+    },
+    {
+      "group": "googlecalendar",
+      "name": "GOOGLECALENDAR_PATCH_EVENT",
+      "description": "Update specified fields of an existing event in a Google Calendar using patch semantics (array fields like `attendees` are fully replaced if provided); ensure the `calendar_id` and `event_id` are valid and the user has write access to the calendar."
+    },
+    {
+      "group": "googlecalendar",
+      "name": "GOOGLECALENDAR_QUICK_ADD",
+      "description": "Parses natural language text to quickly create a basic Google Calendar event with its title, date, and time, suitable for simple scheduling; does not support direct attendee addition or recurring events, and `calendar_id` must be valid if not 'primary'."
+    },
+    {
+      "group": "googlecalendar",
+      "name": "GOOGLECALENDAR_REMOVE_ATTENDEE",
+      "description": "Removes an attendee from a specified event in a Google Calendar; the calendar and event must exist. Concurrent calls on the same event can overwrite attendee lists — apply changes sequentially per event."
+    },
+    {
+      "group": "googlecalendar",
+      "name": "GOOGLECALENDAR_SETTINGS_LIST",
+      "description": "Returns all user settings for the authenticated user. Results include multiple settings keyed by id (e.g., `timeZone`); locate a specific setting by its `id` field. `timeZone` values are IANA identifiers (e.g., `America/New_York`) — use directly in datetime and event logic; align with `timeZone` from GOOGLECALENDAR_GET_CALENDAR for consistent notification times."
+    },
+    {
+      "group": "googlecalendar",
+      "name": "GOOGLECALENDAR_UPDATE_EVENT",
+      "description": "Updates an existing event in Google Calendar. REQUIRES event_id - you MUST first search for the event using GOOGLECALENDAR_FIND_EVENT or GOOGLECALENDAR_EVENTS_LIST to obtain the event_id. This is a full PUT replacement: omitted fields (including attendees, reminders, recurrence, conferencing) are cleared. Always provide the complete desired event state. Use GOOGLECALENDAR_PATCH_EVENT instead for partial edits."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_ADD_REACTION_TO_AN_ITEM",
+      "description": "Adds a specified emoji reaction to an existing message in a Slack channel, identified by its timestamp; does not remove or retrieve reactions."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_ADD_STAR",
+      "description": "Stars a channel, file, file comment, or a specific message in Slack."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_ADMIN_CONVERSATIONS_SEARCH",
+      "description": "Tool to search for public or private channels in an Enterprise organization. Use when you need to find channels by name, type, or other criteria within an Enterprise Grid workspace."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_ASSISTANT_SEARCH_CONTEXT",
+      "description": "Search Slack messages, files, channels, and users via Real-time Search API. For queries referencing entities by name (users/channels/files), first resolve with content_types (users/channels/files) to get exact ID. If multiple matches, ask user to clarify before proceeding (e.g. ask for user email)."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_CLOSE_DM",
+      "description": "Closes a Slack direct message (DM) or multi-person direct message (MPDM) channel, removing it from the user's sidebar without deleting history; this action affects only the calling user's view."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_CREATE_CHANNEL",
+      "description": "Initiates a public or private channel-based conversation in a Slack workspace. Immediately creates the channel; invoke only after explicit user confirmation."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_DELETE_CHANNEL",
+      "description": "Permanently and irreversibly deletes a specified public or private channel, including all its messages and files, within a Slack Enterprise Grid organization."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_DELETES_A_MESSAGE_FROM_A_CHAT",
+      "description": "Deletes a message, identified by its channel ID and timestamp, from a Slack channel, private group, or direct message conversation; the authenticated user or bot must be the original poster."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_DELETE_SCHEDULED_MESSAGE",
+      "description": "Deletes a pending, unsent scheduled message from the specified Slack channel, identified by its `scheduled_message_id`."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_FETCH_CONVERSATION_HISTORY",
+      "description": "Fetches a chronological list of messages and events from a specified Slack conversation, accessible by the authenticated user/bot, with options for pagination and time range filtering. IMPORTANT LIMITATION: This action only returns messages from the main channel timeline. Threaded replies are NOT returned by this endpoint. To retrieve threaded replies, use the SLACK_FETCH_MESSAGE_THREAD_FROM_A_CONVERSATION action (conversations.replies API) instead. The oldest/latest timestamp filters work reliably for filtering the main channel timeline, but cannot be used to retrieve individual threaded replies - even if you know the exact reply timestamp, setting oldest=latest to that timestamp will return an empty messages array. To get threaded replies: 1. Use this action to get parent messages (which include thread_ts, reply_count, latest_reply fields) 2. Use SLACK_FETCH_MESSAGE_THREAD_FROM_A_CONVERSATION with the parent's thread_ts to fetch all replies in that thread"
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_FETCH_ITEM_REACTIONS",
+      "description": "Fetches reactions for a Slack message, file, or file comment. Exactly one identifier path must be provided: `channel`+`timestamp`, `file`, or `file_comment`. Mixing identifiers (e.g., providing both `channel`+`timestamp` and `file`) causes errors. If the response omits the `reactions` field, the item has zero reactions."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_FETCH_MESSAGE_THREAD_FROM_A_CONVERSATION",
+      "description": "Retrieves replies to a specific parent message in a Slack conversation, using the channel ID and the parent message's timestamp (`ts`). Note: The parent message in the response contains metadata (reply_count, reply_users, latest_reply) that indicates expected thread activity. If the returned messages array contains fewer replies than reply_count indicates, check: (1) has_more=true means pagination is needed, (2) recently posted replies may have timing delays, (3) some replies may be filtered by permissions or deleted. The composio_execution_message field will warn about any detected mismatches."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_FIND_CHANNELS",
+      "description": "Find channels in a Slack workspace by any criteria - name, topic, purpose, or description. Returns channel IDs (C*/G* prefixed) required by most Slack tools — always resolve names to IDs here before passing to other tools. NOTE: This action searches channels and conversations visible to the authenticated user. Empty results may indicate: - No channels match the search query in name, topic, or purpose - The target private channel or DM is not accessible to the authenticated user because they are not a member - The connection lacks required read scopes (channels:read, groups:read, im:read, mpim:read). If empty, retry with exact_match=false or exclude_archived=false to avoid false negatives. In large workspaces, paginate using next_cursor to avoid missing matches. Check 'composio_execution_message' and 'total_channels_searched' in the response for details."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_FIND_USER_BY_EMAIL_ADDRESS",
+      "description": "Retrieves the Slack user object for an active user by their registered email address; requires the users:read.email OAuth scope. Fails with 'users_not_found' if the email is unregistered, the user is inactive, the account is a guest, or the email is hidden by workspace privacy settings."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_FIND_USERS",
+      "description": "Find users in a Slack workspace by any criteria - email, name, display name, or other text. Includes optimized email lookup for exact email matches. Zero results may reflect email visibility restrictions or workspace policies, not global absence. Repeated calls may trigger HTTP 429; honor the Retry-After header."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_GET_CHANNEL_CONVERSATION_PREFERENCES",
+      "description": "Retrieves conversation preferences (e.g., who can post, who can thread) for a specified channel, primarily for use within Slack Enterprise Grid environments."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_GET_UNREAD_MESSAGES_FROM_USER",
+      "description": "Retrieves unread direct messages from a specific user by opening their DM conversation, checking for unread messages, and fetching message history since the last read timestamp. Use this action when you need to check if a specific user has sent unread direct messages to the authenticated user, or when monitoring incoming DMs from particular users. Returns an empty messages array if there are no unread messages from the specified user. Note: This action only works for direct messages (DMs), not channel messages or group conversations."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_INVITE_USERS_TO_A_SLACK_CHANNEL",
+      "description": "Invites users to an existing Slack channel using their valid Slack User IDs. Response is always HTTP 200; inspect `ok`, `error`, and `errors` fields to confirm users were added."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_INVITE_USER_TO_CHANNEL",
+      "description": "Invites users to a specified Slack channel; this action is restricted to Enterprise Grid workspaces and requires the authenticated user to be a member of the target channel."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_JOIN_AN_EXISTING_CONVERSATION",
+      "description": "Joins an existing Slack conversation (public channel, private channel, or multi-person direct message) by its ID, if the authenticated user has permission. Joining an already-joined channel returns a non-fatal no-op response. Private or restricted channel joins may fail with a permission error."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_LEAVE_CONVERSATION",
+      "description": "Leaves a Slack conversation given its channel ID; fails if leaving as the last member of a private channel or if used on a Slack Connect channel."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_LIST_ALL_USERS",
+      "description": "Retrieves a paginated list of all users with profile details, status, and team memberships in a Slack workspace; data may not be real-time. Filter response fields `is_bot`, `is_app_user`, and `deleted` to build human-only rosters. Profile fields like `email` and `phone` may be absent depending on OAuth scopes and workspace privacy settings. Guest/restricted accounts may be omitted based on scopes—do not treat results as a complete directory. High-frequency calls risk HTTP 429; honor the `Retry-After` header and throttle to ~1–2 requests/second. Use stable user IDs rather than display names for mapping. Prefer SLACK_FIND_USERS for targeted lookups; cache results to avoid full-workspace fetches."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_LIST_PINNED_ITEMS",
+      "description": "Retrieves all messages and files pinned to a specified channel; the caller must have access to this channel."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_LIST_SCHEDULED_MESSAGES",
+      "description": "Retrieves a list of pending (not yet delivered) messages scheduled in a specific Slack channel, or across all accessible channels if no channel ID is provided, optionally filtered by time and paginated."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_LIST_UNREAD_CHANNEL_MESSAGES",
+      "description": "Lists all unread messages in a specified Slack channel for the authenticated user. This action fetches messages that have been posted since the user's last read position in the channel. Use this action when you need to retrieve messages the user hasn't seen yet. The action determines the user's read position and returns all messages posted after that timestamp. Note: This only returns messages from the main channel timeline, not threaded replies. For threaded replies, use SLACK_FETCH_MESSAGE_THREAD_FROM_A_CONVERSATION."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_OPEN_DM",
+      "description": "Opens or resumes a Slack direct message (DM) or multi-person direct message (MPIM) by providing either user IDs or an existing channel ID. Returns `already_open=true` when the DM exists — treat as success and reuse the returned `channel.id` (starts with 'D') for subsequent SLACK_SEND_MESSAGE calls; passing a username, email, or user ID directly to SLACK_SEND_MESSAGE causes `channel_not_found`. Avoid redundant calls when an existing DM channel ID is available."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_PIN_ITEM",
+      "description": "Pins a message to a specified Slack channel; the message must not already be pinned."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_REMOVE_REACTION_FROM_ITEM",
+      "description": "Removes an emoji reaction from a message, file, or file comment in Slack. Provide exactly one targeting method: channel+timestamp together, file, or file_comment. Mixing methods or omitting all returns invalid_arguments."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_REMOVE_STAR",
+      "description": "Removes a star from a previously starred Slack item (message, file, file comment, channel, group, or DM), requiring identification via `file`, `file_comment`, `channel` (for channel/group/DM), or both `channel` and `timestamp` (for a message)."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_RETRIEVE_CONVERSATION_INFORMATION",
+      "description": "Retrieves metadata for a Slack conversation by ID (e.g., name, purpose, creation date, with options for member count/locale), excluding message content. The `channel` parameter is effectively required. Private channels, DMs, or channels where the app lacks membership may return restricted data; check `is_archived` and `is_member` fields in the response to diagnose access issues. Bulk lookups may trigger HTTP 429 rate limiting; honor the `Retry-After` response header."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_RETRIEVE_DETAILED_USER_INFORMATION",
+      "description": "Retrieves comprehensive information for a valid Slack user ID, excluding message history and channel memberships. Sensitive fields like `email` and `phone` require the `users:read.email` scope and may be silently omitted based on workspace privacy policies."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_RETRIEVE_MESSAGE_PERMALINK_URL",
+      "description": "Retrieves a permalink URL for a specific message in a Slack channel or conversation; the permalink respects Slack's privacy settings."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_RETRIEVE_USER_PROFILE_INFORMATION",
+      "description": "Retrieves profile information for a specified Slack user (defaults to the authenticated user if `user` ID is omitted); a provided `user` ID must be valid. Sensitive fields like email and phone may be silently omitted if required scopes (e.g., `users:read.email`) are not granted or workspace privacy policies restrict access."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_SCHEDULE_MESSAGE",
+      "description": "Schedules a message to a Slack channel, DM, or private group for a future time (`post_at`), requiring `text`, `blocks`, or `attachments` for content; scheduling is limited to 120 days in advance."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_SEARCH_ALL",
+      "description": "Tool to search all messages and files. Use when you need unified content search across channels and files in one call. Results are scoped to content visible to the authenticated token; missing hits in private or restricted channels reflect permission/membership gaps. Response separates messages and files into distinct sections — explicitly read the files section for document results. Results are index-based and may lag several minutes behind real-time; use SLACK_FETCH_CONVERSATION_HISTORY for near-real-time per-channel coverage. Paginated searches exceeding ~1 req/sec may return HTTP 429 too_many_requests; honor the Retry-After header and resume from the last page."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_SEARCH_MESSAGES",
+      "description": "Workspace‑wide Slack message search with date ranges and filters. Use `query` modifiers (e.g., in:#channel, from:@user, before/after:YYYY-MM-DD), sorting (score/timestamp), and pagination."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_SEND_EPHEMERAL_MESSAGE",
+      "description": "Sends an ephemeral message visible only to the specified `user` in a channel; other channel members cannot see it. Both the bot and the target user must be members of the specified channel."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_SEND_ME_MESSAGE",
+      "description": "Sends a 'me message' (e.g., '/me is typing') to a Slack channel, where it's displayed as a third-person user action; messages are plain text and the channel must exist and be accessible."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_SEND_MESSAGE",
+      "description": "Posts a message to a Slack channel, DM, or private group. Provide exactly one visible content mode: `markdown_text` for normal Markdown content, or `blocks` for raw Slack Block Kit layouts. Use `fallback_text` only with `blocks`; it maps to Slack's top-level `text` fallback. Fails with `not_in_channel`, `channel_not_found`, or `channel_is_archived` if the bot lacks access. Rate-limited at ~1 req/sec (HTTP 429, honor `Retry-After`). Not idempotent — duplicate calls post duplicate messages."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_SET_CONVERSATION_PREFS",
+      "description": "Sets the posting permissions for a public or private channel in Slack. Use this to control who can post messages, start threads, use @channel/@here mentions, and initiate huddles in a specific channel."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_SET_DEFAULT_CHANNELS",
+      "description": "Tool to set the default channels of a workspace. Use when you need to configure which channels new members automatically join."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_SET_READ_CURSOR_IN_A_CONVERSATION",
+      "description": "Marks a message, specified by its timestamp (`ts`), as the most recently read for the authenticated user in the given `channel`, provided the user is a member of the channel and the message exists within it."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_SHARE_REMOTE_FILE",
+      "description": "Shares a remote file, which must already be registered with Slack, into specified Slack channels or direct message conversations."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_UNARCHIVE_CHANNEL",
+      "description": "Reverses conversation archival."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_UNPIN_ITEM",
+      "description": "Unpins a message, identified by its timestamp, from a specified channel if the message is currently pinned there; this operation is destructive."
+    },
+    {
+      "group": "slack",
+      "name": "SLACK_UPLOAD_OR_CREATE_A_FILE_IN_SLACK",
+      "description": "Upload files, images, screenshots, documents, or any media to Slack channels or threads. Supports all file types including images (PNG, JPG, JPEG, GIF), documents (PDF, DOCX, TXT), code files, and more. Can share files publicly in channels or as thread replies with optional comments. Large files may fail with `upload_too_large`; use SLACK_ADD_A_REMOTE_FILE_FROM_A_SERVICE for large uploads. If the API returns `ok=false` with `method_deprecated`, fall back to SLACK_ADD_A_REMOTE_FILE_FROM_A_SERVICE or SLACK_SEND_MESSAGE with a URL."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_ADD_EMAIL_ADDRESS_FOR_AUTHENTICATED_USER",
+      "description": "Adds one or more email addresses (which will be initially unverified) to the authenticated user's GitHub account; use this to associate new emails, noting an email verified for another account will error, while an existing email for the current user is accepted."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_ADD_SUB_ISSUE",
+      "description": "Tool to add a sub-issue to a parent GitHub issue using GraphQL. Use when you need to establish a parent-child relationship between issues. Requires the 'sub_issues' GraphQL feature to be enabled."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_CREATE_A_MILESTONE",
+      "description": "Creates a milestone in a GitHub repository for tracking progress on issues or pull requests; requires repository existence and user write permissions."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_CREATE_AN_ISSUE",
+      "description": "Creates a new issue in a GitHub repository, requiring the repository to exist and have issues enabled; specific fields like assignees, milestone, or labels may require push access."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_CREATE_AN_ISSUE_COMMENT",
+      "description": "Creates a new comment on an existing GitHub issue or pull request within the specified repository."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_CREATE_A_PROJECT_CARD",
+      "description": "Creates a project card in a GitHub project column (classic projects only). DEPRECATION NOTICE: GitHub Projects (classic) was sunset on August 23, 2024. This API only works with existing classic project columns. New classic projects cannot be created. Consider using GitHub Projects V2 (GraphQL API) instead. The request body must contain either: - `note`: A text note for the card - OR `content_id` AND `content_type`: To associate an issue or pull request"
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_CREATE_A_PULL_REQUEST",
+      "description": "Creates a pull request in a GitHub repository, requiring existing `base` and `head` branches; `title` or `issue` must be provided."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_CREATE_A_REPLY_FOR_A_REVIEW_COMMENT",
+      "description": "Posts a reply to a specific review comment on a GitHub pull request, requiring the repository, pull request, and original comment to exist, and a non-empty reply body."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_CREATE_A_REPOSITORY_DISPATCH_EVENT",
+      "description": "Triggers a GitHub Actions workflow or a webhook on a repository by creating a repository dispatch event, allowing programmatic triggering of workflows based on events outside of GitHub."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_CREATE_A_REVIEW_FOR_A_PULL_REQUEST",
+      "description": "Creates a pull request review, allowing approval, change requests, or comments; `body` is required if `event` is `REQUEST_CHANGES` or `COMMENT`, and omitting `event` makes the review `PENDING`."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_CREATE_A_USER_PROJECT",
+      "description": "Creates a new GitHub Projects V2 project board for the authenticated user to organize and track issues, pull requests, and notes. Note: This action uses GitHub's Projects V2 GraphQL API. The legacy Projects V1 REST API has been sunset by GitHub."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_CREATE_A_WORKFLOW_DISPATCH_EVENT",
+      "description": "Manually triggers a GitHub Actions workflow identified by `workflow_id` at a given `ref`, if the workflow is configured to accept `workflow_dispatch` events."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_CREATE_DRAFT_ITEM_FOR_USER_PROJECT",
+      "description": "Creates a draft issue item in a user-owned GitHub ProjectsV2. Use when you need to add a new draft item to track ideas or tasks in a user's project."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_CREATE_ISSUE_TYPE",
+      "description": "Create a new issue type for a GitHub organization. Requires the authenticated user to be an organization administrator. OAuth tokens need admin:org scope."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_CREATE_REACTION_FOR_AN_ISSUE",
+      "description": "Creates a reaction for a specified issue within a GitHub repository."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_CREATE_REACTION_FOR_AN_ISSUE_COMMENT",
+      "description": "Creates a reaction for a specific comment on an issue within a GitHub repository."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_CREATE_REPOSITORY",
+      "description": "Creates a new repository for the authenticated user. Use this action when you need to create a new GitHub repository under the authenticated user's account. The repository name must be unique for the user, and various settings can be configured such as visibility (public/private), enabled features (issues, wiki, projects), and merge options."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_DELETE_A_THREAD_SUBSCRIPTION",
+      "description": "Call this to mute a specific notification thread by deleting the user's subscription; notifications may still occur if the user is @mentioned, comments, or due to repository watch settings."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_DELETE_EMAIL_ADDRESS",
+      "description": "Sends an empty request body to `DELETE /user/emails` to attempt deletion of user email addresses; the API typically requires specific emails, so outcome may vary."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_DELETE_ISSUE_REACTION",
+      "description": "Permanently removes a specific reaction from an issue in a GitHub repository."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_FIND_PULL_REQUESTS",
+      "description": "Primary tool to find and search pull requests. Supports filtering by repository, author, state, labels, and merge status, and returns structured PR data for reliable use in workflows. GitHub search results are capped at ~1000 total items; narrow filters when totals approach this limit. `created_since`/`updated_since` filter on creation/update timestamps, not `merged_at`; apply merge-date filtering client-side."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_FIND_REPOSITORIES",
+      "description": "AI-optimized repository search with smart filtering by language, stars, topics, and ownership. Builds intelligent search queries and returns clean, actionable repository data. Check `incomplete_results` in the response — when true, results are non-exhaustive. Search endpoints are rate-limited to ~30 requests/minute (vs. 5000/hour for general REST); apply backoff on 403/429. Total results are capped at ~1000 per query regardless of pagination."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_GET_AN_ISSUE",
+      "description": "Retrieves detailed information about a specific issue in a repository using the owner, repository name, and issue number."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_GET_AN_ISSUE_COMMENT",
+      "description": "Action to get an issue comment."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_GET_AN_ISSUE_EVENT",
+      "description": "Fetches details of a specific issue event for a given repository and event ID."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_GET_A_THREAD",
+      "description": "Retrieves a specific GitHub notification thread using its unique `thread_id`."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_GET_A_THREAD_SUBSCRIPTION_FOR_THE_AUTHENTICATED_USER",
+      "description": "Retrieves the authenticated user's subscription details for a specific notification thread, identified by `thread_id`."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_GET_ORGANIZATION_TEAMS",
+      "description": "Retrieves a list of teams for a specified GitHub organization. Use this action when you need to list all teams, find team information, or explore team structure within an organization. Requires read:org scope and returns paginated results."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_GET_PARENT_ISSUE",
+      "description": "Retrieve the parent issue of a GitHub sub-issue."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_GET_REPOSITORY_DISCUSSION_THREAD",
+      "description": "Reads one repository Discussion with cursor-paginated top-level comments and up to the requested first replies for each comment."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_COMMENT_CHANGES",
+      "description": "Tool to list issue and PR comment changes across an organization's repositories efficiently. Use when monitoring comment activity without per-PR/per-issue polling. Filters organization events to return only comment-related events (IssueCommentEvent, PullRequestReviewCommentEvent, CommitCommentEvent). Note: Events are limited to the past 30 days and up to 300 events per timeline. Use ETag header for efficient polling to avoid rate limits."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_EMAIL_ADDRESSES_FOR_THE_AUTHENTICATED_USER",
+      "description": "Lists all email addresses for the authenticated user, including their primary status, verification status, and visibility. This action retrieves the complete list of email addresses associated with the authenticated user, providing important details such as which email is primary and whether the emails are verified."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_EVENTS_FOR_THE_AUTHENTICATED_USER",
+      "description": "Lists public events for the specified GitHub user, or private events if authenticated as that user, in reverse chronological order."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_EVENTS_FOR_USER",
+      "description": "Lists events performed by a GitHub user in reverse chronological order. If authenticated as the specified user, you will see private events; otherwise, only public events are returned. Use this action when you need to retrieve a user's activity history, such as commits, pull requests, issues, and other GitHub actions."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_EVENTS_RECEIVED_BY_THE_AUTHENTICATED_USER",
+      "description": "Lists events a specific GitHub user received from followed users and watched repositories; returns private events if authenticated for `username`, otherwise public."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_ISSUE_COMMENTS",
+      "description": "Lists comments for a specified issue in a GitHub repository."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_ISSUE_DEPENDENCIES_BLOCKED_BY",
+      "description": "Tool to list dependencies an issue is blocked by. Use when you need to retrieve all issues that are blocking a specific issue from being closed or completed."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_ISSUE_DEPENDENCIES_BLOCKING",
+      "description": "Tool to list dependencies an issue is blocking. Use when you need to see which issues are blocked by a specific issue."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_ISSUE_EVENTS",
+      "description": "Retrieves a list of all events for a specific issue within a GitHub repository."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_ISSUE_EVENTS_FOR_A_REPOSITORY",
+      "description": "Lists all issue events (e.g., closed, reopened, assigned) for a specified repository."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_LABELS_FOR_AN_ISSUE",
+      "description": "Lists all labels for a specified issue in a GitHub repository."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_LABELS_FOR_ISSUES_IN_A_MILESTONE",
+      "description": "Lists all labels for issues within a specific milestone in a repository."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_ORGANIZATION_EVENTS_FOR_THE_AUTHENTICATED_USER",
+      "description": "Lists public events in a specified GitHub organization for the authenticated user's organization dashboard. Returns activities like repository pushes, pull requests, issues, forks, and other public events within the organization. The authenticated user must be a member of the organization to see events."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_PUBLIC_EMAILS_FOR_AUTH_USER",
+      "description": "Lists the public email addresses for the authenticated user."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_PUBLIC_EVENTS",
+      "description": "Lists public GitHub events, which may be delayed by up to 5 minutes, with support for pagination."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_PUBLIC_EVENTS_FOR_A_NETWORK_OF_REPOSITORIES",
+      "description": "Retrieves public events (up to 90 days old, newest first) for a GitHub repository network, including the repository and its forks."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_PUBLIC_EVENTS_FOR_A_USER",
+      "description": "Retrieves a list of public events for a specified GitHub user, in reverse chronological order."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_PUBLIC_EVENTS_RECEIVED_BY_A_USER",
+      "description": "Lists public events for a specified GitHub user (e.g., activities in repositories they watch or are involved in); the target user's profile must be public, and if blocked by the authenticated user, a 404 error is returned."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_PUBLIC_ORGANIZATION_EVENTS",
+      "description": "Lists public events for a specified GitHub organization, which must exist. This action retrieves the events that are publicly accessible for the organization specified. It returns a paginated list of events with details about each event."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_PULL_REQUESTS",
+      "description": "Lists pull requests for a GitHub repository. REQUIRES 'owner' AND 'repo' parameters - both are MANDATORY and must be provided in every call. Does NOT support filtering by assignee or date range - use GITHUB_FIND_PULL_REQUESTS instead for searching PRs by assignee, author, or across multiple repositories."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_REPOSITORY_EVENTS",
+      "description": "Lists chronological events (e.g., code pushes, issue activities, PR actions, forks) for a specified, existing GitHub repository."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_SECURITY_VULNERABILITIES",
+      "description": "Query software vulnerabilities documented by GitHub Security Advisories using GraphQL. Use this to find security issues in packages across ecosystems like npm, pip, maven, etc."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_SUB_ISSUES",
+      "description": "Tool to list sub-issues for a specific GitHub issue. Use when you need to retrieve all sub-issues associated with a parent issue, supporting pagination for large hierarchies."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_TIMELINE_EVENTS_FOR_AN_ISSUE",
+      "description": "Lists chronological events (e.g., comments, commits, label changes) for a specific issue in a GitHub repository."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LIST_WORKFLOW_RUNS_FOR_A_REPOSITORY",
+      "description": "Lists workflow runs for a repository, allowing filtering by actor, branch, event, status, creation date, check suite ID, or head SHA; the repository must exist and be accessible."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_LOOKUP_TOPIC_BY_NAME",
+      "description": "Tool to look up a GitHub topic by name using GraphQL. Use when you need to find information about a specific GitHub topic including its popularity (stargazer count) and related topics."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_MANAGE_ISSUE_BLOCKING_DEPENDENCY",
+      "description": "Add or remove an issue that blocks another issue in the same repository."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_MARK_A_THREAD_AS_DONE",
+      "description": "Marks the GitHub notification thread (identified by `thread_id`) as done or read for the authenticated user, effectively archiving it."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_MARK_A_THREAD_AS_READ",
+      "description": "Marks an existing GitHub notification thread, identified by its `thread_id`, as read."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_PING_AN_ORGANIZATION_WEBHOOK",
+      "description": "Sends a 'ping' event to a specified, existing organization webhook to test its configuration and ensure it correctly receives events."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_REMOVE_A_LABEL_FROM_AN_ISSUE",
+      "description": "Removes a label currently applied to a specific issue in a repository."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_REMOVE_INTERACTION_RESTRICTIONS_FOR_A_REPOSITORY",
+      "description": "Removes all interaction restrictions for a repository, enabling all users to comment, open issues, and create pull requests by lifting any existing temporary interaction limits."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_SEARCH_COMMITS",
+      "description": "Finds commits on GitHub using a query string (q) supporting keywords and qualifiers, with options for sorting and pagination."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_SEARCH_COMMITS_BY_AUTHOR",
+      "description": "Searches commits across GitHub using the Search API (e.g., by author/email/org/date range) without per-repo scanning. Use when you need to find commits by author, committer email, organization, or date ranges across multiple repositories. This avoids the need to list commits per repository and prevents 409 errors on empty repos."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_SEARCH_ISSUES",
+      "description": "Searches GitHub issues and pull requests using a flexible query with qualifiers, sorting, and pagination. Use this action when you need to find issues or pull requests across repositories using search criteria like author, labels, state, milestone, or date ranges. This action searches across all repositories accessible to the authenticated user unless constrained by qualifiers like repo:, user:, or org:."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_SEARCH_TOPICS",
+      "description": "Finds topics on GitHub using keywords and qualifiers with GitHub's search syntax, supporting pagination."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_SET_A_THREAD_SUBSCRIPTION",
+      "description": "Sets whether a GitHub notification thread is ignored (muted) or unignored (unmuted), for a `thread_id` that must identify an existing notification thread."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_SET_EMAIL_VISIBILITY",
+      "description": "Sets the visibility ('public' or 'private') of the authenticated user's primary email address on GitHub, if one is configured."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_SET_INTERACTION_RESTRICTIONS_FOR_A_REPOSITORY",
+      "description": "Temporarily limits which GitHub users (e.g., existing_users, contributors_only) can interact (comment, open issues, create pull requests) in a repository for a specified duration."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_SET_LABELS_FOR_AN_ISSUE",
+      "description": "Replaces all existing labels on a GitHub issue with a new set of labels."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_SYNC_FORK_BRANCH_WITH_UPSTREAM",
+      "description": "Synchronizes a branch in a forked GitHub repository with its upstream counterpart, assuming the repository is a fork, the branch exists, an upstream is configured, and the merge is conflict-free."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_TEST_REPOSITORY_WEBHOOK",
+      "description": "Triggers a simulated push event to test a repository's push webhook; a test event is only delivered if the webhook is subscribed to 'push' events, otherwise, it returns 204 No Content without sending a POST."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_UNLOCK_AN_ISSUE",
+      "description": "Unlocks a currently locked GitHub issue in the specified repository, allowing new comments and interactions."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_UPDATE_AN_ISSUE_COMMENT",
+      "description": "Updates an existing comment on an issue or pull request within a specified repository. You can only update comments that the authenticated user has permission to edit. The comment_id can be obtained from the list_issue_comments or get_an_issue_comment actions."
+    },
+    {
+      "group": "github",
+      "name": "GITHUB_UPDATE_THE_AUTHENTICATED_USER",
+      "description": "Updates the authenticated user's GitHub profile; a new public email must be verified, and existing private emails remain private even if specified."
+    },
+    {
+      "group": "notion",
+      "name": "NOTION_CREATE_COMMENT",
+      "description": "Adds a comment to a Notion page (via `parent_page_id`) OR to an existing discussion thread (via `discussion_id`); cannot create new discussion threads on specific blocks (inline comments)."
+    },
+    {
+      "group": "notion",
+      "name": "NOTION_SEARCH_NOTION_PAGE",
+      "description": "Searches Notion pages and databases by title. Use specific search terms to find items by title (primary approach). KNOWN LIMITATIONS: (1) Search indexing is not immediate - recently shared items may not appear. (2) Search is not exhaustive - results may be incomplete. (3) Database pages return all custom properties with full nested structures, which can create large responses for databases with many properties - use filter_properties to reduce response size. FALLBACK STRATEGY: If a specific title search returns empty results despite knowing items exist, try an empty query to list all accessible items and filter client-side."
+    },
+    {
+      "group": "notion",
+      "name": "NOTION_SEND_FILE_UPLOAD",
+      "description": "Tool to transmit file contents to Notion for a file upload object. Use after creating a file upload object to send the actual file data."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_ARCHIVE_ISSUE",
+      "description": "Archives an existing Linear issue by its ID, removing it from active views while preserving its data for future reference. Use this action when you need to remove an issue from active work without permanently deleting it — for example, when an issue is no longer relevant, was created by mistake, or has been superseded by another issue. Archiving is reversible via the unarchive mutation, unlike permanent deletion. This action is irreversible through the API once completed, though issues can be manually unarchived in the Linear UI or via the issueUnarchive mutation."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_CREATE_ATTACHMENT",
+      "description": "Creates a new attachment and associates it with a specific, existing Linear issue."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_CREATE_COMMENT_REACTION",
+      "description": "Tool to add a reaction to an existing Linear comment. Use when you want to programmatically react to a comment on an issue."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_CREATE_LINEAR_COMMENT",
+      "description": "Creates a new comment on a specified Linear issue. This action modifies shared workspace data and is not reversible — confirm the target issue and comment content before executing."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_CREATE_LINEAR_ISSUE",
+      "description": "Creates a new issue in a specified Linear project and team, requiring team_id and title, and allowing optional properties like description, assignee, state, priority, cycle, and due date. All UUID parameters (state_id, assignee_id, cycle_id, label_ids, project_id) must belong to the same team as team_id. The created issue's id is returned in data.id — capture it for use as parent_id in sub-issues or follow-up operations. No template_id field exists; expand templates manually into title and description before calling."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_CREATE_LINEAR_ISSUE_RELATION",
+      "description": "Create a relationship between two Linear issues using the issueRelationCreate mutation. Use this to establish connections like 'blocks', 'duplicate', or 'related' between issues."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_CREATE_LINEAR_LABEL",
+      "description": "Creates a new label in Linear for a specified team, used to categorize and organize issues. Label names must be unique within each team. If a label with the same name already exists, the existing label will be returned. Both new and existing labels return the same object structure; check the label's `createdAt` or compare IDs to determine if creation occurred."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_CREATE_LINEAR_PROJECT",
+      "description": "Creates a new Linear project with specified name and team associations."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_CREATE_PROJECT_MILESTONE",
+      "description": "Tool to create a project milestone in Linear with a name and optional target date and sort order. Use when you need to add milestones to track progress within a project."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_CREATE_PROJECT_UPDATE",
+      "description": "Tool to create a project status update post for a Linear project. Use when you need to post progress updates, status reports, or announcements for a project."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_CREATE_TEAM",
+      "description": "Creates a new team in Linear with the specified name and key. Use this action when you need to create a new organizational unit or work group in a Linear workspace. Teams are fundamental organizational structures in Linear that group issues, projects, and members together. Once created, the team's key becomes the prefix for all issues created within that team (e.g., 'ENG-123'). IMPORTANT: The key must be unique across the workspace and cannot be changed after creation."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_DELETE_LINEAR_ISSUE",
+      "description": "Archives an existing Linear issue by its ID, which is Linear's standard way of deleting issues; the operation is idempotent. Archiving is permanent with no built-in undo — confirm the issue identifier and title with the user before executing, especially in bulk operations."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_GET_ATTACHMENT",
+      "description": "Downloads a Linear Attachment record or a private upload embedded in issue/comment Markdown; `file_name` must include the correct extension."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_GET_COMMENT",
+      "description": "Retrieves a single Linear comment by its unique ID. Returns comprehensive details including the comment body, author, timestamps, associated issue, and thread information. Use this action when you need to fetch details about a specific comment, such as when displaying comment information, checking comment status, or retrieving comment content for processing. The comment ID can be obtained from issue queries, comment lists, or comment creation responses."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_GET_ISSUE_DEFAULTS",
+      "description": "Fetches a Linear team's default issue estimate and state, useful for pre-filling new issue forms."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_GET_LINEAR_ISSUE",
+      "description": "Retrieves an existing Linear issue's comprehensive details, including id, identifier, title, description, timestamps, state, team, creator, attachments, comments (with user info and timestamps, use issue.comments.nodes for comment IDs), subscribers, and due date. Embedded screenshots are uploads.linear.app URLs in description/comment Markdown, not Attachment records; download them with LINEAR_GET_ATTACHMENT's upload_url input. Does not include parent, milestone, cycle, or relation graphs—use LINEAR_RUN_QUERY_OR_MUTATION for those. Optional fields (labels, project, state, assignee, cycle) may be null; guard against null when accessing nested properties. Returns null or 'Entity not found' for invalid IDs, cross-workspace IDs, or restricted teams. Rate limit: ~60 req/min; HTTP 429 on excess—apply exponential backoff and respect Retry-After headers."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_GET_LINEAR_PROJECT",
+      "description": "Retrieves a single Linear project by its unique identifier. Use when verifying a newly created or updated project, or when fetching detailed project information by ID."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_LIST_COMMENTS",
+      "description": "Lists comments from Linear workspace accessible to the authenticated user. Use this action when you need to retrieve comments for analysis, reporting, or tracking discussions across issues. The response includes comment content, timestamps, author information, and associated issue details. Supports pagination for large result sets."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_LIST_ISSUE_DRAFTS",
+      "description": "Tool to list issue drafts. Use when you need to fetch draft issues for review or further editing. Check `pageInfo.hasNextPage` in the response to determine if additional drafts exist beyond the current page."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_LIST_ISSUES_BY_TEAM_ID",
+      "description": "Tool to list all issues for a specific Linear team, scoped by team ID. Use when you need to retrieve issues belonging to a particular team without fetching workspace-wide issues. This is more efficient than workspace-wide listing followed by client-side filtering."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_LIST_LINEAR_ISSUES",
+      "description": "Lists non-archived Linear issues; if project_id is not specified, issues from all accessible projects are returned. Can filter by assignee_id. Only project_id and assignee_id server-side filters are supported; label, state, team, cycle, or date filters must be done client-side or via LINEAR_RUN_QUERY_OR_MUTATION. Response is a flat issues array plus page_info object (not GraphQL nodes/pageInfo). Fields like cycle membership, dueDate, completedAt, comments, and attachments are absent; use LINEAR_GET_LINEAR_ISSUE for enrichment. state and labels are nested objects (labels as labels.nodes array). Response order is not guaranteed; sort client-side after collecting all pages. No team_id filter; scope by project_id or use LINEAR_RUN_QUERY_OR_MUTATION."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_LIST_LINEAR_PROJECTS",
+      "description": "Retrieves all projects from the Linear account. Returns a flat array (not a GraphQL connection) with fields id and name; use LINEAR_RUN_QUERY_OR_MUTATION for progress, state, issues, or team linkage. No server-side filtering: all workspace projects are returned regardless of team or name — filter client-side. Multiple projects can share identical names; always confirm project_id before downstream use. Results are permission-scoped to the connected user. Pagination: loop while page_info.hasNextPage is true, passing page_info.endCursor as after, or results will be silently truncated. HTTP 429 may occur in large workspaces; apply exponential backoff between calls."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_LIST_LINEAR_STATES",
+      "description": "Retrieves all workflow states for a specified team in Linear, representing the stages an issue progresses through in that team's workflow. Returned state IDs are team-scoped — never reuse a stateId across different teams, as this causes validation errors or 'Entity not found' failures in tools like LINEAR_UPDATE_ISSUE. State names (e.g., 'Done', 'In Progress') are non-unique across teams; always resolve names to IDs via this tool for the specific team_id before using them in filters or mutations. Uses cursor-based pagination via pageInfo.hasNextPage and endCursor; iterate until hasNextPage is false to avoid missing states in large workspaces. Always fetch fresh state IDs rather than hardcoding or reusing stale values."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_LIST_LINEAR_USERS",
+      "description": "Lists all workspace users (not team-scoped) with their IDs, names, emails, and active status. Display names are non-unique — use email to disambiguate before extracting an ID. Only assign users with `active: true`. Returned IDs are UUID strings; pass them as-is to fields like `assignee_id` — never substitute names, emails, or tokens. When joining with other tools, always join on IDs."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_REMOVE_ISSUE_LABEL",
+      "description": "Removes a specified label from an existing Linear issue using their IDs; successful even if the label isn't on the issue. Operation is irreversible — obtain explicit user approval before executing. Use this tool instead of LINEAR_UPDATE_ISSUE to avoid replacing the entire label set."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_RUN_QUERY_OR_MUTATION",
+      "description": "Execute any GraphQL query or mutation against Linear's API. USE WHEN: No dedicated action exists, need complex filtering, custom fields, or schema discovery. *** INTROSPECTION FIRST - NEVER GUESS FIELD NAMES *** Run introspection before unknown operations: - query { __type(name: \"Issue\") { fields { name } } } - query { __type(name: \"Mutation\") { fields { name } } } Linear uses nested objects (project { id }), NOT scalar IDs (projectId). KEY: All IDs are UUIDs. Filter: { field: { eq: value } }. Pagination: nodes[] + pageInfo."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_SEARCH_ISSUES",
+      "description": "Search Linear issues using full-text search across identifier, title, and description. Use when you need to find issues by keywords or specific identifiers. Note: This endpoint only supports full-text search; for structured filtering by team, project, assignee, state, or labels, use LIST_ISSUES_BY_TEAM_ID instead."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_UPDATE_ISSUE",
+      "description": "Updates an existing Linear issue using its `issue_id`; requires at least one other attribute for modification, and all provided entity IDs (for state, assignee, labels, etc.) must be valid UUIDs — only `issueId` accepts key format (e.g., 'ENG-123'). All updated fields are fully overwritten, not merged; omit any field you do not intend to change."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_UPDATE_LINEAR_COMMENT",
+      "description": "Tool to update an existing Linear comment's body text. Use when you need to edit or modify the content of a previously created comment."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_UPDATE_LINEAR_PROJECT",
+      "description": "Tool to update an existing Linear project. Use when you need to modify project properties like name, description, state, dates, or lead. All fields except project_id are optional - only provide the fields you want to update."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_VALIDATE_CREDENTIAL",
+      "description": "Validates the Linear API credentials by checking if the authentication token can successfully query the current user. Use this action when you need to verify that API credentials are valid before performing other operations, or to confirm that authentication is working correctly. This is particularly useful for connection testing, credential verification flows, or troubleshooting authentication issues."
+    },
+    {
+      "group": "linear",
+      "name": "LINEAR_WHO_AM_I",
+      "description": "Return the identity (name, email) of the connected Linear account."
+    }
+  ]
+}

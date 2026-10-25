@@ -17,12 +17,10 @@ import { useModelSettings } from "./model-settings/use-model-settings";
 export function ModelSettingsOverlay({
   onClose,
   embedded = false,
-  localOwner = false,
 }: {
   onClose: () => void;
   /** Render panel body only for the shared Settings shell. */
   embedded?: boolean;
-  localOwner?: boolean;
 }) {
   const { t } = useLingui();
   const settings = useModelSettings();
@@ -46,8 +44,6 @@ export function ModelSettingsOverlay({
 
   const description = loading ? (
     <Trans>Loading model catalog…</Trans>
-  ) : localOwner ? (
-    <Trans>Models for the server owner’s default space.</Trans>
   ) : (
     <Trans>Choose which connected model Rakazo uses.</Trans>
   );

@@ -202,6 +202,8 @@ export interface ConnectorTool {
   route?: ConnectorRoute;
   /** Display name of the connected app, for the live activity line only. Never exposed to the model. */
   appName?: string;
+  /** Highlight this tool in large catalog indexes. Metadata only, never exposed to the model. */
+  featured?: boolean;
   /** On a lazy catalog's execute tool: the tools it runs by id. Never exposed to the model. */
   catalog?: ReadonlyArray<{ id: string; tool: ConnectorTool }>;
 }
@@ -223,10 +225,25 @@ export interface ConnectorCall {
   route?: ConnectorRoute;
 }
 
+export type ConnectorFailureKind =
+  | "invalid_arguments"
+  | "auth_required"
+  | "permission_denied"
+  | "unsupported"
+  | "transient"
+  | "unknown";
+
 export type ConnectorEvent =
   | { type: "log"; message: string }
   | { type: "result"; data: unknown }
-  | { type: "error"; message: string };
+  | {
+      type: "error";
+      message: string;
+      /** Omitted by older adapters; consumers treat it as unknown. */
+      kind?: ConnectorFailureKind;
+      /** Provider response, with credentials redacted by the adapter. */
+      details?: unknown;
+    };
 
 export interface ConnectorCapabilities {
   discover: boolean;

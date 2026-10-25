@@ -6,6 +6,7 @@ import type { SessionEntry } from "@rakazo/contracts";
 import { SessionEntrySchema } from "@rakazo/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { createRunExecutor } from "./executor.js";
+import { catalogEntries, lazyCatalogTools } from "./lazy-tool-catalog.js";
 import { PiAgentRuntime } from "./pi-runtime.js";
 import { recordingSessionLog } from "./session-log/recording.test-support.js";
 
@@ -241,11 +242,25 @@ const newest = (sent: Transcript) => JSON.stringify(sent.messages.at(-1));
 describe("the prompt prefix across turns of one thread", () => {
   it("stays byte-identical up to the new turn while memory, open work and recall change", async () => {
     const history = [said("Plan the launch."), ...answered("run-0", "Launch is Tuesday.")];
-    const connectorTools = ["z_lookup", "a_lookup"].map((name) => ({
+    const directTools = ["z_lookup", "a_lookup"].map((name) => ({
       name,
       description: "Look up a record.",
       inputSchema: { type: "object", properties: {} },
     }));
+    const connectorTools = [
+      ...directTools,
+      ...lazyCatalogTools(
+        "mcp",
+        "mcp",
+        "MCP",
+        catalogEntries(
+          directTools.map((tool) => ({
+            ...tool,
+            name: `mcp__notes__${tool.name}`,
+          })),
+        ),
+      ),
+    ];
     const first = await turn({
       runId: "run-1",
       tail: chain([...history, said("Who writes the post?")]),
@@ -280,7 +295,14 @@ describe("the prompt prefix across turns of one thread", () => {
     ]);
     expect(first.messages).toHaveLength(4);
     const declaredTools = first.messages.find((message) => message.role === "system")?.toolsAdded;
-    expect(declaredTools?.slice(-2).map((tool) => tool.name)).toEqual(["a_lookup", "z_lookup"]);
+    expect(
+      declaredTools?.filter((tool) => tool.name.startsWith("mcp_")).map((tool) => tool.name),
+    ).toEqual(["mcp_execute_tool", "mcp_load_tool", "mcp_search_tools"]);
+    const system = first.messages.find((message) => message.role === "system");
+    expect(system?.content).toContain("mcp__notes__a_lookup, mcp__notes__z_lookup");
+    expect(
+      declaredTools?.filter((tool) => tool.name.endsWith("_lookup")).map((tool) => tool.name),
+    ).toEqual(["a_lookup", "z_lookup"]);
     expect(leading(second, 3)).toBe(leading(first, 3));
     expect(second.messages[3]).toMatchObject({ content: "Who writes the post?" });
     expect(newest(first)).toContain("Prefers short posts.");

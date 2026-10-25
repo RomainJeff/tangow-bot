@@ -195,6 +195,20 @@ describe("a connector result through the Rakazo MCP server", () => {
     expect(announced).toEqual([]);
   });
 
+  it("preserves connector failure categories and details for the native model", async () => {
+    const failure = {
+      error: "Connector tool reported an error. See details.",
+      kind: "auth_required",
+      details: { status: 401 },
+    };
+    const { host } = fakeHost(() => failure);
+    const { client } = await connect([controller("demo_read")], host);
+    expect(await client.callTool({ name: "demo_read", arguments: {} })).toEqual({
+      content: [{ type: "text", text: JSON.stringify(failure) }],
+      isError: true,
+    });
+  });
+
   it("reports a refusal the controller returns as a tool error", async () => {
     const { host } = fakeHost(() => ({ error: "MCP tool is not assigned to this bot" }));
     const { client } = await connect(CONNECTOR_TOOLS, host);

@@ -4,83 +4,11 @@ The signed-in product is a long-running API, a Graphile Worker, Postgres, and a 
 
 ## Local (source checkout)
 
-Same as the README quick start: `.env` from `.env.example`, Postgres via Compose, `pnpm sandbox:build`, `pnpm dev`, then [http://127.0.0.1:5173](http://127.0.0.1:5173) (or `http://localhost:5173` — both loopback hosts are trusted). Electron: `pnpm --filter @rakazo/desktop dev` while that stack is up, choosing **Existing instance** with that address. The desktop app's **This computer** option instead installs and runs the published images itself with Docker Compose (see [Published images](#published-images-no-checkout)), using port 45173 by default so it can run alongside `pnpm dev`. If that port is occupied, the app selects and remembers another loopback port. The managed API gets a Docker-assigned loopback port; all desktop traffic uses the web origin.
+Same as the README quick start: `.env` from `.env.example`, Postgres via Compose, `pnpm sandbox:build`, `pnpm dev`, then [http://127.0.0.1:5173](http://127.0.0.1:5173) (or `http://localhost:5173` — both loopback hosts are trusted). Electron: `pnpm --filter @rakazo/desktop dev` while that stack is up, then enter that address in setup.
 
 For source development in WSL, keep the checkout and `data` directory in the Linux filesystem (for example, `~/rakazo`), and run `pnpm dev` as your normal user. The host-run supervisor matches bot container UID/GID to that user. If Docker Desktop container IPs are unreachable, set `SANDBOX_CONTROL_VIA_LOOPBACK=true` in `.env`; this publishes the token-protected control service on a random loopback port. Leave this unset for the Compose-hosted supervisor.
 
 Compose bot homes mount only their own subdirectory of the application volume using Docker volume semantics. Docker's internal volume paths are never used as host bind mounts.
-
-## Published images (no checkout)
-
-Pull Postgres and `ghcr.io/elie222/rakazo/app` into any empty folder. No clone or image build.
-Requires Docker Engine 26+ (API 1.45+ for bot home volume subpaths), the Compose plugin, curl, and OpenSSL.
-
-```bash
-mkdir -p rakazo && cd rakazo &&
-curl -fsSLO https://raw.githubusercontent.com/elie222/rakazo/main/infra/compose/install-images.sh &&
-bash install-images.sh
-```
-
-The installer downloads `docker-compose.images.yml` and `.env.images.example`, creates `.env` with
-random secrets, then pulls and starts the images. It preserves an existing `.env` when rerun. For
-the installer secret list, non-reuse rules, and recovery, see
-[Self-host secrets checklist](./self-host-secrets.md). To customize the public URL, image tag, or
-optional providers before startup, run `bash install-images.sh --prepare-only`, edit `.env`, then
-run `bash install-images.sh`. Flags may be combined in either order: `--prepare-only`, `--local`.
-
-`SANDBOX_PROVIDER` defaults to `docker`. The images Compose file runs a sandbox supervisor
-(from the app image, on the internal network only) and pulls `ghcr.io/elie222/rakazo/computer`.
-Signup and local Docker computers work without an E2B account. For remote computers, set
-`SANDBOX_PROVIDER=e2b`, add `E2B_API_KEY`, and build the templates described in
-[E2B workers](./self-host-e2b-workers.md). The published-images
-Compose stack requires `SANDBOX_SUPERVISOR_TOKEN` for every provider; leave it empty and `compose up` fails closed.
-
-Optional: set `OPENROUTER_API_KEY` or connect a model in the UI after signup.
-
-The example defaults to `edge` (main builds). Every publish is multi-arch (`amd64` + `arm64`), so
-arm64 hosts need no special tag. Do not assume `latest` is present until a stable release exists.
-
-Open [http://127.0.0.1:5173](http://127.0.0.1:5173). The first registered user becomes the
-deployment owner. Put TLS in front of `:5173` for a public host and set the three public origins to
-that HTTPS URL.
-
-Images Compose binds web to loopback (`127.0.0.1:5173`). Terminate TLS on the host and proxy
-there. Vite preview same-origin-proxies `/api` and `/rpc`, so do not expose `:3100`. Set
-`BETTER_AUTH_URL`, `WEB_ORIGIN`, and `API_URL` to that same HTTPS origin, and set
-`RAKAZO_HOST` to its hostname (for example, `app.example.com`).
-
-```Caddyfile
-app.example.com {
-	reverse_proxy 127.0.0.1:5173
-}
-```
-
-Open **Agent computer** on a bot, or send a message that uses the desktop, to see
-the local Docker computer. For in-stack Caddy plus remote E2B computers, use the
-[production Compose](#public-single-vm-deployment) path and `infra/compose/Caddyfile.prod`
-instead of this host proxy.
-
-### Restricted networks / mirror downloads
-
-If the installer, Compose downloads, or image pulls are blocked, use the
-[restricted-network guide](./self-host-restricted-network.md) for mirror settings and local files.
-
-### Bot computer resource ceilings
-
-Each Docker computer runs Xvfb, a window manager and a full Chromium driven by an agent that
-decides for itself what to open, so it is capped. These defaults provide a starting point for the
-Docker computer topology:
-
-| Variable | Default | Accepts |
-| --- | --- | --- |
-| `RAKAZO_COMPUTER_MEMORY` | `8g` | `2g`, `1536m`, a byte count. Minimum `6m`, Docker's own floor. Also caps swap, so the ceiling holds. |
-| `RAKAZO_COMPUTER_CPUS` | `4` | Whole or fractional cores, e.g. `1.5` |
-| `RAKAZO_COMPUTER_PIDS_LIMIT` | `2048` | A positive integer |
-
-These are ceilings, not reservations: an idle computer does not hold 8 GB. On a small host running
-several computers at once, lower them (for example `RAKAZO_COMPUTER_MEMORY=2g`,
-`RAKAZO_COMPUTER_CPUS=2`). Set any of them to `0`, `none` or `unlimited` to remove that ceiling. A malformed value fails the
-supervisor at startup naming the variable, rather than surfacing later as a failed bot.
 
 ## Docker Compose (single machine)
 
@@ -94,8 +22,7 @@ On Windows, if an older clone with `core.autocrlf=true` leaves the computer pane
 
 Compose runs Postgres, the sandbox supervisor (Docker socket), API, worker, and a Vite preview of the web app. Bot computers are sibling containers (`rakazo/computer:local`) on separate per-bot networks; only the supervisor and screen proxy join each one. The API process does not get an unrestricted Docker socket; the supervisor owns the lifecycle.
 
-Postgres stays on the Compose network only (not published on the host), matching the images
-compose. Credentials come from `.env` (`POSTGRES_PASSWORD` is required). Prefer a URI-safe value
+Postgres stays on the Compose network only (not published on the host). Credentials come from `.env` (`POSTGRES_PASSWORD` is required). Prefer a URI-safe value
 (`openssl rand -hex 16`); characters such as `@ : / ? # %` break the interpolated `DATABASE_URL`
 inside Compose. Official Postgres images set user, password, and database only on first volume
 init, so an existing `pgdata` volume keeps its original identity: keep those values in `.env`, or
@@ -132,6 +59,23 @@ in. Configure SMTP below before enabling an allowlist or upgrading an allowliste
 
 For a public deployment, configure SMTP and an allowlist before the API's first start.
 Keep an installation without email on a trusted local network.
+
+### Bot computer resource ceilings
+
+Each Docker computer runs Xvfb, a window manager and a full Chromium driven by an agent that
+decides for itself what to open, so it is capped. These defaults provide a starting point for the
+Docker computer topology:
+
+| Variable | Default | Accepts |
+| --- | --- | --- |
+| `RAKAZO_COMPUTER_MEMORY` | `8g` | `2g`, `1536m`, a byte count. Minimum `6m`, Docker's own floor. Also caps swap, so the ceiling holds. |
+| `RAKAZO_COMPUTER_CPUS` | `4` | Whole or fractional cores, e.g. `1.5` |
+| `RAKAZO_COMPUTER_PIDS_LIMIT` | `2048` | A positive integer |
+
+These are ceilings, not reservations: an idle computer does not hold 8 GB. On a small host running
+several computers at once, lower them (for example `RAKAZO_COMPUTER_MEMORY=2g`,
+`RAKAZO_COMPUTER_CPUS=2`). Set any of them to `0`, `none` or `unlimited` to remove that ceiling. A malformed value fails the
+supervisor at startup naming the variable, rather than surfacing later as a failed bot.
 
 ### Verification and password recovery email
 
@@ -323,11 +267,8 @@ Live evaluations of this behaviour are described in [agent verification](agent-v
 
 The Electron desktop app is a client of the same API, with the same Docker or E2B computers.
 
-- **Published images** (`docker-compose.images.yml`) default to `SANDBOX_PROVIDER=docker` with a
-  local supervisor and published `ghcr.io/elie222/rakazo/computer` image. No E2B account required.
-  Optional: set `e2b` plus `E2B_API_KEY` for remote computers.
-- **Docker** is the quick-start default for published images and for a source checkout / full local
-  Compose stack. Workspace bots share a persistent Team Computer by default; Private computers are
+- **Docker** is the default for a source checkout and the full local Compose stack. No E2B account
+  required. Workspace bots share a persistent Team Computer by default; Private computers are
   optional. Keep the supervisor private, as the included Compose files do.
 - **E2B** runs bot computers away from the Rakazo host and is a good choice for public or multi-user
   production deployments. Each bot run works in its own E2B worker VM, and bot homes live on E2B
@@ -462,7 +403,7 @@ the policy to that one token, set the shortest workable token duration, and rota
 
 ### Desktop
 
-In the setup screen, choose **Existing instance** and paste the client ID and secret into the
+In the setup screen, paste the client ID and secret into the
 Cloudflare Access fields. The app stores the secret with the operating system keychain (Keychain,
 DPAPI, or libsecret) and sends it on every request to that server, including the RPC calls, the
 event stream, and embedded computer views. Machines without a keychain cannot store the secret, and
@@ -574,12 +515,12 @@ worker start, applies the migrations, then moves each thread's messages into its
 the table, logging every thread and the total time. It runs as one transaction: when a thread cannot
 be moved, nothing is written, the table stays, and the script exits naming every such thread. Once
 it has succeeded, running it again changes nothing. On a large database it takes minutes; the
-updater, the installer and the desktop app wait up to an hour.
+updater waits up to an hour.
 
 The API does the same when it starts, so a deployment still on its previous Compose file, which has
 no `migrate` service, can upgrade within these limits:
 
-- `docker-compose.prod.yml` and `docker-compose.images.yml` mark the API unhealthy after about 200 s
+- `docker-compose.prod.yml` marks the API unhealthy after about 200 s
   (a check every 10 s, 20 retries), and the worker waits for a healthy API. The move has to fit in
   that window: about 500,000 messages at the rate measured here (50,000 messages in 18 s), fewer on
   a slower host. Past it, `up` fails and the worker stays stopped.
@@ -691,10 +632,9 @@ this repository that is:
 | `ghcr.io/elie222/rakazo/computer` | Linux desktop used as each bot computer |
 | `ghcr.io/elie222/rakazo/updater` | the updater sidecar, plus the Docker CLI |
 
-`infra/compose/docker-compose.images.yml` is the no-checkout path for those app and computer tags
-plus Postgres. The supervisor runs from the app image on the internal network only (not a separate
-published supervisor image, and no host port). Production Compose (`docker-compose.prod.yml`) can
-also pull the same app tags once `RAKAZO_IMAGE_TAG` is set to a published value.
+Production Compose (`docker-compose.prod.yml`) can pull the app tags once `RAKAZO_IMAGE_TAG` is set
+to a published value. The supervisor runs from the app image on the internal network only (not a
+separate published supervisor image, and no host port).
 
 If you deploy from your own fork, set `RAKAZO_IMAGE` and `RAKAZO_UPDATER_IMAGE` to your namespace —
 your CI cannot publish into someone else's.

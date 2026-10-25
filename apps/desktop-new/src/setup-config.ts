@@ -1,13 +1,7 @@
 import { createHash } from "node:crypto";
 import { isIP } from "node:net";
-import type {
-  DesktopAccessCredentials,
-  DesktopSetup,
-  DesktopStackProbeResponse,
-} from "@rakazo/contracts";
+import type { DesktopAccessCredentials, DesktopSetup } from "@rakazo/contracts";
 
-/** Managed desktop origin; development keeps its usual web/API ports. */
-export const DEFAULT_LOCAL_WEB_URL = "http://127.0.0.1:45173";
 export const PROBE_RESPONSE_LIMIT_BYTES = 64 * 1024;
 
 export const SETUP_FILE_NAME = "setup.json";
@@ -54,45 +48,17 @@ export function normalizeServerUrl(input: string): string | null {
   return url.origin;
 }
 
-/**
- * Managed ("new") setups may only open the configured local stack origin.
- * A saved or IPC URL that normalizes to a different loopback host/port is rejected.
- */
-export function managedLocalOpenUrl(requestedUrl: string, localWebUrl: string): string | null {
-  const managed = normalizeServerUrl(localWebUrl);
-  const requested = normalizeServerUrl(requestedUrl);
-  if (managed === null || requested === null || requested !== managed) return null;
-  return managed;
-}
-
-/**
- * The private managed-stack token may travel over HTTPS anywhere, or over HTTP
- * only to loopback. Private-network and .local HTTP stay cleartext on a LAN, so
- * they must not receive the token.
- */
-export function maySendDesktopStackToken(serverUrl: string): boolean {
-  try {
-    const url = new URL(serverUrl);
-    if (url.protocol === "https:") return true;
-    if (url.protocol === "http:") return isLoopbackHost(url.hostname);
-    return false;
-  } catch {
-    return false;
-  }
-}
-
 /** Validates an untrusted value (saved file or IPC payload) into a usable setup. */
 export function parseSetupInput(value: unknown): DesktopSetup | null {
   if (typeof value !== "object" || value === null) return null;
 
-  const { mode, serverUrl } = value as Record<string, unknown>;
-  if (mode !== "new" && mode !== "existing") return null;
+  // Files saved by older versions also carry a `mode`; only the address matters now.
+  const { serverUrl } = value as Record<string, unknown>;
   if (typeof serverUrl !== "string") return null;
 
   const normalized = normalizeServerUrl(serverUrl);
   if (normalized === null) return null;
-  if (mode === "new" && !isLoopbackHost(new URL(normalized).hostname)) return null;
-  return { mode, serverUrl: normalized };
+  return { serverUrl: normalized };
 }
 
 export function parseStoredSetup(raw: string): DesktopSetup | null {
@@ -197,12 +163,6 @@ export function isRakazoHealth(value: unknown): boolean {
     (json as { ok?: unknown }).ok === true &&
     typeof (json as { version?: unknown }).version === "string"
   );
-}
-
-export function desktopStackImageTag(value: unknown): string | null {
-  if (typeof value !== "object" || value === null) return null;
-  const { ok, imageTag } = value as Partial<DesktopStackProbeResponse>;
-  return ok === true && typeof imageTag === "string" && imageTag !== "" ? imageTag : null;
 }
 
 /** Reads a small probe response without letting an untrusted stream stall on cleanup. */

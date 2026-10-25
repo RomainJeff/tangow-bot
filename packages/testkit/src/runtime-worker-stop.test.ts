@@ -6,7 +6,7 @@ import type { AgentRunRequest, WorkerProvider } from "@rakazo/adapter-kit";
 import { AgentRuntimeUnavailableError } from "@rakazo/adapter-kit";
 import type { E2BWorkerSdk } from "@rakazo/adapters";
 import { createWorkerLifecycle, E2BWorkerProvider } from "@rakazo/adapters";
-import { describeToolActivity } from "@rakazo/adapters/pi-runtime";
+import { describeToolActivity } from "@rakazo/adapters/agent-text-policy";
 import type { GuestConnector, WorkerClock } from "@rakazo/adapters/runtime-worker";
 import {
   createLifecycleLauncher,

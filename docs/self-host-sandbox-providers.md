@@ -9,11 +9,10 @@ for the sharing and persistence contract.
 | Goal | Set | Also need |
 | --- | --- | --- |
 | Local Docker computers | `SANDBOX_PROVIDER=docker` | `SANDBOX_SUPERVISOR_TOKEN`, computer image, Docker socket for supervisor |
-| Managed remote desktop | `SANDBOX_PROVIDER=e2b` | `SANDBOX_SUPERVISOR_TOKEN` (published-images Compose), `E2B_API_KEY`, [E2B templates](./self-host-e2b-workers.md) |
+| Managed remote desktop | `SANDBOX_PROVIDER=e2b` | `E2B_API_KEY`, [E2B templates](./self-host-e2b-workers.md) |
 
-Published-images [Compose](../infra/compose/docker-compose.images.yml) defaults to **`docker`**.
-It always starts the supervisor and requires `SANDBOX_SUPERVISOR_TOKEN`, including for `e2b`.
-This stack credential does not replace a remote provider's API key.
+The source-checkout [Compose](../infra/compose/docker-compose.yml) runs **`docker`**; the
+[production Compose](../infra/compose/docker-compose.prod.yml) defaults to **`e2b`**.
 
 The API and worker refuse to start when the provider cannot run computers: an empty
 `SANDBOX_PROVIDER`, `e2b` without `E2B_API_KEY`, or `docker` in production without
@@ -23,13 +22,13 @@ mode without computers.
 ## `docker` (in-stack supervisor)
 
 Compose starts a **sandbox supervisor** (from the app image) on the internal
-network (port `7091` in published-images). It creates sibling **computer**
-containers from `RAKAZO_COMPUTER_IMAGE` + `RAKAZO_COMPUTER_IMAGE_TAG`.
+network (port `7091`). It creates sibling **computer** containers from the computer image
+built by `pnpm sandbox:build`.
 
 Requirements:
 
 - Non-empty `SANDBOX_SUPERVISOR_TOKEN` (distinct from auth / screen / encryption secrets)
-- Reachable computer image (GHCR default or your mirror; on arm64 pin multi-arch tags for both app and computer)
+- The computer image built on the host (`pnpm sandbox:build`, or the Compose `computer` service)
 - Docker Engine available to the supervisor (socket mount on the Compose path)
 
 Verify:
@@ -59,12 +58,11 @@ the web UI. They require egress to the provider. For air-gapped hosts prefer
 
 ## Verify a provider change
 
-After changing provider or keys (from the published-images drop directory that
-holds `docker-compose.images.yml` and `.env`):
+After changing provider or keys, recreate the stack from the checkout:
 
 ```bash
-docker compose --env-file .env -f docker-compose.images.yml up -d
-curl -fsS http://127.0.0.1:3100/health
+docker compose --env-file .env -f infra/compose/docker-compose.prod.yml up -d --wait --pull never
+curl -fsS https://app.example.com/health
 ```
 
 Confirm `sandbox` equals the intended provider (`e2b`).

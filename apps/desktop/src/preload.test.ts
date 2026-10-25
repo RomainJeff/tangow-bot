@@ -31,13 +31,7 @@ describe("desktop preload bridge", () => {
     const [globalName, bridge] = exposeInMainWorld.mock.calls[0] as [string, RakazoDesktop];
     expect(globalName).toBe("rakazoDesktop");
     expect(bridge.platform).toBe("linux");
-    expect(Object.keys(bridge).sort()).toEqual([
-      "localSettings",
-      "oauth",
-      "platform",
-      "update",
-      "window",
-    ]);
+    expect(Object.keys(bridge).sort()).toEqual(["oauth", "platform", "update", "window"]);
     expect(Object.keys(bridge.window).sort()).toEqual([
       "close",
       "minimize",
@@ -73,13 +67,7 @@ describe("desktop preload bridge", () => {
   it("keeps setup off the app bridge so a connected server cannot re-point the app", () => {
     const { exposeInMainWorld } = runPreload("preload.cjs");
     const [, bridge] = exposeInMainWorld.mock.calls[0] as [string, Record<string, unknown>];
-    expect(Object.keys(bridge).sort()).toEqual([
-      "localSettings",
-      "oauth",
-      "platform",
-      "update",
-      "window",
-    ]);
+    expect(Object.keys(bridge).sort()).toEqual(["oauth", "platform", "update", "window"]);
   });
 
   it("forwards captured codes without leaking the IPC event to the renderer", () => {
@@ -105,46 +93,23 @@ describe("desktop preload bridge", () => {
 
 describe("setup preload bridge", () => {
   it("exposes only the first-run setup operations", async () => {
-    const { invoke, on, exposeInMainWorld } = runPreload("setup-preload.cjs");
+    const { invoke, exposeInMainWorld } = runPreload("setup-preload.cjs");
 
     expect(exposeInMainWorld).toHaveBeenCalledTimes(1);
     const [globalName, bridge] = exposeInMainWorld.mock.calls[0] as [string, RakazoSetup];
     expect(globalName).toBe("rakazoSetup");
     expect(bridge.platform).toBe("linux");
-    expect(Object.keys(bridge).sort()).toEqual([
-      "openLink",
-      "platform",
-      "quit",
-      "save",
-      "stack",
-      "state",
-      "test",
-    ]);
-    expect(Object.keys(bridge.stack).sort()).toEqual(["onChange", "start", "state"]);
+    expect(Object.keys(bridge).sort()).toEqual(["platform", "quit", "save", "state", "test"]);
 
     await bridge.state();
     await bridge.test("http://127.0.0.1:5173");
-    await bridge.save({ mode: "new", serverUrl: "http://127.0.0.1:5173" });
+    await bridge.save({ serverUrl: "http://127.0.0.1:5173" });
     await bridge.quit();
-    await bridge.openLink("orbstack");
-    await bridge.stack.state();
-    await bridge.stack.start();
     expect(invoke.mock.calls.map(([channel]) => channel)).toEqual([
       "desktop.setup.state",
       "desktop.setup.test",
       "desktop.setup.save",
       "desktop.setup.quit",
-      "desktop.setup.openLink",
-      "desktop.setup.stack.state",
-      "desktop.setup.stack.start",
     ]);
-    expect(invoke).toHaveBeenCalledWith("desktop.setup.openLink", "orbstack");
-
-    const listener = vi.fn();
-    bridge.stack.onChange(listener);
-    const [channel, handler] = on.mock.calls.at(-1) as [string, (...args: unknown[]) => void];
-    expect(channel).toBe("desktop.setup.stack.changed");
-    handler({}, { phase: "pulling" });
-    expect(listener).toHaveBeenCalledWith({ phase: "pulling" });
   });
 });

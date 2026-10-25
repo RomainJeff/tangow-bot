@@ -16,8 +16,8 @@ To add a worker provider, see
 
 - An E2B account, or a self-hosted E2B deployment, with volumes enabled. Workers and computers
   mount the bot and space volumes.
-- A checkout of Rakazo at the commit your API and worker images run. For published images, that
-  commit is the `revision` that `GET /health` reports.
+- A checkout of Rakazo at the commit your API and worker images run, which is the `revision` that
+  `GET /health` reports.
 - Node.js 22.22.2 or a later 22, 24, or 26 and later, with pnpm, on a host that reaches the E2B
   API, to build the templates. pnpm refuses other Node versions. For the computer template, Docker
   and a registry the E2B host can pull from.
@@ -188,9 +188,6 @@ has `DATABASE_URL`, `DATA_DIR` and the E2B variables. Set `compose` once:
 ```bash
 compose="docker compose --env-file .env -f infra/compose/docker-compose.prod.yml"
 ```
-
-For published images, run from the directory that holds `docker-compose.images.yml` and set
-`compose="docker compose --env-file .env -f docker-compose.images.yml"` instead.
 
 1. List the E2B computers still on snapshots. Write down each id, its scope and its space:
 

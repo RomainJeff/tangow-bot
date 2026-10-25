@@ -1,11 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   accessHeaders,
-  DEFAULT_LOCAL_WEB_URL,
-  desktopStackImageTag,
   isRakazoHealth,
-  managedLocalOpenUrl,
-  maySendDesktopStackToken,
   normalizeServerUrl,
   PROBE_RESPONSE_LIMIT_BYTES,
   parseAccessInput,
@@ -70,72 +66,41 @@ describe("server address normalization", () => {
   });
 });
 
-describe("managed local open URL", () => {
-  it("returns the authenticated managed origin when the request matches", () => {
-    expect(managedLocalOpenUrl(`${DEFAULT_LOCAL_WEB_URL}/`, DEFAULT_LOCAL_WEB_URL)).toBe(
-      DEFAULT_LOCAL_WEB_URL,
-    );
-    expect(managedLocalOpenUrl("http://127.0.0.1:5199", "http://127.0.0.1:5199/path?x=1")).toBe(
-      "http://127.0.0.1:5199",
-    );
-  });
-
-  it("rejects a different loopback origin even when both are local", () => {
-    expect(managedLocalOpenUrl("http://127.0.0.1:5199", DEFAULT_LOCAL_WEB_URL)).toBeNull();
-    expect(managedLocalOpenUrl("http://localhost:5173", DEFAULT_LOCAL_WEB_URL)).toBeNull();
-    expect(managedLocalOpenUrl("https://rakazo.example.com", DEFAULT_LOCAL_WEB_URL)).toBeNull();
-  });
-});
-
-describe("desktop stack token transport", () => {
-  it("allows HTTPS and loopback HTTP only", () => {
-    expect(maySendDesktopStackToken("https://rakazo.example.com")).toBe(true);
-    expect(maySendDesktopStackToken("http://127.0.0.1:5173")).toBe(true);
-    expect(maySendDesktopStackToken("http://localhost:5173")).toBe(true);
-    expect(maySendDesktopStackToken("http://10.0.0.8:5173")).toBe(false);
-    expect(maySendDesktopStackToken("http://rakazo.local:5173")).toBe(false);
-  });
-});
-
 describe("saved setup", () => {
   it("round-trips through the on-disk format", () => {
-    const setup = { mode: "existing", serverUrl: "https://rakazo.example.com" } as const;
+    const setup = { serverUrl: "https://rakazo.example.com" };
     expect(parseStoredSetup(serializeSetup(setup))).toEqual(setup);
   });
 
   it("normalizes the address it reads back", () => {
-    expect(parseStoredSetup('{"mode":"new","serverUrl":"127.0.0.1:5173/"}')).toEqual({
-      mode: "new",
+    expect(parseStoredSetup('{"serverUrl":"127.0.0.1:5173/"}')).toEqual({
       serverUrl: "http://127.0.0.1:5173",
+    });
+  });
+
+  it("keeps the address of a setup saved by an older version", () => {
+    expect(parseStoredSetup('{"mode":"new","serverUrl":"http://127.0.0.1:45173"}')).toEqual({
+      serverUrl: "http://127.0.0.1:45173",
     });
   });
 
   it.each([
     ["not json", "{oops"],
     ["a non-object", '"nope"'],
-    ["an unknown mode", '{"mode":"other","serverUrl":"http://127.0.0.1:5173"}'],
-    ["a missing address", '{"mode":"new"}'],
-    ["an unusable address", '{"mode":"new","serverUrl":"ftp://example.com"}'],
+    ["a missing address", "{}"],
+    ["an unusable address", '{"serverUrl":"ftp://example.com"}'],
   ])("discards %s so setup runs again", (_label, raw) => {
     expect(parseStoredSetup(raw)).toBeNull();
   });
 
   it("rejects an untrusted payload that is not a setup", () => {
     expect(parseSetupInput(null)).toBeNull();
-    expect(parseSetupInput({ mode: "new", serverUrl: 5173 })).toBeNull();
-  });
-
-  it("keeps the new-instance choice on this computer", () => {
-    expect(parseSetupInput({ mode: "new", serverUrl: "http://192.168.1.20:3100" })).toBeNull();
-    expect(parseSetupInput({ mode: "existing", serverUrl: "http://192.168.1.20:3100" })).toEqual({
-      mode: "existing",
-      serverUrl: "http://192.168.1.20:3100",
-    });
+    expect(parseSetupInput({ serverUrl: 5173 })).toBeNull();
   });
 });
 
 describe("startup target", () => {
-  const saved = { mode: "existing", serverUrl: "https://rakazo.example.com" } as const;
+  const saved = { serverUrl: "https://rakazo.example.com" };
 
   it("runs setup on a first launch", () => {
     expect(resolveStartupTarget({})).toEqual({ kind: "setup" });
@@ -167,20 +132,15 @@ describe("startup target", () => {
   });
 
   it("re-runs setup when the saved address is unusable", () => {
-    expect(resolveStartupTarget({ saved: { mode: "new", serverUrl: "nope://x" } })).toEqual({
+    expect(resolveStartupTarget({ saved: { serverUrl: "nope://x" } })).toEqual({
       kind: "setup",
     });
-    expect(
-      resolveStartupTarget({
-        saved: { mode: "new", serverUrl: "http://192.168.1.20:3100" },
-      }),
-    ).toEqual({ kind: "setup" });
   });
 });
 
 describe("bundled renderer eligibility", () => {
   it("stands in for http(s) origins only", () => {
-    expect(servesBundledRenderer(DEFAULT_LOCAL_WEB_URL)).toBe(true);
+    expect(servesBundledRenderer("http://127.0.0.1:5173")).toBe(true);
     expect(servesBundledRenderer("https://rakazo.example.com")).toBe(true);
     expect(servesBundledRenderer("data:text/html,<p>fixture</p>")).toBe(false);
     expect(servesBundledRenderer("nonsense")).toBe(false);
@@ -212,14 +172,7 @@ describe("Rakazo health response", () => {
   });
 });
 
-describe("managed stack response", () => {
-  it("returns only a non-empty authenticated image tag", () => {
-    expect(desktopStackImageTag({ ok: true, imageTag: "v0.2.0" })).toBe("v0.2.0");
-    expect(desktopStackImageTag({ ok: true, imageTag: "" })).toBeNull();
-    expect(desktopStackImageTag({ ok: false, imageTag: "v0.2.0" })).toBeNull();
-    expect(desktopStackImageTag({ json: { ok: true, imageTag: "v0.2.0" } })).toBeNull();
-  });
-
+describe("probe response", () => {
   it("parses a bounded JSON probe response", async () => {
     await expect(readProbeJson(Response.json({ ok: true }))).resolves.toEqual({ ok: true });
   });

@@ -14,12 +14,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
+- Bots on web, desktop and iPhone find tools in connected apps with large catalogs more reliably, including loading the exact tool they ask for by name.
+
+- Bots on web, desktop and iPhone now prefer suitable connected tools and direct page reads before browser interaction, and distinguish connector failures before choosing another method.
 - On web, desktop and iPhone, global Settings now lists each computer with its bots and visible maintenance actions, and can update all available computers at once, reporting busy computers for a later retry without opening their screens or taking control.
 - A self-hosted server with a missing or incomplete computer provider (an empty or `none` `SANDBOX_PROVIDER`, E2B without `E2B_API_KEY`, or Docker in production without `SANDBOX_SUPERVISOR_TOKEN`) now refuses to start with a message naming the setting to fix, instead of starting with computers turned off ([provider setup](docs/self-host-sandbox-providers.md)).
 
 #### Fixed
 
 - A decision card's soft shadow is no longer cut off at its sides and below it in the thread on web and desktop.
+- Bots running in isolated workers can follow browser and connected-app instructions with the correct tools, while retaining the reason a connector failed.
 - While a bot works on web, desktop and iPhone, activity messages describe the tool being used even when it has a Rakazo MCP prefix, instead of showing raw tool names and arguments or a generic status.
 
 - Opening a bot computer screen or taking control on web, desktop and iPhone no longer fails after the dock starts.
@@ -33,6 +37,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Reverted
 
 - This Mac is gone: bots no longer run commands directly on the desktop app's Mac, and a bot that used it boots a Docker computer again from its saved workspace.
+- Installing a self-hosted server from published images with `install-images.sh` is gone; build the server from a checkout instead, as the [self-hosting guide](docs/self-host.md) describes.
+- The desktop app no longer installs and runs its own local server on this computer, and its Local Server Settings and Stop Local Stack menu items are gone; setup now only asks for the address of a server you run from a checkout ([self-hosting guide](docs/self-host.md)).
 
 ### 2026-10-24
 
