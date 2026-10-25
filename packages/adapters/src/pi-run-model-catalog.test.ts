@@ -7,7 +7,7 @@ import { modelAcceptsImageInput } from "./model-vision.js";
 import { listPiCatalog } from "./pi-models.js";
 import { resolveModelAuth } from "./pi-oauth.js";
 import { OPENAI_COMPATIBLE_PROVIDER_ID } from "./pi-openai-compatible-provider.js";
-import { modelsForRequest } from "./pi-runtime.js";
+import { modelsForRequest } from "./pi-run-model.js";
 
 function requestModel(id: string, baseUrl: string): Pick<AgentRunRequest, "model"> {
   return { model: { provider: OPENAI_COMPATIBLE_PROVIDER_ID, id, baseUrl } };

@@ -1,4 +1,5 @@
 import type { AgentRunRequest, HarnessTranscriptEntry } from "@rakazo/adapter-kit";
+import { RAKAZO_TOOL_PREFIX } from "@rakazo/adapter-kit";
 import { TOOL_FINAL_RESPONSE_FALLBACK } from "./user-progress.js";
 
 // Some OpenAI-compatible models return EOS immediately after a tool result
@@ -224,4 +225,50 @@ export function stripFakeToolCalls(content: string): string {
 export function stripModelControlTokens(text: string): string {
   if (!text.includes("<|")) return text;
   return text.replace(/<\|[^\s|>]{1,64}\|>/g, "");
+}
+
+const TOOL_ACTIVITY = new Map<string, string>([
+  ["read_file", "Reading a file"],
+  ["list_files", "Skimming a folder"],
+  ["write_file", "Saving a file"],
+  ["edit_file", "Editing a file"],
+  ["read", "Reading a file"],
+  ["ls", "Skimming a folder"],
+  ["write", "Saving a file"],
+  ["edit", "Editing a file"],
+  ["bash", "Working the terminal"],
+  ["attach_file", "Attaching a file"],
+  ["open_path", "Opening a file"],
+  ["shell", "Working the terminal"],
+  ["computer_exec", "Working the terminal"],
+  ["web_search", "Searching the web"],
+  ["web_fetch", "Reading a web page"],
+  ["browser_navigate", "Heading to a website"],
+  ["browser_snapshot", "Reading the page"],
+  ["browser_act", "Clicking through a site"],
+  ["browser_run", "Clicking through a site"],
+  ["computer_observe", "Glancing at the screen"],
+  ["computer_act", "Taking the mouse"],
+  ["run_subagent", "Briefing a helper"],
+  ["remember", "Tucking it into memory"],
+  ["render_plot", "Plotting a chart"],
+  ["skill_read", "Pulling up a skill"],
+  ["skill_search", "Looking up a skill"],
+  ["skill_create", "Learning a new trick"],
+  ["skill_update", "Refining a skill"],
+  ["skill_delete", "Deleting a skill"],
+  ["create_space", "Setting up a space"],
+  ["add_mcp_server", "Plugging in an app"],
+]);
+
+/**
+ * The kind of work a tool call is doing, shown live in the thread. It never carries the call's
+ * arguments: paths, commands, queries and URLs stay out of the thread.
+ */
+export function describeToolActivity(toolName: string, appName?: string): string {
+  if (appName) return `Stepping into ${appName}`;
+  const name = toolName.startsWith(RAKAZO_TOOL_PREFIX)
+    ? toolName.slice(RAKAZO_TOOL_PREFIX.length)
+    : toolName;
+  return TOOL_ACTIVITY.get(name) ?? "Seeing to it";
 }

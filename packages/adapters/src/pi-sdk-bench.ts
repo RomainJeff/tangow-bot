@@ -11,7 +11,7 @@ import { Type } from "@earendil-works/pi-ai";
 import type { AgentSession, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { z } from "zod";
 import { OPENAI_COMPATIBLE_PROVIDER_ID } from "./pi-openai-compatible-provider.js";
-import { modelsForRequest, reliableStreamOptions } from "./pi-runtime.js";
+import { modelsForRequest, reliableStreamOptions } from "./pi-run-model.js";
 import type { WireFixture, WireRequest, WireStep } from "./pi-sdk-proof-support.js";
 import { createProofSession, proofModelRuntime, startWireFixture } from "./pi-sdk-proof-support.js";
 
