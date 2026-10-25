@@ -495,6 +495,16 @@ export type SessionEntry = z.infer<typeof SessionEntrySchema>;
 export type SessionEntryType = SessionEntry["type"];
 export type SessionEntryOf<T extends SessionEntryType> = Extract<SessionEntry, { type: T }>;
 
+/** What a call's result reads while its run waits on the card, or the question, the call raised. */
+export function pausedOutput(awaiting: "approval" | "answer"): string {
+  return `paused: awaiting ${awaiting}`;
+}
+
+/** Whether a result is only the pause of its call: a later result for the call replaces it. */
+export function isPausedOutput(output: string): boolean {
+  return output === pausedOutput("approval") || output === pausedOutput("answer");
+}
+
 export type EntryAudience = { inference: "yes" | "no" | "context"; ui: boolean };
 
 /** Who reads each entry type. `context` is one short line in the model's history. */
