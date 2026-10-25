@@ -127,6 +127,7 @@ import {
   nextFence,
   normalizeSpawnBotArgs,
   notificationBody,
+  outboundDraftIdentity,
   PENDING_CARD_EFFECT_KINDS,
   PROPOSAL_EFFECT_KINDS,
   PROPOSAL_KEY_FIELD,
@@ -3528,19 +3529,22 @@ export function createRunExecutor(deps: ExecutorDeps) {
             name === "request_secret" ||
             needsApprovalEarly ||
             requiresApprovalByDefault;
+          // A draft is one effect per message it would send: the bot's own words in the call's
+          // other arguments, a `thought` or a step note, change on every retry.
+          const keyArgs = outbound.kind === "draft" ? outboundDraftIdentity(outbound.draft) : args;
           // Count before choosing a key so an approved replay (occurrence 0 / base
           // key) cannot collide with a later identical-args call in this attempt.
           // request_secret stays single-use: retries must reuse the same card.
           const occurrence =
             name === "request_secret"
               ? 0
-              : nextMutatingEffectOccurrence(replayEffectToolName, args);
+              : nextMutatingEffectOccurrence(replayEffectToolName, keyArgs);
           const effectKey =
             approvedReplayConsumed && nextApprovedKey
               ? nextApprovedKey
               : usesApprovalKey && occurrence === 0
-                ? approvalEffectKey(runId, replayEffectToolName, args)
-                : toolEffectIdempotencyKey(runId, replayEffectToolName, args, occurrence);
+                ? approvalEffectKey(runId, replayEffectToolName, keyArgs)
+                : toolEffectIdempotencyKey(runId, replayEffectToolName, keyArgs, occurrence);
           // A first call is validated and rate-limited before it can record an effect or show a
           // card. A resumed approval, or an effect that already exists for this key, returns its
           // stored outcome instead: it must never trip over a name it took itself.
