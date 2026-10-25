@@ -18,18 +18,18 @@ export async function browserNavigateFromTool(
   try {
     const parsed = new URL(url);
     if (!/^https?:$/.test(parsed.protocol) || parsed.username || parsed.password) {
-      return {
-        error: "An HTTP(S) URL without embedded credentials is required",
-        fallback: "computer_act" as const,
-      };
+      throw new Error("Invalid browser URL");
     }
+  } catch {
+    return { error: "An HTTP(S) URL without embedded credentials is required" };
+  }
+  try {
     const result = await browser.navigate(computer, { url, signal: context.signal }, context);
     return formatBrowserResult(result);
   } catch (error) {
     context.signal.throwIfAborted();
     return {
       error: error instanceof Error ? error.message : String(error),
-      fallback: "computer_act" as const,
     };
   }
 }
@@ -48,7 +48,6 @@ export async function browserSnapshotFromTool(
     context.signal.throwIfAborted();
     return {
       error: error instanceof Error ? error.message : String(error),
-      fallback: "computer_act" as const,
     };
   }
 }
@@ -59,8 +58,13 @@ export async function browserActFromTool(
   context: AdapterContext,
   args: Record<string, unknown>,
 ) {
+  let actions: BrowserActStep[];
   try {
-    const actions = parseBrowserActions(args.actions);
+    actions = parseBrowserActions(args.actions);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
+  try {
     const result = await browser.act(computer, { actions, signal: context.signal }, context);
     return formatBrowserResult(result);
   } catch (error) {
@@ -69,7 +73,6 @@ export async function browserActFromTool(
       ok: false,
       uncertain: true,
       error: error instanceof Error ? error.message : String(error),
-      fallback: "computer_act" as const,
     };
   }
 }

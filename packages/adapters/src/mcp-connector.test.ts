@@ -47,6 +47,7 @@ function mcpFetch(
     headers?: Record<string, string>[];
     tools?: Array<{ name: string; description?: string; inputSchema: Record<string, unknown> }>;
     calls?: string[];
+    toolError?: boolean;
   },
   expectedUrl = "https://mcp.example.test/mcp",
 ) {
@@ -88,7 +89,10 @@ function mcpFetch(
       return Response.json({
         jsonrpc: "2.0",
         id: message.id,
-        result: { content: [{ type: "text", text: "ok" }] },
+        result: {
+          content: [{ type: "text", text: "ok" }],
+          ...(state.toolError ? { isError: true } : {}),
+        },
       });
     }
     return new Response(null, { status: 202 });
@@ -552,7 +556,7 @@ describe("MCP connector session cache", () => {
   });
 
   it("evicts a session after a failed call so the next call reconnects instead of reusing a dead session", async () => {
-    const state = { failNext: false, initializations: 0 };
+    const state = { failNext: false, initializations: 0, toolError: false };
     vi.stubGlobal("fetch", mcpFetch(state));
     const prisma = {
       botMcpServer: {
@@ -582,12 +586,24 @@ describe("MCP connector session cache", () => {
     state.failNext = true;
     const failed: unknown[] = [];
     for await (const event of connector.execute(call, context)) failed.push(event);
-    expect(failed).toMatchObject([{ type: "error" }]);
+    expect(failed).toMatchObject([{ type: "error", kind: "transient" }]);
 
     state.failNext = false;
     const events: unknown[] = [];
     for await (const event of connector.execute(call, context)) events.push(event);
     expect(events).toMatchObject([{ type: "result" }]);
+    expect(state.initializations).toBe(2);
+
+    state.toolError = true;
+    const toolFailed = [];
+    for await (const event of connector.execute(call, context)) toolFailed.push(event);
+    expect(toolFailed).toMatchObject([
+      {
+        type: "error",
+        kind: "unknown",
+        details: { isError: true, content: [{ type: "text", text: "ok" }] },
+      },
+    ]);
     expect(state.initializations).toBe(2);
 
     await connector.close();
@@ -626,7 +642,7 @@ describe("MCP connector session cache", () => {
 
     findFirst.mockResolvedValue(null);
     expect(await run()).toEqual([
-      { type: "error", message: "MCP tool is not assigned to this bot" },
+      { type: "error", kind: "permission_denied", message: "MCP tool is not assigned to this bot" },
     ]);
     expect(state.calls).toEqual(["echo"]);
 

@@ -1735,6 +1735,16 @@ describe("buildSystemInstructions", () => {
     expect(buildSystemInstructions(parts)).not.toContain("Current date and time");
   });
 
+  it("gives both harness paths the same tool preference and connector recovery policy", () => {
+    for (const instructions of [buildSystemInstructions(parts), buildHarnessAddendum(parts)]) {
+      expect(instructions).toContain("Use the simplest suitable method");
+      expect(instructions).toContain("For a known public URL, use web_fetch directly");
+      expect(instructions).toContain("auth_required or permission_denied");
+      expect(instructions).not.toContain("For web pages, use the page tools first");
+      expect(instructions).not.toContain("read a page without a computer");
+    }
+  });
+
   it("gives a harness with its own prompt the bot's guidance without credentials or helpers", () => {
     const instructions = buildSystemInstructions(parts);
     const addendum = buildHarnessAddendum(parts);

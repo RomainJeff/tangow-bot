@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ConnectorError } from "./connector-error.js";
 
 const HeaderValue = z.string().max(2_048);
 export const HeaderName = z
@@ -34,7 +35,8 @@ export const PublicHeadersSchema = z
   });
 
 export function requireCredential(auth: z.infer<typeof AuthSchema>, credential?: string): void {
-  if (auth.type !== "none" && !credential) throw new Error("This connector requires a credential");
+  if (auth.type !== "none" && !credential)
+    throw new ConnectorError("auth_required", "This connector requires a credential");
 }
 
 export function applyCredential(

@@ -8,7 +8,8 @@ import type {
 import { isLocalMcpHost } from "@rakazo/contracts";
 import type { McpServer, PrismaClient } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
-import { redactConnectorPayload, sanitizeConnectorError } from "./connector-safety.js";
+import { connectorError, connectorResult } from "./connector-errors.js";
+import { sanitizeConnectorError } from "./connector-safety.js";
 import {
   CATALOG_EXECUTE,
   catalogEntries,
@@ -19,7 +20,7 @@ import {
   resolveCatalogCall,
 } from "./lazy-tool-catalog.js";
 import type { McpOAuthBroker, OAuthMaterial } from "./mcp-oauth.js";
-import { oauthMaterialSecrets } from "./mcp-oauth.js";
+import { McpReauthorizationRequiredError, oauthMaterialSecrets } from "./mcp-oauth.js";
 import { McpSession } from "./mcp-transport.js";
 import type { RemoteTransportDependencies } from "./remote-mcp.js";
 import type { EncryptedSecretStore } from "./secrets.js";
@@ -156,7 +157,11 @@ export class McpConnector implements ConnectorProvider {
 
   async *execute(call: ConnectorCall, context: AdapterContext): AsyncIterable<ConnectorEvent> {
     if (call.route?.connectorId !== "mcp") {
-      yield { type: "error", message: `MCP route required for ${call.tool}` };
+      yield {
+        type: "error",
+        kind: "invalid_arguments",
+        message: `MCP route required for ${call.tool}`,
+      };
       return;
     }
     if (isLazyCatalogControlRoute(call.route)) {
@@ -167,16 +172,24 @@ export class McpConnector implements ConnectorProvider {
           (resolved) => this.execute(resolved, context),
         );
       } catch (error) {
-        yield { type: "error", message: sanitizeConnectorError(error) };
+        yield connectorError(error);
       }
       return;
     }
     if (!call.route.resourceId) {
-      yield { type: "error", message: `MCP route required for ${call.tool}` };
+      yield {
+        type: "error",
+        kind: "invalid_arguments",
+        message: `MCP route required for ${call.tool}`,
+      };
       return;
     }
     if (!context.botId) {
-      yield { type: "error", message: "MCP tools require a bot context" };
+      yield {
+        type: "error",
+        kind: "permission_denied",
+        message: "MCP tools require a bot context",
+      };
       return;
     }
     const assignment = await this.prisma.botMcpServer.findFirst({
@@ -194,7 +207,11 @@ export class McpConnector implements ConnectorProvider {
       (!assignment.allowAllTools &&
         !(assignment.allowedTools as unknown[]).includes(call.route.toolName))
     ) {
-      yield { type: "error", message: "MCP tool is not assigned to this bot" };
+      yield {
+        type: "error",
+        kind: "permission_denied",
+        message: "MCP tool is not assigned to this bot",
+      };
       return;
     }
     // Capture material before callTool so a concurrent eviction/replace cannot
@@ -208,12 +225,17 @@ export class McpConnector implements ConnectorProvider {
         signal: context.signal,
       });
       const secrets = material ? oauthMaterialSecrets(material) : [];
-      yield { type: "result", data: redactConnectorPayload(result, secrets) };
+      yield connectorResult(result, secrets);
     } catch (error) {
       // A thrown call means the transport or auth broke; drop the session so the next call reconnects.
       const secrets = material ? oauthMaterialSecrets(material) : [];
       await this.evict(this.sessionKey(assignment.server, context));
-      yield { type: "error", message: sanitizeConnectorError(error, secrets) };
+      yield {
+        ...connectorError(error, secrets),
+        ...(error instanceof McpReauthorizationRequiredError
+          ? { kind: "auth_required" as const }
+          : {}),
+      };
     }
   }
 
