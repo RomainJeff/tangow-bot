@@ -165,6 +165,11 @@ app.use("/computers/*", limitSupervisorRequestBody);
 
 const PathSegment = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
 
+/** Computers and workers write the same volumes, so both run as this user. */
+function sandboxUser(supervisorContainer: unknown): string {
+  return supervisorContainer ? COMPUTER_USER : hostComputerUser();
+}
+
 /** Skills mounts are derived from ids + dataDir, never from client paths (design Q10). */
 export function skillsBindsFor(
   dataDir: string,
@@ -221,7 +226,7 @@ app.post("/computers", async (c) => {
       if (storage.homeVolume) {
         assertVolumeSubpathSupport((await docker.version()).ApiVersion);
       }
-      const computerUser = runtimeInfo ? COMPUTER_USER : hostComputerUser(hostUid, hostGid);
+      const computerUser = sandboxUser(runtimeInfo);
       // Bind sources are created by the worker before provision; a root supervisor never mkdirs them.
       const skillsBinds = skillsBindsFor(dataDir, body.spaceId, body.userId, (p) =>
         hostHomePath(p, runtimeInfo),
@@ -894,12 +899,18 @@ app.post("/workers", async (c) => {
         mounts: z.array(z.object({ volume: z.string(), path: z.string(), readOnly: z.boolean() })),
       })
       .parse(await c.req.json());
-    const mounts = workerMounts(body.mounts, dataDir, await inspectSupervisorContainer());
+    const runtimeInfo = await inspectSupervisorContainer();
+    const mounts = workerMounts(body.mounts, dataDir, runtimeInfo);
     const [existing] = await attemptWorkers(body.attemptId);
     if (existing) return c.json({ id: existing.Id });
     await ensureWorkersNetwork();
     const container = await docker.createContainer(
-      workerCreateOptions({ attemptId: body.attemptId, ttlSeconds: body.ttlSeconds, mounts }),
+      workerCreateOptions({
+        attemptId: body.attemptId,
+        ttlSeconds: body.ttlSeconds,
+        mounts,
+        user: sandboxUser(runtimeInfo),
+      }),
     );
     await container.start();
     return c.json({ id: container.id });
@@ -968,7 +979,7 @@ export async function upgradeWorkerGuest(
       AttachStdout: true,
       AttachStderr: true,
       Tty: false,
-      User: COMPUTER_USER,
+      User: info.Config.User || COMPUTER_USER,
       WorkingDir: "/workspace",
       Env: [`RAKAZO_WORKER_CAPABILITY=${capability}`],
     });

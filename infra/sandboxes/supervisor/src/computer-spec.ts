@@ -588,14 +588,20 @@ export function workerMounts(
   });
 }
 
+/**
+ * A worker runs as the user its computer runs as, so both write the volumes they share. A user
+ * other than 1000 has no passwd entry in the image, so `HOME` is set explicitly.
+ */
 export function workerCreateOptions(input: {
   attemptId: string;
   ttlSeconds: number;
   mounts: WorkerMountSource[];
+  user: string;
 }): Docker.ContainerCreateOptions {
   return {
     Image: WORKER_IMAGE,
-    User: COMPUTER_USER,
+    User: input.user,
+    Env: ["HOME=/home/user"],
     Cmd: ["sleep", String(input.ttlSeconds)],
     Labels: {
       "rakazo.managed": "true",

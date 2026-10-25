@@ -7,6 +7,7 @@ import type { PrismaClient } from "@rakazo/db";
 import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { HOME_MOVE_MARKER } from "./docker-home-migration.js";
 import { DockerWorkerProvider } from "./docker-worker.js";
 import {
   carryDockerVolumesToE2B,
@@ -71,7 +72,7 @@ async function put(volumeRef: string, relative: string, content = relative) {
 
 function carry(files: MemoryVolumeFiles, computerId: string, context: AdapterContext) {
   return carryDockerVolumesToE2B(
-    { prisma, source: docker, target: e2b, files },
+    { prisma, dataDir, source: docker, target: e2b, files },
     computerId,
     context,
   );
@@ -195,6 +196,26 @@ describe("carrying a Docker computer's volumes to E2B", () => {
     expect(
       (await prisma.volume.findUniqueOrThrow({ where: { id: own.volumeId } })).providerKind,
     ).toBe("docker-worker");
+    expect((await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } })).kind).toBe(
+      "docker",
+    );
+  });
+
+  it("refuses a computer whose move onto its Docker volumes has not finished", async () => {
+    const { computer, own } = await dockerTeamOnVolumes();
+    await put(own.providerRef, "notes.md", "notes");
+    await mkdir(path.join(dataDir, "homes", computer.homeKey), { recursive: true });
+    await writeFile(path.join(dataDir, "homes", computer.homeKey, HOME_MOVE_MARKER), "");
+    const files = new MemoryVolumeFiles();
+
+    const report = await carry(files, computer.id, fixture.context);
+
+    expect(report).toEqual({
+      outcome: "refused",
+      refusal: { code: "home_move_incomplete" },
+      volumes: [],
+    });
+    expect(await files.list(`rakazo-${own.volumeId}`, fixture.context)).toEqual([]);
     expect((await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } })).kind).toBe(
       "docker",
     );

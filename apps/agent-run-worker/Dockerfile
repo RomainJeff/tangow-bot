@@ -19,9 +19,10 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends bash ca-certificates git procps ripgrep fd-find \
   && rm -rf /var/lib/apt/lists/*
 
-# The guest runs as uid 1000 with the E2B sandbox user's name and home.
+# The guest runs as uid 1000 with the E2B sandbox user's name and home. A Docker source install
+# runs it as the host user instead, as its computer: the home and workspace accept any user.
 RUN usermod -l user -d /home/user -m node && groupmod -n user node \
-  && mkdir /workspace && chown user:user /workspace
+  && mkdir /workspace && chown user:user /workspace && chmod 1777 /home/user /workspace
 
 ENV RAKAZO_WORKER_HOME=/home/user RAKAZO_WORKER_HARNESS=pi-native
 

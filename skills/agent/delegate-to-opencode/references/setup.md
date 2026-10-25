@@ -12,7 +12,7 @@ Goal: the user never opens the computer. Do as much as you can yourself, give th
 | `github=missing` | GitHub is not connected | Fine for local work. Needed only for private repositories and pull requests: see GitHub below. |
 | `bash: ... No such file` | The selected computer has no managed skill mount | Use a computer with the managed skill mount. Direct code work can still use the worker tools. |
 
-Run all setup commands on the computer through `computer_exec` in worker runs, or `shell` in the in-process harness. A missing OpenCode binary in the worker is expected. Do not install it there as a repair. Keep the job-directory override from SKILL.md on every `oc` call.
+Run all setup commands on the computer through `computer_exec`. A missing OpenCode binary in the worker is expected. Do not install it there as a repair. Keep the job-directory override from SKILL.md on every `oc` call.
 
 ## Sign-in by code (preferred)
 

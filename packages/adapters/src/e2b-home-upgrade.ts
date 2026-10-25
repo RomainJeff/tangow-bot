@@ -16,6 +16,7 @@ import { ACTIVE_RUN_STATUSES, workerEnsureDeadline } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { toComputerRef } from "./computer-support.js";
 import { checkpointComputerWorkspace } from "./computer-workspace.js";
+import { homeMovePending } from "./docker-home-migration.js";
 import type { DockerWorkerProvider } from "./docker-worker.js";
 import type { E2BVolumeFiles } from "./e2b-volume-files.js";
 import { isStagedWrite } from "./e2b-volume-files.js";
@@ -196,6 +197,8 @@ export type CarriedVolume = {
 
 export type DockerVolumeRefusal =
   | { code: HomeMoveBlocker }
+  /** The move of its home onto Docker volumes started and has not finished: run the move first. */
+  | { code: "home_move_incomplete" }
   | { code: "volume_not_empty" | "copy_mismatch"; volumes: VolumeConflict[] }
   | { code: "volume_changed"; volumeId: string; paths: string[] };
 
@@ -215,6 +218,8 @@ type VolumePlan = {
 
 type CarryDeps = {
   prisma: PrismaClient;
+  /** Holds the Docker homes, `homes/<homeKey>`, and their volumes. */
+  dataDir: string;
   source: Pick<DockerWorkerProvider, "describe" | "volumePath">;
   target: Pick<WorkerProvider, "describe" | "ensureVolume">;
   files: VolumeFiles & Pick<E2BVolumeFiles, "remove">;
@@ -242,13 +247,17 @@ export async function carryDockerVolumesToE2B(
   const { prisma, target, files } = deps;
   const computer = await prisma.computer.findUniqueOrThrow({
     where: { id: computerId },
-    select: { kind: true, homeStorage: true },
+    select: { kind: true, homeStorage: true, homeKey: true },
   });
   if (computer.kind === "e2b" && computer.homeStorage === "volumes") {
     return { outcome: "already_on_e2b" };
   }
   if (computer.kind !== "docker" || computer.homeStorage !== "volumes") {
     throw new Error(`${computerId} is not a Docker computer on volumes`);
+  }
+  // Part of the home is still outside its volumes, and E2B would never finish that move.
+  if (await homeMovePending(path.resolve(deps.dataDir, "homes", computer.homeKey))) {
+    return { outcome: "refused", refusal: { code: "home_move_incomplete" }, volumes: [] };
   }
   const workers = createWorkerLifecycle({ prisma, provider: null });
   const reservation = await workers.reserveHomeMove(computerId);

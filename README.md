@@ -52,7 +52,7 @@ docker compose --env-file .env \
 pnpm install
 pnpm db:generate
 pnpm db:migrate
-pnpm sandbox:build
+pnpm sandbox:build   # builds the computer and worker images
 pnpm dev
 ```
 

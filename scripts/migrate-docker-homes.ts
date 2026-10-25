@@ -4,8 +4,8 @@
  * worker start. A computer still running or controlled is left for the idle job, which moves it
  * when it suspends. A home that conflicts with its volume is logged with its computer id and
  * skipped, and a move that stopped partway resumes. Any other failure (storage the move cannot
- * write, homes and volumes on different filesystems, the database) exits non-zero. Running it twice
- * changes nothing.
+ * write, homes and volumes on different filesystems, the database) exits non-zero. Then each
+ * space's legacy user skills are copied once to its shared volume. Running it twice changes nothing.
  *
  *   pnpm exec tsx scripts/migrate-docker-homes.ts
  *

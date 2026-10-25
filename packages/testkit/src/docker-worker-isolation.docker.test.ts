@@ -9,6 +9,7 @@ import {
   dockerDesktop,
   dockerWorkersEnabled,
   freePort,
+  sandboxUser,
   workerSpec as spec,
   useDockerSupervisor,
 } from "./docker-worker.test-support.js";
@@ -117,7 +118,7 @@ describe.skipIf(!dockerWorkersEnabled)("Docker worker isolation, from inside a w
     }
   });
 
-  /** Runs a probe as the guest would: uid 1000 in the worker, no extra env. */
+  /** Runs a probe as the guest would: the worker's user, no extra env. */
   // Async, so the supervisor client's pooled sockets see their close while a probe runs.
   const inWorker = (script: string, container = mine) =>
     new Promise<string>((resolve, reject) => {
@@ -263,7 +264,7 @@ describe.skipIf(!dockerWorkersEnabled)("Docker worker isolation, from inside a w
     }
   }, 120_000);
 
-  it("runs as uid 1000 with no capabilities and no new privileges", async () => {
+  it("runs as its computer's user with no capabilities and no new privileges", async () => {
     const output = await inWorker(`
       const fs = require("fs"), cp = require("child_process");
       const status = Object.fromEntries(fs.readFileSync("/proc/self/status", "utf8").split("\\n")
@@ -282,8 +283,7 @@ describe.skipIf(!dockerWorkersEnabled)("Docker worker isolation, from inside a w
     const results = JSON.parse(output) as Record<string, unknown>;
     console.log("privilege probes", JSON.stringify(results, null, 1));
     expect(results).toMatchObject({
-      uid: 1000,
-      gid: 1000,
+      ...sandboxUser,
       CapInh: "0000000000000000",
       CapPrm: "0000000000000000",
       CapEff: "0000000000000000",

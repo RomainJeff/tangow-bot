@@ -3,7 +3,12 @@ import path from "node:path";
 import type { ComputerRef, WorkerSpec } from "@rakazo/adapter-kit";
 import { DockerSandboxProvider, DockerWorkerProvider } from "@rakazo/adapters";
 import { describe, expect, it } from "vitest";
-import { docker, dockerWorkersEnabled, useDockerSupervisor } from "./docker-worker.test-support.js";
+import {
+  docker,
+  dockerWorkersEnabled,
+  sandboxUser,
+  useDockerSupervisor,
+} from "./docker-worker.test-support.js";
 import { toolResult } from "./file-task.js";
 import type { ModelEmulatorStep } from "./model-emulator.js";
 import { call, finish } from "./worker-live/run.js";
@@ -73,7 +78,9 @@ describe.skipIf(!dockerWorkersEnabled)("Docker workers", () => {
       const runId = await run.send("Write the notes.");
       await run.continueRun(runId);
       run.model.assertComplete();
-      expect(seen[0]).toBe(`1000\n/workspace/bots/${run.bot.id}\nwritten on the computer`);
+      expect(seen[0]).toBe(
+        `${sandboxUser.uid}\n/workspace/bots/${run.bot.id}\nwritten on the computer`,
+      );
       expect(seen[1]).toContain("Successfully wrote");
       const volumes = await run.prisma.volume.findMany();
       const ref = (kind: string) => volumes.find((volume) => volume.kind === kind)!.providerRef!;

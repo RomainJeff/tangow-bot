@@ -270,7 +270,7 @@ import {
   needsLivePluginSync,
   planLiveConnectionSync,
 } from "./composio-connector.js";
-import { BACKGROUND_WORK_LAUNCH, sandboxIdleMs } from "./computer-idle.js";
+import { BACKGROUND_WORK_LAUNCH, sandboxIdleMs, scheduleComputerSleep } from "./computer-idle.js";
 import { ComputerBusyError, screenLeaseIdForRun } from "./computer-lifecycle.js";
 import { withComputerScreenAvailability } from "./computer-screens.js";
 import {
@@ -680,7 +680,7 @@ const HOME_MOVE_PENDING_MESSAGE =
  * composed without workers, runs in process.
  */
 async function routeRun(
-  deps: Pick<ExecutorDeps, "runtime" | "workers">,
+  deps: Pick<ExecutorDeps, "runtime" | "workers" | "jobs">,
   run: {
     attemptId: string;
     tools: ConnectorTool[];
@@ -712,6 +712,10 @@ async function routeRun(
   }
   if (plan.mode === "busy") throw new AgentRuntimeBusyError("Computer home is moving");
   if (plan.mode === "refused") {
+    // Its sleep attempt also moves the home, as for a computer an upgrade caught mid-operation.
+    if (plan.refusal.code === "home_move_pending" && run.computerId) {
+      scheduleComputerSleep(deps.jobs, run.computerId);
+    }
     return {
       ...inProcess,
       refusal:
