@@ -1,11 +1,27 @@
 import type { AskDraftEdits } from "@rakazo/contracts";
 import { ASK_DRAFT_TEXT_MAX_LENGTH } from "@rakazo/contracts";
 import type { RecipientRole } from "@rakazo/core";
-import { draftAddresses, RECIPIENT_ROLES } from "@rakazo/core";
+import {
+  addressesOf,
+  changeLine,
+  draftAddresses,
+  foldedRoles,
+  RECIPIENT_ROLES,
+} from "@rakazo/core";
 import { radii } from "@rakazo/ui-tokens";
 import { Stack, useRouter } from "expo-router";
+import { usePreventRemove } from "expo-router/react-navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  AccessibilityInfo,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppLogo } from "../components/draft-card";
 import { MoreRecipientsRow, RecipientRow, SubjectRow } from "../components/draft-lines";
@@ -19,7 +35,7 @@ import {
   subscribeDraftEdit,
 } from "../lib/draft-edit";
 import type { TypedLines } from "../lib/draft-sheet";
-import { addressesOf, finishLines, foldedRoles, withRole } from "../lib/draft-sheet";
+import { finishLines, sheetChanged } from "../lib/draft-sheet";
 import { useI18n } from "../lib/i18n";
 import { native, useMobileTokens, useThemedStyles } from "../lib/native";
 import { nativeTextStyle } from "../lib/typography";
@@ -40,16 +56,20 @@ export default function EditDraft() {
   const [edit, setEdit] = useState(opening);
   const [typed, setTyped] = useState<TypedLines>({});
   const [opened, setOpened] = useState<ReadonlySet<RecipientRole>>(new Set());
-  const closing = useRef(false);
+  const [leaving, setLeaving] = useState(false);
   const mounted = useRef(true);
   const messageId = useRef(card?.messageId);
+  const doneRef = useRef<() => void>(() => undefined);
 
-  function close() {
-    if (closing.current) return;
-    closing.current = true;
+  // Leaving waits a render, so a swipe held back for typing no longer is.
+  const close = () => setLeaving(true);
+  useEffect(() => {
+    if (!leaving) return;
     if (router.canGoBack()) router.back();
     else router.replace("/");
-  }
+  }, [leaving, router]);
+  // A swipe down while a row holds typing would skip Done: it runs Done instead.
+  usePreventRemove(!leaving && Object.values(typed).some(Boolean), () => doneRef.current());
 
   useEffect(() => {
     mounted.current = true;
@@ -73,7 +93,7 @@ export default function EditDraft() {
   const text = edit.text ?? draft.body;
   const recipients = edit.recipients ?? draft.recipients;
   const subject = edit.subject ?? draft.subject ?? "";
-  const folded = fields ? foldedRoles(fields, recipients, typed, opened) : [];
+  const folded = foldedRoles(fields, recipients, typed, opened);
   const roleLabel = { to: t("To"), cc: t("Cc"), bcc: t("Bcc") };
 
   function keep(next: AskDraftEdits) {
@@ -88,13 +108,13 @@ export default function EditDraft() {
     const finished = finishLines(fields, recipients, typed);
     if (finished.recipients.length !== recipients.length) keep({ recipients: finished.recipients });
     setTyped(finished.typed);
-    if (!finished.held) close();
+    if (!finished.held) return close();
+    AccessibilityInfo.announceForAccessibility(t("Not an email address"));
   }
+  doneRef.current = done;
 
   function cancel() {
-    const changed =
-      JSON.stringify(edit) !== JSON.stringify(opening) || Object.values(typed).some(Boolean);
-    if (!changed) return close();
+    if (!sheetChanged(draft, opening, edit, typed)) return close();
     Alert.alert(t("Discard changes?"), undefined, [
       { text: t("Keep editing"), style: "cancel" },
       {
@@ -102,6 +122,7 @@ export default function EditDraft() {
         style: "destructive",
         onPress: () => {
           if (card) keepDraftEdit(card.messageId, opening);
+          setTyped({});
           close();
         },
       },
@@ -163,7 +184,11 @@ export default function EditDraft() {
                   typed={typed[role] ?? ""}
                   room={room}
                   autoFocus={opened.has(role) && role === [...opened][0]}
-                  onChange={(next) => keep({ recipients: withRole(recipients, role, next) })}
+                  onChange={(next) => {
+                    const changed = changeLine(recipients, opened, role, next);
+                    keep({ recipients: changed.recipients });
+                    setOpened(changed.opened);
+                  }}
                   onTyped={(next) => setTyped((current) => ({ ...current, [role]: next }))}
                 />
               );

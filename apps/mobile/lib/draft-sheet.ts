@@ -1,46 +1,17 @@
-import type { AskDraftFields, AskDraftRecipient } from "@rakazo/contracts";
+import type { AskDraft, AskDraftEdits, AskDraftFields, AskDraftRecipient } from "@rakazo/contracts";
 import type { RecipientRole } from "@rakazo/core";
-import { heldBack, RECIPIENT_ROLES, takeAddresses } from "@rakazo/core";
+import {
+  addressesOf,
+  draftChanges,
+  heldBack,
+  RECIPIENT_ROLES,
+  sameRecipients,
+  takeAddresses,
+  withRole,
+} from "@rakazo/core";
 
 /** What each recipient row's field holds that has not joined the row yet. */
 export type TypedLines = Partial<Record<RecipientRole, string>>;
-
-export function addressesOf(recipients: readonly AskDraftRecipient[], role: RecipientRole) {
-  return recipients.filter((recipient) => recipient.role === role).map((each) => each.address);
-}
-
-/** The recipients with one role's addresses replaced, kept in To, Cc, Bcc order. */
-export function withRole(
-  recipients: readonly AskDraftRecipient[],
-  role: RecipientRole,
-  addresses: readonly string[],
-): AskDraftRecipient[] {
-  return RECIPIENT_ROLES.flatMap((each) =>
-    each === role
-      ? addresses.map((address) => ({ role, address }))
-      : recipients.filter((recipient) => recipient.role === each),
-  );
-}
-
-/**
- * The Cc and Bcc rows the sheet keeps folded behind "Cc/Bcc": a role the draft takes that names
- * nobody, holds no typing and was not opened.
- */
-export function foldedRoles(
-  fields: AskDraftFields,
-  recipients: readonly AskDraftRecipient[],
-  typed: TypedLines,
-  opened: ReadonlySet<RecipientRole>,
-): RecipientRole[] {
-  return RECIPIENT_ROLES.filter(
-    (role) =>
-      role !== "to" &&
-      fields[role] !== undefined &&
-      !addressesOf(recipients, role).length &&
-      !typed[role] &&
-      !opened.has(role),
-  );
-}
 
 /**
  * Every row's typing joined as if each field were left, as Done does. `held` says a finished word
@@ -65,4 +36,21 @@ export function finishLines(
     typed: left,
     held: RECIPIENT_ROLES.some((role) => heldBack(left[role] ?? "")),
   };
+}
+
+/** Whether Cancel would lose anything: a change since the sheet opened, or typing in a row. */
+export function sheetChanged(
+  draft: AskDraft,
+  opening: AskDraftEdits,
+  edit: AskDraftEdits,
+  typed: TypedLines,
+): boolean {
+  if (Object.values(typed).some(Boolean)) return true;
+  const before = draftChanges(draft, opening);
+  const now = draftChanges(draft, edit);
+  return (
+    before.text !== now.text ||
+    before.subject !== now.subject ||
+    !sameRecipients(before.recipients ?? draft.recipients, now.recipients ?? draft.recipients)
+  );
 }
