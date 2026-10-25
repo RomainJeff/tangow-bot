@@ -6,9 +6,10 @@ import path from "node:path";
 import { Sandbox, SandboxNotFoundError, TimeoutError } from "@e2b/desktop";
 import { CommandExitError, Sandbox as RawSandbox } from "e2b";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
+import { linkWorkspaceCommand } from "./computer-support.js";
 import { fakeE2BMachine } from "./e2b-machine.test-support.js";
 import type { E2BSandboxSdk } from "./e2b-sandbox.js";
-import { E2BSandboxProvider, isSandboxGoneError, linkWorkspaceCommand } from "./e2b-sandbox.js";
+import { E2BSandboxProvider, isSandboxGoneError } from "./e2b-sandbox.js";
 import { desktopCommandResponder } from "./linux-desktop.test-support.js";
 
 const context = {

@@ -4,10 +4,13 @@ import type {
   ComputerRef,
   ProcessEvent,
 } from "@rakazo/adapter-kit";
-import { FakeSandboxProvider } from "@rakazo/adapters";
+import { VolumeComputer } from "../volume-computer.js";
 
-/** A model must not receive successful shell results for commands the fixture never ran. */
-export class EvalSandboxProvider extends FakeSandboxProvider {
+/**
+ * The eval's computer, whose files are the trial's worker volumes. A model must not receive
+ * successful shell results for commands the fixture never ran.
+ */
+export class EvalSandboxProvider extends VolumeComputer {
   readonly harnessIssues: string[] = [];
 
   override async *execute(

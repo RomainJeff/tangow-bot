@@ -6,7 +6,6 @@ x-app-env: &app-env
   SANDBOX_SUPERVISOR_URL: http://supervisor:7091
   WAKEUP_DRIVER: graphile
   SANDBOX_PROVIDER: docker
-  AGENT_RUNTIME: pi
   # Optional egress proxy (Mainland / corporate). Empty = unset; either case works.
   HTTP_PROXY: ${HTTP_PROXY:-${http_proxy:-}}
   HTTPS_PROXY: ${HTTPS_PROXY:-${https_proxy:-}}
@@ -43,6 +42,7 @@ services:
       SUPERVISOR_PORT: "7091"
       DOCKER_SOCKET: /var/run/docker.sock
       RAKAZO_COMPUTER_IMAGE: rakazo/computer:local
+      RAKAZO_WORKER_IMAGE: rakazo/worker:local
       RAKAZO_COMPUTER_MEMORY: ${RAKAZO_COMPUTER_MEMORY:-8g}
       RAKAZO_COMPUTER_CPUS: ${RAKAZO_COMPUTER_CPUS:-4}
       RAKAZO_COMPUTER_PIDS_LIMIT: ${RAKAZO_COMPUTER_PIDS_LIMIT:-2048}
@@ -62,11 +62,21 @@ services:
     depends_on:
       computer:
         condition: service_completed_successfully
+      worker-image:
+        condition: service_completed_successfully
 
   computer:
     image: rakazo/computer:local
     build:
       context: ../sandboxes/computer
+    command: ["true"]
+    restart: "no"
+
+  worker-image:
+    image: rakazo/worker:local
+    build:
+      context: ../..
+      dockerfile: apps/agent-run-worker/Dockerfile
     command: ["true"]
     restart: "no"
 
@@ -78,17 +88,25 @@ services:
       - ../../data:/data
 
   # Applies the migrations before the API and the worker start, writing the session log from the
-  # legacy messages first when an upgrade needs it. On a large database that takes minutes.
+  # legacy messages first when an upgrade needs it. On a large database that takes minutes. Then
+  # moves each idle computer's home onto its volumes, on the same /data as the supervisor.
   migrate:
     image: rakazo/app:local
     pull_policy: never
-    command: ["pnpm", "exec", "tsx", "scripts/backfill-session-log.ts"]
+    command:
+      - sh
+      - -c
+      - pnpm exec tsx scripts/backfill-session-log.ts && pnpm exec tsx scripts/migrate-docker-homes.ts
     restart: "no"
     environment:
       <<: *app-env
+    volumes:
+      - ../../data:/data
     depends_on:
       postgres:
         condition: service_healthy
+      data-init:
+        condition: service_completed_successfully
 
   api:
     # One image for api, worker and web: same context, same Dockerfile, only the

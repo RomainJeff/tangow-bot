@@ -3,11 +3,9 @@ import { isToolActivityBlock } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import {
   botMessageOutcomeFromMidTurn,
-  endsWithToolCallBudgetNotice,
   extractNarrationText,
   finalBlocksAfterMidTurnProgress,
   repeatsSentUserText,
-  toolCallBudgetNotice,
 } from "./user-progress.js";
 
 describe("extractNarrationText", () => {
@@ -125,25 +123,5 @@ describe("repeatsSentUserText", () => {
   it("never flags an empty message or an empty history", () => {
     expect(repeatsSentUserText("   ", ["   "])).toBe(false);
     expect(repeatsSentUserText("Done.", [])).toBe(false);
-  });
-});
-
-describe("endsWithToolCallBudgetNotice", () => {
-  const notice = toolCallBudgetNotice(40);
-
-  it("recognises the runtime's limit notice, alone or after the model's own text", () => {
-    expect(endsWithToolCallBudgetNotice(notice)).toBe(true);
-    expect(endsWithToolCallBudgetNotice(`Partial result.\n\n${notice}\n`)).toBe(true);
-  });
-
-  it("ignores ordinary text, including one that only mentions a limit", () => {
-    expect(endsWithToolCallBudgetNotice("")).toBe(false);
-    expect(
-      endsWithToolCallBudgetNotice(
-        "I stopped after reaching the limit of many tool calls in this turn. Send another message to continue.",
-      ),
-    ).toBe(false);
-    expect(endsWithToolCallBudgetNotice("Nothing to report.")).toBe(false);
-    expect(endsWithToolCallBudgetNotice(`${notice} Then I carried on.`)).toBe(false);
   });
 });

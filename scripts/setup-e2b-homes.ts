@@ -4,7 +4,11 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { DockerSandboxProvider } from "../packages/adapters/src/docker-sandbox.js";
-import { prepareHomeForE2B } from "../packages/adapters/src/e2b-home-upgrade.js";
+import { DockerWorkerProvider } from "../packages/adapters/src/docker-worker.js";
+import {
+  prepareHomeForE2B,
+  previewDockerVolumeCarry,
+} from "../packages/adapters/src/e2b-home-upgrade.js";
 import { verifyE2BInstallation } from "../packages/adapters/src/e2b-install-check.js";
 import { E2BSandboxProvider } from "../packages/adapters/src/e2b-sandbox.js";
 import { LocalAgentHomeStore } from "../packages/adapters/src/home.js";
@@ -56,9 +60,10 @@ try {
   } else if (values.inspect || values.verify) {
     const now = new Date();
     const [computers, runs, controls, leases, maintenance] = await Promise.all([
+      // Homes still on snapshots, and Docker computers whose volumes must be carried to E2B.
       prisma.computer.findMany({
-        where: { homeStorage: "snapshot" },
-        select: { id: true, kind: true, scope: true, spaceId: true },
+        where: { OR: [{ homeStorage: "snapshot" }, { kind: "docker", homeStorage: "volumes" }] },
+        select: { id: true, kind: true, scope: true, spaceId: true, homeStorage: true },
         orderBy: [{ scope: "desc" }, { id: "asc" }],
       }),
       prisma.run.count({ where: { status: { in: [...ACTIVE_RUN_STATUSES] } } }),
@@ -80,7 +85,7 @@ try {
     const unsupported = computers.filter((c) => c.kind !== "docker" && c.kind !== "e2b").length;
     if (values.verify && computers.length)
       throw new Error(
-        `${computers.length} computer homes still use snapshots; setup is incomplete`,
+        `${computers.length} computer homes still use snapshots or Docker volumes; setup is incomplete`,
       );
     if (values.verify) {
       if (runs || controls || leases || maintenance || unsupported)
@@ -93,6 +98,24 @@ try {
     const previews = [];
     if (values.plans && !runs && !controls && !leases && !maintenance && !unsupported) {
       for (const computer of computers) {
+        if (computer.homeStorage === "volumes") {
+          previews.push({
+            computerId: computer.id,
+            ...(await previewDockerVolumeCarry(
+              {
+                prisma,
+                // Only its volume paths under DATA_DIR are used: the supervisor is never called.
+                source: new DockerWorkerProvider({
+                  supervisorUrl: "http://127.0.0.1:9",
+                  supervisorToken: "unused",
+                  dataDir: process.env.DATA_DIR ?? "/data",
+                }),
+              },
+              computer.id,
+            )),
+          });
+          continue;
+        }
         previews.push({
           computerId: computer.id,
           ...(await previewHomeVolumeMove(

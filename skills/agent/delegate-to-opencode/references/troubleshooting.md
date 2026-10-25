@@ -5,7 +5,7 @@ Always start with `<oc> result <id>`: the report, or OpenCode's last message, us
 ## `failed`
 
 - **Error mentions credentials, auth, 401, quota or rate limit**: the model account is not usable. Run `<oc> doctor`, then `references/setup.md`. Quota or rate limit: tell the user their AI account hit its limit and offer to retry later with a reminder.
-- **Error mentions a model not found**: drop `--model` or pick one from `opencode models` (run it through `computer_exec` in worker runs, or `shell` in-process).
+- **Error mentions a model not found**: drop `--model` or pick one from `opencode models` (run it through `computer_exec`).
 - **The report says it could not finish** (tests red, missing information): if the gap is information only the user has, ask them one simple question, then `<oc> send <id> <file>` with the answer. If it is technical, send one follow-up restating the failing criterion; after two failed follow-ups, tell the user plainly what blocks.
 - **Nothing useful in the result**: start the job again once with the same brief. Fails again: tell the user and suggest a smaller task.
 

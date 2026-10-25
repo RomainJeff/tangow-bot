@@ -9,13 +9,11 @@ When delegating, write the brief, judge whether the result matches what the user
 
 ## Execution and paths
 
-In a worker run, use native `read`, `write`, `edit` and `bash` for file and code work under `/workspace/bots/<id>`. Use `computer_exec` for commands needing the computer's apps, browser, services or OpenCode installation. Worker `localhost` is a different machine. Use Rakazo browser tools for browser interaction.
+Use native `read`, `write`, `edit` and `bash` for file and code work under `/workspace/bots/<id>`. Use `computer_exec` for commands needing the computer's apps, browser, services or OpenCode installation. Worker `localhost` is a different machine. Use Rakazo browser tools for browser interaction.
 
-Tool names here are Rakazo names. Each harness exposes them under its own naming. Use the offered tools, without assuming an MCP prefix. The in-process harness uses `shell` for computer commands and `write_file` for briefs.
+Tool names here are Rakazo names. Each harness exposes them under its own naming. Use the offered tools, without assuming an MCP prefix.
 
 `<dir>` below is `/managed-skills/agent/delegate-to-opencode` on the computer. Do not pass a worker home symlink or a worker-only path to `computer_exec`. Read references from the managed skill in the worker using native `read`.
-
-In-process runs write `briefs/<name>.md` with `write_file`; the computer workspace maps it to `/workspace/bots/<id>/briefs/<name>.md` on both dedicated and team computers.
 
 Write briefs under `/workspace/bots/<id>/briefs/` using native `write`. Use an absolute repository path under `/workspace/bots/<id>/` or `/workspace/shared/`. Both machines see those volume paths. For every helper command, use `computer_exec` with a literal command of this form:
 

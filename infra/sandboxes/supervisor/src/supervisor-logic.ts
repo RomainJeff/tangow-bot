@@ -327,6 +327,7 @@ export function containerActionStep(
   action: z.infer<typeof computerActionSchema>,
   display = ":1",
   browserProfile?: string,
+  workspace = COMPUTER_HOME,
 ): { argv: string[] } | { waitMs: number } {
   if (action.kind === "wait") {
     return { waitMs: Math.min(Math.max(action.ms, 0), 5_000) };
@@ -347,7 +348,7 @@ export function containerActionStep(
   } else if (action.kind === "open") {
     const target = /^https?:\/\//i.test(action.path)
       ? action.path
-      : workspaceTarget(normalizeWorkspaceRelative(action.path));
+      : workspaceTarget(normalizeWorkspaceRelative(action.path), workspace);
     argv = [
       "env",
       `DISPLAY=${display}`,
@@ -372,8 +373,9 @@ export function containerActionSteps(
   actions: Array<z.infer<typeof computerActionSchema>>,
   display = ":1",
   browserProfile?: string,
+  workspace = COMPUTER_HOME,
 ) {
-  return actions.map((action) => containerActionStep(action, display, browserProfile));
+  return actions.map((action) => containerActionStep(action, display, browserProfile, workspace));
 }
 
 export function normalizeWorkspaceRelative(value: string) {
@@ -385,8 +387,27 @@ export function normalizeWorkspaceRelative(value: string) {
   return segments.join("/");
 }
 
-export function workspaceTarget(relative: string) {
-  return relative ? path.posix.join("/home/rakazo", relative) : "/home/rakazo";
+/** The computer user's home, and its workspace until the home moves onto volumes. */
+export const COMPUTER_HOME = "/home/rakazo";
+
+export function workspaceTarget(relative: string, workspace = COMPUTER_HOME) {
+  return relative ? path.posix.join(workspace, relative) : workspace;
+}
+
+/**
+ * Where a command runs. The controller names its directory under the home, as it always has; on
+ * volumes that place is the workspace root, and a path under `/workspace` is taken as it is.
+ */
+export function commandWorkingDir(cwd: string | undefined, workspace = COMPUTER_HOME) {
+  if (workspace !== COMPUTER_HOME && (cwd === "/workspace" || cwd?.startsWith("/workspace/"))) {
+    return workspaceTarget(
+      normalizeWorkspaceRelative(cwd.slice("/workspace".length)),
+      "/workspace",
+    );
+  }
+  if (!cwd || cwd === COMPUTER_HOME) return workspace;
+  const relative = cwd.startsWith(`${COMPUTER_HOME}/`) ? cwd.slice(COMPUTER_HOME.length + 1) : cwd;
+  return workspaceTarget(normalizeWorkspaceRelative(relative), workspace);
 }
 
 export function sandboxTimeoutCommand(argv: string[], timeoutMs: number, completionMarker: string) {

@@ -270,7 +270,7 @@ import {
   needsLivePluginSync,
   planLiveConnectionSync,
 } from "./composio-connector.js";
-import { BACKGROUND_WORK_LAUNCH, sandboxIdleMs } from "./computer-idle.js";
+import { BACKGROUND_WORK_LAUNCH, sandboxIdleMs, scheduleComputerSleep } from "./computer-idle.js";
 import { ComputerBusyError, screenLeaseIdForRun } from "./computer-lifecycle.js";
 import { withComputerScreenAvailability } from "./computer-screens.js";
 import {
@@ -387,8 +387,6 @@ import { inferScript } from "./scripted-runtime.js";
 import type { EncryptedSecretStore } from "./secrets.js";
 import { writeSkillLines } from "./skill-lines.js";
 import type { SkillOwnerLock } from "./skill-lock.js";
-import type { SkillNudgeDecision } from "./skill-nudge.js";
-import { decideSkillNudge, runSkillNudgeTurn } from "./skill-nudge.js";
 import type { SkillTreeFile } from "./skill-store.js";
 import {
   listAgentSkillRecords,
@@ -421,7 +419,6 @@ import { advanceToolCallLoopGuard } from "./tool-loop.js";
 import {
   botMessageOutcomeFromMidTurn,
   buildSteeringMessageText,
-  endsWithToolCallBudgetNotice,
   extractNarrationText,
   finalBlocksAfterMidTurnProgress,
   repeatsSentUserText,
@@ -451,7 +448,6 @@ const READ_ONLY_AGENT_TOOLS = new Set([
   "list_secrets",
 ]);
 const MAX_SETUP_ATTEMPTS = 3;
-const SKILL_NUDGE_TIMEOUT_MS = 2 * 60 * 1000;
 
 const TURN_ATTACHMENT_UNAVAILABLE =
   "An attachment in this message could not be loaded. Tell the user the attachment was unavailable and do not guess its contents.";
@@ -674,12 +670,17 @@ function withLocalTools(tools: ConnectorTool[], local: readonly ConnectorTool[])
   return [...tools.filter((tool) => !names.has(tool.name)), ...local];
 }
 
+/** The migrate service or the idle job moves the home onto volumes; the run fails until then. */
+const HOME_MOVE_PENDING_MESSAGE =
+  "This computer's home move is pending, so file work can't run yet";
+
 /**
  * One worker start per attempt. A worker run keeps the computer for its explicit computer tools
- * only: file work and commands run in the guest. Scripted runs stay in process.
+ * only: file work and commands run in the guest. The scripted test runtime, and any runtime
+ * composed without workers, runs in process.
  */
 async function routeRun(
-  deps: Pick<ExecutorDeps, "runtime" | "workers">,
+  deps: Pick<ExecutorDeps, "runtime" | "workers" | "jobs">,
   run: {
     attemptId: string;
     tools: ConnectorTool[];
@@ -705,16 +706,22 @@ async function routeRun(
   });
   let plan = await deps.workers.plan({ attemptId: run.attemptId, needs });
   // A bot attached after its computer moved has no volume until something creates it.
-  if (plan.mode === "refused" && run.computerId) {
+  if (plan.mode === "refused" && plan.refusal.code === "slot_volume_missing" && run.computerId) {
     await deps.workers.provisionHomeVolumes(run.computerId, context);
     plan = await deps.workers.plan({ attemptId: run.attemptId, needs });
   }
-  if (plan.mode === "in_process") return inProcess;
   if (plan.mode === "busy") throw new AgentRuntimeBusyError("Computer home is moving");
   if (plan.mode === "refused") {
+    // Its sleep attempt also moves the home, as for a computer an upgrade caught mid-operation.
+    if (plan.refusal.code === "home_move_pending" && run.computerId) {
+      scheduleComputerSleep(deps.jobs, run.computerId);
+    }
     return {
       ...inProcess,
-      refusal: `This bot has no ${plan.refusal.slot} volume on its computer yet, so the run cannot start`,
+      refusal:
+        plan.refusal.code === "home_move_pending"
+          ? HOME_MOVE_PENDING_MESSAGE
+          : `This bot has no ${plan.refusal.slot} volume on its computer yet, so the run cannot start`,
     };
   }
   const runtime = deps.workers.runtime(plan);
@@ -747,6 +754,10 @@ export interface ExecutorDeps {
   prisma: PrismaClient;
   events: ThreadEvents;
   sessionLog: SessionLog<Prisma.TransactionClient>;
+  /**
+   * In process: the scripted test runtime, or, beside `workers`, the model-call runtime the
+   * auto-review judge uses and whose capabilities gate compaction.
+   */
   runtime: AgentRuntime;
   sandbox: SandboxProvider;
   memory: MemoryStore;
@@ -767,8 +778,8 @@ export interface ExecutorDeps {
   /** Builtin web_search / web_fetch. Defaults to keyless HTTP when omitted. */
   web?: WebProvider;
   /**
-   * Runs a product run whose bot qualifies in a worker of its own. Every other runtime call, and
-   * every run when absent, stays on `runtime`.
+   * Runs every non-scripted product run in a worker of its own. Composition always provides it
+   * outside tests.
    */
   workers?: RunWorkers;
   /** Page browser (DOM refs) on the bot computer. Defaults to the sandbox live browser when supported. */
@@ -863,12 +874,10 @@ async function recordRunUsage(
   deps: Pick<ExecutorDeps, "prisma">,
   target: { spaceId: string; userId: string; botId: string; runId: string },
   event: Extract<AgentRuntimeEvent, { type: "usage" }>,
-  turn?: "skill_nudge",
 ): Promise<void> {
   getLogger().info("agent.run.usage", {
     runId: target.runId,
     botId: target.botId,
-    ...(turn ? { turn } : {}),
     provider: event.provider,
     model: event.model,
     inputTokens: event.inputTokens,
@@ -896,8 +905,6 @@ export async function appendToolCompletionAudit(
   target: { spaceId: string; threadId: string; botId: string; runId: string },
   completion: AgentToolCompletion,
   secrets: string[] = [],
-  /** `nudge`: the call came from the skill nudge, so it never counts toward one. */
-  marks: { nudge?: true } = {},
 ): Promise<void> {
   try {
     await deps.events.append({
@@ -906,7 +913,7 @@ export async function appendToolCompletionAudit(
       botId: target.botId,
       runId: target.runId,
       type: "agent.tool.completed",
-      payload: { ...toolCompletionAuditPayload(completion, secrets), ...marks },
+      payload: toolCompletionAuditPayload(completion, secrets),
     });
   } catch (error) {
     // Audit persistence must not change the tool result or strand the run.
@@ -1656,8 +1663,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
       const runSecrets = [...deps.secrets];
       // A skill write landed in this attempt: its line goes under the run's message at the end.
       let savedSkill = false;
-      // The skill nudge's private turn, run once the run has let go of its lease and computer.
-      let skillNudgeTurn: (() => Promise<void>) | undefined;
       let setupFailures = 0;
       try {
         if (
@@ -2826,7 +2831,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         };
 
         const skillOwner = { spaceId: run.spaceId, userId: run.userId, botId: run.botId };
-        /** What the skill-learning nudge reads back: the skills this run followed, in order. */
+        /** The skills this run followed, in order. */
         const recordSkillUse = async (skillName: string, via: string) => {
           if (learning === "off" && via !== "read") return;
           await deps.events
@@ -5715,20 +5720,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             run.trigger === "bot_message"
               ? botMessageOutcomeFromMidTurn(text, midTurnUserTexts)
               : null;
-          // Decided and marked while the run still holds its lease: a resumed run reads the mark.
-          const skillNudge: SkillNudgeDecision | undefined =
-            learning === "off" || workerSkills
-              ? undefined
-              : await decideSkillNudge(deps, learning, {
-                  run: { ...run, threadId: thread.id },
-                  sourceRole,
-                  steeredByOthers,
-                  replied: !handedOff && (text.trim() !== "" || publishedMidTurnUserMessage),
-                  budgetExhausted: endsWithToolCallBudgetNotice(text),
-                }).catch((error) => {
-                  getLogger().error("skill nudge decision", error);
-                  return undefined;
-                });
           const completed = await deps.events.finalizeRun({
             spaceId: run.spaceId,
             threadId: thread.id,
@@ -5815,77 +5806,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             await deps.jobs
               .enqueue(historyCompactJob(thread.id, historyBudget))
               .catch((error) => getLogger().error("history.compact enqueue failed", error));
-          }
-          if (skillNudge?.nudge && skillNudge.mode === "on") {
-            const { signal } = skillNudge;
-            skillNudgeTurn = async () => {
-              const exchange = await readExchange(deps, runId, sessionId);
-              const target = { spaceId: run.spaceId, threadId: thread.id, botId: bot.id, runId };
-              await runSkillNudgeTurn(deps, {
-                run: { id: runId, spaceId: run.spaceId, threadId: thread.id, botId: bot.id },
-                signal,
-                request: {
-                  botId: bot.id,
-                  threadId: thread.id,
-                  instructions,
-                  // The prompt stands in for the source message, as it did in the exchange.
-                  history: [
-                    ...runtimeHistory.filter(
-                      (message) => !run.sourceMessageId || message.id !== run.sourceMessageId,
-                    ),
-                    { role: "user", content: prompt },
-                    ...projectInferenceTurns(exchange, {
-                      selfBotId: bot.id,
-                      botNames: group?.memberNames,
-                    }),
-                  ],
-                  model: runtimeModel,
-                  secrets: runSecrets,
-                },
-                context: {
-                  operationId: `${runId}:skill-nudge`,
-                  traceId: runId,
-                  spaceId: run.spaceId,
-                  userId: run.userId,
-                  botId: bot.id,
-                  runId,
-                  signal: AbortSignal.any([
-                    AbortSignal.timeout(SKILL_NUDGE_TIMEOUT_MS),
-                    ...(deps.shutdownSignal ? [deps.shutdownSignal] : []),
-                  ]),
-                },
-                callTool: async (name, args, toolCallId) => {
-                  const skillRefusal = skillWriteRefusal(
-                    { trigger: run.trigger, sourceRole, trustedRoutine, steeredByOthers },
-                    name,
-                  );
-                  if (skillRefusal) return { error: skillRefusal };
-                  const safeArgs = redactBotToolArgs(name, args, runSecrets);
-                  if (name !== "skill_create" && name !== "skill_update") {
-                    return runSkillTool(name, safeArgs, undefined, true);
-                  }
-                  // The effect row is what the line sweep looks for if the worker dies mid-turn.
-                  const effect = await deps.prisma.externalEffect.create({
-                    data: {
-                      spaceId: run.spaceId,
-                      runId,
-                      kind: name,
-                      idempotencyKey: toolCallId,
-                      status: "intended",
-                      request: safeArgs as never,
-                    },
-                  });
-                  const result = await runSkillTool(name, safeArgs, undefined, true);
-                  await completeEffect(deps, effect.id, "intended", result);
-                  return result;
-                },
-                audit: (completion) =>
-                  appendToolCompletionAudit(deps, target, completion, runSecrets, { nudge: true }),
-                recordUsage: (usage) =>
-                  recordRunUsage(deps, { ...target, userId: run.userId }, usage, "skill_nudge"),
-              });
-              await writeRunSkillLines(runId);
-            };
           }
         } catch (error) {
           // A guest that could not start or was lost requeues the run like a failed setup.
@@ -6073,7 +5993,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
           })
           .catch(() => undefined);
       }
-      await skillNudgeTurn?.().catch((error) => getLogger().error("skill nudge", error));
     },
   };
 }
@@ -6368,35 +6287,6 @@ function stepAlignedHistory(entries: SessionEntry[], limit: number, runId: strin
   const step = Math.max(1, Math.floor(limit / 4));
   const anchor = Math.ceil(oldest.seq / step) * step;
   return entries.filter((entry) => entry.seq >= anchor || entry.runId === runId);
-}
-
-/**
- * The person's messages a run claimed as steering carry no run id, so the claim names them, and
- * one that answers the run's question is in `readRun` too. `run.started` adds nothing: the run's
- * prompt already says why it ran.
- */
-async function readExchange(
-  deps: Pick<ExecutorDeps, "prisma" | "sessionLog">,
-  runId: string,
-  sessionId: SessionId,
-): Promise<SessionEntry[]> {
-  const [written, claimed] = await Promise.all([
-    deps.sessionLog.readRun(runId),
-    deps.prisma.steeringMessage.findMany({
-      where: { runId, claimedAt: { not: null } },
-      select: { messageId: true },
-    }),
-  ]);
-  const steering = await Promise.all(
-    claimed.map(({ messageId }) => deps.sessionLog.readEntry(sessionId, EntryId.parse(messageId))),
-  );
-  const exchange = new Map<string, SessionEntry>();
-  for (const entry of [...written, ...steering]) {
-    if (entry && entry.type !== "run.started") exchange.set(entry.id, entry);
-  }
-  return [...exchange.values()].sort(
-    (left, right) => left.ts.localeCompare(right.ts) || left.seq - right.seq,
-  );
 }
 
 async function readEntriesOffChain(

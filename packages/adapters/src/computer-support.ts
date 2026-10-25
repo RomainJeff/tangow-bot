@@ -9,6 +9,7 @@ import type {
 } from "@rakazo/adapter-kit";
 import type { ComputerMode } from "@rakazo/contracts";
 import { WORKSPACE_ROOT } from "@rakazo/core";
+import { shellQuote } from "@rakazo/core/node/desktop-runtime";
 
 export function toComputerRef(computer: {
   homeKey: string;
@@ -178,4 +179,20 @@ function stripVirtualWorkspaceRoot(value: string): string | null {
   return portable.startsWith("/") ? portable.slice(1) : null;
 }
 
-export { shellQuote } from "@rakazo/core/node/desktop-runtime";
+export { shellQuote };
+
+/**
+ * Points `link` at `target`. `ln -sfn` would nest the link inside a real directory and succeed, so
+ * an empty directory is removed first, a directory with files in it fails, and the result is read
+ * back.
+ */
+export function linkWorkspaceCommand(target: string, link: string): string {
+  const [to, at] = [shellQuote(target), shellQuote(link)];
+  return [
+    `if [ -L ${at} ]; then rm -f ${at}`,
+    `elif [ -d ${at} ]; then rmdir ${at} 2>/dev/null || { echo ${shellQuote(`${link} has files in it, so it cannot link to ${target}`)} >&2; exit 1; }`,
+    `elif [ -e ${at} ]; then echo ${shellQuote(`${link} is a file, so it cannot link to ${target}`)} >&2; exit 1; fi`,
+    `ln -s ${to} ${at}`,
+    `[ "$(readlink ${at})" = ${to} ] || { echo ${shellQuote(`${link} does not link to ${target}`)} >&2; exit 1; }`,
+  ].join("\n");
+}

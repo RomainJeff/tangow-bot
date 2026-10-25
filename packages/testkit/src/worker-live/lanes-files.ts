@@ -1,9 +1,5 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { PiAgentRuntime } from "@rakazo/adapters";
 import { WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
-import { fileTask, nativeFileTask, toolResult } from "../file-task.js";
-import { startWorkerRun } from "../worker-run-fixture.js";
+import { nativeFileTask, toolResult } from "../file-task.js";
 import { call, finish, liveRun } from "./run.js";
 import type { Lane } from "./session.js";
 import { context, forward, sha256 } from "./session.js";
@@ -12,34 +8,9 @@ export const laneA: Lane = {
   id: "a",
   issue: "tâche fichier identique à baseline",
   scenario:
-    "A file task through the in-process tools and Pi native write, edit, read and ls in an E2B worker on its private volume",
-  passWhen: "The same final file content in both arms; tool names and result formats may differ",
+    "A file task through Pi native write, edit, read and ls in an E2B worker on its private volume",
+  passWhen: "The expected final file content, read back from the volume after the worker is gone",
   async run(live) {
-    const inProcess = await (async () => {
-      const seen: string[] = [];
-      let file: string | undefined;
-      const run = await startWorkerRun({
-        steps: fileTask(seen, () => {
-          file = readFileSync(
-            path.join(run.provider.volumePath("bot_private"), "notes.md"),
-            "utf8",
-          );
-        }),
-        runtime: () => new PiAgentRuntime(),
-      });
-      try {
-        const runId = await run.send("Write, edit, read and list a note.");
-        await run.continueRun(runId);
-        run.model.assertComplete();
-        const results = (await run.runEntries(runId)).flatMap((entry) =>
-          entry.type === "tool.result" ? [[entry.payload.output, entry.payload.isError]] : [],
-        );
-        return { seen, results, file };
-      } finally {
-        await run.close();
-      }
-    })();
-
     const seen: string[] = [];
     const worker = await liveRun(live, {
       steps: nativeFileTask(seen, () => {}),
@@ -54,12 +25,8 @@ export const laneA: Lane = {
         await files.read(worker.volumes.private!, "notes.md", context("a")),
       );
       return {
-        pass:
-          (await worker.status(runId)) === "completed" &&
-          inProcess.file === "alpha\ngamma\n" &&
-          file === inProcess.file,
+        pass: (await worker.status(runId)) === "completed" && file === "alpha\ngamma\n",
         observed: {
-          inProcessFile: inProcess.file,
           workerFileReadFromVolumeAfterDestroy: file,
           nativeToolResults: seen,
           loggedResultCount: results.length,

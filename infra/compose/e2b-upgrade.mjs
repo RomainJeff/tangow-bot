@@ -218,6 +218,18 @@ export class HomeUpgrade {
     console.log("Migrating existing homes to volumes, team homes first...");
     for (const computer of this.inventory.computers) {
       const name = encodeURIComponent(computer.id);
+      if (computer.homeStorage === "volumes") {
+        const carry = this.oneoff(
+          "scripts/carry-docker-volumes-to-e2b.ts",
+          ["--computer", computer.id, "--template", this.template],
+          path.join(this.state.backup, `${name}-result.json`),
+        );
+        if (carry.outcome !== "carried" && carry.outcome !== "already_on_e2b")
+          throw new Error(
+            `Docker volumes not carried to E2B: ${carry.refusal?.code ?? carry.outcome}`,
+          );
+        continue;
+      }
       const reportPath = path.join(this.state.backup, `${name}-plan.json`);
       const args = [
         "--computer",

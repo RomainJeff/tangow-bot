@@ -5,9 +5,8 @@ runs the bot's Pi harness with native file and `bash` tools on the bot's volumes
 (computer, browser, memory, integrations) stay on the API and worker processes, and the model key
 never enters the worker. The worker is destroyed when the run attempt ends.
 
-A run goes to a worker when `SANDBOX_PROVIDER=e2b` and the bot's computer keeps its home on volumes.
-Every other run stays in process, as on `docker`, which runs no workers. Docker workers are a later exploration
-([#317](https://github.com/RomainJeff/rakazo-bot/issues/317)).
+Every run goes to a worker. A Docker deployment runs its workers as containers instead
+([self-host](self-host.md)).
 
 To add a worker provider, see
 [how to add a worker provider](./implementation/pi-e2b/adding-a-worker-provider.md).
@@ -72,6 +71,17 @@ volumes. It migrates team homes before dedicated homes, verifies copied files an
 copies legacy user skills to the shared volumes. Original homes and old machines are retained.
 Detailed migration manifests are stored under `DATA_DIR/e2b-upgrade/`. The full data backup also
 retains folders outside the migration scope; backup traversal is independent of migration planning.
+
+A Docker computer whose home is already on Docker volumes (`DATA_DIR/volumes/rakazo-<volume-id>`)
+is carried the same way: setup stops it, copies the regular files of each of its volumes into an
+E2B volume of the same name, verifies their SHA-256 and mode, then switches the volume and the
+computer to E2B. A space's shared volume is copied once. Symbolic links, special files, empty
+folders and files over 1 GiB are never followed or copied; the plan lists them, a large file as
+`too_large`. Dotfiles and browser profiles in
+`DATA_DIR/homes` stay behind, as for a team home, so each bot starts E2B with a fresh browser and
+must sign in again to the sites it used. The local volume directories are left in place:
+delete them once the bots work on E2B. See
+[Carry Docker volumes to E2B](#carry-docker-volumes-to-e2b) to run it by hand.
 
 For noninteractive operation, supply `E2B_DOMAIN` and `E2B_API_KEY` through the environment or
 existing private configuration. Explicitly consent to the home move with `--migrate-existing`.
@@ -178,7 +188,7 @@ A new space on E2B gets a team computer whose home is on volumes. A dedicated co
 later takes the storage of its space's team computer. Its runs go to workers with no move.
 
 Until upgraded, a computer created before this release keeps its home in snapshots under `DATA_DIR`,
-and its runs stay in process. The setup command above moves these homes as part of the upgrade. The following manual commands are for controlled recovery or standalone moves with `scripts/migrate-home-to-volumes.ts`. The move is
+and the API refuses to start. The setup command above moves these homes as part of the upgrade. The following manual commands are for controlled recovery or standalone moves with `scripts/migrate-home-to-volumes.ts`. The move is
 one way: Rakazo has no command to move a home back to snapshots. The snapshot stays in `DATA_DIR`
 as the pre-move original, and nothing writes to it after the move.
 
@@ -244,6 +254,31 @@ one minute and Rakazo releases it. To release it at once, run the script with
 `--computer <computer-id> --clear-stale-move`. Then rerun the move with a new manifest path. It
 resumes the copy.
 
+### Carry Docker volumes to E2B
+
+For a Docker computer whose home is on Docker volumes, with the API and worker stopped:
+
+1. Stop the computer and list what each volume would copy and leave behind:
+
+   ```bash
+   $compose run --rm --no-deps api pnpm exec tsx scripts/setup-e2b-homes.ts --prepare <computer-id>
+   $compose run --rm --no-deps api pnpm exec tsx scripts/setup-e2b-homes.ts --inspect --plans
+   ```
+
+2. Carry it. The command prints a JSON report and exits with code 1 when it refuses:
+
+   ```bash
+   $compose run --rm --no-deps api pnpm exec tsx scripts/carry-docker-volumes-to-e2b.ts \
+     --computer <computer-id>
+   ```
+
+In each space, carry the team computer before the space's dedicated computers: it carries the
+shared volume, which their bots' workers also mount. If the command stops, rerun it: volumes already on
+E2B are skipped and the copy resumes. It refuses with `volume_not_empty` when the E2B volume holds
+files it did not copy, and with `volume_changed` when a local file changed during the copy. The
+local directories under `DATA_DIR/volumes` are never changed or deleted; delete them yourself once
+the bots work on E2B.
+
 ## Verify
 
 1. Check that `GET /health` reports `"sandbox": "e2b"`. A missing `E2B_API_KEY` reports `"none"`.
@@ -253,8 +288,7 @@ resumes the copy.
    ```
 
 2. Send a message to a bot whose computer is on volumes, and wait for the reply. Each model request
-   of a worker run logs `agent.worker.model_request` with the run's `runId` and `attemptId`. A run
-   that stays in process logs none:
+   of a worker run logs `agent.worker.model_request` with the run's `runId` and `attemptId`:
 
    ```bash
    $compose logs api worker | grep agent.worker.model_request

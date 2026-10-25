@@ -352,6 +352,106 @@ describe("a run whose bot runs in a guest", () => {
     expect(before.launches).toHaveLength(1);
   });
 
+  it("hands a throwing controller tool's failure to the model and finishes the run", async () => {
+    const run = await fixture({
+      tools: {
+        describe: () => ({
+          id: "fixture",
+          contractVersion: "1",
+          adapterVersion: "1",
+          capabilities: { discover: true, oauth: false, secretsBrokered: true },
+        }),
+        discoverTools: async () => [
+          { name: "publish_note", description: "Publish a note", inputSchema: { type: "object" } },
+        ],
+        execute() {
+          throw new Error("Fixture publish denied");
+        },
+      },
+      steps: [
+        {
+          expect() {},
+          response: { type: "tool", id: "publish", name: "publish_note", arguments: {} },
+        },
+        {
+          expect(request) {
+            expect(toolResult(request)).toContain("Fixture publish denied");
+          },
+          response: finishing[0]!.response,
+        },
+        finishing[1]!,
+      ],
+    });
+    const runId = await run.send("Publish the plan.");
+    await run.continueRun(runId);
+
+    run.model.assertComplete();
+    expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+      "completed",
+    );
+    expect(
+      (await run.runEntries(runId)).flatMap((entry) =>
+        entry.type === "tool.result" ? [entry.payload.isError] : [],
+      ),
+    ).toEqual([true, false]);
+  });
+
+  it("fails the run when the provider rejects the relayed call", async () => {
+    const run = await fixture({
+      steps: [
+        {
+          expect() {},
+          response: { type: "error", status: 400, message: "Fixture request rejected" },
+        },
+      ],
+    });
+    const runId = await run.send("Save a note.");
+    await run.continueRun(runId);
+
+    run.model.assertComplete();
+    expect(
+      await run.prisma.run.findUniqueOrThrow({
+        where: { id: runId },
+        select: { status: true, error: true },
+      }),
+    ).toEqual({ status: "failed", error: expect.stringContaining("Fixture request rejected") });
+    expect((await run.runEntries(runId)).filter((entry) => entry.type === "tool.call")).toEqual([]);
+  });
+
+  it("wakes a message sent during the run's last turn as a steering run", async () => {
+    const finalAsked = Promise.withResolvers<void>();
+    const answerFinal = Promise.withResolvers<void>();
+    const run = await fixture({
+      steps: [
+        finishing[0]!,
+        {
+          async expect() {
+            finalAsked.resolve();
+            await answerFinal.promise;
+          },
+          response: finishing[1]!.response,
+        },
+        ...finishing,
+      ],
+    });
+    const runId = await run.send("Write the plan.");
+    const first = run.continueRun(runId);
+    await finalAsked.promise;
+    expect(await run.send("Also add the budget.")).toBe(runId);
+    answerFinal.resolve();
+    await first;
+
+    const followUp = await run.prisma.run.findFirstOrThrow({ where: { trigger: "follow_up" } });
+    await run.continueRun(followUp.id);
+    run.model.assertComplete();
+    const started = (await run.runEntries(followUp.id)).find(
+      (entry) => entry.type === "run.started",
+    );
+    expect(started?.payload).toMatchObject({
+      trigger: { kind: "steering", entryId: followUp.sourceMessageId },
+    });
+  });
+
   it("pauses a guest's parallel tool batch at a connector approval, runs its sibling once, then runs the approved call at the controller", async () => {
     const published: string[] = [];
     const publish = { id: "publish", name: "publish_note", arguments: { title: "Plan" } };

@@ -57,7 +57,7 @@ Rakazo tools reach the harness through an MCP facade named `rakazo`. The facade 
 - **Context files.** The harness keeps reading `AGENTS.md` from the volume for now.
 - **Native tools after a pause.** A native tool called during the grace requests after a pause may still run in the VM. This is accepted: its effect stays inside the VM and the window is bounded.
 - **Egress.** Worker egress stays open for now. Filtering through an allowlist proxy is tracked in the infrastructure repository.
-- **Native loop.** The native loop is the target architecture. The A/B in P5 measures it but does not gate it. The in-process path will move to the same architecture on the Docker worker provider later.
+- **Native loop.** The native loop is the only agent loop. The A/B in P5 measured it without gating it. The in-process loop was removed once Docker deployments ran on workers too ([#317](https://github.com/RomainJeff/rakazo-bot/issues/317)).
 
 - **OpenCode.** OpenCode stays on the computer for P4; see the [execution decision](opencode-execution.md).
 

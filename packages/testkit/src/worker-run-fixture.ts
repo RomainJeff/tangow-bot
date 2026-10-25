@@ -20,7 +20,7 @@ import {
   InMemoryJobQueue,
   LocalAgentHomeStore,
   LocalArtifactStore,
-  PiAgentRuntime,
+  ModelCallRuntime,
   PostgresSessionLog,
   provisionComputer,
 } from "@rakazo/adapters";
@@ -108,6 +108,8 @@ export async function startWorkerRun<
   memoryProviders?: Parameters<typeof createRunExecutor>[0]["memoryProviders"];
   databaseUrl?: string;
   tools?: ConnectorProvider;
+  /** Values the controller masks wherever the model would see them. */
+  secrets?: string[];
   /**
    * Bills a catalog Anthropic model with a plain API key instead of a custom OpenAI-compatible
    * connection; the catalog entry points at the emulator for the fixture's lifetime.
@@ -125,6 +127,8 @@ export async function startWorkerRun<
   provider?: () => Provider;
   /** The bot's computer instead of the fake one on local volumes. */
   sandbox?: SandboxProvider;
+  /** The `DATA_DIR` the computer shares, homes included, as a Docker computer's supervisor does. */
+  dataDir?: string;
   mode?: "memory" | "child";
   /** The harness a `memory` guest runs instead of Pi native. */
   harness?: GuestHarness;
@@ -152,6 +156,8 @@ export async function startWorkerRun<
     : await openPgliteDatabase();
   const prisma = options.prisma?.(database.prisma) ?? database.prisma;
   const dir = await mkdtemp(path.join(tmpdir(), "rakazo-worker-run-"));
+  const dataDir = options.dataDir ?? path.join(dir, "data");
+  const homesRoot = options.dataDir ?? path.join(dir, "homes");
   const catalog =
     options.catalogModel ??
     (options.protocol === "anthropic"
@@ -214,7 +220,7 @@ export async function startWorkerRun<
             scope: computerScope,
             scopeKey: "worker-computer",
             homeKey: "worker-computer",
-            kind: "e2b",
+            kind: options.sandbox?.describe().id === "docker" ? "docker" : "e2b",
             homeStorage: "volumes",
           },
         });
@@ -290,7 +296,7 @@ export async function startWorkerRun<
         harness: options.harness,
       }) as unknown as Provider);
     const lifecycle = createWorkerLifecycle({ prisma, provider });
-    const runtime: AgentRuntime = options.runtime?.(prisma) ?? new PiAgentRuntime();
+    const runtime: AgentRuntime = options.runtime?.(prisma) ?? new ModelCallRuntime();
     const routing = options.runtime
       ? undefined
       : createRunWorkers({
@@ -306,16 +312,16 @@ export async function startWorkerRun<
       sessionLog,
       events,
       sandbox,
-      home: new LocalAgentHomeStore(path.join(dir, "homes")),
-      dataDir: path.join(dir, "data"),
-      artifacts: new LocalArtifactStore(path.join(dir, "data")),
+      home: new LocalAgentHomeStore(homesRoot),
+      dataDir,
+      artifacts: new LocalArtifactStore(dataDir),
       memory: options.memory ?? emptyMemory,
       memoryProviders: options.memoryProviders ?? { resolve: async () => null },
       secretStore,
       jobs: new InMemoryJobQueue(),
       skillLock: createInMemorySkillLock(),
       skillLearning: "off",
-      secrets: [],
+      secrets: options.secrets ?? [],
       connector: options.tools,
       runtime,
       workers,
@@ -375,8 +381,8 @@ export async function startWorkerRun<
           prisma,
           sandbox,
           events,
-          home: new LocalAgentHomeStore(path.join(dir, "homes")),
-          dataDir: path.join(dir, "data"),
+          home: new LocalAgentHomeStore(homesRoot),
+          dataDir,
           jobs: new InMemoryJobQueue(),
           workers: current.lifecycle,
         },
@@ -397,7 +403,7 @@ export async function startWorkerRun<
         prisma,
         sessionLog,
         sandbox,
-        home: new LocalAgentHomeStore(path.join(dir, "homes")),
+        home: new LocalAgentHomeStore(homesRoot),
         jobs: new InMemoryJobQueue(),
         events,
         workerId: "worker-fixture",

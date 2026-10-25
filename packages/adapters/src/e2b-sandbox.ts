@@ -28,7 +28,12 @@ import type { CommandHandle, CommandResult, ConnectionOpts } from "e2b";
 import { CommandExitError, ConnectionConfig, Sandbox, TimeoutError } from "e2b";
 import { sandboxIdleMs } from "./computer-idle.js";
 import { ComputerScreenUnavailableError } from "./computer-screens.js";
-import { normalizeWorkspacePath, shellQuote, workspacePath } from "./computer-support.js";
+import {
+  linkWorkspaceCommand,
+  normalizeWorkspacePath,
+  shellQuote,
+  workspacePath,
+} from "./computer-support.js";
 import {
   PORTABLE_TRANSFER_BATCH_BYTES,
   shouldSkipPortableWorkspaceFile,
@@ -140,22 +145,6 @@ export function e2bCreateOptions(botId: string, apiKey: string, volumeHome?: Vol
       ),
     }),
   };
-}
-
-/**
- * Points `link` at `target`. `ln -sfn` would nest the link inside a real directory and succeed, so
- * an empty directory is removed first, a directory with files in it fails, and the result is read
- * back.
- */
-export function linkWorkspaceCommand(target: string, link: string): string {
-  const [to, at] = [shellQuote(target), shellQuote(link)];
-  return [
-    `if [ -L ${at} ]; then rm -f ${at}`,
-    `elif [ -d ${at} ]; then rmdir ${at} 2>/dev/null || { echo ${shellQuote(`${link} has files in it, so it cannot link to ${target}`)} >&2; exit 1; }`,
-    `elif [ -e ${at} ]; then echo ${shellQuote(`${link} is a file, so it cannot link to ${target}`)} >&2; exit 1; fi`,
-    `ln -s ${to} ${at}`,
-    `[ "$(readlink ${at})" = ${to} ] || { echo ${shellQuote(`${link} does not link to ${target}`)} >&2; exit 1; }`,
-  ].join("\n");
 }
 
 // How the E2B SDK words a sandbox that no longer exists. It does not always say "not found":

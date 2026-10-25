@@ -15,6 +15,7 @@ import { getLogger } from "@rakazo/logging";
 import { expireComputerControl } from "./computer-control.js";
 import { scheduleComputerSleep, sleepComputerIfIdle } from "./computer-idle.js";
 import { performComputerUpdate } from "./computer-update.js";
+import { moveIdleDockerHomes } from "./docker-home-migration.js";
 import type { createRunExecutor } from "./executor.js";
 import { compactHistory } from "./history-compaction.js";
 import { runLinkPreviewJob } from "./link-preview/job.js";
@@ -22,6 +23,7 @@ import type { MemoryProviderResolver } from "./memory-provider-factory.js";
 import { deliverMessagingOutbound, mirrorMessagingOutbound } from "./messaging-delivery.js";
 import type { EncryptedSecretStore } from "./secrets.js";
 import { expireTaughtSkillTeaching } from "./teaching-session.js";
+import type { WorkerLifecycle } from "./worker-lifecycle.js";
 
 export function createBackgroundJobHandlers(deps: {
   executor: ReturnType<typeof createRunExecutor>;
@@ -40,6 +42,8 @@ export function createBackgroundJobHandlers(deps: {
   messaging?: MessagingSurface;
   /** Where link preview images are kept; without it `link.preview` jobs do nothing. */
   artifacts?: ArtifactStore;
+  /** Moves Docker homes onto volumes as their computers suspend. */
+  homeMove?: { prisma: PrismaClient; workers: WorkerLifecycle; dataDir: string };
 }): BackgroundJobHandlers {
   const deliverMessaging = async (runId?: string) => {
     if (!deps.messaging) return;
@@ -83,6 +87,22 @@ export function createBackgroundJobHandlers(deps: {
     },
     "computer.sleep": async (payload) => {
       await sleepComputerIfIdle(deps, payload.computerId);
+      // A Docker home still off volumes moves once its computer suspends, before its next boot.
+      if (deps.homeMove) {
+        await moveIdleDockerHomes(
+          deps.homeMove,
+          {
+            operationId: `computer.home-move:${payload.computerId}`,
+            traceId: `computer.home-move:${payload.computerId}`,
+            spaceId: "",
+            userId: "",
+            signal: new AbortController().signal,
+          },
+          payload.computerId,
+        ).catch((error: unknown) =>
+          getLogger().error("docker home move failed", error, { computerId: payload.computerId }),
+        );
+      }
     },
     "computer.control-expire": async (payload) => {
       if (await expireComputerControl(deps, payload.computerId, payload.leaseId)) {
