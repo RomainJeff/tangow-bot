@@ -1,5 +1,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { AgentRunRequest } from "@rakazo/adapter-kit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { builtinAgentTools } from "./builtin-tools.js";
 
 const fakeAgentState = vi.hoisted(() => ({
   thinkingLevels: [] as string[],
@@ -104,6 +106,7 @@ vi.mock("./pi-openai-compatible-provider.js", () => ({
   registerOpenAiCompatibleRuntime: (models: unknown) => models,
 }));
 
+import { catalogEntries, lazyCatalogTools } from "./lazy-tool-catalog.js";
 import { PiAgentRuntime } from "./pi-runtime.js";
 
 async function runWithModel(
@@ -123,6 +126,7 @@ async function runWithModel(
   }>,
   maxImagesPerPrompt?: number,
   instructions = "",
+  tools: AgentRunRequest["tools"] = [],
 ) {
   const runtime = new PiAgentRuntime();
   for await (const _event of runtime.run(
@@ -133,7 +137,7 @@ async function runWithModel(
       prompt: "hello",
       instructions,
       history: [],
-      tools: [],
+      tools,
       model: { provider, id: modelId, thinkingLevel, maxImagesPerPrompt },
       executeTool: vi.fn(async () => ({ ok: true })),
       resolveModel,
@@ -297,15 +301,32 @@ describe("Pi agent thinking level", () => {
     });
   });
 
-  it("gives a helper neither the thread's chat voice nor message_user", async () => {
+  it("gives a helper connector discovery without the thread's chat voice or message_user", async () => {
     const chatVoice =
       "## How you communicate with the user\n\nmessage_user is the only way to reach the user.";
     const signal = new AbortController().signal;
-    await runWithModel("plain-model", "test", signal, null, undefined, undefined, chatVoice);
+    const tools = lazyCatalogTools(
+      "mcp",
+      "mcp",
+      "MCP",
+      catalogEntries([
+        {
+          name: "mcp__notes__search",
+          description: "Search notes",
+          inputSchema: { type: "object" },
+        },
+      ]),
+    );
+    await runWithModel("plain-model", "test", signal, null, undefined, undefined, chatVoice, [
+      ...builtinAgentTools,
+      ...tools,
+    ]);
 
     const [thread, helper] = fakeAgentState.systemPrompts;
     expect(thread).toContain(chatVoice);
     expect(helper).not.toContain(chatVoice);
+    expect(helper).toContain("mcp__notes__search");
+    expect(helper).toContain("mcp_load_tool");
     const [, helperTools] = fakeAgentState.toolNames;
     expect(helperTools).toContain("web_search");
     expect(helperTools).not.toContain("message_user");

@@ -10,8 +10,8 @@ import { ConnectorError } from "./connector-error.js";
 export const DIRECT_TOOL_LIMIT = 20;
 export const TOOL_SEARCH_LIMIT = 10;
 export const SELECTED_SCHEMA_MAX_BYTES = 100_000;
-export const NAME_INDEX_MAX_NAMES = 200;
-export const NAME_INDEX_MAX_BYTES = 2_048;
+const INDEX_GROUP_NAME_LIMIT = 100;
+const CATALOG_INDEX_MAX_BYTES = 16_384;
 const MAX_QUERY_LENGTH = 200;
 const MAX_GROUP_LENGTH = 200;
 const MAX_TOOL_NAME_LENGTH = 200;
@@ -43,15 +43,10 @@ export function lazyCatalogTools(
   label: string,
   entries: CatalogEntry[] = [],
 ): ConnectorTool[] {
-  const indexText = formatNameIndexText(groupedNames(entries));
-  const embedIndex = indexText.length > 0 && fitsNameIndexBudget(groupedNames(entries));
-  const searchDescription = embedIndex
-    ? `Search connected ${label} tools. Empty query lists names by source. Pass group to expand one source.\n${indexText}`
-    : `Search connected ${label} tools. Empty query lists sources. Pass group to list names in one source, or query to search.`;
   return [
     {
       name: `${prefix}_search_tools`,
-      description: searchDescription,
+      description: `Search connected ${label} tools. Empty query lists sources. Pass group to list names in one source, or query to search.`,
       inputSchema: {
         type: "object",
         properties: {
@@ -147,8 +142,7 @@ export function searchCatalog(
 ): CatalogSearchResult {
   const query = String(args.query ?? "")
     .slice(0, MAX_QUERY_LENGTH)
-    .trim()
-    .toLowerCase();
+    .trim();
   const groupFilter = String(args.group ?? "")
     .slice(0, MAX_GROUP_LENGTH)
     .trim();
@@ -165,7 +159,7 @@ export function searchCatalog(
       }
       const group = scoped[0]!.group;
       const names = listNames(scoped);
-      if (!fitsNameIndexBudget([{ group, names }])) {
+      if (Buffer.byteLength(JSON.stringify(names), "utf8") > CATALOG_INDEX_MAX_BYTES) {
         return {
           group,
           count: names.length,
@@ -175,7 +169,7 @@ export function searchCatalog(
       return { group, names };
     }
     const grouped = groupedNames(scoped);
-    if (!fitsNameIndexBudget(grouped)) {
+    if (Buffer.byteLength(JSON.stringify(grouped), "utf8") > CATALOG_INDEX_MAX_BYTES) {
       return {
         groups: grouped.map(({ group, names }) => ({ group, count: names.length })),
         hint: "Pass group to list names in one source.",
@@ -189,22 +183,12 @@ export function searchCatalog(
     ? Math.max(1, Math.min(TOOL_SEARCH_LIMIT, Math.trunc(requested)))
     : TOOL_SEARCH_LIMIT;
   return {
-    tools: scoped
-      .map((entry) => ({ entry, score: catalogScore(entry, query) }))
-      .filter(({ score }) => score < 4)
-      .sort(
-        (left, right) =>
-          left.score - right.score ||
-          left.entry.tool.name.localeCompare(right.entry.tool.name) ||
-          left.entry.id.localeCompare(right.entry.id),
-      )
-      .slice(0, limit)
-      .map(({ entry }) => ({
-        id: entry.id,
-        name: entry.tool.name,
-        description: entry.tool.description.slice(0, MAX_DESCRIPTION_LENGTH),
-        readOnly: entry.tool.readOnly === true,
-      })),
+    tools: new Bm25Ranker().rank(query, scoped, limit).map(({ entry }) => ({
+      id: entry.id,
+      name: entry.tool.name,
+      description: entry.tool.description.slice(0, MAX_DESCRIPTION_LENGTH),
+      readOnly: entry.tool.readOnly === true,
+    })),
   };
 }
 
@@ -329,14 +313,65 @@ export function disambiguateInstalledToolNames(tools: ConnectorTool[]): Connecto
   });
 }
 
-export function formatNameIndexText(groups: Array<{ group: string; names: string[] }>): string {
-  return groups.map(({ group, names }) => `${group}:\n  ${names.join(", ")}`).join("\n");
-}
-
-export function fitsNameIndexBudget(groups: Array<{ group: string; names: string[] }>): boolean {
-  const nameCount = groups.reduce((total, group) => total + group.names.length, 0);
-  if (nameCount > NAME_INDEX_MAX_NAMES) return false;
-  return Buffer.byteLength(formatNameIndexText(groups), "utf8") <= NAME_INDEX_MAX_BYTES;
+export function catalogIndexText(tools: ConnectorTool[]): string {
+  const groups = tools
+    .filter((tool) => tool.catalog?.length)
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .flatMap((catalog) => {
+      const prefix = catalog.name.replace(/_execute_tool$/, "");
+      const byGroup = new Map<string, ConnectorTool[]>();
+      for (const { tool } of catalog.catalog!) {
+        const group = catalogGroupOf(tool);
+        const members = byGroup.get(group) ?? [];
+        members.push(tool);
+        byGroup.set(group, members);
+      }
+      return [...byGroup.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([group, members]) => ({
+          prefix,
+          group,
+          count: members.length,
+          names: members
+            .filter((tool) => members.length <= INDEX_GROUP_NAME_LIMIT || tool.featured)
+            .map((tool) => tool.name)
+            .sort((left, right) => left.localeCompare(right)),
+        }));
+    });
+  if (groups.length === 0) return "";
+  let omitted = false;
+  const render = () => {
+    const lines = ["## Connected tool catalog"];
+    let previous: string | undefined;
+    for (const { prefix, group, count, names } of groups) {
+      if (prefix !== previous) {
+        lines.push(
+          `\n${prefix}: use the tool search of your harness or ${prefix}_load_tool to discover parameters.`,
+        );
+        previous = prefix;
+      }
+      lines.push(`  ${group}: ${count} tools.${names.length ? `\n    ${names.join(", ")}` : ""}`);
+    }
+    if (omitted) lines.push("Additional groups omitted. Use tool search to discover them.");
+    return lines.join("\n");
+  };
+  let text = render();
+  // Trim the largest name lists first; all catalog entries remain available.
+  for (const group of [...groups].sort(
+    (left, right) =>
+      Buffer.byteLength(right.names.join(", "), "utf8") -
+      Buffer.byteLength(left.names.join(", "), "utf8"),
+  )) {
+    if (Buffer.byteLength(text, "utf8") <= CATALOG_INDEX_MAX_BYTES) return text;
+    group.names = [];
+    text = render();
+  }
+  while (Buffer.byteLength(text, "utf8") > CATALOG_INDEX_MAX_BYTES) {
+    groups.pop();
+    omitted = true;
+    text = render();
+  }
+  return text;
 }
 
 function catalogEntryId(tool: ConnectorTool): string {
@@ -378,15 +413,108 @@ function listNames(entries: CatalogEntry[]): string[] {
   );
 }
 
-function catalogScore(entry: CatalogEntry, query: string): number {
-  if (!query) return 0;
-  const name = entry.tool.name.toLowerCase();
-  const shortName = catalogShortName(entry).toLowerCase();
-  const description = entry.tool.description.toLowerCase();
-  const group = entry.group.toLowerCase();
-  if (name === query || shortName === query) return 0;
-  if (name.startsWith(query) || shortName.startsWith(query)) return 1;
-  if (name.includes(query) || shortName.includes(query) || group.includes(query)) return 2;
-  if (description.includes(query)) return 3;
-  return 4;
+const STOP_WORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "are",
+  "as",
+  "at",
+  "be",
+  "by",
+  "for",
+  "from",
+  "in",
+  "is",
+  "it",
+  "of",
+  "on",
+  "or",
+  "that",
+  "the",
+  "this",
+  "to",
+  "with",
+]);
+
+function stem(term: string): string {
+  if (term.length > 4 && term.endsWith("ies")) return `${term.slice(0, -3)}y`;
+  if (term.length > 4 && /(ches|shes|sses|xes|zes)$/.test(term)) return term.slice(0, -2);
+  if (term.length > 3 && term.endsWith("s") && !term.endsWith("ss")) return term.slice(0, -1);
+  return term;
+}
+
+function tokenize(text: string): string[] {
+  return text
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((term) => term.length > 0 && !STOP_WORDS.has(term))
+    .map(stem);
+}
+
+/** Okapi BM25 over tool names and descriptions, excluding schema text. */
+class Bm25Ranker {
+  private readonly k1 = 1.2;
+  private readonly b = 0.75;
+
+  rank(
+    query: string,
+    entries: CatalogEntry[],
+    limit: number,
+  ): Array<{ entry: CatalogEntry; score: number }> {
+    const queryTerms = [...new Set(tokenize(query))];
+    if (queryTerms.length === 0 || entries.length === 0 || limit <= 0) return [];
+    const nameScores = this.scores(
+      queryTerms,
+      entries.map(({ tool }) => `${tool.name} ${tool.name.replaceAll("_", " ")}`),
+    );
+    const descriptionScores = this.scores(
+      queryTerms,
+      entries.map(({ tool }) => tool.description),
+    );
+    // Weight name BM25 at 3x description BM25: plain BM25 buries named operations with long descriptions.
+    return entries
+      .map((entry, index) => ({
+        entry,
+        score: 3 * nameScores[index]! + descriptionScores[index]!,
+      }))
+      .filter(({ score }) => score > 0)
+      .sort(
+        (left, right) =>
+          right.score - left.score ||
+          left.entry.tool.name.localeCompare(right.entry.tool.name) ||
+          left.entry.id.localeCompare(right.entry.id),
+      )
+      .slice(0, limit);
+  }
+
+  private scores(queryTerms: string[], documents: string[]): number[] {
+    const termCounts = documents.map((text) => {
+      const counts = new Map<string, number>();
+      for (const term of tokenize(text)) counts.set(term, (counts.get(term) ?? 0) + 1);
+      return counts;
+    });
+    const lengths = termCounts.map((counts) =>
+      [...counts.values()].reduce((sum, count) => sum + count, 0),
+    );
+    const averageLength = lengths.reduce((sum, length) => sum + length, 0) / documents.length || 1;
+    const idf = new Map(
+      queryTerms.map((term) => {
+        const frequency = termCounts.filter((counts) => counts.has(term)).length;
+        return [term, Math.log(1 + (documents.length - frequency + 0.5) / (frequency + 0.5))];
+      }),
+    );
+    return documents.map((_document, index) => {
+      let score = 0;
+      for (const term of queryTerms) {
+        const count = termCounts[index]!.get(term);
+        if (!count) continue;
+        const norm = this.k1 * (1 - this.b + (this.b * lengths[index]!) / averageLength);
+        score += (idf.get(term) ?? 0) * ((count * (this.k1 + 1)) / (count + norm));
+      }
+      return score;
+    });
+  }
 }

@@ -2,7 +2,7 @@ import type { AgentRunRequest, ConnectorTool, WorkerStartV1 } from "@rakazo/adap
 import { describe, expect, it } from "vitest";
 import { catalogEntries, lazyCatalogTools } from "../lazy-tool-catalog.js";
 import { encodeMessage } from "./framing.js";
-import { workerStart } from "./guest-input.js";
+import { helperRunInput, workerStart } from "./guest-input.js";
 import { WORKER_LIMITS } from "./limits.js";
 
 const MiB = 1024 * 1024;
@@ -101,4 +101,31 @@ describe("a large catalog in worker.start", () => {
     expect(sent.fallback).toHaveLength(sent.entries * 3);
     expect(sent.unmarked).toHaveLength((1000 - sent.entries) * 3);
   });
+});
+
+it("gives helpers the connector name index while replacing the parent's instructions", () => {
+  const tools = catalog("mcp", 30, 20);
+  const run = helperRunInput(
+    ENVELOPE,
+    {
+      botId: "bot-1",
+      threadId: "thread-1",
+      prompt: "Parent task",
+      instructions: "Parent instructions",
+      history: [],
+      tools,
+      model: { provider: "test", id: "model" },
+    } as unknown as AgentRunRequest,
+    { name: "test", capabilities: [] },
+    {
+      task: "Helper task",
+      instructions: "Helper instructions",
+      model: { provider: "test", id: "model" },
+    },
+  );
+  expect(run.instructions).toContain("Helper instructions");
+  expect(run.instructions).not.toContain("Parent instructions");
+  expect(run.instructions).toContain("mcp__tool_29");
+  expect(run.instructions).toContain("mcp_load_tool");
+  expect(run.tools.filter((tool) => typeof tool.catalog === "object")).toHaveLength(30);
 });
