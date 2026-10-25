@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { computerSupportsUpdate } from "@rakazo/adapters";
-import type { ComputerStatus } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, computerScreenSize } from "@rakazo/core";
+import { type ComputerStatus, SandboxKind } from "@rakazo/contracts";
+import { ACTIVE_RUN_STATUSES, DEFAULT_COMPUTER_SCREEN } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 
 /** Mirrors computer.takeover: an execution lease blocks user control unless a takeover is pending. */
@@ -93,8 +93,8 @@ export function toComputerStatus(
           computer?.state === "error"
         ? computer.state
         : "stopped";
-  const screen = computerScreenSize(computer?.kind);
-  const kind = (computer?.kind ?? "fake") as ComputerStatus["kind"];
+  // A row left by a removed provider (daytona, box) reads as fake until its next boot replaces it.
+  const kind = SandboxKind.catch("fake").parse(computer?.kind);
   return {
     botId,
     mode: computer?.scope === "dedicated" ? "dedicated" : "team",
@@ -104,8 +104,8 @@ export function toComputerStatus(
     controlBotId: computer?.controlBotId ?? null,
     takeoverRequested: Boolean(computer?.controlRunId),
     screenAvailable: !computer?.maintenanceId && (state === "running" || state === "booting"),
-    screenWidth: screen.width,
-    screenHeight: screen.height,
+    screenWidth: DEFAULT_COMPUTER_SCREEN.width,
+    screenHeight: DEFAULT_COMPUTER_SCREEN.height,
     homeRevision: computer?.homeRevision ?? null,
     screenStamp: screenStamp(botScreenGeneration, computer),
     busyBotName,

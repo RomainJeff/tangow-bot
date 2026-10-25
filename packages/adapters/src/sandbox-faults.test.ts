@@ -3,10 +3,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { PortableFile, SandboxProvider } from "@rakazo/adapter-kit";
 import { afterEach, describe, expect, it } from "vitest";
-import { BoxSandboxEmulator } from "./box-emulator.js";
-import { DaytonaSandboxEmulator } from "./daytona-emulator.js";
 import { DesktopSandboxProvider } from "./desktop-sandbox.js";
-import { ManagedSandboxEmulator } from "./e2b-emulator.js";
+import { E2BSandboxEmulator } from "./e2b-emulator.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { provisionPrepared } from "./sandbox-test-support.js";
 
@@ -28,9 +26,7 @@ afterEach(async () => {
 
 describe.each([
   ["fake", () => Promise.resolve(new FakeSandboxProvider())],
-  ["managed emulator", () => Promise.resolve(new ManagedSandboxEmulator())],
-  ["Daytona emulator", () => Promise.resolve(new DaytonaSandboxEmulator())],
-  ["Box emulator", () => Promise.resolve(new BoxSandboxEmulator())],
+  ["managed emulator", () => Promise.resolve(new E2BSandboxEmulator())],
   [
     "desktop",
     async () => {
@@ -279,9 +275,7 @@ async function providerSet(label: string): Promise<Array<[string, SandboxProvide
   temporaryRoots.push(root);
   return [
     ["fake", new FakeSandboxProvider()],
-    ["managed", new ManagedSandboxEmulator()],
-    ["daytona", new DaytonaSandboxEmulator()],
-    ["box", new BoxSandboxEmulator()],
+    ["managed", new E2BSandboxEmulator()],
     ["desktop", new DesktopSandboxProvider({ root: await realpath(root) })],
   ];
 }

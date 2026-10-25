@@ -40,6 +40,7 @@ export {
   withValueAt,
 } from "./draft-fields.js";
 export * from "./draft-lines.js";
+export * from "./effect-phase.js";
 export * from "./events.js";
 export * from "./featured-connectors.js";
 export * from "./field-save.js";
@@ -92,3 +93,5 @@ export * from "./thread-subscription.js";
 export * from "./thread-time-markers.js";
 export * from "./tool-activity.js";
 export * from "./waiting-ask.js";
+export * from "./worker-plan.js";
+export * from "./worker-stop.js";

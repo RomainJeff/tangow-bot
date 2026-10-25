@@ -11,6 +11,7 @@ loadRootEnv();
 
 import {
   ChatSdkMessagingSurface,
+  composeWorkers,
   createBackgroundJobHandlers,
   createConnectorStack,
   createJobReconciler,
@@ -24,6 +25,7 @@ import {
   createSkillLineSweep,
   createTraceExporterFromEnv,
   createWebProvider,
+  createWorkerProvider,
   databaseCapacityBackoffMs,
   EncryptedSecretStore,
   ExpoPushProvider,
@@ -48,6 +50,7 @@ import {
   reconcileComputerUpdates,
   resolveDeploymentModel,
   resolveSandboxProvider,
+  resolveWorkerProvider,
   ScriptedAgentRuntime,
   SpaceDecisionProviderResolver,
   SpaceMemoryProviderResolver,
@@ -106,11 +109,6 @@ async function main() {
     supervisorUrl: process.env.SANDBOX_SUPERVISOR_URL ?? "http://127.0.0.1:7091",
     supervisorToken: sandboxProvider === "docker" ? resolveSupervisorToken(process.env) : undefined,
     e2bApiKey: process.env.E2B_API_KEY,
-    daytonaApiKey: process.env.DAYTONA_API_KEY,
-    daytonaApiUrl: process.env.DAYTONA_API_URL,
-    daytonaTarget: process.env.DAYTONA_TARGET,
-    boxApiKey: process.env.BOX_API_KEY,
-    boxApiUrl: process.env.BOX_API_URL ?? process.env.BOX_BASE_URL,
     dataDir,
     prisma,
   });
@@ -172,6 +170,7 @@ async function main() {
   const decisionProviders = new SpaceDecisionProviderResolver(prisma, secrets);
   const home = new LocalAgentHomeStore(dataDir);
   const artifacts = new LocalArtifactStore(dataDir);
+  const workers = composeWorkers(prisma, createWorkerProvider(resolveWorkerProvider(process.env)));
   const inMemoryJobs = process.env.WAKEUP_DRIVER === "memory" ? new InMemoryJobQueue() : undefined;
   const jobs: JobPublisher = inMemoryJobs ?? new GraphileJobPublisher(pool);
   const jobHost: JobWorkerHost =
@@ -204,6 +203,7 @@ async function main() {
     sessionLog,
     skillLock,
     runtime,
+    workers: workers.runWorkers,
     sandbox,
     memory,
     memoryProviders,
@@ -291,6 +291,7 @@ async function main() {
       sessionLog,
       lineOnlyMessages: skillLearning !== "off",
     }),
+    reconcileWorkers: workers.reconcileWorkers,
   });
   reconciler.start();
 

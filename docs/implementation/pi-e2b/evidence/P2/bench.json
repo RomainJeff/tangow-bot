@@ -1,0 +1,417 @@
+{
+  "generatedAt": "2026-10-19T20:19:49.121Z",
+  "host": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpus": 18,
+    "node": "v24.21.0"
+  },
+  "database": "PGlite in memory over the wire protocol, all repository migrations applied",
+  "arms": {
+    "in_process": "a scripted runtime in the controller's process runs each bash call through executeLocalTool: the same journaling and fenced claim, no channel, no model",
+    "memory": "the guest runs Pi in the controller's process over an in-memory channel",
+    "child": "the guest runs Pi in a child process over stdio frames"
+  },
+  "model": "startModelEmulator on loopback; Pi, its HTTP client and SSE parsing are real",
+  "measuredAt": "the controller's side of the channel: a tool.call read to its tool.grant sent (authorize), a tool.done read to its tool.recorded sent (ack)",
+  "order": "trials rotate the arms, so each arm runs first, second and third equally often",
+  "stopMeasure": "runtime.abort on a run whose guest sleeps in a granted bash call, until it resolves; an error is a stop not recorded as process ended and released",
+  "trials": 30,
+  "warmupTrials": 3,
+  "toolsPerRun": 5,
+  "budgets": {
+    "controlP95Ms": 200,
+    "stopConfirmMs": 10000
+  },
+  "control": {
+    "in_process": {
+      "errors": 0,
+      "firstToolOfAttempt": {
+        "controlMs": {
+          "count": 30,
+          "p50": 4.1,
+          "p95": 5.004,
+          "min": 3.796,
+          "max": 5.12
+        },
+        "authorizeMs": {
+          "count": 30,
+          "p50": 2.733,
+          "p95": 3.406,
+          "min": 2.502,
+          "max": 3.605
+        },
+        "ackMs": {
+          "count": 30,
+          "p50": 1.344,
+          "p95": 1.635,
+          "min": 1.192,
+          "max": 1.66
+        },
+        "queriesPerTool": {
+          "count": 30,
+          "p50": 15,
+          "p95": 15,
+          "min": 15,
+          "max": 15
+        },
+        "queryShareOfControl": 0.798
+      },
+      "laterTools": {
+        "controlMs": {
+          "count": 120,
+          "p50": 3.443,
+          "p95": 3.965,
+          "min": 3.063,
+          "max": 5.994
+        },
+        "authorizeMs": {
+          "count": 120,
+          "p50": 2.225,
+          "p95": 2.605,
+          "min": 1.977,
+          "max": 4.32
+        },
+        "ackMs": {
+          "count": 120,
+          "p50": 1.2,
+          "p95": 1.465,
+          "min": 1.056,
+          "max": 3.127
+        },
+        "queriesPerTool": {
+          "count": 120,
+          "p50": 13,
+          "p95": 13,
+          "min": 13,
+          "max": 13
+        },
+        "queryShareOfControl": 0.8
+      },
+      "warmupTools": {
+        "controlMs": {
+          "count": 15,
+          "p50": 4.01,
+          "p95": 10.849,
+          "min": 3.248,
+          "max": 10.849
+        },
+        "authorizeMs": {
+          "count": 15,
+          "p50": 2.463,
+          "p95": 8.258,
+          "min": 2.114,
+          "max": 8.258
+        },
+        "ackMs": {
+          "count": 15,
+          "p50": 1.367,
+          "p95": 2.997,
+          "min": 1.132,
+          "max": 2.997
+        },
+        "queriesPerTool": {
+          "count": 15,
+          "p50": 13,
+          "p95": 15,
+          "min": 13,
+          "max": 15
+        },
+        "queryShareOfControl": 0.785
+      },
+      "runMs": {
+        "count": 30,
+        "p50": 63.022,
+        "p95": 76.284,
+        "min": 59.407,
+        "max": 83.757
+      }
+    },
+    "memory": {
+      "errors": 0,
+      "firstToolOfAttempt": {
+        "controlMs": {
+          "count": 30,
+          "p50": 6.511,
+          "p95": 9.19,
+          "min": 6.005,
+          "max": 10.3
+        },
+        "authorizeMs": {
+          "count": 30,
+          "p50": 4.92,
+          "p95": 6.866,
+          "min": 4.473,
+          "max": 8.403
+        },
+        "ackMs": {
+          "count": 30,
+          "p50": 1.662,
+          "p95": 2.271,
+          "min": 1.48,
+          "max": 2.324
+        },
+        "queriesPerTool": {
+          "count": 30,
+          "p50": 20,
+          "p95": 20,
+          "min": 20,
+          "max": 20
+        },
+        "queryShareOfControl": 0.854
+      },
+      "laterTools": {
+        "controlMs": {
+          "count": 120,
+          "p50": 6.013,
+          "p95": 8.64,
+          "min": 5.028,
+          "max": 10.812
+        },
+        "authorizeMs": {
+          "count": 120,
+          "p50": 4.319,
+          "p95": 6.215,
+          "min": 3.628,
+          "max": 8.998
+        },
+        "ackMs": {
+          "count": 120,
+          "p50": 1.67,
+          "p95": 2.363,
+          "min": 1.355,
+          "max": 3.424
+        },
+        "queriesPerTool": {
+          "count": 120,
+          "p50": 17,
+          "p95": 17,
+          "min": 17,
+          "max": 17
+        },
+        "queryShareOfControl": 0.958
+      },
+      "warmupTools": {
+        "controlMs": {
+          "count": 15,
+          "p50": 7.664,
+          "p95": 16.249,
+          "min": 5.646,
+          "max": 16.249
+        },
+        "authorizeMs": {
+          "count": 15,
+          "p50": 5.557,
+          "p95": 13.464,
+          "min": 4.127,
+          "max": 13.464
+        },
+        "ackMs": {
+          "count": 15,
+          "p50": 2.052,
+          "p95": 2.785,
+          "min": 1.482,
+          "max": 2.785
+        },
+        "queriesPerTool": {
+          "count": 15,
+          "p50": 17,
+          "p95": 20,
+          "min": 17,
+          "max": 20
+        },
+        "queryShareOfControl": 0.933
+      },
+      "runMs": {
+        "count": 30,
+        "p50": 135.168,
+        "p95": 151.986,
+        "min": 126.515,
+        "max": 162.381
+      },
+      "guestBoot": {
+        "connectToHelloMs": {
+          "count": 30,
+          "p50": 0.068,
+          "p95": 0.106,
+          "min": 0.054,
+          "max": 0.119
+        },
+        "helloToStartMs": {
+          "count": 30,
+          "p50": 0.241,
+          "p95": 0.286,
+          "min": 0.211,
+          "max": 0.31
+        }
+      },
+      "withinBudget": true
+    },
+    "child": {
+      "errors": 0,
+      "firstToolOfAttempt": {
+        "controlMs": {
+          "count": 30,
+          "p50": 6.974,
+          "p95": 10.645,
+          "min": 6.404,
+          "max": 15.086
+        },
+        "authorizeMs": {
+          "count": 30,
+          "p50": 4.898,
+          "p95": 7.805,
+          "min": 4.405,
+          "max": 9.995
+        },
+        "ackMs": {
+          "count": 30,
+          "p50": 2.014,
+          "p95": 3.13,
+          "min": 1.699,
+          "max": 5.091
+        },
+        "queriesPerTool": {
+          "count": 30,
+          "p50": 19,
+          "p95": 19,
+          "min": 19,
+          "max": 19
+        },
+        "queryShareOfControl": 0.949
+      },
+      "laterTools": {
+        "controlMs": {
+          "count": 120,
+          "p50": 6.225,
+          "p95": 10.208,
+          "min": 5.131,
+          "max": 12.704
+        },
+        "authorizeMs": {
+          "count": 120,
+          "p50": 4.377,
+          "p95": 7.408,
+          "min": 3.491,
+          "max": 9.569
+        },
+        "ackMs": {
+          "count": 120,
+          "p50": 1.797,
+          "p95": 2.831,
+          "min": 1.444,
+          "max": 4.433
+        },
+        "queriesPerTool": {
+          "count": 120,
+          "p50": 17,
+          "p95": 17,
+          "min": 17,
+          "max": 17
+        },
+        "queryShareOfControl": 0.942
+      },
+      "warmupTools": {
+        "controlMs": {
+          "count": 15,
+          "p50": 7.634,
+          "p95": 11.018,
+          "min": 5.665,
+          "max": 11.018
+        },
+        "authorizeMs": {
+          "count": 15,
+          "p50": 5.468,
+          "p95": 9.022,
+          "min": 4.139,
+          "max": 9.022
+        },
+        "ackMs": {
+          "count": 15,
+          "p50": 2.009,
+          "p95": 3.175,
+          "min": 1.526,
+          "max": 3.175
+        },
+        "queriesPerTool": {
+          "count": 15,
+          "p50": 17,
+          "p95": 19,
+          "min": 17,
+          "max": 19
+        },
+        "queryShareOfControl": 0.955
+      },
+      "runMs": {
+        "count": 30,
+        "p50": 1387.119,
+        "p95": 1473.055,
+        "min": 1341.249,
+        "max": 1479.23
+      },
+      "guestBoot": {
+        "connectToHelloMs": {
+          "count": 30,
+          "p50": 1222.915,
+          "p95": 1299.413,
+          "min": 1187.022,
+          "max": 1301.977
+        },
+        "helloToStartMs": {
+          "count": 30,
+          "p50": 0.354,
+          "p95": 0.407,
+          "min": 0.313,
+          "max": 4.849
+        }
+      },
+      "withinBudget": true
+    }
+  },
+  "stop": {
+    "memory_guest_cooperates": {
+      "errors": 0,
+      "cancelToDestroyedMs": {
+        "count": 30,
+        "p50": 4.381,
+        "p95": 5.976,
+        "min": 3.564,
+        "max": 7.723
+      },
+      "withinBudget": true
+    },
+    "child_guest_cooperates": {
+      "errors": 0,
+      "cancelToDestroyedMs": {
+        "count": 30,
+        "p50": 17.23,
+        "p95": 21.954,
+        "min": 15.008,
+        "max": 26.563
+      },
+      "withinBudget": true
+    },
+    "memory_guest_ignores_cancel": {
+      "errors": 0,
+      "cancelToDestroyedMs": {
+        "count": 30,
+        "p50": 2008.864,
+        "p95": 2012.822,
+        "min": 2004.919,
+        "max": 2014.63
+      },
+      "withinBudget": true
+    },
+    "child_guest_ignores_cancel": {
+      "errors": 0,
+      "cancelToDestroyedMs": {
+        "count": 30,
+        "p50": 2031.761,
+        "p95": 2037.897,
+        "min": 2019.091,
+        "max": 2038.786
+      },
+      "withinBudget": true
+    }
+  }
+}

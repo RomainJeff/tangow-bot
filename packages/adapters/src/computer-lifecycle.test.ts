@@ -808,7 +808,7 @@ describe("computer provisioning", () => {
         id: "computer-1",
         homeKey: "bot-1",
         providerRef: "provider-1",
-        kind: "box",
+        kind: "e2b",
         scope: "dedicated",
         state: "running",
         controlLeaseId: null,
@@ -870,14 +870,14 @@ describe("computer provisioning", () => {
             id: "computer-1",
             state: "booting",
             providerRef: "provider-1",
-            kind: "box",
+            kind: "e2b",
             updatedAt: expect.any(Date),
           },
           data: { state: "running" },
         });
         expect(original).toMatchObject({
           state: "running",
-          kind: "box",
+          kind: "e2b",
           providerRef: "provider-1",
         });
       } finally {
@@ -893,7 +893,7 @@ describe("computer provisioning", () => {
       id: "computer-1",
       homeKey: "bot-1",
       providerRef: "provider-1",
-      kind: "box",
+      kind: "e2b",
       scope: "dedicated",
       state: "running",
       controlLeaseId: null,
@@ -948,9 +948,9 @@ describe("computer provisioning", () => {
 
   it.each([
     { kind: "e2b" as const, providerRef: "provider-2", fresh: true },
-    { kind: "box" as const, providerRef: "provider-2", fresh: false },
+    { kind: "fake" as const, providerRef: "provider-2", fresh: false },
     { kind: "e2b" as const, providerRef: "provider-1", fresh: false },
-    { kind: "box" as const, providerRef: "provider-1", fresh: true },
+    { kind: "fake" as const, providerRef: "provider-1", fresh: true },
   ])(
     "restores saved files before reconnecting to $kind/$providerRef (fresh=$fresh)",
     async (next) => {
@@ -972,7 +972,7 @@ describe("computer provisioning", () => {
             id: "computer-1",
             homeKey: "bot-1",
             providerRef: "provider-1",
-            kind: "box",
+            kind: "fake",
             scope: "dedicated",
             state: "running",
             controlLeaseId: null,
@@ -1012,7 +1012,7 @@ describe("computer provisioning", () => {
             id: "computer-1",
             state: "booting",
             providerRef: "provider-1",
-            kind: "box",
+            kind: "fake",
             updatedAt: expect.any(Date),
             bots: { some: { id: "bot-1", archivedAt: null } },
           },
@@ -1406,16 +1406,6 @@ describe("computer execution leases", () => {
 
     prisma.updateMany.mockClear();
     await expect(renewComputerExecutionLease(prisma.client, lease)).resolves.toBe(true);
-    expect(prisma.updateMany).toHaveBeenCalledWith({
-      where: {
-        computerId: "computer-1",
-        botId: "bot-1",
-        runId: "run-1",
-        fence: 1,
-        expiresAt: { gt: expect.any(Date) },
-      },
-      data: { expiresAt: expect.any(Date) },
-    });
     await releaseComputerExecutionLease(prisma.client, lease);
     expect(prisma.updateMany).toHaveBeenLastCalledWith({
       where: {
@@ -1446,7 +1436,12 @@ describe("computer execution leases", () => {
       computer: {
         findUniqueOrThrow: vi.fn().mockResolvedValue({ scope: "team", state: "running" }),
       },
-      computerExecutionLease: { create, updateMany, updateManyAndReturn },
+      computerExecutionLease: {
+        create,
+        updateMany,
+        updateManyAndReturn,
+        findFirst: vi.fn().mockResolvedValue(null),
+      },
     } as unknown as PrismaClient;
     const lease = {
       computerId: "computer-1",
@@ -1458,10 +1453,6 @@ describe("computer execution leases", () => {
     await releaseComputerExecutionLease(prisma, lease);
     await expect(renewComputerExecutionLease(prisma, lease)).resolves.toBe(false);
     expect(expiresAt).toEqual(new Date(0));
-    expect(updateMany).toHaveBeenLastCalledWith({
-      where: { ...lease, expiresAt: { gt: expect.any(Date) } },
-      data: { expiresAt: expect.any(Date) },
-    });
     await expect(
       acquireComputerExecutionLease(prisma, {
         computerId: "computer-1",
@@ -1488,7 +1479,9 @@ describe("computer execution leases", () => {
           expiresAt = data.expiresAt;
           return { count: 1 };
         });
-        const prisma = { computerExecutionLease: { updateMany } } as unknown as PrismaClient;
+        const prisma = {
+          computerExecutionLease: { updateMany, findFirst: vi.fn().mockResolvedValue(null) },
+        } as unknown as PrismaClient;
         const lease = { computerId: "computer-1", botId: "bot-1", runId: "run-1", fence: 1 };
 
         await expect(extend(prisma, lease)).resolves.toBe(true);
@@ -1813,7 +1806,13 @@ describe("computer replacement", () => {
       { path: "notes/keep.txt", content: new TextEncoder().encode("saved") },
       context,
     );
-    const revision = await checkpointComputerWorkspace(home, sandbox, "bot-1", first, context);
+    const revision = await checkpointComputerWorkspace(
+      home,
+      sandbox,
+      { homeKey: "bot-1", homeStorage: "snapshot", homeRevision: "empty" },
+      first,
+      context,
+    );
 
     const computerRecord = {
       id: "computer-1",

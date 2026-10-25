@@ -26,18 +26,19 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { NativeMenu } from "../components/native-menu";
 import { type MobileMe, type MobileModel, type MobileModelCredential, rpc } from "../lib/api";
 import { mobileTokens } from "../lib/appearance";
 import { useI18n } from "../lib/i18n";
-import { presentMessageActionSheet } from "../lib/message-action-sheet";
 import {
   cancelModelOAuthAttempt,
   finishModelOAuthAttempt,
   waitForModelOAuth,
 } from "../lib/model-auth";
-import { native, useResolvedAppearance, useThemedStyles } from "../lib/native";
+import { native, useThemedStyles } from "../lib/native";
 import { thinkingLevelLabel } from "../lib/thinking-level";
 
+const DEFAULT_THINKING = "default";
 const THINKING_LEVEL_OPTIONS: ThinkingLevel[] = [
   "minimal",
   "low",
@@ -55,7 +56,6 @@ type ModelSelection = {
 export default function Models() {
   const styles = useThemedStyles(createModelsStyles);
   const { t } = useI18n();
-  const colorScheme = useResolvedAppearance();
   const [catalog, setCatalog] = useState<MobileModel[]>([]);
   const [credentials, setCredentials] = useState<MobileModelCredential[]>([]);
   const [me, setMe] = useState<MobileMe | null>(null);
@@ -639,35 +639,30 @@ export default function Models() {
                   </View>
                 ) : null}
                 {showAdvanced && reasoning ? (
-                  <Pressable
-                    accessibilityRole="button"
+                  <NativeMenu
+                    title={t("Reasoning effort")}
                     accessibilityLabel={t("Reasoning effort")}
                     disabled={busy}
-                    onPress={() => {
-                      presentMessageActionSheet({
-                        title: t("Reasoning effort"),
-                        cancel: t("Cancel"),
-                        more: t("More"),
-                        colorScheme,
-                        actions: [
-                          {
-                            text: t("Default"),
-                            onPress: () => setThinkingLevel(null),
-                          },
-                          ...THINKING_LEVEL_OPTIONS.map((level) => ({
-                            text: thinkingLevelLabel(level),
-                            onPress: () => setThinkingLevel(level),
-                          })),
-                        ],
-                      });
-                    }}
+                    options={[
+                      { value: DEFAULT_THINKING, label: t("Default") },
+                      ...THINKING_LEVEL_OPTIONS.map((level) => ({
+                        value: level,
+                        label: thinkingLevelLabel(level),
+                      })),
+                    ]}
+                    selected={thinkingLevel ?? DEFAULT_THINKING}
+                    onSelect={(value) =>
+                      setThinkingLevel(
+                        THINKING_LEVEL_OPTIONS.find((level) => level === value) ?? null,
+                      )
+                    }
                     style={styles.modelRow}
                   >
                     <Text style={styles.modelLabel}>{t("Reasoning effort")}</Text>
                     <Text style={styles.helpLabel}>
                       {thinkingLevel ? thinkingLevelLabel(thinkingLevel) : t("Default")}
                     </Text>
-                  </Pressable>
+                  </NativeMenu>
                 ) : null}
                 {showAdvanced ? (
                   <View style={styles.modelRow}>

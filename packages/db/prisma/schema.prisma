@@ -171,6 +171,7 @@ model Space {
   createdByUser               User?                        @relation("SpaceCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
   createdAt                   DateTime                     @default(now())
   deletingAt                  DateTime?
+  skillIndexReceivedAt         DateTime?
   deletionClaimId             String?
   memberships                 SpaceMember[]
   bots                        Bot[]
@@ -212,6 +213,7 @@ model Space {
   linkPreviewCache            LinkPreviewCache[]
   linkPreviewReads            LinkPreviewRead[]
   conversationSessions        ConversationSession[]
+  volumes                     Volume[]
 
   @@unique([id, organizationId])
   @@index([organizationId, createdAt])
@@ -391,10 +393,12 @@ model Bot {
   steeringMessages  SteeringMessage[]
   mcpServers        BotMcpServer[]
   skills            BotSkill[]
+  volumeSkills      VolumeSkill[]
   groupMembers      ChatGroupMember[]
   botSecrets BotSecret[]
 
   externalConversations ExternalConversation[]
+  volumes               Volume[]
 
   @@unique([spaceId, spawnKey])
   @@index([spaceId, userId, archivedAt, pinned, updatedAt])
@@ -691,7 +695,20 @@ model Attempt {
   error      String?
   startedAt  DateTime  @default(now())
   finishedAt DateTime?
+  // The attempt's worker VM, all null on in-process attempts (attempts_worker_shape_check). SQL
+  // partial unique indexes allow one live worker per run and one attempt per provider VM.
+  workerState        String?
+  workerProviderKind String?
+  workerProviderRef  String?
+  workerStateAt      DateTime?
+  workerEnsureAt     DateTime?
+  // How far the controller got stopping the guest (attempts_stop_phase_check). The VM is gone
+  // only once workerState is released.
+  stopPhase          String?
+  stopPhaseAt        DateTime?
+  writtenVolumes     Volume[]  @relation("VolumeWriter")
 
+  @@unique([runId, fence])
   @@index([runId])
   @@map("attempts")
 }
@@ -950,6 +967,9 @@ model Computer {
   scopeKey                String                   @unique
   homeKey                 String                   @unique
   homeRevision            String                   @default("empty")
+  // "snapshot" or, on e2b only (computers_home_storage_check), "volumes": the home lives on its
+  // bots' private volumes and the space volume, and is never imported or exported automatically.
+  homeStorage             String                   @default("snapshot")
   kind                    String
   providerRef             String?
   state                   String                   @default("stopped")
@@ -969,10 +989,48 @@ model Computer {
   bots                    Bot[]
   executionLeases         ComputerExecutionLease[]
   maintenanceId           String?
+  homeMoveExpiresAt       DateTime?
   updates                 ComputerUpdate[]
 
   @@index([spaceId, scope])
   @@map("computers")
+}
+
+// A whole provider volume: one bot_private per bot, one space_shared per space (SQL partial unique
+// indexes, volumes_owner_shape_check). writerAttemptId is the single-writer lease, cleared only when
+// the holder's VM is confirmed gone. Owners restrict deletion so no provider volume is orphaned.
+model Volume {
+  id              String   @id @default(cuid())
+  kind            String
+  spaceId         String
+  space           Space    @relation(fields: [spaceId], references: [id], onDelete: Restrict)
+  botId           String?
+  bot             Bot?     @relation(fields: [botId], references: [id], onDelete: Restrict)
+  providerKind    String
+  providerRef     String?
+  ensureUntil     DateTime?
+  writerAttemptId String?
+  writerAttempt   Attempt? @relation("VolumeWriter", fields: [writerAttemptId], references: [id], onDelete: Restrict)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([spaceId])
+  @@index([writerAttemptId])
+  @@map("volumes")
+}
+
+/// A provider volume whose row was deleted, until the volume sweep deletes it at the provider.
+model VolumeDeletion {
+  providerKind String
+  providerRef  String
+  volumeId     String
+  /// Unique across deletion and reinsertion, so an older sweep cannot clear a fresh record.
+  generation   Int      @default(dbgenerated("nextval('volume_deletion_generation_seq'::regclass)"))
+  notBefore    DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@id([providerKind, providerRef])
+  @@map("volume_deletions")
 }
 
 model ComputerExecutionLease {
@@ -1465,4 +1523,22 @@ model IntegrationProviderConfig {
   updatedAt  DateTime @updatedAt
 
   @@map("integration_provider_configs")
+}
+
+/// Last complete skill observation from a bot's worker. Files stay on volumes.
+model VolumeSkill {
+  id          String   @id @default(cuid())
+  botId       String
+  bot         Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  source      String
+  name        String
+  description String
+  path        String
+  content     String
+  contentHash String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([botId, source, name])
+  @@map("volume_skills")
 }

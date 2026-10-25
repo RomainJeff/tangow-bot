@@ -16,7 +16,7 @@ Before starting a long job, warn once: pressing Stop on my reply also stops the 
 
 ## While it runs
 
-Stay silent on reminders that find the job still running. If the user asks, run `oc status <id> --detail` and give status in plain words: "Still working on it, it's running the tests now." Never paste raw status lines.
+Stay silent on reminders that find the job still running. If the user asks, run `<oc> status <id> --detail` and give status in plain words: "Still working on it, it's running the tests now." Never paste raw status lines.
 
 If a job runs much longer than announced (more than an hour), say so once and offer to stop it or keep going.
 

@@ -15,6 +15,7 @@ import type {
   ModelEmulatorStep,
 } from "./model-emulator.js";
 import { startModelEmulator } from "./model-emulator.js";
+import { startWorkerRun } from "./worker-run-fixture.js";
 
 type App = { request: (input: string, init?: RequestInit) => Promise<Response> };
 type Handles = Awaited<ReturnType<typeof createApp>>;
@@ -23,6 +24,45 @@ const fixtureOrigin = "http://127.0.0.1:5173";
 const fixtureKey = "offline-product-fixture-key";
 
 describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
+  it("runs the bench controller fixture on disposable PostgreSQL without a live provider", async () => {
+    const run = await startWorkerRun({
+      databaseUrl: process.env.DATABASE_URL!,
+      computerScope: "none",
+      steps: [
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            id: "say",
+            name: "message_user",
+            arguments: { message: "Done." },
+          },
+        },
+        {
+          expect() {},
+          response: {
+            type: "text",
+            text: JSON.stringify({ version: 1, results: ["Answered"], references: [] }),
+          },
+        },
+      ],
+    });
+    try {
+      const [database] = await run.prisma.$queryRaw<
+        Array<{ name: string }>
+      >`SELECT current_database() AS name`;
+      expect(database?.name).toMatch(/^worker_bench_[a-f0-9]{32}$/);
+      const runId = await run.send("Hello.");
+      await run.continueRun(runId);
+      run.model.assertComplete();
+      expect(await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).toMatchObject({
+        status: "completed",
+      });
+    } finally {
+      await run.close();
+    }
+  });
+
   it("discovers a fact only in an archived recap after compaction and answers without repeating file tools", async () => {
     let priorRunId = "";
     const toolResult = (request: ModelEmulatorRequest) =>

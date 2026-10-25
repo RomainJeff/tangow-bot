@@ -124,6 +124,7 @@ COPY --from=capture-builder /build/librakazo-xcapture.so /usr/local/lib/librakaz
 COPY --chmod=755 rakazo-browser /usr/local/bin/rakazo-browser
 COPY --chmod=755 rakazo-page-browser /usr/local/bin/rakazo-page-browser
 COPY --chmod=755 rakazo-terminal /usr/local/bin/rakazo-terminal
+COPY --chmod=755 rakazo-files /usr/local/bin/rakazo-files
 COPY --chmod=644 terminalrc /etc/xdg/xfce4/terminal/terminalrc
 COPY --chmod=644 zshrc /etc/rakazo/zshrc
 COPY --chmod=644 zshrc /etc/zsh/zshrc
@@ -146,7 +147,7 @@ COPY --chmod=644 screen-link-session.js /usr/share/novnc/screen-link-session.js
 # Strip CR so shebangs work even if the build context came from a CRLF checkout.
 RUN ldconfig \
   && sed -i 's/\r$//' /usr/local/bin/rakazo-computer /usr/local/bin/rakazo-computer-control /usr/local/bin/rakazo-browser /usr/local/bin/rakazo-page-browser \
-    /usr/local/bin/rakazo-terminal /etc/rakazo/zshrc /etc/xdg/xfce4/terminal/terminalrc \
+    /usr/local/bin/rakazo-terminal /usr/local/bin/rakazo-files /etc/rakazo/zshrc /etc/xdg/xfce4/terminal/terminalrc \
     /etc/rakazo/fluxbox/init /etc/rakazo/fluxbox/apps /etc/rakazo/fluxbox/menu
 EXPOSE 7070 6080 6081 6082 6083 6084 6085 6086 6087 6088 6089 6090 6091 6092 6093 6094 6095
 USER 1000:1000

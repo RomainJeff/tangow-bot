@@ -1,6 +1,8 @@
 import type {
   AgentRunRequest,
   AgentRuntimeEvent,
+  GuestBody,
+  HarnessTranscriptEntry,
   SemanticMemoryRecallRequest,
   SessionLog,
 } from "@rakazo/adapter-kit";
@@ -28,6 +30,9 @@ import {
   estimateToolSchemaTokens,
   formatRecalledMemory,
 } from "./history-compaction.js";
+import { manualLauncher, rawGuest, stillClock } from "./runtime-worker/raw-guest.test-support.js";
+import { createWorkerAgentRuntime } from "./runtime-worker/runtime.js";
+import { transcriptIngest } from "./runtime-worker/transcript.js";
 import { PostgresSessionLog } from "./session-log/postgres.js";
 import { recordingSessionLog } from "./session-log/recording.test-support.js";
 
@@ -43,6 +48,21 @@ beforeAll(() => {
   vi.stubEnv("RAKAZO_LOCAL_MAX_TOKENS", "32768");
 });
 afterAll(() => vi.unstubAllEnvs());
+
+/** The transcript event the session builds, after the model requests that produced it. */
+function nativeTranscript(
+  ingest: ReturnType<typeof transcriptIngest>,
+  messages: Extract<GuestBody, { type: "transcript" }>["messages"],
+) {
+  for (const _ of messages) ingest.requested("root");
+  const event = ingest.ingest(
+    "root",
+    { type: "transcript", dialect: "pi-ai", messages },
+    "pi-native",
+  );
+  if (typeof event === "string") throw new Error(event);
+  return event;
+}
 
 const RUN = "run-1";
 const BOT = "bot-1";
@@ -159,6 +179,7 @@ function fixture(
       findMany: vi.fn(async () => []),
     },
     attempt: {
+      count: vi.fn(async () => 0),
       create: vi.fn(async () => ({ id: "attempt-1" })),
       update: vi.fn(),
       updateMany: vi.fn(async () => ({ count: 1 })),
@@ -223,6 +244,7 @@ function fixture(
       thread: db.thread,
       routine: db.routine,
       sessionEntry: db.sessionEntry,
+      usageRecord: db.usageRecord,
       $transaction: db.$transaction.bind(db),
       $queryRaw: db.$queryRaw.bind(db),
     });
@@ -1058,6 +1080,351 @@ describe("interactive executor sessions with durable history", () => {
     };
   }
 
+  it.each(["text", "runtimeNotice", "privateFinalText"] as const)(
+    "preserves non-native Pi completion with %s and no transcript",
+    async (field) => {
+      const c = await conversation();
+      const content =
+        field === "privateFinalText"
+          ? JSON.stringify({ version: 1, results: ["Completed"], references: [] })
+          : "Legacy Pi completion";
+      await fixture({
+        database: c.prisma,
+        run: c.run,
+        runtime: async function* (request) {
+          const launcher = manualLauncher();
+          const runtime = createWorkerAgentRuntime({
+            launcher: launcher.launcher,
+            stops: { mark: async () => undefined },
+            clock: stillClock,
+          });
+          const guestTask = (async () => {
+            const launched = await launcher.launchedFor(request.runId);
+            const guest = rawGuest(launched.connect(), launched.capability);
+            await guest.hello();
+            guest.send(1, { type: "done", [field]: content });
+          })();
+          yield* runtime.run({
+            ...request,
+            attempt: request.attempt ?? { id: "raw-attempt", fence: 1 },
+          });
+          await guestTask;
+        },
+      }).request();
+      expect(await c.prisma.run.findUniqueOrThrow({ where: { id: c.run.id } })).toMatchObject({
+        status: "completed",
+      });
+      const parent = await c.parent();
+      expect(
+        (await c.log.readRun(c.run.id))
+          .filter((entry) => entry.type === "assistant.text")
+          .map((entry) => entry.payload.blocks),
+      ).toEqual(field === "runtimeNotice" ? [[{ kind: "text", text: content }]] : []);
+      expect(
+        parent.filter((entry) => entry.type === "run.recap").map((entry) => entry.payload.recap),
+      ).toEqual([
+        field === "privateFinalText"
+          ? { state: "available", facts: { version: 1, results: ["Completed"], references: [] } }
+          : { state: "missing", reason: field === "text" ? "invalid" : "absent" },
+      ]);
+    },
+  );
+
+  it.each(["missing", "empty", "present", "rejected", "late", "duplicate"] as const)(
+    "enforces native completion policy through a raw worker with %s transcript",
+    async (transcriptCase) => {
+      const c = await conversation();
+      const marker = "GUEST_PRIVATE_NOTICE_MUST_NOT_PUBLISH";
+      await fixture({
+        database: c.prisma,
+        run: c.run,
+        runtime: async function* (request) {
+          const launcher = manualLauncher({ name: "pi-native", capabilities: ["native-loop"] });
+          const runtime = createWorkerAgentRuntime({
+            launcher: launcher.launcher,
+            stops: { mark: async () => undefined },
+            clock: stillClock,
+          });
+          const guestTask = (async () => {
+            const launched = await launcher.launchedFor(request.runId);
+            const guest = rawGuest(launched.connect(), launched.capability, {
+              name: "pi-native",
+              capabilities: ["native-loop"],
+            });
+            await guest.hello();
+            let seq = 1;
+            const transcript = {
+              type: "transcript",
+              dialect: "pi-ai",
+              messages:
+                transcriptCase === "empty"
+                  ? []
+                  : [
+                      {
+                        role: "assistant",
+                        content: [{ type: "text", text: "PRIVATE_MODEL_PROSE" }],
+                      },
+                    ],
+            } satisfies Extract<GuestBody, { type: "transcript" }>;
+            // Each reported response needs a model request the controller relayed.
+            const responses =
+              transcriptCase === "duplicate" ? 2 : transcriptCase === "present" ? 1 : 0;
+            for (let i = 0; i < responses; i++) {
+              guest.send(seq, {
+                type: "model.request",
+                agent: "root",
+                dialect: "pi-ai",
+                call: { context: { messages: [] }, options: {} },
+              });
+              expect((await guest.replies(seq++)).at(-1)).toEqual({ type: "model.end" });
+            }
+            if (
+              transcriptCase === "empty" ||
+              transcriptCase === "present" ||
+              transcriptCase === "duplicate"
+            ) {
+              guest.send(seq, transcript);
+              expect(await guest.replies(seq++)).toEqual([{ type: "recorded" }]);
+            }
+            if (transcriptCase === "rejected") {
+              guest.send(seq++, { ...transcript, agent: "unknown-helper" });
+            } else if (transcriptCase === "duplicate") {
+              guest.send(seq++, transcript);
+            }
+            guest.send(seq++, {
+              type: "done",
+              text: marker,
+              privateFinalText: marker,
+              runtimeNotice: marker,
+            });
+            if (transcriptCase === "late") guest.send(seq++, transcript);
+          })();
+          yield* runtime.run({
+            ...request,
+            attempt: request.attempt ?? { id: "raw-attempt", fence: 1 },
+          });
+          await guestTask;
+        },
+      }).request();
+      const parent = await c.parent();
+      const trace = await c.log.readRun(c.run.id);
+      expect(JSON.stringify([...parent, ...trace])).not.toContain(marker);
+      expect(JSON.stringify([...parent, ...trace])).not.toContain("PRIVATE_MODEL_PROSE");
+      expect(trace.filter((entry) => entry.type === "assistant.text")).toEqual([]);
+      expect(parent.filter((entry) => entry.type === "run.recap")).toHaveLength(1);
+      expect(await c.prisma.run.findUniqueOrThrow({ where: { id: c.run.id } })).toMatchObject({
+        status: ["empty", "present", "duplicate"].includes(transcriptCase) ? "completed" : "failed",
+      });
+    },
+  );
+
+  it.each([
+    {
+      emptyTurns: 1,
+      expected:
+        "I completed the tool step but could not produce a final response. Please ask me to continue.",
+      privateText: false,
+    },
+    {
+      emptyTurns: 2,
+      expected:
+        "I completed the tool step but could not produce a final response. Please ask me to continue.",
+      privateText: true,
+    },
+    { emptyTurns: 2, expected: "", privateText: false },
+    { emptyTurns: 2, expected: "The final answer.", final: "The final answer.<|eos|>" },
+  ])(
+    "replays native tool work with $emptyTurns empty turns and final $final",
+    async ({ emptyTurns, expected, final, privateText }) => {
+      const c = await conversation();
+      const routine = await c.prisma.routine.create({
+        data: {
+          spaceId: "space-1",
+          userId: "user-1",
+          botId: BOT,
+          threadId: c.thread.id,
+          name: "Check",
+          prompt: "Check",
+          crons: [],
+        },
+      });
+      const run = privateText
+        ? c.run
+        : await c.prisma.run.update({
+            where: { id: c.run.id },
+            data: { trigger: "routine", routineId: routine.id },
+          });
+      await fixture({
+        database: c.prisma,
+        run,
+        runtime: async function* () {
+          yield { type: "text", text: "Private work" };
+          yield nativeTranscript(
+            transcriptIngest((text) => text),
+            [
+              {
+                role: "assistant",
+                content: [
+                  { type: "text", text: "Private work" },
+                  {
+                    type: "toolCall",
+                    id: "native-read",
+                    name: "read",
+                    arguments: { path: "notes.txt" },
+                  },
+                ],
+              },
+              { role: "toolResult", toolCallId: "native-read", content: "nothing to report" },
+              ...Array.from({ length: emptyTurns }, (_, index) => ({
+                role: "assistant",
+                content: index === 0 ? [] : [{ type: "text", text: "" }],
+              })),
+              ...(final ? [{ role: "assistant", content: [{ type: "text", text: final }] }] : []),
+            ],
+          );
+          yield {
+            type: "done",
+            text: "Private work",
+            runtimeNotice: "GUEST_PRIVATE_NOTICE_MUST_NOT_PUBLISH",
+          };
+        },
+      }).request();
+      const parent = await c.parent();
+      if (privateText) {
+        expect(
+          projectThreadItems(parent).flatMap((item) =>
+            item.kind === "message" && item.role === "bot"
+              ? item.blocks.flatMap((block) => (block.kind === "text" ? [block.text] : []))
+              : [],
+          ),
+        ).toEqual([expected]);
+      } else {
+        expect(
+          parent
+            .filter((entry) => entry.type === "routine.finished")
+            .map((entry) => entry.payload.result),
+        ).toEqual([expected]);
+      }
+      const logged = await c.log.readRun(run.id);
+      expect(
+        logged
+          .filter((entry) => entry.type === "assistant.text")
+          .flatMap((entry) =>
+            entry.payload.blocks.flatMap((block) => (block.kind === "text" ? [block.text] : [])),
+          ),
+      ).toEqual(expected ? [expected] : []);
+      expect(JSON.stringify(logged)).not.toContain("Private work");
+    },
+  );
+
+  it("closes only a harness's own call an earlier attempt cut, not a controller tool of its name", async () => {
+    const c = await conversation();
+    const call = (callId: string, native?: true) =>
+      c.prisma.$transaction((tx) =>
+        c.log.append(tx, {
+          sessionId: c.run.sessionId as SessionId,
+          botId: BOT,
+          runId: c.run.id,
+          type: "tool.call",
+          payload: { callId, name: "read", input: "{}", ...(native ? { native } : {}) },
+        }),
+      );
+    await call("harness-read", true);
+    await call("connector-read");
+    const run = await c.prisma.run.update({ where: { id: c.run.id }, data: { leaseFence: 1 } });
+    await fixture({ database: c.prisma, run }).request();
+
+    expect(
+      (await c.log.readRun(run.id)).flatMap((entry) =>
+        entry.type === "tool.result" ? [`${entry.payload.callId}: ${entry.payload.output}`] : [],
+      ),
+    ).toEqual([
+      "harness-read: The read call was interrupted, so its outcome is unknown. It was not replayed; check the state before retrying.",
+    ]);
+  });
+
+  it.each([
+    { empty: false, messageUser: false },
+    { empty: true, messageUser: false },
+    { empty: false, messageUser: true },
+    { empty: true, messageUser: true },
+  ])(
+    "keeps native recap and guest notice private, empty=$empty, messageUser=$messageUser",
+    async ({ empty, messageUser }) => {
+      const c = await conversation();
+      const recap = JSON.stringify({ version: 1, results: ["Found the answer"], references: [] });
+      await fixture({
+        database: c.prisma,
+        run: c.run,
+        runtime: async function* (request) {
+          const ingest = transcriptIngest((text) => text);
+          const args = { message: "The answer is 42." };
+          if (messageUser) {
+            const output = await request.executeTool!("message_user", args, "say");
+            ingest.answered(
+              { type: "tool.call", agent: "root", callId: "say", name: "message_user", args },
+              { type: "tool.result", output },
+            );
+          }
+          yield nativeTranscript(ingest, [
+            {
+              role: "assistant",
+              content: [
+                { type: "text", text: "Private work" },
+                ...(messageUser
+                  ? [
+                      {
+                        type: "toolCall",
+                        id: "guest-say",
+                        name: "message_user",
+                        arguments: args,
+                      },
+                    ]
+                  : []),
+              ],
+            },
+            { role: "assistant", content: [{ type: "text", text: recap }] },
+            ...(empty ? [{ role: "assistant", content: [] }] : []),
+          ]);
+          yield {
+            type: "done",
+            text: recap,
+            privateFinalText: recap,
+            runtimeNotice: "GUEST_PRIVATE_NOTICE_MUST_NOT_PUBLISH",
+          };
+        },
+      }).request();
+      const parent = await c.parent();
+      expect(
+        projectThreadItems(parent).filter((item) => item.kind === "message" && item.role === "bot"),
+      ).toEqual(
+        messageUser
+          ? [expect.objectContaining({ blocks: [{ kind: "text", text: "The answer is 42." }] })]
+          : [],
+      );
+      expect(
+        parent.filter((entry) => entry.type === "run.recap").map((entry) => entry.payload.recap),
+      ).toEqual([
+        empty
+          ? { state: "missing", reason: "absent" }
+          : {
+              state: "available",
+              facts: { version: 1, results: ["Found the answer"], references: [] },
+            },
+      ]);
+      const trace = await c.log.readRun(c.run.id);
+      expect(
+        trace
+          .filter((entry) => entry.type === "assistant.text")
+          .map((entry) => entry.payload.blocks),
+      ).toEqual(messageUser ? [[{ kind: "text", text: "The answer is 42." }]] : []);
+      expect(JSON.stringify(trace)).not.toContain("Private work");
+      expect(JSON.stringify([...parent, ...trace])).not.toContain(
+        "GUEST_PRIVATE_NOTICE_MUST_NOT_PUBLISH",
+      );
+    },
+  );
+
   it.each(["user", "follow_up"] as const)(
     "publishes a direct child bot's %s answer while its final words stay private",
     async (trigger) => {
@@ -1164,6 +1531,145 @@ describe("interactive executor sessions with durable history", () => {
         ],
       }),
     ]);
+  });
+
+  it("logs a native harness's own calls among the controller's as the attempt reports them", async () => {
+    const c = await conversation();
+    const secret = "hunter2-secret";
+    await fixture({
+      database: c.prisma,
+      run: c.run,
+      secrets: [secret],
+      sandbox: {
+        listFiles: async () => {
+          throw new Error("Path escapes the computer workspace");
+        },
+      },
+      runtime: async function* (request) {
+        const reported = (entries: HarnessTranscriptEntry[]) =>
+          ({ type: "transcript", entries, unverifiedCalls: 0 }) as const;
+        yield reported([
+          { kind: "text", turn: 0, text: "Looking first." },
+          {
+            kind: "call",
+            turn: 0,
+            callId: "bash-1",
+            name: "bash",
+            args: { command: `grep ${secret} notes.md` },
+          },
+          { kind: "controller", turn: 0, name: "list_files" },
+        ]);
+        yield reported([
+          { kind: "result", callId: "bash-1", output: `notes.md: ${secret}`, isError: false },
+        ]);
+        await request.executeTool!("list_files", { path: "/" }, "ls-1").catch(() => {});
+        yield reported([
+          { kind: "call", turn: 1, callId: "bash-2", name: "bash", args: { command: "false" } },
+        ]);
+        yield reported([
+          { kind: "result", callId: "bash-2", output: "exit 1", isError: true },
+          {
+            kind: "summary",
+            turn: 2,
+            summary: `Searched notes.md for ${secret}.`,
+            tokensBefore: 9000,
+          },
+        ]);
+        yield { type: "done", text: "Found it." };
+      },
+    }).request();
+    const logged = await c.log.readRun(c.run.id);
+
+    expect(
+      logged
+        .filter((entry) => entry.type.startsWith("tool.") || entry.type === "harness.summary")
+        .map(({ type, payload }) => ({ type, payload })),
+    ).toEqual([
+      {
+        type: "tool.call",
+        payload: {
+          callId: "bash-1",
+          name: "bash",
+          input: '{\n  "command": "grep [redacted] notes.md"\n}',
+          native: true,
+        },
+      },
+      {
+        type: "tool.result",
+        payload: {
+          callId: "bash-1",
+          output: "notes.md: [redacted]",
+          isError: false,
+          artifactIds: [],
+        },
+      },
+      {
+        type: "tool.call",
+        payload: { callId: "ls-1", name: "list_files", input: '{\n  "path": "/"\n}' },
+      },
+      {
+        type: "tool.result",
+        payload: {
+          callId: "ls-1",
+          output: "Path escapes the computer workspace",
+          isError: true,
+          artifactIds: [],
+        },
+      },
+      {
+        type: "tool.call",
+        payload: {
+          callId: "bash-2",
+          name: "bash",
+          input: '{\n  "command": "false"\n}',
+          native: true,
+        },
+      },
+      {
+        type: "tool.result",
+        payload: { callId: "bash-2", output: "exit 1", isError: true, artifactIds: [] },
+      },
+      {
+        type: "harness.summary",
+        payload: { summary: "Searched notes.md for [redacted].", tokensBefore: 9000 },
+      },
+    ]);
+    expect(
+      projectThreadItems(logged).flatMap((item) =>
+        item.kind === "message" && item.role === "bot"
+          ? item.blocks.flatMap((block) =>
+              block.kind === "steps" ? block.steps.map((step) => step.label) : [],
+            )
+          : [],
+      ),
+    ).toEqual(["Bash", "List files", "Bash"]);
+  });
+
+  it("logs nothing of a transcript once another worker holds the run", async () => {
+    const c = await conversation();
+    await fixture({
+      database: c.prisma,
+      run: c.run,
+      runtime: async function* () {
+        yield { type: "text", text: "" };
+        await c.prisma.run.update({
+          where: { id: c.run.id },
+          data: { leaseOwner: "worker-2", leaseFence: { increment: 1 } },
+        });
+        yield {
+          type: "transcript",
+          entries: [
+            { kind: "call", turn: 0, callId: "bash-1", name: "bash", args: { command: "ls" } },
+            { kind: "result", callId: "bash-1", output: "late", isError: false },
+          ],
+          unverifiedCalls: 0,
+        };
+      },
+    }).request();
+
+    expect(
+      (await c.log.readRun(c.run.id)).filter((entry) => entry.type.startsWith("tool.")),
+    ).toEqual([]);
   });
 
   it.each(["routine", "bot_message", "follow_up"] as const)(

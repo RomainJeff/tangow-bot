@@ -162,6 +162,7 @@ export default function Layout() {
                   }}
                 />
                 <Stack.Screen name="models" options={{ title: t("Models") }} />
+                <Stack.Screen name="computer-settings" options={{ title: t("Computer") }} />
                 <Stack.Screen name="voice" options={{ title: t("Voice") }} />
                 <Stack.Screen name="integrations" options={{ title: t("Integrations") }} />
                 <Stack.Screen name="skills" options={{ title: t("Skills") }} />

@@ -1,3 +1,4 @@
+import type { ThreadEntry } from "@rakazo/contracts";
 import {
   activeBotId,
   captureScreenshot,
@@ -9,6 +10,7 @@ import {
   signup,
 } from "./helpers";
 import { expect, type Page, test } from "./test";
+import { finishedRuns } from "./thread-log";
 
 test("Team Computer gives bots a home folder plus shared space while Private stays isolated", async ({
   page,
@@ -298,9 +300,7 @@ async function waitForRun(page: Page, botId: string, runId: string) {
       async () => {
         const snapshot = await threadSnapshot(page, botId);
         if (snapshot.run?.id === runId) return false;
-        return snapshot.entries.some(
-          (entry) => entry.type === "run.finished" && entry.runId === runId,
-        );
+        return finishedRuns(snapshot.entries).some((entry) => entry.runId === runId);
       },
       {
         timeout: realSandboxTimeout(90_000, 20_000),
@@ -321,7 +321,7 @@ async function waitForIdle(page: Page, botId: string) {
 function threadSnapshot(page: Page, botId: string) {
   return rpc<{
     run: { id: string; status: string } | null;
-    entries: Array<{ type: string; runId?: string }>;
+    entries: ThreadEntry[];
   }>(page, "threads/get", { botId });
 }
 

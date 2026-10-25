@@ -43,6 +43,36 @@ describe("LocalAgentHomeStore path containment", () => {
     expect(exported.sort()).toEqual([".revision", "result.txt"]);
   });
 
+  it("scopes migration traversal to bot and shared folders before reading excluded entries", async () => {
+    const { root, home } = await fixture();
+    await mkdir(path.join(home, "bots/ada"), { recursive: true });
+    await mkdir(path.join(home, "shared"));
+    await mkdir(path.join(home, "legacy"));
+    await writeFile(path.join(home, "bots/ada/note.txt"), "private");
+    await writeFile(path.join(home, "shared/note.txt"), "shared");
+    await writeFile(path.join(home, "legacy/document.txt"), "retained");
+    await symlink("../legacy", path.join(home, "shared/legacy"));
+    await chmod(path.join(home, "legacy"), 0);
+    try {
+      const scoped = new LocalAgentHomeStore(root, ["bots", "shared"]);
+      const tree = await scoped.listTree("bot-1", context);
+      expect(tree.map((entry) => entry.path).sort()).toEqual([
+        "bots",
+        "bots/ada",
+        "bots/ada/note.txt",
+        "shared",
+        "shared/legacy",
+        "shared/note.txt",
+      ]);
+      const files = [];
+      for await (const file of scoped.exportHome("bot-1", context)) files.push(file.path);
+      expect(files.sort()).toEqual(["bots/ada/note.txt", "shared/note.txt"]);
+    } finally {
+      await chmod(path.join(home, "legacy"), 0o700);
+    }
+    expect(await readFile(path.join(home, "legacy/document.txt"), "utf8")).toBe("retained");
+  });
+
   it("rejects lexical traversal and sibling-prefix paths", async () => {
     const { store } = await fixture();
     await expect(store.readFile("bot-1", "../../homes-other/secret", context)).rejects.toThrow(

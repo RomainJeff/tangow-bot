@@ -46,6 +46,14 @@ describe("redactSecrets", () => {
     );
   });
 
+  it("still decodes JSON that opens after whitespace or as a string literal", () => {
+    // `\u0074` spells the secret's first letter, so only a decoded parse can find it.
+    expect(redactSecrets(' \n {"note":"\\u0074oken"}', ["token"])).toBe(
+      ' \n {"note":"[redacted]"}',
+    );
+    expect(redactSecrets('"\\u0074oken"', ["token"])).toBe('"[redacted]"');
+  });
+
   it("masks a field when nested JSON exceeds the shared work budget", () => {
     let input = "public";
     for (let i = 0; i < 20; i++) input = JSON.stringify(input);

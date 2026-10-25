@@ -1,0 +1,2 @@
+#!/bin/sh
+exec pcmanfm "$(getent passwd "$(id -u)" | cut -d: -f6)"

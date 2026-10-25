@@ -18,7 +18,11 @@ export interface ScreenProxyTarget {
   port: number;
   path: string;
   interactive: boolean;
+  /** Host header for a gateway that routes screens by host name. */
+  host?: string;
 }
+
+const HOST_HEADER = /^[a-z0-9.-]+(?::\d{1,5})?$/i;
 
 export function isScreenProxyTarget(value: unknown): value is ScreenProxyTarget {
   if (!value || typeof value !== "object") return false;
@@ -35,7 +39,9 @@ export function isScreenProxyTarget(value: unknown): value is ScreenProxyTarget 
     typeof target.path === "string" &&
     target.path.startsWith("/") &&
     !/[\r\n]/.test(target.path) &&
-    typeof target.interactive === "boolean"
+    typeof target.interactive === "boolean" &&
+    (target.host === undefined ||
+      (typeof target.host === "string" && HOST_HEADER.test(target.host)))
   );
 }
 
@@ -45,8 +51,10 @@ export function sealScreenCapability(
   origin: string,
   scope: ScreenCapabilityScope,
   now = Date.now(),
+  host?: string,
 ) {
   const target = new URL(url);
+  if (host !== undefined && !HOST_HEADER.test(host)) throw new Error("Invalid screen host");
   if (target.protocol !== "https:" && target.protocol !== "http:")
     throw new Error("Invalid screen protocol");
   const policy = target.searchParams.get("view_only") === "false" ? "control" : "view";
@@ -57,7 +65,7 @@ export function sealScreenCapability(
   });
   cipher.setAAD(Buffer.from(`${policy}:${expiresAt}`));
   const ciphertext = Buffer.concat([
-    cipher.update(JSON.stringify({ url, scope }), "utf8"),
+    cipher.update(JSON.stringify({ url, scope, host }), "utf8"),
     cipher.final(),
   ]);
   const token = Buffer.concat([iv, cipher.getAuthTag(), ciphertext]).toString("base64url");
@@ -119,6 +127,8 @@ export function openScreenCapability(
       (!isAllowedTargetName(target.hostname) || port < 1024 || port > 65535)
     )
       return null;
+    const host: unknown = payload.host;
+    if (host !== undefined && (typeof host !== "string" || !HOST_HEADER.test(host))) return null;
     const interactive = match[1] === "control";
     const requestedPath = `${match[4] || target.pathname || "/"}${match[5] || ""}`;
     return {
@@ -130,6 +140,7 @@ export function openScreenCapability(
         port,
         path: screenPolicyPath(remoteTargetPath(target, requestedPath), interactive),
         interactive,
+        ...(host ? { host } : {}),
       },
     };
   } catch {
@@ -161,6 +172,8 @@ function remoteTargetPath(target: URL, requestedPath: string) {
 function isAllowedTargetName(hostname: string) {
   return (
     hostname === "localhost" ||
+    // RFC 6761 reserves *.localhost for loopback, e.g. a self-hosted E2B proxy forwarded locally.
+    /^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.localhost$/i.test(hostname) ||
     hostname === "127.0.0.1" ||
     hostname === "::1" ||
     /^10\.(?:\d{1,3}\.){2}\d{1,3}$/.test(hostname) ||

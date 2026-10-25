@@ -1,4 +1,15 @@
 export const ZH_MESSAGES: Record<string, string> = {
+  "Private Computer": "专用电脑",
+  Bots: "机器人",
+  "Busy. Try again when idle.": "正在使用。请在空闲时重试。",
+  "Could not queue update. Try again.": "无法将更新加入队列。请重试。",
+  "Could not update computers": "无法更新电脑",
+  "No computers": "没有电脑",
+  Stopped: "已停止",
+  "Update all computers": "更新所有电脑",
+  "Updates queued: {count}": "已排队的更新：{count}",
+  "Updates unavailable": "更新不可用",
+  "Content lives on the shared volume.": "内容存放在共享卷上。",
   "Update your server to use AI data sharing in this mobile version.":
     "请更新服务器，以便在此移动版本中使用 AI 数据共享功能。",
   "Release computer": "释放电脑",
@@ -8,6 +19,8 @@ export const ZH_MESSAGES: Record<string, string> = {
 
   "Recovery is unavailable until the previous operation has stopped.":
     "上一次操作停止之前，无法恢复。",
+  "Computer updated": "电脑已更新",
+  "Computer recovered": "电脑已恢复",
   "Continue in Background": "在后台继续",
   "Could not complete action": "无法完成操作",
   Dismiss: "关闭",

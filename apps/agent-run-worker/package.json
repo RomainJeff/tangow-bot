@@ -1,0 +1,31 @@
+{
+  "name": "@rakazo/agent-run-worker",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./bundle": "./scripts/bundle.ts",
+    "./template": "./template/template.ts"
+  },
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "bundle": "tsx scripts/bundle.ts",
+    "tools:manifest": "tsx src/harness/generate-manifest.ts",
+    "template:build": "tsx template/build.ts",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --root ../.. apps/agent-run-worker/src"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "1.3.0",
+    "@rakazo/adapter-kit": "workspace:*",
+    "@rakazo/adapters": "workspace:*"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "e2b": "2.49.1",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  }
+}

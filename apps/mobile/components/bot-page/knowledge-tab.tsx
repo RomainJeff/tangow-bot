@@ -4,7 +4,8 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { rpc } from "../../lib/api";
 import { useMemoryScopeChoice } from "../../lib/bot-choices";
-import { type BotPageContext, useBotField } from "../../lib/bot-page";
+import type { BotPageContext } from "../../lib/bot-page";
+import { useBotField } from "../../lib/bot-page";
 import { dateLocaleForUi, useI18n } from "../../lib/i18n";
 import { FileList } from "./files";
 import {
@@ -137,7 +138,7 @@ function SkillsGroup({ page }: { page: BotPageContext }) {
   };
 
   const listed = read.kind === "ready" ? filterSkillList(read.value, { botId }) : [];
-  // No search on iPhone: the skills a bot can switch lead, the always-on builtins follow.
+  // No search on iPhone: the skills a bot can switch lead, the always-on managed skills follow.
   const skills = [
     ...listed.filter((entry) => entry.source !== "builtin"),
     ...listed.filter((entry) => entry.source === "builtin"),
@@ -219,7 +220,7 @@ function SkillRow({
       meta={<SaveMeta state={access.state} onRetry={access.retry} />}
       control={
         // Builtins are always on for every bot; only the rest carry a switch.
-        entry.source === "builtin" ? null : (
+        entry.source !== "user" ? null : (
           <InkSwitch
             accessibilityLabel={entry.name}
             value={access.value}

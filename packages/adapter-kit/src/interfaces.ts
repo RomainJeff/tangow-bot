@@ -91,6 +91,16 @@ export interface SandboxProvider {
       homePath: string;
       providerRef?: string;
       providerKind?: ComputerRef["kind"];
+      /**
+       * A home kept on worker volumes: mount each at its path and serve the workspace from `root`.
+       * Only a provider that supports worker volumes receives one. A machine that mounts another
+       * set is replaced, after `archive` received its files that are on no volume.
+       */
+      volumeHome?: {
+        root: string;
+        mounts: Array<{ volumeRef: string; path: string }>;
+        archive(files: AsyncIterable<PortableFile>): Promise<void>;
+      };
     },
     context: AdapterContext,
   ): Promise<ComputerRef>;
@@ -151,6 +161,8 @@ export interface SandboxProvider {
   keepAlive?(computer: ComputerRef): Promise<void>;
   /** Drop a single-screen graphical claim for this bot so another Team bot can use the display. */
   releaseScreen?(computer: ComputerRef, context: AdapterContext): Promise<void>;
+  /** Keep what lives only on the machine's own disk before a replacement destroys it. */
+  preserveBeforeReplace?(computer: ComputerRef, context: AdapterContext): Promise<void>;
   stop(computer: ComputerRef, context: AdapterContext): Promise<void>;
   destroy(computer: ComputerRef, context: AdapterContext): Promise<void>;
 }
@@ -251,12 +263,22 @@ export interface JobWorkerHost {
   stop(): Promise<void>;
 }
 
+export interface HomeTreeEntry {
+  path: string;
+  kind: "file" | "dir" | "symlink" | "other";
+}
+
 export interface AgentHomeStore {
   describe(): AdapterDescriptor<{ revisions: boolean }>;
   checkout(botId: string, dest: string, context: AdapterContext): Promise<string>;
   commit(botId: string, src: string, context: AdapterContext): Promise<string>;
   restore(botId: string, revision: string, dest: string, context: AdapterContext): Promise<void>;
   exportHome(botId: string, context: AdapterContext): AsyncIterable<PortableFile>;
+  /**
+   * Every entry of the home without following symlinks, where `exportHome` follows them and
+   * yields only files.
+   */
+  listTree(botId: string, context: AdapterContext): Promise<HomeTreeEntry[]>;
   readFile(
     botId: string,
     path: string,

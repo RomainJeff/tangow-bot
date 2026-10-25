@@ -105,6 +105,50 @@
           }
         }
       }
+    },
+    {
+      "includes": ["apps/agent-run-worker/src/**", "!apps/agent-run-worker/src/harness/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@earendil-works/pi-ai": "Only a harness adapter (apps/agent-run-worker/src/harness/) or a model dialect (runtime-worker/dialects/) may import an agent SDK.",
+                  "@earendil-works/pi-agent-core": "Only a harness adapter (apps/agent-run-worker/src/harness/) or a model dialect (runtime-worker/dialects/) may import an agent SDK.",
+                  "@earendil-works/pi-coding-agent": "Only a harness adapter (apps/agent-run-worker/src/harness/) or a model dialect (runtime-worker/dialects/) may import an agent SDK.",
+                  "@rakazo/adapters": "Only a harness adapter (apps/agent-run-worker/src/harness/) or a model dialect (runtime-worker/dialects/) may import an agent SDK.",
+                  "@rakazo/adapters/runtime-worker/pi-ai": "Only a harness adapter (apps/agent-run-worker/src/harness/) or a model dialect (runtime-worker/dialects/) may import an agent SDK.",
+                  "@rakazo/adapters/pi-runtime": "Only a harness adapter (apps/agent-run-worker/src/harness/) or a model dialect (runtime-worker/dialects/) may import an agent SDK."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/adapters/src/runtime-worker/**",
+        "!packages/adapters/src/runtime-worker/dialects/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@earendil-works/pi-ai": "Only a harness adapter (apps/agent-run-worker/src/harness/) or a model dialect (runtime-worker/dialects/) may import an agent SDK.",
+                  "@earendil-works/pi-agent-core": "Only a harness adapter (apps/agent-run-worker/src/harness/) or a model dialect (runtime-worker/dialects/) may import an agent SDK.",
+                  "@earendil-works/pi-coding-agent": "Only a harness adapter (apps/agent-run-worker/src/harness/) or a model dialect (runtime-worker/dialects/) may import an agent SDK."
+                }
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }

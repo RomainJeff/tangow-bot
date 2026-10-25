@@ -13,7 +13,7 @@ import {
   containsSecret,
   findSkillByName,
   isSkillVisible,
-  mergeBuiltinSkills,
+  mergeManagedSkills,
   parseSkillMd,
   SANDBOX_SKILL_MOUNTS,
   searchSkills,
@@ -23,7 +23,7 @@ import {
 } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
-import { loadBuiltinSkills } from "./builtin-skills.js";
+import { loadManagedSkills } from "./managed-skills.js";
 import type { SkillOwnerLock } from "./skill-lock.js";
 import type { SkillTreeFile } from "./skill-store.js";
 import {
@@ -70,8 +70,8 @@ export type SkillToolDeps = {
   lock: SkillOwnerLock;
 };
 
-async function builtinRecords(): Promise<Array<SkillRecord & { id: string }>> {
-  return (await loadBuiltinSkills()).map((skill) => ({
+async function managedRecords(): Promise<Array<SkillRecord & { id: string }>> {
+  return (await loadManagedSkills()).map((skill) => ({
     id: `builtin:${skill.name}`,
     name: skill.name,
     description: skill.description,
@@ -99,7 +99,7 @@ export function userSkillsOpenedIn<T extends { id: string; name: string; source:
 }
 
 function readOnlyError(skill: { source: string; readOnly: boolean }): string | undefined {
-  if (skill.readOnly || skill.source !== "user") return "Builtin skills are read-only.";
+  if (skill.readOnly || skill.source !== "user") return "Managed skills are read-only.";
   return undefined;
 }
 
@@ -137,13 +137,12 @@ export async function listAgentSkillRecords(
   deps: SkillToolDeps,
   owner: SkillOwner,
 ): Promise<Array<SkillRecord & { id: string }>> {
-  const [builtins, userSkills] = await Promise.all([
-    builtinRecords(),
+  const [managed, userSkills] = await Promise.all([
+    managedRecords(),
     listUserSkills(userSkillsRoot(deps.dataDir, owner)),
   ]);
-  // Builtins join the catalog before filtering: a user skill shadows a same-named builtin,
-  // and per-bot availability applies to builtins too.
-  const records = mergeBuiltinSkills(builtins, userSkills);
+  // Managed skills win name collisions and ignore legacy visibility settings.
+  const records = mergeManagedSkills(managed, userSkills);
   return owner.botId ? await onlyVisibleTo(deps.prisma, owner, owner.botId, records) : records;
 }
 
@@ -161,11 +160,13 @@ async function onlyVisibleTo<T extends { id: string }>(
     settings.map((s) => [s.skillKey, asSkillAvailability(s.availability)]),
   );
   const override = new Map(overrides.map((o) => [o.skillKey, o.enabled]));
-  return records.filter((record) =>
-    isSkillVisible({
-      availability: availability.get(record.id) ?? "all",
-      override: override.get(record.id),
-    }),
+  return records.filter(
+    (record) =>
+      record.id.startsWith("builtin:") ||
+      isSkillVisible({
+        availability: availability.get(record.id) ?? "all",
+        override: override.get(record.id),
+      }),
   );
 }
 

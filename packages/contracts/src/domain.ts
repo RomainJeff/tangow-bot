@@ -505,7 +505,7 @@ export const TaughtSkillSchema = z.object({
 });
 export type TaughtSkill = z.infer<typeof TaughtSkillSchema>;
 
-export const AgentSkillSourceSchema = z.enum(["user", "builtin"]);
+export const AgentSkillSourceSchema = z.enum(["user", "builtin", "bot", "shared"]);
 export type AgentSkillSource = z.infer<typeof AgentSkillSourceSchema>;
 
 export const SkillAvailabilitySchema = z.enum(["disabled", "all", "selected"]);
@@ -811,6 +811,26 @@ export const ComputerStatusSchema = z.object({
   canUpdate: z.boolean(),
 });
 export type ComputerStatus = z.infer<typeof ComputerStatusSchema>;
+
+export const ComputerListItemSchema = z.object({
+  bots: z.array(z.object({ id: Id, name: z.string() })).min(1),
+  botId: Id,
+  name: z.string(),
+  status: ComputerStatusSchema,
+});
+export type ComputerListItem = z.infer<typeof ComputerListItemSchema>;
+
+export const ComputerUpdateAllResultSchema = z.object({
+  queued: z.array(ComputerUpdateSchema),
+  skipped: z.array(
+    z.object({
+      botId: Id,
+      name: z.string(),
+      reason: z.enum(["busy", "unsupported", "failed"]),
+    }),
+  ),
+});
+export type ComputerUpdateAllResult = z.infer<typeof ComputerUpdateAllResultSchema>;
 
 export const ComputerReleaseReasonSchema = z.enum(["done", "skipped"]);
 export type ComputerReleaseReason = z.infer<typeof ComputerReleaseReasonSchema>;

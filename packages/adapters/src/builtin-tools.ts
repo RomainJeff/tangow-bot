@@ -1,4 +1,4 @@
-import type { ConnectorTool } from "@rakazo/adapter-kit";
+import type { AgentRunRequest, ConnectorTool } from "@rakazo/adapter-kit";
 import {
   BotSecretDestination,
   BotSecretName,
@@ -18,6 +18,48 @@ export const DELEGATION_TOOL_NAMES = new Set([
   "handoff_to_bot",
   "message_bot",
 ]);
+
+/** A helper reports to the bot that ran it, never to the user, and delegates nothing further. */
+export const isHelperTool = (name: string) =>
+  !DELEGATION_TOOL_NAMES.has(name) && name !== "message_user";
+
+export function helperCallOf(args: Record<string, unknown>) {
+  return {
+    name:
+      String(args.name ?? "helper")
+        .trim()
+        .slice(0, 80) || "helper",
+    task: String(args.task ?? "").trim(),
+    instructions: args.instructions ? String(args.instructions).trim() : "",
+    provider: String(args.model_provider ?? "").trim(),
+    modelId: String(args.model_id ?? "").trim(),
+  };
+}
+
+export async function helperModel(
+  request: Pick<AgentRunRequest, "model" | "resolveModel">,
+  call: ReturnType<typeof helperCallOf>,
+): Promise<AgentRunRequest["model"]> {
+  if (Boolean(call.provider) !== Boolean(call.modelId)) {
+    throw new Error("model_provider and model_id must both be set");
+  }
+  if (!call.provider) return request.model;
+  if (!request.resolveModel) throw new Error("Per-call subagent model selection is unavailable");
+  return request.resolveModel(call.provider, call.modelId);
+}
+
+export const HELPER_STOPPED_FOR_PAUSE = "Stopped: the run is waiting for the user.";
+
+export function helperInstructions(name: string, ...extra: Array<string | undefined>) {
+  return [
+    `You are a Rakazo subagent named "${name}".`,
+    "You run inside the parent bot's turn — you are not a separate bot chat.",
+    "Complete the task and return a concise result. Do not spawn bots or further subagents.",
+    ...extra,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
 
 export const builtinAgentTools: ConnectorTool[] = [
   {
@@ -39,7 +81,15 @@ export const builtinAgentTools: ConnectorTool[] = [
     name: "computer_observe",
     description:
       "Capture the current screen of this bot's computer. Returns frame metadata and an image. Observe before coordinate-based actions and whenever another actor may have changed the desktop.",
-    inputSchema: { type: "object", properties: {} },
+    inputSchema: {
+      type: "object",
+      properties: {
+        attach: {
+          type: "boolean",
+          description: "Also post this screenshot to the chat for the user (default false).",
+        },
+      },
+    },
   },
   {
     name: "computer_act",
@@ -933,6 +983,23 @@ that merely narrate internal operations.`,
     },
   },
 ];
+
+/** The computer's shell in a worker run, named apart from the worker's own bash. */
+export const computerExecTool: ConnectorTool = {
+  name: "computer_exec",
+  description:
+    "Run a command on this bot's computer, where its apps, browser and services run. bash runs on a separate machine with its own localhost: use computer_exec when a command needs the computer, and bash for file and code work. /workspace paths are the same on both. cwd defaults to your home.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      command: { type: "string" },
+      cwd: { type: "string" },
+    },
+    required: ["command"],
+  },
+};
+
+export const COMPUTER_COMMAND_TOOLS = new Set(["shell", computerExecTool.name]);
 
 /** Agent-connection tools, exposed only when the messaging surface is enabled. */
 export const agentConnectionTools: ConnectorTool[] = [

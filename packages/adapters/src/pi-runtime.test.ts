@@ -30,6 +30,16 @@ describe("describeToolActivity", () => {
     );
   });
 
+  it.each([
+    ["read", "Reading a file"],
+    ["ls", "Skimming a folder"],
+    ["write", "Saving a file"],
+    ["edit", "Editing a file"],
+    ["bash", "Working the terminal"],
+  ])("labels the worker's native %s tool like its in-process counterpart", (name, label) => {
+    expect(describeToolActivity(name)).toBe(label);
+  });
+
   it("never derives a label from an unknown tool's name", () => {
     expect(describeToolActivity("mcp__notion-work__search_pages")).toBe("Seeing to it");
     expect(describeToolActivity("destination_write")).toBe("Seeing to it");

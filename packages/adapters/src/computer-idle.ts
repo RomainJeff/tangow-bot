@@ -8,6 +8,7 @@ import {
 } from "@rakazo/adapter-kit";
 import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
+import { recoverBrowserApprovalScreens } from "./browser-approval.js";
 import { expireComputerControl, hasActiveComputerControl } from "./computer-control.js";
 import { toComputerRef } from "./computer-lifecycle.js";
 import { checkpointComputerWorkspace } from "./computer-workspace.js";
@@ -81,7 +82,7 @@ export const CANCEL_COMPUTER_RUN_WORK = [
 /**
  * Kill the primary browser session without matching chromium-screen-* profiles.
  * Covers Docker (--user-data-dir=.../chromium) and portable launches that only
- * use the symlinked primary profile (E2B desktop.launch / Daytona nohup).
+ * use the symlinked primary profile (E2B desktop.launch).
  */
 export const CANCEL_PRIMARY_BROWSER_WORK = [
   "pkill -TERM -f -- '--user-data-dir=.*/.browser-profiles/chromium$' || true",
@@ -192,6 +193,7 @@ export async function sleepComputerIfIdle(
   },
   computerId: string,
 ): Promise<void> {
+  await recoverBrowserApprovalScreens(deps, { computerId });
   let computer = await loadComputer(deps.prisma, computerId);
   if (!computer?.providerRef || computer.state !== "running") return;
 
@@ -249,13 +251,7 @@ export async function sleepComputerIfIdle(
   };
 
   try {
-    const revision = await checkpointComputerWorkspace(
-      deps.home,
-      deps.sandbox,
-      computer.homeKey,
-      ref,
-      ctx,
-    );
+    const revision = await checkpointComputerWorkspace(deps.home, deps.sandbox, computer, ref, ctx);
     const saved = await deps.prisma.computer.updateMany({
       where: suspensionClaim,
       data: { homeRevision: revision, updatedAt: checkpointedAt },
@@ -349,6 +345,8 @@ function loadComputer(prisma: PrismaClient, computerId: string) {
     select: {
       id: true,
       homeKey: true,
+      homeStorage: true,
+      homeRevision: true,
       providerRef: true,
       kind: true,
       state: true,

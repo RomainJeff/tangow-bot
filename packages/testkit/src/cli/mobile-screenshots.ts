@@ -193,6 +193,17 @@ async function seedFixture(app: App, prisma: PrismaClient) {
     instructions: "Find evidence and summarize it clearly.",
     notifyOnFinish: true,
   });
+  await prisma.volumeSkill.create({
+    data: {
+      botId: researcher.id,
+      source: "shared",
+      name: "team-review",
+      description: "Review shared work before publishing.",
+      path: "/workspace/shared/skills/team-review/SKILL.md",
+      content: "",
+      contentHash: "0".repeat(64),
+    },
+  });
   const writer = await rpc<{ id: string }>(app, cookie, "bots/create", {
     name: "Writer",
     title: "Clear writing",

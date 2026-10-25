@@ -241,16 +241,23 @@ function SkillCatalog({
       <View style={styles.editor}>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {open ? <Text style={styles.title}>{open.name}</Text> : null}
-        <TextInput
-          value={draft}
-          onChangeText={setDraft}
-          editable={!open?.readOnly}
-          multiline
-          autoCapitalize="none"
-          autoCorrect={false}
-          accessibilityLabel={t("Skill content")}
-          style={styles.textarea}
-        />
+        {open?.source === "shared" ? (
+          <View>
+            <Text style={styles.secondary}>{open.description}</Text>
+            <Text style={styles.secondary}>{t("Content lives on the shared volume.")}</Text>
+          </View>
+        ) : (
+          <TextInput
+            value={draft}
+            onChangeText={setDraft}
+            editable={!open?.readOnly}
+            multiline
+            autoCapitalize="none"
+            autoCorrect={false}
+            accessibilityLabel={t("Skill content")}
+            style={styles.textarea}
+          />
+        )}
         {draftError ? <Text style={styles.error}>{draftError}</Text> : null}
         <View style={styles.actions}>
           {open?.readOnly ? null : (
@@ -368,7 +375,7 @@ function SkillCatalog({
 
       {shown.map((entry) => {
         // Builtins are always on for every agent; only the rest carry access controls.
-        const controlled = entry.source !== "builtin";
+        const controlled = entry.source === "user";
         return (
           <View key={entry.id} style={styles.card} testID="skill-row">
             <Pressable accessibilityRole="button" onPress={() => void openSkill(entry)}>

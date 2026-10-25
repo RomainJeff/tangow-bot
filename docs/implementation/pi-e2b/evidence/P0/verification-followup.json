@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "sourceSha": "4561b93cc24534e7adc795882d6b81cf5aa9d8de",
+  "sha256": {
+    "package.json": "4aa97621bcf6249aa5a70cdb4a0d91790b3c8b4a59a00ab56b87398072fca9b6",
+    "pnpm-lock.yaml": "e57deb4e1b9701efe103df45d9e9dbca9f5efc37d309d021dc4ba189ba1dd449",
+    "packages/adapters/src/pi-live-eval.ts": "80b0741c4d14556bf3f7656cc746df285a0e7d30df936b9721426f54a452049f",
+    "packages/adapters/src/pi-live-eval-arms.ts": "4bc99868f78803ec7690d377a1aac062b16bc285242c8d043dc49d70e8145651",
+    "packages/adapters/src/pi-live-eval-tasks.ts": "83030bc85b731fb9acb57b7192ef8101c07c4e8be570454ed9601610aca8722f",
+    "packages/adapters/src/pi-live-eval-fleet.ts": "9541720cb294611fdd46e837f542306912de8f1993565e1067310e6f3db5be3f",
+    "packages/adapters/src/pi-live-eval-workspace.ts": "bcb76552b04a6aaa7f14d8fa333a9c525a03a18b662dd7f1708247c47a33ddaf",
+    "packages/adapters/src/pi-live-eval.test.ts": "51acbd4f5ec9bd83487583788b402b5791148b9bfe0c4247a3f94fdee5264320",
+    "packages/adapters/src/pi-sdk-proof-support.ts": "85747f4af697e00b09cdcc8ae979233352594536c6d99ecc7d59cf475e5456bd",
+    "packages/adapters/src/pi-sdk-lifecycle.test.ts": "e47cc44dc1884118bf691016c5b9e8540426d5f48973f6af577d25ba49e626eb",
+    "packages/adapters/src/pi-sdk-test-support.ts": "1ec2ccd1b278cb8049d5e6f5196a8b5764dc7d52f0fdc748e42699a6212e2939"
+  },
+  "scope": "Proof and evaluator only; no product engine switch.",
+  "historicalReceipt": "verification.json describes source 014e9a6 and remains unchanged.",
+  "ciCorrection": {
+    "commit": "359d47fda",
+    "cause": "Node 22 retained an idle TCP connection after the held HTTP response closed.",
+    "proof": "Both held-response closure and session/helper settlement share a five-second deadline; zero in-flight HTTP responses is asserted before cleanup.",
+    "localPiTests": {
+      "passed": 30
+    },
+    "ciAfterCorrection": {
+      "head": "72c7ca913840506317ebc9ba3bbfc5fcf0d29848",
+      "lint": "passed",
+      "typecheck": "passed",
+      "unitTests": "passed",
+      "postgresJourneys": "passed",
+      "automatedReview": "Rate-limited; a success status did not represent a completed review."
+    }
+  },
+  "longEvaluatorVerification": {
+    "evaluatorTestsPassed": 17,
+    "sharedFileOperationTestsPassed": 15,
+    "workspaceTypecheckTasksPassed": 23,
+    "biome": "passed",
+    "dryRuns": "Default cases retain 40 calls and exclude the fleet; explicit fleet selects 512 calls and a 300-second deadline without model requests.",
+    "independentReview": "No blocking defect; limitations and partial-series comparisons documented."
+  },
+  "webE2E": {
+    "command": "pnpm test:e2e:affected",
+    "selection": "Full suite because no readable impact map exists.",
+    "previousRun": {
+      "passed": 210,
+      "failed": 12,
+      "additionalFailure": "Mention-picker keyboard; cause not established."
+    },
+    "latestRun": {
+      "passed": 211,
+      "failed": 11,
+      "baselineFailuresRecurred": true,
+      "mentionPickerFailureRecurred": false
+    },
+    "status": "red",
+    "failureSpecs": {
+      "ask-card-follow.spec.ts": 4,
+      "ask-card-motion.spec.ts": 3,
+      "message-hover-actions.spec.ts": 1,
+      "message-quote.spec.ts": 1,
+      "team-computer.spec.ts": 2
+    }
+  },
+  "livePilots": {
+    "short": "live-primary-summary.json",
+    "long": "live-long-summary.json",
+    "separateThinkingOffCalibration": "Excluded from both pilots."
+  }
+}

@@ -38,8 +38,8 @@ if (
     "--ui requires local e2e with the fake sandbox and scripted runtime, without --impact",
   );
 }
-if (!["fake", "e2b", "daytona", "box"].includes(sandboxProvider)) {
-  throw new Error('Sandbox must be "fake", "e2b", "daytona", or "box"');
+if (!["fake", "e2b"].includes(sandboxProvider)) {
+  throw new Error('Sandbox must be "fake" or "e2b"');
 }
 if (integration && sandboxProvider !== "fake") {
   throw new Error("Integration tests only support the fake sandbox");
@@ -49,12 +49,6 @@ if (agentRuntime !== "pi" && agentRuntime !== "scripted") {
 }
 if (sandboxProvider === "e2b" && !process.env.E2B_API_KEY) {
   throw new Error("E2B_API_KEY is required when --sandbox=e2b");
-}
-if (sandboxProvider === "daytona" && !process.env.DAYTONA_API_KEY) {
-  throw new Error("DAYTONA_API_KEY is required when --sandbox=daytona");
-}
-if (sandboxProvider === "box" && !process.env.BOX_API_KEY) {
-  throw new Error("BOX_API_KEY is required when --sandbox=box");
 }
 
 async function main() {
@@ -101,6 +95,7 @@ async function main() {
     if (integration) {
       const suites = [
         "packages/testkit/src/pi-offline.postgres.test.ts",
+        "packages/testkit/src/worker-skills.test.ts",
         "packages/testkit/src/computer-approval.postgres.test.ts",
         "packages/testkit/src/eval-history.postgres.test.ts",
         "packages/testkit/src/eval-customer-support.postgres.test.ts",
@@ -122,6 +117,7 @@ async function main() {
         "packages/adapters/src/job-reconciler.postgres.test.ts",
         "packages/adapters/src/executor-run-log.postgres.test.ts",
         "packages/adapters/src/skill-lock.postgres.test.ts",
+        "packages/adapters/src/worker-lifecycle.postgres.test.ts",
       ];
       // Each app reconciles all durable work in its database, including intentionally
       // unfinished fixture runs. Clone the pristine migrated schema so one suite
@@ -295,7 +291,7 @@ async function main() {
               {
                 id: computer.providerRef!,
                 botId: computer.homeKey,
-                kind: computer.kind as "e2b" | "daytona" | "box",
+                kind: "e2b",
                 providerRef: computer.providerRef!,
               },
               {
@@ -340,10 +336,10 @@ async function startApiCoverage() {
 }
 
 async function managedComputers(handles: AppHandles) {
-  if (!["e2b", "daytona", "box"].includes(sandboxProvider)) return [];
+  if (sandboxProvider !== "e2b") return [];
   return handles.prisma.computer.findMany({
     where: { providerRef: { not: null } },
-    select: { homeKey: true, kind: true, providerRef: true, userId: true, spaceId: true },
+    select: { homeKey: true, providerRef: true, userId: true, spaceId: true },
   });
 }
 

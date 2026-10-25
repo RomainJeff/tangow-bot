@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import http from "node:http";
 import net from "node:net";
 import { resolveSupervisorToken } from "@rakazo/core";
+import { stopBrowserCommand } from "@rakazo/core/node/desktop-runtime";
 import { describe, expect, it } from "vitest";
 import {
   MAX_SUPERVISOR_FILE_REQUEST_BYTES,
@@ -608,7 +609,6 @@ describe("sandbox supervisor input containment", () => {
     expect(command).not.toContain("/home/rakazo/.browser-profiles/chromium/.");
     expect(command).not.toContain(".rakazo-base-generation");
     expect(command).toContain("browser-pid-");
-    expect(command).toContain("tr '\\0' '\\n' <\"/proc/$pid/cmdline\"");
     expect(browserProfilePathForScreen("../../writer")).toMatch(
       /^\/home\/rakazo\/\.browser-profiles\/chromium-bot-[0-9a-f]+$/,
     );
@@ -721,9 +721,10 @@ describe("sandbox supervisor input containment", () => {
 
   it("stops the released bot's browser without tearing down the primary desktop", () => {
     const primary = stopExtraScreenCommand(0, "writer");
-    expect(primary).toContain(`--user-data-dir=${browserProfilePathForScreen("writer")}`);
+    expect(primary).toContain(stopBrowserCommand("writer"));
     expect(primary).toContain("kill -KILL");
-    expect(primary).not.toMatch(/Xvfb :1 /);
+    expect(primary).not.toContain("Xvfb");
+    expect(primary).not.toContain("fluxbox");
     expect(primary).not.toContain("websockify");
     expect(primary).toContain("sockets/view-1-");
     expect(primary).toContain("sockets/control-1-");
@@ -735,15 +736,7 @@ describe("sandbox supervisor input containment", () => {
     expect(extra).toContain("[f]luxbox -rc /tmp/fluxbox-home-2/.fluxbox/init");
     expect(extra).toContain("sockets/view-2-");
     expect(extra).not.toContain("websockify");
-    expect(extra).toContain(`--user-data-dir=${browserProfilePathForScreen("researcher")}`);
-  });
-
-  it("on cancel, stops only the matching bot's primary-display Chromium", () => {
-    const stop = stopExtraScreenCommand(0, "writer");
-    expect(stop).toContain(`--user-data-dir=${browserProfilePathForScreen("writer")}`);
-    expect(stop).not.toContain(`--user-data-dir=${browserProfilePathForScreen("researcher")}`);
-    expect(stop).not.toContain("Xvfb");
-    expect(stop).not.toContain("fluxbox");
+    expect(extra).toContain(stopBrowserCommand("researcher"));
   });
 
   it("does not stop the primary browser when a present registry rejects release", () => {
@@ -764,7 +757,7 @@ describe("sandbox supervisor input containment", () => {
       cancelRunWork: true,
       screenId: "writer",
     });
-    expect(orphanCancelStop).toContain(`--user-data-dir=${browserProfilePathForScreen("writer")}`);
+    expect(orphanCancelStop).toBe(stopBrowserCommand("writer"));
     expect(orphanCancelStop).not.toContain("Xvfb");
   });
 

@@ -136,6 +136,23 @@ describeAttachments("chat attachments", () => {
       "write notes/result.txt and attach it to the thread",
     );
   });
+
+  it("posts the computer's current screen into the thread", async () => {
+    const cookie = await signup(app, `attach-screen-${stamp}@rakazo.test`, "Attach Screen User");
+    const bot = await rpc<{ id: string }>(app, cookie, "bots/create", {
+      name: "Screener",
+      title: "Screener",
+      description: "tests computer_observe attach",
+      instructions: "",
+      notifyOnFinish: true,
+    });
+    await sendAndWait(app, cookie, bot.id, { text: "send me a screenshot" });
+    const snapshot = await rpc<ThreadSnapshot>(app, cookie, "threads/get", { botId: bot.id });
+    const imageBlock = threadMessages(snapshot)
+      .flatMap((message) => message.blocks)
+      .find((block) => block.kind === "image");
+    expect(imageBlock).toMatchObject({ kind: "image" });
+  });
 });
 
 async function signup(app: App, email: string, name: string) {

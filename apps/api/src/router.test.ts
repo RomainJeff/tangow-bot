@@ -854,6 +854,7 @@ describe("thread rewind", () => {
         }),
       },
       sessionEntry: { findFirst: vi.fn().mockResolvedValue(type ? { type } : null) },
+      $queryRaw: vi.fn().mockResolvedValue([]),
     } as unknown as PrismaClient;
     const deps = {
       prisma,
