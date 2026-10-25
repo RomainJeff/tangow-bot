@@ -20,7 +20,23 @@ describe("hoverPillPlacement", () => {
     expect(hoverPillPlacement({ frame, pill, bubble })).toBeNull();
   });
 
-  it("keeps a card at the corner", () => {
+  it("keeps a row with neither bubble nor open card at the corner", () => {
     expect(hoverPillPlacement({ frame, pill })).toBeNull();
+  });
+
+  it("straddles an open card's top edge at its end, clear of the header status", () => {
+    const card = { left: 100, top: 0, right: 800, bottom: 300 };
+    expect(hoverPillPlacement({ frame, pill, card })).toEqual({ x: 538, y: -17 });
+  });
+
+  it("puts that pill at the card's left in a right-to-left thread", () => {
+    const card = { left: 100, top: 0, right: 800, bottom: 300 };
+    expect(hoverPillPlacement({ frame, pill, card, rtl: true })).toEqual({ x: 12, y: -17 });
+  });
+
+  it("prefers the bubble when the row has one", () => {
+    const bubble = { left: 100, top: 10, right: 160, bottom: 52 };
+    const card = { left: 100, top: 0, right: 800, bottom: 300 };
+    expect(hoverPillPlacement({ frame, pill, bubble, card })).toEqual({ x: 68, y: 14 });
   });
 });

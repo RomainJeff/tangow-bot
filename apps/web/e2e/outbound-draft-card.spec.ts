@@ -273,6 +273,18 @@ for (const width of [1440, 390]) {
     await expect(header).toContainText("Editing");
     await expect(text).toHaveCSS("box-shadow", /0px 0px 0px 1\.5px/);
     await text.fill(EDITED);
+    // The row's hover pill straddles the card's top edge: it never covers the Editing status.
+    await draftCard.hover();
+    const pill = page.locator('[data-message-id="draft-card"] [data-slot="hover-pill"]');
+    await expect(pill).toHaveCSS("opacity", "1");
+    const [pillBox, statusBox, cardBox] = await Promise.all([
+      pill.boundingBox(),
+      draftCard.locator('[data-slot="framed-block-status"]').boundingBox(),
+      draftCard.boundingBox(),
+    ]);
+    expect(pillBox!.y + pillBox!.height).toBeLessThanOrEqual(statusBox!.y);
+    expect(pillBox!.y).toBeLessThan(cardBox!.y);
+    await captureScreenshot(page, testInfo, `outbound-draft-editing-pill-${width}`);
     await shoot(page, testInfo, "editing");
     await draftCard.getByText("Subject").click();
     await expect(header).toContainText("Edited");
@@ -941,7 +953,8 @@ test.describe("the open card's shadow", () => {
     const draftCard = page.getByTestId("draft-card");
     await expect(draftCard).toBeVisible();
 
-    // shadow-card reaches 28 px sideways and 44 px below in dark, its widest.
+    // shadow-card reaches 20 px sideways in light and 28 in dark by its blur radius, where the
+    // visible part ends well short of it; below, 44 px at the widest.
     const room = await draftCard.evaluate((card) => {
       const box = card.getBoundingClientRect();
       const rooms: { sides: number; below: number }[] = [];
@@ -958,8 +971,15 @@ test.describe("the open card's shadow", () => {
     });
     expect(room.length).toBeGreaterThan(0);
     // The shell's own overflow sits a column and a sidebar away: only the nearest clip is tight.
-    expect(room[0]!.sides).toBeGreaterThanOrEqual(28);
+    expect(room[0]!.sides).toBeGreaterThanOrEqual(26);
     expect(room[0]!.below).toBeGreaterThanOrEqual(44);
+    // The scroller reaches no further than the column it sits in.
+    const sticksOut = await page.getByTestId("transcript").evaluate((scroller) => {
+      const column = scroller.parentElement!.parentElement!.getBoundingClientRect();
+      const box = scroller.getBoundingClientRect();
+      return Math.max(column.left - box.left, box.right - column.right);
+    });
+    expect(sticksOut).toBeLessThanOrEqual(0);
 
     const box = (await draftCard.boundingBox())!;
     for (const theme of ["light", "dark"] as const) {
