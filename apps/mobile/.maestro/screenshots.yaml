@@ -262,3 +262,17 @@ tags:
     timeout: 10000
 - assertNotVisible: "Reply"
 - takeScreenshot: "15c-message-reaction"
+
+# The computer was booted above, so its update runs through the real fixture API.
+- openLink: "rakazo:///computer-settings"
+- extendedWaitUntil:
+    visible: "Update computer"
+    timeout: 10000
+- tapOn: "Update computer"
+- extendedWaitUntil:
+    visible: "Computer updated"
+    timeout: 30000
+- assertVisible: "Done"
+- takeScreenshot: "30-computer-updated"
+- tapOn: "Done"
+- assertNotVisible: "Computer updated"

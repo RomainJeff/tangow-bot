@@ -60,4 +60,47 @@ describe("computer update presentation", () => {
     await Promise.resolve();
     expect(store.getSnapshot().updates).toEqual([]);
   });
+  it("keeps an authoritative completed result open until Done without dismissing its server history", async () => {
+    vi.useFakeTimers();
+    const completed: ComputerUpdate = { ...update, status: "completed", stage: "reconnecting" };
+    const dismiss = vi.fn(async () => {});
+    const requests: string[][] = [];
+    const store = createComputerUpdates({
+      list: async (ids: string[]) => {
+        requests.push(ids);
+        return ids.includes(update.id) ? [completed] : [];
+      },
+      start: async () => update,
+      dismiss,
+      releaseInterrupted: async () => {},
+    });
+    const stop = store.watch();
+    await store.start("bot-1");
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(store.getSnapshot()).toEqual({ updates: [completed], openId: update.id });
+    const calls = requests.length;
+    await vi.advanceTimersByTimeAsync(14999);
+    expect(requests).toHaveLength(calls);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(requests.at(-1)).toEqual([update.id]);
+    await store.dismiss(update.id);
+    expect(dismiss).not.toHaveBeenCalled();
+    expect(store.getSnapshot()).toEqual({ updates: [], openId: null });
+    stop();
+  });
+
+  it("tracks batch receipts before reading a result that already completed", async () => {
+    vi.useFakeTimers();
+    const completed: ComputerUpdate = { ...update, status: "completed", stage: "reconnecting" };
+    const store = createComputerUpdates({
+      list: async (ids: string[]) => (ids.includes(update.id) ? [completed] : []),
+      start: async () => update,
+      dismiss: async () => {},
+      releaseInterrupted: async () => {},
+    });
+    const stop = store.watch();
+    await store.refresh([update]);
+    expect(store.getSnapshot()).toEqual({ updates: [completed], openId: null });
+    stop();
+  });
 });

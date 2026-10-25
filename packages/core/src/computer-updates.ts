@@ -2,7 +2,7 @@ import { COMPUTER_UPDATE_STAGES, type ComputerUpdate } from "@rakazo/contracts";
 
 /** Shared polling and local presentation state; the server owns operation lifetime. */
 export function createComputerUpdates(client: {
-  list: () => Promise<ComputerUpdate[]>;
+  list: (ids: string[]) => Promise<ComputerUpdate[]>;
   start: (botId: string, action: "update" | "recover") => Promise<ComputerUpdate>;
   dismiss: (id: string) => Promise<unknown>;
   releaseInterrupted: (id: string) => Promise<unknown>;
@@ -18,7 +18,7 @@ export function createComputerUpdates(client: {
   const poll = async (epoch: number) => {
     const stamp = revision;
     try {
-      const updates = await client.list();
+      const updates = await client.list(state.updates.map((update) => update.id));
       if (epoch !== generation || stamp !== revision) return;
       if (JSON.stringify(state.updates) === JSON.stringify(updates)) return;
       state = {
@@ -31,7 +31,10 @@ export function createComputerUpdates(client: {
     } finally {
       if (epoch === generation) {
         clearTimeout(timer);
-        timer = setTimeout(() => void poll(epoch), state.updates.length ? 1500 : 15000);
+        timer = setTimeout(
+          () => void poll(epoch),
+          state.updates.some((update) => update.status !== "completed") ? 1500 : 15000,
+        );
       }
     }
   };
@@ -56,7 +59,18 @@ export function createComputerUpdates(client: {
       state = { ...state, openId: id };
       emit();
     },
-    async refresh() {
+    async refresh(accepted: ComputerUpdate[] = []) {
+      if (accepted.length) {
+        revision++;
+        state = {
+          ...state,
+          updates: [
+            ...accepted,
+            ...state.updates.filter((old) => !accepted.some((item) => item.id === old.id)),
+          ],
+        };
+        emit();
+      }
       await poll(generation);
     },
     async start(botId: string, action: "update" | "recover" = "update") {
@@ -81,7 +95,9 @@ export function createComputerUpdates(client: {
     },
     async dismiss(id: string) {
       const epoch = generation;
-      await client.dismiss(id);
+      if (state.updates.find((update) => update.id === id)?.status !== "completed") {
+        await client.dismiss(id);
+      }
       if (epoch !== generation) return;
       revision++;
       state = {

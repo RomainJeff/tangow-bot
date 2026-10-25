@@ -18,6 +18,8 @@ export const RU_MESSAGES: Record<string, string> = {
   "Client ID": "ID клиента",
   "Client secret": "Секрет клиента",
   Continue: "Продолжить",
+  "Computer updated": "Компьютер обновлён",
+  "Computer recovered": "Компьютер восстановлен",
   "Continue in Background": "Продолжить в фоне",
   "Could not complete action": "Не удалось выполнить действие",
   "Could not verify or save these credentials":
