@@ -1,4 +1,5 @@
 import type { AgentToolExecutionResult } from "@rakazo/adapter-kit";
+import { APPROVAL_WAITING_TEXT } from "@rakazo/contracts";
 import {
   DRAFT_DISCARDED_NOTE,
   readDraft,
@@ -318,7 +319,7 @@ export function catalogApprovalInnerArgs(catalog: {
 export function approvalPausedToolResult(): ApprovalPausedToolResult {
   return {
     kind: "agent_tool_result",
-    content: [{ type: "text", text: "Waiting for approval." }],
+    content: [{ type: "text", text: APPROVAL_WAITING_TEXT }],
     details: { approval: "paused" },
     terminate: true,
   };
@@ -397,8 +398,13 @@ export function resolveDuplicateEffectGate(
     return { action: "return", result: effect.result ?? { duplicate: true } };
   }
   if (effect.status === "denied") {
-    if (readDraft(effect.status, effect.draft)?.state === "discarded") {
+    const drafted = readDraft(effect.status, effect.draft);
+    if (drafted?.state === "discarded") {
       return { action: "return", result: { ...DRAFT_DISCARDED_RESULT } };
+    }
+    // A send the run ended on may or may not have left.
+    if (drafted?.state === "unsent") {
+      return { action: "return", result: uncertainEffectResult(toolName) };
     }
     const replaced = replacedDraftResult(effect);
     if (replaced) return { action: "return", result: replaced };

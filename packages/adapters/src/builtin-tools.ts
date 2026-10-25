@@ -73,7 +73,7 @@ export async function helperModel(
   return request.resolveModel(choice.provider, choice.id);
 }
 
-export const HELPER_STOPPED_FOR_PAUSE = "Stopped: the run is waiting for the user.";
+export { HELPER_STOPPED_FOR_PAUSE } from "@rakazo/contracts";
 
 export function helperInstructions(name: string, ...extra: Array<string | undefined>) {
   return [

@@ -80,7 +80,7 @@ export * from "./session-log/jsonl.js";
 export * from "./session-log/project-inference.js";
 export * from "./session-log/project-thread-view.js";
 export * from "./session-log/project-ui.js";
-export { pausedCallOfEffect } from "./session-log/run-fold.js";
+export { pendingPauseOfEffect } from "./session-log/run-fold.js";
 export * from "./session-log/takeover-card.js";
 export * from "./signup-policy.js";
 export * from "./skill-access.js";
