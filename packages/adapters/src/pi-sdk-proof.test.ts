@@ -5,7 +5,6 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
-import { toHistory } from "./pi-runtime.js";
 import type { WireProtocol, WireUsage } from "./pi-sdk-proof-support.js";
 import {
   chainDurableSteering,
@@ -29,6 +28,7 @@ import {
   usePoisonedWorkspace,
   workspace,
 } from "./pi-sdk-test-support.js";
+import { toHistory } from "./runtime-worker/dialects/pi-ai-history.js";
 
 const HISTORY_PAST_KEPT_RECENT_TOKENS = "old ".repeat(30_000);
 const USAGE_PAST_COMPACTION_THRESHOLD: WireUsage = {

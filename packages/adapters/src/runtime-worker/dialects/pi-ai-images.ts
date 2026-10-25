@@ -1,4 +1,4 @@
-import { DEFAULT_COMPUTER_SCREENSHOTS_TO_KEEP } from "../../pi-runtime.js";
+export const DEFAULT_COMPUTER_SCREENSHOTS_TO_KEEP = 2;
 
 type Part = { type?: unknown };
 type PiAiMessage = { role: string; content?: unknown };
