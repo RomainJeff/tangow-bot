@@ -881,19 +881,26 @@ app.post("/workers", async (c) => {
 app.delete("/workers", async (c) => {
   const attemptId = PathSegment.safeParse(c.req.query("attempt"));
   if (!attemptId.success) return c.json({ error: "invalid attempt" }, 400);
-  const found = await attemptWorkers(attemptId.data);
-  const removed = await Promise.all(
-    found.map((info) =>
-      docker
-        .getContainer(info.Id)
-        .remove({ force: true })
-        .then(
-          () => true,
-          () => false,
-        ),
-    ),
-  );
-  return c.json({ destroyed: removed.includes(true) });
+  try {
+    const found = await attemptWorkers(attemptId.data);
+    await Promise.all(
+      found.map((info) =>
+        docker
+          .getContainer(info.Id)
+          .remove({ force: true })
+          .catch((error: unknown) => {
+            if ((error as { statusCode?: number }).statusCode !== 404) throw error;
+          }),
+      ),
+    );
+    // The controller frees the volumes' writer leases on this answer: confirm nothing is left.
+    if ((await attemptWorkers(attemptId.data)).length > 0) {
+      return c.json({ error: "worker still present" }, 500);
+    }
+    return c.json({ destroyed: found.length > 0 });
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : String(error) }, 500);
+  }
 });
 
 /** How much of a guest's stderr is kept for the log, as `e2b-worker.ts` does. */
@@ -909,6 +916,8 @@ export async function upgradeWorkerGuest(
   socket: Duplex,
   head: Buffer = Buffer.alloc(0),
 ) {
+  // Node drops its own error listener on upgrade: an unhandled reset would kill the supervisor.
+  socket.on("error", () => socket.destroy());
   const refuse = (status: string) => {
     socket.end(`HTTP/1.1 ${status}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
   };
@@ -934,6 +943,8 @@ export async function upgradeWorkerGuest(
       Env: [`RAKAZO_WORKER_CAPABILITY=${capability}`],
     });
     const stream = await exec.start({ hijack: true, stdin: true });
+    // The client left while the exec was starting: closing stdin ends the guest.
+    if (socket.destroyed) return stream.end();
     socket.write(
       "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: rakazo-guest\r\n\r\n",
     );

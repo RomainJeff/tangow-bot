@@ -895,6 +895,17 @@ describe("docker worker guest upgrade", () => {
     expect(await upgrade("/workers/../guest", { ...capability, authorization })).toBe(404);
     expect(await upgrade("/workers/abc/guest", { authorization })).toBe(400);
   });
+  it("survives a client that resets while the guest is being set up", async () => {
+    const [socket] = duplexPair();
+    const request = Object.assign(new http.IncomingMessage(new net.Socket()), {
+      url: "/workers/abc/guest",
+      headers: { authorization: `Bearer ${token}`, "x-rakazo-worker-capability": "capability" },
+    });
+    const upgrading = upgradeWorkerGuest(request, socket);
+    expect(() => socket.emit("error", new Error("read ECONNRESET"))).not.toThrow();
+    await upgrading;
+    expect(socket.destroyed).toBe(true);
+  });
 });
 
 describe("docker worker guest relay", () => {
