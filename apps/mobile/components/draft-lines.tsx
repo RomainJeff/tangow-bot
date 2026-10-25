@@ -194,7 +194,7 @@ function createStyles() {
     hairline: {
       height: StyleSheet.hairlineWidth,
       marginStart: 16,
-      backgroundColor: tokens.input,
+      backgroundColor: tokens.border,
     },
     row: {
       flexDirection: "row",
