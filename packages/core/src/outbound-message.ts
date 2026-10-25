@@ -129,6 +129,7 @@ const FIELD_ROLES: Record<string, FieldRole> = {
   replybroadcast: "toggle",
   unfurllinks: "toggle",
   unfurlmedia: "toggle",
+  unfurlapplinks: "toggle",
 };
 
 const INHERITED_ROLES = new Set<FieldRole | undefined>(["to", "cc", "bcc", "sender", "attachment"]);
