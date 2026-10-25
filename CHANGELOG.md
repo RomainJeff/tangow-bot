@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
-- On web, desktop and iPhone, global Settings now groups computer maintenance and can update all available computers at once, reporting busy computers for a later retry without opening their screens or taking control.
+- On web, desktop and iPhone, global Settings now lists each computer with its bots and visible maintenance actions, and can update all available computers at once, reporting busy computers for a later retry without opening their screens or taking control.
 
 #### Fixed
 

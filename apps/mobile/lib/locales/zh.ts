@@ -1,4 +1,6 @@
 export const ZH_MESSAGES: Record<string, string> = {
+  "Private Computer": "专用电脑",
+  Bots: "机器人",
   "Busy. Try again when idle.": "正在使用。请在空闲时重试。",
   "Could not queue update. Try again.": "无法将更新加入队列。请重试。",
   "Could not update computers": "无法更新电脑",

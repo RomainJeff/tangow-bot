@@ -1,4 +1,6 @@
 export const RU_MESSAGES: Record<string, string> = {
+  "Private Computer": "Личный компьютер",
+  Bots: "Боты",
   "Busy. Try again when idle.": "Занят. Повторите, когда освободится.",
   "Could not queue update. Try again.":
     "Не удалось поставить обновление в очередь. Повторите попытку.",

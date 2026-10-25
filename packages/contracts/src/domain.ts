@@ -813,6 +813,7 @@ export const ComputerStatusSchema = z.object({
 export type ComputerStatus = z.infer<typeof ComputerStatusSchema>;
 
 export const ComputerListItemSchema = z.object({
+  bots: z.array(z.object({ id: Id, name: z.string() })).min(1),
   botId: Id,
   name: z.string(),
   status: ComputerStatusSchema,

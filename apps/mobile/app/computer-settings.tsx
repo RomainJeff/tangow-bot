@@ -93,7 +93,17 @@ export default function ComputerSettings() {
                 />
               </Group>
               {read.value.map((computer) => (
-                <Group key={computer.botId} label={computer.name}>
+                <Group
+                  key={computer.botId}
+                  label={
+                    computer.status.mode === "team" ? t("Team Computer") : t("Private Computer")
+                  }
+                >
+                  <Row
+                    label={t("Bots")}
+                    subline={computer.bots.map((bot) => bot.name).join(", ")}
+                    sublineLines={0}
+                  />
                   <Row label={statusLabel(computer)} />
                   <ComputerMaintenanceActions
                     botId={computer.botId}

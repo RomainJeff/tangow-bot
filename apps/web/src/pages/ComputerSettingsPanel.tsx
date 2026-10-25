@@ -93,24 +93,30 @@ export function ComputerSettingsPanel() {
       {computers?.length ? (
         <div className="overflow-hidden rounded-card bg-group shadow-group">
           {computers.map((item) => (
-            <SettingRow
+            <section
               key={item.botId}
-              label={item.status.mode === "team" ? t`Team Computer` : item.name}
-              subline={
-                item.status.controlHolder === "user" || item.status.busyBotName
-                  ? t`In use`
-                  : undefined
-              }
-              className="border-b border-border last:border-b-0"
+              className="flex flex-col gap-3 border-b border-border px-3.5 py-3 last:border-b-0"
               data-testid="computer-settings-row"
             >
+              <SettingRow
+                label={item.status.mode === "team" ? t`Team Computer` : t`Private Computer`}
+                subline={t`Bots: ${item.bots.map((bot) => bot.name).join(", ")}`}
+                className="p-0"
+              />
+              {item.status.controlHolder === "user" ? (
+                <p className="text-meta text-muted-foreground">
+                  <Trans>You have control</Trans>
+                </p>
+              ) : item.status.busyBotName ? (
+                <p className="text-meta text-muted-foreground">{t`${item.status.busyBotName} is using it`}</p>
+              ) : null}
               <ComputerMaintenanceActions
                 botId={item.botId}
                 computer={item.status}
                 onChanged={refresh}
                 disabled={pending}
               />
-            </SettingRow>
+            </section>
           ))}
         </div>
       ) : null}

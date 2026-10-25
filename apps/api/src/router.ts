@@ -90,6 +90,7 @@ import {
 import type { Auth } from "@rakazo/auth";
 import type {
   Actor,
+  ComputerListItem,
   ComputerStatus,
   ComputerUpdateAllResult,
   McpServer,
@@ -1779,20 +1780,22 @@ export function createRouter(deps: RouterDeps) {
     computer: {
       list: authed.computer.list.handler(async ({ context }) => {
         const computers = await listAccessibleComputers(deps.prisma, context.actor);
-        return Promise.all(
-          computers.flatMap((computer) => {
-            const bot = computer.bots[0];
-            return bot
-              ? [
-                  computerStatus(deps, context.actor, bot.id).then((status) => ({
-                    botId: bot.id,
-                    name: bot.name,
-                    status,
-                  })),
-                ]
-              : [];
-          }),
-        );
+        const result: ComputerListItem[] = [];
+        for (const computer of computers) {
+          const [bot, ...otherBots] = computer.bots;
+          if (!bot) continue;
+          const status = await computerStatus(deps, context.actor, bot.id);
+          for (const other of otherBots) {
+            if (status.busyBotName) break;
+            status.busyBotName = await resolveBusyBotName(deps.prisma, {
+              computerId: computer.id,
+              botId: other.id,
+              botName: other.name,
+            });
+          }
+          result.push({ botId: bot.id, name: bot.name, bots: computer.bots, status });
+        }
+        return result;
       }),
       updateAll: authed.computer.updateAll.handler(async ({ context }) => {
         const computers = await listAccessibleComputers(deps.prisma, context.actor);
@@ -5140,7 +5143,6 @@ function listAccessibleComputers(prisma: PrismaClient, actor: Actor) {
         where: ownedActiveBot,
         select: { id: true, name: true },
         orderBy: { id: "asc" },
-        take: 1,
       },
     },
     orderBy: { id: "asc" },

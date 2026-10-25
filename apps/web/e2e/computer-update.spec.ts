@@ -15,7 +15,8 @@ test("global Computer settings updates idle computers without taking control and
 }, testInfo) => {
   await signup(page, `computer-batch-${Date.now()}@rakazo.test`, "password12", "Computer Batch");
   await completeOnboarding(page);
-  const busyBotId = await createNamedBot(page, "Busy computer", { computerMode: "dedicated" });
+  await createNamedBot(page, "Planner");
+  const busyBotId = await createNamedBot(page, "Scout", { computerMode: "dedicated" });
   await rpc(page, "computer/boot", { botId: busyBotId });
   await rpc(page, "computer/takeover", { botId: busyBotId });
   const controlRequests: string[] = [];
@@ -26,6 +27,23 @@ test("global Computer settings updates idle computers without taking control and
   });
   const settings = await openUserSettings(page, "computer");
   await expect(settings.getByTestId("computer-settings-row")).toHaveCount(2);
+  const team = settings.getByTestId("computer-settings-row").filter({ hasText: "Team Computer" });
+  await expect(team).toContainText("Chief");
+  await expect(team).toContainText("Planner");
+  const privateComputer = settings
+    .getByTestId("computer-settings-row")
+    .filter({ hasText: "Private Computer" });
+  await expect(privateComputer).toContainText("Bots: Scout");
+  for (const name of ["Update computer", "Recover computer", "Reset computer"]) {
+    await expect(team.getByRole("button", { name, exact: true })).toBeVisible();
+    await expect(privateComputer.getByRole("button", { name, exact: true })).toBeDisabled();
+  }
+  await team.getByRole("button", { name: "Reset computer", exact: true }).click();
+  const reset = page.getByRole("alertdialog");
+  await expect(
+    reset.getByText("Restore the last saved workspace. Unsaved work on the computer is lost."),
+  ).toBeVisible();
+  await reset.getByRole("button", { name: "Cancel", exact: true }).click();
   await captureScreenshot(page, testInfo, "computer-settings-desktop");
   await page.setViewportSize({ width: 390, height: 844 });
   await captureScreenshot(page, testInfo, "computer-settings-phone");
@@ -35,9 +53,7 @@ test("global Computer settings updates idle computers without taking control and
   await settings.getByRole("button", { name: "Update all computers", exact: true }).click();
   const result: { json: ComputerUpdateAllResult } = await (await response).json();
   expect(result.json.queued).toHaveLength(1);
-  expect(result.json.skipped).toEqual([
-    { botId: busyBotId, name: "Busy computer", reason: "busy" },
-  ]);
+  expect(result.json.skipped).toEqual([{ botId: busyBotId, name: "Scout", reason: "busy" }]);
   await expect(settings.getByRole("status")).toContainText("Updates queued: 1");
   await expect(settings.getByRole("status")).toContainText("Busy. Try again when idle.");
   expect(controlRequests).toEqual([]);
@@ -65,6 +81,7 @@ test("computer maintenance shows durable background progress and failure recover
           {
             botId,
             name: "Chief",
+            bots: [{ id: botId, name: "Chief" }],
             status: {
               ...status,
               state: updates.some((item) => item.status !== "failed" && item.status !== "completed")
@@ -106,8 +123,7 @@ test("computer maintenance shows durable background progress and failure recover
     return route.fulfill({ json: { json: { ok: true } } });
   });
   const settings = await openUserSettings(page, "computer");
-  await settings.getByTestId("computer-more-button").click();
-  await page.getByRole("menuitem", { name: "Update computer", exact: true }).click();
+  await settings.getByRole("button", { name: "Update computer", exact: true }).click();
   const dialog = page.getByTestId("computer-update-dialog");
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("heading")).toHaveText("Updating Team Computer");
@@ -115,10 +131,14 @@ test("computer maintenance shows durable background progress and failure recover
   await captureScreenshot(page, testInfo, "computer-update-progress");
   await dialog.getByRole("button", { name: "Continue in Background" }).click();
   await expect(dialog).not.toBeVisible();
-  await expect(settings.getByTestId("computer-more-button")).toBeDisabled();
+  await expect(
+    settings.getByRole("button", { name: "Recover computer", exact: true }),
+  ).toBeDisabled();
   await captureScreenshot(page, testInfo, "computer-update-background");
   updates = [];
-  await expect(settings.getByTestId("computer-more-button")).toBeEnabled();
+  await expect(
+    settings.getByRole("button", { name: "Recover computer", exact: true }),
+  ).toBeEnabled();
   updates = [updating];
   await page.reload();
   await page.getByRole("button", { name: /Updating Team Computer/ }).click();

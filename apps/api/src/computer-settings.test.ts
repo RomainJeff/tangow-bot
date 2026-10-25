@@ -53,7 +53,12 @@ it("lists each owned active computer once and queues only idle computers in the 
   const controlled = await fixture.seedComputer(spaceId);
   const controlledBot = await fixture.seedBot(spaceId, controlled.id);
   const executing = await fixture.seedComputer(spaceId);
-  const executingBot = await fixture.seedBot(spaceId, executing.id);
+  const firstExecutingBot = await fixture.seedBot(spaceId, executing.id);
+  const secondExecutingBot = await fixture.seedBot(spaceId, executing.id);
+  const executingRepresentative =
+    firstExecutingBot.id < secondExecutingBot.id ? firstExecutingBot : secondExecutingBot;
+  const executingBot =
+    executingRepresentative.id === firstExecutingBot.id ? secondExecutingBot : firstExecutingBot;
   const unsupported = await fixture.seedComputer(spaceId, { kind: "desktop" });
   const unsupportedBot = await fixture.seedBot(spaceId, unsupported.id);
   const archived = await fixture.seedComputer(spaceId);
@@ -111,12 +116,18 @@ it("lists each owned active computer once and queues only idle computers in the 
     const listed = ComputerListItemSchema.array().parse(await call("list"));
     const representative = firstBot.id < secondBot.id ? firstBot : secondBot;
     expect(listed.map((item) => item.botId).sort()).toEqual(
-      [representative.id, controlledBot.id, executingBot.id, unsupportedBot.id].sort(),
+      [representative.id, controlledBot.id, executingRepresentative.id, unsupportedBot.id].sort(),
     );
     expect(listed.find((item) => item.botId === representative.id)).toMatchObject({
       name: representative.name,
+      bots: [firstBot, secondBot]
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .map(({ id, name }) => ({ id, name })),
       status: { state: "stopped", controlHolder: "none" },
     });
+    expect(
+      listed.find((item) => item.botId === executingRepresentative.id)?.status.busyBotName,
+    ).toBe(executingBot.name);
     expect(sandbox.boxes.size).toBe(0);
     expect(await prisma.computer.findUniqueOrThrow({ where: { id: controlled.id } })).toMatchObject(
       {
@@ -137,7 +148,7 @@ it("lists each owned active computer once and queues only idle computers in the 
     expect(result.skipped.sort((a, b) => a.botId.localeCompare(b.botId))).toEqual(
       [
         { botId: controlledBot.id, name: controlledBot.name, reason: "busy" },
-        { botId: executingBot.id, name: executingBot.name, reason: "busy" },
+        { botId: executingRepresentative.id, name: executingRepresentative.name, reason: "busy" },
         { botId: unsupportedBot.id, name: unsupportedBot.name, reason: "unsupported" },
       ].sort((a, b) => a.botId.localeCompare(b.botId)),
     );
