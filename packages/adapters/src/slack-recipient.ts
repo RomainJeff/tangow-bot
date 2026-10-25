@@ -11,6 +11,11 @@ export const CHAT_APPS: ReadonlySet<string> = new Set(["slack"]);
 const TIMEOUT_MS = 1_500;
 const TTL_MS = 10 * 60_000;
 const NAME_MAX_LENGTH = 200;
+// Composio passes Slack's answer on under `data`, inside a batch per action under `results`.
+const ANSWER_WALK = {
+  keys: ["data", "structuredContent", "content", "results", "response"],
+  depth: 8,
+};
 // Composio's Slack reads (toolkit 2026-10): conversations.info and users.info.
 const CONVERSATION_TOOL = "SLACK_RETRIEVE_CONVERSATION_INFORMATION";
 const USER_TOOL = "SLACK_RETRIEVE_DETAILED_USER_INFORMATION";
@@ -50,10 +55,14 @@ export async function lookUpChatRecipient(
     if (context.signal.aborted) return undefined;
     const data = await readConnector(connector, readCall(call, tool, args), context, TIMEOUT_MS);
     const value = args[field];
-    return findInResult(data, (record) => {
-      const found = record[field];
-      return isRecord(found) && found.id === value ? found : undefined;
-    });
+    return findInResult(
+      data,
+      (record) => {
+        const found = record[field];
+        return isRecord(found) && found.id === value ? found : undefined;
+      },
+      ANSWER_WALK,
+    );
   };
   const person = async (user: string) => {
     const found = USER_ID.test(user) ? await read(USER_TOOL, { user }, "user") : undefined;
@@ -78,11 +87,14 @@ export async function lookUpChatRecipient(
 function personIn(user: Record<string, unknown>): AskDraftConversation | undefined {
   const profile = isRecord(user.profile) ? user.profile : {};
   const name = clean(profile.real_name) || clean(user.real_name);
-  const handle = clean(profile.display_name) || clean(user.name);
+  // Many people set their display name to their full name: the handle then adds nothing.
+  const handle = [clean(profile.display_name), clean(user.name)].find(
+    (each) => each && each.toLowerCase() !== name.toLowerCase(),
+  );
   if (!name && !handle) return undefined;
   return name
     ? { kind: "person", name, ...(handle ? { handle } : {}) }
-    : { kind: "person", name: handle };
+    : { kind: "person", name: handle! };
 }
 
 function clean(value: unknown): string {
@@ -91,17 +103,21 @@ function clean(value: unknown): string {
     : "";
 }
 
-/** The read `tool` made the way the send is: through Composio's batch with its account, or direct. */
+/**
+ * The read `tool` made the way the send is: through Composio's batch with the send's account, or
+ * direct. It is built whole here: nothing else the bot wrote in its send travels with it.
+ */
 function readCall(call: ConnectorCall, tool: string, args: Record<string, string>): ConnectorCall {
   const executionId = `${call.executionId}:recipient`;
   const item = batchItem(call);
   if (item) {
-    const { arguments: _arguments, ...rest } = item;
+    const account = typeof item.account === "string" ? { account: item.account } : {};
     return {
-      ...call,
       tool: call.route?.toolName ?? call.tool,
-      args: { ...call.args, tools: [{ ...rest, tool_slug: tool, arguments: args }] },
+      args: { tools: [{ tool_slug: tool, ...account, arguments: args }] },
       executionId,
+      ...(call.connectionId ? { connectionId: call.connectionId } : {}),
+      ...(call.route ? { route: call.route } : {}),
     };
   }
   return {

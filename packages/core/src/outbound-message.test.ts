@@ -578,6 +578,8 @@ describe("readOutboundCall on a chat app's send", () => {
       fc.property(fc.dictionary(keys, value, { maxKeys: 4 }), (extra) => {
         const args = { ...slackSend, ...extra };
         const result = chat("SLACK_SEND_MESSAGE", args);
+        // Whatever it holds, a Slack send shows a card: never none, which would send it unseen.
+        expect(result.kind).not.toBe("none");
         if (result.kind !== "chat") return;
         const shown = [result.draft.body, result.draft.recipients[0]!.address];
         for (const [path, leaf] of stringLeaves(args)) {
