@@ -3116,8 +3116,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
 
         /**
          * The key a draft's effect is recorded under: `base`, unless that draft was discarded or
-         * replaced and the person has written in the thread since, when the same mail may be wanted
-         * after all and gets the next key. Without a newer message the stored outcome stands.
+         * replaced and a person has typed in the thread since, when the same mail may be wanted
+         * after all and gets the next key. Without a newer message the stored outcome stands. The
+         * log keeps no author on a message, so another member of a group thread counts too.
          */
         const keyPastAnsweredDrafts = async (base: string) => {
           let key = base;
@@ -3133,6 +3134,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
               where: {
                 sessionId: thread.sessionId,
                 type: "user.message",
+                // Typed in the app: not a channel contact's, a routine's, or an answer inside a card.
+                payload: { path: ["source"], equals: "app" },
                 createdAt: { gt: existing.answeredAt },
               },
             });
