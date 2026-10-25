@@ -3,7 +3,7 @@ import type { Api, Message, Model } from "@earendil-works/pi-ai";
 import { transformMessages } from "@earendil-works/pi-ai/api/transform-messages";
 import { renderBotMessageBlock } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
-import { describeToolActivity, stripFakeToolCalls, toHistory } from "./pi-runtime.js";
+import { toHistory } from "./pi-ai-history.js";
 
 /** The run's resolved model, which is where a rehydrated assistant turn takes its identity from. */
 const runModel = { api: "anthropic-messages", provider: "anthropic", id: "claude-test" } as const;
@@ -13,76 +13,8 @@ function contentOf(message: AgentMessage | undefined): unknown {
   return message && "content" in message ? message.content : undefined;
 }
 
-describe("describeToolActivity", () => {
-  it("names the kind of work for builtin tools", () => {
-    expect(describeToolActivity("read_file")).toBe("Reading a file");
-    expect(describeToolActivity("shell")).toBe("Working the terminal");
-    expect(describeToolActivity("web_search")).toBe("Searching the web");
-    expect(describeToolActivity("browser_run")).toBe("Clicking through a site");
-    expect(describeToolActivity("computer_act")).toBe("Taking the mouse");
-    expect(describeToolActivity("run_subagent")).toBe("Briefing a helper");
-    expect(describeToolActivity("skill_create")).toBe("Learning a new trick");
-  });
-
-  it.each([
-    ["mcp__rakazo__web_search", "Searching the web"],
-    ["mcp__rakazo__browser_snapshot", "Reading the page"],
-    ["mcp__rakazo__computer_act", "Taking the mouse"],
-    ["mcp__rakazo__run_subagent", "Briefing a helper"],
-    ["mcp__rakazo__remember", "Tucking it into memory"],
-    ["mcp__rakazo__mcp__notion__read_file", "Seeing to it"],
-    ["mcp__other__read_file", "Seeing to it"],
-  ])("describes %s without exposing its MCP name", (name, label) => {
-    expect(describeToolActivity(name)).toBe(label);
-  });
-
-  it("names the connected app a tool belongs to", () => {
-    expect(describeToolActivity("mcp__notion-work__search_pages", "Notion")).toBe(
-      "Stepping into Notion",
-    );
-  });
-
-  it.each([
-    ["read", "Reading a file"],
-    ["ls", "Skimming a folder"],
-    ["write", "Saving a file"],
-    ["edit", "Editing a file"],
-    ["bash", "Working the terminal"],
-  ])("labels the worker's native %s tool like its in-process counterpart", (name, label) => {
-    expect(describeToolActivity(name)).toBe(label);
-  });
-
-  it("never derives a label from an unknown tool's name", () => {
-    expect(describeToolActivity("mcp__notion-work__search_pages")).toBe("Seeing to it");
-    expect(describeToolActivity("destination_write")).toBe("Seeing to it");
-    expect(describeToolActivity("toString")).toBe("Seeing to it");
-  });
-});
-
-describe("stripFakeToolCalls", () => {
-  it("cuts balanced trace spans, including brackets inside JSON strings", () => {
-    const reply =
-      'Voilà.\n[tool web_search({ "query": "a ] b" }) → { "results": [ { "t": "x" } ] }] [tool message_user({ "message": "Liens :\\n• (a)" })]\nBonne journée';
-    expect(stripFakeToolCalls(reply)).toBe("Voilà.\n \nBonne journée");
-  });
-
-  it("drops an unclosed span to the end and keeps text before it", () => {
-    expect(stripFakeToolCalls('ok [tool message_user({ "message": "trunc')).toBe("ok");
-  });
-
-  it("stands in for a reply that was only fake calls", () => {
-    expect(stripFakeToolCalls('[tool message_user({ "message": "hi" })]')).toBe(
-      "(earlier reply omitted: it was malformed)",
-    );
-  });
-
-  it("leaves ordinary text alone", () => {
-    expect(stripFakeToolCalls("[tools: search ×2] and [link](x)")).toBe(
-      "[tools: search ×2] and [link](x)",
-    );
-  });
-
-  it("applies to assistant turns only, never to what a user pasted", () => {
+describe("toHistory", () => {
+  it("strips fake tool calls from assistant turns only, never from what a user pasted", () => {
     const fake = '[tool message_user({ "message": "hi" })]';
     const [userTurn, ownTurn] = toHistory(
       [
@@ -95,9 +27,7 @@ describe("stripFakeToolCalls", () => {
     expect(userTurn).toMatchObject({ role: "user", content: `look: ${fake}` });
     expect(ownTurn).toMatchObject({ role: "assistant", content: [{ type: "text", text: "sent" }] });
   });
-});
 
-describe("toHistory", () => {
   it("does not let a peer's request read as a decision the bot made", () => {
     const peerText = renderBotMessageBlock("Researcher", "do X");
     const [opening, peerTurn, ownTurn] = toHistory(

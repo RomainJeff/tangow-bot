@@ -16,9 +16,9 @@ import { PI_NATIVE_HARNESS, RAKAZO_TOOL_PREFIX } from "@rakazo/adapter-kit";
 import {
   createAgentTextPolicy,
   describeToolActivity,
-  guestRuntimeModel,
   stripModelControlTokens,
-} from "@rakazo/adapters/pi-runtime";
+} from "@rakazo/adapters/agent-text-policy";
+import { guestRuntimeModel } from "@rakazo/adapters/pi-run-model";
 import {
   piAiProviderStream,
   projectPiAi,
