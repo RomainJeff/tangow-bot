@@ -1,7 +1,6 @@
 import type {
   ComputerMode,
   HomeStorage,
-  SandboxKind,
   VolumeAccess,
   VolumeKind,
   WorkerState,
@@ -43,17 +42,6 @@ export function lostSetupMove(
   if (observed.workerState === "releasing") return "record_ref";
   if (observed.workerState === "released") return "reopen_orphan";
   return "stale";
-}
-
-/** Which computer kinds can move a home onto worker volumes. A new SandboxKind must declare one. */
-export const WORKER_SUPPORT = {
-  e2b: "worker",
-  docker: "in_process",
-  fake: "in_process",
-} as const satisfies Record<SandboxKind, "worker" | "in_process">;
-
-export function supportsWorkers(computerKind: string): boolean {
-  return (WORKER_SUPPORT as Record<string, string>)[computerKind] === "worker";
 }
 
 /**

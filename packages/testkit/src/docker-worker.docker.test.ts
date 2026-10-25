@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { ComputerRef, WorkerSpec } from "@rakazo/adapter-kit";
-import { DockerWorkerProvider } from "@rakazo/adapters";
+import { DockerSandboxProvider, DockerWorkerProvider } from "@rakazo/adapters";
 import { describe, expect, it } from "vitest";
 import { docker, dockerWorkersEnabled, useDockerSupervisor } from "./docker-worker.test-support.js";
 import { toolResult } from "./file-task.js";
@@ -90,6 +90,53 @@ describe.skipIf(!dockerWorkersEnabled)("Docker workers", () => {
       await run.close();
     }
   }, 120_000);
+
+  it("shows the Docker computer what a worker wrote, at the same paths", async () => {
+    const sandbox = new DockerSandboxProvider(supervisor.url, supervisor.token);
+    const run = await startWorkerRun<DockerWorkerProvider>({
+      provider,
+      sandbox,
+      dataDir: supervisor.dataDir,
+      computerScope: "team",
+      steps: [
+        call("write", "bash", {
+          command:
+            "printf 'worker\\n' > from-worker.txt && printf 'team\\n' > ../../shared/team.txt",
+        }),
+        ...finish("Wrote"),
+      ],
+    });
+    let computer: ComputerRef | undefined;
+    try {
+      computer = await run.startComputer();
+      const runId = await run.send("Write the files.");
+      await run.continueRun(runId);
+      run.model.assertComplete();
+      const context = { ...ctx("computer"), spaceId: run.spaceId };
+      const read = async (file: string) =>
+        Buffer.from(await sandbox.readFile(computer!, file, context)).toString("utf8");
+      expect(await read(`bots/${run.bot.id}/from-worker.txt`)).toBe("worker\n");
+      expect(await read("shared/team.txt")).toBe("team\n");
+      let output = "";
+      for await (const event of sandbox.execute(
+        computer,
+        {
+          argv: [
+            "bash",
+            "-c",
+            `cat /workspace/bots/${run.bot.id}/from-worker.txt && readlink /home/rakazo/workspace && pwd`,
+          ],
+        },
+        context,
+      )) {
+        if (event.type === "stdout") output += event.data;
+      }
+      expect(output).toBe("worker\n/workspace\n/workspace\n");
+    } finally {
+      if (computer) await sandbox.destroy(computer, { ...ctx("cleanup"), spaceId: run.spaceId });
+      await run.close();
+    }
+  }, 180_000);
 
   it.each([
     ["the container dies right after it was created", "kill"],

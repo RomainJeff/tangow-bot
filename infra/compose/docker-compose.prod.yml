@@ -22,8 +22,19 @@ services:
       timeout: 5s
       retries: 20
 
+  # Gives /data to the app image's uid 1000 before anything writes to it, as in the other files.
+  data-init:
+    # Optional Hub override; unset keeps busybox:1.
+    image: ${BUSYBOX_IMAGE:-busybox:1}
+    command: ["chown", "-R", "1000:1000", "/data"]
+    network_mode: none
+    restart: "no"
+    volumes:
+      - appdata:/data
+
   # Applies the migrations before the API and the worker start, writing the session log from the
-  # legacy messages first when an upgrade needs it. On a large database that takes minutes.
+  # legacy messages first when an upgrade needs it. On a large database that takes minutes. Then,
+  # on Docker, moves each idle computer's home onto its volumes in /data, as the image's uid 1000.
   migrate:
     image: ${RAKAZO_IMAGE:-ghcr.io/elie222/rakazo/app}:${RAKAZO_IMAGE_TAG:-local}
     build:
@@ -32,7 +43,10 @@ services:
       args:
         GIT_SHA: ${GIT_SHA:-}
     restart: "no"
-    command: ["pnpm", "exec", "tsx", "scripts/backfill-session-log.ts"]
+    command:
+      - sh
+      - -c
+      - pnpm exec tsx scripts/backfill-session-log.ts && pnpm exec tsx scripts/migrate-docker-homes.ts
     init: true
     security_opt:
       - no-new-privileges:true
@@ -43,11 +57,17 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://${POSTGRES_USER:-rakazo}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-rakazo}
+      DATA_DIR: /data
+      SANDBOX_PROVIDER: ${SANDBOX_PROVIDER:-e2b}
+    volumes:
+      - appdata:/data
     networks:
       - data
     depends_on:
       postgres:
         condition: service_healthy
+      data-init:
+        condition: service_completed_successfully
 
   api:
     # The tag is what the updater moves. `docker compose pull` fetches it, `up -d` recreates onto

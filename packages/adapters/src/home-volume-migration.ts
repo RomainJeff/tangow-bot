@@ -216,6 +216,31 @@ async function planHome(
   return { planned, notCopied, exported, links };
 }
 
+/** An E2B computer whose home is still on snapshots, which only the in-process path can run. */
+export class E2BHomesNotMigrated extends Error {
+  constructor(readonly computerIds: string[]) {
+    super(
+      [
+        `${computerIds.length} E2B computer${computerIds.length === 1 ? " keeps its" : "s keep their"} home on snapshots: ${computerIds.join(", ")}.`,
+        "Move each one onto volumes before starting the API:",
+        "  pnpm exec tsx scripts/migrate-home-to-volumes.ts --computer <id> --manifest <path>",
+        "See docs/self-host-e2b-workers.md#move-existing-homes-onto-volumes.",
+      ].join("\n"),
+    );
+    this.name = "E2BHomesNotMigrated";
+  }
+}
+
+/** Refuses to go on while an E2B computer's home is still on snapshots. */
+export async function assertE2BHomesOnVolumes(prisma: PrismaClient): Promise<void> {
+  const computers = await prisma.computer.findMany({
+    where: { kind: "e2b", homeStorage: "snapshot" },
+    select: { id: true },
+    orderBy: { id: "asc" },
+  });
+  if (computers.length > 0) throw new E2BHomesNotMigrated(computers.map(({ id }) => id));
+}
+
 /** Read-only planning before an operator agrees to an upgrade, including Docker source homes. */
 export async function previewHomeVolumeMove(
   deps: { prisma: PrismaClient; home: AgentHomeStore },
