@@ -4,25 +4,50 @@ import path from "node:path";
 import type { AdapterContext } from "@rakazo/adapter-kit";
 import type { PrismaClient } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
-import type {
-  HomeAdoption,
-  HomeMoveBlocker,
-  VolumeOwner,
-  WorkerLifecycle,
-} from "./worker-lifecycle.js";
+import type { HomeAdoption, HomeMoveBlocker, WorkerLifecycle } from "./worker-lifecycle.js";
+import { HOME_MOVE_TTL_MS } from "./worker-lifecycle.js";
 
 export type DockerHomeMove =
   | { outcome: "already_on_volumes" }
   | { outcome: "refused"; code: HomeMoveBlocker | Exclude<HomeAdoption, "adopted"> }
   | { outcome: "adopted"; moved: string[] };
 
+/** A home whose content conflicts with its volumes: only that computer waits for an operator. */
+export class DockerHomeConflict extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DockerHomeConflict";
+  }
+}
+
+/** Homes and volumes on different filesystems: no home can move until the deployment is fixed. */
+export class DockerHomeStorageError extends Error {
+  constructor(source: string, target: string) {
+    super(
+      `${source} and ${target} are on different filesystems. DATA_DIR/homes and DATA_DIR/volumes must live on the same DATA_DIR storage.`,
+    );
+    this.name = "DockerHomeStorageError";
+  }
+}
+
+type Destination = { scope: "private"; botId: string } | { scope: "shared" };
+/** A home entry still to move, as `lstat` saw it: never followed. */
+type Leftover = { source: string; label: string; stats: Stats; destination: Destination };
+type Rename =
+  | { kind: "replace" | "into"; source: string; target: string; label: string }
+  | { kind: "drop"; source: string; label: string };
+
+const RENEW_AFTER_MS = HOME_MOVE_TTL_MS / 3;
+
 /**
  * Moves one idle Docker computer's home onto its volumes by renaming, on the storage that holds
  * both `DATA_DIR/homes` and `DATA_DIR/volumes`. A team home gives `bots/<botId>` to each bot's
  * private volume and `shared` to the space volume; a dedicated home gives every root entry but its
- * dot entries to its bot's private volume. What stays, dotfiles and browser profiles, is still
- * `/home/rakazo`. Nothing is copied or left behind, and a move interrupted after some renames
- * resumes: a target whose source is gone is done.
+ * dot entries to its bot's private volume. Dotfiles and browser profiles stay in `/home/rakazo`.
+ *
+ * The computer adopts its volumes before the first rename, under the move reservation, so it never
+ * boots on a half-moved home. A rename that fails afterwards leaves the rest in the home directory,
+ * and the next run, which also visits computers already on volumes, finishes it.
  */
 export async function moveDockerHomeToVolumes(
   deps: { prisma: PrismaClient; workers: WorkerLifecycle; dataDir: string },
@@ -41,60 +66,68 @@ export async function moveDockerHomeToVolumes(
       bots: { select: { id: true } },
     },
   });
-  if (computer.homeStorage === "volumes") return { outcome: "already_on_volumes" };
   if (computer.kind !== "docker") throw new Error(`${computerId} is not a Docker computer`);
+  const onVolumes = computer.homeStorage === "volumes";
+  const data = path.resolve(deps.dataDir);
+  const home = path.join(data, "homes", computer.homeKey);
+  const layout = {
+    team: computer.scope === "team",
+    botIds: computer.bots.map((bot) => bot.id),
+    homeKey: computer.homeKey,
+  };
+  if (onVolumes && (await leftovers(home, layout)).length === 0) {
+    return { outcome: "already_on_volumes" };
+  }
+
   const { start } = await workers.inspectHomeMove(computerId);
   const reservation = await workers.reserveHomeMove(computerId);
   if ("blocker" in reservation) return { outcome: "refused", code: reservation.blocker };
-  try {
-    const team = computer.scope === "team";
-    const volumeRef = async (owner: VolumeOwner) =>
-      (await workers.ensureVolume(owner, context)).providerRef;
-    const privates = new Map<string, string>();
-    for (const bot of computer.bots) {
-      privates.set(
-        bot.id,
-        await volumeRef({ kind: "bot_private", spaceId: computer.spaceId, botId: bot.id }),
-      );
+  let renewedAt = Date.now();
+  // A boot waits while the reservation holds, so it must not lapse in the middle of the renames.
+  const keepReserved = async () => {
+    if (Date.now() - renewedAt < RENEW_AFTER_MS) return;
+    const started = Date.now();
+    if (!(await workers.renewHomeMove(reservation.marker))) {
+      throw new Error(`The home move reservation of ${computerId} expired`);
     }
-    const shared = team
-      ? await volumeRef({ kind: "space_shared", spaceId: computer.spaceId })
-      : null;
-
-    const data = path.resolve(deps.dataDir);
-    const home = await realDirectory(path.join(data, "homes"), computer.homeKey);
+    renewedAt = started;
+  };
+  try {
+    const refs = new Map<string, string>();
+    for (const botId of layout.botIds) {
+      await keepReserved();
+      const owner = { kind: "bot_private" as const, spaceId: computer.spaceId, botId };
+      refs.set(botId, (await workers.ensureVolume(owner, context)).providerRef);
+    }
+    if (layout.team) {
+      const owner = { kind: "space_shared" as const, spaceId: computer.spaceId };
+      refs.set("", (await workers.ensureVolume(owner, context)).providerRef);
+    }
     const volumes = await realDirectory(data, "volumes");
-    if (!volumes) throw new Error(`${path.join(data, "volumes")} does not exist`);
-    const target = async (ref: string) => {
-      const directory = await realDirectory(volumes, ref);
-      if (!directory) throw new Error(`The volume ${ref} has no directory`);
+    const volumeOf = async (destination: Destination) => {
+      const ref = refs.get(destination.scope === "shared" ? "" : destination.botId);
+      const directory = ref && (await realDirectory(volumes, ref));
+      if (!directory) throw new Error(`No volume directory for ${JSON.stringify(destination)}`);
       return directory;
     };
-    const moved: string[] = [];
-    if (home && team) {
-      const bots = await realDirectory(home, "bots");
-      for (const [botId, ref] of privates) {
-        if (bots && (await moveDirectory(path.join(bots, botId), await target(ref)))) {
-          moved.push(`bots/${botId}`);
-        }
-      }
-      if (shared && (await moveDirectory(path.join(home, "shared"), await target(shared)))) {
-        moved.push("shared");
-      }
-    } else if (home) {
-      const ref = privates.get(computer.homeKey);
-      if (!ref)
-        throw new Error(`The dedicated computer ${computerId} has no bot ${computer.homeKey}`);
-      const into = await target(ref);
-      for (const name of (await readdir(home)).sort()) {
-        if (name.startsWith(".")) continue;
-        await moveEntry(path.join(home, name), path.join(into, name));
-        moved.push(name);
-      }
+    // Every conflict is found before anything moves or the computer adopts its volumes.
+    const renames: Rename[] = [];
+    for (const leftover of await leftovers(home, layout)) {
+      renames.push(await planRename(leftover, await volumeOf(leftover.destination)));
     }
 
-    const adoption = await workers.adoptVolumeHome(computerId, start, reservation.marker);
-    if (adoption !== "adopted") return { outcome: "refused", code: adoption };
+    if (!onVolumes) {
+      await keepReserved();
+      const adoption = await workers.adoptVolumeHome(computerId, start, reservation.marker);
+      if (adoption !== "adopted") return { outcome: "refused", code: adoption };
+    }
+    const moved: string[] = [];
+    for (const step of renames) {
+      await keepReserved();
+      if (step.kind === "drop") await rmdir(step.source);
+      else await renameOnStorage(step.source, step.target);
+      if (step.kind !== "drop") moved.push(step.label);
+    }
     return { outcome: "adopted", moved };
   } finally {
     await workers.releaseHomeMove(reservation.marker);
@@ -102,8 +135,10 @@ export async function moveDockerHomeToVolumes(
 }
 
 /**
- * Moves the Docker homes still off volumes whose computer is idle now, every one or only
- * `computerId`. A busy one is skipped: it moves the next time it suspends.
+ * Moves the Docker homes left to move, every one or only `computerId`: those still off volumes,
+ * and those whose move stopped after the computer adopted its volumes. A busy computer, or one whose
+ * home conflicts with its volumes, is logged and skipped; the others still move. Only a deployment
+ * error, homes and volumes on different filesystems, or a database failure throws.
  */
 export async function moveIdleDockerHomes(
   deps: { prisma: PrismaClient; workers: WorkerLifecycle; dataDir: string },
@@ -111,20 +146,33 @@ export async function moveIdleDockerHomes(
   computerId?: string,
 ): Promise<{ adopted: number; deferred: number }> {
   const computers = await deps.prisma.computer.findMany({
-    where: { kind: "docker", homeStorage: "snapshot", ...(computerId && { id: computerId }) },
+    where: { kind: "docker", ...(computerId && { id: computerId }) },
     select: { id: true },
     orderBy: { id: "asc" },
   });
   const counts = { adopted: 0, deferred: 0 };
   for (const { id } of computers) {
-    const move = await moveDockerHomeToVolumes(deps, id, context);
-    if (move.outcome === "adopted") counts.adopted += 1;
-    if (move.outcome === "refused") {
+    try {
+      const move = await moveDockerHomeToVolumes(deps, id, context);
+      if (move.outcome === "adopted") counts.adopted += 1;
+      if (move.outcome === "refused") {
+        counts.deferred += 1;
+        getLogger().info("docker home move deferred", { computerId: id, reason: move.code });
+      }
+    } catch (error) {
+      if (!(error instanceof DockerHomeConflict || isFileSystemError(error))) throw error;
       counts.deferred += 1;
-      getLogger().info("docker home move deferred", { computerId: id, reason: move.code });
+      getLogger().warn("docker home move deferred", {
+        computerId: id,
+        reason: error instanceof Error ? error.message : String(error),
+      });
     }
   }
   return counts;
+}
+
+function isFileSystemError(error: unknown): boolean {
+  return error instanceof Error && "syscall" in error;
 }
 
 async function lstatOrNull(target: string): Promise<Stats | null> {
@@ -134,54 +182,72 @@ async function lstatOrNull(target: string): Promise<Stats | null> {
   });
 }
 
-/** `parent/name` when it is a real directory, null when absent. A link there is refused. */
-async function realDirectory(parent: string, name: string): Promise<string | null> {
+async function realDirectory(parent: string, name: string): Promise<string> {
   const directory = path.join(parent, name);
   const stats = await lstatOrNull(directory);
-  if (!stats) return null;
-  if (stats.isSymbolicLink() || !stats.isDirectory()) {
-    throw new Error(`${directory} is not a directory`);
-  }
+  if (!stats?.isDirectory()) throw new Error(`${directory} is not a directory`);
   return directory;
 }
 
 /**
- * Renames `source` onto the volume directory `target`, which `ensureVolume` created empty. A rename
- * replaces an empty directory. With the source gone, an earlier run already moved it; an empty
- * source next to a filled target is what a later boot recreated, and goes.
+ * What the home still holds for its volumes. The home root and `bots` are descended only when they
+ * are real directories, so a link a guest planted there is never followed: a `bots` that is not a
+ * directory holds no bot folder. A dedicated home keeps its dot entries and the `workspace` link a
+ * computer on volumes makes.
  */
-async function moveDirectory(source: string, target: string): Promise<boolean> {
-  const stats = await lstatOrNull(source);
-  if (!stats) return false;
-  if (stats.isSymbolicLink() || !stats.isDirectory()) {
-    throw new Error(`${source} is not a directory`);
-  }
-  const sourceEmpty = (await readdir(source)).length === 0;
-  const targetEmpty = (await readdir(target)).length === 0;
-  if (!targetEmpty) {
-    if (sourceEmpty) {
-      await rmdir(source);
-      return false;
+async function leftovers(
+  home: string,
+  layout: { team: boolean; botIds: string[]; homeKey: string },
+): Promise<Leftover[]> {
+  const root = await lstatOrNull(home);
+  if (!root) return [];
+  if (!root.isDirectory()) throw new DockerHomeConflict(`${home} is not a directory`);
+  const found: Leftover[] = [];
+  const add = async (source: string, label: string, destination: Destination) => {
+    const stats = await lstatOrNull(source);
+    if (stats) found.push({ source, label, stats, destination });
+  };
+  if (!layout.team) {
+    for (const name of (await readdir(home)).sort()) {
+      if (name.startsWith(".")) continue;
+      const source = path.join(home, name);
+      if (name === "workspace" && (await lstat(source)).isSymbolicLink()) continue;
+      await add(source, name, { scope: "private", botId: layout.homeKey });
     }
-    throw new Error(`Both ${source} and ${target} hold files`);
+    return found;
   }
-  await renameOnStorage(source, target);
-  return true;
+  if ((await lstatOrNull(path.join(home, "bots")))?.isDirectory()) {
+    for (const botId of [...layout.botIds].sort()) {
+      await add(path.join(home, "bots", botId), `bots/${botId}`, { scope: "private", botId });
+    }
+  }
+  await add(path.join(home, "shared"), "shared", { scope: "shared" });
+  return found;
 }
 
-/** One entry of a dedicated home, moved as it is: a link or a special file is never followed. */
-async function moveEntry(source: string, target: string): Promise<void> {
-  if (await lstatOrNull(target)) throw new Error(`${target} already exists`);
-  await renameOnStorage(source, target);
+/**
+ * How one leftover reaches its volume. A team folder replaces the empty volume directory; an empty
+ * one a later boot recreated next to a moved one goes. A link or a file there, and each entry of a
+ * dedicated home, moves into the volume as it is.
+ */
+async function planRename(leftover: Leftover, volume: string): Promise<Rename> {
+  const { source, label, stats } = leftover;
+  const team = label === "shared" || label.startsWith("bots/");
+  if (team && stats.isDirectory()) {
+    const sourceEmpty = (await readdir(source)).length === 0;
+    const volumeEmpty = (await readdir(volume)).length === 0;
+    if (sourceEmpty) return { kind: "drop", source, label };
+    if (!volumeEmpty) throw new DockerHomeConflict(`Both ${source} and ${volume} hold files`);
+    return { kind: "replace", source, target: volume, label };
+  }
+  const target = path.join(volume, path.basename(source));
+  if (await lstatOrNull(target)) throw new DockerHomeConflict(`${target} already exists`);
+  return { kind: "into", source, target, label };
 }
 
 async function renameOnStorage(source: string, target: string): Promise<void> {
   await rename(source, target).catch((error: NodeJS.ErrnoException) => {
-    if (error.code === "EXDEV") {
-      throw new Error(
-        `${source} and ${target} are on different storage: DATA_DIR/homes and DATA_DIR/volumes must share it`,
-      );
-    }
+    if (error.code === "EXDEV") throw new DockerHomeStorageError(source, target);
     throw error;
   });
 }

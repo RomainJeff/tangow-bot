@@ -22,6 +22,16 @@ services:
       timeout: 5s
       retries: 20
 
+  # Gives /data to the app image's uid 1000 before anything writes to it, as in the other files.
+  data-init:
+    # Optional Hub override; unset keeps busybox:1.
+    image: ${BUSYBOX_IMAGE:-busybox:1}
+    command: ["chown", "-R", "1000:1000", "/data"]
+    network_mode: none
+    restart: "no"
+    volumes:
+      - appdata:/data
+
   # Applies the migrations before the API and the worker start, writing the session log from the
   # legacy messages first when an upgrade needs it. On a large database that takes minutes. Then,
   # on Docker, moves each idle computer's home onto its volumes in /data, as the image's uid 1000.
@@ -56,6 +66,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      data-init:
+        condition: service_completed_successfully
 
   api:
     # The tag is what the updater moves. `docker compose pull` fetches it, `up -d` recreates onto

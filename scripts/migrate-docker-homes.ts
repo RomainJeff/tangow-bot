@@ -2,7 +2,9 @@
  * Moves every idle Docker computer's home onto its volumes, by renaming its directories under
  * `DATA_DIR`. The Compose `migrate` service runs it after the migrations, before the API and the
  * worker start. A computer still running or controlled is left for the idle job, which moves it
- * when it suspends. Running it twice changes nothing.
+ * when it suspends. A home that conflicts with its volume is logged with its computer id and
+ * skipped. It exits non-zero only when the deployment is wrong (homes and volumes on different
+ * filesystems) or the database fails. Running it twice changes nothing.
  *
  *   pnpm exec tsx scripts/migrate-docker-homes.ts
  *

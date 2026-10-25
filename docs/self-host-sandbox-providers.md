@@ -58,7 +58,9 @@ Homes created before volumes move once, by renaming their folders into the volum
 Computer's `bots/<botId>/` and `shared/`, and everything at the root of a Private Computer except
 its dot entries. The `migrate` service moves every idle computer before the API and the worker
 start (`scripts/migrate-docker-homes.ts` for a source checkout). A computer still running moves
-when it next goes to sleep. Nothing is copied, and a home on volumes stays there.
+when it next goes to sleep. Nothing is copied, and a home on volumes stays there. A home whose
+folder and volume both hold files is left as it is and logged with its computer id, and the
+others still move.
 
 On Docker Desktop (macOS, Windows), a worker can reach the host's localhost through
 `host.docker.internal`, so the API, web and Postgres published on `127.0.0.1` answer it. They still

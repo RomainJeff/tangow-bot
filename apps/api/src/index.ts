@@ -20,7 +20,8 @@ try {
   const legacy = createDb(env.databaseUrl, { poolMax: 1 });
   try {
     await moveLegacyMessages(legacy.prisma, { log: (line) => logger.info(line) });
-    await assertE2BHomesOnVolumes(legacy.prisma);
+    // Only an E2B deployment runs E2B computers: leftover rows must not block a Docker install.
+    if (env.sandboxProvider === "e2b") await assertE2BHomesOnVolumes(legacy.prisma);
   } finally {
     await legacy.prisma.$disconnect();
     await legacy.pool.end();
