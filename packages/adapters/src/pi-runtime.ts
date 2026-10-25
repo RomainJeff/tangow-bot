@@ -32,6 +32,7 @@ import type {
   SubagentLog,
   ToolCallTrace,
 } from "@rakazo/adapter-kit";
+import { RAKAZO_TOOL_PREFIX } from "@rakazo/adapter-kit";
 import { redactSecrets } from "@rakazo/core";
 import { getLogger, redactSensitiveText } from "@rakazo/logging";
 import { z } from "zod";
@@ -697,7 +698,10 @@ const TOOL_ACTIVITY = new Map<string, string>([
  */
 export function describeToolActivity(toolName: string, appName?: string): string {
   if (appName) return `Stepping into ${appName}`;
-  return TOOL_ACTIVITY.get(toolName) ?? "Seeing to it";
+  const name = toolName.startsWith(RAKAZO_TOOL_PREFIX)
+    ? toolName.slice(RAKAZO_TOOL_PREFIX.length)
+    : toolName;
+  return TOOL_ACTIVITY.get(name) ?? "Seeing to it";
 }
 
 /** Model-facing tool name to connected app display name, for the activity line. */

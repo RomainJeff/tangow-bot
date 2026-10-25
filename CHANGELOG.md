@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
+- While a bot works on web, desktop and iPhone, activity messages describe the tool being used even when it has a Rakazo MCP prefix, instead of showing raw tool names and arguments or a generic status.
+
 - Opening a bot computer screen or taking control on web, desktop and iPhone no longer fails after the dock starts.
 - Computer updates and recovery on web, desktop and iPhone now show an explicit successful result until you select Done, instead of closing the progress view without confirmation.
 - Every bot's computer screen now has the dock with Browser, Files and Terminal, on E2B and for the additional bots of a Docker Team Computer, instead of a bare desktop with only the browser.
