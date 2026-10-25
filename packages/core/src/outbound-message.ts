@@ -58,15 +58,35 @@ export type OutboundCall =
   | { kind: "classic" }
   | { kind: "refuse"; error: string };
 
+/** Free text the bot writes beside a message, anew on each retry, which says nothing of where it goes. */
+const FREE_TEXT_NOTES = new Set(["thought"]);
+
 /**
- * What a draft would send, as the key of its effect: the app, the recipients, the subject, the text
- * and the sending account. Every other argument of a call that reads as a draft is explained as
- * leaving the message as it is (a flag, a toggle, a thread id, the bot's own `thought`), so the
- * same mail issued again with other words there is the same effect, whatever the tool's envelope.
+ * What a draft would send, as the key of its effect: the tool, the app, the recipients, the
+ * subject, the text, the sending account, and every argument that says where it lands (a thread,
+ * a message or a reply it answers, a broadcast). Only the bot's own free-text notes are left out,
+ * so the same mail issued again with other words there is the same effect, whatever the tool's
+ * envelope, and the same text in another thread or by another tool is another. `toolName` is the
+ * tool the call performs when it is not the one the effect is recorded under, as in a batch.
  */
-export function outboundDraftIdentity(draft: OutboundDraft): Record<string, unknown> {
+export function outboundDraftIdentity(
+  draft: OutboundDraft,
+  toolName?: string,
+): Record<string, unknown> {
+  const addressing = Object.entries(draft.args)
+    .filter(([key, value]) => {
+      const role = FIELD_ROLES[fieldKey(key)];
+      return (
+        (role === "inert" || role === "toggle") &&
+        !FREE_TEXT_NOTES.has(fieldKey(key)) &&
+        value !== undefined
+      );
+    })
+    .sort(([left], [right]) => left.localeCompare(right));
   return {
     app: draft.connectorKind,
+    ...(toolName === undefined ? {} : { tool: toolName }),
+    ...(addressing.length === 0 ? {} : { addressing: Object.fromEntries(addressing) }),
     recipients: draft.recipients
       .map((recipient) => `${recipient.role} ${recipient.address.toLowerCase()}`)
       .sort(),
