@@ -5,7 +5,6 @@ import type {
   ComputerReleaseReason,
   ComputerStatus,
   Group,
-  Me,
   Routine,
   SpaceMemoryConfig,
   TaughtSkill,
@@ -26,7 +25,7 @@ import { CreateGroupForm, GroupSettings } from "../GroupPanel";
 import { WindowChrome } from "../WindowChrome";
 import type { BotCommands } from "./bot-commands";
 import { CreateBotForm } from "./bot-panel";
-import { ComputerPreview, computerLabel, DesktopKindEmptyState } from "./computer-preview";
+import { ComputerPreview, computerLabel } from "./computer-preview";
 import type { BotPageView, Panel, PanelSize } from "./layout";
 import { firstThreadRoute, panelIsOpen } from "./layout";
 import { usePanelEscape } from "./panel-escape";
@@ -48,7 +47,6 @@ export function SidePanel({
   computerOpen,
   escapeCloses,
   booting,
-  bootstrapMe,
   embeddedScreenUrl,
   computerScreenError,
   screenLink,
@@ -82,7 +80,6 @@ export function SidePanel({
   /** False while a full-screen overlay or a call owns the Escape key. */
   escapeCloses: boolean;
   booting: boolean;
-  bootstrapMe: Me | null | undefined;
   embeddedScreenUrl: string | null;
   computerScreenError: ReactNode;
   screenLink: ScreenLinkHandlers;
@@ -168,7 +165,6 @@ export function SidePanel({
                     computer={computer}
                     computerOpen={computerOpen}
                     booting={booting}
-                    bootstrapMe={bootstrapMe}
                     embeddedScreenUrl={embeddedScreenUrl}
                     computerScreenError={computerScreenError}
                     screenLink={screenLink}
@@ -357,7 +353,6 @@ export function ComputerOverlay({
               <TeachComputerOverlayControl
                 key={active.id}
                 botId={active.id}
-                computer={computer}
                 busy={teachBusy}
                 onRefresh={refreshActiveTeaching}
               >
@@ -393,9 +388,7 @@ export function ComputerOverlay({
           </div>
         ) : null}
         <div className="relative min-h-0 flex-1 bg-background">
-          {computer?.kind === "desktop" ? (
-            <DesktopKindEmptyState className="grid h-full place-items-center px-8 text-center text-meta text-muted-foreground/80" />
-          ) : computer?.state === "running" && embeddedScreenUrl && !computerScreenError ? (
+          {computer?.state === "running" && embeddedScreenUrl && !computerScreenError ? (
             <>
               <ScreenFrame
                 url={embeddedScreenUrl}

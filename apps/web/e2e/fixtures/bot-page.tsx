@@ -299,8 +299,6 @@ const READS: Record<string, unknown> = {
     needsModel: false,
     defaultProvider: "anthropic",
     defaultModel: "claude-sonnet",
-    computerHost: "docker",
-    canChooseHostComputer: false,
     sandboxProvider: "docker",
     avatarStyle: "organic",
   },

@@ -49,8 +49,6 @@ test("local settings open and save integrations without an app session", async (
               needsModel: true,
               defaultProvider: "openai-compatible",
               defaultModel: "custom",
-              computerHost: "local",
-              canChooseHostComputer: true,
               sandboxProvider: "docker",
               avatarStyle: "robot",
             };

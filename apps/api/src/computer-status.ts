@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { computerSupportsUpdate } from "@rakazo/adapters";
 import { type ComputerStatus, SandboxKind } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, DEFAULT_COMPUTER_SCREEN } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
@@ -109,6 +108,6 @@ export function toComputerStatus(
     homeRevision: computer?.homeRevision ?? null,
     screenStamp: screenStamp(botScreenGeneration, computer),
     busyBotName,
-    canUpdate: computerSupportsUpdate(kind),
+    canUpdate: true,
   };
 }

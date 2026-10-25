@@ -1,12 +1,8 @@
 import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { Bot, ComputerStatus, Me } from "@rakazo/contracts";
+import type { Bot, ComputerStatus } from "@rakazo/contracts";
 import { Maximize2 } from "lucide-react";
 import type { ReactNode } from "react";
-import {
-  ComputersUnavailableHint,
-  computersAreUnavailable,
-} from "../../components/ComputersUnavailableHint";
 import type { ScreenLinkHandlers } from "./screen-frame";
 import { ScreenFrame } from "./screen-frame";
 
@@ -16,7 +12,6 @@ export function ComputerPreview({
   computer,
   computerOpen,
   booting,
-  bootstrapMe,
   embeddedScreenUrl,
   computerScreenError,
   screenLink,
@@ -26,7 +21,6 @@ export function ComputerPreview({
   computer: ComputerStatus | null;
   computerOpen: boolean;
   booting: boolean;
-  bootstrapMe: Me | null | undefined;
   embeddedScreenUrl: string | null;
   computerScreenError: ReactNode;
   screenLink: ScreenLinkHandlers;
@@ -43,8 +37,6 @@ export function ComputerPreview({
           <div className="grid h-full place-items-center text-meta text-muted-foreground/80">
             <Trans>Open in full window</Trans>
           </div>
-        ) : computer?.kind === "desktop" ? (
-          <DesktopKindEmptyState className="grid h-full place-items-center px-6 text-center text-meta text-muted-foreground/80" />
         ) : computer?.state === "running" && embeddedScreenUrl && !computerScreenError ? (
           <ScreenFrame
             url={embeddedScreenUrl}
@@ -56,15 +48,11 @@ export function ComputerPreview({
         ) : (
           <div className="grid h-full place-items-center px-6 text-center text-meta text-muted-foreground/80">
             {computerScreenError ??
-              (computersAreUnavailable(bootstrapMe?.sandboxProvider) ? (
-                <ComputersUnavailableHint />
-              ) : (
-                computerPlaceholder(
-                  computer?.state,
-                  booting,
-                  computerLabel(computer?.mode, bot.name),
-                )
-              ))}
+              computerPlaceholder(
+                computer?.state,
+                booting,
+                computerLabel(computer?.mode, bot.name),
+              )}
           </div>
         )}
         {!computerScreenError ? (
@@ -85,16 +73,6 @@ export function ComputerPreview({
       <p className="mt-2 truncate text-reasoning text-muted-foreground" dir="auto">
         {t`${bot.name}'s screen`}
       </p>
-    </div>
-  );
-}
-
-export function DesktopKindEmptyState({ className }: { className?: string }) {
-  return (
-    <div className={className}>
-      <Trans>
-        This bot runs on this computer, not a Linux desktop. Shell and files use your home folder.
-      </Trans>
     </div>
   );
 }

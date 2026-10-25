@@ -426,7 +426,7 @@ describe("moving a home from snapshots to volumes", () => {
     expect(await homeStorageOf(computer.id)).toBe("volumes");
   });
 
-  it.each(["none", "desktop", "running", "worker"])(
+  it.each(["none", "docker", "running", "worker"])(
     "copies a dedicated home despite a %s sibling, with no shared volume",
     async (sibling) => {
       const spaceId = await fixture.seedSpace();
@@ -445,7 +445,7 @@ describe("moving a home from snapshots to volumes", () => {
       await seedHome(bot.id, { "docs/a.md": "alpha", "shared/b.md": "not the space's" });
       if (sibling !== "none") {
         const other = await fixture.seedComputer(spaceId, {
-          kind: sibling === "desktop" ? "desktop" : "e2b",
+          kind: sibling === "docker" ? "docker" : "e2b",
         });
         if (sibling === "running")
           await prisma.computer.update({ where: { id: other.id }, data: { state: "running" } });

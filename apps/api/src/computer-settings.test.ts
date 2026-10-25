@@ -63,8 +63,6 @@ it("lists each owned active computer once and queues only idle computers in the 
     firstExecutingBot.id < secondExecutingBot.id ? firstExecutingBot : secondExecutingBot;
   const executingBot =
     executingRepresentative.id === firstExecutingBot.id ? secondExecutingBot : firstExecutingBot;
-  const unsupported = await fixture.seedComputer(spaceId, { kind: "desktop" });
-  const unsupportedBot = await fixture.seedBot(spaceId, unsupported.id);
   const archived = await fixture.seedComputer(spaceId);
   const archivedBot = await fixture.seedBot(spaceId, archived.id);
   await prisma.bot.update({ where: { id: archivedBot.id }, data: { archivedAt: new Date() } });
@@ -120,7 +118,7 @@ it("lists each owned active computer once and queues only idle computers in the 
     const listed = ComputerListItemSchema.array().parse(await call("list"));
     const representative = firstBot.id < secondBot.id ? firstBot : secondBot;
     expect(listed.map((item) => item.botId).sort()).toEqual(
-      [representative.id, controlledBot.id, executingRepresentative.id, unsupportedBot.id].sort(),
+      [representative.id, controlledBot.id, executingRepresentative.id].sort(),
     );
     expect(listed.find((item) => item.botId === representative.id)).toMatchObject({
       name: representative.name,
@@ -153,7 +151,6 @@ it("lists each owned active computer once and queues only idle computers in the 
       [
         { botId: controlledBot.id, name: controlledBot.name, reason: "busy" },
         { botId: executingRepresentative.id, name: executingRepresentative.name, reason: "busy" },
-        { botId: unsupportedBot.id, name: unsupportedBot.name, reason: "unsupported" },
       ].sort((a, b) => a.botId.localeCompare(b.botId)),
     );
     expect(
