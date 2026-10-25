@@ -24,6 +24,18 @@ describe("describeToolActivity", () => {
     expect(describeToolActivity("skill_create")).toBe("Learning a new trick");
   });
 
+  it.each([
+    ["mcp__rakazo__web_search", "Searching the web"],
+    ["mcp__rakazo__browser_snapshot", "Reading the page"],
+    ["mcp__rakazo__computer_act", "Taking the mouse"],
+    ["mcp__rakazo__run_subagent", "Briefing a helper"],
+    ["mcp__rakazo__remember", "Tucking it into memory"],
+    ["mcp__rakazo__mcp__notion__read_file", "Seeing to it"],
+    ["mcp__other__read_file", "Seeing to it"],
+  ])("describes %s without exposing its MCP name", (name, label) => {
+    expect(describeToolActivity(name)).toBe(label);
+  });
+
   it("names the connected app a tool belongs to", () => {
     expect(describeToolActivity("mcp__notion-work__search_pages", "Notion")).toBe(
       "Stepping into Notion",

@@ -15,6 +15,7 @@ import type { GuestBody, GuestImage, GuestRunInput, ReplyFinal } from "@rakazo/a
 import { PI_NATIVE_HARNESS, RAKAZO_TOOL_PREFIX } from "@rakazo/adapter-kit";
 import {
   createAgentTextPolicy,
+  describeToolActivity,
   guestRuntimeModel,
   stripModelControlTokens,
 } from "@rakazo/adapters/pi-runtime";
@@ -81,10 +82,9 @@ function rakazoExtension(
     });
     pi.on("tool_execution_start", async (event) => {
       if (agent !== "root") return;
-      const args = JSON.stringify(event.args ?? {});
       await host.emit({
         type: "progress",
-        text: `${event.toolName} ${args.length > 160 ? `${args.slice(0, 160)}…` : args}`,
+        text: describeToolActivity(controllerNames.get(event.toolName) ?? event.toolName),
         activity: true,
       });
     });
