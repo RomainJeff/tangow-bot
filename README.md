@@ -1,30 +1,8 @@
-# Rakazo
-
-[![GitHub stars](https://img.shields.io/github/stars/elie222/rakazo?labelColor=black&style=for-the-badge&color=2563EB)](https://github.com/elie222/rakazo/stargazers)
-[![Discord](https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?labelColor=black&style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/RWwKa2Sn7h)
-
-![Rakazo — AI teammates you actually own](./docs/readme-hero.png)
+# Tangow
 
 Rakazo is an open-source platform for running persistent AI teammates. It is available on the web,
 as an Electron desktop app, and through an Expo mobile app. Bring your own model and computer
 provider, or run the complete stack locally.
-
-Rakazo is in beta. Learn more at [rakazo.com](https://rakazo.com).
-
-## Features
-
-- Persistent bots with their own conversations, memory, routines, and history
-- Voice mode: speak replies, dictate, and call a bot. Bring your own ElevenLabs, OpenAI, Cartesia, or Fish Audio key
-- Shared Team Computers and isolated Private computers
-- Browser, terminal, file, and graphical desktop access
-- Bots that can delegate to peer bots or short-lived subagents
-- Bring-your-own model credentials through Pi
-- App integrations through Composio or Pipedream Connect, plus user-installed Treg, remote MCP, and OpenAPI tool sources
-- Docker, E2B, and trusted local-computer support
-
-## Demo
-
-https://github.com/user-attachments/assets/dccdeddb-2134-4a56-8eed-b2e591736b1c
 
 ## Stack
 
@@ -164,15 +142,6 @@ setup again.
 
 Mobile build and release instructions live in [docs/mobile-release.md](./docs/mobile-release.md).
 
-## UI language
-
-The web (and Electron-hosted) UI supports English, Deutsch, 한국어, Türkçe, हिन्दी,
-Português (Brasil), 简体中文, Español, and Русский under **Settings → Language**. The Expo
-app supports English, 简体中文, and Русский under **Account → Language**. The marketing
-homepage (`apps/www`) is available in en/de/ko/zh via footer language links (`/`, `/de/`,
-`/ko/`, `/zh/`); other marketing pages stay English. The Russian marketing homepage and
-native Electron setup/menu remain separate follow-up work.
-
 ## Development
 
 ```text
@@ -191,21 +160,6 @@ pnpm test
 pnpm test:integration
 pnpm test:e2e
 ```
-
-### End-to-end tests
-
-CI does not run the web end-to-end suite, so it is on every change:
-
-- Before pushing anything that changes behavior or UI, run `pnpm test:e2e:affected`: it runs only the specs your branch reaches and switches to the full suite itself when shared test plumbing, dependencies, or the database schema change, or when a changed source file is reached by no spec (`--dry-run` prints the selection). An uncovered file is a prompt to decide whether a user-visible flow needs a spec, not a reason to add one by default. Narrow a run further with `pnpm test:e2e --spec=<file>` or `--grep=<title>`.
-- The selection comes from `apps/web/e2e/impact-map.json`, the files each spec ran in its last recorded run. Rerecord it with `pnpm test:e2e:impact-map` (a full, serial run) when the selector says it is stale or after a large refactor, and commit it.
-- For repeated local runs, use `pnpm test:e2e --ui --spec=e2e/quiet-shell.spec.ts`. Playwright's UI keeps PostgreSQL, the API and the web server running between test executions, so generation, migrations and server startup happen once per session. Test data persists during the session. Restart the command after API, database schema or harness changes; web and test edits reload. Closing the UI releases the environment. This mode uses the fake sandbox and scripted runtime and cannot record an impact map.
-- Local command-line runs disable trace and video recording. Add `--record` to retain both on failure, for example `pnpm test:e2e --spec=e2e/quiet-shell.spec.ts --record`. Failure screenshots and explicit feature screenshots remain enabled. CI retains traces and videos on failure. Playwright's interactive UI provides its own traces for debugging.
-- Preserve browser HTTP caching by default. Playwright's [`page.route()`](https://playwright.dev/docs/api/class-page#page-route) and [`browserContext.route()`](https://playwright.dev/docs/api/class-browsercontext#browser-context-route) disable HTTP caching, even for a narrow RPC pattern. Prefer the real test backend and existing helpers such as `rpc()` and `completeOnboarding()` for setup. To observe requests, use `waitForRequest()`, `waitForResponse()`, or request events without routing. Use interception only when a scenario needs it, such as fault injection or synthetic responses, and document why the test accepts disabled HTTP caching. This also applies to routing hidden inside helpers such as `showThread()` and `reshapeThreadPages()` and to HAR routing. Do not add routing to shared automatic fixtures.
-- The [HTTP cache benchmark](docs/playwright-http-cache.md) records the measured effect on phone navigation and the limits of whole-test timing claims.
-- Update the specs in `apps/web/e2e/` in the same change: adjust the ones whose behavior or copy changed, and add one for any new screen or flow. Specs import `test` and `expect` from `./test` so they are recorded in the map.
-- A failing end-to-end test is fixed or updated, never skipped or deleted to get green.
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for the development workflow and test matrix.
 
 ## Documentation
 
