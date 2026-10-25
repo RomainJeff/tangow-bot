@@ -25,8 +25,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { AppLogo } from "../components/app-logo";
-import { MoreRecipientsRow, RecipientRow, SubjectRow } from "../components/draft-lines";
-import { mobileTokens } from "../lib/appearance";
+import { DraftGroup, MoreRecipientsRow, RecipientRow, SubjectRow } from "../components/draft-lines";
+import { mobileTokens, resolveMobileAppearance } from "../lib/appearance";
 import type { DraftEditTarget } from "../lib/draft-edit";
 import {
   closeDraftEdit,
@@ -39,6 +39,7 @@ import type { TypedLines } from "../lib/draft-sheet";
 import { finishLines, sheetChanged } from "../lib/draft-sheet";
 import { useI18n } from "../lib/i18n";
 import { native, useMobileTokens, useThemedStyles } from "../lib/native";
+import { shadowsForAppearance } from "../lib/theme";
 import { nativeTextStyle } from "../lib/typography";
 
 // Presented as a formSheet from a waiting mail draft card. What is typed goes back to the card as
@@ -174,7 +175,7 @@ export default function EditDraft() {
         contentContainerStyle={styles.content}
       >
         {fields ? (
-          <View>
+          <DraftGroup>
             {RECIPIENT_ROLES.map((role) => {
               const room = fields[role];
               if (room === undefined || folded.includes(role)) return null;
@@ -208,7 +209,7 @@ export default function EditDraft() {
                 onChange={(next) => keep({ subject: next })}
               />
             ) : null}
-          </View>
+          </DraftGroup>
         ) : (
           <View style={styles.to}>
             <AppLogo app={draft.app} chat={Boolean(draft.conversation)} />
@@ -237,6 +238,7 @@ export default function EditDraft() {
 
 function createStyles() {
   const tokens = mobileTokens();
+  const shadows = shadowsForAppearance(resolveMobileAppearance());
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: native.page },
     content: { padding: 20, gap: 12 },
@@ -248,8 +250,9 @@ function createStyles() {
       paddingHorizontal: 16,
       paddingTop: 12,
       paddingBottom: 12,
-      borderRadius: radii.card,
-      backgroundColor: tokens.well,
+      borderRadius: radii.mobileGroup,
+      backgroundColor: tokens.group,
+      boxShadow: shadows.group,
       color: tokens.foreground,
       textAlignVertical: "top",
       ...nativeTextStyle("composer"),
