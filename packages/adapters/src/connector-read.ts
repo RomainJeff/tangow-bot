@@ -42,19 +42,23 @@ export function remember<T>(cache: Map<string, T>, key: string, value: T): void 
   cache.set(key, value);
 }
 
+/** Where in a connector's result to look: the keys that wrap an answer, and how deep. */
+export type ResultWalk = { keys: readonly string[]; depth: number };
+
 /**
- * The first thing `pick` finds in a connector's result, however the connector wrapped it: in
- * nested data, a batch's per-action responses, or an MCP result's structured or JSON text content.
+ * The first thing `pick` finds in a connector's result, under the walk's keys only: in nested
+ * data, or in an MCP result's structured or JSON text content.
  */
 export function findInResult<T>(
   value: unknown,
   pick: (record: Record<string, unknown>) => T | undefined,
+  walk: ResultWalk,
   depth = 0,
 ): T | undefined {
-  if (depth > 8) return undefined;
+  if (depth > walk.depth) return undefined;
   if (Array.isArray(value)) {
     for (const item of value) {
-      const found = findInResult(item, pick, depth + 1);
+      const found = findInResult(item, pick, walk, depth + 1);
       if (found !== undefined) return found;
     }
     return undefined;
@@ -64,13 +68,13 @@ export function findInResult<T>(
   if (own !== undefined) return own;
   if (value.type === "text" && typeof value.text === "string") {
     try {
-      return findInResult(JSON.parse(value.text), pick, depth + 1);
+      return findInResult(JSON.parse(value.text), pick, walk, depth + 1);
     } catch {
       return undefined;
     }
   }
-  for (const child of Object.values(value)) {
-    const found = findInResult(child, pick, depth + 1);
+  for (const key of walk.keys) {
+    const found = findInResult(value[key], pick, walk, depth + 1);
     if (found !== undefined) return found;
   }
   return undefined;

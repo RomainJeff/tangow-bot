@@ -6,6 +6,7 @@ import { findInResult, isRecord, readConnector, remember } from "./connector-rea
 /** How long a draft waits for its batch item's schema before showing only what its call holds. */
 const TIMEOUT_MS = 1_500;
 const SCHEMA_TOOL = "COMPOSIO_GET_TOOL_SCHEMAS";
+const SCHEMA_WALK = { keys: ["data", "structuredContent", "content"], depth: 6 };
 
 /** The recipient lines of input schemas already looked up, by route, revision and slug. */
 export type BatchItemSchemaCache = Map<string, Record<string, unknown>>;
@@ -65,10 +66,14 @@ export function batchItemSchemaIn(
   result: unknown,
   slug: string,
 ): Record<string, unknown> | undefined {
-  const schemas = findInResult(result, (record) => {
-    const own = record.tool_schemas ?? record.toolSchemas;
-    return isRecord(own) ? own : undefined;
-  });
+  const schemas = findInResult(
+    result,
+    (record) => {
+      const own = record.tool_schemas ?? record.toolSchemas;
+      return isRecord(own) ? own : undefined;
+    },
+    SCHEMA_WALK,
+  );
   if (!schemas) return undefined;
   const key = Object.keys(schemas).find((each) => each.toUpperCase() === slug.toUpperCase());
   const entry = key === undefined ? undefined : schemas[key];

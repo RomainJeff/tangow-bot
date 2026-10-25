@@ -27,10 +27,12 @@ const batched = (channel: string): ConnectorCall => ({
       {
         tool_slug: "SLACK_SEND_MESSAGE",
         account: "slack_acme",
+        memory: { note: "Marie prefers Thursdays" },
         arguments: { channel, markdown_text: "Thursday instead?" },
       },
     ],
     thought: "Tell Marie",
+    sync_response_to_workbench: true,
   },
   executionId: "call-1",
   route: { connectorId: "mcp", resourceId: "server-1", toolName: "COMPOSIO_MULTI_EXECUTE_TOOL" },
@@ -73,7 +75,7 @@ describe("lookUpChatRecipient", () => {
     ).toEqual(named);
   });
 
-  it("asks through Composio's batch with the send's own account", async () => {
+  it("asks through Composio's batch with the send's account and nothing else the bot wrote", async () => {
     const slack = new ComposioEmulator();
     expect(
       await lookUpChatRecipient(slack, batched("C0GENERAL"), "C0GENERAL", context(), new Map()),
@@ -89,7 +91,6 @@ describe("lookUpChatRecipient", () => {
               arguments: { channel: "C0GENERAL" },
             },
           ],
-          thought: "Tell Marie",
         },
       ],
     ]);
@@ -146,6 +147,43 @@ describe("lookUpChatRecipient", () => {
     expect(
       await lookUpChatRecipient(answering({ data }), direct(id), id, context(), new Map()),
     ).toBeUndefined();
+  });
+
+  it.each([
+    ["a display name that repeats the full name", { display_name: "marie dupont" }, "marie"],
+    ["no display name", { display_name: "" }, "marie"],
+    ["a username that repeats it too", { display_name: "Marie Dupont" }, undefined, "Marie Dupont"],
+  ])(
+    "gives the handle Slack users go by, never %s",
+    async (_, profile, handle, username = "marie") => {
+      const data = {
+        user: { id: "U0MARIE", name: username, profile: { real_name: "Marie Dupont", ...profile } },
+      };
+      expect(
+        await lookUpChatRecipient(
+          answering({ data }),
+          direct("U0MARIE"),
+          "U0MARIE",
+          context(),
+          new Map(),
+        ),
+      ).toEqual({ kind: "person", name: "Marie Dupont", ...(handle ? { handle } : {}) });
+    },
+  );
+
+  it("asks Slack again once a name it kept is ten minutes old", async () => {
+    vi.useFakeTimers();
+    const slack = new ComposioEmulator();
+    const cache: ChatRecipientCache = new Map();
+    const lookUp = () =>
+      lookUpChatRecipient(slack, direct("C0GENERAL"), "C0GENERAL", context(), cache);
+    await lookUp();
+    vi.advanceTimersByTime(10 * 60_000 - 1);
+    await lookUp();
+    expect(slack.executions).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(await lookUp()).toEqual({ kind: "channel", name: "general" });
+    expect(slack.executions).toHaveLength(2);
   });
 
   it("reads Slack's answer inside an MCP result's JSON text", async () => {
