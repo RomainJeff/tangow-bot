@@ -18,8 +18,8 @@ import type { ConnectorCallActions } from "./connector-actions.js";
 const COMPOSIO_SIGNED_SENDS = new Set(["GMAIL_SEND_EMAIL", "GMAIL_REPLY_TO_THREAD"]);
 
 /**
- * How a connector call is gated when it may send a message. `schema` is the called tool's own: a
- * batch's items go without, since the batch tool's schema does not describe them.
+ * How a connector call is gated when it may send a message. `schema` is the input schema of the
+ * action that sends: the called tool's own, or for a batch of one, its item's when looked up.
  */
 export function readConnectorOutbound(
   toolName: string,
@@ -31,7 +31,11 @@ export function readConnectorOutbound(
   if (contained?.kind === "opaque") {
     return cardFitsArguments(args) ? { kind: "classic" } : REFUSE_UNSHOWABLE;
   }
-  const actions = contained?.actions ?? [{ toolName, args, schema }];
+  const actions = contained
+    ? contained.actions.map((action) =>
+        contained.actions.length === 1 ? { ...action, schema } : action,
+      )
+    : [{ toolName, args, schema }];
   const read = readOutboundCall(actions, connectorKinds);
   if (read.kind !== "draft") return read;
   // The draft's arguments are stored in place of the call's, and items sent as one JSON string
