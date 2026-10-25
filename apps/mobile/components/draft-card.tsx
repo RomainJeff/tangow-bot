@@ -13,9 +13,8 @@ import { radii, sizes } from "@rakazo/ui-tokens";
 import { useRouter } from "expo-router";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Image, Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { Pressable, Share, StyleSheet, Text, View } from "react-native";
 import Animated, { withTiming } from "react-native-reanimated";
-import { SvgUri } from "react-native-svg";
 import { mobileTokens } from "../lib/appearance";
 import { CHAT_MOTION, useChatReducedMotion, usePressScaleStyle } from "../lib/chat-motion";
 import type { CardEdits } from "../lib/draft-edit";
@@ -32,6 +31,7 @@ import { useMobileTokens, useThemedStyles } from "../lib/native";
 import { useProfilePhoto } from "../lib/profile-photo";
 import { nativeTextStyle } from "../lib/typography";
 import { CapsuleButton } from "./AskActions";
+import { AppLogo } from "./app-logo";
 import { FramedBlock } from "./framed-block";
 import { NativeSymbol } from "./native-symbol";
 import { UserAvatar } from "./user-avatar";
@@ -41,7 +41,6 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 type AskBlock = Extract<MessageBlock, { kind: "ask" }>;
 
 const ROLES = ["to", "cc", "bcc"] as const;
-const LOGO_SIZE = 20;
 const AVATAR_SIZE = 24;
 // Undo is one line of meta text: the slop grows its target to a 48 pt action's height.
 const UNDO_LINE = nativeTextStyle("meta").lineHeight;
@@ -51,31 +50,6 @@ const UNDO_HIT_SLOP = {
   left: 8,
   right: 16,
 };
-
-/** The app's catalog logo, or its first letter when it has none or it fails to load. */
-export function AppLogo({ app }: { app: AskDraft["app"] }) {
-  const styles = useThemedStyles(createStyles);
-  const [failed, setFailed] = useState<string | null>(null);
-  const uri = app.logo && app.logo !== failed ? app.logo : null;
-  if (!uri) {
-    return (
-      <View accessibilityElementsHidden style={[styles.logo, styles.logoLetter]}>
-        <Text style={styles.logoLetterText}>{app.name.slice(0, 1).toUpperCase()}</Text>
-      </View>
-    );
-  }
-  return /\.svg(?:[?#]|$)/i.test(uri) ? (
-    <SvgUri uri={uri} width={LOGO_SIZE} height={LOGO_SIZE} onError={() => setFailed(uri)} />
-  ) : (
-    <Image
-      accessibilityElementsHidden
-      source={{ uri }}
-      resizeMode="contain"
-      onError={() => setFailed(uri)}
-      style={styles.logo}
-    />
-  );
-}
 
 /** The text with its sender in front of it: the mail leaves in the run owner's name. */
 function Sender({
@@ -264,7 +238,7 @@ export function DraftCard({
   const app = draft.app.name;
   const header = {
     who: draft.app.account ? `${app} · ${draft.app.account}` : app,
-    icon: <AppLogo app={draft.app} />,
+    icon: <AppLogo app={draft.app} chat={Boolean(draft.conversation)} />,
   };
 
   if (view.kind === "sent") {
@@ -303,7 +277,12 @@ export function DraftCard({
       ) : (
         t("No longer active")
       );
-    return <FramedBlock answered={state} answeredMark={<AppLogo app={draft.app} />} />;
+    return (
+      <FramedBlock
+        answered={state}
+        answeredMark={<AppLogo app={draft.app} chat={Boolean(draft.conversation)} />}
+      />
+    );
   }
 
   const roleLabel = { to: t("To"), cc: t("Cc"), bcc: t("Bcc") };
@@ -435,13 +414,6 @@ export function DraftCard({
 function createStyles() {
   const tokens = mobileTokens();
   return StyleSheet.create({
-    logo: { width: LOGO_SIZE, height: LOGO_SIZE, borderRadius: radii.chip },
-    logoLetter: {
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: tokens.well,
-    },
-    logoLetterText: { color: tokens.foreground, ...nativeTextStyle("label") },
     sender: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
     avatar: { marginTop: 12 },
     mark: { flexDirection: "row", alignItems: "center", gap: 6 },
