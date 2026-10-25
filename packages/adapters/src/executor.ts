@@ -2409,7 +2409,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
             entry.type === "tool.call" ? [entry.payload.callId] : [],
           ),
         );
-        const settledEffects = answeredEffects.filter(
+        // A draft is never settled or replayed, whatever became of it: sendApprovedDrafts sends an
+        // approved one before any turn, and the draft tells the model itself how it ended.
+        const answeredDrafts = answeredEffects.filter((effect) => effect.draft !== null);
+        const answeredCalls = answeredEffects.filter((effect) => effect.draft === null);
+        const settledEffects = answeredCalls.filter(
           (effect) =>
             settlesApprovals &&
             !loggedResults.has(effect.id) &&
@@ -2420,7 +2424,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             effect.status === "approved" && (!settlesApprovals || localTools.has(effect.kind)),
         );
         const approvedEffectReplays = createApprovedEffectReplayQueue(
-          [...settledEffects, ...replayedEffects].filter((effect) => effect.status === "approved"),
+          [...answeredDrafts, ...settledEffects, ...replayedEffects].filter((effect) => effect.status === "approved"),
         );
         const computerToolName = (name: string) =>
           `${runtime.describe().id === "worker" ? RAKAZO_TOOL_PREFIX : ""}${name}`;
