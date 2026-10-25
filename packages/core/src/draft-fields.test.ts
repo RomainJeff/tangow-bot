@@ -149,15 +149,41 @@ describe("the lines a draft offers", () => {
     expect(draft.fields && askDraftFields(draft.fields)).toEqual({ to: 1 });
   });
 
-  it("lets only the text change when a recipient argument cannot be written back", () => {
-    const { draft } = drafted({
-      toolName: "mcp__acme__sendEmail",
-      args: {
-        to: [{ emailAddress: { address: "a@example.com" } }, { address: "b@example.com" }],
-        body: "Hello",
-      },
-    });
+  it.each([
+    [
+      "objects of different shapes",
+      [{ emailAddress: { address: "a@example.com" } }, { address: "b@example.com" }],
+    ],
+    ["an object holding a list", [{ addresses: ["a@example.com", "b@example.com"] }]],
+  ])("lets only the text change when recipients sit in %s", (_, to) => {
+    const send = { toolName: "mcp__acme__sendEmail", args: { to, body: "Hello" } };
+    const { draft, binding } = drafted(send);
+    expect(draft.recipients.map((recipient) => recipient.address)).toEqual([
+      "a@example.com",
+      "b@example.com",
+    ]);
     expect(draft.fields).toBe(undefined);
+    expect(
+      draftSentResult({ recipients: draft.recipients }, send.args, binding).sent.recipients,
+    ).toEqual(draft.recipients);
+  });
+
+  it("gives a subject with a line break the classic card, and refuses one in an edit", () => {
+    expect(
+      readOutboundCall([
+        {
+          toolName: "GMAIL_SEND_EMAIL",
+          args: {
+            recipient_email: "a@example.com",
+            subject: "Hi\nBcc: x@example.com",
+            body: "Hello",
+          },
+        },
+      ]).kind,
+    ).toBe("classic");
+    expect(edit(sends["Gmail called directly"], { subject: "Hi\r\nBcc: x@example.com" })).toEqual({
+      error: "A subject fits on one line.",
+    });
   });
 });
 
@@ -342,6 +368,18 @@ describe("what the bot reads once its draft left", () => {
       note: "The user sent this message from the draft card. Do not send it again.",
     });
     expect(draftSentResult(undefined, send.args, binding).editedByUser).toEqual([]);
+  });
+
+  it("takes the subject from the card when the send recorded no subject line", () => {
+    const send = {
+      toolName: "GMAIL_REPLY_TO_THREAD",
+      args: { thread_id: "t1", recipient_email: "a@example.com", message_body: "Hello" },
+    };
+    const { binding } = drafted(send);
+    expect(binding.fields?.subject).toBe(undefined);
+    expect(
+      draftSentResult({ recipients: [], subject: "Re: Hi" }, send.args, binding).sent.subject,
+    ).toBe("Re: Hi");
   });
 
   it("takes an older draft's recipients from its card", () => {

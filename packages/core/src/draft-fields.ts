@@ -8,6 +8,13 @@ export type RecipientRole = AskDraftRecipient["role"];
 
 export const RECIPIENT_ROLES: readonly RecipientRole[] = ["to", "cc", "bcc"];
 
+export function isRecipientRole(value: unknown): value is RecipientRole {
+  return RECIPIENT_ROLES.includes(value as RecipientRole);
+}
+
+/** Every line break a client may render, so a card can indent each one. */
+export const LINE_BREAKS = /\r\n|[\n\v\f\r\u0085\u2028\u2029]/g;
+
 /**
  * One argument that holds a role's addresses, and how: a string with one address, a string of
  * comma-separated ones, an array of strings, or an array of objects with the address at `address`.
@@ -155,6 +162,7 @@ export function draftFieldsError(
     if (edits.subject.length > ASK_DRAFT_SUBJECT_MAX_LENGTH) {
       return `This subject is longer than ${ASK_DRAFT_SUBJECT_MAX_LENGTH} characters.`;
     }
+    if (edits.subject.search(LINE_BREAKS) !== -1) return "A subject fits on one line.";
   }
   return undefined;
 }
@@ -217,7 +225,7 @@ export function readDraftSlots(value: unknown): DraftSlots | undefined {
 
 function isSlot(value: unknown): value is RecipientSlot {
   if (!isRecord(value) || !isPath(value.path) || !value.path.length) return false;
-  if (!RECIPIENT_ROLES.includes(value.role as RecipientRole)) return false;
+  if (!isRecipientRole(value.role)) return false;
   if (value.shape === "objects") return isPath(value.address) && value.address.length > 0;
   return value.shape === "one" || value.shape === "list" || value.shape === "array";
 }

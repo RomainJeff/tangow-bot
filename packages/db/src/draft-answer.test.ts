@@ -446,6 +446,20 @@ describe("editing a draft's recipients and subject", () => {
     });
   });
 
+  it("keeps the card when its request no longer holds the draft's text", async () => {
+    const w = await waiting("fielded");
+    const { effect } = await w.state();
+    await prisma.externalEffect.update({
+      where: { id: effect.id },
+      data: { request: { moved: 1 } },
+    });
+    await expect(
+      w.typed({ draft: { messageId: w.messageId, text: "Hello, edited.", ...edits } }),
+    ).resolves.toEqual({ outcome: "keep" });
+    const after = await w.state();
+    expect([after.run, after.effect.status]).toEqual(["waiting_input", "intended"]);
+  });
+
   it("refuses to replace a draft with an address that is not one, keeping it waiting", async () => {
     const w = await waiting("fielded");
     await expect(
