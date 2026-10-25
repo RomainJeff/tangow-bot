@@ -1,5 +1,4 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { LOCAL_SETTINGS_PAGE } from "@rakazo/contracts";
 import { Button, Skeleton } from "@rakazo/ui-web";
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
@@ -14,7 +13,6 @@ import {
   showSessionUnavailable,
 } from "./lib/session-gate";
 import { IntegrationSetupPage } from "./pages/IntegrationSetup";
-import { LocalSettingsPage } from "./pages/LocalSettings";
 import { McpOAuthCallbackPage } from "./pages/McpOAuthCallback";
 import { ShellPage } from "./pages/Shell";
 
@@ -32,11 +30,6 @@ const WelcomePage = lazy(() =>
 );
 
 export function App() {
-  if (window.location.pathname === LOCAL_SETTINGS_PAGE) return <LocalSettingsPage />;
-  return <SessionApp />;
-}
-
-function SessionApp() {
   const [searchParams] = useSearchParams();
   const signInDestination =
     searchParams.get("next") === "/integrations/setup" ? "/integrations/setup" : "/app";

@@ -28,6 +28,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Reverted
 
 - This Mac is gone: bots no longer run commands directly on the desktop app's Mac, and a bot that used it boots a Docker computer again from its saved workspace.
+- Installing a self-hosted server from published images with `install-images.sh` is gone; build the server from a checkout instead, as the [self-hosting guide](docs/self-host.md) describes.
+- The desktop app no longer installs and runs its own local server on this computer, and its Local Server Settings and Stop Local Stack menu items are gone; setup now only asks for the address of a server you run from a checkout ([self-hosting guide](docs/self-host.md)).
 
 ### 2026-10-24
 

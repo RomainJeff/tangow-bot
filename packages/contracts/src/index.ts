@@ -7,7 +7,6 @@ export * from "./events.js";
 export * from "./ids.js";
 export * from "./integration-settings.js";
 export * from "./link-preview.js";
-export * from "./local-settings.js";
 export * from "./mcp.js";
 export * from "./migrate-wait.js";
 export * from "./openai-compatible-ui.js";
