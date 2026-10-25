@@ -1,6 +1,6 @@
 # How to add a worker provider
 
-This guide adds a provider that runs one worker per run attempt and mounts bot and space volumes. The worked example is Docker. Docker workers are not implemented: [#317](https://github.com/RomainJeff/rakazo-bot/issues/317) explores them. E2B is the only provider today, in `packages/adapters/src/e2b-worker.ts`. Read the [P1 handoff](P1-handoff.md) for the contract history.
+This guide adds a provider that runs one worker per run attempt and mounts bot and space volumes. The worked example is Docker. Two providers exist: E2B in `packages/adapters/src/e2b-worker.ts`, and Docker in `packages/adapters/src/docker-worker.ts`, which drives containers through the sandbox supervisor ([#317](https://github.com/RomainJeff/rakazo-bot/issues/317)). Until the three switches below are flipped for Docker, a run that uses its Docker computer's files stays in process; a run without file tools already runs in a Docker worker. Read the [P1 handoff](P1-handoff.md) for the contract history.
 
 A provider is an adapter that implements `WorkerProvider` and `GuestConnector`, a guest image, and three switches that say which computer kinds keep their home on volumes. Nothing else in the controller changes. Harness concerns, such as native tools, transcripts and the guest's model relay, belong to [how to add a harness](adding-a-harness.md).
 
@@ -88,7 +88,7 @@ Three switches decide which computer kinds keep their home on volumes. Change al
 
 ## Compose the provider
 
-The computer provider selects the worker provider. There is no separate setting. `resolveWorkerProvider` in `packages/adapters/src/worker-composition.ts` returns E2B workers when `resolveSandboxProvider` resolves `SANDBOX_PROVIDER` to `e2b` with an `E2B_API_KEY`. `WORKER_TEMPLATE` only renames the guest image (`rakazo-worker-pi-native` by default). `createWorkerProvider` builds the adapter. Add your provider to both. Do not add a provider-specific environment variable when the provider's own SDK or the shared connection settings can express it. E2B reads `E2B_API_KEY` and `E2B_DOMAIN` itself.
+The computer provider selects the worker provider. There is no separate setting. `resolveWorkerProvider` in `packages/adapters/src/worker-composition.ts` returns E2B workers when `resolveSandboxProvider` resolves `SANDBOX_PROVIDER` to `e2b` with an `E2B_API_KEY`, and Docker workers on the computers' supervisor (`SANDBOX_SUPERVISOR_URL`, `SANDBOX_SUPERVISOR_TOKEN`) and `DATA_DIR` when it resolves to `docker`. `WORKER_TEMPLATE` only renames the guest image (`rakazo-worker-pi-native` by default). `createWorkerProvider` builds the adapter. Add your provider to both. Do not add a provider-specific environment variable when the provider's own SDK or the shared connection settings can express it. E2B reads `E2B_API_KEY` and `E2B_DOMAIN` itself.
 
 Both composition roots, `apps/api/src/app.ts` and `apps/worker/src/index.ts`, call `composeWorkers(prisma, provider)`. It returns the lifecycle that bot and space deletion use, the reconciler's `reconcileWorkers`, and, with a provider, the executor's `runWorkers`.
 
@@ -120,7 +120,7 @@ Reuse I1's attack list for E2B: direct mounts, guessed identifiers, links and pa
 
 ## Test the adapter
 
-Keep these tests deterministic and offline. Gate any test that needs a real Docker daemon, and list it with the other suites that need Docker.
+Keep these tests deterministic and offline. Gate any test that needs a real Docker daemon, and list it with the other suites that need Docker. The Docker workers' run, fault and isolation suites, `packages/testkit/src/docker-worker*.docker.test.ts`, run with `VERIFY_DOCKER_WORKERS=1` once the worker image is built. On Docker Desktop, `host.docker.internal` reaches the host's localhost, and the Linux-only assertions are skipped.
 
 - Test the adapter against a fake of its SDK, as `packages/adapters/src/e2b-worker.test.ts` does. Cover that `ensure` and `ensureVolume` create nothing after their deadlines, that `ensureVolume` returns the requested name twice, that `destroy` without a reference finds a worker by its attempt tag and returns `absent` once nothing is left, and that `connect` carries frames both ways and settles `exited` once the guest is gone.
 - The controller suites, `packages/adapters/src/worker-lifecycle.test.ts` and `worker-volumes.test.ts`, run against `FakeWorkerProvider` and define the behavior your adapter must match: one destroy per release, leases held while a destroy is unconfirmed, and deletion records kept through the grace period.
