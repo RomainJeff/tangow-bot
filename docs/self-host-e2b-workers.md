@@ -76,8 +76,9 @@ retains folders outside the migration scope; backup traversal is independent of 
 A Docker computer whose home is already on Docker volumes (`DATA_DIR/volumes/rakazo-<volume-id>`)
 is carried the same way: setup stops it, copies the regular files of each of its volumes into an
 E2B volume of the same name, verifies their SHA-256 and mode, then switches the volume and the
-computer to E2B. A space's shared volume is copied once. Symbolic links, special files and empty
-folders are never followed or copied; the plan lists them. Dotfiles and browser profiles in
+computer to E2B. A space's shared volume is copied once. Symbolic links, special files, empty
+folders and files over 1 GiB are never followed or copied; the plan lists them, a large file as
+`too_large`. Dotfiles and browser profiles in
 `DATA_DIR/homes` stay behind, as for a team home. The local volume directories are left in place:
 delete them once the bots work on E2B. See
 [Carry Docker volumes to E2B](#carry-docker-volumes-to-e2b) to run it by hand.
@@ -271,7 +272,8 @@ For a Docker computer whose home is on Docker volumes, with the API and worker s
      --computer <computer-id>
    ```
 
-In each space, carry the team computer first. If the command stops, rerun it: volumes already on
+In each space, carry the team computer before the space's dedicated computers: it carries the
+shared volume, which their bots' workers also mount. If the command stops, rerun it: volumes already on
 E2B are skipped and the copy resumes. It refuses with `volume_not_empty` when the E2B volume holds
 files it did not copy, and with `volume_changed` when a local file changed during the copy. The
 local directories under `DATA_DIR/volumes` are never changed or deleted; delete them yourself once

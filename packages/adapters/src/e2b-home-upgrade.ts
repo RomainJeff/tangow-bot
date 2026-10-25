@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
+import type { Stats } from "node:fs";
 import { constants } from "node:fs";
+import type { FileHandle } from "node:fs/promises";
 import { lstat, open, readdir } from "node:fs/promises";
 import path from "node:path";
 import type {
@@ -15,6 +17,8 @@ import type { PrismaClient } from "@rakazo/db";
 import { toComputerRef } from "./computer-support.js";
 import { checkpointComputerWorkspace } from "./computer-workspace.js";
 import type { DockerWorkerProvider } from "./docker-worker.js";
+import type { E2BVolumeFiles } from "./e2b-volume-files.js";
+import { isStagedWrite } from "./e2b-volume-files.js";
 import type {
   HomeDestination,
   HomeFile,
@@ -213,17 +217,20 @@ type CarryDeps = {
   prisma: PrismaClient;
   source: Pick<DockerWorkerProvider, "describe" | "volumePath">;
   target: Pick<WorkerProvider, "describe" | "ensureVolume">;
-  files: VolumeFiles;
+  files: VolumeFiles & Pick<E2BVolumeFiles, "remove">;
 };
 
 const RENEW_AFTER_MS = HOME_MOVE_TTL_MS / 3;
+/** A file is copied in one piece, held in memory: a larger one stays only in the local directory. */
+const MAX_CARRIED_FILE_BYTES = 1024 ** 3;
 
 /**
  * Carries a stopped Docker computer whose home is on Docker volumes to E2B. Each of its volumes
  * still on Docker (its bots' private volumes, and the space's shared one for a team computer) gets
  * its E2B volume under the same name; the regular files of its local directory are copied and
  * verified by hash and mode, then the row switches to E2B. Links are never followed and stay, like
- * special files and empty directories, only in the local directory, which is never changed. A
+ * special files, empty directories and files over 1 GiB, only in the local directory, which is
+ * never changed. A
  * volume already on E2B is skipped, so a shared volume is copied once and a rerun resumes. The
  * computer switches to E2B once all its volumes did.
  */
@@ -288,7 +295,14 @@ export async function carryDockerVolumesToE2B(
         providerRef,
         files: planned,
       };
-      // Files a stopped run already copied, with the same content and mode, are not foreign.
+      // A stopped run may have left a staged write; what it already placed, with the same content
+      // and mode, is not foreign.
+      const plannedPaths = new Set(planned.map((file) => file.volumePath));
+      for (const entry of await files.list(providerRef, context)) {
+        if (entry.kind === "file" && isStagedWrite(entry.path) && !plannedPaths.has(entry.path)) {
+          await files.remove(providerRef, entry.path, context);
+        }
+      }
       const [before] = await inspectTargets(files, [volume], context);
       if (!before) throw new Error("The E2B volume was not inspected");
       if (before.foreign.length > 0) {
@@ -297,7 +311,13 @@ export async function carryDockerVolumesToE2B(
       const changed: string[] = [];
       for (const file of before.missing) {
         await keepReserved();
-        const local = directory && (await readRegularFile(path.join(directory, file.volumePath)));
+        const local =
+          directory &&
+          (await withRegularFile(path.join(directory, file.volumePath), async (handle, stats) =>
+            stats.size === file.size
+              ? { content: await handle.readFile(), mode: stats.mode & 0o777 }
+              : null,
+          ));
         if (!local || sha256(local.content) !== file.sha256 || local.mode !== file.mode) {
           changed.push(file.volumePath);
           continue;
@@ -436,18 +456,17 @@ async function localTree(
       else if (!isPortablePath(relative)) {
         notCopied.push({ homePath: relative, kind: "invalid_path" });
       } else {
-        const file = await readRegularFile(absolute);
+        const file = await withRegularFile(absolute, async (handle, stats) => {
+          if (stats.size > MAX_CARRIED_FILE_BYTES) return "too_large" as const;
+          const hash = createHash("sha256");
+          for await (const chunk of handle.createReadStream({ autoClose: false })) {
+            hash.update(chunk);
+          }
+          return { size: stats.size, sha256: hash.digest("hex"), mode: stats.mode & 0o777 };
+        });
         if (!file) notCopied.push({ homePath: relative, kind: "special" });
-        else {
-          planned.push({
-            homePath: relative,
-            volumePath: relative,
-            destination,
-            size: file.content.byteLength,
-            sha256: sha256(file.content),
-            mode: file.mode,
-          });
-        }
+        else if (file === "too_large") notCopied.push({ homePath: relative, kind: "too_large" });
+        else planned.push({ homePath: relative, volumePath: relative, destination, ...file });
       }
     }
   };
@@ -455,10 +474,11 @@ async function localTree(
   return { planned, notCopied };
 }
 
-/** A regular file's content and permission bits; null for anything else, never a link's target. */
-async function readRegularFile(
+/** Uses a regular file, opened without following a link; null for anything else. */
+async function withRegularFile<T>(
   file: string,
-): Promise<{ content: Uint8Array; mode: number } | null> {
+  use: (handle: FileHandle, stats: Stats) => Promise<T>,
+): Promise<T | null> {
   const handle = await open(
     file,
     constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
@@ -470,7 +490,7 @@ async function readRegularFile(
   try {
     const stats = await handle.stat();
     if (!stats.isFile()) return null;
-    return { content: await handle.readFile(), mode: stats.mode & 0o777 };
+    return await use(handle, stats);
   } finally {
     await handle.close();
   }

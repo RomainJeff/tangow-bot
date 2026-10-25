@@ -36,7 +36,8 @@ export type HomeFile = {
  * Why a home entry stays only in the AgentHomeStore original: outside every destination, a path
  * a volume cannot hold, one of several files bound for the same volume path, an entry that is not
  * a regular file or a directory with something in it, or a file the export did not yield (it
- * walks a symlinked directory once, under the link's name).
+ * walks a symlinked directory once, under the link's name). Carrying Docker volumes to E2B also
+ * leaves a file too large to copy in one piece.
  */
 export type NotCopied = {
   homePath: string;
@@ -47,7 +48,8 @@ export type NotCopied = {
     | "symlink"
     | "empty_dir"
     | "special"
-    | "not_exported";
+    | "not_exported"
+    | "too_large";
 };
 
 export type ManifestVolume = {

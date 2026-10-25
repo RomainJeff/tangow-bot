@@ -1,4 +1,5 @@
-import { chmod, mkdir, mkdtemp, readdir, symlink, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { chmod, mkdir, mkdtemp, readdir, symlink, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AdapterContext, PortableFile } from "@rakazo/adapter-kit";
@@ -88,6 +89,8 @@ describe("carrying a Docker computer's volumes to E2B", () => {
     await writeFile(outside, "host secret");
     await symlink(outside, path.join(docker.volumePath(own.providerRef), "secret"));
     await mkdir(path.join(docker.volumePath(own.providerRef), "empty"));
+    // Sparse, so the disk holds none of it: one byte over what is copied in one piece.
+    await truncate(await put(shared.providerRef, "huge.bin", ""), 1024 ** 3 + 1);
     const before = await readdir(docker.volumePath(own.providerRef));
 
     const preview = await previewDockerVolumeCarry({ prisma, source: docker }, computer.id);
@@ -98,16 +101,21 @@ describe("carrying a Docker computer's volumes to E2B", () => {
     const left = [
       { homePath: `volumes/${own.providerRef}/empty`, kind: "empty_dir" },
       { homePath: `volumes/${own.providerRef}/secret`, kind: "symlink" },
+      { homePath: `volumes/${shared.providerRef}/huge.bin`, kind: "too_large" },
     ];
-    expect(preview.notCopied).toEqual(left);
+    expect(preview.notCopied).toEqual(expect.arrayContaining(left));
+    expect(preview.notCopied).toHaveLength(left.length);
     expect(report).toMatchObject({ outcome: "carried" });
     expect(report.outcome === "carried" && report.volumes.flatMap((v) => v.notCopied)).toEqual(
-      left,
+      preview.notCopied,
     );
     const target = `rakazo-${own.volumeId}`;
     expect(await files.list(target, fixture.context)).toEqual([
       { path: "bin", kind: "dir", mode: 0o755 },
       { path: "bin/run.sh", kind: "file", mode: 0o755 },
+    ]);
+    expect(await files.list(`rakazo-${shared.volumeId}`, fixture.context)).toEqual([
+      { path: "team.txt", kind: "file", mode: 0o644 },
     ]);
     expect(await text(files, `rakazo-${shared.volumeId}`, "team.txt")).toBe("team");
     const rows = await prisma.volume.findMany({
@@ -128,7 +136,7 @@ describe("carrying a Docker computer's volumes to E2B", () => {
     });
   });
 
-  it("resumes after an interruption without copying a file or a carried volume twice", async () => {
+  it("resumes after an interruption that left a staged write, copying no file or volume twice", async () => {
     const { computer, own, shared } = await dockerTeamOnVolumes();
     await put(own.providerRef, "notes.md", "notes");
     await put(shared.providerRef, "a.txt", "a");
@@ -139,6 +147,8 @@ describe("carrying a Docker computer's volumes to E2B", () => {
       override async write(volumeRef: string, file: PortableFile, context: AdapterContext) {
         if (file.path === "b.txt" && interrupt) {
           interrupt = false;
+          // What E2BVolumeFiles leaves when its sandbox dies mid-write.
+          await super.write(volumeRef, { ...file, path: `.rakazo-${randomUUID()}` }, context);
           throw new Error("connection lost");
         }
         writes.push(`${volumeRef}/${file.path}`);
@@ -160,6 +170,10 @@ describe("carrying a Docker computer's volumes to E2B", () => {
       [`rakazo-${own.volumeId}/notes.md`, `${sharedRef}/a.txt`, `${sharedRef}/b.txt`].sort(),
     );
     expect(await text(files, sharedRef, "b.txt")).toBe("b");
+    expect((await files.list(sharedRef, fixture.context)).map((entry) => entry.path)).toEqual([
+      "a.txt",
+      "b.txt",
+    ]);
   });
 
   it("refuses an E2B volume holding files it did not copy, and keeps the volume on Docker", async () => {
