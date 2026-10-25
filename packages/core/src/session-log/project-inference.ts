@@ -13,6 +13,7 @@ import { isInferenceEntry, needsThePerson, REPLY_QUOTE_MAX_LENGTH } from "@rakaz
 import { blocksToAgentHistoryText } from "../attachments.js";
 import { escapeDirectoryField, escapePromptData, renderBotMessageBlock } from "../bot-messages.js";
 import { messageReaction } from "../message-reactions.js";
+import { isReplacedDraftOutput } from "../outbound-draft.js";
 import type { ChildSession } from "./child-sessions.js";
 import { childSessionsOf } from "./child-sessions.js";
 import { foldRuns, toolAnswers } from "./run-fold.js";
@@ -450,6 +451,15 @@ function replayParts(
       calls: block.steps
         .flatMap((step) => step.calls ?? [])
         .map((call) => {
+          // What the user left on a replaced draft is read whole: the bot has no other copy.
+          if (isReplacedDraftOutput(call.output)) {
+            return {
+              id: call.id ?? "",
+              name: call.name,
+              args: replayedToolArgs(call.input),
+              output: call.output,
+            };
+          }
           let output =
             call.output.length > REPLAY_OUTPUT_MAX_CHARS
               ? `${call.output.slice(0, REPLAY_OUTPUT_MAX_CHARS)}\n… truncated`

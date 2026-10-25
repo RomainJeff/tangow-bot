@@ -164,4 +164,30 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
       { composio },
     );
   }, 60_000);
+
+  it("gives a replaced draft's text to the bot whole, however long the user's edit", async () => {
+    const composio = new ComposioEmulator();
+    const edit = `${"A much longer text than the bot wrote. ".repeat(20)}Goodbye.`;
+    await journey(
+      [
+        mailTo("anna@example.test", "mail-1"),
+        {
+          expect(request) {
+            expect(JSON.stringify(request.messages)).toContain(edit);
+          },
+          response: reply("Here is a shorter one."),
+        },
+        DONE,
+      ],
+      async (fixture) => {
+        await connectGmail(composio, fixture);
+        const sent = await fixture.send("Mail Anna.");
+        await sent.settled("waiting_input");
+        const card = await latestCard(fixture.prisma, sent.runId);
+        await fixture.send("Make it shorter.", { draft: { messageId: card.id, text: edit } });
+        await sent.settled("completed");
+      },
+      { composio },
+    );
+  }, 60_000);
 });
