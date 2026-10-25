@@ -1,65 +1,71 @@
 import { useLingui } from "@lingui/react/macro";
 import { ASK_DRAFT_SUBJECT_MAX_LENGTH } from "@rakazo/contracts";
-import { isMailAddress } from "@rakazo/core";
+import { isMailAddress, LINE_BREAKS } from "@rakazo/core";
+import { Textarea } from "@rakazo/ui-web";
 import { X } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { useId, useRef } from "react";
+import { flushSync } from "react-dom";
 
 // The body's edit grammar, on a line: an outline on hover, the selected ring while typing.
 const EDITABLE_LINE =
   "-mx-1.5 rounded-chip px-1.5 duration-(--duration-hover) ease-quiet hover:ring-1 hover:ring-option-ring-hover focus-within:ring-selected focus-within:ring-foreground";
 const FIELD =
   "min-w-0 bg-transparent text-foreground outline-none placeholder:text-muted-foreground";
+// A line's controls take no room and no tap at rest, and show while the line is hovered or focused.
+const LINE_CONTROL =
+  "pointer-events-none -my-1.5 h-6 w-0 shrink-0 self-center overflow-hidden opacity-0 outline-none focus-visible:ring-1 focus-visible:ring-foreground group-focus-within/line:pointer-events-auto group-focus-within/line:opacity-100 group-hover/line:pointer-events-auto group-hover/line:opacity-100";
+const SEPARATORS = /[\s,;]+/;
+
+/** Whether a line's field holds a finished word that could not join the line: Send would leave it. */
+export function heldBack(typed: string): boolean {
+  return /[^\s,;][\s,;]/.test(typed);
+}
 
 /**
  * One recipient line of a draft: its addresses as text, each with its remove button once the line
- * is hovered or focused, then a field that takes more until the line is full. Only addresses that
- * are ones join the line; anything else stays in the field, marked invalid.
+ * is hovered or focused, then a field that takes more until the line is full. A finished word that
+ * cannot join the line, not an address or past its room, stays in the field, marked.
  */
 export function RecipientLine({
+  id,
   label,
   addresses,
+  typed,
   room,
   onChange,
-  onInvalidChange,
+  onTyped,
+  more = [],
   strong,
 }: {
+  id: string;
   label: string;
   addresses: string[];
+  /** The field's text, kept by the card so it outlives the line. */
+  typed: string;
   /** The most addresses the line takes, or null when any number fits. */
   room: number | null;
   onChange: (addresses: string[]) => void;
-  /** Whether the field holds text that is not an address, which Send would leave behind. */
-  onInvalidChange: (invalid: boolean) => void;
+  onTyped: (typed: string) => void;
+  /** Hidden lines this one offers to open, shown with its controls. */
+  more?: { label: string; open: () => void }[];
   strong?: boolean;
 }) {
   const { t } = useLingui();
-  const id = useId();
   const input = useRef<HTMLInputElement>(null);
-  const [typed, setTyped] = useState("");
-  // Marked once a word is finished, by a separator or by leaving the field, never mid-word.
-  const [invalid, setInvalid] = useState(false);
   const full = room !== null && addresses.length >= room;
 
-  /**
-   * Keeps `value` in the field, moving every address finished by a separator into the line, or
-   * every one when `final`. What is not an address stays in the field.
-   */
+  /** Moves every address finished by a separator into the line, or every one when `final`. */
   function take(value: string, final: boolean) {
     const cut = final ? value.length : value.search(/[^\s,;]*$/);
-    const words = value
-      .slice(0, cut)
-      .split(/[\s,;]+/)
-      .filter(Boolean);
-    const added = [...new Set(words.filter(isMailAddress))].filter(
-      (word) => !addresses.includes(word),
-    );
-    const fits = room === null ? added : added.slice(0, Math.max(0, room - addresses.length));
-    if (fits.length) onChange([...addresses, ...fits]);
-    const rejected = words.filter((word) => !isMailAddress(word));
-    const next = [...rejected, value.slice(cut)].filter(Boolean).join(" ");
-    setTyped(next);
-    setInvalid(rejected.length > 0);
-    onInvalidChange(next.split(/[\s,;]+/).some((word) => word && !isMailAddress(word)));
+    const kept = [...addresses];
+    let back = "";
+    for (const word of value.slice(0, cut).split(SEPARATORS).filter(Boolean)) {
+      if (kept.includes(word)) continue;
+      if (isMailAddress(word) && (room === null || kept.length < room)) kept.push(word);
+      else back += `${word} `;
+    }
+    if (kept.length > addresses.length) onChange(kept);
+    onTyped(back + value.slice(cut));
   }
 
   return (
@@ -83,17 +89,17 @@ export function RecipientLine({
             aria-label={t`Remove ${address}`}
             onClick={(event) => {
               event.stopPropagation();
-              onChange(addresses.filter((each) => each !== address));
+              // A full line shows its field only once the address is gone.
+              flushSync(() => onChange(addresses.filter((each) => each !== address)));
               input.current?.focus();
             }}
-            // No room, no tap and no sight at rest, still reachable by keyboard.
-            className="pointer-events-none inline-flex w-0 self-center overflow-hidden rounded-full text-muted-foreground opacity-0 outline-none hover:text-foreground focus-visible:ms-1 focus-visible:w-3 focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-foreground group-focus-within/line:pointer-events-auto group-focus-within/line:ms-1 group-focus-within/line:w-3 group-focus-within/line:opacity-100 group-hover/line:pointer-events-auto group-hover/line:ms-1 group-hover/line:w-3 group-hover/line:opacity-100"
+            className={`${LINE_CONTROL} inline-flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground group-focus-within/line:-me-1.5 group-focus-within/line:w-6 group-hover/line:-me-1.5 group-hover/line:w-6`}
           >
-            <X className="size-3" aria-hidden="true" />
+            <X className="size-3 shrink-0" aria-hidden="true" />
           </button>
         </span>
       ))}
-      {full ? null : (
+      {full && !typed ? null : (
         <input
           ref={input}
           id={id}
@@ -102,7 +108,7 @@ export function RecipientLine({
           autoComplete="off"
           spellCheck={false}
           value={typed}
-          aria-invalid={invalid || undefined}
+          aria-invalid={heldBack(typed) || undefined}
           onChange={(event) => take(event.target.value, false)}
           onBlur={() => take(typed, true)}
           onKeyDown={(event) => {
@@ -113,14 +119,34 @@ export function RecipientLine({
               onChange(addresses.slice(0, -1));
             }
           }}
-          className={`w-24 flex-1 ${FIELD} aria-invalid:text-destructive`}
+          className={`w-24 flex-1 ${FIELD} aria-invalid:text-destructive aria-invalid:underline aria-invalid:decoration-destructive aria-invalid:decoration-wavy`}
         />
       )}
+      {more.length ? (
+        // Cancels the line's gap so the hidden buttons take no room at rest.
+        <span className="-ms-1.5 flex">
+          {more.map((line) => (
+            <button
+              key={line.label}
+              type="button"
+              // Keeps the line focused, and so these buttons shown, while one is pressed.
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={(event) => {
+                event.stopPropagation();
+                line.open();
+              }}
+              className={`${LINE_CONTROL} rounded-chip text-body font-normal text-muted-foreground hover:text-foreground group-focus-within/line:ms-1.5 group-focus-within/line:w-auto group-focus-within/line:px-1 group-hover/line:ms-1.5 group-hover/line:w-auto group-hover/line:px-1`}
+            >
+              {line.label}
+            </button>
+          ))}
+        </span>
+      ) : null}
     </div>
   );
 }
 
-/** The draft's subject, one line edited in place. */
+/** The draft's subject, edited in place on one line that wraps when long. */
 export function SubjectLine({
   label,
   subject,
@@ -134,18 +160,23 @@ export function SubjectLine({
   return (
     <div
       data-draft-field
-      className={`flex items-baseline gap-1.5 text-body font-normal ${EDITABLE_LINE}`}
+      className={`flex items-start gap-1.5 text-body font-normal ${EDITABLE_LINE}`}
     >
       <label htmlFor={id} className="shrink-0 text-muted-foreground">
         {label}
       </label>
-      <input
+      <Textarea
         id={id}
         dir="auto"
+        rows={1}
         value={subject}
         maxLength={ASK_DRAFT_SUBJECT_MAX_LENGTH}
-        onChange={(event) => onChange(event.target.value)}
-        className={`flex-1 ${FIELD}`}
+        // The server takes a subject on one line.
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.preventDefault();
+        }}
+        onChange={(event) => onChange(event.target.value.replace(LINE_BREAKS, " "))}
+        className={`min-h-0 w-auto flex-1 resize-none rounded-none border-0 p-0 text-body focus-visible:ring-0 md:text-body dark:bg-transparent ${FIELD}`}
       />
     </div>
   );

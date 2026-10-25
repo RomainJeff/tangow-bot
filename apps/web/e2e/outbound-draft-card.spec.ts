@@ -401,7 +401,7 @@ for (const width of [1440, 390]) {
   test(`a mail draft's recipients and subject are edited in place and leave as shown (${width})`, async ({
     page,
   }, testInfo) => {
-    test.setTimeout(90_000);
+    test.setTimeout(120_000);
     await page.setViewportSize({ width, height: 900 });
     await signup(
       page,
@@ -411,33 +411,63 @@ for (const width of [1440, 390]) {
     );
     await completeOnboarding(page);
     const botId = activeBotId(page);
-    const drafts = [
+    const waiting = (block = fielded) => [
       ...waitingDraft(botId).slice(0, -1),
-      requested(botId, "draft-card", 11, fielded),
+      requested(botId, "draft-card", 11, block),
     ];
+    const drafts = waiting();
+    const reset = async (entries: EntryDraft[]) => {
+      drafts.splice(0, drafts.length, ...entries);
+      await page.reload({ waitUntil: "domcontentloaded" });
+    };
     let onAnswer: () => void = () => undefined;
     const answered = await answerRpc(page, "answer", () => {
       onAnswer();
       return { ok: true };
     });
+    const sent = await answerRpc(page, "send", (body) => {
+      drafts.push(resolved(botId, "draft-replaced", 13, "denied", true), {
+        id: "draft-typed",
+        ts: at(13),
+        type: "user.message",
+        payload: { blocks: [{ kind: "text", text: body.text }], source: "app" },
+      });
+      return { taskId: "draft-task", runId: RUN, seq: 99 };
+    });
     await showThread(page, drafts, { run: null });
 
     const draftCard = page.getByTestId("draft-card");
     const header = draftCard.locator('[data-slot="framed-block-header"]');
-    const send = draftCard.getByRole("button", { name: "Send", exact: true });
-    const to = draftCard.getByRole("textbox", { name: "To", exact: true });
-    const cc = draftCard.getByRole("textbox", { name: "Cc", exact: true });
-    const subject = draftCard.getByRole("textbox", { name: "Subject", exact: true });
+    const button = (name: string) => draftCard.getByRole("button", { name, exact: true });
+    const field = (name: string) => draftCard.getByRole("textbox", { name, exact: true });
+    const [to, cc, bcc, subject] = ["To", "Cc", "Bcc", "Subject"].map(field);
+    const send = button("Send");
 
-    // At rest: the addresses as text, a Cc and a Bcc the send accepts offered empty, no state.
-    // An empty line shows no example address, which would read as a recipient.
+    // At rest: the addresses as text, the subject, no empty Cc or Bcc line and no state.
     await expect(draftCard.getByText("bo@example.com,", { exact: true })).toBeVisible();
-    await expect(cc).toHaveValue("");
-    await expect(draftCard.getByRole("textbox", { name: "Bcc", exact: true })).toBeVisible();
+    await expect(cc).toHaveCount(0);
+    await expect(bcc).toHaveCount(0);
     await expect(subject).toHaveValue("Thursday instead of Wednesday");
     await expect(draftCard.locator('[data-slot="framed-block-status"]')).toHaveCount(0);
-    const remove = draftCard.getByRole("button", { name: "Remove cy@example.com", exact: true });
+    const remove = button("Remove cy@example.com");
     await expect(remove).toHaveCSS("opacity", "0");
+    await expect(button("Cc")).toHaveCSS("opacity", "0");
+    await expect(button("Cc")).toHaveCSS("width", "0px");
+
+    // The focused To line offers the Cc and Bcc the send accepts; pressing one opens its field.
+    await to.focus();
+    await expect(button("Cc")).toHaveCSS("opacity", "1");
+    await expect(button("Bcc")).toHaveCSS("opacity", "1");
+    const [removeBox, ccBox] = await Promise.all([
+      remove.boundingBox(),
+      button("Cc").boundingBox(),
+    ]);
+    expect(removeBox!.width).toBeGreaterThanOrEqual(24);
+    expect(ccBox!.height).toBeGreaterThanOrEqual(24);
+    await shoot(page, testInfo, "fields-cc-reveal");
+    await button("Cc").click();
+    await expect(cc).toBeFocused();
+    await expect(button("Cc")).toHaveCount(0);
 
     // A hovered line offers each address's remove button; a typed address joins the line.
     await draftCard.getByText("cy@example.com", { exact: true }).hover();
@@ -446,25 +476,57 @@ for (const width of [1440, 390]) {
     await to.fill("ana@example.com");
     await to.press("Enter");
     await expect(draftCard.getByText("ana@example.com", { exact: true })).toBeVisible();
+    // Backspace in an empty field takes the line's last address back off.
+    await to.press("Backspace");
+    await expect(draftCard.getByText("ana@example.com", { exact: true })).toHaveCount(0);
+    await to.fill("ana@example.com,");
+    await expect(draftCard.getByText("ana@example.com", { exact: true })).toBeVisible();
 
-    // What is not an address stays in the field, marked, and Send waits for it.
+    // A finished word that is not an address stays in the field, marked, and Send waits for it.
+    // An unfinished one marks nothing and holds nothing back.
+    await cc.fill("dee@partners.exa");
+    await expect(cc).not.toHaveAttribute("aria-invalid");
+    await expect(send).toBeEnabled();
     await cc.fill("dee at partners");
+    await expect(cc).toHaveAttribute("aria-invalid", "true");
+    await expect(cc).toHaveCSS("text-decoration-style", "wavy");
+    await expect(send).toBeDisabled();
+    // Discard then Undo brings the card back as it was left, half-typed text included.
+    await button("Discard").click();
+    await expect(draftCard).toHaveText("Discarded · Undo");
+    await draftCard.getByRole("button", { name: "Undo", exact: true }).click();
+    await expect(cc).toHaveValue("dee at partners ");
     await expect(cc).toHaveAttribute("aria-invalid", "true");
     await expect(send).toBeDisabled();
     await cc.fill("dee@partners.example.com,");
     await expect(cc).toHaveValue("");
     await expect(send).toBeEnabled();
+
+    // The subject stays on one line the server takes, and wraps when it is long.
+    await subject.fill("Friday\ninstead of Wednesday");
+    await expect(subject).toHaveValue("Friday instead of Wednesday");
+    await subject.press("Enter");
+    await expect(subject).toHaveValue("Friday instead of Wednesday");
+    const oneLine = (await subject.boundingBox())!.height;
+    await subject.fill(
+      `Friday instead of Wednesday, ${"and the week after if Friday is full, ".repeat(4)}`,
+    );
+    await expect.poll(async () => (await subject.boundingBox())!.height).toBeGreaterThan(oneLine);
     await subject.fill("Friday instead of Wednesday");
     await shoot(page, testInfo, "fields-editing");
     await subject.blur();
     await expect(header).toContainText("Edited");
     await shoot(page, testInfo, "fields-edited");
 
-    // Send carries the whole list and the subject; the card then names who it left for.
+    // An address still typed when Send is pressed joins the line and leaves with it.
+    await to.focus();
+    await button("Bcc").click();
+    await bcc.pressSequentially("ed@example.com");
     const recipients = [
       { role: "to", address: "bo@example.com" },
       { role: "to", address: "ana@example.com" },
       { role: "cc", address: "dee@partners.example.com" },
+      { role: "bcc", address: "ed@example.com" },
     ];
     onAnswer = () =>
       drafts.push(
@@ -484,5 +546,70 @@ for (const width of [1440, 390]) {
     await expect(
       draftCard.getByText(/^Sent to bo@example\.com, ana@example\.com · \d/),
     ).toBeVisible();
+
+    // Typing to the bot while the draft waits hands over its lines as they were left.
+    await reset(waiting());
+    await draftCard.getByText("cy@example.com", { exact: true }).hover();
+    await remove.click();
+    await subject.fill("Friday instead of Wednesday");
+    const composer = page.locator('textarea[name="chat-message"]');
+    await composer.fill("Make it Friday instead.");
+    await composer.press("Enter");
+    await expect(draftCard).toHaveText("Replaced");
+    expect(sent.body).toMatchObject({
+      text: "Make it Friday instead.",
+      draft: {
+        messageId: "draft-card",
+        text: BODY,
+        recipients: [{ role: "to", address: "bo@example.com" }],
+        subject: "Friday instead of Wednesday",
+      },
+    });
+
+    // Another member sees the owner's draft read-only: its lines as text, no field, no action.
+    await reset(
+      waiting(card({}, { ...fielded.draft, owner: { userId: "another", name: "Bo Chen" } })),
+    );
+    await expect(draftCard.getByText("To bo@example.com, cy@example.com")).toBeVisible();
+    await expect(draftCard.getByText("Subject Thursday instead of Wednesday")).toBeVisible();
+    await expect(draftCard.getByRole("textbox")).toHaveCount(0);
+    await expect(draftCard.getByRole("button")).toHaveCount(0);
   });
 }
+
+test("a one-address line keeps what does not fit in its field, marked", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signup(page, `outbound-one-${Date.now()}@rakazo.test`, "password12", "Ana Lima");
+  await completeOnboarding(page);
+  const botId = activeBotId(page);
+  const oneTo = card(
+    {},
+    { recipients: [{ role: "to", address: "bo@example.com" }], fields: { to: 1, subject: true } },
+  );
+  await showThread(
+    page,
+    [...waitingDraft(botId).slice(0, -1), requested(botId, "draft-card", 11, oneTo)],
+    {
+      run: null,
+    },
+  );
+  const draftCard = page.getByTestId("draft-card");
+  const to = draftCard.getByRole("textbox", { name: "To", exact: true });
+  const send = draftCard.getByRole("button", { name: "Send", exact: true });
+
+  // A full line has no field; removing its address opens the field, focused.
+  await expect(to).toHaveCount(0);
+  await draftCard.getByText("bo@example.com", { exact: true }).hover();
+  await draftCard.getByRole("button", { name: "Remove bo@example.com", exact: true }).click();
+  await expect(to).toBeFocused();
+
+  // The first address fills the line; the field stays with the rest, marked, and Send waits.
+  await to.pressSequentially("foo cy@example.com dee@example.com,");
+  await expect(draftCard.getByText("cy@example.com", { exact: true })).toBeVisible();
+  await expect(to).toHaveValue("foo dee@example.com ");
+  await expect(to).toHaveAttribute("aria-invalid", "true");
+  await expect(send).toBeDisabled();
+  await to.fill("");
+  await expect(to).toHaveCount(0);
+  await expect(send).toBeEnabled();
+});

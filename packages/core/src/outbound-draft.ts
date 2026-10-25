@@ -144,7 +144,8 @@ export function draftEditedFields(
   return edited;
 }
 
-function sameRecipients(left: AskDraftRecipient[], right: AskDraftRecipient[]): boolean {
+/** Whether two recipient lists name the same people in the same roles, in any order or case. */
+export function sameRecipients(left: AskDraftRecipient[], right: AskDraftRecipient[]): boolean {
   const key = (list: AskDraftRecipient[]) =>
     list
       .map((recipient) => `${recipient.role} ${recipient.address.toLowerCase()}`)

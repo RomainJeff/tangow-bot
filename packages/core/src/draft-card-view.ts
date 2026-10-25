@@ -1,5 +1,6 @@
 import type { AskDraft, AskDraftEdits } from "@rakazo/contracts";
 import { askDraftState } from "@rakazo/contracts";
+import { sameRecipients } from "./outbound-draft.js";
 
 /** How long a discarded draft can still be brought back before the bot hears of it. */
 export const DRAFT_UNDO_MS = 5000;
@@ -107,9 +108,7 @@ export function draftSentTo(draft: AskDraft): string {
 export function draftChanges(draft: AskDraft, edit: AskDraftEdits | undefined): AskDraftEdits {
   const changes: AskDraftEdits = {};
   if (edit?.text !== undefined && edit.text !== draft.body) changes.text = edit.text;
-  const listed = (recipients: AskDraft["recipients"]) =>
-    recipients.map((recipient) => `${recipient.role} ${recipient.address}`).join("\n");
-  if (edit?.recipients && listed(edit.recipients) !== listed(draft.recipients)) {
+  if (edit?.recipients && !sameRecipients(edit.recipients, draft.recipients)) {
     changes.recipients = edit.recipients;
   }
   if (edit?.subject !== undefined && edit.subject !== (draft.subject ?? "")) {
