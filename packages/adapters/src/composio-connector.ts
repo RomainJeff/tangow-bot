@@ -15,6 +15,7 @@ import {
   mergeCatalogWithConnected,
   type ToolkitDirectoryEntry,
 } from "./composio-catalog-cache.js";
+import { connectorError } from "./connector-errors.js";
 import { DestinationEmulator } from "./destination-emulator.js";
 import { isVitestRuntime } from "./test-runtime.js";
 
@@ -378,7 +379,7 @@ export class ComposioConnector implements ComposioProvider {
       );
       const result = await session.execute(call.tool, call.args ?? {});
       if (result.error) {
-        yield { type: "error", message: sanitizeComposioError(result.error) };
+        yield { ...connectorError(result.error), message: sanitizeComposioError(result.error) };
         return;
       }
       const logId = collectLogIds(result)[0] ?? "";
@@ -390,7 +391,7 @@ export class ComposioConnector implements ComposioProvider {
         },
       };
     } catch (error) {
-      yield { type: "error", message: sanitizeComposioError(error) };
+      yield { ...connectorError(error), message: sanitizeComposioError(error) };
     }
   }
 
@@ -649,7 +650,7 @@ export class ConnectorRegistry implements ConnectorProvider {
       call.route?.connectorId ?? (call.tool === "destination.write" ? "destination" : "composio");
     const provider = this.providers.get(connectorId);
     if (!provider) {
-      yield { type: "error", message: `unknown connector ${connectorId}` };
+      yield { type: "error", kind: "unsupported", message: `unknown connector ${connectorId}` };
       return;
     }
     yield* provider.execute({ ...call, tool: call.route?.toolName ?? call.tool }, context);
