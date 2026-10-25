@@ -1,28 +1,16 @@
-import type { AskDraftFields, AskDraftRecipient } from "@rakazo/contracts";
+import type { AskDraft, AskDraftFields, AskDraftRecipient } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
-import { finishLines, foldedRoles, withRole } from "./draft-sheet";
+import { finishLines, sheetChanged } from "./draft-sheet";
 
 const fields: AskDraftFields = { to: null, cc: null, bcc: null, subject: true };
 const marie: AskDraftRecipient = { role: "to", address: "marie@example.com" };
-
-describe("withRole", () => {
-  it("replaces one role's addresses and keeps To, Cc, Bcc in order", () => {
-    const recipients: AskDraftRecipient[] = [{ role: "bcc", address: "ed@example.com" }, marie];
-    expect(withRole(recipients, "cc", ["paul@example.com"])).toEqual([
-      marie,
-      { role: "cc", address: "paul@example.com" },
-      { role: "bcc", address: "ed@example.com" },
-    ]);
-  });
-});
-
-describe("foldedRoles", () => {
-  it("folds an empty Cc or Bcc the draft takes until it is opened, typed in or filled", () => {
-    expect(foldedRoles(fields, [marie], {}, new Set())).toEqual(["cc", "bcc"]);
-    expect(foldedRoles(fields, [marie], { bcc: "ed" }, new Set(["cc"]))).toEqual([]);
-    expect(foldedRoles({ to: 1 }, [marie], {}, new Set())).toEqual([]);
-  });
-});
+const draft: AskDraft = {
+  app: { name: "Mail", logo: null },
+  recipients: [marie],
+  fields,
+  subject: "Thursday",
+  body: "Thursday instead?",
+};
 
 describe("finishLines", () => {
   it("joins every row's finished typing on Done", () => {
@@ -40,5 +28,17 @@ describe("finishLines", () => {
       held: true,
     });
     expect(finishLines({ to: 1 }, [marie], { to: "bo@example.com" }).held).toBe(true);
+  });
+});
+
+describe("sheetChanged", () => {
+  it("asks before Cancel only when something differs from what the sheet opened on", () => {
+    const opening = { subject: "Friday" };
+    expect(sheetChanged(draft, opening, { subject: "Friday", text: draft.body }, {})).toBe(false);
+    expect(
+      sheetChanged(draft, {}, { recipients: [{ role: "to", address: "MARIE@example.com" }] }, {}),
+    ).toBe(false);
+    expect(sheetChanged(draft, opening, { subject: "Saturday" }, {})).toBe(true);
+    expect(sheetChanged(draft, opening, opening, { cc: "pa" })).toBe(true);
   });
 });

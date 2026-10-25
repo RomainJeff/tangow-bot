@@ -10,8 +10,12 @@ import { nativeTextStyle } from "../lib/typography";
 import { NativeSymbol } from "./native-symbol";
 
 const REMOVE_ICON = 16;
-// The remove glyph is small; the slop grows its target to a 48 pt action.
-const REMOVE_SLOP = (sizes.mobileAction - REMOVE_ICON) / 2;
+const ROW_GAP = 6;
+const CHIP_PADDING = 4;
+const CHIP_HEIGHT = nativeTextStyle("body").lineHeight + 2 * CHIP_PADDING;
+// iOS stops a tap at the chip's edge, so no slop can grow the remove glyph past it: the button is a
+// real 48 pt frame that spills out of the chip, by no more than the gap to the next one.
+const REMOVE_SPILL = (sizes.mobileAction - REMOVE_ICON) / 2;
 
 /**
  * One recipient row of the Edit message sheet, like Mail's compose sheet: its label, its addresses
@@ -61,8 +65,8 @@ export function RecipientRow({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t("Remove {address}", { address })}
-            hitSlop={REMOVE_SLOP}
             onPress={() => onChange(addresses.filter((each) => each !== address))}
+            style={styles.remove}
           >
             <NativeSymbol
               ios="xmark.circle.fill"
@@ -78,6 +82,8 @@ export function RecipientRow({
           ref={own}
           autoFocus={autoFocus}
           accessibilityLabel={label}
+          // The red underline says it on screen; VoiceOver hears it here.
+          accessibilityHint={invalid ? t("Not an email address") : undefined}
           value={typed}
           keyboardType="email-address"
           autoCapitalize="none"
@@ -132,6 +138,7 @@ export function SubjectRow({
         accessibilityLabel={label}
         value={subject}
         maxLength={ASK_DRAFT_SUBJECT_MAX_LENGTH}
+        multiline
         submitBehavior="blurAndSubmit"
         onChangeText={(value) => onChange(value.replace(LINE_BREAKS, " "))}
         style={styles.input}
@@ -147,7 +154,7 @@ function createStyles() {
       flexDirection: "row",
       flexWrap: "wrap",
       alignItems: "center",
-      gap: 6,
+      gap: ROW_GAP,
       minHeight: sizes.mobileAction,
       paddingVertical: 6,
       borderBottomWidth: StyleSheet.hairlineWidth,
@@ -159,11 +166,20 @@ function createStyles() {
       alignItems: "center",
       gap: 4,
       maxWidth: "100%",
+      minHeight: CHIP_HEIGHT,
       paddingStart: 10,
-      paddingEnd: 6,
-      paddingVertical: 4,
+      paddingEnd: REMOVE_SPILL - ROW_GAP,
+      paddingVertical: CHIP_PADDING,
       borderRadius: radii.pill,
       backgroundColor: tokens.well,
+    },
+    remove: {
+      width: sizes.mobileAction,
+      height: sizes.mobileAction,
+      marginVertical: -(sizes.mobileAction - CHIP_HEIGHT) / 2,
+      marginHorizontal: -REMOVE_SPILL,
+      alignItems: "center",
+      justifyContent: "center",
     },
     addressText: { flexShrink: 1, color: tokens.foreground, ...nativeTextStyle("body") },
     input: {
