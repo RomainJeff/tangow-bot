@@ -24,3 +24,5 @@ packages/ui-tokens/src/tokens.css linguist-generated
 apps/mobile/targets/notification-service/AvatarShapes.swift linguist-generated
 packages/ui-web/src/components/ui/** linguist-vendored
 packages/ui-web/src/shadcn.css linguist-vendored
+
+packages/adapters/src/fixtures/composio-search-corpus.json linguist-vendored

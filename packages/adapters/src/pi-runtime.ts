@@ -35,6 +35,7 @@ import {
   helperModel,
   isHelperTool,
 } from "./builtin-tools.js";
+import { catalogIndexText } from "./lazy-tool-catalog.js";
 import {
   normalizeOpenAiToolParameters,
   openAiToolParametersNeedNormalization,
@@ -972,7 +973,9 @@ async function runSubagent(
       pruneComputerScreenshotContext(messages, requestModel.maxImagesPerPrompt),
     finishTurn: async () => (nestedHost.pausePending ? { action: "end" } : undefined),
     initialState: {
-      systemPrompt: helperInstructions(name, helper.instructions),
+      systemPrompt: [helperInstructions(name, helper.instructions), catalogIndexText(childDefs)]
+        .filter(Boolean)
+        .join("\n\n"),
       model: subagentModel,
       thinkingLevel: thinkingLevelFor(subagentModel, requestModel.thinkingLevel),
       tools: childTools,

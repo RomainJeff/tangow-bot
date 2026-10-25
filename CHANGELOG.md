@@ -10,12 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
+- Bots on web, desktop and iPhone find the right tools of connected apps that expose many tools more reliably.
+
 - Bots on web, desktop and iPhone now prefer suitable connected tools and direct page reads before browser interaction, and distinguish connector failures before choosing another method.
 - On web, desktop and iPhone, global Settings now lists each computer with its bots and visible maintenance actions, and can update all available computers at once, reporting busy computers for a later retry without opening their screens or taking control.
 - A self-hosted server with a missing or incomplete computer provider (an empty or `none` `SANDBOX_PROVIDER`, E2B without `E2B_API_KEY`, or Docker in production without `SANDBOX_SUPERVISOR_TOKEN`) now refuses to start with a message naming the setting to fix, instead of starting with computers turned off ([provider setup](docs/self-host-sandbox-providers.md)).
 
 #### Fixed
 
+- Bots running in isolated workers can follow browser and connected-app instructions with the correct tools, while retaining the reason a connector failed.
 - While a bot works on web, desktop and iPhone, activity messages describe the tool being used even when it has a Rakazo MCP prefix, instead of showing raw tool names and arguments or a generic status.
 
 - Opening a bot computer screen or taking control on web, desktop and iPhone no longer fails after the dock starts.
