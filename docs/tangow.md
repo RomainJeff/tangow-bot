@@ -1,8 +1,7 @@
 # Tangow
 
 Tangow runs **directly on the server**, from a Rakazo source checkout. It updates the application
-and the computer builds for the configured provider. Run `./tangow` or `pnpm tangow`; it does not
-operate the published-image installer or install E2B infrastructure. Coding agents can use the project [Tangow skill](../.agents/skills/tangow/SKILL.md)
+and the computer builds for the configured provider. Run `./tangow` or `pnpm tangow`; it operates the source Compose stack. Coding agents can use the project [Tangow skill](../.agents/skills/tangow/SKILL.md)
 for lifecycle operations and recovery.
 
 ```bash
@@ -15,13 +14,39 @@ for lifecycle operations and recovery.
 It reads the ignored `.env.e2b.compose.json` used by the deployment:
 
 - With that override, it preserves E2B settings, installs frozen build dependencies, builds and
-  pushes the desktop image, then rebuilds the worker and desktop templates. The desktop template
+  pushes the desktop image, then rebuilds the worker and desktop templates on every update. The desktop template
   uses the pushed image's immutable digest.
-- Without it, it builds the Docker computer and supervisor images alongside the application.
-  Source Compose forces Docker; a `SANDBOX_PROVIDER` value in `.env` alone does not enable E2B.
+- Without it, it builds the Docker computer, supervisor and `rakazo/worker` images alongside the application.
+  The worker comes from `apps/agent-run-worker/Dockerfile` through Compose `worker-image`; its
+  revision label must match the application revision before services can start.
+  Empty/`none` providers, E2B without a key, and production Docker without a supervisor token
+  fail startup. Source Compose forces Docker; a `SANDBOX_PROVIDER` value in `.env` alone does not enable E2B.
 
 It then starts the services and checks the actual API revision and provider, application images,
 web readiness and, on Docker, the supervisor image. It never resets local commits or deletes data.
+
+Every real run uses the same worker agent loop: Docker starts one `rakazo/worker` container per
+attempt through the supervisor, and E2B starts a worker VM. There is no in-process Pi runtime.
+`AGENT_RUNTIME=pi` is obsolete; Tangow removes that legacy entry from `.env` during update.
+`AGENT_RUNTIME=scripted` is reserved for tests and Tangow refuses it for a real deployment.
+
+Before starting API/worker, Tangow recreates and waits for the Compose `migrate` service, then
+checks its exit code and app image. It runs the session-log backfill and Docker-home migration.
+The final startup checks `migrate` again. A database/configuration or storage error blocks startup;
+individual busy/conflicting homes are deferred instead of failing the deployment.
+
+Docker moves idle homes by rename under `DATA_DIR/volumes/rakazo-<volumeId>`. A temporary
+`.rakazo-move-pending` in a home guards partial moves. Tangow reports remaining computer ids,
+bots, states and reasons after startup, including homes with that marker. Busy computers move
+on their next suspend; conflicts need inspection. Do not delete the marker. Legacy user skills
+are copied once into each space's shared volume by the existing migration.
+
+E2B updates and restarts run `scripts/setup-e2b-homes.ts --inspect` before restarting services.
+Any remaining snapshot homes or Docker volumes block restart. Use the existing
+[home upgrade procedure](self-host-e2b-workers.md#move-existing-homes-onto-volumes), through
+`./tangow provider e2b`, before retrying. Setup verifies the prepared application image/revision, stops the older API and
+worker after migration consent, and can migrate before the new API is first started. Tangow never
+starts an API with an incomplete E2B upgrade.
 
 ## Configure once
 
@@ -74,22 +99,24 @@ To select a different source deployment on the same server:
 revision and container images. `status` shows checkout and runtime revisions separately. Logs
 show the last 100 lines unless followed; they are operator output and may contain private data.
 
-`computers build` rebuilds only the configured provider's images/templates. An E2B build requires
+`computers build` rebuilds only the configured provider's images/templates. A standalone worker build requires
 a clean checkout matching the running API and worker revision; use `update` for a new revision.
 
 New workers and computers use the new builds. To replace existing computers, open
 **Settings > Computer > Update all computers**. Busy computers are skipped and reported for retry.
 Tangow does not interrupt them.
 
-Cleanup removes unused build cache and images, including images useful for manual rollback. It
-never prunes containers or volumes. Run it after checking the deployment. `--dry-run` on any
+Cleanup removes unused build cache and images. It never prunes containers or volumes. Run it after checking the deployment. `--dry-run` on any
 command describes the operation without running external commands or changing files.
 
 ## Switch Docker to E2B
 
 Tangow reuses the [existing setup and migration command](self-host-e2b-workers.md), including its
-backups, readiness checks and resumable home migration. Deploy the current revision, configure a
-registry image as above, and finish active work and release computer control first.
+backups, readiness checks and resumable home migration. Existing Docker volumes are carried by
+`scripts/carry-docker-volumes-to-e2b.ts`, team computer first, then private computers. Every copy
+is verified and interrupted copies resume; Tangow reuses this flow rather than copying files itself. Prepare the current revision and application image with `update`; if it
+blocks on E2B homes, keep the prepared artifacts for setup. Configure a registry image as above,
+finish active work and release computer control first.
 
 ```bash
 ./tangow provider e2b --dry-run
@@ -102,7 +129,7 @@ use existing private configuration or `E2B_DOMAIN` and `E2B_API_KEY` on the serv
 `E2B_*` and `WORKER_TEMPLATE` variables; their values never enter command arguments. Successful
 setup saves the selected registry image and sudo preference in `.env.tangow.json` for later updates.
 
-Originals and backups are retained. Unsupported home entries stay in originals and backups,
+Chrome profiles are not copied; bots must sign in again to their sites. Originals and backups are retained. Unsupported home entries stay in originals and backups,
 outside the new volumes; the setup guide documents the scope. `provider docker` confirms an
 existing Docker deployment but refuses E2B because reverse home migration is unsupported.
 
@@ -110,7 +137,7 @@ existing Docker deployment but refuses E2B because reverse home migration is uns
 
 A failed application build leaves running services alone, although Git may have advanced. A later
 failure may leave published E2B templates or restarted services in place. Tangow identifies the
-failed step and never claims a template or database rollback. Fix the problem and rerun `update`.
+failed step. Recovery is forward only; do not roll back configuration, code, templates or databases. Fix the problem and rerun `update`.
 Keep template and application upgrades within a maintenance window.
 
 If home migration fails, rerun the same `provider e2b` command. Do not manually start services while

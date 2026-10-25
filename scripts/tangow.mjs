@@ -4,6 +4,14 @@ import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildComputers } from "./tangow-builds.mjs";
+import {
+  inspectHomes,
+  runMigrations,
+  validateConfiguration,
+  verifyExited,
+  workerImage,
+} from "./tangow-deployment.mjs";
 import { help, mainOptions, services } from "./tangow-options.mjs";
 
 function writePrivate(filename, contents) {
@@ -30,7 +38,7 @@ async function main() {
   if (values["dry-run"]) {
     const descriptions = {
       update:
-        "fetch origin/main; fast-forward a clean checkout to main; detect the private provider configuration; build the application and Docker computers/supervisor or E2B worker/desktop templates; restart services; verify readiness",
+        "fetch origin/main; fast-forward a clean checkout to main; detect the private provider configuration; build the application and Docker worker/computer/supervisor or E2B worker/desktop templates; restart services; verify readiness",
       restart: "restart api/worker/web with the existing E2B override and verify readiness",
       status: "read application health, checkout revision and Compose service states",
       logs: `read ${subcommand ?? "api"} logs`,
@@ -312,81 +320,12 @@ async function main() {
       console.log("Cleanup complete. Containers and volumes retained.");
       return;
     }
-    const buildComputers = () => {
-      console.log("Building computer image...");
-      const image = provider === "e2b" ? values["computer-image"] : "rakazo/computer:local";
-      const connection = { ...process.env };
-      if (override) {
-        const saved = override.services.api.environment;
-        Object.assign(
-          connection,
-          Object.fromEntries(
-            Object.entries(saved).filter(
-              ([name]) => name.startsWith("E2B_") || name === "WORKER_TEMPLATE",
-            ),
-          ),
-        );
-        run("pnpm (install supported Node and enable Corepack first)", "pnpm", ["--version"]);
-        console.log("Installing template build dependencies for the checkout revision...");
-        run("Template dependencies", "pnpm", ["install", "--frozen-lockfile"], {
-          env: {
-            ...process.env,
-            CI: "true",
-            ELECTRON_SKIP_BINARY_DOWNLOAD: "1",
-            PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1",
-          },
-        });
-      }
-      dock("Computer image build", [
-        "build",
-        ...(provider === "e2b" ? ["--platform", "linux/amd64"] : []),
-        "-t",
-        image,
-        "infra/sandboxes/computer",
-      ]);
-      if (override) {
-        dock("Computer image push", ["push", image]);
-        dock("Local computer image tag", ["tag", image, "rakazo/computer:local"]);
-        const digest = dock("Computer image digest", [
-          "image",
-          "inspect",
-          "--format",
-          "{{index .RepoDigests 0}}",
-          image,
-        ]).stdout.trim();
-        if (!/^[^\s]+@sha256:[a-f0-9]{64}$/.test(digest))
-          throw new Error("Registry did not return an immutable computer image digest.");
-        console.log("Building E2B worker template...");
-        run(
-          "Worker template build",
-          "pnpm",
-          [
-            "--filter",
-            "@rakazo/agent-run-worker",
-            "template:build",
-            "--name",
-            connection.WORKER_TEMPLATE || "rakazo-worker-pi-native",
-          ],
-          { env: connection },
-        );
-        console.log("Building E2B desktop template...");
-        run(
-          "Desktop template build",
-          "pnpm",
-          ["--filter", "@rakazo/computer-e2b-template", "template:build", "--image", digest],
-          { env: connection },
-        );
-      }
-      console.log(
-        "Computer builds ready. Replace existing computers from Settings > Computer; busy computers are skipped.",
-      );
-    };
     if (command === "computers") {
       if (git(["status", "--porcelain"]))
         throw new Error(
           "Checkout has local changes. Build templates from a clean deployed revision.",
         );
-      if (provider === "e2b") {
+      {
         const health = readHealth();
         const id = comp("Worker lookup", ["ps", "-q", "worker"]).stdout.trim();
         const workerRevision = id
@@ -399,7 +338,7 @@ async function main() {
           : null;
         if (
           !health?.ok ||
-          health.sandbox !== "e2b" ||
+          health.sandbox !== provider ||
           health.revision !== sha() ||
           workerRevision !== sha()
         )
@@ -407,10 +346,16 @@ async function main() {
             "Template source must match the running API and worker revision. Use update to deploy a new revision.",
           );
       }
-      buildComputers();
+      validateConfiguration(comp, provider);
+      if (provider === "docker") {
+        comp("Worker image build", ["build", "--build-arg", `GIT_SHA=${sha()}`, "worker-image"]);
+        workerImage(dock, sha());
+      }
+      buildComputers({ provider, values, override, run, dock });
       return;
     }
     if (command === "update") {
+      validateConfiguration(comp, provider);
       console.log("Checking checkout and fetching origin/main...");
       if (git(["status", "--porcelain"]))
         throw new Error("Checkout has local changes. Commit or move them before updating.");
@@ -446,7 +391,7 @@ async function main() {
         "--build-arg",
         `GIT_SHA=${target}`,
         "api",
-        ...(provider === "docker" ? ["supervisor"] : []),
+        ...(provider === "docker" ? ["supervisor", "worker-image"] : []),
       ]);
       const appImage = dock("Application image", [
         "image",
@@ -464,15 +409,19 @@ async function main() {
           "{{.Id}}",
           "rakazo/supervisor:local",
         ]).stdout.trim();
-      if (needsComputers) buildComputers();
       const filename = path.join(root, ".env");
       const original = readFileSync(filename, "utf8");
-      const replacement = original.replace(/^(?:export )?GIT_SHA=.*$/gm, `GIT_SHA=${target}`);
+      const cleaned = original.replace(/^(?:export )?AGENT_RUNTIME=(?:pi|"pi"|'pi')\s*\n?/gm, "");
+      const replacement = cleaned.replace(/^(?:export )?GIT_SHA=.*$/gm, `GIT_SHA=${target}`);
       const next =
-        replacement === original && !/^(?:export )?GIT_SHA=/m.test(original)
-          ? `${original.trimEnd()}\nGIT_SHA=${target}\n`
+        replacement === cleaned && !/^(?:export )?GIT_SHA=/m.test(cleaned)
+          ? `${cleaned.trimEnd()}\nGIT_SHA=${target}\n`
           : replacement;
       writePrivate(filename, next);
+      const guestImage = provider === "docker" ? workerImage(dock, target) : null;
+      runMigrations(comp, dock, appImage);
+      if (provider === "e2b") inspectHomes(comp, provider);
+      buildComputers({ provider, values, override, run, dock });
       console.log("Starting application services...");
       comp("Application start", [
         "up",
@@ -485,11 +434,16 @@ async function main() {
         ...services,
         ...(provider === "docker" ? ["supervisor"] : []),
       ]);
+      verifyExited(comp, dock, "migrate", appImage);
+      if (guestImage) verifyExited(comp, dock, "worker-image", guestImage);
       await verify(target, expectedImages);
+      if (provider === "docker") inspectHomes(comp, provider);
       console.log(
-        `Updated application and ${provider === "e2b" ? "E2B templates" : "Docker computer/supervisor images"}. Existing computers can be updated from Settings > Computer.`,
+        `Updated application and ${provider === "e2b" ? "E2B templates" : "Docker worker/computer/supervisor images"}. Existing computers can be updated from Settings > Computer.`,
       );
     } else {
+      validateConfiguration(comp, provider);
+      if (provider === "e2b") inspectHomes(comp, provider);
       const running = readHealth();
       if (!running?.revision)
         throw new Error(

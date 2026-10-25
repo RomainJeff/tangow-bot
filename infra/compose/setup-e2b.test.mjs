@@ -22,6 +22,11 @@ function fixture(t) {
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(path.join(root, "infra/compose"), { recursive: true });
   mkdirSync(path.join(root, "bin"));
+  mkdirSync(path.join(root, "scripts"));
+  copyFileSync(
+    fileURLToPath(new URL("../../scripts/tangow-deployment.mjs", import.meta.url)),
+    path.join(root, "scripts/tangow-deployment.mjs"),
+  );
   copyFileSync(source, path.join(root, "infra/compose/setup-e2b.mjs"));
   const upgrade = fileURLToPath(new URL("./e2b-upgrade.mjs", import.meta.url));
   if (existsSync(upgrade)) copyFileSync(upgrade, path.join(root, "infra/compose/e2b-upgrade.mjs"));
@@ -66,9 +71,12 @@ if (name === 'docker' && args.includes('postgres')) { console.log('fake-database
 if (name === 'git') {
  if (args.includes('rev-parse')) console.log('${sha}');
 } else if (name === 'docker') {
+ if (args.includes('config') && args.includes('--format')) { console.log(JSON.stringify({services:{api:{environment:{AGENT_RUNTIME:process.env.SCRIPTED?'scripted':'worker'}},worker:{environment:{AGENT_RUNTIME:process.env.SCRIPTED?'scripted':'worker'}}}})); process.exit(0); }
+ if (args.includes('@rakazo/adapters') && process.env.STOPPED_SERVICES && !args.includes('run')) process.exit(1);
  if (args[0] === 'compose' && args.includes('ps')) console.log('container-id');
- if (args[0] === 'inspect') console.log(args.includes('{{.State.Running}}') ? (process.env.WORKER_STOPPED ? 'false' : 'true') : process.env.MISMATCH ? 'b'.repeat(40) : '${sha}');
- if (args[0] === 'image') console.log('registry.example.com/computer@sha256:'+'c'.repeat(64));
+ if (args[0] === 'inspect' && args.some(a=>a.includes('.State.ExitCode'))) { console.log('exited '+(process.env.MIGRATION_FAILED?'1':'0')+' sha256:app'); process.exit(0); }
+ if (args[0] === 'inspect') console.log(args.includes('{{.State.Running}}') ? (process.env.WORKER_STOPPED ? 'false' : 'true') : (process.env.MISMATCH || process.env.OLD_RUNTIME) ? 'b'.repeat(40) : '${sha}');
+ if (args[0] === 'image') console.log(args.includes('{{.Id}}') ? 'sha256:app' : args.some(a=>a.includes('Config.Env')) ? (process.env.MISMATCH ? 'b'.repeat(40) : '${sha}') : 'registry.example.com/computer@sha256:'+'c'.repeat(64));
  if (args.includes('up') && process.env.FAIL_START && fs.existsSync('.env.e2b.compose.json')) process.exit(1);
  if (args.includes('logs')) console.log('worker ready');
  if (args.includes('@rakazo/adapters') && (process.env.FAIL_CONTAINER_CONNECT || !process.env.E2B_API_KEY)) process.exit(1);
@@ -121,7 +129,7 @@ test("dry-run leaves files untouched and runs no external commands", (t) => {
   assert.doesNotMatch(result.stdout + result.stderr, /fake-test-secret/);
 });
 
-test("refuses a mismatched running revision before probing or publishing", (t) => {
+test("refuses a built image that does not match the checkout before probing or publishing", (t) => {
   const f = fixture(t);
   const result = f.invoke([], { MISMATCH: "1" });
   assert.notEqual(result.status, 0);
@@ -190,18 +198,18 @@ test("failed template build never changes configuration or starts services", (t)
   );
 });
 
-test("failed switch restores prior configuration and restarts with the original compose command", (t) => {
+test("failed switch retains E2B configuration and stops services without rollback", (t) => {
   const f = fixture(t);
   const result = f.invoke([], { FAIL_START: "1" });
   assert.notEqual(result.status, 0);
-  assert.equal(existsSync(path.join(f.root, ".env.e2b.compose.json")), false);
+  assert.equal(existsSync(path.join(f.root, ".env.e2b.compose.json")), true);
   const starts = f.calls().filter((c) => c.includes("up"));
-  assert.equal(starts.length, 2);
+  assert.equal(starts.length, 1);
   assert.ok(starts[0].some((v) => v.endsWith(".env.e2b.compose.json")));
-  assert.equal(
-    starts[1].some((v) => v.endsWith(".env.e2b.compose.json")),
-    false,
-  );
+  assert.ok(f.calls().some((c) => c.includes("stop")));
+  assert.match(result.stderr, /No rollback was attempted/);
+  const resumed = f.invoke([], { STOPPED_SERVICES: "1" });
+  assert.equal(resumed.status, 0, resumed.stderr);
 });
 
 test("interactive domain and secret are requested with terminal echo disabled for the key", (t) => {
@@ -288,29 +296,30 @@ test("real Compose merges the generated override over the forced Docker provider
   assert.equal(config.services.api.environment.E2B_API_KEY, "fake-test-secret");
 });
 
-test("startup failures restore application configuration", { concurrency: true }, async (t) => {
+test("startup failures retain E2B configuration for forward recovery", {
+  concurrency: true,
+}, async (t) => {
   await Promise.all([
-    t.test("a stopped worker prevents success and restores the original deployment", (t) => {
+    t.test("a stopped worker prevents success and leaves services stopped", (t) => {
       const f = fixture(t);
       const result = f.invoke([], { WORKER_STOPPED: "1" });
       assert.notEqual(result.status, 0);
-      assert.equal(existsSync(path.join(f.root, ".env.e2b.compose.json")), false);
+      assert.equal(existsSync(path.join(f.root, ".env.e2b.compose.json")), true);
+      assert.equal(f.calls().filter((c) => c.includes("up")).length, 1);
+    }),
+    t.test("an invalid health response retains the new private configuration", (t) => {
+      const f = fixture(t);
+      assert.equal(f.invoke().status, 0);
+      const filename = path.join(f.root, ".env.e2b.compose.json");
+      const result = f.invoke([], { FAIL_HEALTH: "1", E2B_API_KEY: "fake-replacement-secret" });
+      assert.notEqual(result.status, 0);
+      assert.equal(
+        JSON.parse(readFileSync(filename, "utf8")).services.api.environment.E2B_API_KEY,
+        "fake-replacement-secret",
+      );
+      assert.doesNotMatch(result.stdout + result.stderr, /fake-replacement-secret/);
       assert.equal(f.calls().filter((c) => c.includes("up")).length, 2);
     }),
-    t.test(
-      "an invalid health response restores an existing private override byte for byte",
-      (t) => {
-        const f = fixture(t);
-        assert.equal(f.invoke().status, 0);
-        const filename = path.join(f.root, ".env.e2b.compose.json");
-        const previous = readFileSync(filename, "utf8");
-        const result = f.invoke([], { FAIL_HEALTH: "1", E2B_API_KEY: "fake-replacement-secret" });
-        assert.notEqual(result.status, 0);
-        assert.equal(readFileSync(filename, "utf8"), previous);
-        assert.doesNotMatch(result.stdout + result.stderr, /fake-replacement-secret/);
-        assert.equal(f.calls().filter((c) => c.includes("up")).length, 3);
-      },
-    ),
   ]);
 });
 
@@ -444,4 +453,37 @@ test("sudo covers migration inventory and database backup and restore verificati
   assert.ok(privileged.some((c) => c.some((arg) => arg.includes("pg_dump"))));
   assert.ok(privileged.some((c) => c.includes("pg_restore")));
   assert.doesNotMatch(result.stdout + result.stderr, /fake-test-secret/);
+});
+
+test("provider setup rejects a scripted runtime before building or switching services", (t) => {
+  const f = fixture(t);
+  const result = f.invoke([], { SCRIPTED: "1" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /scripted is reserved for tests/);
+  assert.ok(f.calls().every((c) => !c.includes("template:build") && !c.includes("up")));
+  assert.equal(existsSync(path.join(f.root, ".env.e2b.compose.json")), false);
+});
+
+test("snapshot preflight recovery uses the verified new image while the old API is still deployed", (t) => {
+  const f = fixture(t);
+  const unprepared = f.invoke(["--migrate-existing"], { OLD_RUNTIME: "1", UPGRADE_EXISTING: "1" });
+  assert.notEqual(unprepared.status, 0);
+  assert.match(unprepared.stderr, /prepare revision and migrations/);
+  const envPath = path.join(f.root, ".env");
+  writeFileSync(envPath, `${readFileSync(envPath, "utf8")}GIT_SHA=${sha}\n`);
+  const failedMigration = f.invoke(["--migrate-existing"], {
+    OLD_RUNTIME: "1",
+    MIGRATION_FAILED: "1",
+    UPGRADE_EXISTING: "1",
+  });
+  assert.notEqual(failedMigration.status, 0);
+  assert.match(failedMigration.stderr, /migrate did not complete successfully/);
+  assert.ok(f.calls().every((c) => !c.includes("template:build") && !c.includes("up")));
+  const result = f.invoke(["--migrate-existing"], { OLD_RUNTIME: "1", UPGRADE_EXISTING: "1" });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = f.calls();
+  const stopped = calls.findIndex((c) => c.includes("stop") && c.includes("api"));
+  const build = calls.findIndex((c) => c.includes("template:build"));
+  assert.ok(stopped >= 0 && build > stopped);
+  assert.ok(calls.some((c) => c.includes("scripts/migrate-home-to-volumes.ts")));
 });

@@ -30,6 +30,11 @@ function fixture(t, { e2b = false } = {}) {
     fileURLToPath(new URL("./tangow-options.mjs", import.meta.url)),
     path.join(root, "scripts/tangow-options.mjs"),
   );
+  for (const name of ["tangow-builds.mjs", "tangow-deployment.mjs"])
+    copyFileSync(
+      fileURLToPath(new URL(`./${name}`, import.meta.url)),
+      path.join(root, "scripts", name),
+    );
   writeFileSync(path.join(root, "infra/compose/docker-compose.yml"), "services: {}\n");
   writeFileSync(
     path.join(root, "infra/compose/setup-e2b.mjs"),
@@ -38,7 +43,7 @@ function fixture(t, { e2b = false } = {}) {
   writeFileSync(path.join(root, ".gitignore"), ".env*\n");
   writeFileSync(
     path.join(root, ".env"),
-    'SECRET=fake-test-secret\nGIT_SHA=old\nUNRELATED="$(touch must-not-exist)"\n',
+    'SECRET=fake-test-secret\nAGENT_RUNTIME=pi\nGIT_SHA=old\nUNRELATED="$(touch must-not-exist)"\n',
   );
   if (e2b) {
     const environment = {
@@ -89,11 +94,17 @@ if(name==='sudo'){
 }
 if(name==='pnpm'){if(args.includes('template:build')&&process.env.E2B_API_KEY!=='fake-test-secret')process.exit(1);process.exit(0);}
 if(args.includes('build')&&process.env.FAIL_BUILD){console.error('fake-test-secret');process.exit(1);}
+if(args.includes('config')){console.log(JSON.stringify({services:{api:{environment:{SANDBOX_PROVIDER:process.env.PROVIDER,SANDBOX_SUPERVISOR_TOKEN:process.env.NO_TOKEN?'':'fake-token',E2B_API_KEY:process.env.NO_KEY?'':'fake-test-secret',AGENT_RUNTIME:process.env.SCRIPTED?'scripted':undefined}},worker:{environment:{SANDBOX_PROVIDER:process.env.PROVIDER,SANDBOX_SUPERVISOR_TOKEN:process.env.NO_TOKEN?'':'fake-token',E2B_API_KEY:process.env.NO_KEY?'':'fake-test-secret'}}}}));process.exit(0);}
+if(args.includes('wait')&&process.env.FAIL_MIGRATE)process.exit(1);
+if(args.includes('scripts/setup-e2b-homes.ts')){console.log(JSON.stringify({computers:process.env.E2B_SNAPSHOTS?[{id:'computer-old',kind:'e2b',homeStorage:'snapshot'}]:[]}));process.exit(0);}
+if(args.includes('scripts/migrate-docker-homes.ts')){console.log(JSON.stringify({deferred:process.env.DEFERRED?[{id:'computer-busy',state:'running',bots:[{name:'Fixture bot'}],reason:'snapshot'}]:[]}));process.exit(0);}
 if(args.includes('exec')&&args.includes('api'))console.log(JSON.stringify({ok:true,revision:process.env.TARGET,sandbox:process.env.PROVIDER}));
 else if(args.includes('ps')&&args.includes('-q'))console.log(args.at(-1)+'-container');
 else if(args.includes('ps'))console.log('api running\\nworker running\\nweb running');
 else if(args.includes('{{json .RepoDigests}}'))console.log(JSON.stringify(process.env.NO_DIGEST?[]:['registry.example.com/computer@sha256:'+'c'.repeat(64)]));
-else if(args[0]==='image'&&args.includes('inspect'))console.log(args.includes('{{.Id}}')?(args.at(-1).includes('supervisor')?'sha256:supervisor':'sha256:app'):'registry.example.com/computer@sha256:'+'c'.repeat(64));
+else if(args[0]==='image'&&args.some(a=>a.includes('org.opencontainers.image.revision')))console.log(process.env.BAD_WORKER_REVISION?'old':process.env.TARGET);
+else if(args[0]==='image'&&args.includes('inspect'))console.log(args.includes('{{.Id}}')?(args.at(-1).includes('supervisor')?'sha256:supervisor':args.at(-1).includes('/worker:')?'sha256:guest':'sha256:app'):'registry.example.com/computer@sha256:'+'c'.repeat(64));
+else if(args[0]==='inspect'&&args.some(a=>a.includes('.State.ExitCode')))console.log('exited 0 '+(args.at(-1)==='worker-image-container'?'sha256:guest':process.env.BAD_MIGRATE_IMAGE?'sha256:old':'sha256:app'));
 else if(args[0]==='inspect')console.log(args.includes('{{.Image}}')?'sha256:app':args.some(a=>a.includes('Config.Env'))?process.env.TARGET:args.at(-1)==='supervisor-container'?'sha256:supervisor true 0':'sha256:app true 0');
 `;
   for (const name of ["docker", "sudo", "pnpm"])
@@ -156,6 +167,7 @@ test("update automatically builds E2B templates, preserves its override and veri
   assert.equal(f.git("rev-parse", "HEAD"), f.target);
   assert.equal(readFileSync(path.join(f.root, ".env.e2b.compose.json"), "utf8"), override);
   assert.match(readFileSync(path.join(f.root, ".env"), "utf8"), new RegExp(`GIT_SHA=${f.target}`));
+  assert.doesNotMatch(readFileSync(path.join(f.root, ".env"), "utf8"), /^AGENT_RUNTIME=/m);
   assert.equal(statSync(path.join(f.root, ".env")).mode & 0o777, 0o600);
   assert.equal(existsSync(path.join(f.root, "must-not-exist")), false);
   const calls = f.calls();
@@ -191,7 +203,9 @@ test("dirty or divergent checkouts are refused without rebuilding or rewriting h
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, kind === "dirty" ? /local changes/ : /outside origin\/main/);
     assert.equal(f.git("rev-parse", "HEAD"), original);
-    assert.deepEqual(f.calls(), []);
+    assert.ok(
+      f.calls().every((c) => !c.includes("build") && !c.includes("up") && !c.includes("restart")),
+    );
     assert.equal(readFileSync(path.join(f.root, "local-file"), "utf8"), "keep me");
   }
 });
@@ -327,4 +341,65 @@ test("missing registry configuration and invalid private config fail before upda
   const invalid = f.invoke(["update"]);
   assert.notEqual(invalid.status, 0);
   assert.doesNotMatch(invalid.stdout + invalid.stderr, /fake-test-secret/);
+});
+
+test("Docker update builds worker guest at the application revision and verifies migration before service start", (t) => {
+  const f = fixture(t);
+  const result = f.invoke(["update"]);
+  assert.equal(result.status, 0, result.stderr);
+  const calls = f.calls();
+  const build = calls.find((c) => c.includes("build") && c.includes("api"));
+  assert.ok(build.includes("worker-image"));
+  assert.ok(build.includes(`GIT_SHA=${f.target}`));
+  const wait = calls.findIndex((c) => c.includes("wait") && c.includes("migrate"));
+  const start = calls.findIndex((c) => c.includes("up") && c.includes("api"));
+  assert.ok(wait >= 0 && start > wait);
+});
+
+test("failed migration or mismatched guest image prevents restarting application services", (t) => {
+  for (const env of [
+    { FAIL_MIGRATE: "1" },
+    { BAD_MIGRATE_IMAGE: "1" },
+    { BAD_WORKER_REVISION: "1" },
+  ]) {
+    const f = fixture(t);
+    const result = f.invoke(["update"], env);
+    assert.notEqual(result.status, 0);
+    assert.ok(
+      f.calls().every((c) => !c.includes("restart") && !(c.includes("up") && c.includes("api"))),
+    );
+  }
+});
+
+test("E2B snapshot homes refuse update and restart before any application start", (t) => {
+  for (const command of ["update", "restart"]) {
+    const f = fixture(t, { e2b: true });
+    const result = f.invoke([command], { E2B_SNAPSHOTS: "1" });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /provider e2b/);
+    assert.ok(
+      f.calls().every((c) => !c.includes("restart") && !(c.includes("up") && c.includes("api"))),
+    );
+  }
+});
+
+test("successful startup reports deferred Docker homes with bot context", (t) => {
+  const f = fixture(t);
+  const result = f.invoke(["update"], { DEFERRED: "1" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /deferred.*Fixture bot/);
+});
+
+test("invalid production provider credentials and scripted runtime refuse updates before builds", (t) => {
+  for (const [e2b, env] of [
+    [false, { NO_TOKEN: "1" }],
+    [true, { NO_KEY: "1" }],
+    [false, { SCRIPTED: "1" }],
+  ]) {
+    const f = fixture(t, { e2b });
+    const result = f.invoke(["update"], env);
+    assert.notEqual(result.status, 0);
+    assert.ok(f.calls().every((c) => !c.includes("build") && !c.includes("up")));
+    assert.doesNotMatch(result.stdout + result.stderr, /fake-test-secret/);
+  }
 });

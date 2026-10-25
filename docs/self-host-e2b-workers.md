@@ -15,15 +15,16 @@ To add a worker provider, see
 
 - An E2B account, or a self-hosted E2B deployment, with volumes enabled. Workers and computers
   mount the bot and space volumes.
-- A checkout of Rakazo at the commit your API and worker images run, which is the `revision` that
-  `GET /health` reports.
+- A clean checkout matching the locally built `rakazo/app:local` image. For ordinary setup this
+  is also the running revision. After a Tangow E2B home preflight refusal, keep its prepared target
+  image, `.env` revision and completed startup migrations while setup upgrades the older services.
 - Node.js 22.22.2 or a later 22, 24, or 26 and later, with pnpm, on a host that reaches the E2B
   API, to build the templates. pnpm refuses other Node versions. For the computer template, Docker
   and a registry the E2B host can pull from.
 
 ## Configure an existing source deployment with one command
 
-Run setup on the deployment host from the checkout matching the running API and worker revision.
+Run setup on the deployment host from the checkout matching the verified local application image.
 It builds the lightweight Pi worker and desktop computer templates separately, upgrades existing
 Docker or snapshot-based E2B homes, and starts the application only after the upgrade is complete.
 It targets `infra/compose/docker-compose.yml`; it does not install E2B or configure other Compose
@@ -39,8 +40,11 @@ node infra/compose/setup-e2b.mjs --computer-image registry.example.com/rakazo-co
 ```
 
 Docker must be accessible to the current user, with push access to a registry the E2B builder can
-pull from. Runtime sources must have no uncommitted changes. The script checks the application
-revision before publishing templates. The registry argument applies only to the desktop image;
+pull from. Runtime sources must have no uncommitted changes. The script verifies the locally built application image matches the checkout before publishing
+templates. If Tangow update stopped at the E2B home preflight, its prepared revision and startup
+migrations allow setup to use that new image while the older API is still deployed. After migration
+consent, setup stops the older API/worker before publishing templates and starts the prepared
+revision only when the home upgrade completes. The registry argument applies only to the desktop image;
 the Pi worker has its own Node-based builder. `WORKER_TEMPLATE` can select another worker name.
 
 The terminal asks for the E2B domain and API key. Key entry is hidden; Enter keeps a saved value.
@@ -115,10 +119,9 @@ backup and already-adopted homes, retains previous manifests and restarts servic
 homes and skills are ready. Do not delete the journal or manually start services during a partial
 upgrade. An expired preparation reservation is cleared safely on retry.
 
-Before home preparation starts, a startup failure restores the previous application configuration.
-After home preparation starts, automatically reverting to Docker could separate computers from
-already-adopted volumes, so setup stays in maintenance instead. Published template builds are never
-rolled back. Protect the override, journal, plans, manifests and backups as private deployment data;
+A startup or verification failure retains the new E2B configuration and stops API/worker, even
+before home preparation starts. Fix the failure and rerun setup to recover forward. Configuration,
+code, databases and published template builds are never rolled back. Protect the override, journal, plans, manifests and backups as private deployment data;
 never paste their contents into commits, issues or public logs.
 
 ## Build the templates

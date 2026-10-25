@@ -36,7 +36,7 @@ export function acquireSetupLock(root) {
   });
 }
 
-/** The journal is also the rollback boundary: after preparation starts the old provider cannot safely resume. */
+/** Retains progress so setup resumes forward; services stay stopped until the upgrade completes. */
 export class HomeUpgrade {
   constructor({ root, compose, env, run, prompt, flags, template, docker = ["docker"] }) {
     Object.assign(this, { root, compose, env, run, prompt, flags, template, docker });

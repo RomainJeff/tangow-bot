@@ -16,6 +16,7 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs, parseEnv } from "node:util";
+import { validateRuntime, verifyExited } from "../../scripts/tangow-deployment.mjs";
 import { acquireSetupLock, HomeUpgrade } from "./e2b-upgrade.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
@@ -178,7 +179,6 @@ async function main() {
         throw new Error(
           "Cannot read the private E2B override. Use --sudo for root-owned configuration.",
         );
-      // Preserve bytes when recovery restores the original override.
       const result = spawnSync("sudo", ["-n", "cat", overridePath], {
         stdio: ["ignore", "pipe", "pipe"],
       });
@@ -194,18 +194,37 @@ async function main() {
     throw new Error("Existing private Compose override is invalid JSON.");
   }
   const oldCompose = hadOverride ? [...compose, "-f", overridePath] : compose;
+  validateRuntime((_label, args) => ({ stdout: run("docker", [...oldCompose, ...args]) }));
   const revisionFormat =
     '{{range .Config.Env}}{{if eq (index (split . "=") 0) "GIT_SHA"}}{{index (split . "=") 1}}{{end}}{{end}}';
+  const builtRevision = run("docker", [
+    "image",
+    "inspect",
+    "--format",
+    revisionFormat,
+    "rakazo/app:local",
+  ]);
+  if (builtRevision !== sha)
+    throw new Error("Build the application image from this checkout before E2B setup.");
+  let olderRuntime = false;
   for (const service of ["api", "worker"]) {
     const id = run("docker", [...oldCompose, "ps", "-a", "-q", service]);
-    if (
-      !id ||
-      id.includes("\n") ||
-      run("docker", ["inspect", "--format", revisionFormat, id]) !== sha
-    )
-      throw new Error(
-        `Running ${service} revision must match this checkout before template builds.`,
-      );
+    if (!id || id.includes("\n"))
+      throw new Error(`Cannot identify deployed ${service}; deploy the source stack first.`);
+    if (run("docker", ["inspect", "--format", revisionFormat, id]) !== sha) olderRuntime = true;
+  }
+  if (olderRuntime && parseEnv(readFileSync(envPath, "utf8")).GIT_SHA !== sha)
+    throw new Error(
+      "The built image is newer than the running services. Run Tangow update first to prepare revision and migrations, then retry E2B setup.",
+    );
+  if (olderRuntime) {
+    const image = run("docker", ["image", "inspect", "--format", "{{.Id}}", "rakazo/app:local"]);
+    verifyExited(
+      (_label, args) => ({ stdout: run("docker", [...oldCompose, ...args]) }),
+      (_label, args) => ({ stdout: run("docker", args) }),
+      "migrate",
+      image,
+    );
   }
   const saved = previousData.services?.api?.environment ?? {};
   const env = { ...parseEnv(readFileSync(envPath, "utf8")), ...saved, ...process.env };
@@ -239,6 +258,7 @@ async function main() {
   if (upgrade.active) run("docker", [...oldCompose, "stop", "api", "worker"]);
   upgrade.inspect(!upgrade.active);
   upgrade.confirm();
+  if (olderRuntime) run("docker", [...oldCompose, "stop", "api", "worker"]);
   console.log("Checking E2B API and volume access...");
   run(
     "pnpm",
@@ -260,7 +280,9 @@ async function main() {
         "docker",
         [
           ...oldCompose,
-          "exec",
+          "run",
+          "--rm",
+          "--no-deps",
           "-T",
           ...Object.keys(connection).flatMap((name) => ["-e", name]),
           service,
@@ -345,27 +367,13 @@ async function main() {
     }
     if (!healthy) throw new Error("E2B API or worker readiness check failed.");
   } catch (error) {
-    if (upgrade.active) {
-      try {
-        run("docker", [...nextCompose, "stop", "api", "worker"]);
-      } catch {
-        /* The journal still prevents a false success on retry. */
-      }
-      throw new Error(
-        `${error.message} Existing-home upgrade is incomplete. API and worker remain stopped; keep the E2B override and rerun this setup command to resume. Journal: ${upgrade.journalPath}`,
-      );
-    }
-    if (previous) atomicWrite(overridePath, previous);
-    else rmSync(overridePath, { force: true });
     try {
-      run("docker", [...oldCompose, ...start]);
+      run("docker", [...nextCompose, "stop", "api", "worker"]);
     } catch {
-      throw new Error(
-        "Switch and configuration recovery failed. Configuration was restored; restart API and worker manually. Published templates are unchanged by recovery.",
-      );
+      /* Retain configuration and the journal for explicit forward recovery. */
     }
     throw new Error(
-      `${error.message} Previous application configuration restored. Published template builds are not rolled back.`,
+      `${error.message} E2B setup is incomplete. Keep the E2B configuration and any upgrade journal; API and worker must remain stopped. Fix the failure and rerun this setup command. No rollback was attempted.`,
     );
   }
   upgrade.complete();

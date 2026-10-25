@@ -8,7 +8,7 @@ Usage: tangow [--path <checkout>] [--sudo] <command>
   update                    Update main, build for the configured provider and restart
   restart                   Restart application services and check readiness
   logs [service] [--follow] Show the last 100 log lines (default: api)
-  computers build           Rebuild computer image and E2B worker/desktop templates
+  computers build           Rebuild Docker worker/computer or E2B worker/desktop builds
   provider e2b              Configure E2B and migrate existing computer homes
   provider docker           Check Docker mode; reverse E2B migration is unsupported
   cleanup --yes             Remove unused build cache and images, never volumes
@@ -55,7 +55,8 @@ export function mainOptions() {
       : command === "provider"
         ? !["e2b", "docker"].includes(subcommand)
         : command === "logs"
-          ? subcommand && ![...services, "supervisor"].includes(subcommand)
+          ? subcommand &&
+            ![...services, "supervisor", "migrate", "worker-image"].includes(subcommand)
           : subcommand !== undefined)
   )
     throw new Error("Unknown command. Run tangow --help.");
