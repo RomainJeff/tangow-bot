@@ -239,7 +239,7 @@ describe("ComposioEmulator", () => {
     });
   });
 
-  it("discovers realistic Gmail tools and keeps thin actions for other apps", async () => {
+  it("discovers realistic Gmail and Slack tools and keeps thin actions for other apps", async () => {
     const emulator = new ComposioEmulator();
     const tools = await emulator.discoverTools({
       ...context,
@@ -256,6 +256,12 @@ describe("ComposioEmulator", () => {
           externalId: "SLACK",
           displayName: "Slack",
         },
+        {
+          id: "connection-notion",
+          connectorId: "composio",
+          externalId: "NOTION",
+          displayName: "Notion",
+        },
       ],
     });
 
@@ -269,7 +275,10 @@ describe("ComposioEmulator", () => {
       "GMAIL_REPLY_TO_THREAD",
       "GMAIL_SEND_DRAFT",
       "GMAIL_FORWARD_MESSAGE",
-      "SLACK_EMULATED_ACTION",
+      "SLACK_SEND_MESSAGE",
+      "SLACK_RETRIEVE_CONVERSATION_INFORMATION",
+      "SLACK_RETRIEVE_DETAILED_USER_INFORMATION",
+      "NOTION_EMULATED_ACTION",
       "COMPOSIO_MULTI_EXECUTE_TOOL",
     ]);
     expect(tools.find((tool) => tool.name === "GMAIL_FETCH_EMAILS")).toMatchObject({

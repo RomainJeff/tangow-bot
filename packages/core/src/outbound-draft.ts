@@ -1,4 +1,9 @@
-import type { AskDraft, AskDraftEdits, AskDraftRecipient } from "@rakazo/contracts";
+import type {
+  AskDraft,
+  AskDraftConversation,
+  AskDraftEdits,
+  AskDraftRecipient,
+} from "@rakazo/contracts";
 import { ASK_DRAFT_TEXT_MAX_LENGTH } from "@rakazo/contracts";
 import type { DraftPath, DraftSlots } from "./draft-fields.js";
 import {
@@ -237,10 +242,26 @@ export function draftTextError(text: string): string | undefined {
   return undefined;
 }
 
+/** How a chat draft names its recipient: a person and their handle, or a channel with its #. */
+export function conversationLabel(conversation: AskDraftConversation): {
+  name: string;
+  handle?: string;
+} {
+  if (conversation.kind === "channel") return { name: `#${conversation.name}` };
+  return {
+    name: conversation.name,
+    ...(conversation.handle ? { handle: conversation.handle } : {}),
+  };
+}
+
 /** The card's text lines for a draft, read by clients that do not know drafts. */
 export function askDraftDetail(draft: AskDraft): string {
   const lines = draft.app.account ? [`from: ${draft.app.account}`] : [];
-  for (const role of ["to", "cc", "bcc"] as const) {
+  if (draft.conversation) {
+    const { name, handle } = conversationLabel(draft.conversation);
+    lines.push(`to: ${handle ? `${name} @${handle}` : name}`);
+  }
+  for (const role of draft.conversation ? [] : (["to", "cc", "bcc"] as const)) {
     const addresses = draft.recipients.filter((recipient) => recipient.role === role);
     if (addresses.length) {
       lines.push(`${role}: ${addresses.map((recipient) => recipient.address).join(", ")}`);

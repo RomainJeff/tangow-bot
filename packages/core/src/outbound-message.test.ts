@@ -491,6 +491,105 @@ describe("readOutboundCall", () => {
   });
 });
 
+describe("readOutboundCall on a chat app's send", () => {
+  const chatApps = new Set(["slack"]);
+  const chat = (toolName: string, args: Record<string, unknown>) =>
+    readOutboundCall([{ toolName, args }], [], chatApps);
+  // Composio's Slack send as its docs give it (2026-10): a conversation id and Markdown text.
+  const slackSend = { channel: "D0MARIE", markdown_text: "Thursday instead?" };
+
+  it("reads a send to one conversation as a chat draft waiting for its recipient's name", () => {
+    expect(
+      chat("SLACK_SEND_MESSAGE", { ...slackSend, thread_ts: "1.2", unfurl_links: true }),
+    ).toEqual({
+      kind: "chat",
+      draft: {
+        connectorKind: "slack",
+        recipients: [{ role: "to", address: "D0MARIE" }],
+        body: "Thursday instead?",
+        args: { ...slackSend, thread_ts: "1.2", unfurl_links: true },
+        textPath: ["markdown_text"],
+      },
+    });
+    expect(chat("SLACK_CHAT_POST_MESSAGE", { channel_id: "C0GENERAL", text: "Hi" })).toMatchObject({
+      kind: "chat",
+      draft: { recipients: [{ role: "to", address: "C0GENERAL" }], textPath: ["text"] },
+    });
+  });
+
+  it.each([
+    ["Block Kit content the card does not show", { blocks: [{ type: "section" }] }],
+    ["a second text", { text: "Something else" }],
+    ["a second conversation", { channel_id: "C0GENERAL" }],
+    ["a name the message would go out under", { username: "Ceo" }],
+    ["a mail recipient", { to: "a@example.com" }],
+    ["a conversation inside another argument", { options: { channel: "C0GENERAL" } }],
+  ])("gives a send with %s the classic card", (_, extra) => {
+    expect(chat("SLACK_SEND_MESSAGE", { ...slackSend, ...extra })).toEqual({ kind: "classic" });
+  });
+
+  it("gives a send it cannot find the conversation of the classic card, never no card", () => {
+    expect(chat("SLACK_SEND_MESSAGE", { markdown_text: "Hi" })).toEqual({ kind: "classic" });
+  });
+
+  it("refuses an empty message back to the bot", () => {
+    expect(chat("SLACK_SEND_MESSAGE", { channel: "C0GENERAL", markdown_text: " " })).toEqual({
+      kind: "refuse",
+      error: "This message is empty.",
+    });
+  });
+
+  it("leaves a chat app without a recipient reader, and Slack's reads, as they were", () => {
+    expect(readOutboundCall([{ toolName: "SLACK_SEND_MESSAGE", args: slackSend }])).toEqual({
+      kind: "none",
+    });
+    expect(chat("TEAMS_SEND_MESSAGE", slackSend)).toEqual({ kind: "none" });
+    expect(chat("SLACK_FETCH_CONVERSATION_HISTORY", { channel: "C0GENERAL" })).toEqual({
+      kind: "none",
+    });
+  });
+
+  it("keeps reading a mail as a mail", () => {
+    expect(readOutboundCall([tracedSend], [], chatApps).kind).toBe("draft");
+    expect(read("GMAIL_SEND_EMAIL", { ...tracedSend.args, channel: "C0GENERAL" })).toEqual({
+      kind: "classic",
+    });
+  });
+
+  it("never drafts a chat message with text the card does not show", () => {
+    const keys = fc.constantFrom(
+      "channel",
+      "channel_id",
+      "markdown_text",
+      "text",
+      "thread_ts",
+      "unfurl_links",
+      "blocks",
+      "username",
+      "notes",
+    );
+    const value = fc.oneof(
+      fc.constantFrom("C0GENERAL", "Hello", "", true, false, null),
+      fc.string(),
+      fc.array(fc.string(), { maxLength: 2 }),
+      fc.dictionary(keys, fc.string(), { maxKeys: 2 }),
+    );
+    fc.assert(
+      fc.property(fc.dictionary(keys, value, { maxKeys: 4 }), (extra) => {
+        const args = { ...slackSend, ...extra };
+        const result = chat("SLACK_SEND_MESSAGE", args);
+        if (result.kind !== "chat") return;
+        const shown = [result.draft.body, result.draft.recipients[0]!.address];
+        for (const [path, leaf] of stringLeaves(args)) {
+          if (!leaf.trim() || path.includes("thread_ts")) continue;
+          expect(shown).toContain(leaf);
+        }
+      }),
+      { numRuns: 500 },
+    );
+  });
+});
+
 function summary(result: OutboundCall): string {
   if (result.kind !== "draft") return result.kind;
   const { recipients, subject, body, account } = result.draft;

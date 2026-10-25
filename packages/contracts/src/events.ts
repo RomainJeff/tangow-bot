@@ -140,7 +140,14 @@ export const AskDraftEdits = z.object({
 });
 export type AskDraftEdits = z.infer<typeof AskDraftEdits>;
 
-/** A mail the bot proposes to send: the card shows it as it will leave. */
+/** Who a chat message goes to, as the chat app itself names them: a person or a channel. */
+export const AskDraftConversation = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("person"), name: z.string(), handle: z.string().optional() }),
+  z.object({ kind: z.literal("channel"), name: z.string() }),
+]);
+export type AskDraftConversation = z.infer<typeof AskDraftConversation>;
+
+/** A message the bot proposes to send: the card shows it as it will leave. */
 export const AskDraft = z.object({
   app: z.object({
     name: z.string(),
@@ -149,6 +156,11 @@ export const AskDraft = z.object({
     account: z.string().optional(),
   }),
   recipients: z.array(AskDraftRecipient).min(1),
+  /**
+   * A chat message's one recipient, named by its app; its `recipients` hold the app's id for it.
+   * Absent on mail.
+   */
+  conversation: AskDraftConversation.optional().catch(undefined),
   subject: z.string().optional(),
   /**
    * The lines the user may edit besides the text, each offered even when empty. Absent on a draft

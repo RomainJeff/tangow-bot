@@ -741,6 +741,155 @@ describe("connector read-only metadata and approval enforcement", () => {
     });
   });
 
+  describe("outbound chat", () => {
+    const inputSchema = {
+      type: "object",
+      properties: {
+        channel: { type: "string" },
+        markdown_text: { type: "string" },
+        blocks: { type: "array" },
+      },
+    };
+    const send = { channel: "D0MARIE", markdown_text: "Thursday instead?" };
+    const chatCard = {
+      kind: "ask",
+      actions: [
+        { id: "allow", label: "Send" },
+        { id: "deny", label: "Discard" },
+      ],
+      detail: "to: Marie Dupont @marie\nbody:\n  Thursday instead?",
+      draft: {
+        app: { name: "Slack", logo: null },
+        recipients: [{ role: "to", address: "D0MARIE" }],
+        conversation: { kind: "person", name: "Marie Dupont", handle: "marie" },
+        body: "Thursday instead?",
+        owner: { userId: "user-1", name: "Ana Lima" },
+      },
+    };
+    const card = (f: ReturnType<typeof fixture>) =>
+      f.pauseRunForInput.mock.calls.at(-1)![0].blocks[0] as Extract<MessageBlock, { kind: "ask" }>;
+    const sends = (slack: ComposioEmulator) =>
+      slack.executions.filter((call) => !call.tool.startsWith("SLACK_RETRIEVE_"));
+    function slackSend(slack: ComposioEmulator, options: Parameters<typeof fixture>[0] = {}) {
+      const f = fixture({ name: "SLACK_SEND_MESSAGE", inputSchema, connector: slack, ...options });
+      f.setCalls([{ args: send, executionId: "c1" }]);
+      return f;
+    }
+
+    it.each([
+      ["no rule", {}],
+      [
+        "an always-allow rule on Slack",
+        {
+          rules: [
+            {
+              effect: "always_allow" as const,
+              matchKind: "connector" as const,
+              matchValue: "slack",
+            },
+          ],
+        },
+      ],
+      ["Auto Review on", { autoReview: true }],
+    ])(
+      "pauses a Slack message on a draft naming its person as Slack does, under %s",
+      async (_, options) => {
+        const slack = new ComposioEmulator();
+        const f = slackSend(slack, options);
+        await f.run();
+        expect(sends(slack)).toEqual([]);
+        expect(runAutoReviewJudge).not.toHaveBeenCalled();
+        expect(card(f)).toMatchObject(chatCard);
+        expect(card(f).draft?.fields).toBeUndefined();
+      },
+    );
+
+    it.each([
+      ["refuses", { kind: "fail", error: "missing_scope" } as const],
+      ["never answers", { kind: "hang" } as const],
+    ])(
+      "shows the classic card when Slack %s to name the recipient, sending nothing",
+      async (_, fault) => {
+        const slack = new ComposioEmulator();
+        slack.failNext("SLACK_RETRIEVE_CONVERSATION_INFORMATION", fault);
+        const f = slackSend(slack);
+        await f.run();
+        expect(sends(slack)).toEqual([]);
+        expect(card(f)).toMatchObject({
+          actions: [
+            { id: "allow", label: "Allow once" },
+            { id: "deny", label: "Deny" },
+          ],
+          detail: "channel: D0MARIE\nmarkdown_text: Thursday instead?",
+        });
+        expect(card(f).draft).toBeUndefined();
+        expect(f.effects[0]!.draft).toBeUndefined();
+      },
+    );
+
+    it("sends exactly the text the user edited, once, to the conversation the card named", async () => {
+      const slack = new ComposioEmulator();
+      const f = slackSend(slack);
+      await f.run();
+      expect(() =>
+        approve(f.effects[0]!, { recipients: [{ role: "to", address: "a@b.co" }] }),
+      ).toThrow("Only the message text can be edited on this draft.");
+      approve(f.effects[0]!, "Thursday at 10 instead?");
+      f.setCalls([]);
+      await f.run();
+      expect(sends(slack).map((call) => [call.tool, call.args])).toEqual([
+        ["SLACK_SEND_MESSAGE", { ...send, markdown_text: "Thursday at 10 instead?" }],
+      ]);
+      expect(f.effects[0]).toMatchObject({ status: "completed", draft: { state: "sent" } });
+    });
+
+    it("drafts and sends a Slack message inside Composio's batch, reading through the batch", async () => {
+      const slack = new ComposioEmulator();
+      const batch = (markdown_text: string) => ({
+        tools: [
+          {
+            tool_slug: "SLACK_SEND_MESSAGE",
+            account: "slack_acme",
+            arguments: { channel: "C0GENERAL", markdown_text },
+          },
+        ],
+      });
+      const f = fixture({
+        name: "COMPOSIO_MULTI_EXECUTE_TOOL",
+        inputSchema: { type: "object", properties: { tools: { type: "array" } } },
+        connector: slack,
+      });
+      f.setCalls([{ args: batch("Launch moved to Friday."), executionId: "c1" }]);
+      await f.run();
+      expect(card(f).draft?.conversation).toEqual({ kind: "channel", name: "general" });
+      approve(f.effects[0]!, "Launch moved to Monday.");
+      f.setCalls([]);
+      await f.run();
+      expect(slack.executions.map((call) => call.args)).toEqual([
+        {
+          tools: [
+            {
+              tool_slug: "SLACK_RETRIEVE_CONVERSATION_INFORMATION",
+              account: "slack_acme",
+              arguments: { channel: "C0GENERAL" },
+            },
+          ],
+        },
+        batch("Launch moved to Monday."),
+      ]);
+    });
+
+    it("shows the classic card for a Slack message the card cannot show whole", async () => {
+      const slack = new ComposioEmulator();
+      const f = fixture({ name: "SLACK_SEND_MESSAGE", inputSchema, connector: slack });
+      f.setCalls([{ args: { ...send, blocks: [{ type: "section" }] }, executionId: "c1" }]);
+      await f.run();
+      expect(slack.executions).toEqual([]);
+      expect(card(f).draft).toBeUndefined();
+      expect(card(f).actions?.[0]).toEqual({ id: "allow", label: "Allow once" });
+    });
+  });
+
   describe("outbound mail", () => {
     const inputSchema = {
       type: "object",
