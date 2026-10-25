@@ -5,6 +5,7 @@ import type { DraftCard as DraftCardBlock, DraftLocal, RecipientRole } from "@ra
 import {
   addressesOf,
   changeLine,
+  conversationLabel,
   DRAFT_UNDO_MS,
   draftCardView,
   draftChanges,
@@ -81,8 +82,9 @@ function StateMark({ tone, children }: { tone: "ink" | "destructive"; children: 
 }
 
 /**
- * A mail the bot wrote in the person's name, shown as it will leave: every recipient, the subject
- * and the text, which they edit in place before Send.
+ * A message the bot wrote in the person's name, shown as it will leave: every recipient, the subject
+ * and the text, which they edit in place before Send. A chat message names its one recipient as its
+ * app did, and only its text changes.
  */
 export function DraftCard({
   block,
@@ -284,6 +286,7 @@ export function DraftCard({
   const subject = edit.subject ?? draft.subject ?? "";
   // An empty Cc or Bcc names nobody: it opens from the To line on demand.
   const hidden = foldedRoles(fields, recipients, typed, opened);
+  const chat = draft.conversation && conversationLabel(draft.conversation);
 
   return (
     <FramedBlock
@@ -330,7 +333,10 @@ export function DraftCard({
                 className={role === "to" ? "break-words" : "break-words text-body font-normal"}
               >
                 <span className="font-normal text-muted-foreground">{roleLabel[role]}</span>{" "}
-                {addresses.join(", ")}
+                {chat ? chat.name : addresses.join(", ")}
+                {chat?.handle ? (
+                  <span className="font-normal text-muted-foreground"> @{chat.handle}</span>
+                ) : null}
               </p>
             );
           })}

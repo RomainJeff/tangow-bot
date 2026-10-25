@@ -1,6 +1,7 @@
 import type { AskDraft, MessageBlock } from "@rakazo/contracts";
 import type { DraftLocal } from "@rakazo/core";
 import {
+  conversationLabel,
   DRAFT_UNDO_MS,
   draftAddresses,
   draftCardView,
@@ -148,8 +149,9 @@ function RoundAction({
 }
 
 /**
- * A mail the bot wrote in the person's name, shown as it will leave: every recipient, the subject
- * and the text, which the Edit message sheet changes before Send. Mirrors
+ * A message the bot wrote in the person's name, shown as it will leave: every recipient, the subject
+ * and the text, which the Edit message sheet changes before Send. A chat message names its one
+ * recipient as its app did. Mirrors
  * `apps/web/src/components/DraftCard.tsx`.
  */
 export function DraftCard({
@@ -305,12 +307,14 @@ export function DraftCard({
   }
 
   const roleLabel = { to: t("To"), cc: t("Cc"), bcc: t("Bcc") };
+  const chat = draft.conversation && conversationLabel(draft.conversation);
   const lines = ROLES.flatMap((role) => {
     const addresses = draftAddresses(shown, role);
     if (!addresses) return [];
     return [
       <Text key={role} style={role === "to" ? undefined : styles.detail}>
-        <Text style={styles.label}>{roleLabel[role]}</Text> {addresses}
+        <Text style={styles.label}>{roleLabel[role]}</Text> {chat ? chat.name : addresses}
+        {chat?.handle ? <Text style={styles.label}> @{chat.handle}</Text> : null}
       </Text>,
     ];
   });
