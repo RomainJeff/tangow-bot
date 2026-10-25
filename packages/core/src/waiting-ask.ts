@@ -1,5 +1,6 @@
 import type { AskDraftEdits, MessageBlock } from "@rakazo/contracts";
 import { draftChanges } from "./draft-card-view.js";
+import { draftFieldsError } from "./draft-fields.js";
 import type { ThreadView } from "./session-log/project-thread-view.js";
 import type { WaitingCard } from "./session-log/project-ui.js";
 
@@ -44,6 +45,9 @@ export function editedWaitingDraft(
   if (!waiting || !draft) return undefined;
   const edit = editOf(waiting.itemId);
   const changes = draftChanges(draft, typeof edit === "string" ? { text: edit } : edit);
+  // The message replaces the draft however its lines were left: a line Send would refuse stays out.
+  if (draftFieldsError(draft.fields, { recipients: changes.recipients })) delete changes.recipients;
+  if (draftFieldsError(draft.fields, { subject: changes.subject })) delete changes.subject;
   if (!Object.keys(changes).length) return undefined;
   return {
     itemId: waiting.itemId,

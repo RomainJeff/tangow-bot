@@ -12,15 +12,17 @@ import {
 import { Button, FramedBlock, Textarea, UserAvatar } from "@rakazo/ui-web";
 import { Check, Copy, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { authClient } from "../lib/auth";
 import { draftEdits } from "../lib/draft-edits";
 import { messageTimeLabel } from "../lib/message-time";
 import { userInitials } from "../lib/user-initials";
 import type { CardEdits } from "./AskCard";
-import { RecipientLine, SubjectLine } from "./DraftLines";
+import { heldBack, RecipientLine, SubjectLine } from "./DraftLines";
 
 const ROLES = ["to", "cc", "bcc"] as const;
+type Role = (typeof ROLES)[number];
 
 function AppLogo({ app }: { app: AskDraft["app"] }) {
   return app.logo ? (
@@ -100,8 +102,11 @@ export function DraftCard({
   const { draft } = block;
   const [edit, setEdit] = useState<AskDraftEdits>(() => draftEdits.get(messageId) ?? {});
   const [focused, setFocused] = useState(false);
-  // Lines whose field holds text that is not an address: Send would leave it behind.
-  const [invalidLines, setInvalidLines] = useState<ReadonlySet<string>>(new Set());
+  // What each line's field holds, not yet an address: kept here so it outlives the line.
+  const [typed, setTyped] = useState<Partial<Record<Role, string>>>({});
+  // Cc and Bcc lines the person opened or changed: they stay shown even when empty.
+  const [opened, setOpened] = useState<ReadonlySet<Role>>(new Set());
+  const lineId = useId();
   const [pending, setPending] = useState<DraftLocal["pending"]>(null);
   const [error, setError] = useState<string | null>(null);
   const [reconnectOpened, setReconnectOpened] = useState(false);
@@ -119,7 +124,7 @@ export function DraftCard({
   const sendable =
     text.trim() !== "" &&
     recipients.some((recipient) => recipient.role === "to") &&
-    invalidLines.size === 0;
+    !ROLES.some((role) => heldBack(typed[role] ?? ""));
 
   function keepEdit(next: AskDraftEdits) {
     const merged = { ...edit, ...next };
@@ -132,10 +137,16 @@ export function DraftCard({
     draftEdits.delete(messageId);
   }
 
-  function keepRole(role: AskDraft["recipients"][number]["role"], addresses: string[]) {
+  function keepRole(role: Role, addresses: string[]) {
     const others = recipients.filter((recipient) => recipient.role !== role);
     const next = [...others, ...addresses.map((address) => ({ role, address }))];
     keepEdit({ recipients: ROLES.flatMap((each) => next.filter((r) => r.role === each)) });
+    if (role !== "to") setOpened((current) => new Set(current).add(role));
+  }
+
+  function openLine(role: Role) {
+    flushSync(() => setOpened((current) => new Set(current).add(role)));
+    document.getElementById(`${lineId}-${role}`)?.focus();
   }
 
   async function send() {
@@ -271,6 +282,12 @@ export function DraftCard({
   // Lines change only on a draft that records where its recipients and subject sit.
   const fields = view.readOnly || view.sending ? undefined : draft.fields;
   const subject = edit.subject ?? draft.subject ?? "";
+  const addressesOf = (role: Role) =>
+    recipients.filter((recipient) => recipient.role === role).map((recipient) => recipient.address);
+  // An empty Cc or Bcc names nobody: it opens from the To line on demand.
+  const shown = (role: Role) =>
+    role === "to" || addressesOf(role).length > 0 || Boolean(typed[role]) || opened.has(role);
+  const hidden = ROLES.filter((role) => fields?.[role] !== undefined && !shown(role));
 
   return (
     <FramedBlock
@@ -284,26 +301,28 @@ export function DraftCard({
       question={
         <div className="flex flex-col gap-1">
           {ROLES.map((role) => {
-            const addresses = recipients
-              .filter((recipient) => recipient.role === role)
-              .map((recipient) => recipient.address);
+            const addresses = addressesOf(role);
             const room = fields?.[role];
             if (room !== undefined) {
+              if (!shown(role)) return null;
               return (
                 <RecipientLine
                   key={role}
+                  id={`${lineId}-${role}`}
                   label={roleLabel[role]}
                   addresses={addresses}
+                  typed={typed[role] ?? ""}
                   room={room}
                   strong={role === "to"}
                   onChange={(next) => keepRole(role, next)}
-                  onInvalidChange={(invalid) =>
-                    setInvalidLines((current) => {
-                      const next = new Set(current);
-                      if (invalid) next.add(role);
-                      else next.delete(role);
-                      return next;
-                    })
+                  onTyped={(next) => setTyped((current) => ({ ...current, [role]: next }))}
+                  more={
+                    role === "to"
+                      ? hidden.map((each) => ({
+                          label: roleLabel[each],
+                          open: () => openLine(each),
+                        }))
+                      : undefined
                   }
                 />
               );

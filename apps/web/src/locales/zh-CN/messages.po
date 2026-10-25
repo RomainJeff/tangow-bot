@@ -98,7 +98,7 @@ msgstr ""
 msgid "{0}'s screen"
 msgstr "{0} 的屏幕"
 
-#: src/components/DraftCard.tsx:269
+#: src/components/DraftCard.tsx:280
 msgid "{app} is disconnected."
 msgstr ""
 
@@ -676,7 +676,7 @@ msgstr "返回登录"
 msgid "Base URL"
 msgstr "Base URL"
 
-#: src/components/DraftCard.tsx:262
+#: src/components/DraftCard.tsx:273
 msgid "Bcc"
 msgstr ""
 
@@ -797,7 +797,7 @@ msgstr "取消回复"
 msgid "Cancelled"
 msgstr "已取消"
 
-#: src/components/DraftCard.tsx:262
+#: src/components/DraftCard.tsx:273
 msgid "Cc"
 msgstr ""
 
@@ -1159,7 +1159,7 @@ msgstr "使用邮箱继续"
 msgid "Conversation cleared"
 msgstr ""
 
-#: src/components/DraftCard.tsx:350
+#: src/components/DraftCard.tsx:369
 #: src/pages/shell/message-actions-sheet.tsx:75
 #: src/pages/shell/message-hover-actions.tsx:98
 #: src/pages/shell/message-hover-actions.tsx:169
@@ -1525,8 +1525,8 @@ msgid "Could not start teaching"
 msgstr "无法开始教学"
 
 #: src/components/AskCard.tsx:199
-#: src/components/DraftCard.tsx:150
-#: src/components/DraftCard.tsx:163
+#: src/components/DraftCard.tsx:161
+#: src/components/DraftCard.tsx:174
 msgid "Could not submit this answer"
 msgstr "无法提交此回答"
 
@@ -1812,12 +1812,12 @@ msgstr ""
 msgid "Disabled"
 msgstr "已停用"
 
-#: src/components/DraftCard.tsx:341
+#: src/components/DraftCard.tsx:360
 msgid "Discard"
 msgstr ""
 
-#: src/components/DraftCard.tsx:229
-#: src/components/DraftCard.tsx:239
+#: src/components/DraftCard.tsx:240
+#: src/components/DraftCard.tsx:250
 msgid "Discarded"
 msgstr ""
 
@@ -1933,7 +1933,7 @@ msgstr "编辑"
 msgid "Edit and resend"
 msgstr "编辑并重新发送"
 
-#: src/components/DraftCard.tsx:393
+#: src/components/DraftCard.tsx:412
 msgid "Edit message"
 msgstr ""
 
@@ -1941,11 +1941,11 @@ msgstr ""
 msgid "Edit Profile"
 msgstr "编辑资料"
 
-#: src/components/DraftCard.tsx:266
+#: src/components/DraftCard.tsx:277
 msgid "Edited"
 msgstr ""
 
-#: src/components/DraftCard.tsx:265
+#: src/components/DraftCard.tsx:276
 msgid "Editing"
 msgstr ""
 
@@ -2853,7 +2853,7 @@ msgstr "尚未安装任何集成。"
 
 #: src/components/ask/AskSettled.tsx:28
 #: src/components/AskCard.tsx:260
-#: src/components/DraftCard.tsx:246
+#: src/components/DraftCard.tsx:257
 msgid "No longer active"
 msgstr "已停用"
 
@@ -2940,7 +2940,7 @@ msgstr "不在插件目录中"
 msgid "Not now"
 msgstr "暂不"
 
-#: src/components/DraftCard.tsx:264
+#: src/components/DraftCard.tsx:275
 msgid "Not sent"
 msgstr ""
 
@@ -3252,7 +3252,7 @@ msgstr ""
 msgid "Recommended · {description}"
 msgstr ""
 
-#: src/components/DraftCard.tsx:366
+#: src/components/DraftCard.tsx:385
 msgid "Reconnect {app}"
 msgstr ""
 
@@ -3353,7 +3353,7 @@ msgstr "移除"
 msgid "Remove {0}"
 msgstr "移除 {0}"
 
-#: src/components/DraftLines.tsx:83
+#: src/components/DraftLines.tsx:89
 msgid "Remove {address}"
 msgstr ""
 
@@ -3422,7 +3422,7 @@ msgstr "替换 API 密钥"
 msgid "Replace key"
 msgstr "替换密钥"
 
-#: src/components/DraftCard.tsx:243
+#: src/components/DraftCard.tsx:254
 msgid "Replaced"
 msgstr ""
 
@@ -3695,7 +3695,7 @@ msgstr "选择 Bot"
 
 #: src/components/ask/QuestionCard.tsx:205
 #: src/components/ask/QuestionCard.tsx:306
-#: src/components/DraftCard.tsx:377
+#: src/components/DraftCard.tsx:396
 #: src/pages/shell/composer.tsx:407
 msgid "Send"
 msgstr "发送"
@@ -3709,11 +3709,11 @@ msgid "Send reset link"
 msgstr "发送重置链接"
 
 #: src/components/AskCard.tsx:304
-#: src/components/DraftCard.tsx:377
+#: src/components/DraftCard.tsx:396
 msgid "Sending…"
 msgstr "正在发送…"
 
-#: src/components/DraftCard.tsx:216
+#: src/components/DraftCard.tsx:227
 msgid "Sent to {recipient} · {time}"
 msgstr ""
 
@@ -3959,8 +3959,8 @@ msgstr "已安全存储。不会显示在这里。"
 msgid "subagent"
 msgstr "子 Agent"
 
-#: src/components/DraftCard.tsx:324
-#: src/components/DraftCard.tsx:330
+#: src/components/DraftCard.tsx:343
+#: src/components/DraftCard.tsx:349
 msgid "Subject"
 msgstr ""
 
@@ -4112,7 +4112,7 @@ msgstr "时间"
 msgid "Title"
 msgstr "标题"
 
-#: src/components/DraftCard.tsx:262
+#: src/components/DraftCard.tsx:273
 msgid "To"
 msgstr ""
 
@@ -4142,7 +4142,7 @@ msgstr ""
 msgid "Treg token"
 msgstr "Treg token"
 
-#: src/components/DraftCard.tsx:377
+#: src/components/DraftCard.tsx:396
 #: src/pages/Onboarding.tsx:685
 msgid "Try again"
 msgstr "重试"
@@ -4159,7 +4159,7 @@ msgstr "未分配"
 msgid "Unavailable"
 msgstr "不可用"
 
-#: src/components/DraftCard.tsx:235
+#: src/components/DraftCard.tsx:246
 msgid "Undo"
 msgstr ""
 
@@ -4390,7 +4390,7 @@ msgstr "每年{date} {time}"
 msgid "Yesterday"
 msgstr "昨天"
 
-#: src/components/DraftCard.tsx:59
+#: src/components/DraftCard.tsx:61
 #: src/pages/Shell.tsx:136
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"
