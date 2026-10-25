@@ -3,11 +3,7 @@ import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { scheduleComputerSleep } from "./computer-idle.js";
-import {
-  ComputerBusyError,
-  computerSupportsUpdate,
-  replaceComputer,
-} from "./computer-lifecycle.js";
+import { ComputerBusyError, replaceComputer } from "./computer-lifecycle.js";
 
 type Deps = Parameters<typeof replaceComputer>[0];
 const STALE_MS = 10 * 60_000;
@@ -48,8 +44,6 @@ export async function queueComputerUpdate(
     // The following statement then observes their committed reservation.
     await tx.$queryRaw`SELECT id FROM computers WHERE id = ${computerId} FOR UPDATE`;
     const computer = await tx.computer.findUniqueOrThrow({ where: { id: computerId } });
-    if (action === "update" && !computerSupportsUpdate(computer.kind))
-      throw new Error("Computer update is not available on this device");
     const update = await tx.computerUpdate.create({ data: { computerId, botId, action } });
     const claimed = await tx.computer.updateMany({
       where: {

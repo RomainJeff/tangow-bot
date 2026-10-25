@@ -450,7 +450,6 @@ export function ShellOverlays({
             initialSection={overlays.settingsSection}
             avatarStyle={bootstrapMe?.avatarStyle ?? "organic"}
             isDeploymentOwner={bootstrapMe?.isDeploymentOwner === true}
-            sandboxProvider={bootstrapMe?.sandboxProvider}
             messagingEnabled={overlays.messagingSurfaceEnabled}
             onOpenMessaging={() => {
               overlays.setSettingsOpen(false);

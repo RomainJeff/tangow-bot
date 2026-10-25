@@ -727,10 +727,6 @@ function isUniqueConstraintError(error: unknown) {
 
 export type ComputerReplaceMode = "recover" | "reset" | "update";
 
-export function computerSupportsUpdate(kind: string): boolean {
-  return kind !== "desktop";
-}
-
 export async function replaceComputer(
   deps: {
     prisma: PrismaClient;

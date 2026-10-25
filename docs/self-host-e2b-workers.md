@@ -6,8 +6,7 @@ runs the bot's Pi harness with native file and `bash` tools on the bot's volumes
 never enters the worker. The worker is destroyed when the run attempt ends.
 
 A run goes to a worker when `SANDBOX_PROVIDER=e2b` and the bot's computer keeps its home on volumes.
-Every other run stays in process, as on `docker`, `none` and the trusted local computer, which run
-no workers. Docker workers are a later exploration
+Every other run stays in process, as on `docker`, which runs no workers. Docker workers are a later exploration
 ([#317](https://github.com/RomainJeff/rakazo-bot/issues/317)).
 
 To add a worker provider, see

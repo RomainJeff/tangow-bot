@@ -76,7 +76,7 @@ body:
     id: sandbox
     attributes:
       label: SANDBOX_PROVIDER
-      description: If relevant (default is `docker`).
+      description: If relevant, `docker` (default) or `e2b`.
       placeholder: docker
 
   - type: input

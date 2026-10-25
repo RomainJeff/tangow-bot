@@ -1019,14 +1019,6 @@ msgstr "컴퓨터가 중지됨"
 msgid "Computer unavailable"
 msgstr "컴퓨터를 사용할 수 없음"
 
-#: src/pages/AccountSettingsOverlay.tsx:258
-msgid "Computers"
-msgstr "컴퓨터"
-
-#: src/components/ComputersUnavailableHint.tsx:7
-msgid "Computers are off. Set SANDBOX_PROVIDER=docker with SANDBOX_SUPERVISOR_TOKEN, or set SANDBOX_PROVIDER to e2b with its API key. Recreate the stack after changing .env."
-msgstr "컴퓨터가 꺼져 있습니다. SANDBOX_PROVIDER=docker와 SANDBOX_SUPERVISOR_TOKEN을 설정하거나, SANDBOX_PROVIDER를 e2b로 두고 해당 API 키를 넣으세요. .env 변경 후 스택을 다시 만드세요."
-
 #: src/pages/ModelSettingsOverlay.tsx:397
 msgid "Configured by deployment"
 msgstr "서버에서 설정됨"
@@ -1490,10 +1482,6 @@ msgstr "확인 규칙을 저장하지 못했습니다."
 msgid "Could not save skill"
 msgstr "스킬을 저장하지 못했습니다"
 
-#: src/pages/HostComputerPrompt.tsx:47
-msgid "Could not save that choice"
-msgstr "선택 내용을 저장하지 못했습니다."
-
 #: src/pages/VoiceSettingsOverlay.tsx:139
 msgid "Could not save that voice"
 msgstr "목소리를 저장하지 못했습니다."
@@ -1852,14 +1840,6 @@ msgstr "표시 이름"
 #: src/components/teach/TeachRecordingChrome.tsx:67
 msgid "Do not type passwords into the demo. Use Take control for credentials."
 msgstr "시연 중에는 비밀번호를 입력하지 마세요. 인증이 필요하면 직접 조작을 사용하세요."
-
-#: src/pages/HostComputerPrompt.tsx:84
-msgid "Docker"
-msgstr "Docker"
-
-#: src/pages/HostComputerPrompt.tsx:63
-msgid "Docker limits access to your computer for added security. Using {hostLabel} lets bots work with your local files and tools."
-msgstr "Docker는 보안을 위해 컴퓨터 접근을 제한합니다. {hostLabel}에서는 Bot이 로컬 파일과 도구로 작업할 수 있습니다."
 
 #: src/pages/Auth.tsx:223
 msgid "Don’t have an account?"
@@ -2445,10 +2425,6 @@ msgstr "불러오는 중…"
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:39
 msgid "Local"
 msgstr "로컬"
-
-#: src/pages/HostComputerPrompt.tsx:69
-msgid "Local access lets bots run commands without asking. Avoid it on shared or public servers."
-msgstr "로컬 접근을 허용하면 Bot이 묻지 않고 명령을 실행할 수 있습니다. 공유 서버나 공개 서버에서는 허용하지 마세요."
 
 #: src/pages/LocalSettings.tsx:22
 msgid "Local Server Settings"
@@ -4003,10 +3979,6 @@ msgstr "선택한 기억 서비스는 현재 빌드에서 사용할 수 없습�
 msgid "Thinking"
 msgstr "생각 깊이"
 
-#: src/pages/shell/side-panel.tsx:286
-msgid "This bot runs on this computer, not a Linux desktop. Shell and files use your home folder."
-msgstr "이 Bot은 별도 Linux 화면이 아니라 현재 컴퓨터에서 실행됩니다. 터미널과 파일 작업은 홈 폴더를 사용합니다."
-
 #: src/components/AgentSteps.tsx:83
 msgid "This call ran before step details were recorded."
 msgstr "이 호출은 단계 세부 정보가 기록되기 전에 실행되었습니다."
@@ -4020,17 +3992,9 @@ msgstr "이 작업은 되돌릴 수 없습니다."
 msgid "This chat is view-only"
 msgstr "이 채팅은 읽기 전용입니다"
 
-#: src/pages/HostComputerPrompt.tsx:22
-msgid "this computer"
-msgstr "이 컴퓨터"
-
 #: src/components/ArtifactFileCard.tsx:135
 msgid "This file is not valid UTF-8 Markdown."
 msgstr "이 파일은 올바른 UTF-8 Markdown 형식이 아닙니다."
-
-#: src/pages/HostComputerPrompt.tsx:22
-msgid "this Mac"
-msgstr "이 Mac"
 
 #: src/pages/shell/dialogs.tsx:296
 msgid "This permanently removes every message and stops current work. The chat remains available."
@@ -4189,10 +4153,6 @@ msgstr "업데이트 중…"
 msgid "Usage"
 msgstr "사용량"
 
-#: src/pages/HostComputerPrompt.tsx:92
-msgid "Use {hostLabel}"
-msgstr "{hostLabel} 사용"
-
 #: src/pages/ModelSettingsOverlay.tsx:543
 #: src/pages/Onboarding.tsx:486
 msgid "Use a found model"
@@ -4310,10 +4270,6 @@ msgstr "실행 시간"
 #: src/components/teach/SkillDraftCard.tsx:81
 msgid "When to use"
 msgstr "언제 사용할지"
-
-#: src/pages/HostComputerPrompt.tsx:59
-msgid "Where should bots run?"
-msgstr "Bot을 어디에서 실행할까요?"
 
 #: src/pages/Auth.tsx:211
 #: src/pages/Auth.tsx:319

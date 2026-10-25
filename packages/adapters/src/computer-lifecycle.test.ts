@@ -14,7 +14,6 @@ import { describe, expect, it, vi } from "vitest";
 import {
   acquireComputerExecutionLease,
   ComputerBusyError,
-  computerSupportsUpdate,
   holdComputerExecutionLeaseForTakeover,
   provisionComputer,
   releaseBotScreen,
@@ -1790,11 +1789,6 @@ function leasePrisma(options: {
 }
 
 describe("computer replacement", () => {
-  it("exposes update availability by sandbox kind", () => {
-    expect(computerSupportsUpdate("e2b")).toBe(true);
-    expect(computerSupportsUpdate("desktop")).toBe(false);
-  });
-
   it("replaces a wedged computer and restores the durable home", async () => {
     const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-replace-"));
     const homeRoot = await mkdtemp(path.join(tmpdir(), "rakazo-replace-home-"));

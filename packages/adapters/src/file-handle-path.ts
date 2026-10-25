@@ -1,11 +1,11 @@
 import { readlink } from "node:fs/promises";
 import koffi, { type LibraryHandle } from "koffi";
-import { pathFromWindowsHandle } from "./desktop-sandbox-win32-path.js";
 
 type KoffiFunction = ReturnType<LibraryHandle["func"]>;
 
 let getPath: KoffiFunction | undefined;
 let getNodeHandle: KoffiFunction | undefined;
+let getFinalPath: KoffiFunction | undefined;
 
 /** Resolve the opened object, never the pathname that was used to open it. */
 export async function fileHandlePath(fd: number): Promise<string> {
@@ -29,4 +29,22 @@ export async function fileHandlePath(fd: number): Promise<string> {
     return buffer.toString("utf8", 0, end);
   }
   throw new Error("Cannot securely read home files on this platform");
+}
+
+function pathFromWindowsHandle(handle: number | bigint): string {
+  if (handle === -1n || handle === -1) throw new Error("Cannot resolve the opened home file");
+  getFinalPath ??= koffi
+    .load("kernel32.dll")
+    .func(
+      "uint32_t __stdcall GetFinalPathNameByHandleW(void *hFile, void *lpszFilePath, uint32_t cchFilePath, uint32_t dwFlags)",
+    );
+  const size = getFinalPath(handle, null, 0, 0 /* VOLUME_NAME_DOS */) as number;
+  if (size === 0) throw new Error("Cannot resolve the opened home file");
+  const buffer = Buffer.alloc((size + 1) * 2);
+  const written = getFinalPath(handle, buffer, size + 1, 0) as number;
+  if (written === 0) throw new Error("Cannot resolve the opened home file");
+  const resolved = buffer.toString("utf16le", 0, written * 2);
+  if (resolved.startsWith("\\\\?\\UNC\\")) return `\\\\${resolved.slice("\\\\?\\UNC\\".length)}`;
+  if (resolved.startsWith("\\\\?\\")) return resolved.slice("\\\\?\\".length);
+  return resolved;
 }
