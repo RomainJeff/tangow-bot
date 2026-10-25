@@ -39,6 +39,7 @@ export {
   valueAt,
   withValueAt,
 } from "./draft-fields.js";
+export * from "./draft-lines.js";
 export * from "./events.js";
 export * from "./featured-connectors.js";
 export * from "./field-save.js";

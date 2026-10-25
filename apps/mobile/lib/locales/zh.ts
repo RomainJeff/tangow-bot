@@ -834,4 +834,5 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Try again": "重试",
   Undo: "撤销",
   "{app} is disconnected.": "{app} 已断开连接。",
+  "Remove {address}": "移除 {address}",
 };

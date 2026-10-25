@@ -852,4 +852,5 @@ export const RU_MESSAGES: Record<string, string> = {
   "Try again": "Повторить",
   Undo: "Вернуть",
   "{app} is disconnected.": "{app} отключено.",
+  "Remove {address}": "Удалить {address}",
 };

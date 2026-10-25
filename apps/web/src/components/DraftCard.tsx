@@ -8,6 +8,7 @@ import {
   draftChanges,
   draftPrimaryAction,
   draftSentTo,
+  heldBack,
 } from "@rakazo/core";
 import { Button, FramedBlock, Textarea, UserAvatar } from "@rakazo/ui-web";
 import { Check, Copy, Trash2 } from "lucide-react";
@@ -19,7 +20,7 @@ import { draftEdits } from "../lib/draft-edits";
 import { messageTimeLabel } from "../lib/message-time";
 import { userInitials } from "../lib/user-initials";
 import type { CardEdits } from "./AskCard";
-import { heldBack, RecipientLine, SubjectLine } from "./DraftLines";
+import { RecipientLine, SubjectLine } from "./DraftLines";
 
 const ROLES = ["to", "cc", "bcc"] as const;
 type Role = (typeof ROLES)[number];
