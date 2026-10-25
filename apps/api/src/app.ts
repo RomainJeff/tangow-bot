@@ -96,7 +96,6 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { AppEnv } from "./env.js";
 import { loadEnv } from "./env.js";
-import { mountLocalSettings } from "./local-settings.js";
 import {
   createMessagingInboundHandler,
   teamChatSenderCanWakeMessageRoutines,
@@ -557,7 +556,6 @@ export async function createApp(
     }
     return auth.handler(c.req.raw);
   });
-  mountLocalSettings(app, { token: env.desktopStackToken, prisma, rpc });
   app.use("/rpc/*", async (c, next) => {
     const session = await auth.api.getSession({ headers: sessionHeaders(c.req.raw) });
     const requestedSpaceId = c.req.header("x-rakazo-space-id");

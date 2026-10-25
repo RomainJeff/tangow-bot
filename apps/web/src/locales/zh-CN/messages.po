@@ -1386,10 +1386,6 @@ msgstr "无法加载更新状态"
 msgid "Could not load voice settings"
 msgstr "无法加载语音设置"
 
-#: src/pages/LocalSettings.tsx:26
-msgid "Could not open local settings. Start the local server and create its owner account, then try again."
-msgstr ""
-
 #: src/pages/VoiceSettingsOverlay.tsx:158
 msgid "Could not play a test clip"
 msgstr "无法播放测试片段"
@@ -2426,10 +2422,6 @@ msgstr "加载中…"
 msgid "Local"
 msgstr "本地"
 
-#: src/pages/LocalSettings.tsx:22
-msgid "Local Server Settings"
-msgstr ""
-
 #: src/pages/shell/sidebar.tsx:734
 msgid "Log out"
 msgstr "退出登录"
@@ -2639,15 +2631,10 @@ msgstr "模型费用使用你的提供方密钥。"
 msgid "Model updated."
 msgstr "模型已更新。"
 
-#: src/pages/LocalSettings.tsx:36
 #: src/pages/ModelSettingsOverlay.tsx:370
 #: src/pages/SettingsOverlay.tsx:99
 msgid "Models"
 msgstr "模型"
-
-#: src/pages/ModelSettingsOverlay.tsx:359
-msgid "Models for the server owner’s default space."
-msgstr ""
 
 #: src/pages/ModelSettingsOverlay.tsx:510
 #: src/pages/Onboarding.tsx:450
@@ -3655,7 +3642,6 @@ msgstr "正在发送…"
 
 #: src/components/integrations/IntegrationSetup.tsx:132
 #: src/pages/AccountSettingsOverlay.tsx:194
-#: src/pages/LocalSettings.tsx:42
 msgid "Server integrations"
 msgstr ""
 
