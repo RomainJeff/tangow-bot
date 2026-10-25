@@ -6,16 +6,19 @@ describe("resolveSandboxProvider", () => {
     expect(resolveSandboxProvider({})).toBe("docker");
   });
 
-  it("keeps explicit none", () => {
-    expect(resolveSandboxProvider({ SANDBOX_PROVIDER: "none" })).toBe("none");
-    expect(resolveSandboxProvider({ SANDBOX_PROVIDER: "" })).toBe("none");
+  it("refuses an empty provider and an E2B provider without a key", () => {
+    expect(() => resolveSandboxProvider({ SANDBOX_PROVIDER: "" })).toThrow(
+      "SANDBOX_PROVIDER is empty. Set it to docker or e2b, or remove it for docker.",
+    );
+    expect(() => resolveSandboxProvider({ SANDBOX_PROVIDER: "e2b" })).toThrow(
+      "SANDBOX_PROVIDER=e2b needs E2B_API_KEY.",
+    );
   });
 
-  it("falls back to none when a remote provider key is missing", () => {
-    expect(resolveSandboxProvider({ SANDBOX_PROVIDER: "e2b" })).toBe("none");
-  });
-
-  it("refuses the removed daytona and box providers", () => {
+  it("refuses the removed none, daytona and box providers", () => {
+    expect(() => resolveSandboxProvider({ SANDBOX_PROVIDER: "none" })).toThrow(
+      "The none computer provider was removed. Set SANDBOX_PROVIDER to docker or e2b.",
+    );
     expect(() =>
       resolveSandboxProvider({
         SANDBOX_PROVIDER: "daytona",
@@ -27,13 +30,13 @@ describe("resolveSandboxProvider", () => {
     );
   });
 
-  it("falls back to none in production when Docker has no supervisor token", () => {
-    expect(
+  it("refuses Docker in production without a supervisor token", () => {
+    expect(() =>
       resolveSandboxProvider({
         NODE_ENV: "production",
         SANDBOX_PROVIDER: "docker",
       }),
-    ).toBe("none");
+    ).toThrow("SANDBOX_PROVIDER=docker needs SANDBOX_SUPERVISOR_TOKEN in production.");
   });
 
   it("keeps docker in production when a supervisor token is set", () => {

@@ -1019,14 +1019,6 @@ msgstr "Компьютер остановлен"
 msgid "Computer unavailable"
 msgstr "Компьютер недоступен"
 
-#: src/pages/AccountSettingsOverlay.tsx:258
-msgid "Computers"
-msgstr "Компьютеры"
-
-#: src/components/ComputersUnavailableHint.tsx:7
-msgid "Computers are off. Set SANDBOX_PROVIDER=docker with SANDBOX_SUPERVISOR_TOKEN, or set SANDBOX_PROVIDER to e2b with its API key. Recreate the stack after changing .env."
-msgstr "Компьютеры выключены. Установите SANDBOX_PROVIDER=docker с помощью SANDBOX_SUPERVISOR_TOKEN или установите для SANDBOX_PROVIDER значение e2b с его ключом API. Воссоздайте стек после изменения .env."
-
 #: src/pages/ModelSettingsOverlay.tsx:397
 msgid "Configured by deployment"
 msgstr "Настраивается путем развертывания"
@@ -1490,10 +1482,6 @@ msgstr "Не удалось сохранить правило."
 msgid "Could not save skill"
 msgstr "Не удалось сохранить навык"
 
-#: src/pages/HostComputerPrompt.tsx:47
-msgid "Could not save that choice"
-msgstr "Не удалось сохранить этот выбор"
-
 #: src/pages/VoiceSettingsOverlay.tsx:139
 msgid "Could not save that voice"
 msgstr "Не удалось сохранить этот голос"
@@ -1852,14 +1840,6 @@ msgstr "Отображаемое имя"
 #: src/components/teach/TeachRecordingChrome.tsx:67
 msgid "Do not type passwords into the demo. Use Take control for credentials."
 msgstr "Не вводите пароли в демо. Используйте «Взять управление» для учётных данных."
-
-#: src/pages/HostComputerPrompt.tsx:84
-msgid "Docker"
-msgstr "Docker"
-
-#: src/pages/HostComputerPrompt.tsx:63
-msgid "Docker limits access to your computer for added security. Using {hostLabel} lets bots work with your local files and tools."
-msgstr "Docker ограничивает доступ к вашему компьютеру для дополнительной безопасности. С помощью {hostLabel} боты могут работать с локальными файлами и инструментами."
 
 #: src/pages/Auth.tsx:223
 msgid "Don’t have an account?"
@@ -2445,10 +2425,6 @@ msgstr "Загрузка…"
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:39
 msgid "Local"
 msgstr "Местный"
-
-#: src/pages/HostComputerPrompt.tsx:69
-msgid "Local access lets bots run commands without asking. Avoid it on shared or public servers."
-msgstr "Локальный доступ позволяет ботам выполнять команды без запроса разрешения. Не используйте его на общих или публичных серверах."
 
 #: src/pages/LocalSettings.tsx:22
 msgid "Local Server Settings"
@@ -4003,10 +3979,6 @@ msgstr "Выбранный поставщик памяти недоступен 
 msgid "Thinking"
 msgstr "рассуждение"
 
-#: src/pages/shell/side-panel.tsx:286
-msgid "This bot runs on this computer, not a Linux desktop. Shell and files use your home folder."
-msgstr "Этот бот работает на этом компьютере, а не на рабочем столе Linux. Оболочка и файлы используют вашу домашнюю папку."
-
 #: src/components/AgentSteps.tsx:83
 msgid "This call ran before step details were recorded."
 msgstr ""
@@ -4020,17 +3992,9 @@ msgstr "Это невозможно отменить."
 msgid "This chat is view-only"
 msgstr "Этот чат доступен только для просмотра"
 
-#: src/pages/HostComputerPrompt.tsx:22
-msgid "this computer"
-msgstr "этот компьютер"
-
 #: src/components/ArtifactFileCard.tsx:135
 msgid "This file is not valid UTF-8 Markdown."
 msgstr "Этот файл недействителен в формате UTF-8 Markdown."
-
-#: src/pages/HostComputerPrompt.tsx:22
-msgid "this Mac"
-msgstr "этот Mac"
 
 #: src/pages/shell/dialogs.tsx:296
 msgid "This permanently removes every message and stops current work. The chat remains available."
@@ -4189,10 +4153,6 @@ msgstr "Обновление…"
 msgid "Usage"
 msgstr "Использование"
 
-#: src/pages/HostComputerPrompt.tsx:92
-msgid "Use {hostLabel}"
-msgstr "Используйте {hostLabel}"
-
 #: src/pages/ModelSettingsOverlay.tsx:543
 #: src/pages/Onboarding.tsx:486
 msgid "Use a found model"
@@ -4310,10 +4270,6 @@ msgstr "Когда запускать"
 #: src/components/teach/SkillDraftCard.tsx:81
 msgid "When to use"
 msgstr "Когда использовать"
-
-#: src/pages/HostComputerPrompt.tsx:59
-msgid "Where should bots run?"
-msgstr "Где должны работать боты?"
 
 #: src/pages/Auth.tsx:211
 #: src/pages/Auth.tsx:319

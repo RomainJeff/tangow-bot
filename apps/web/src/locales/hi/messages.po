@@ -1019,14 +1019,6 @@ msgstr "कंप्यूटर रुका हुआ है"
 msgid "Computer unavailable"
 msgstr "कंप्यूटर उपलब्ध नहीं"
 
-#: src/pages/AccountSettingsOverlay.tsx:258
-msgid "Computers"
-msgstr "कंप्यूटर"
-
-#: src/components/ComputersUnavailableHint.tsx:7
-msgid "Computers are off. Set SANDBOX_PROVIDER=docker with SANDBOX_SUPERVISOR_TOKEN, or set SANDBOX_PROVIDER to e2b with its API key. Recreate the stack after changing .env."
-msgstr "कंप्यूटर बंद हैं। SANDBOX_PROVIDER=docker और SANDBOX_SUPERVISOR_TOKEN सेट करें, या SANDBOX_PROVIDER को e2b पर सेट कर उसका API key दें। .env बदलने के बाद स्टैक फिर बनाएँ।"
-
 #: src/pages/ModelSettingsOverlay.tsx:397
 msgid "Configured by deployment"
 msgstr "डिप्लॉयमेंट द्वारा कॉन्फ़िगर"
@@ -1490,10 +1482,6 @@ msgstr "नियम सहेजा नहीं जा सका"
 msgid "Could not save skill"
 msgstr "स्किल सहेजी नहीं जा सकी"
 
-#: src/pages/HostComputerPrompt.tsx:47
-msgid "Could not save that choice"
-msgstr "वह विकल्प सहेजा नहीं जा सका"
-
 #: src/pages/VoiceSettingsOverlay.tsx:139
 msgid "Could not save that voice"
 msgstr "वह आवाज़ सहेजी नहीं जा सकी"
@@ -1852,14 +1840,6 @@ msgstr "प्रदर्शित नाम"
 #: src/components/teach/TeachRecordingChrome.tsx:67
 msgid "Do not type passwords into the demo. Use Take control for credentials."
 msgstr "डेमो में पासवर्ड टाइप न करें। क्रेडेंशियल्स के लिए 'टेक कंट्रोल' (Take control) का इस्तेमाल करें।"
-
-#: src/pages/HostComputerPrompt.tsx:84
-msgid "Docker"
-msgstr "Docker"
-
-#: src/pages/HostComputerPrompt.tsx:63
-msgid "Docker limits access to your computer for added security. Using {hostLabel} lets bots work with your local files and tools."
-msgstr "Docker अतिरिक्त सुरक्षा के लिए आपके कंप्यूटर तक पहुँच सीमित करता है। {hostLabel} चुनने पर बॉट्स आपकी स्थानीय फ़ाइलों और टूल्स के साथ काम कर सकते हैं।"
 
 #: src/pages/Auth.tsx:223
 msgid "Don’t have an account?"
@@ -2445,10 +2425,6 @@ msgstr "लोड हो रहा है…"
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:39
 msgid "Local"
 msgstr "लोकल"
-
-#: src/pages/HostComputerPrompt.tsx:69
-msgid "Local access lets bots run commands without asking. Avoid it on shared or public servers."
-msgstr "स्थानीय पहुँच मिलने पर बॉट्स बिना पूछे कमांड चला सकते हैं। साझा या सार्वजनिक सर्वर पर इससे बचें।"
 
 #: src/pages/LocalSettings.tsx:22
 msgid "Local Server Settings"
@@ -4003,10 +3979,6 @@ msgstr "चयनित मेमोरी प्रोवाइडर इस �
 msgid "Thinking"
 msgstr "सोच रहा है"
 
-#: src/pages/shell/side-panel.tsx:286
-msgid "This bot runs on this computer, not a Linux desktop. Shell and files use your home folder."
-msgstr "यह बॉट इसी कंप्यूटर पर चलता है, किसी Linux डेस्कटॉप पर नहीं। शेल और फ़ाइलें आपके होम फ़ोल्डर का उपयोग करती हैं।"
-
 #: src/components/AgentSteps.tsx:83
 msgid "This call ran before step details were recorded."
 msgstr "यह कॉल चरण विवरण दर्ज होने से पहले चला था।"
@@ -4020,17 +3992,9 @@ msgstr "इसे पूर्ववत नहीं किया जा सक�
 msgid "This chat is view-only"
 msgstr "यह चैट केवल देखने के लिए है"
 
-#: src/pages/HostComputerPrompt.tsx:22
-msgid "this computer"
-msgstr "यह कंप्यूटर"
-
 #: src/components/ArtifactFileCard.tsx:135
 msgid "This file is not valid UTF-8 Markdown."
 msgstr "यह फ़ाइल मान्य UTF-8 Markdown नहीं है।"
-
-#: src/pages/HostComputerPrompt.tsx:22
-msgid "this Mac"
-msgstr "यह Mac"
 
 #: src/pages/shell/dialogs.tsx:296
 msgid "This permanently removes every message and stops current work. The chat remains available."
@@ -4189,10 +4153,6 @@ msgstr "अपडेट हो रहा है…"
 msgid "Usage"
 msgstr "उपयोग"
 
-#: src/pages/HostComputerPrompt.tsx:92
-msgid "Use {hostLabel}"
-msgstr "{hostLabel} का उपयोग करें"
-
 #: src/pages/ModelSettingsOverlay.tsx:543
 #: src/pages/Onboarding.tsx:486
 msgid "Use a found model"
@@ -4310,10 +4270,6 @@ msgstr "कब चलाएं"
 #: src/components/teach/SkillDraftCard.tsx:81
 msgid "When to use"
 msgstr "कब उपयोग करें"
-
-#: src/pages/HostComputerPrompt.tsx:59
-msgid "Where should bots run?"
-msgstr "बॉट कहां चलने चाहिए?"
 
 #: src/pages/Auth.tsx:211
 #: src/pages/Auth.tsx:319

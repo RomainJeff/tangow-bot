@@ -49,7 +49,6 @@ export function lostSetupMove(
 export const WORKER_SUPPORT = {
   e2b: "worker",
   docker: "in_process",
-  desktop: "in_process",
   fake: "in_process",
 } as const satisfies Record<SandboxKind, "worker" | "in_process">;
 

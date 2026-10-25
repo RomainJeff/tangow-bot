@@ -1019,14 +1019,6 @@ msgstr "Computer ist gestoppt"
 msgid "Computer unavailable"
 msgstr "Computer nicht verfügbar"
 
-#: src/pages/AccountSettingsOverlay.tsx:258
-msgid "Computers"
-msgstr "Computer"
-
-#: src/components/ComputersUnavailableHint.tsx:7
-msgid "Computers are off. Set SANDBOX_PROVIDER=docker with SANDBOX_SUPERVISOR_TOKEN, or set SANDBOX_PROVIDER to e2b with its API key. Recreate the stack after changing .env."
-msgstr "Computer sind aus. Setze SANDBOX_PROVIDER=docker mit SANDBOX_SUPERVISOR_TOKEN, oder setze SANDBOX_PROVIDER auf e2b mit dem passenden API-Key. Stack nach der Änderung von .env neu erstellen."
-
 #: src/pages/ModelSettingsOverlay.tsx:397
 msgid "Configured by deployment"
 msgstr "Durch die Bereitstellung konfiguriert"
@@ -1490,10 +1482,6 @@ msgstr "Regel konnte nicht gespeichert werden"
 msgid "Could not save skill"
 msgstr "Skill konnte nicht gespeichert werden"
 
-#: src/pages/HostComputerPrompt.tsx:47
-msgid "Could not save that choice"
-msgstr "Auswahl konnte nicht gespeichert werden"
-
 #: src/pages/VoiceSettingsOverlay.tsx:139
 msgid "Could not save that voice"
 msgstr "Stimme konnte nicht gespeichert werden"
@@ -1852,14 +1840,6 @@ msgstr "Anzeigename"
 #: src/components/teach/TeachRecordingChrome.tsx:67
 msgid "Do not type passwords into the demo. Use Take control for credentials."
 msgstr "Gib keine Passwörter in die Demo ein. Verwende „Kontrolle übernehmen“ für Zugangsdaten."
-
-#: src/pages/HostComputerPrompt.tsx:84
-msgid "Docker"
-msgstr "Docker"
-
-#: src/pages/HostComputerPrompt.tsx:63
-msgid "Docker limits access to your computer for added security. Using {hostLabel} lets bots work with your local files and tools."
-msgstr "Docker begrenzt für mehr Sicherheit den Zugriff auf deinen Computer. Wenn {hostLabel} verwendet wird, können Bots mit deinen lokalen Dateien und Werkzeugen arbeiten."
 
 #: src/pages/Auth.tsx:223
 msgid "Don’t have an account?"
@@ -2445,10 +2425,6 @@ msgstr "Wird geladen…"
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:39
 msgid "Local"
 msgstr "Lokal"
-
-#: src/pages/HostComputerPrompt.tsx:69
-msgid "Local access lets bots run commands without asking. Avoid it on shared or public servers."
-msgstr "Mit lokalem Zugriff können Bots ohne Rückfrage Befehle ausführen. Vermeide dies auf gemeinsam genutzten oder öffentlichen Servern."
 
 #: src/pages/LocalSettings.tsx:22
 msgid "Local Server Settings"
@@ -4003,10 +3979,6 @@ msgstr "Der ausgewählte Erinnerungsanbieter ist in diesem Build nicht verfügba
 msgid "Thinking"
 msgstr "Denkmodus"
 
-#: src/pages/shell/side-panel.tsx:286
-msgid "This bot runs on this computer, not a Linux desktop. Shell and files use your home folder."
-msgstr "Dieser Bot wird auf diesem Computer und nicht auf einem Linux-Desktop ausgeführt. Shell und Dateien verwenden deinen persönlichen Ordner."
-
 #: src/components/AgentSteps.tsx:83
 msgid "This call ran before step details were recorded."
 msgstr "Dieser Aufruf lief, bevor Schrittdetails aufgezeichnet wurden."
@@ -4020,17 +3992,9 @@ msgstr "Dies kann nicht rückgängig gemacht werden."
 msgid "This chat is view-only"
 msgstr "Dieser Chat ist schreibgeschützt"
 
-#: src/pages/HostComputerPrompt.tsx:22
-msgid "this computer"
-msgstr "dieser Computer"
-
 #: src/components/ArtifactFileCard.tsx:135
 msgid "This file is not valid UTF-8 Markdown."
 msgstr "Diese Datei ist kein gültiges UTF-8-Markdown."
-
-#: src/pages/HostComputerPrompt.tsx:22
-msgid "this Mac"
-msgstr "dieser Mac"
 
 #: src/pages/shell/dialogs.tsx:296
 msgid "This permanently removes every message and stops current work. The chat remains available."
@@ -4189,10 +4153,6 @@ msgstr "Wird aktualisiert …"
 msgid "Usage"
 msgstr "Nutzung"
 
-#: src/pages/HostComputerPrompt.tsx:92
-msgid "Use {hostLabel}"
-msgstr "{hostLabel} verwenden"
-
 #: src/pages/ModelSettingsOverlay.tsx:543
 #: src/pages/Onboarding.tsx:486
 msgid "Use a found model"
@@ -4310,10 +4270,6 @@ msgstr "Ausführungszeit"
 #: src/components/teach/SkillDraftCard.tsx:81
 msgid "When to use"
 msgstr "Einsatzzeitpunkt"
-
-#: src/pages/HostComputerPrompt.tsx:59
-msgid "Where should bots run?"
-msgstr "Wo sollen Bots ausgeführt werden?"
 
 #: src/pages/Auth.tsx:211
 #: src/pages/Auth.tsx:319

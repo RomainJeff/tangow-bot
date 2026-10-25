@@ -9,12 +9,16 @@ for the sharing and persistence contract.
 | Goal | Set | Also need |
 | --- | --- | --- |
 | Local Docker computers | `SANDBOX_PROVIDER=docker` | `SANDBOX_SUPERVISOR_TOKEN`, computer image, Docker socket for supervisor |
-| UI only, no computers | `SANDBOX_PROVIDER=none` | No provider credential; published-images Compose still requires `SANDBOX_SUPERVISOR_TOKEN` |
 | Managed remote desktop | `SANDBOX_PROVIDER=e2b` | `SANDBOX_SUPERVISOR_TOKEN` (published-images Compose), `E2B_API_KEY`, [E2B templates](./self-host-e2b-workers.md) |
 
 Published-images [Compose](../infra/compose/docker-compose.images.yml) defaults to **`docker`**.
-It always starts the supervisor and requires `SANDBOX_SUPERVISOR_TOKEN`, including for `none`
-and remote providers. This stack credential does not replace a remote provider's API key.
+It always starts the supervisor and requires `SANDBOX_SUPERVISOR_TOKEN`, including for `e2b`.
+This stack credential does not replace a remote provider's API key.
+
+The API and worker refuse to start when the provider cannot run computers: an empty
+`SANDBOX_PROVIDER`, `e2b` without `E2B_API_KEY`, or `docker` in production without
+`SANDBOX_SUPERVISOR_TOKEN`. The error names the missing setting. `none` was removed; there is no
+mode without computers.
 
 ## `docker` (in-stack supervisor)
 
@@ -35,13 +39,7 @@ curl -fsS http://127.0.0.1:3100/health
 # expect sandbox: docker
 ```
 
-Missing supervisor token is a **setup failure**: do not treat `sandbox: "none"` as success for this path.
-
 Signup and local Docker computers work **without** an E2B (or other remote) account.
-
-## `none`
-
-Runs API/web without provisioning bot computers.
 
 ## Remote provider
 
@@ -57,7 +55,7 @@ Daytona sandboxes or Box machines, so delete them in the vendor's console.
 
 Remote paths still need a working API/worker; they do not replace Postgres or
 the web UI. They require egress to the provider. For air-gapped hosts prefer
-`docker` with pre-loaded images, or `none`.
+`docker` with pre-loaded images.
 
 ## Verify a provider change
 
@@ -70,6 +68,6 @@ curl -fsS http://127.0.0.1:3100/health
 ```
 
 Confirm `sandbox` equals the intended provider (`e2b`).
-HTTP 200 alone does not verify a remote provider: a missing API key falls back to `sandbox: "none"`.
-A present but invalid key still reports the selected provider. Open a bot's computer to verify
+A missing API key stops the API at startup. A present but invalid key still reports the selected
+provider. Open a bot's computer to verify
 provisioning and desktop access.

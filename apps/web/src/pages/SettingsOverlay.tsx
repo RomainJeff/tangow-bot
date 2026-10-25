@@ -13,9 +13,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { type ComponentType, useEffect, useRef, useState } from "react";
-import { computersAreUnavailable } from "../components/ComputersUnavailableHint";
 import {
-  ComputerSettingsPanel as ComputerSetupSettingsPanel,
   GeneralSettingsPanels,
   UpdatesSettingsPanel,
   UsageSettingsPanel,
@@ -51,7 +49,6 @@ export function SettingsOverlay({
   avatarStyle,
   onAvatarStyleChange,
   isDeploymentOwner = false,
-  sandboxProvider,
   messagingEnabled = false,
   onOpenMessaging,
   memoryConfig,
@@ -67,7 +64,6 @@ export function SettingsOverlay({
   avatarStyle: AvatarStyle;
   onAvatarStyleChange: (style: AvatarStyle) => Promise<void>;
   isDeploymentOwner?: boolean;
-  sandboxProvider?: string | null;
   messagingEnabled?: boolean;
   onOpenMessaging?: () => void;
   memoryConfig: SpaceMemoryConfig | null | undefined;
@@ -82,7 +78,6 @@ export function SettingsOverlay({
   const [memoryBusy, setMemoryBusy] = useState(false);
   const [decisionModelBusy, setDecisionModelBusy] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState(false);
-  const showComputerSetup = isDeploymentOwner && computersAreUnavailable(sandboxProvider);
   const panelBusy = memoryBusy || decisionModelBusy || voiceBusy;
 
   useEffect(() => {
@@ -233,13 +228,7 @@ export function SettingsOverlay({
               {section === "usage" ? (
                 <UsageSettingsPanel usage={usage} panelRef={usageRef} />
               ) : null}
-              {section === "computer" ? (
-                showComputerSetup ? (
-                  <ComputerSetupSettingsPanel />
-                ) : (
-                  <ComputerSettingsPanel />
-                )
-              ) : null}
+              {section === "computer" ? <ComputerSettingsPanel /> : null}
               {section === "updates" ? (
                 <UpdatesSettingsPanel isDeploymentOwner={isDeploymentOwner} />
               ) : null}

@@ -20,8 +20,8 @@ import {
   createPostgresReconciliationLeadership,
   createPostgresSkillLock,
   createRunExecutor,
-  createRunSandbox,
   createRunSecretWriter,
+  createSandboxProvider,
   createSkillLineSweep,
   createTraceExporterFromEnv,
   createWebProvider,
@@ -105,12 +105,10 @@ async function main() {
   // Same resolver the API uses, so both processes agree on provider, model and key.
   const { key: deploymentModelKey } = resolveDeploymentModel();
   const sandboxProvider = resolveSandboxProvider(process.env);
-  const sandbox = createRunSandbox(sandboxProvider, {
+  const sandbox = createSandboxProvider(sandboxProvider, {
     supervisorUrl: process.env.SANDBOX_SUPERVISOR_URL ?? "http://127.0.0.1:7091",
     supervisorToken: sandboxProvider === "docker" ? resolveSupervisorToken(process.env) : undefined,
     e2bApiKey: process.env.E2B_API_KEY,
-    dataDir,
-    prisma,
   });
   const mcpOAuth = new McpOAuthBroker(prisma, secrets);
   const mcp = new McpConnector(

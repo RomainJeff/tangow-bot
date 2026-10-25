@@ -6,7 +6,6 @@ import { ComputerUpdateProgress } from "../components/ComputerUpdateProgress";
 import { authClient } from "../lib/auth";
 import { markAfterPaint, markOnce } from "../lib/performance";
 import { rpc } from "../lib/rpc";
-import { HostComputerPrompt } from "./HostComputerPrompt";
 import { useAgentSkillCatalog } from "./shell/agent-skill-catalog";
 import type { BotAction, BotCommands } from "./shell/bot-commands";
 import { downloadBotExport, useBotCommands } from "./shell/bot-commands";
@@ -204,9 +203,6 @@ export function ShellPage() {
           if (active) void sync.refreshThread(active.id);
         }}
       />
-      {bootstrapMe !== undefined ? (
-        <HostComputerPrompt initialMe={bootstrapMe ?? undefined} />
-      ) : null}
       <BotsSidebar
         {...sidebar}
         mobileSidebarOpen={mobileSidebarOpen}
@@ -286,7 +282,6 @@ export function ShellPage() {
         computerOpen={screen.computerOpen}
         escapeCloses={!screen.computerOpen && !voice.callOpen}
         booting={control.booting}
-        bootstrapMe={bootstrapMe}
         embeddedScreenUrl={screen.embeddedScreenUrl}
         computerScreenError={screen.computerScreenError}
         screenLink={screen.screenLink}

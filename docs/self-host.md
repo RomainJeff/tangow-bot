@@ -200,7 +200,7 @@ Optional:
 ```env
 SIGNUPS_ENABLED=true
 SIGNUP_ALLOWLIST=you@example.com,@company.com
-SANDBOX_PROVIDER=docker   # or none, e2b. Keep fake only for pnpm test.
+SANDBOX_PROVIDER=docker   # or e2b. Keep fake only for pnpm test.
 AGENT_RUNTIME=pi          # Keep scripted only for pnpm test.
 WAKEUP_DRIVER=graphile
 SANDBOX_IDLE_MS=600000    # pause the bot computer after 10 minutes idle
@@ -321,7 +321,7 @@ Live evaluations of this behaviour are described in [agent verification](agent-v
 
 ## Choosing a computer provider
 
-The Electron desktop app is a client of the same API. Docker and E2B still apply. On first launch, Electron asks the deployment owner whether bots should keep using Docker or run on this Mac as you. `SANDBOX_PROVIDER=desktop` is a separate, explicit provider that always runs commands on the service host.
+The Electron desktop app is a client of the same API, with the same Docker or E2B computers.
 
 - **Published images** (`docker-compose.images.yml`) default to `SANDBOX_PROVIDER=docker` with a
   local supervisor and published `ghcr.io/elie222/rakazo/computer` image. No E2B account required.
@@ -332,13 +332,9 @@ The Electron desktop app is a client of the same API. Docker and E2B still apply
 - **E2B** runs bot computers away from the Rakazo host and is a good choice for public or multi-user
   production deployments. Each bot run works in its own E2B worker VM, and bot homes live on E2B
   volumes. Set it up with [E2B workers](./self-host-e2b-workers.md).
-- **Desktop provider** / **This Mac** runs commands on the API/worker host. Docker stays the default.
-  The Electron app asks once; if you choose This Mac, bots can use working directories under your home
-  folder. Do not enable it on a public or shared service. macOS does not show its own permission
-  dialog for this.
 - **Fake** is only an emulator for verification.
-- **None** boots the product without a computer host (fallback when Docker/supervisor is not
-  configured, or when a remote provider is selected without its API key).
+- A missing or incomplete provider setting stops the API and worker at startup with a message
+  naming what to set. There is no mode without computers.
 
 For provider configuration and health checks, see the [provider setup guide](./self-host-sandbox-providers.md).
 
