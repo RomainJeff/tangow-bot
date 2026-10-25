@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
+- Self-hosted servers with trace export configured (`LANGFUSE_*`) show bot runs in their traces again, on E2B and Docker workers, with each model request and tool call ([agent traces](docs/self-host.md#agent-traces)).
 - On web, desktop and iPhone, each message a bot sends during a run keeps its own bubble when the final answer arrives, instead of being merged into it.
 - Idle E2B computers now pause after the configured inactivity delay instead of staying awake or waking again when the inactivity check runs, across web, desktop and iPhone.
 - Bots running in isolated workers can follow browser and connected-app instructions with the correct tools, while retaining the reason a connector failed.

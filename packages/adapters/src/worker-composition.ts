@@ -6,6 +6,7 @@ import { DockerWorkerProvider } from "./docker-worker.js";
 import { E2BWorkerProvider } from "./e2b-worker.js";
 import { ModelCallRuntime } from "./model-call-runtime.js";
 import type { GuestConnector } from "./runtime-worker/launcher.js";
+import type { WorkerTrace } from "./runtime-worker/runtime.js";
 import { createRunWorkers } from "./runtime-worker/runtime.js";
 import { resolveSandboxProvider } from "./sandbox-provider-env.js";
 import { ScriptedAgentRuntime } from "./scripted-runtime.js";
@@ -67,12 +68,13 @@ export function createWorkerProvider(
 export function composeWorkers(
   prisma: PrismaClient,
   provider: (WorkerProvider & GuestConnector) | null,
+  trace?: WorkerTrace,
 ) {
   const lifecycle = createWorkerLifecycle({ prisma, provider });
   return {
     lifecycle,
     runWorkers: provider
-      ? createRunWorkers({ prisma, lifecycle, connector: provider, screensByPath: true })
+      ? createRunWorkers({ prisma, lifecycle, connector: provider, screensByPath: true, trace })
       : undefined,
     async reconcileWorkers(signal: AbortSignal) {
       const context = {

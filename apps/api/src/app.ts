@@ -238,18 +238,17 @@ export async function createApp(
   const oauthLogins = new PiOAuthLogins();
   const home = new LocalAgentHomeStore(env.dataDir);
   const artifacts = new LocalArtifactStore(env.dataDir);
+  // Optional trace export of worker runs and the controller's model calls. Without configuration
+  // this resolves to nothing, so no span is recorded and no vendor endpoint is ever contacted.
+  const traceExport = createTraceExporterFromEnv(process.env);
+  if (traceExport.warning) logger.warn(traceExport.warning);
+  const trace = { exporter: traceExport.exporter, serviceName: SERVICE_NAMES.api };
   const workers = composeWorkers(
     prisma,
     workersOverride ?? createWorkerProvider(env.workerProvider),
+    trace,
   );
-  // Optional trace export of the controller's model calls. Without configuration this resolves
-  // to nothing, so no span is recorded and no vendor endpoint is ever contacted.
-  const traceExport = createTraceExporterFromEnv(process.env);
-  if (traceExport.warning) logger.warn(traceExport.warning);
-  const runtime = composeInProcessRuntime(env.agentRuntime, workers, {
-    exporter: traceExport.exporter,
-    serviceName: SERVICE_NAMES.api,
-  });
+  const runtime = composeInProcessRuntime(env.agentRuntime, workers, trace);
   const memory = new MarkdownMemoryStore(prisma);
   const mcp = new McpConnector(
     prisma,
