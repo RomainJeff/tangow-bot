@@ -127,7 +127,11 @@ export class SlackMcpEmulator {
       }
       case "slack_read_channel": {
         const channel = EMULATED_SLACK_CONVERSATIONS[String(args.channel_id ?? "")];
-        if (!channel || typeof channel.name !== "string") return { error: "channel_not_found" };
+        if (!channel) return { error: "channel_not_found" };
+        // The server heads a direct message's history without a name.
+        if (typeof channel.name !== "string") {
+          return { messages: `Channel: DM (${channel.id})\n\nMarie Dupont: Hi!` };
+        }
         return {
           messages: `Channel: #${channel.name} (${channel.id})\n\nBob Martin: Launch is Friday.`,
         };

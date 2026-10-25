@@ -79,7 +79,9 @@ const SLACK_READS = {
     channelIn: (record, id) => {
       const header = textOf(record, "messages")?.split("\n", 1)[0];
       const named = header?.match(/^Channel: #(\S+) \(([A-Z0-9]+)\)$/);
-      return named?.[2] === id ? { name: clean(named[1]) } : undefined;
+      if (named?.[2] !== id) return undefined;
+      // A group message is neither a person nor a channel the card can name.
+      return named[1]!.startsWith("mpdm-") ? {} : { name: clean(named[1]) };
     },
   },
 } satisfies Record<string, SlackReads>;
@@ -140,6 +142,8 @@ export async function lookUpChatRecipient(
   ) => {
     if (context.signal.aborted) return undefined;
     const data = await readConnector(connector, readCall(call, tool, args), context, TIMEOUT_MS);
+    // An MCP server reports a failed call as a result: nothing in it names anyone.
+    if (isRecord(data) && data.isError === true) return undefined;
     return findInResult(data, pick, ANSWER_WALK);
   };
   const named = async (user: string) =>
@@ -169,9 +173,8 @@ function person(name: string, handles: string[]): Person | undefined {
     : { kind: "person", name: handle! };
 }
 
-/** A field of a server's answer, or the answer's own text when it came as plain text. */
 function textOf(record: Record<string, unknown>, key: string): string | undefined {
-  const value = record[key] ?? (record.type === "text" ? record.text : undefined);
+  const value = record[key];
   return typeof value === "string" ? value : undefined;
 }
 
