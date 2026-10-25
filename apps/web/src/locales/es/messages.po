@@ -98,7 +98,7 @@ msgstr ""
 msgid "{0}'s screen"
 msgstr "Pantalla de {0}"
 
-#: src/components/DraftCard.tsx:254
+#: src/components/DraftCard.tsx:280
 msgid "{app} is disconnected."
 msgstr ""
 
@@ -676,7 +676,7 @@ msgstr "Volver a iniciar sesión"
 msgid "Base URL"
 msgstr "URL base"
 
-#: src/components/DraftCard.tsx:247
+#: src/components/DraftCard.tsx:273
 msgid "Bcc"
 msgstr ""
 
@@ -797,7 +797,7 @@ msgstr "Cancelar respuesta"
 msgid "Cancelled"
 msgstr "Cancelado"
 
-#: src/components/DraftCard.tsx:247
+#: src/components/DraftCard.tsx:273
 msgid "Cc"
 msgstr ""
 
@@ -1159,7 +1159,7 @@ msgstr "Continuar con el correo"
 msgid "Conversation cleared"
 msgstr ""
 
-#: src/components/DraftCard.tsx:297
+#: src/components/DraftCard.tsx:369
 #: src/pages/shell/message-actions-sheet.tsx:75
 #: src/pages/shell/message-hover-actions.tsx:98
 #: src/pages/shell/message-hover-actions.tsx:169
@@ -1525,8 +1525,8 @@ msgid "Could not start teaching"
 msgstr "No se pudo iniciar la enseñanza"
 
 #: src/components/AskCard.tsx:199
-#: src/components/DraftCard.tsx:136
-#: src/components/DraftCard.tsx:149
+#: src/components/DraftCard.tsx:161
+#: src/components/DraftCard.tsx:174
 msgid "Could not submit this answer"
 msgstr "No se pudo enviar esta respuesta"
 
@@ -1547,7 +1547,7 @@ msgstr "No se pudo actualizar el acceso del agente"
 msgid "Could not update computer"
 msgstr "No se pudo actualizar la computadora"
 
-#: src/pages/shell/use-thread-send.ts:127
+#: src/pages/shell/use-thread-send.ts:115
 msgid "Could not update reaction"
 msgstr "No se pudo actualizar la reacción"
 
@@ -1812,12 +1812,12 @@ msgstr ""
 msgid "Disabled"
 msgstr "Desactivado"
 
-#: src/components/DraftCard.tsx:288
+#: src/components/DraftCard.tsx:360
 msgid "Discard"
 msgstr ""
 
-#: src/components/DraftCard.tsx:217
-#: src/components/DraftCard.tsx:227
+#: src/components/DraftCard.tsx:240
+#: src/components/DraftCard.tsx:250
 msgid "Discarded"
 msgstr ""
 
@@ -1933,7 +1933,7 @@ msgstr "Editar"
 msgid "Edit and resend"
 msgstr "Editar y reenviar"
 
-#: src/components/DraftCard.tsx:339
+#: src/components/DraftCard.tsx:412
 msgid "Edit message"
 msgstr ""
 
@@ -1941,11 +1941,11 @@ msgstr ""
 msgid "Edit Profile"
 msgstr "Editar perfil"
 
-#: src/components/DraftCard.tsx:251
+#: src/components/DraftCard.tsx:277
 msgid "Edited"
 msgstr ""
 
-#: src/components/DraftCard.tsx:250
+#: src/components/DraftCard.tsx:276
 msgid "Editing"
 msgstr ""
 
@@ -2066,14 +2066,14 @@ msgstr "Falló"
 msgid "Failed {when}"
 msgstr "Falló {when}"
 
-#: src/pages/shell/use-thread-send.ts:295
-#: src/pages/shell/use-thread-send.ts:297
-#: src/pages/shell/use-thread-send.ts:299
+#: src/pages/shell/use-thread-send.ts:289
+#: src/pages/shell/use-thread-send.ts:291
+#: src/pages/shell/use-thread-send.ts:293
 msgid "Failed to send message"
 msgstr "No se pudo enviar el mensaje"
 
-#: src/pages/shell/use-thread-send.ts:335
-#: src/pages/shell/use-thread-send.ts:354
+#: src/pages/shell/use-thread-send.ts:329
+#: src/pages/shell/use-thread-send.ts:348
 msgid "Failed to stop"
 msgstr "No se pudo detener"
 
@@ -2853,7 +2853,7 @@ msgstr "Aún no hay integraciones instaladas."
 
 #: src/components/ask/AskSettled.tsx:28
 #: src/components/AskCard.tsx:260
-#: src/components/DraftCard.tsx:234
+#: src/components/DraftCard.tsx:257
 msgid "No longer active"
 msgstr "Ya no está activo"
 
@@ -2940,7 +2940,7 @@ msgstr "No está en el catálogo de plugins"
 msgid "Not now"
 msgstr "Ahora no"
 
-#: src/components/DraftCard.tsx:249
+#: src/components/DraftCard.tsx:275
 msgid "Not sent"
 msgstr ""
 
@@ -3252,7 +3252,7 @@ msgstr ""
 msgid "Recommended · {description}"
 msgstr ""
 
-#: src/components/DraftCard.tsx:313
+#: src/components/DraftCard.tsx:385
 msgid "Reconnect {app}"
 msgstr ""
 
@@ -3353,6 +3353,10 @@ msgstr "Quitar"
 msgid "Remove {0}"
 msgstr "Quitar {0}"
 
+#: src/components/DraftLines.tsx:97
+msgid "Remove {address}"
+msgstr ""
+
 #: src/pages/bot-page/RoutineTriggers.tsx:235
 msgid "Remove Git event?"
 msgstr "¿Quitar evento de Git?"
@@ -3418,7 +3422,7 @@ msgstr "Reemplazar clave de API"
 msgid "Replace key"
 msgstr "Reemplazar clave"
 
-#: src/components/DraftCard.tsx:231
+#: src/components/DraftCard.tsx:254
 msgid "Replaced"
 msgstr ""
 
@@ -3691,7 +3695,7 @@ msgstr "Selecciona un bot"
 
 #: src/components/ask/QuestionCard.tsx:205
 #: src/components/ask/QuestionCard.tsx:306
-#: src/components/DraftCard.tsx:324
+#: src/components/DraftCard.tsx:396
 #: src/pages/shell/composer.tsx:407
 msgid "Send"
 msgstr "Enviar"
@@ -3705,11 +3709,11 @@ msgid "Send reset link"
 msgstr "Enviar enlace de restablecimiento"
 
 #: src/components/AskCard.tsx:304
-#: src/components/DraftCard.tsx:324
+#: src/components/DraftCard.tsx:396
 msgid "Sending…"
 msgstr "Enviando…"
 
-#: src/components/DraftCard.tsx:209
+#: src/components/DraftCard.tsx:227
 msgid "Sent to {recipient} · {time}"
 msgstr ""
 
@@ -3955,7 +3959,8 @@ msgstr "Almacenado de forma segura. Nunca se muestra aquí."
 msgid "subagent"
 msgstr "subagente"
 
-#: src/components/DraftCard.tsx:277
+#: src/components/DraftCard.tsx:343
+#: src/components/DraftCard.tsx:349
 msgid "Subject"
 msgstr ""
 
@@ -4107,8 +4112,7 @@ msgstr "Hora del día"
 msgid "Title"
 msgstr "Título"
 
-#: src/components/DraftCard.tsx:188
-#: src/components/DraftCard.tsx:247
+#: src/components/DraftCard.tsx:273
 msgid "To"
 msgstr ""
 
@@ -4138,7 +4142,7 @@ msgstr ""
 msgid "Treg token"
 msgstr "Token de Treg"
 
-#: src/components/DraftCard.tsx:324
+#: src/components/DraftCard.tsx:396
 #: src/pages/Onboarding.tsx:685
 msgid "Try again"
 msgstr "Intentarlo de nuevo"
@@ -4155,7 +4159,7 @@ msgstr "Sin asignar"
 msgid "Unavailable"
 msgstr "No disponible"
 
-#: src/components/DraftCard.tsx:223
+#: src/components/DraftCard.tsx:246
 msgid "Undo"
 msgstr ""
 
@@ -4172,7 +4176,7 @@ msgid "Unpin"
 msgstr "Desfijar"
 
 #. placeholder {0}: pending.file.name
-#: src/pages/shell/use-thread-send.ts:206
+#: src/pages/shell/use-thread-send.ts:195
 msgid "Unsupported file type: {0}"
 msgstr "Tipo de archivo no compatible: {0}"
 
@@ -4386,7 +4390,7 @@ msgstr "Cada año el {date} a las {time}"
 msgid "Yesterday"
 msgstr "Ayer"
 
-#: src/components/DraftCard.tsx:63
+#: src/components/DraftCard.tsx:61
 #: src/pages/Shell.tsx:136
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"

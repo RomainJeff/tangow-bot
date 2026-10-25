@@ -98,7 +98,7 @@ msgstr ""
 msgid "{0}'s screen"
 msgstr "{0}의 화면"
 
-#: src/components/DraftCard.tsx:254
+#: src/components/DraftCard.tsx:280
 msgid "{app} is disconnected."
 msgstr ""
 
@@ -676,7 +676,7 @@ msgstr "로그인으로 돌아가기"
 msgid "Base URL"
 msgstr "서버 주소"
 
-#: src/components/DraftCard.tsx:247
+#: src/components/DraftCard.tsx:273
 msgid "Bcc"
 msgstr ""
 
@@ -797,7 +797,7 @@ msgstr "답장 취소"
 msgid "Cancelled"
 msgstr "취소됨"
 
-#: src/components/DraftCard.tsx:247
+#: src/components/DraftCard.tsx:273
 msgid "Cc"
 msgstr ""
 
@@ -1159,7 +1159,7 @@ msgstr "이메일로 계속하기"
 msgid "Conversation cleared"
 msgstr ""
 
-#: src/components/DraftCard.tsx:297
+#: src/components/DraftCard.tsx:369
 #: src/pages/shell/message-actions-sheet.tsx:75
 #: src/pages/shell/message-hover-actions.tsx:98
 #: src/pages/shell/message-hover-actions.tsx:169
@@ -1525,8 +1525,8 @@ msgid "Could not start teaching"
 msgstr "가르치기를 시작하지 못했습니다."
 
 #: src/components/AskCard.tsx:199
-#: src/components/DraftCard.tsx:136
-#: src/components/DraftCard.tsx:149
+#: src/components/DraftCard.tsx:161
+#: src/components/DraftCard.tsx:174
 msgid "Could not submit this answer"
 msgstr "답변을 보내지 못했습니다."
 
@@ -1547,7 +1547,7 @@ msgstr "Bot의 서버 사용 권한을 변경하지 못했습니다."
 msgid "Could not update computer"
 msgstr "컴퓨터를 업데이트할 수 없습니다"
 
-#: src/pages/shell/use-thread-send.ts:127
+#: src/pages/shell/use-thread-send.ts:115
 msgid "Could not update reaction"
 msgstr "반응을 업데이트할 수 없습니다"
 
@@ -1812,12 +1812,12 @@ msgstr ""
 msgid "Disabled"
 msgstr "비활성"
 
-#: src/components/DraftCard.tsx:288
+#: src/components/DraftCard.tsx:360
 msgid "Discard"
 msgstr ""
 
-#: src/components/DraftCard.tsx:217
-#: src/components/DraftCard.tsx:227
+#: src/components/DraftCard.tsx:240
+#: src/components/DraftCard.tsx:250
 msgid "Discarded"
 msgstr ""
 
@@ -1933,7 +1933,7 @@ msgstr "수정"
 msgid "Edit and resend"
 msgstr "편집 후 다시 보내기"
 
-#: src/components/DraftCard.tsx:339
+#: src/components/DraftCard.tsx:412
 msgid "Edit message"
 msgstr ""
 
@@ -1941,11 +1941,11 @@ msgstr ""
 msgid "Edit Profile"
 msgstr "Bot 정보 수정"
 
-#: src/components/DraftCard.tsx:251
+#: src/components/DraftCard.tsx:277
 msgid "Edited"
 msgstr ""
 
-#: src/components/DraftCard.tsx:250
+#: src/components/DraftCard.tsx:276
 msgid "Editing"
 msgstr ""
 
@@ -2066,14 +2066,14 @@ msgstr "실패"
 msgid "Failed {when}"
 msgstr "{when} 실패"
 
-#: src/pages/shell/use-thread-send.ts:295
-#: src/pages/shell/use-thread-send.ts:297
-#: src/pages/shell/use-thread-send.ts:299
+#: src/pages/shell/use-thread-send.ts:289
+#: src/pages/shell/use-thread-send.ts:291
+#: src/pages/shell/use-thread-send.ts:293
 msgid "Failed to send message"
 msgstr "메시지를 보내지 못했습니다."
 
-#: src/pages/shell/use-thread-send.ts:335
-#: src/pages/shell/use-thread-send.ts:354
+#: src/pages/shell/use-thread-send.ts:329
+#: src/pages/shell/use-thread-send.ts:348
 msgid "Failed to stop"
 msgstr "작업을 중지하지 못했습니다."
 
@@ -2853,7 +2853,7 @@ msgstr "아직 설치된 통합이 없습니다."
 
 #: src/components/ask/AskSettled.tsx:28
 #: src/components/AskCard.tsx:260
-#: src/components/DraftCard.tsx:234
+#: src/components/DraftCard.tsx:257
 msgid "No longer active"
 msgstr "이미 종료된 요청입니다"
 
@@ -2940,7 +2940,7 @@ msgstr "플러그인 카탈로그에 없음"
 msgid "Not now"
 msgstr "나중에"
 
-#: src/components/DraftCard.tsx:249
+#: src/components/DraftCard.tsx:275
 msgid "Not sent"
 msgstr ""
 
@@ -3252,7 +3252,7 @@ msgstr ""
 msgid "Recommended · {description}"
 msgstr ""
 
-#: src/components/DraftCard.tsx:313
+#: src/components/DraftCard.tsx:385
 msgid "Reconnect {app}"
 msgstr ""
 
@@ -3353,6 +3353,10 @@ msgstr "삭제"
 msgid "Remove {0}"
 msgstr "{0} 삭제"
 
+#: src/components/DraftLines.tsx:97
+msgid "Remove {address}"
+msgstr ""
+
 #: src/pages/bot-page/RoutineTriggers.tsx:235
 msgid "Remove Git event?"
 msgstr "Git 이벤트를 제거할까요?"
@@ -3418,7 +3422,7 @@ msgstr "API 키 교체"
 msgid "Replace key"
 msgstr "키 교체"
 
-#: src/components/DraftCard.tsx:231
+#: src/components/DraftCard.tsx:254
 msgid "Replaced"
 msgstr ""
 
@@ -3691,7 +3695,7 @@ msgstr "대화할 Bot을 선택하세요"
 
 #: src/components/ask/QuestionCard.tsx:205
 #: src/components/ask/QuestionCard.tsx:306
-#: src/components/DraftCard.tsx:324
+#: src/components/DraftCard.tsx:396
 #: src/pages/shell/composer.tsx:407
 msgid "Send"
 msgstr "보내기"
@@ -3705,11 +3709,11 @@ msgid "Send reset link"
 msgstr "재설정 링크 보내기"
 
 #: src/components/AskCard.tsx:304
-#: src/components/DraftCard.tsx:324
+#: src/components/DraftCard.tsx:396
 msgid "Sending…"
 msgstr "보내는 중…"
 
-#: src/components/DraftCard.tsx:209
+#: src/components/DraftCard.tsx:227
 msgid "Sent to {recipient} · {time}"
 msgstr ""
 
@@ -3955,7 +3959,8 @@ msgstr "안전하게 저장됩니다. 이 화면에 표시되지 않습니다."
 msgid "subagent"
 msgstr "보조 에이전트"
 
-#: src/components/DraftCard.tsx:277
+#: src/components/DraftCard.tsx:343
+#: src/components/DraftCard.tsx:349
 msgid "Subject"
 msgstr ""
 
@@ -4107,8 +4112,7 @@ msgstr "실행 시각"
 msgid "Title"
 msgstr "역할"
 
-#: src/components/DraftCard.tsx:188
-#: src/components/DraftCard.tsx:247
+#: src/components/DraftCard.tsx:273
 msgid "To"
 msgstr ""
 
@@ -4138,7 +4142,7 @@ msgstr ""
 msgid "Treg token"
 msgstr "Treg 토큰"
 
-#: src/components/DraftCard.tsx:324
+#: src/components/DraftCard.tsx:396
 #: src/pages/Onboarding.tsx:685
 msgid "Try again"
 msgstr "다시 시도"
@@ -4155,7 +4159,7 @@ msgstr "섹션 없음"
 msgid "Unavailable"
 msgstr "사용할 수 없음"
 
-#: src/components/DraftCard.tsx:223
+#: src/components/DraftCard.tsx:246
 msgid "Undo"
 msgstr ""
 
@@ -4172,7 +4176,7 @@ msgid "Unpin"
 msgstr "고정 해제"
 
 #. placeholder {0}: pending.file.name
-#: src/pages/shell/use-thread-send.ts:206
+#: src/pages/shell/use-thread-send.ts:195
 msgid "Unsupported file type: {0}"
 msgstr "지원하지 않는 파일 형식: {0}"
 
@@ -4386,7 +4390,7 @@ msgstr "매년 {date} {time}"
 msgid "Yesterday"
 msgstr "어제"
 
-#: src/components/DraftCard.tsx:63
+#: src/components/DraftCard.tsx:61
 #: src/pages/Shell.tsx:136
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"

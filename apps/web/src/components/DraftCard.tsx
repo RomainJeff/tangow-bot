@@ -1,25 +1,28 @@
 import { useLingui } from "@lingui/react/macro";
-import type { AskDraft } from "@rakazo/contracts";
+import type { AskDraft, AskDraftEdits } from "@rakazo/contracts";
 import { ASK_DRAFT_TEXT_MAX_LENGTH } from "@rakazo/contracts";
 import type { DraftCard as DraftCardBlock, DraftLocal } from "@rakazo/core";
 import {
   DRAFT_UNDO_MS,
-  draftAddresses,
   draftCardView,
+  draftChanges,
   draftPrimaryAction,
   draftSentTo,
 } from "@rakazo/core";
 import { Button, FramedBlock, Textarea, UserAvatar } from "@rakazo/ui-web";
 import { Check, Copy, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { authClient } from "../lib/auth";
 import { draftEdits } from "../lib/draft-edits";
 import { messageTimeLabel } from "../lib/message-time";
 import { userInitials } from "../lib/user-initials";
 import type { CardEdits } from "./AskCard";
+import { heldBack, RecipientLine, SubjectLine } from "./DraftLines";
 
 const ROLES = ["to", "cc", "bcc"] as const;
+type Role = (typeof ROLES)[number];
 
 function AppLogo({ app }: { app: AskDraft["app"] }) {
   return app.logo ? (
@@ -97,8 +100,13 @@ export function DraftCard({
 }) {
   const { t, i18n } = useLingui();
   const { draft } = block;
-  const [edit, setEdit] = useState(() => draftEdits.get(messageId) ?? null);
+  const [edit, setEdit] = useState<AskDraftEdits>(() => draftEdits.get(messageId) ?? {});
   const [focused, setFocused] = useState(false);
+  // What each line's field holds, not yet an address: kept here so it outlives the line.
+  const [typed, setTyped] = useState<Partial<Record<Role, string>>>({});
+  // Cc and Bcc lines the person opened or changed: they stay shown even when empty.
+  const [opened, setOpened] = useState<ReadonlySet<Role>>(new Set());
+  const lineId = useId();
   const [pending, setPending] = useState<DraftLocal["pending"]>(null);
   const [error, setError] = useState<string | null>(null);
   const [reconnectOpened, setReconnectOpened] = useState(false);
@@ -107,28 +115,47 @@ export function DraftCard({
   const discardTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const commitDiscardRef = useRef<() => void>(() => undefined);
 
-  const text = edit ?? draft.body;
-  const edited = text !== draft.body;
+  const text = edit.text ?? draft.body;
+  const recipients = edit.recipients ?? draft.recipients;
+  const changes = draftChanges(draft, edit);
+  const edited = Object.keys(changes).length > 0;
   const owner = !draft.owner || draft.owner.userId === viewerUserId;
   const view = draftCardView(block, { edited, focused, pending, canAnswer, owner });
+  const sendable =
+    text.trim() !== "" &&
+    recipients.some((recipient) => recipient.role === "to") &&
+    !ROLES.some((role) => heldBack(typed[role] ?? ""));
 
-  function keepEdit(next: string) {
-    setEdit(next);
-    draftEdits.set(messageId, next);
+  function keepEdit(next: AskDraftEdits) {
+    const merged = { ...edit, ...next };
+    setEdit(merged);
+    draftEdits.set(messageId, merged);
   }
 
   function dropEdit() {
-    setEdit(null);
+    setEdit({});
     draftEdits.delete(messageId);
   }
 
+  function keepRole(role: Role, addresses: string[]) {
+    const others = recipients.filter((recipient) => recipient.role !== role);
+    const next = [...others, ...addresses.map((address) => ({ role, address }))];
+    keepEdit({ recipients: ROLES.flatMap((each) => next.filter((r) => r.role === each)) });
+    if (role !== "to") setOpened((current) => new Set(current).add(role));
+  }
+
+  function openLine(role: Role) {
+    flushSync(() => setOpened((current) => new Set(current).add(role)));
+    document.getElementById(`${lineId}-${role}`)?.focus();
+  }
+
   async function send() {
-    if (pending || !text.trim()) return;
+    if (pending || !sendable) return;
     setReconnectOpened(false);
     setPending("send");
     setError(null);
     try {
-      await onAnswer("allow", edited ? { text } : undefined);
+      await onAnswer("allow", edited ? changes : undefined);
       dropEdit();
     } catch (err) {
       setError(err instanceof Error ? err.message : t`Could not submit this answer`);
@@ -252,28 +279,74 @@ export function DraftCard({
   const primary = draftPrimaryAction(view.failure, reconnectOpened);
   const reason = view.failure?.disconnected ? t`${app} is disconnected.` : view.failure?.reason;
 
+  // Lines change only on a draft that records where its recipients and subject sit.
+  const fields = view.readOnly || view.sending ? undefined : draft.fields;
+  const subject = edit.subject ?? draft.subject ?? "";
+  const addressesOf = (role: Role) =>
+    recipients.filter((recipient) => recipient.role === role).map((recipient) => recipient.address);
+  // An empty Cc or Bcc names nobody: it opens from the To line on demand.
+  const shown = (role: Role) =>
+    role === "to" || addressesOf(role).length > 0 || Boolean(typed[role]) || opened.has(role);
+  const hidden = ROLES.filter((role) => fields?.[role] !== undefined && !shown(role));
+
   return (
     <FramedBlock
       data-testid="draft-card"
       header={{ ...header, status: view.status ? marks[view.status] : undefined }}
+      onFocus={(event) => setFocused(Boolean(event.target.closest("[data-draft-field]")))}
+      onBlur={(event) => {
+        const next = event.relatedTarget;
+        if (!(next instanceof Element && next.closest("[data-draft-field]"))) setFocused(false);
+      }}
       question={
         <div className="flex flex-col gap-1">
           {ROLES.map((role) => {
-            const addresses = draftAddresses(draft, role);
-            if (!addresses) return null;
+            const addresses = addressesOf(role);
+            const room = fields?.[role];
+            if (room !== undefined) {
+              if (!shown(role)) return null;
+              return (
+                <RecipientLine
+                  key={role}
+                  id={`${lineId}-${role}`}
+                  label={roleLabel[role]}
+                  addresses={addresses}
+                  typed={typed[role] ?? ""}
+                  room={room}
+                  strong={role === "to"}
+                  onChange={(next) => keepRole(role, next)}
+                  onTyped={(next) => setTyped((current) => ({ ...current, [role]: next }))}
+                  more={
+                    role === "to"
+                      ? hidden.map((each) => ({
+                          label: roleLabel[each],
+                          open: () => openLine(each),
+                        }))
+                      : undefined
+                  }
+                />
+              );
+            }
+            if (!addresses.length) return null;
             return (
               <p
                 key={role}
                 className={role === "to" ? "break-words" : "break-words text-body font-normal"}
               >
                 <span className="font-normal text-muted-foreground">{roleLabel[role]}</span>{" "}
-                {addresses}
+                {addresses.join(", ")}
               </p>
             );
           })}
-          {draft.subject ? (
+          {fields?.subject ? (
+            <SubjectLine
+              label={t`Subject`}
+              subject={subject}
+              onChange={(next) => keepEdit({ subject: next })}
+            />
+          ) : subject ? (
             <p className="break-words text-body font-normal">
-              <span className="text-muted-foreground">{t`Subject`}</span> {draft.subject}
+              <span className="text-muted-foreground">{t`Subject`}</span> {subject}
             </p>
           ) : null}
         </div>
@@ -317,7 +390,7 @@ export function DraftCard({
                 variant="capsule"
                 size="capsule"
                 consequential
-                disabled={view.sending || !text.trim()}
+                disabled={view.sending || !sendable}
                 onClick={() => void send()}
               >
                 {view.sending ? t`Sending…` : primary === "try_again" ? t`Try again` : t`Send`}
@@ -335,14 +408,13 @@ export function DraftCard({
             </p>
           ) : (
             <Textarea
+              data-draft-field
               aria-label={t`Edit message`}
               dir="auto"
               value={text}
               readOnly={view.sending}
               maxLength={ASK_DRAFT_TEXT_MAX_LENGTH}
-              onChange={(event) => keepEdit(event.target.value)}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
+              onChange={(event) => keepEdit({ text: event.target.value })}
               className="min-h-0 w-auto min-w-0 flex-1 resize-none rounded-card border-0 bg-well px-4 py-3 text-body text-foreground duration-(--duration-hover) ease-quiet read-only:text-muted-foreground hover:ring-1 hover:ring-option-ring-hover focus-visible:ring-selected focus-visible:ring-foreground md:text-body dark:bg-well"
             />
           )}

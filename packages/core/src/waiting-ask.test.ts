@@ -44,6 +44,36 @@ describe("editedWaitingDraft", () => {
     });
   });
 
+  it("hands edited recipients and subject with the text the card shows", () => {
+    const fielded = { ...pendingDraft, draft: { ...draft, fields: { to: null, subject: true } } };
+    const recipients = [{ role: "to" as const, address: "paul@example.com" }];
+    expect(
+      editedWaitingDraft(waitingOn(fielded), () => ({ recipients, subject: "Friday" })),
+    ).toEqual({
+      itemId: "card-1",
+      draft: {
+        messageId: "asked-again-2",
+        text: "Thursday instead?",
+        recipients,
+        subject: "Friday",
+      },
+    });
+    // The same people in another case are no change, as the server reads them.
+    const recased = [{ role: "to" as const, address: "Marie@Example.com" }];
+    expect(editedWaitingDraft(waitingOn(fielded), () => ({ recipients: recased }))).toBeUndefined();
+  });
+
+  it("leaves out lines Send would refuse and still hands the text", () => {
+    const fielded = { ...pendingDraft, draft: { ...draft, fields: { to: null } } };
+    expect(
+      editedWaitingDraft(waitingOn(fielded), () => ({ recipients: [], text: "Friday instead?" })),
+    ).toEqual({
+      itemId: "card-1",
+      draft: { messageId: "asked-again-2", text: "Friday instead?" },
+    });
+    expect(editedWaitingDraft(waitingOn(fielded), () => ({ recipients: [] }))).toBeUndefined();
+  });
+
   it("replaces nothing for the bot's own text, an untouched card or a card that is not a draft", () => {
     expect(editedWaitingDraft(waitingOn(pendingDraft), () => "Thursday instead?")).toBeUndefined();
     expect(editedWaitingDraft(waitingOn(pendingDraft), () => undefined)).toBeUndefined();
