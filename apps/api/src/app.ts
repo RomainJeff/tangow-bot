@@ -22,6 +22,7 @@ import {
   applyMessagingOutboundStatus,
   ChatSdkMessagingSurface,
   ComposioConnector,
+  composeInProcessRuntime,
   composeWorkers,
   createBackgroundJobHandlers,
   createConnectorStack,
@@ -54,7 +55,6 @@ import {
   McpConnector,
   McpOAuthBroker,
   messagingPlatformsFromEnv,
-  PiAgentRuntime,
   PiOAuthLogins,
   PipedreamConnector,
   PostgresRealtimeFanout,
@@ -63,7 +63,6 @@ import {
   pushTokenPath,
   reconcileComputerUpdates,
   removeUserSkillDirs,
-  ScriptedAgentRuntime,
   SmtpEmailProvider,
   SpaceDecisionProviderResolver,
   SpaceMemoryProviderResolver,
@@ -243,6 +242,14 @@ export async function createApp(
     prisma,
     workersOverride ?? createWorkerProvider(env.workerProvider),
   );
+  // Optional trace export of the controller's model calls. Without configuration this resolves
+  // to nothing, so no span is recorded and no vendor endpoint is ever contacted.
+  const traceExport = createTraceExporterFromEnv(process.env);
+  if (traceExport.warning) logger.warn(traceExport.warning);
+  const runtime = composeInProcessRuntime(env.agentRuntime, workers, {
+    exporter: traceExport.exporter,
+    serviceName: SERVICE_NAMES.api,
+  });
   const memory = new MarkdownMemoryStore(prisma);
   const mcp = new McpConnector(
     prisma,
@@ -306,18 +313,6 @@ export async function createApp(
   const connector = stack.destination;
   await connector.start();
   integrationSettings.warmDirectories();
-  // Optional agent trace export. Without configuration this resolves to nothing,
-  // so the runtime records no spans and no vendor endpoint is ever contacted.
-  const traceExport = createTraceExporterFromEnv(process.env);
-  if (traceExport.warning) logger.warn(traceExport.warning);
-  const runtime =
-    env.agentRuntime === "scripted"
-      ? new ScriptedAgentRuntime()
-      : new PiAgentRuntime({
-          ...(traceExport.exporter
-            ? { traceExporter: traceExport.exporter, serviceName: SERVICE_NAMES.api }
-            : {}),
-        });
   const notifications = new ExpoPushProvider(env.dataDir);
   const auth = createAuth(prisma, {
     secret: env.authSecret,

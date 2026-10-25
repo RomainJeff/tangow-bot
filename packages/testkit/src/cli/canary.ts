@@ -22,7 +22,6 @@ async function main() {
       REALTIME_DATABASE_URL: postgres?.getConnectionUri() ?? "",
       VERIFY_PROVIDERS: "1",
       WAKEUP_DRIVER: "memory",
-      AGENT_RUNTIME: "pi",
       SANDBOX_PROVIDER: "fake",
       COMPOSIO_API_KEY: "",
       MAX_TOOL_CALLS_PER_TURN: "24",

@@ -1,5 +1,7 @@
 # P0 real-model comparison
 
+> Removed. The evaluator (`pnpm eval:pi-sdk`, `packages/adapters/src/pi-live-eval*.ts`) and the in-process `PiAgentRuntime` it compared were deleted when every run moved to workers ([#317](https://github.com/RomainJeff/rakazo-bot/issues/317)). This page records the pilot's results; its commands no longer run.
+
 The real-model pilots find no consistent latency or quality improvement on these workloads. Every variant passes 11 of 12 short tasks and all six longer tasks. The evaluator source was frozen at `79cccff84` before that pilot. The earlier microbenchmark and its failed diagnostic budget remain in [P0-handoff.md](P0-handoff.md).
 
 The question is whether task completion, latency and token use change when the session engine or file tools change. The pilot uses real OpenAI Responses requests to `gpt-6-luna`, with medium reasoning, a 4,096-token response limit, a 40-tool budget and a 180-second task deadline.

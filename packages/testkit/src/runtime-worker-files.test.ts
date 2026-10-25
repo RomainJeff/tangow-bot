@@ -1,9 +1,6 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import type { ComputerRef } from "@rakazo/adapter-kit";
-import { PiAgentRuntime } from "@rakazo/adapters";
 import { afterEach, describe, expect, it } from "vitest";
-import { fileTask, nativeFileTask, toolResult } from "./file-task.js";
+import { toolResult } from "./file-task.js";
 import type { ModelEmulatorStep } from "./model-emulator.js";
 import { afterPrivateText, startWorkerRun } from "./worker-run-fixture.js";
 
@@ -13,49 +10,6 @@ afterEach(async () => {
 });
 
 const recap = JSON.stringify({ version: 1, results: ["Edited notes.md"], references: [] });
-
-async function runTask(arm: "in_process" | "worker") {
-  const seen: string[] = [];
-  let file: string | undefined;
-  const run = await startWorkerRun({
-    steps: (arm === "worker" ? nativeFileTask : fileTask)(seen, () => {
-      file = readFileSync(path.join(run.provider.volumePath("bot_private"), "notes.md"), "utf8");
-    }),
-    ...(arm === "in_process" ? { runtime: () => new PiAgentRuntime() } : {}),
-  });
-  cleanups.push(() => run.close());
-  const runId = await run.send("Write, edit, read and list a note.");
-  await run.continueRun(runId);
-  run.model.assertComplete();
-  const results = (await run.runEntries(runId)).flatMap((entry) =>
-    entry.type === "tool.result" ? [[entry.payload.output, entry.payload.isError]] : [],
-  );
-  return { seen, results, file };
-}
-
-describe("a file task in a worker", () => {
-  it("leaves the same final file as in process through the native tool contracts", async () => {
-    const inProcess = await runTask("in_process");
-    const worker = await runTask("worker");
-
-    expect(inProcess.file).toBe("alpha\ngamma\n");
-    expect(inProcess.seen).toEqual([
-      '{"ok":true,"path":"notes.md"}',
-      '{"error":"file already exists; use edit_file to change part of it, or set overwrite to true to replace it whole","path":"notes.md"}',
-      '{"ok":true,"path":"notes.md","replacements":1}',
-      '{"error":"old_text not found; read the file again with read_file and copy the text exactly","path":"notes.md"}',
-      '{"path":"notes.md","content":"gamma\\n","startLine":2,"endLine":2,"totalLines":2}',
-      '{"path":"","entries":[{"path":"notes.md","kind":"file","size":12}]}',
-      expect.stringContaining('"ok":true'),
-    ]);
-    expect(worker.file).toBe(inProcess.file);
-    expect(worker.seen[0]).toContain("Successfully wrote");
-    expect(worker.seen[1]).toContain("Successfully replaced");
-    expect(worker.seen[2]).toContain("Could not find");
-    expect(worker.seen[3]).toContain("gamma");
-    expect(worker.seen[4]).toContain("notes.md");
-  });
-});
 
 describe("a product run in a worker", () => {
   it("shares the bot's and the space's files with the computer, both ways", async () => {

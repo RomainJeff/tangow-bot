@@ -2,6 +2,8 @@
 
 Issue : [#317](https://github.com/RomainJeff/rakazo-bot/issues/317).
 
+Statut : tranches 0 à 4 livrées dans `feature/docker-workers` ; il ne reste qu'une seule boucle d'agent, `pi-native` dans un worker E2B ou Docker. La tranche 3b (report des homes Docker vers E2B) avance à part.
+
 ## Pourquoi
 
 Il reste deux boucles d'agent. Sur E2B, `pi-native` tourne dans un worker par tentative. Partout ailleurs, `PiAgentRuntime` (`packages/adapters/src/pi-runtime.ts`, 2 000 lignes) fait tourner l'ancienne boucle dans le job worker. Chaque comportement est donc écrit et testé deux fois. Un provider worker Docker fait passer l'installation par défaut sur la même architecture qu'E2B, et l'ancienne boucle peut disparaître.
@@ -85,7 +87,13 @@ L'image `rakazo/worker` contient exactement ce que contient le template E2B (`ap
   - le garde dans `apps/api/src/router.ts` ;
   - les champs `computerHost` des contrats et de la base, avec une migration qui supprime la colonne ;
   - les specs `host-computer-prompt` et `local-settings`.
-- **`AGENT_RUNTIME=pi`** dans les fichiers Compose et `.env.example`.
+- **`AGENT_RUNTIME=pi`** dans les fichiers Compose et `.env.example`. `AGENT_RUNTIME` ne sert plus qu'à choisir `scripted` dans les tests ; toute autre valeur fait tourner les bots dans des workers, et l'app refuse de démarrer sans provider worker.
+- **Ce que la tranche 4b a découvert en plus** :
+  - compaction, faits appris, juge de team chat et auto-review appelaient un modèle à travers `PiAgentRuntime`. Ils passent par `ModelCallRuntime`, un appel unique sans outils sur `streamRunModel` ;
+  - le skill nudge de fin d'échange ne tournait déjà plus pour les runs worker : il est supprimé, et `SKILL_LEARNING=on` se comporte comme `shadow` ;
+  - l'export de traces (Langfuse/OTLP) n'était branché que sur `PiAgentRuntime` : `ModelCallRuntime` exporte désormais une trace par appel du contrôleur, et le traçage des runs worker au relais viendra dans un suivi ;
+  - `skill.learnt` ne s'écrit que depuis les effets `skill_create`/`skill_update`, que les runs worker n'émettent pas : la ligne « Skill learned » ne s'affiche pas pour un skill écrit nativement (suivi à part) ;
+  - les outils `test:computer`, `test:computer-replay` et `harness --runtime=pi`, qui pilotaient la boucle in-process, disparaissent ; les canaries et les evals passent par `LocalWorkerProvider` en process enfant.
 
 ## Le runtime `scripted`
 
@@ -95,7 +103,7 @@ Les E2E et la topologie tournent avec `ScriptedAgentRuntime`, en in-process. On 
 
 La tranche 4 supprime le chemin in-process. Un computer dont le home est encore sur snapshots ne pourrait alors plus tourner.
 
-- **Docker** : la migration tourne automatiquement dans le service Compose `migrate`, avant le démarrage de l'api et du job worker. Ce service monte `/data` et tourne avec l'uid 1000 de l'image. Il ne déplace que les computers au repos : arrêtés ou suspendus, sans personne aux commandes et sans bail vivant. Les autres sont déplacés par le job de mise en veille quand ils se suspendent, avant leur prochain démarrage. La tranche 4b ajoute pour Docker le même refus au démarrage que pour E2B, tant qu'un home n'est pas migré.
+- **Docker** : la migration tourne automatiquement dans le service Compose `migrate`, avant le démarrage de l'api et du job worker. Ce service monte `/data` et tourne avec l'uid 1000 de l'image. Il ne déplace que les computers au repos : arrêtés ou suspendus, sans personne aux commandes et sans bail vivant. Les autres sont déplacés par le job de mise en veille quand ils se suspendent, avant leur prochain démarrage. Pas de refus au démarrage pour Docker (décision de la tranche 4b) : tant que son home n'a pas bougé, un run de ce computer qui a besoin de fichiers échoue avec « This computer's home move is pending, so file work can't run yet » (`home_move_pending`). Comme tout run d'un bot qui a un computer reçoit les outils fichiers et shell, ce sont en pratique tous ses runs ; seul un bot sans computer tourne sans fichiers.
 - **E2B** : l'api refuse de démarrer tant qu'un computer E2B a encore son home sur snapshots, et l'opérateur le migre avec le script de #241. C'est déjà le parcours prévu par P6 : les nouveaux computers E2B naissent sur volumes.
 
 ## Spike

@@ -5,9 +5,8 @@ runs the bot's Pi harness with native file and `bash` tools on the bot's volumes
 (computer, browser, memory, integrations) stay on the API and worker processes, and the model key
 never enters the worker. The worker is destroyed when the run attempt ends.
 
-A run goes to a worker when `SANDBOX_PROVIDER=e2b` and the bot's computer keeps its home on volumes.
-Every other run stays in process, as on `docker`, which runs no workers. Docker workers are a later exploration
-([#317](https://github.com/RomainJeff/rakazo-bot/issues/317)).
+Every run goes to a worker. A Docker deployment runs its workers as containers instead
+([self-host](self-host.md)).
 
 To add a worker provider, see
 [how to add a worker provider](./implementation/pi-e2b/adding-a-worker-provider.md).
@@ -189,7 +188,7 @@ A new space on E2B gets a team computer whose home is on volumes. A dedicated co
 later takes the storage of its space's team computer. Its runs go to workers with no move.
 
 Until upgraded, a computer created before this release keeps its home in snapshots under `DATA_DIR`,
-and its runs stay in process. The setup command above moves these homes as part of the upgrade. The following manual commands are for controlled recovery or standalone moves with `scripts/migrate-home-to-volumes.ts`. The move is
+and the API refuses to start. The setup command above moves these homes as part of the upgrade. The following manual commands are for controlled recovery or standalone moves with `scripts/migrate-home-to-volumes.ts`. The move is
 one way: Rakazo has no command to move a home back to snapshots. The snapshot stays in `DATA_DIR`
 as the pre-move original, and nothing writes to it after the move.
 
@@ -289,8 +288,7 @@ the bots work on E2B.
    ```
 
 2. Send a message to a bot whose computer is on volumes, and wait for the reply. Each model request
-   of a worker run logs `agent.worker.model_request` with the run's `runId` and `attemptId`. A run
-   that stays in process logs none:
+   of a worker run logs `agent.worker.model_request` with the run's `runId` and `attemptId`:
 
    ```bash
    $compose logs api worker | grep agent.worker.model_request

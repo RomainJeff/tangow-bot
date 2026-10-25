@@ -344,9 +344,8 @@ export function createWorkerLifecycle(deps: {
   }
 
   return {
-    /** Without a provider, answers in process with no query; with one, a single indexed read. */
+    /** One indexed read. */
     async plan(input: { attemptId: string; needs: RunNeeds }): Promise<LaunchPlan> {
-      if (!deps.provider) return { mode: "in_process", reason: "no_worker_provider" };
       const [row] = await prisma.$queryRaw<PlanRow[]>`
         SELECT r.id AS "runId", r."botId", r."spaceId", a.fence, r."leaseFence", r.status,
           c.id AS "computerId", c."homeStorage",
