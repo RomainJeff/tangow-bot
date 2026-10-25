@@ -113,8 +113,10 @@ export type WorkerLaunch = {
 export type VolumeSlot = "private" | "shared";
 
 export type LaunchPlan =
-  | { mode: "in_process"; reason: "no_worker_provider" | "home_not_migrated" }
-  | { mode: "refused"; refusal: { code: "slot_volume_missing"; slot: VolumeSlot } }
+  | {
+      mode: "refused";
+      refusal: { code: "slot_volume_missing"; slot: VolumeSlot } | { code: "home_move_pending" };
+    }
   | { mode: "busy"; reason: "home_moving" }
   | WorkerLaunch;
 
@@ -134,7 +136,7 @@ export function planLaunch(inputs: LaunchInputs, needs: RunNeeds): LaunchPlan {
   if (inputs.homeMoving) return { mode: "busy", reason: "home_moving" };
   const { private: privateAccess, shared: sharedAccess } = needs.files;
   if ((privateAccess || sharedAccess) && inputs.computer?.homeStorage !== "volumes") {
-    return { mode: "in_process", reason: "home_not_migrated" };
+    return { mode: "refused", refusal: { code: "home_move_pending" } };
   }
   const slots: Array<[VolumeSlot, VolumeAccess | null, string | null]> = [
     ["private", privateAccess, inputs.privateVolumeId],

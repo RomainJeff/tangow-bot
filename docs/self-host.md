@@ -123,6 +123,9 @@ child commands do not receive them.
 
 ### Agent traces
 
+Bot runs in workers do not export traces yet, so these settings currently send nothing; the export
+below described the in-process runtime, which was removed.
+
 Exporting agent traces is optional and off unless configured. Set both `LANGFUSE_PUBLIC_KEY` and
 `LANGFUSE_SECRET_KEY` to send each run to an OpenTelemetry endpoint as a tree: the run, one
 generation per turn, one span per tool call, with prompts, responses, tool results, token counts and
@@ -145,7 +148,6 @@ Optional:
 SIGNUPS_ENABLED=true
 SIGNUP_ALLOWLIST=you@example.com,@company.com
 SANDBOX_PROVIDER=docker   # or e2b. Keep fake only for pnpm test.
-AGENT_RUNTIME=pi          # Keep scripted only for pnpm test.
 WAKEUP_DRIVER=graphile
 SANDBOX_IDLE_MS=600000    # pause the bot computer after 10 minutes idle
 SANDBOX_COMMAND_TIMEOUT_MS=300000 # stop a shell command after 5 minutes
@@ -218,48 +220,17 @@ API and worker read it at start.
 
 - `off`: a bot saves a skill when it judges a task worth repeating, and mentions `/Name` after
   creating or updating one.
-- `shadow` (default): a bot keeps or improves the skill it followed and no longer mentions it, since the
-  line under its message shows the change. At the end of each conversation turn the user started,
-  the worker also decides whether that turn earns the private follow-up described under `on`, and
-  records the decision without running it.
-- `on`: the same, and a turn that ends with a reply after 15 or more tool calls, or after a step
-  failed while the bot followed a skill, gets one private follow-up in which the bot may only read,
-  search, create and update skills. It posts nothing; a skill it saves gets its line under the
-  reply.
+- `shadow` (default) and `on`: a bot keeps or improves the skill it followed and no longer mentions
+  it, since the line under its message shows the change.
 
 Unset or empty means `shadow`; a value that is not one of the three means `off`.
 
 `shadow` and `on` both stop the bot's announcement, so a client that does not show the skill line
 shows nothing when a skill changes. The web app always shows it; the desktop app and the iPhone app
 do from the release that added the line. If some clients in use are older, set `SKILL_LEARNING=off`
-until the desktop app is rebuilt and the iPhone app updated. Once the `agent.skill_nudge` decisions
-below look right, move to `on`. To switch, set `SKILL_LEARNING` in `.env` and recreate the `api` and
-`worker` services with the `docker compose ... up -d` command you deploy with.
-
-In `shadow` and `on`, each decision is logged by the worker as `agent.skill_nudge`, with `decision`
-`nudge` or `skip` and the `reason` of a skip:
-
-```bash
-docker compose --env-file .env -f infra/compose/docker-compose.prod.yml logs worker \
-  | grep agent.skill_nudge
-```
-
-It is also stored as an `agent.skill.nudge` event of the turn's run: `phase` `decided` for a turn
-that earns the follow-up, `skipped` with its `reason` otherwise (turns the user did not start are
-not stored). Count them over the last week in `psql`:
-
-```sql
-SELECT coalesce(payload->>'reason', 'nudge') AS outcome, count(*)
-FROM events
-WHERE type = 'agent.skill.nudge'
-  AND payload->>'phase' IN ('decided', 'skipped')
-  AND "createdAt" > now() - interval '7 days'
-GROUP BY 1
-ORDER BY 2 DESC;
-```
-
-Aim for `nudge` on 10 to 15 % of the turns counted, leaving out `no_reply` and `budget_exhausted`.
-Well above that, the follow-up costs a model call on most long turns; well below, it rarely runs.
+until the desktop app is rebuilt and the iPhone app updated. To switch, set `SKILL_LEARNING` in
+`.env` and recreate the `api` and `worker` services with the `docker compose ... up -d` command you
+deploy with.
 
 Live evaluations of this behaviour are described in [agent verification](agent-verification.md).
 
@@ -269,7 +240,7 @@ The Electron desktop app is a client of the same API, with the same Docker or E2
 
 - **Docker** is the default for a source checkout and the full local Compose stack. No E2B account
   required. Workspace bots share a persistent Team Computer by default; Private computers are
-  optional. Each bot run that uses files works in its own worker container, and bot homes live on
+  optional. Each bot run works in its own short-lived worker container, and bot homes live on
   volumes under `DATA_DIR/volumes`, mounted by the workers and the computer alike. Keep the
   supervisor private, as the included Compose files do. On Docker Desktop (macOS, Windows) a worker
   can reach the host's localhost through `host.docker.internal`; see
@@ -340,7 +311,6 @@ SIGNUPS_ENABLED=true
 SIGNUP_ALLOWLIST=owner@example.com,reviewer@example.com
 # docker or e2b
 SANDBOX_PROVIDER=e2b
-AGENT_RUNTIME=pi
 WAKEUP_DRIVER=graphile
 DATA_DIR=/data
 # Absolute path of this checkout as the Docker daemon sees it. /srv/rakazo is the Linux default;

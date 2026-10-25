@@ -350,41 +350,29 @@ describe("a worker run's computer", () => {
     expect(await bot.leases()).toEqual([{ runId, held: false }]);
   });
 
-  it.each([
-    ["in a worker", "volumes"],
-    ["in process", "snapshot"],
-  ])(
-    "starts the computer for a takeover %s and holds it for the person, with no tool result logged",
-    async (_where, homeStorage) => {
-      const bot = await botRun([
-        {
-          expect() {},
-          response: {
-            type: "tool",
-            id: "hand",
-            name: "request_takeover",
-            arguments: { reason: "Log in" },
-          },
+  it("starts the computer for a takeover and holds it for the person, with no tool result logged", async () => {
+    const bot = await botRun([
+      {
+        expect() {},
+        response: {
+          type: "tool",
+          id: "hand",
+          name: "request_takeover",
+          arguments: { reason: "Log in" },
         },
-        // Pi native closes its turn once the controller answers that the run waits.
-        ...(homeStorage === "volumes"
-          ? [{ expect() {}, response: { type: "text" as const, text: "" } }]
-          : []),
-      ]);
-      await bot.run.prisma.computer.update({
-        where: { id: bot.run.bot.computerId! },
-        data: { homeStorage },
-      });
-      const runId = await bot.start();
+      },
+      // Pi native closes its turn once the controller answers that the run waits.
+      { expect() {}, response: { type: "text" as const, text: "" } },
+    ]);
+    const runId = await bot.start();
 
-      expect((await bot.run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
-        "waiting_takeover",
-      );
-      expect(await bot.computer()).toBe("running");
-      expect(await bot.leases()).toEqual([{ runId, held: true }]);
-      expect(await bot.toolEntries(runId)).toEqual([]);
-    },
-  );
+    expect((await bot.run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+      "waiting_takeover",
+    );
+    expect(await bot.computer()).toBe("running");
+    expect(await bot.leases()).toEqual([{ runId, held: true }]);
+    expect(await bot.toolEntries(runId)).toEqual([]);
+  });
 
   it("answers a takeover with a busy error while another run of the bot holds the computer", async () => {
     let result: unknown;
@@ -545,7 +533,6 @@ describe("computer_exec", () => {
 
   it.each([
     ["a worker run with a computer", "team", "volumes", ["bash", "computer_exec"]],
-    ["a run in process", "team", "snapshot", ["shell"]],
     ["a run without a computer", "none", null, []],
   ] as const)("is offered to %s", async (_run, scope, homeStorage, offered) => {
     let tools: string[] = [];

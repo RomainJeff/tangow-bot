@@ -11,6 +11,7 @@ loadRootEnv();
 
 import {
   ChatSdkMessagingSurface,
+  composeInProcessRuntime,
   composeWorkers,
   createBackgroundJobHandlers,
   createConnectorStack,
@@ -23,7 +24,6 @@ import {
   createRunSecretWriter,
   createSandboxProvider,
   createSkillLineSweep,
-  createTraceExporterFromEnv,
   createWebProvider,
   createWorkerProvider,
   databaseCapacityBackoffMs,
@@ -42,7 +42,6 @@ import {
   McpOAuthBroker,
   messagingEnvFromProcess,
   messagingPlatformsFromEnv,
-  PiAgentRuntime,
   PipedreamConnector,
   PostgresRealtimeFanout,
   PostgresSessionLog,
@@ -51,7 +50,6 @@ import {
   resolveDeploymentModel,
   resolveSandboxProvider,
   resolveWorkerProvider,
-  ScriptedAgentRuntime,
   SpaceDecisionProviderResolver,
   SpaceMemoryProviderResolver,
 } from "@rakazo/adapters";
@@ -90,18 +88,6 @@ async function main() {
     runSecretWriter: createRunSecretWriter(secrets),
   });
   const dataDir = process.env.DATA_DIR ?? "./data";
-  // Optional agent trace export. Absent configuration resolves to nothing here,
-  // so the runtime records no spans and no vendor endpoint is ever contacted.
-  const traceExport = createTraceExporterFromEnv(process.env);
-  if (traceExport.warning) logger.warn(traceExport.warning);
-  const runtime =
-    process.env.AGENT_RUNTIME === "scripted"
-      ? new ScriptedAgentRuntime()
-      : new PiAgentRuntime({
-          ...(traceExport.exporter
-            ? { traceExporter: traceExport.exporter, serviceName: SERVICE_NAMES.worker }
-            : {}),
-        });
   // Same resolver the API uses, so both processes agree on provider, model and key.
   const { key: deploymentModelKey } = resolveDeploymentModel();
   const sandboxProvider = resolveSandboxProvider(process.env);
@@ -169,6 +155,7 @@ async function main() {
   const home = new LocalAgentHomeStore(dataDir);
   const artifacts = new LocalArtifactStore(dataDir);
   const workers = composeWorkers(prisma, createWorkerProvider(resolveWorkerProvider(process.env)));
+  const runtime = composeInProcessRuntime(process.env.AGENT_RUNTIME ?? "", workers);
   const inMemoryJobs = process.env.WAKEUP_DRIVER === "memory" ? new InMemoryJobQueue() : undefined;
   const jobs: JobPublisher = inMemoryJobs ?? new GraphileJobPublisher(pool);
   const jobHost: JobWorkerHost =
@@ -311,7 +298,6 @@ async function main() {
       await pool.end().catch(() => undefined);
       await skillLockPool.end().catch(() => undefined);
     } finally {
-      await traceExport.exporter?.flush(2_000);
       await logger.flush({ timeoutMs: 2_000 });
     }
   };

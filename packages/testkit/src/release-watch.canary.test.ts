@@ -11,6 +11,7 @@ import {
 import { loadRootEnv } from "@rakazo/core/node/load-root-env";
 import { afterAll, describe, expect, it } from "vitest";
 import { sessionCookieHeader } from "./index.js";
+import { computerOnVolumes, localWorkerApp } from "./local-worker-provider.js";
 
 if (process.env.VERIFY_PROVIDERS) loadRootEnv();
 
@@ -38,14 +39,21 @@ describeLive("live release-watch eval (GPT 5.6 Luna + GitHub emulator)", () => {
 
     const { createApp } = await import("../../../apps/api/src/app.ts");
     dataDir = mkdtempSync(path.join(tmpdir(), "rakazo-release-watch-"));
+    const local = localWorkerApp(path.join(dataDir, "workers"));
     const handles = await createApp({
       databaseUrl: process.env.DATABASE_URL!,
       dataDir,
       sandboxProvider: "fake",
-      agentRuntime: "pi",
       composio,
+      ...local,
     });
-    stop = handles.stop;
+    stop = async () => {
+      try {
+        await handles.stop();
+      } finally {
+        await local.workers.dispose();
+      }
+    };
 
     const stamp = Date.now();
     const signup = await handles.app.request("/api/auth/sign-up/email", {
@@ -95,6 +103,7 @@ describeLive("live release-watch eval (GPT 5.6 Luna + GitHub emulator)", () => {
       instructions: "You are a chief of staff.",
       notifyOnFinish: true,
     });
+    await computerOnVolumes(handles.prisma, bot.id);
 
     // Mirror the Discord user ask: no tool names, no Bing/browser coaching.
     // schedule_create + connected-plugin guidance should steer the model.

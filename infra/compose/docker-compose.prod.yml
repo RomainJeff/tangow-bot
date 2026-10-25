@@ -100,7 +100,6 @@ services:
       DATA_DIR: /data
       SANDBOX_PROVIDER: ${SANDBOX_PROVIDER:-e2b}
       WAKEUP_DRIVER: graphile
-      AGENT_RUNTIME: pi
       # Optional egress proxy (Mainland / corporate). Empty = unset; either case works.
       HTTP_PROXY: ${HTTP_PROXY:-${http_proxy:-}}
       HTTPS_PROXY: ${HTTPS_PROXY:-${https_proxy:-}}
@@ -158,7 +157,6 @@ services:
       SANDBOX_PROVIDER: ${SANDBOX_PROVIDER:-e2b}
       SCREEN_PROXY_SECRET: ""
       WAKEUP_DRIVER: graphile
-      AGENT_RUNTIME: pi
       # Optional egress proxy (Mainland / corporate). Empty = unset; either case works.
       HTTP_PROXY: ${HTTP_PROXY:-${http_proxy:-}}
       HTTPS_PROXY: ${HTTPS_PROXY:-${https_proxy:-}}

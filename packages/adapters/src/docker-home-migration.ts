@@ -165,7 +165,8 @@ export async function moveIdleDockerHomes(
       if (move.outcome === "adopted") counts.adopted += 1;
       if (move.outcome === "refused") {
         counts.deferred += 1;
-        getLogger().info("docker home move deferred", { computerId: id, reason: move.code });
+        // A busy computer is tried again at each sleep attempt, so its wait stays quiet.
+        getLogger().debug("docker home move deferred", { computerId: id, reason: move.code });
       }
     } catch (error) {
       if (!isHomeConflict(error)) throw error;

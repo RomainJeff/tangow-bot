@@ -194,7 +194,7 @@ describe("model setup gate", () => {
   }
 
   it("refuses to start a run when no model is configured", async () => {
-    const { actor, handler } = modelGateDeps({ agentRuntime: "pi" });
+    const { actor, handler } = modelGateDeps({ agentRuntime: "worker" });
 
     const response = await call(handler, actor, "threads/send", {
       botId: "bot-1",
@@ -223,7 +223,7 @@ describe("model setup gate", () => {
 
   it("accepts a deployment model key as model configuration", async () => {
     const { actor, handler } = modelGateDeps({
-      agentRuntime: "pi",
+      agentRuntime: "worker",
       deploymentModelKey: "fake-deployment-key",
     });
 
@@ -237,7 +237,7 @@ describe("model setup gate", () => {
 
   it("does not accept a stored deployment cipher the executor cannot use", async () => {
     const { actor, handler } = modelGateDeps({
-      agentRuntime: "pi",
+      agentRuntime: "worker",
       deploymentModelCredentialCipher: "legacy-ciphertext",
     });
 

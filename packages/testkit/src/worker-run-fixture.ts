@@ -20,7 +20,7 @@ import {
   InMemoryJobQueue,
   LocalAgentHomeStore,
   LocalArtifactStore,
-  PiAgentRuntime,
+  ModelCallRuntime,
   PostgresSessionLog,
   provisionComputer,
 } from "@rakazo/adapters";
@@ -108,6 +108,8 @@ export async function startWorkerRun<
   memoryProviders?: Parameters<typeof createRunExecutor>[0]["memoryProviders"];
   databaseUrl?: string;
   tools?: ConnectorProvider;
+  /** Values the controller masks wherever the model would see them. */
+  secrets?: string[];
   /**
    * Bills a catalog Anthropic model with a plain API key instead of a custom OpenAI-compatible
    * connection; the catalog entry points at the emulator for the fixture's lifetime.
@@ -294,7 +296,7 @@ export async function startWorkerRun<
         harness: options.harness,
       }) as unknown as Provider);
     const lifecycle = createWorkerLifecycle({ prisma, provider });
-    const runtime: AgentRuntime = options.runtime?.(prisma) ?? new PiAgentRuntime();
+    const runtime: AgentRuntime = options.runtime?.(prisma) ?? new ModelCallRuntime();
     const routing = options.runtime
       ? undefined
       : createRunWorkers({
@@ -319,7 +321,7 @@ export async function startWorkerRun<
       jobs: new InMemoryJobQueue(),
       skillLock: createInMemorySkillLock(),
       skillLearning: "off",
-      secrets: [],
+      secrets: options.secrets ?? [],
       connector: options.tools,
       runtime,
       workers,

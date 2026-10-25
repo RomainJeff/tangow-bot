@@ -1,12 +1,14 @@
-import type { WorkerProvider } from "@rakazo/adapter-kit";
+import type { AgentRuntime, WorkerProvider } from "@rakazo/adapter-kit";
 import { resolveSupervisorToken } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { DockerWorkerProvider } from "./docker-worker.js";
 import { E2BWorkerProvider } from "./e2b-worker.js";
+import { ModelCallRuntime } from "./model-call-runtime.js";
 import type { GuestConnector } from "./runtime-worker/launcher.js";
 import { createRunWorkers } from "./runtime-worker/runtime.js";
 import { resolveSandboxProvider } from "./sandbox-provider-env.js";
+import { ScriptedAgentRuntime } from "./scripted-runtime.js";
 import { createWorkerLifecycle } from "./worker-lifecycle.js";
 
 export type WorkerProviderConfig =
@@ -86,4 +88,19 @@ export function composeWorkers(
       if (swept.failed > 0) getLogger().error("volume sweep", swept);
     },
   };
+}
+
+/**
+ * The in-process runtime beside the workers: the scripted test runtime (`AGENT_RUNTIME=scripted`),
+ * or the model-call runtime the controller's own model calls use. Bot runs need workers.
+ */
+export function composeInProcessRuntime(
+  agentRuntime: string,
+  workers: Pick<ReturnType<typeof composeWorkers>, "runWorkers">,
+): AgentRuntime {
+  if (agentRuntime === "scripted") return new ScriptedAgentRuntime();
+  if (!workers.runWorkers) {
+    throw new Error("Bot runs need workers: set SANDBOX_PROVIDER to docker or e2b.");
+  }
+  return new ModelCallRuntime();
 }

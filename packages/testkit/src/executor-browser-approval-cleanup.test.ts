@@ -7,7 +7,6 @@ import type {
 import {
   E2BSandboxEmulator,
   InMemoryJobQueue,
-  PiAgentRuntime,
   recoverBrowserApprovalScreens,
 } from "@rakazo/adapters";
 import { browserApprovalCheckpointOf } from "@rakazo/db";
@@ -83,7 +82,9 @@ async function pausedBrowser(
     },
     runtime: () => ({
       describe: () => ({
-        ...new PiAgentRuntime().describe(),
+        id: "fixture",
+        contractVersion: "1",
+        adapterVersion: "0",
         capabilities: { scripted: false, streaming: false },
       }),
       abort: async () => {},

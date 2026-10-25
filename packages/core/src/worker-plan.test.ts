@@ -132,10 +132,10 @@ describe("the launch a run gets from its tools and its bot's computer", () => {
       ),
     ],
     [
-      "a team bot whose team home is still a snapshot stays in process, shared slot included",
+      "a team bot whose team home is still a snapshot is refused until it moves",
       { ...files, computerScope: "team" as const },
       { ...base, computer: { id: "computer_a", homeStorage: "snapshot" as const } },
-      { mode: "in_process", reason: "home_not_migrated" },
+      { mode: "refused", refusal: { code: "home_move_pending" } },
     ],
     [
       "a dedicated bot mounts shared skills alongside its private files",

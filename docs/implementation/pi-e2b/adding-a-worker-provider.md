@@ -80,7 +80,7 @@ The computer provider selects the worker provider. There is no separate setting.
 
 Both composition roots, `apps/api/src/app.ts` and `apps/worker/src/index.ts`, call `composeWorkers(prisma, provider)`. It returns the lifecycle that bot and space deletion use, the reconciler's `reconcileWorkers`, and, with a provider, the executor's `runWorkers`.
 
-A deployment that composes no provider keeps every run in process. `plan` then answers `no_worker_provider` without a query. A run whose computer home is still a snapshot stays in process too (`home_not_migrated`).
+Every deployment composes a provider: the app refuses to start without one unless `AGENT_RUNTIME=scripted`, the in-process test runtime. A run that needs files while its computer home is still a snapshot is refused (`home_move_pending`) until the home moves; a run without files still starts.
 
 ## Mount the same volumes on the computer
 

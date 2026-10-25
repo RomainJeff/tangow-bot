@@ -6,7 +6,6 @@ x-app-env: &app-env
   SANDBOX_SUPERVISOR_URL: http://supervisor:7091
   WAKEUP_DRIVER: graphile
   SANDBOX_PROVIDER: docker
-  AGENT_RUNTIME: pi
   # Optional egress proxy (Mainland / corporate). Empty = unset; either case works.
   HTTP_PROXY: ${HTTP_PROXY:-${http_proxy:-}}
   HTTPS_PROXY: ${HTTPS_PROXY:-${https_proxy:-}}
