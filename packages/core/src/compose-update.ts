@@ -367,6 +367,7 @@ export const SOURCE_MANUAL_UPGRADE_COMMANDS = [
   "git pull",
   "pnpm install --frozen-lockfile",
   "pnpm exec tsx scripts/backfill-session-log.ts",
+  "pnpm exec tsx scripts/migrate-docker-homes.ts",
   "# Start the API and worker processes",
 ] as const;
 

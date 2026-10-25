@@ -6,6 +6,7 @@ import type { AgentRunRequest, WorkerProvider } from "@rakazo/adapter-kit";
 import { AgentRuntimeUnavailableError } from "@rakazo/adapter-kit";
 import type { E2BWorkerSdk } from "@rakazo/adapters";
 import { createWorkerLifecycle, E2BWorkerProvider } from "@rakazo/adapters";
+import { describeToolActivity } from "@rakazo/adapters/agent-text-policy";
 import type { GuestConnector, WorkerClock } from "@rakazo/adapters/runtime-worker";
 import {
   createLifecycleLauncher,
@@ -204,7 +205,8 @@ async function sleepingRun<P extends WorkerProvider & GuestConnector>(
   const runtime = await runtimeFor(attempt);
   const events = (async () => {
     for await (const event of runtime.run(runRequest(attempt))) {
-      if (event.type === "progress" && event.text.startsWith("bash ")) napping.resolve();
+      if (event.type === "progress" && event.text === describeToolActivity("bash"))
+        napping.resolve();
     }
   })().catch((error: unknown) => error);
   await napping.promise;

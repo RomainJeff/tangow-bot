@@ -112,7 +112,6 @@ async function main() {
       SIGNUPS_ENABLED: "true",
       SIGNUP_ALLOWLIST: "",
       SANDBOX_PROVIDER: "fake",
-      AGENT_RUNTIME: "pi",
       DATA_DIR: dataDir,
       MAX_TOOL_CALLS_PER_TURN: String(controls.maxToolCalls),
       WEB_PROVIDER: "fake",
@@ -141,6 +140,7 @@ async function main() {
     const { createApp } = await import("../../../../apps/api/src/app.ts");
     const { runTrial } = await import("../evals/runner.js");
     const { EvalSandboxProvider } = await import("../evals/sandbox.js");
+    const { computerOnVolumes, LocalWorkerProvider } = await import("../local-worker-provider.js");
     for (let i = 0; i < trials.length; i++) {
       const planned = trials[i]!;
       const scenario = selected.find((c) => c.id === planned.caseId)!;
@@ -148,15 +148,21 @@ async function main() {
         ...controls,
         connection,
         createApp: async (composio, messaging) => {
-          const sandbox = new EvalSandboxProvider();
           const trialDataDir = path.join(dataDir, `${scenario.id}-${planned.trial}`);
+          // Each guest is a child process with none of this process's keys.
+          const workers = new LocalWorkerProvider({
+            mode: "child",
+            root: path.join(trialDataDir, "workers"),
+          });
+          const sandbox = new EvalSandboxProvider((volumeRef) => workers.volumePath(volumeRef));
           const handles = await createApp({
             sandbox,
+            workers,
+            agentRuntime: "worker",
             databaseUrl,
             realtimeDatabaseUrl: databaseUrl,
             dataDir: trialDataDir,
             sandboxProvider: "fake",
-            agentRuntime: "pi",
             wakeupDriver: "memory",
             composio,
             messaging,
@@ -185,7 +191,19 @@ async function main() {
             updaterToken: undefined,
             skillLearning: scenario.skillLearning ? "on" : DEFAULT_SKILL_LEARNING,
           });
-          return { ...handles, dataDir: trialDataDir, harnessIssues: sandbox.harnessIssues };
+          return {
+            ...handles,
+            dataDir: trialDataDir,
+            harnessIssues: sandbox.harnessIssues,
+            prepareBot: (botId) => computerOnVolumes(handles.prisma, botId),
+            async stop() {
+              try {
+                await handles.stop();
+              } finally {
+                await workers.dispose();
+              }
+            },
+          };
         },
       });
       save();

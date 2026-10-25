@@ -7,9 +7,9 @@ const base = {
 };
 
 describe("loadEnv", () => {
-  it("defaults the product path to Pi, Docker, and Graphile Worker", () => {
+  it("defaults the product path to workers, Docker, and Graphile Worker", () => {
     const env = loadEnv(base);
-    expect(env.agentRuntime).toBe("pi");
+    expect(env.agentRuntime).toBe("worker");
     expect(env.sandboxProvider).toBe("docker");
     expect(env.wakeupDriver).toBe("graphile");
     expect(env.apiHost).toBe("127.0.0.1");
@@ -43,27 +43,6 @@ describe("loadEnv", () => {
     ).toBe("https://catalog.example.test/feed");
   });
 
-  it("falls back to none when a remote provider key is missing", () => {
-    expect(
-      loadEnv({
-        ...base,
-        SANDBOX_PROVIDER: "e2b",
-      }).sandboxProvider,
-    ).toBe("none");
-    expect(
-      loadEnv({
-        ...base,
-        SANDBOX_PROVIDER: "none",
-      }).sandboxProvider,
-    ).toBe("none");
-    expect(
-      loadEnv({
-        ...base,
-        SANDBOX_PROVIDER: "",
-      }).sandboxProvider,
-    ).toBe("none");
-  });
-
   it("throws when production omits secrets", () => {
     expect(() =>
       loadEnv({
@@ -94,6 +73,7 @@ describe("loadEnv", () => {
       ENCRYPTION_KEY: "prod-encryption-key-with-enough-length",
       SCREEN_PROXY_SECRET: "prod-screen-proxy-secret-with-enough-length",
       SANDBOX_PROVIDER: "e2b",
+      E2B_API_KEY: "fake-e2b-key",
       API_HOST: "0.0.0.0",
     });
     expect(env.authSecret).toBe("prod-auth-secret-with-enough-length");
@@ -101,19 +81,6 @@ describe("loadEnv", () => {
     expect(env.sandboxSupervisorToken).toBeUndefined();
     expect(env.screenProxySecret).toBe("prod-screen-proxy-secret-with-enough-length");
     expect(env.apiHost).toBe("0.0.0.0");
-  });
-
-  it("falls back to none in production when Docker has no supervisor token", () => {
-    const env = loadEnv({
-      DATABASE_URL: base.DATABASE_URL,
-      NODE_ENV: "production",
-      BETTER_AUTH_SECRET: "prod-auth-secret-with-enough-length",
-      ENCRYPTION_KEY: "prod-encryption-key-with-enough-length",
-      SCREEN_PROXY_SECRET: "prod-screen-proxy-secret-with-enough-length",
-      SANDBOX_PROVIDER: "docker",
-    });
-    expect(env.sandboxProvider).toBe("none");
-    expect(env.sandboxSupervisorToken).toBeUndefined();
   });
 
   it("requires a dedicated supervisor token when Docker stays selected", () => {
@@ -168,7 +135,7 @@ describe("loadEnv", () => {
         BETTER_AUTH_SECRET: "prod-auth-secret-with-enough-length",
         ENCRYPTION_KEY: "prod-encryption-key-with-enough-length",
         SCREEN_PROXY_SECRET: "prod-screen-proxy-secret-with-enough-length",
-        SANDBOX_PROVIDER: "none",
+        SANDBOX_PROVIDER: "fake",
         EMAIL_EMULATOR: "true",
       }).emailEmulator,
     ).toBe(false);

@@ -5,7 +5,6 @@ import type { AgentSession, ExtensionAPI } from "@earendil-works/pi-coding-agent
 import {
   createAgentSession,
   createMcpExtension,
-  createToolSearchExtension,
   DefaultResourceLoader,
   defineTool,
   SessionManager,
@@ -15,9 +14,10 @@ import type { GuestBody, GuestImage, GuestRunInput, ReplyFinal } from "@rakazo/a
 import { PI_NATIVE_HARNESS, RAKAZO_TOOL_PREFIX } from "@rakazo/adapter-kit";
 import {
   createAgentTextPolicy,
-  guestRuntimeModel,
+  describeToolActivity,
   stripModelControlTokens,
-} from "@rakazo/adapters/pi-runtime";
+} from "@rakazo/adapters/agent-text-policy";
+import { guestRuntimeModel } from "@rakazo/adapters/pi-run-model";
 import {
   piAiProviderStream,
   projectPiAi,
@@ -27,6 +27,7 @@ import { skillReadName } from "@rakazo/adapters/volume-skills";
 import type { DoneBody, GuestHarness, HarnessHost } from "../harness.js";
 import { rakazoMcpTools } from "../rakazo-mcp.js";
 import { durableBashTool } from "./durable-bash.js";
+import { exactToolSearchExtension } from "./exact-tool-search.js";
 import { relayModelRuntime } from "./pi-session.js";
 import { rakazoMcpTransport } from "./rakazo-mcp.js";
 
@@ -81,10 +82,9 @@ function rakazoExtension(
     });
     pi.on("tool_execution_start", async (event) => {
       if (agent !== "root") return;
-      const args = JSON.stringify(event.args ?? {});
       await host.emit({
         type: "progress",
-        text: `${event.toolName} ${args.length > 160 ? `${args.slice(0, 160)}…` : args}`,
+        text: describeToolActivity(controllerNames.get(event.toolName) ?? event.toolName),
         activity: true,
       });
     });
@@ -183,7 +183,12 @@ export const piNativeHarness: GuestHarness = {
         noPromptTemplates: true,
         noThemes: true,
         extensionFactories: [
-          createToolSearchExtension(),
+          exactToolSearchExtension(
+            (term) =>
+              assignedNames.get(
+                term.startsWith(RAKAZO_TOOL_PREFIX) ? term.slice(RAKAZO_TOOL_PREFIX.length) : term,
+              ) ?? term,
+          ),
           (pi) =>
             createMcpExtension({
               loadConfig: () => ({

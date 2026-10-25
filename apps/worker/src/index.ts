@@ -11,6 +11,7 @@ loadRootEnv();
 
 import {
   ChatSdkMessagingSurface,
+  composeInProcessRuntime,
   composeWorkers,
   createBackgroundJobHandlers,
   createConnectorStack,
@@ -20,8 +21,8 @@ import {
   createPostgresReconciliationLeadership,
   createPostgresSkillLock,
   createRunExecutor,
-  createRunSandbox,
   createRunSecretWriter,
+  createSandboxProvider,
   createSkillLineSweep,
   createTraceExporterFromEnv,
   createWebProvider,
@@ -42,7 +43,6 @@ import {
   McpOAuthBroker,
   messagingEnvFromProcess,
   messagingPlatformsFromEnv,
-  PiAgentRuntime,
   PipedreamConnector,
   PostgresRealtimeFanout,
   PostgresSessionLog,
@@ -51,7 +51,6 @@ import {
   resolveDeploymentModel,
   resolveSandboxProvider,
   resolveWorkerProvider,
-  ScriptedAgentRuntime,
   SpaceDecisionProviderResolver,
   SpaceMemoryProviderResolver,
 } from "@rakazo/adapters";
@@ -90,27 +89,13 @@ async function main() {
     runSecretWriter: createRunSecretWriter(secrets),
   });
   const dataDir = process.env.DATA_DIR ?? "./data";
-  // Optional agent trace export. Absent configuration resolves to nothing here,
-  // so the runtime records no spans and no vendor endpoint is ever contacted.
-  const traceExport = createTraceExporterFromEnv(process.env);
-  if (traceExport.warning) logger.warn(traceExport.warning);
-  const runtime =
-    process.env.AGENT_RUNTIME === "scripted"
-      ? new ScriptedAgentRuntime()
-      : new PiAgentRuntime({
-          ...(traceExport.exporter
-            ? { traceExporter: traceExport.exporter, serviceName: SERVICE_NAMES.worker }
-            : {}),
-        });
   // Same resolver the API uses, so both processes agree on provider, model and key.
   const { key: deploymentModelKey } = resolveDeploymentModel();
   const sandboxProvider = resolveSandboxProvider(process.env);
-  const sandbox = createRunSandbox(sandboxProvider, {
+  const sandbox = createSandboxProvider(sandboxProvider, {
     supervisorUrl: process.env.SANDBOX_SUPERVISOR_URL ?? "http://127.0.0.1:7091",
     supervisorToken: sandboxProvider === "docker" ? resolveSupervisorToken(process.env) : undefined,
     e2bApiKey: process.env.E2B_API_KEY,
-    dataDir,
-    prisma,
   });
   const mcpOAuth = new McpOAuthBroker(prisma, secrets);
   const mcp = new McpConnector(
@@ -171,6 +156,14 @@ async function main() {
   const home = new LocalAgentHomeStore(dataDir);
   const artifacts = new LocalArtifactStore(dataDir);
   const workers = composeWorkers(prisma, createWorkerProvider(resolveWorkerProvider(process.env)));
+  // Optional trace export of the controller's model calls. Without configuration this resolves
+  // to nothing, so no span is recorded and no vendor endpoint is ever contacted.
+  const traceExport = createTraceExporterFromEnv(process.env);
+  if (traceExport.warning) logger.warn(traceExport.warning);
+  const runtime = composeInProcessRuntime(process.env.AGENT_RUNTIME ?? "", workers, {
+    exporter: traceExport.exporter,
+    serviceName: SERVICE_NAMES.worker,
+  });
   const inMemoryJobs = process.env.WAKEUP_DRIVER === "memory" ? new InMemoryJobQueue() : undefined;
   const jobs: JobPublisher = inMemoryJobs ?? new GraphileJobPublisher(pool);
   const jobHost: JobWorkerHost =
@@ -251,6 +244,8 @@ async function main() {
     deploymentModelKey,
     messaging,
     artifacts,
+    homeMove:
+      sandboxProvider === "docker" ? { prisma, workers: workers.lifecycle, dataDir } : undefined,
   });
   // graphile-worker run() connects through the shared pool. createPool already
   // retries connect() on 53300 a finite number of times. Keep retrying start

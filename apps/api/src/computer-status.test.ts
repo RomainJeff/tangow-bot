@@ -38,13 +38,6 @@ describe("toComputerStatus", () => {
     expect(ComputerStatusSchema.parse(status).kind).toBe("fake");
   });
 
-  it("hides update on desktop computers", () => {
-    expect(toComputerStatus("bot-1", 5, { ...baseComputer, kind: "desktop" }).canUpdate).toBe(
-      false,
-    );
-    expect(toComputerStatus("bot-1", 5, { ...baseComputer, kind: "e2b" }).canUpdate).toBe(true);
-  });
-
   describe("screenStamp", () => {
     const stamp = (botGeneration: number, computer: Partial<typeof baseComputer> = {}) =>
       toComputerStatus("bot-1", botGeneration, { ...baseComputer, ...computer }).screenStamp;

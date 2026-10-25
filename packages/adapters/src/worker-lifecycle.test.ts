@@ -40,21 +40,7 @@ beforeEach(() => {
 });
 
 describe("worker plan", () => {
-  it("keeps every run in process without a query when no worker provider is composed", async () => {
-    const noDatabase = new Proxy({} as PrismaClient, {
-      get() {
-        throw new Error("plan queried the database");
-      },
-    });
-    const lifecycle = createWorkerLifecycle({ prisma: noDatabase, provider: null });
-
-    await expect(lifecycle.plan({ attemptId: "attempt", needs: allFiles })).resolves.toEqual({
-      mode: "in_process",
-      reason: "no_worker_provider",
-    });
-  });
-
-  it("keeps a run that needs files in process while its home is a snapshot", async () => {
+  it("refuses a run that needs files while its home is a snapshot", async () => {
     const computer = await fixture.seedComputer(spaceA);
     const bot = await fixture.seedBot(spaceA, computer.id);
     const attempt = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
@@ -64,7 +50,7 @@ describe("worker plan", () => {
         attemptId: attempt.id,
         needs: { files: { private: "rw", shared: null }, computer: "none" },
       }),
-    ).resolves.toEqual({ mode: "in_process", reason: "home_not_migrated" });
+    ).resolves.toEqual({ mode: "refused", refusal: { code: "home_move_pending" } });
   });
 
   it("plans the bot's own volumes and a lazy computer once its home is migrated", async () => {

@@ -9,7 +9,7 @@ import type {
   WorkerStartV1,
 } from "@rakazo/adapter-kit";
 import { isHelperTool } from "../builtin-tools.js";
-import { isLazyCatalogControlRoute } from "../lazy-tool-catalog.js";
+import { catalogIndexText, isLazyCatalogControlRoute } from "../lazy-tool-catalog.js";
 import { encodeMessage } from "./framing.js";
 import { WORKER_LIMITS } from "./limits.js";
 import { guestModelOf } from "./model-relay.js";
@@ -175,7 +175,12 @@ export function helperRunInput(
     threadId: parent.threadId,
     sourceMessageId: parent.sourceMessageId,
     prompt: helper.task,
-    instructions: helper.instructions,
+    instructions: [
+      helper.instructions,
+      catalogIndexText(request.tools.filter((tool) => isHelperTool(tool.name))),
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
     history: [],
     images: [],
     tools: parent.tools.filter((tool) => isHelperTool(tool.name)),

@@ -361,10 +361,7 @@ export function createRepos(prisma: PrismaClient) {
         }
         if (thinkingLevel == null) thinkingLevel = parent.thinkingLevel ?? null;
       }
-      const settings = await prisma.deploymentSettings.findUnique({ where: { id: "default" } });
-      const envKind = process.env.SANDBOX_PROVIDER ?? "docker";
-      const kind =
-        envKind === "docker" && settings?.computerHost === "this-mac" ? "desktop" : envKind;
+      const kind = process.env.SANDBOX_PROVIDER ?? "docker";
       const insertBot = () =>
         prisma.$transaction(async (tx) => {
           await lockSpaceForContentCreation(tx, {
@@ -380,8 +377,8 @@ export function createRepos(prisma: PrismaClient) {
             spaceId: actor.spaceId,
             userId: actor.userId,
             kind,
-            // A new E2B home starts on volumes, so its runs go to workers with no move.
-            homeStorage: kind === "e2b" ? "volumes" : "snapshot",
+            // A new home starts on volumes, so its runs go to workers with no move.
+            homeStorage: kind === "e2b" || kind === "docker" ? "volumes" : "snapshot",
           });
           const created = await tx.bot.create({
             data: {

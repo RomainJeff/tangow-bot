@@ -30,10 +30,10 @@ COPY packages/ui-tokens/package.json packages/ui-tokens/
 COPY packages/ui-web/package.json packages/ui-web/
 COPY infra/sandboxes/supervisor/package.json infra/sandboxes/supervisor/
 COPY infra/updater/package.json infra/updater/
-# Only what this image ever runs. Across docker-compose.yml, .prod.yml and
-# .images.yml the app image is started as @rakazo/api, @rakazo/worker, @rakazo/web
+# Only what this image ever runs. Across docker-compose.yml and .prod.yml
+# the app image is started as @rakazo/api, @rakazo/worker, @rakazo/web
 # and @rakazo/sandbox-supervisor, plus scripts/backfill-session-log.ts and @rakazo/db's
-# prisma CLI it runs to migrate;
+# prisma CLI it runs to migrate, and scripts/migrate-docker-homes.ts;
 # the desktop, mobile, www and testkit projects only add electron, expo, react-native
 # and the astro toolchain to an image that never builds them. `rakazo` is the
 # workspace root: `start` is `tsx src/index.ts`, and tsx, turbo and cross-env are root

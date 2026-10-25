@@ -159,14 +159,6 @@ describe("volume provisioning and home adoption", () => {
       { op: "ensureVolume", name: `rakazo-${bobVolume.id}` },
     ]);
   });
-
-  it("never adopts a home on a computer kind without workers", async () => {
-    const computer = await fixture.seedComputer(spaceA, { kind: "docker", scope: "dedicated" });
-    const bot = await fixture.seedBot(spaceA, computer.id);
-    await fixture.seedVolume("bot_private", spaceA, bot.id);
-
-    await expect(adopt(computer.id)).resolves.toBe("computer_kind_unsupported");
-  });
 });
 
 describe("the home of a computer created with a bot", () => {
@@ -208,29 +200,32 @@ describe("the home of a computer created with a bot", () => {
     });
   }
 
-  it("starts a new E2B team home on volumes, and gives each of its bots a volume", async () => {
-    const actor = await memberOf(await owner.seedSpace());
-    const ada = await createBot(actor, "e2b");
-    const bob = await createBot(actor, "e2b");
-    expect([ada, bob]).toEqual([
-      { id: ada.id, scope: "team", homeStorage: "volumes" },
-      { id: ada.id, scope: "team", homeStorage: "volumes" },
-    ]);
+  it.each(["e2b", "docker"])(
+    "starts a new %s team home on volumes, and gives each of its bots a volume",
+    async (sandbox) => {
+      const actor = await memberOf(await owner.seedSpace());
+      const ada = await createBot(actor, sandbox);
+      const bob = await createBot(actor, sandbox);
+      expect([ada, bob]).toEqual([
+        { id: ada.id, scope: "team", homeStorage: "volumes" },
+        { id: ada.id, scope: "team", homeStorage: "volumes" },
+      ]);
 
-    await workers.provisionHomeVolumes(ada.id, fixture.context);
+      await workers.provisionHomeVolumes(ada.id, fixture.context);
 
-    const volumes = await prisma.volume.findMany({
-      where: { spaceId: actor.spaceId },
-      select: { kind: true, providerRef: true },
-      orderBy: { kind: "asc" },
-    });
-    const provisioned = { providerRef: expect.stringMatching(/^rakazo-/) };
-    expect(volumes).toEqual([
-      { kind: "bot_private", ...provisioned },
-      { kind: "bot_private", ...provisioned },
-      { kind: "space_shared", ...provisioned },
-    ]);
-  });
+      const volumes = await prisma.volume.findMany({
+        where: { spaceId: actor.spaceId },
+        select: { kind: true, providerRef: true },
+        orderBy: { kind: "asc" },
+      });
+      const provisioned = { providerRef: expect.stringMatching(/^rakazo-/) };
+      expect(volumes).toEqual([
+        { kind: "bot_private", ...provisioned },
+        { kind: "bot_private", ...provisioned },
+        { kind: "space_shared", ...provisioned },
+      ]);
+    },
+  );
 
   it("gives a new dedicated E2B computer its space's team home storage", async () => {
     const moved = await memberOf(await owner.seedSpace());
@@ -288,7 +283,7 @@ describe("worker schema", () => {
         prisma.$executeRaw`INSERT INTO computers (id, "spaceId", "userId", "scopeKey", "homeKey",
           kind, "homeStorage", "updatedAt")
           VALUES (${fixture.unique("computer")}, ${spaceA}, ${fixture.userId}, ${fixture.unique("scope")},
-            ${fixture.unique("home")}, 'docker', 'volumes', now())`,
+            ${fixture.unique("home")}, 'fake', 'volumes', now())`,
     ],
   ])("rejects a row that breaks %s", async (constraint, write) => {
     const run = await fixture.seedRun(await fixture.seedBot(spaceA, null));

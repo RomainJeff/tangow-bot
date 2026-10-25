@@ -12,7 +12,9 @@ const context: AdapterContext = {
 
 describe("honest offline eval shell results", () => {
   it("does not claim a shell-created file exists when it never executed the command", async () => {
-    const sandbox = new EvalSandboxProvider();
+    const sandbox = new EvalSandboxProvider(() => {
+      throw new Error("This computer has no volumes");
+    });
     const computer = await sandbox.provision({ botId: "bot", homePath: "/fixture" }, context);
     const events: ProcessEvent[] = [];
     for await (const event of sandbox.execute(

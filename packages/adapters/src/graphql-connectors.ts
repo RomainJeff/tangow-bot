@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { ConnectorError } from "./connector-error.js";
+import { httpConnectorFailureKind } from "./connector-errors.js";
 import {
   AuthSchema,
   applyCredential,
@@ -308,7 +310,10 @@ export async function executeGraphqlOperation(
       MAX_GRAPHQL_VALIDATION_BYTES,
     );
     if (!response.ok) {
-      throw new Error(`GraphQL request returned HTTP ${response.status}`);
+      throw new ConnectorError(
+        httpConnectorFailureKind(response.status),
+        `GraphQL request returned HTTP ${response.status}`,
+      );
     }
     if (validationTruncated) {
       throw new Error("GraphQL response exceeded the validation limit");

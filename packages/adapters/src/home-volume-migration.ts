@@ -36,7 +36,8 @@ export type HomeFile = {
  * Why a home entry stays only in the AgentHomeStore original: outside every destination, a path
  * a volume cannot hold, one of several files bound for the same volume path, an entry that is not
  * a regular file or a directory with something in it, or a file the export did not yield (it
- * walks a symlinked directory once, under the link's name).
+ * walks a symlinked directory once, under the link's name). Carrying Docker volumes to E2B also
+ * leaves a file too large to copy in one piece.
  */
 export type NotCopied = {
   homePath: string;
@@ -47,7 +48,8 @@ export type NotCopied = {
     | "symlink"
     | "empty_dir"
     | "special"
-    | "not_exported";
+    | "not_exported"
+    | "too_large";
 };
 
 export type ManifestVolume = {
@@ -113,7 +115,7 @@ type HomeComputer = {
   botIds: Set<string>;
 };
 
-type TargetVolume = ManifestVolume & { files: HomeFile[] };
+export type TargetVolume = ManifestVolume & { files: HomeFile[] };
 
 type HomePlan = {
   planned: HomeFile[];
@@ -214,6 +216,31 @@ async function planHome(
   }
   notCopied.sort((a, b) => a.homePath.localeCompare(b.homePath));
   return { planned, notCopied, exported, links };
+}
+
+/** An E2B computer whose home is still on snapshots, which only the in-process path can run. */
+export class E2BHomesNotMigrated extends Error {
+  constructor(readonly computerIds: string[]) {
+    super(
+      [
+        `${computerIds.length} E2B computer${computerIds.length === 1 ? " keeps its" : "s keep their"} home on snapshots: ${computerIds.join(", ")}.`,
+        "Move each one onto volumes before starting the API:",
+        "  pnpm exec tsx scripts/migrate-home-to-volumes.ts --computer <id> --manifest <path>",
+        "See docs/self-host-e2b-workers.md#move-existing-homes-onto-volumes.",
+      ].join("\n"),
+    );
+    this.name = "E2BHomesNotMigrated";
+  }
+}
+
+/** Refuses to go on while an E2B computer's home is still on snapshots. */
+export async function assertE2BHomesOnVolumes(prisma: PrismaClient): Promise<void> {
+  const computers = await prisma.computer.findMany({
+    where: { kind: "e2b", homeStorage: "snapshot" },
+    select: { id: true },
+    orderBy: { id: "asc" },
+  });
+  if (computers.length > 0) throw new E2BHomesNotMigrated(computers.map(({ id }) => id));
 }
 
 /** Read-only planning before an operator agrees to an upgrade, including Docker source homes. */
@@ -522,10 +549,10 @@ async function existingVolume(
   return volume ? { volumeId: volume.id, providerRef: volume.providerRef } : null;
 }
 
-type Inspection = { target: TargetVolume; foreign: string[]; missing: HomeFile[] };
+export type Inspection = { target: TargetVolume; foreign: string[]; missing: HomeFile[] };
 
 /** A volume not provisioned yet holds nothing, so every planned file is missing from it. */
-async function inspectTargets(
+export async function inspectTargets(
   files: VolumeFiles,
   targets: TargetVolume[],
   context: AdapterContext,
@@ -546,7 +573,7 @@ async function inspectTargets(
   return inspections;
 }
 
-function conflictOf({ target, foreign, missing }: Inspection): VolumeConflict {
+export function conflictOf({ target, foreign, missing }: Inspection): VolumeConflict {
   return {
     destination: target.destination,
     volumeId: target.volumeId,

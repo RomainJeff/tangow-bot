@@ -76,15 +76,8 @@ body:
     id: sandbox
     attributes:
       label: SANDBOX_PROVIDER
-      description: If relevant (default is `docker`).
+      description: If relevant, `docker` (default) or `e2b`.
       placeholder: docker
-
-  - type: input
-    id: runtime
-    attributes:
-      label: AGENT_RUNTIME
-      description: If relevant (default is `pi`).
-      placeholder: pi
 
   - type: textarea
     id: logs

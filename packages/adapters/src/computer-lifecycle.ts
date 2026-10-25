@@ -30,6 +30,7 @@ import {
   ensureComputerWorkspaceLayout,
   restoreComputerWorkspace,
 } from "./computer-workspace.js";
+import { homeMovePending } from "./docker-home-migration.js";
 import { resolveAgentHomePath } from "./home.js";
 import type { RunWorkers } from "./runtime-worker/runtime.js";
 import { userSkillsRoot } from "./skill-store.js";
@@ -142,8 +143,12 @@ async function hasLiveForeignRunLease(
 
 /** `transition`: someone else's fresh start or suspend, which ends on its own. */
 export class ComputerBusyError extends Error {
-  constructor(readonly reason: "held" | "transition" = "held") {
-    super("Computer is busy");
+  constructor(readonly reason: "held" | "transition" | "home_move_incomplete" = "held") {
+    super(
+      reason === "home_move_incomplete"
+        ? "Computer is busy: home move incomplete"
+        : "Computer is busy",
+    );
     this.name = "ComputerBusyError";
   }
 }
@@ -217,6 +222,10 @@ export async function provisionComputer(
     }
   }
   const homePath = resolveAgentHomePath(deps.home, existing.homeKey, deps.dataDir ?? "./data");
+  // A Docker home half-moved onto its volumes must not boot until the move finishes.
+  if (existing.kind === "docker" && (await homeMovePending(homePath))) {
+    throw new ComputerBusyError("home_move_incomplete");
+  }
   await mkdir(homePath, { recursive: true });
   // Docker would create missing bind sources as root; create them as the worker user first.
   if (deps.dataDir) {
@@ -726,10 +735,6 @@ function isUniqueConstraintError(error: unknown) {
 }
 
 export type ComputerReplaceMode = "recover" | "reset" | "update";
-
-export function computerSupportsUpdate(kind: string): boolean {
-  return kind !== "desktop";
-}
 
 export async function replaceComputer(
   deps: {

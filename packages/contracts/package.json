@@ -9,7 +9,6 @@
       "development": "./src/index.ts",
       "default": "./src/index.ts"
     },
-    "./local-settings": "./src/local-settings.js",
     "./migrate-wait": "./src/migrate-wait.js",
     "./page-head-reader": "./src/page-head-reader.js"
   },

@@ -76,7 +76,7 @@ function launch(extraEnv: Record<string, string> = {}) {
   });
 }
 
-test("first run asks whether to use a local or existing instance", async () => {
+test("first run asks for the server address", async () => {
   app = await launch();
   if (process.env.RAKAZO_E2E_EXECUTABLE) {
     expect(await app.evaluate(({ app }) => app.isPackaged)).toBe(true);
@@ -84,21 +84,12 @@ test("first run asks whether to use a local or existing instance", async () => {
   const setup = await app.firstWindow();
 
   await expect(setup.getByRole("heading", { name: "Welcome to Dax" })).toBeVisible();
-  await expect(setup.getByText("Choose which server this app should use.")).toBeVisible();
-  await expect(setup.getByText("This computer")).toBeVisible();
-  await expect(setup.getByText("Existing instance")).toBeVisible();
   await expect(setup.locator(".card")).toHaveCount(0);
-
-  // A new instance is the default: the app runs the stack itself at the local address.
-  await expect(setup.getByRole("radio", { name: /This computer/ })).toBeChecked();
-  // The panel is empty until a start begins, so check the attribute rather than the box.
-  await expect(setup.locator("#panel-new")).toHaveJSProperty("hidden", false);
-  await expect(setup.locator("#stack")).toBeHidden();
-  await expect(setup.getByRole("button", { name: "Check connection" })).toBeHidden();
-  await expect(setup.locator("#panel-existing")).toBeHidden();
+  await expect(setup.locator("#server-url")).toBeFocused();
+  await expect(setup.getByRole("button", { name: "Check connection" })).toBeVisible();
 
   await setup.screenshot({
-    path: path.join(import.meta.dirname, "screenshots", "01-setup-new-instance.png"),
+    path: path.join(import.meta.dirname, "screenshots", "01-setup.png"),
   });
 
   // Linux CI verifies the layout state; the macOS CI job also captures the native controls.
@@ -130,12 +121,9 @@ test("first run asks whether to use a local or existing instance", async () => {
   }
 });
 
-test("connecting to an existing instance verifies, saves, and opens it", async () => {
+test("connecting to a server verifies, saves, and opens it", async () => {
   app = await launch();
   const setup = await app.firstWindow();
-
-  await setup.getByRole("radio", { name: /Existing instance/ }).check();
-  await expect(setup.locator("#panel-new")).toBeHidden();
 
   await setup.locator("#server-url").fill(serverUrl);
   await setup.getByRole("button", { name: "Check connection" }).click();
@@ -165,13 +153,12 @@ test("connecting to an existing instance verifies, saves, and opens it", async (
         return null;
       }
     })
-    .toEqual({ mode: "existing", serverUrl });
+    .toEqual({ serverUrl });
 });
 
 test("Continue verifies and remembers the instance so setup does not run again", async () => {
   app = await launch();
   const setup = await app.firstWindow();
-  await setup.getByRole("radio", { name: /Existing instance/ }).check();
   await setup.locator("#server-url").fill(serverUrl);
   const firstRun = await Promise.all([
     app.waitForEvent("window"),
@@ -187,7 +174,7 @@ test("Continue verifies and remembers the instance so setup does not run again",
         return null;
       }
     })
-    .toEqual({ mode: "existing", serverUrl });
+    .toEqual({ serverUrl });
   await app.close();
 
   app = await launch();
@@ -200,7 +187,6 @@ test("an unreachable address is reported instead of being saved", async () => {
   app = await launch();
   const setup = await app.firstWindow();
 
-  await setup.getByRole("radio", { name: /Existing instance/ }).check();
   await setup.locator("#server-url").fill(closedUrl);
   await setup.getByRole("button", { name: "Check connection" }).click();
 
@@ -233,7 +219,6 @@ test("an HTTP error document is not accepted after a healthy probe", async () =>
   try {
     app = await launch();
     const setup = await app.firstWindow();
-    await setup.getByRole("radio", { name: /Existing instance/ }).check();
     await setup.locator("#server-url").fill(`http://127.0.0.1:${address.port}`);
     await setup.getByRole("button", { name: "Continue" }).click();
 
@@ -268,7 +253,6 @@ test("a session-pending shell skeleton is not accepted as a ready app", async ()
   try {
     app = await launch();
     const setup = await app.firstWindow();
-    await setup.getByRole("radio", { name: /Existing instance/ }).check();
     await setup.locator("#server-url").fill(`http://127.0.0.1:${address.port}`);
     await setup.getByRole("button", { name: "Continue" }).click();
 
@@ -320,7 +304,6 @@ for (const { name, surface } of [
     try {
       app = await launch();
       const setup = await app.firstWindow();
-      await setup.getByRole("radio", { name: /Existing instance/ }).check();
       await setup.locator("#server-url").fill(`http://127.0.0.1:${address.port}`);
       const appWindow = await Promise.all([
         app.waitForEvent("window"),
@@ -337,7 +320,6 @@ for (const { name, surface } of [
           }
         })
         .toEqual({
-          mode: "existing",
           serverUrl: `http://127.0.0.1:${address.port}`,
         });
     } finally {
@@ -368,7 +350,6 @@ test("a shell mount before workspace bootstrap is not accepted", async () => {
   try {
     app = await launch();
     const setup = await app.firstWindow();
-    await setup.getByRole("radio", { name: /Existing instance/ }).check();
     await setup.locator("#server-url").fill(`http://127.0.0.1:${address.port}`);
     await setup.getByRole("button", { name: "Continue" }).click();
 
@@ -405,7 +386,6 @@ test("a session-ready marker without a route surface is not accepted", async () 
   try {
     app = await launch();
     const setup = await app.firstWindow();
-    await setup.getByRole("radio", { name: /Existing instance/ }).check();
     await setup.locator("#server-url").fill(`http://127.0.0.1:${address.port}`);
     await setup.getByRole("button", { name: "Continue" }).click();
 
@@ -426,7 +406,6 @@ test("a malformed address is rejected before anything is written", async () => {
   app = await launch();
   const setup = await app.firstWindow();
 
-  await setup.getByRole("radio", { name: /Existing instance/ }).check();
   await setup.locator("#server-url").fill("not a server");
   await setup.getByRole("button", { name: "Continue" }).click();
 
@@ -448,7 +427,6 @@ test("a generic web page is not accepted as a Rakazo server", async () => {
   try {
     app = await launch();
     const setup = await app.firstWindow();
-    await setup.getByRole("radio", { name: /Existing instance/ }).check();
     await setup.locator("#server-url").fill(`http://127.0.0.1:${address.port}`);
     await setup.getByRole("button", { name: "Continue" }).click();
 
@@ -479,7 +457,6 @@ test("the setup probe refuses redirects instead of following them", async () => 
   try {
     app = await launch();
     const setup = await app.firstWindow();
-    await setup.getByRole("radio", { name: /Existing instance/ }).check();
     await setup.locator("#server-url").fill(`http://127.0.0.1:${address.port}`);
     await setup.getByRole("button", { name: "Continue" }).click();
 
@@ -499,7 +476,7 @@ test("the setup probe refuses redirects instead of following them", async () => 
 test("an unreachable saved server falls back to setup with a recovery message", async () => {
   await writeFile(
     path.join(userData, "setup.json"),
-    `${JSON.stringify({ mode: "existing", serverUrl: closedUrl }, null, 2)}\n`,
+    `${JSON.stringify({ serverUrl: closedUrl }, null, 2)}\n`,
     { encoding: "utf8", mode: 0o600 },
   );
 
@@ -507,7 +484,6 @@ test("an unreachable saved server falls back to setup with a recovery message", 
   const setup = await app.firstWindow();
 
   await expect(setup.getByRole("heading", { name: "Welcome to Dax" })).toBeVisible();
-  await expect(setup.getByRole("radio", { name: /Existing instance/ })).toBeChecked();
   await expect(setup.locator("#server-url")).toHaveValue(closedUrl);
   await expect(setup.locator("#status")).toContainText("Could not reconnect to the saved server.");
   await setup.screenshot({

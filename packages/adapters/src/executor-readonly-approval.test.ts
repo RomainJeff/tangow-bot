@@ -1,4 +1,9 @@
-import type { AgentRunRequest, ConnectorCall, ConnectorTool } from "@rakazo/adapter-kit";
+import type {
+  AgentRunRequest,
+  ConnectorCall,
+  ConnectorEvent,
+  ConnectorTool,
+} from "@rakazo/adapter-kit";
 import type { ActionApprovalRule } from "@rakazo/core";
 import { approvalEffectKey, toolEffectIdempotencyKey } from "@rakazo/core/node/approval-effect-key";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,7 +18,7 @@ import { recordingSessionLog } from "./session-log/recording.test-support.js";
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
   acquireComputerExecutionLease: async () => null,
-  provisionComputer: async () => ({ id: "computer-1", kind: "desktop" }),
+  provisionComputer: async () => ({ id: "computer-1", kind: "docker" }),
 }));
 
 vi.mock("./auto-review.js", async (importOriginal) => ({
@@ -47,6 +52,7 @@ function fixture({
     required: ["id"],
   } as Record<string, unknown>,
   routeToolName = undefined as string | undefined,
+  connectorFailure = undefined as Extract<ConnectorEvent, { type: "error" }> | undefined,
 } = {}) {
   const tool: ConnectorTool = {
     name,
@@ -167,6 +173,10 @@ function fixture({
   });
   const finalizeRun = vi.fn(async () => ({ continuationRunId: null }));
   const execute = vi.fn(async function* (call: ConnectorCall) {
+    if (connectorFailure) {
+      yield connectorFailure;
+      return;
+    }
     yield { type: "result" as const, data: { item: call.args.id } };
   });
   let calls: Array<{ args: Record<string, unknown>; executionId: string }> = [
@@ -232,6 +242,33 @@ function fixture({
 describe("connector read-only metadata and approval enforcement", () => {
   beforeEach(() => {
     vi.mocked(runAutoReviewJudge).mockReset();
+  });
+
+  it("preserves the connector failure category and details in the model's tool result", async () => {
+    const f = fixture({
+      requireToolApproval: false,
+      connectorFailure: {
+        type: "error",
+        kind: "auth_required",
+        message: "Reconnect this app",
+        details: { status: 401 },
+      },
+    });
+    await f.run();
+    expect(f.results).toEqual([
+      { error: "Reconnect this app", kind: "auth_required", details: { status: 401 } },
+    ]);
+    expect(f.execute).toHaveBeenCalledOnce();
+  });
+
+  it("reports invalid catalog arguments without executing the connector", async () => {
+    const f = fixture({ catalog: true });
+    f.setCalls([{ args: { id: 123 }, executionId: "invalid-call" }]);
+    await f.run();
+    expect(f.results).toEqual([
+      { error: expect.stringContaining("Tool arguments are invalid"), kind: "invalid_arguments" },
+    ]);
+    expect(f.execute).not.toHaveBeenCalled();
   });
 
   it.each(["shell", "write_file"])(

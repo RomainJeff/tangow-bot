@@ -4,11 +4,12 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Sandbox, SandboxNotFoundError, TimeoutError } from "@e2b/desktop";
-import { Sandbox as RawSandbox } from "e2b";
+import { CommandExitError, Sandbox as RawSandbox } from "e2b";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
+import { linkWorkspaceCommand } from "./computer-support.js";
 import { fakeE2BMachine } from "./e2b-machine.test-support.js";
 import type { E2BSandboxSdk } from "./e2b-sandbox.js";
-import { E2BSandboxProvider, isSandboxGoneError, linkWorkspaceCommand } from "./e2b-sandbox.js";
+import { E2BSandboxProvider, isSandboxGoneError } from "./e2b-sandbox.js";
 import { desktopCommandResponder } from "./linux-desktop.test-support.js";
 
 const context = {
@@ -20,6 +21,41 @@ const context = {
 };
 
 describe("E2B computer backend", () => {
+  it.each([
+    { exitCode: 1, stdout: "rakazo-background-idle\n", stderr: "" },
+    { exitCode: 7, stdout: "partial output\n", stderr: "command failed\n" },
+  ])("returns process events for a command exiting with $exitCode", async (result) => {
+    const machine = fakeE2BMachine("computer");
+    vi.spyOn(machine.sandbox.commands, "run").mockRejectedValue(new CommandExitError(result));
+    const provider = new E2BSandboxProvider("test-key", {
+      create: async () => machine.sandbox,
+      connect: async () => machine.sandbox,
+      pause: async () => undefined,
+    });
+
+    const events = [];
+    for await (const event of provider.execute(
+      { id: "computer", providerRef: "computer", kind: "e2b", botId: "bot" },
+      { argv: ["command"] },
+      context,
+    )) {
+      events.push(event);
+    }
+
+    expect(events).toEqual(
+      result.exitCode === 1
+        ? [
+            { type: "stdout", data: "rakazo-background-idle\n" },
+            { type: "exit", code: 1 },
+          ]
+        : [
+            { type: "stdout", data: "partial output\n" },
+            { type: "stderr", data: "command failed\n" },
+            { type: "exit", code: 7 },
+          ],
+    );
+  });
+
   it("does not report a stopped computer when pausing fails at the provider", async () => {
     const sdk: E2BSandboxSdk = {
       create: vi.fn(),

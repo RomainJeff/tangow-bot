@@ -52,7 +52,7 @@ if (name === 'tar') { fs.writeFileSync(args[args.indexOf('-czf')+1], 'fake-data-
 if (name === 'docker' && args.includes('scripts/setup-e2b-homes.ts')) {
  if (args.includes('--verify') && process.env.FAIL_VERIFY) process.exit(1);
  if (args.includes('--verify') && process.env.EXPECT_TEMPLATE && (args.includes('WORKER_TEMPLATE') ? process.env.WORKER_TEMPLATE : 'rakazo-worker-pi-native') !== process.env.EXPECT_TEMPLATE) process.exit(1);
- const computers=process.env.UPGRADE_EXISTING && !fs.existsSync('.upgraded') ? [{id:'computer-old',spaceId:'space-old',scope:'team'}] : [];
+ const computers=process.env.UPGRADE_EXISTING && !fs.existsSync('.upgraded') ? [{id:'computer-old',spaceId:'space-old',scope:'team',homeStorage:process.env.DOCKER_VOLUMES?'volumes':'snapshot'}] : [];
  console.log(JSON.stringify(args.includes('--prepare') ? {prepared:'computer-old'} : {computers,previews:process.env.UNMAPPED && args.includes('--plans') ? [{computerId:'computer-old',notCopied:[{homePath:'legacy.txt',kind:'unmapped'}]}] : [],blockers:{runs:process.env.BUSY_RUNS?1:0,controls:0,leases:0,maintenance:0,unsupported:0}})); process.exit(0);
 }
 if (name === 'docker' && args.includes('scripts/migrate-home-to-volumes.ts')) {
@@ -60,6 +60,7 @@ if (name === 'docker' && args.includes('scripts/migrate-home-to-volumes.ts')) {
  if (!args.includes('--dry-run')) fs.writeFileSync('.upgraded','yes');
  console.log(JSON.stringify({outcome:args.includes('--dry-run')?'planned':'adopted'})); process.exit(0);
 }
+if (name === 'docker' && args.includes('scripts/carry-docker-volumes-to-e2b.ts')) { fs.writeFileSync('.upgraded','yes'); console.log(JSON.stringify({outcome:'carried',volumes:[]})); process.exit(0); }
 if (name === 'docker' && args.includes('scripts/migrate-skills-to-volumes.ts')) { console.log(JSON.stringify({events:[]})); process.exit(0); }
 if (name === 'docker' && args.includes('postgres')) { console.log('fake-database-backup'); process.exit(0); }
 if (name === 'git') {
@@ -340,6 +341,20 @@ test("existing homes are upgraded before services restart and no snapshots remai
   );
   assert.ok(verify > migrate && verify < start);
   assert.equal(existsSync(path.join(f.root, ".env.e2b.upgrade.json")), false);
+});
+
+test("a Docker computer on volumes is carried to E2B instead of migrated, before services restart", (t) => {
+  const f = fixture(t);
+  const result = f.invoke(["--migrate-existing"], { UPGRADE_EXISTING: "1", DOCKER_VOLUMES: "1" });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = f.calls();
+  const carry = calls.findIndex((c) => c.includes("scripts/carry-docker-volumes-to-e2b.ts"));
+  const start = calls.findIndex((c) => c.includes("up"));
+  assert.ok(carry >= 0 && start > carry);
+  assert.equal(
+    calls.some((c) => c.includes("scripts/migrate-home-to-volumes.ts")),
+    false,
+  );
 });
 
 test("active generations refuse the upgrade before any build or service change", (t) => {

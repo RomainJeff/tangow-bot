@@ -14,6 +14,8 @@ import type { ChannelFaults, FrameChannel, GuestConnector } from "@rakazo/adapte
 import { memoryChannelPair, streamChannel, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
 import type { GuestHarness } from "@rakazo/agent-run-worker";
 import { HARNESSES, runGuest } from "@rakazo/agent-run-worker";
+import type { PrismaClient } from "@rakazo/db";
+import { VolumeComputer } from "./volume-computer.js";
 
 export interface LocalWorkerFaults extends ChannelFaults {
   /** Connections the in-memory guest may open after its first. Default 0. */
@@ -61,7 +63,7 @@ function isCancel(frame: Uint8Array) {
 }
 
 /**
- * Workers on this machine, for tests and P3's local runs: a VM is a directory, its guest runs the
+ * Workers on this machine, for tests, canaries and evals: a VM is a directory, its guest runs the
  * harness in this process (`memory`) or as a child process over stdio (`child`). A volume is a
  * directory beside the VMs, linked at its mount path and kept when the VM is destroyed. Never
  * composed in production.
@@ -223,8 +225,9 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
       cwd: path.dirname(entry),
       detached: true,
       stdio: ["pipe", "pipe", "ignore"],
+      // Like a VM, the guest gets none of this process's keys: live runs let a model run commands.
       env: {
-        ...process.env,
+        PATH: process.env.PATH,
         RAKAZO_WORKER_CAPABILITY: capability,
         RAKAZO_WORKER_HARNESS: this.harness.declaration.name,
         RAKAZO_WORKER_ROOT: vm.root,
@@ -270,4 +273,36 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
     };
     return { connections: connections(), guest };
   }
+}
+
+/**
+ * What `createApp` takes to run bots in workers on this machine, each guest a child process by
+ * default, on a fake computer whose files are the workers' volumes.
+ */
+export function localWorkerApp(root: string, mode: "memory" | "child" = "child") {
+  const workers = new LocalWorkerProvider({ mode, root });
+  return {
+    agentRuntime: "worker" as const,
+    workers,
+    sandbox: new VolumeComputer((volumeRef) => workers.volumePath(volumeRef)),
+  };
+}
+
+/**
+ * Puts a new bot's computer on volumes, as a Docker or E2B deployment creates it: the test
+ * providers' computers start on snapshots. Its volumes are created at its first run.
+ */
+export async function computerOnVolumes(
+  prisma: Pick<PrismaClient, "bot" | "computer">,
+  botId: string,
+): Promise<void> {
+  const { computerId } = await prisma.bot.findUniqueOrThrow({
+    where: { id: botId },
+    select: { computerId: true },
+  });
+  if (!computerId) return;
+  await prisma.computer.update({
+    where: { id: computerId },
+    data: { kind: "e2b", homeStorage: "volumes" },
+  });
 }

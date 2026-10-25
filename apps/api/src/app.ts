@@ -22,6 +22,7 @@ import {
   applyMessagingOutboundStatus,
   ChatSdkMessagingSurface,
   ComposioConnector,
+  composeInProcessRuntime,
   composeWorkers,
   createBackgroundJobHandlers,
   createConnectorStack,
@@ -31,8 +32,8 @@ import {
   createMessagingTeamChatSender,
   createPostgresSkillLock,
   createRunExecutor,
-  createRunSandbox,
   createRunSecretWriter,
+  createSandboxProvider,
   createSkillLineSweep,
   createTraceExporterFromEnv,
   createWebProvider,
@@ -54,7 +55,6 @@ import {
   McpConnector,
   McpOAuthBroker,
   messagingPlatformsFromEnv,
-  PiAgentRuntime,
   PiOAuthLogins,
   PipedreamConnector,
   PostgresRealtimeFanout,
@@ -63,7 +63,6 @@ import {
   pushTokenPath,
   reconcileComputerUpdates,
   removeUserSkillDirs,
-  ScriptedAgentRuntime,
   SmtpEmailProvider,
   SpaceDecisionProviderResolver,
   SpaceMemoryProviderResolver,
@@ -96,7 +95,6 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { AppEnv } from "./env.js";
 import { loadEnv } from "./env.js";
-import { mountLocalSettings } from "./local-settings.js";
 import {
   createMessagingInboundHandler,
   teamChatSenderCanWakeMessageRoutines,
@@ -229,12 +227,10 @@ export async function createApp(
       );
   const sandbox: SandboxProvider =
     sandboxOverride ??
-    createRunSandbox(env.sandboxProvider, {
+    createSandboxProvider(env.sandboxProvider, {
       supervisorUrl: env.sandboxSupervisorUrl,
       supervisorToken: env.sandboxSupervisorToken,
       e2bApiKey: env.e2bApiKey,
-      dataDir: env.dataDir,
-      prisma,
     });
   const mcpOAuth = new McpOAuthBroker(prisma, secrets, remoteConnectors);
   const memoryProviders = new SpaceMemoryProviderResolver(prisma, secrets);
@@ -246,6 +242,14 @@ export async function createApp(
     prisma,
     workersOverride ?? createWorkerProvider(env.workerProvider),
   );
+  // Optional trace export of the controller's model calls. Without configuration this resolves
+  // to nothing, so no span is recorded and no vendor endpoint is ever contacted.
+  const traceExport = createTraceExporterFromEnv(process.env);
+  if (traceExport.warning) logger.warn(traceExport.warning);
+  const runtime = composeInProcessRuntime(env.agentRuntime, workers, {
+    exporter: traceExport.exporter,
+    serviceName: SERVICE_NAMES.api,
+  });
   const memory = new MarkdownMemoryStore(prisma);
   const mcp = new McpConnector(
     prisma,
@@ -309,18 +313,6 @@ export async function createApp(
   const connector = stack.destination;
   await connector.start();
   integrationSettings.warmDirectories();
-  // Optional agent trace export. Without configuration this resolves to nothing,
-  // so the runtime records no spans and no vendor endpoint is ever contacted.
-  const traceExport = createTraceExporterFromEnv(process.env);
-  if (traceExport.warning) logger.warn(traceExport.warning);
-  const runtime =
-    env.agentRuntime === "scripted"
-      ? new ScriptedAgentRuntime()
-      : new PiAgentRuntime({
-          ...(traceExport.exporter
-            ? { traceExporter: traceExport.exporter, serviceName: SERVICE_NAMES.api }
-            : {}),
-        });
   const notifications = new ExpoPushProvider(env.dataDir);
   const auth = createAuth(prisma, {
     secret: env.authSecret,
@@ -451,6 +443,10 @@ export async function createApp(
     deploymentModelKey: env.deploymentModelKey,
     messaging,
     artifacts,
+    homeMove:
+      env.sandboxProvider === "docker"
+        ? { prisma, workers: workers.lifecycle, dataDir: env.dataDir }
+        : undefined,
   });
   if (inMemoryJobs) {
     await inMemoryJobs.start(jobHandlers);
@@ -555,7 +551,6 @@ export async function createApp(
     }
     return auth.handler(c.req.raw);
   });
-  mountLocalSettings(app, { token: env.desktopStackToken, prisma, rpc });
   app.use("/rpc/*", async (c, next) => {
     const session = await auth.api.getSession({ headers: sessionHeaders(c.req.raw) });
     const requestedSpaceId = c.req.header("x-rakazo-space-id");

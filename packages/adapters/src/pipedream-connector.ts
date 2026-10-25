@@ -8,11 +8,9 @@ import type {
   ManagedConnectorProvider,
 } from "@rakazo/adapter-kit";
 import { collectPages, filterCatalog } from "./composio-connector.js";
-import {
-  combineSignals,
-  redactConnectorPayload,
-  sanitizeConnectorError,
-} from "./connector-safety.js";
+import { ConnectorError } from "./connector-error.js";
+import { connectorError, connectorResult, httpConnectorFailureKind } from "./connector-errors.js";
+import { combineSignals, sanitizeConnectorError } from "./connector-safety.js";
 import {
   callRemoteMcpTool,
   listRemoteMcpTools,
@@ -180,7 +178,7 @@ export class PipedreamConnector implements ManagedConnectorProvider {
   async *execute(call: ConnectorCall, context: AdapterContext): AsyncIterable<ConnectorEvent> {
     const app = call.route?.resourceId;
     if (!app) {
-      yield { type: "error", message: "Pipedream app route is missing" };
+      yield { type: "error", kind: "invalid_arguments", message: "Pipedream app route is missing" };
       return;
     }
     let token: string | undefined;
@@ -197,18 +195,12 @@ export class PipedreamConnector implements ManagedConnectorProvider {
         call.route?.toolName ?? call.tool,
         call.args,
       );
-      yield {
-        type: "result",
-        data: redactConnectorPayload(result, [token, this.config.clientSecret]),
-      };
+      yield connectorResult(result, [token, this.config.clientSecret]);
     } catch (error) {
-      yield {
-        type: "error",
-        message: sanitizeConnectorError(
-          error,
-          [token, this.config.clientSecret].filter((value): value is string => Boolean(value)),
-        ),
-      };
+      yield connectorError(
+        error,
+        [token, this.config.clientSecret].filter((value): value is string => Boolean(value)),
+      );
     }
   }
 
@@ -424,7 +416,8 @@ export class PipedreamConnector implements ManagedConnectorProvider {
     if (response.status === 401) this.accessToken = undefined;
     const body = await readPipedreamBody(response, requestAbort);
     if (!response.ok) {
-      throw new Error(
+      throw new ConnectorError(
+        httpConnectorFailureKind(response.status),
         sanitizeConnectorError(`Pipedream returned HTTP ${response.status}: ${body}`, [token]),
       );
     }
@@ -466,7 +459,10 @@ export class PipedreamConnector implements ManagedConnectorProvider {
       error?: string;
     };
     if (!response.ok || !body.access_token) {
-      throw new Error(`Pipedream authentication failed: ${body.error ?? response.status}`);
+      throw new ConnectorError(
+        response.ok ? "auth_required" : httpConnectorFailureKind(response.status),
+        `Pipedream authentication failed: ${body.error ?? response.status}`,
+      );
     }
     this.accessToken = {
       value: body.access_token,

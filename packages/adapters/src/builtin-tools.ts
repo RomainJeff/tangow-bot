@@ -131,7 +131,7 @@ export const builtinAgentTools: ConnectorTool[] = [
   {
     name: "browser_navigate",
     description:
-      'Open a URL in the page browser on this bot\'s computer and return the document title. Prefer this over pixel clicks for web pages. If the result includes fallback:"computer_act", use computer_act on the desktop browser instead.',
+      'Open a URL in the page browser on this bot\'s computer and return the document title. Use this when reading with web_fetch is insufficient because the page needs JavaScript, sign-in, or interaction. Prefer this over pixel clicks for web pages. If the result includes fallback:"computer_act", use computer_act on the desktop browser instead.',
     inputSchema: {
       type: "object",
       properties: {
@@ -547,7 +547,7 @@ that merely narrate internal operations.`,
   {
     name: "web_fetch",
     description:
-      "Fetch a public http(s) page and return readable text (title + content). Read-only; no JavaScript. Use after web_search when you need the page itself.",
+      "Fetch a public http(s) page and return readable text (title + content). Read-only; no JavaScript. Use directly for a known public URL before opening the browser; no prior web_search is needed.",
     inputSchema: {
       type: "object",
       properties: {
