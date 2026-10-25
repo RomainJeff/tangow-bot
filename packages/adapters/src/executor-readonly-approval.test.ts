@@ -71,6 +71,7 @@ function fixture({
   connector = undefined as
     | { execute(call: ConnectorCall, context: AdapterContext): AsyncIterable<ConnectorEvent> }
     | undefined,
+  connectorFailure = undefined as Extract<ConnectorEvent, { type: "error" }> | undefined,
 } = {}) {
   const tool: ConnectorTool = {
     name,
@@ -281,6 +282,10 @@ function fixture({
   };
   const finalizeRun = vi.fn(async () => ({ continuationRunId: null }));
   const execute = vi.fn(async function* (call: ConnectorCall, context: AdapterContext) {
+    if (connectorFailure) {
+      yield connectorFailure;
+      return;
+    }
     if (connector) yield* connector.execute(call, context);
     else yield { type: "result" as const, data: { item: call.args.id } };
   });
@@ -395,6 +400,33 @@ function approve(effect: Effect, edits?: string | AskDraftEdits) {
 describe("connector read-only metadata and approval enforcement", () => {
   beforeEach(() => {
     vi.mocked(runAutoReviewJudge).mockReset();
+  });
+
+  it("preserves the connector failure category and details in the model's tool result", async () => {
+    const f = fixture({
+      requireToolApproval: false,
+      connectorFailure: {
+        type: "error",
+        kind: "auth_required",
+        message: "Reconnect this app",
+        details: { status: 401 },
+      },
+    });
+    await f.run();
+    expect(f.results).toEqual([
+      { error: "Reconnect this app", kind: "auth_required", details: { status: 401 } },
+    ]);
+    expect(f.execute).toHaveBeenCalledOnce();
+  });
+
+  it("reports invalid catalog arguments without executing the connector", async () => {
+    const f = fixture({ catalog: true });
+    f.setCalls([{ args: { id: 123 }, executionId: "invalid-call" }]);
+    await f.run();
+    expect(f.results).toEqual([
+      { error: expect.stringContaining("Tool arguments are invalid"), kind: "invalid_arguments" },
+    ]);
+    expect(f.execute).not.toHaveBeenCalled();
   });
 
   it.each(["shell", "write_file"])(

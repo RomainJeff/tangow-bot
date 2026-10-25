@@ -1726,6 +1726,7 @@ describe("buildSystemInstructions", () => {
     workspaceInstruction: "This entire computer workspace is your private home.",
     agentEnvironmentInstruction: "Environment: linux",
     pluginLine: "No plugins are connected yet.",
+    catalogIndex: "Connected tool catalog: mcp__mail__send",
     agentSkillsLine: "Skills: none",
     taughtSkillsLine: "Saved taught skills:\n- brief",
     botDirectory: "<bots>peer</bots>",
@@ -1733,6 +1734,71 @@ describe("buildSystemInstructions", () => {
 
   it("keeps the clock out of the system prefix", () => {
     expect(buildSystemInstructions(parts)).not.toContain("Current date and time");
+  });
+
+  it("gives both harness paths the same tool preference and connector recovery policy", () => {
+    for (const [instructions, prefix] of [
+      [buildSystemInstructions(parts), ""],
+      [buildHarnessAddendum(parts), "mcp__rakazo__"],
+    ]) {
+      expect(instructions).toContain("Connected tool catalog: mcp__mail__send");
+      expect(instructions).toContain("Use the simplest suitable method");
+      expect(instructions).toContain(`For a known public URL, use ${prefix}web_fetch directly`);
+      expect(instructions).toContain("auth_required or permission_denied");
+      expect(instructions).not.toContain("For web pages, use the page tools first");
+      expect(instructions).not.toContain("read a page without a computer");
+    }
+  });
+
+  it("uses the worker's Rakazo tool names throughout owned guidance while retaining native names", () => {
+    const instructions = buildHarnessAddendum({
+      ...parts,
+      browserRunAllowed: true,
+      takeoverExposed: true,
+      searchRunsExposed: true,
+      userTurn: true,
+      offerProposals: true,
+    });
+    for (const name of [
+      "web_fetch",
+      "web_search",
+      "browser_navigate",
+      "browser_run",
+      "browser_snapshot",
+      "browser_act",
+      "computer_observe",
+      "computer_act",
+      "request_takeover",
+      "request_secret",
+      "list_secrets",
+      "secret_request",
+      "forget_secret",
+      "remember",
+      "scratchpad_add",
+      "scratchpad_update",
+      "scratchpad_complete",
+      "destination_write",
+      "create_space",
+      "spawn_bot",
+      "update_bot",
+      "search_runs",
+      "ask_user",
+      "archive_bot",
+      "render_plot",
+      "add_mcp_server",
+      "schedule_create",
+      "schedule_list",
+    ]) {
+      expect(instructions).toContain(`mcp__rakazo__${name}`);
+      if (name !== "remember") {
+        expect(instructions).not.toMatch(new RegExp(`(?<![A-Za-z0-9_])${name}\\b`));
+      }
+    }
+    expect(instructions).toContain("Call mcp__rakazo__remember the moment");
+    expect(instructions).toContain("remember that when you can");
+    expect(instructions).toContain("Use native read, write, edit and bash");
+    expect(instructions).not.toContain("mcp__rakazo__bash");
+    expect(instructions).not.toContain("mcp__rakazo__mcp__rakazo__");
   });
 
   it("gives a harness with its own prompt the bot's guidance without credentials or helpers", () => {
