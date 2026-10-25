@@ -287,7 +287,6 @@ export function ShellPage() {
         computerScreenError={screen.computerScreenError}
         screenLink={screen.screenLink}
         openComputer={control.openComputer}
-        refreshThread={sync.refreshThread}
         refreshGroupThread={sync.refreshGroupThread}
         refreshBots={refreshBots}
         activeRoutines={!inGroup && store.routinesBotId === active?.id ? store.routines : null}

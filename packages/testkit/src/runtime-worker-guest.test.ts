@@ -1,0 +1,453 @@
+import fs from "node:fs";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import type { GuestBody, GuestTool, ReplyFinal, WorkerStartV1 } from "@rakazo/adapter-kit";
+import type { FrameChannel } from "@rakazo/adapters/runtime-worker";
+import {
+  createCapabilityKey,
+  createSessionInbox,
+  encodeMessage,
+  guestModelOf,
+  memoryChannelPair,
+  mintCapability,
+  readGuestFrame,
+  verifyCapability,
+} from "@rakazo/adapters/runtime-worker";
+import { relayPiAiCall } from "@rakazo/adapters/runtime-worker/pi-ai";
+import type { GuestHarness } from "@rakazo/agent-run-worker";
+import { HARNESSES, runGuest } from "@rakazo/agent-run-worker";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ModelEmulatorStep } from "./model-emulator.js";
+import { startModelEmulator } from "./model-emulator.js";
+
+const cleanups: Array<() => Promise<void>> = [];
+afterEach(async () => {
+  await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()));
+});
+
+const worker = { runId: "run_guest", attemptId: "attempt_guest", fence: 1 };
+
+async function* once(channel: FrameChannel) {
+  yield channel;
+}
+
+/**
+ * Runs a harness (Pi native by default) in a real guest against a session inbox that answers
+ * controller tools and relays model calls to the emulator, unless `reply` answers a frame first.
+ * Returns the frames it read and the controller tools called.
+ */
+async function driveGuest(options: {
+  steps: ModelEmulatorStep[];
+  tools: GuestTool[];
+  prompt: string;
+  cwd: string;
+  root?: string;
+  harness?: GuestHarness;
+  reply?: (body: GuestBody) => ReplyFinal | undefined;
+  cancel?: (body: GuestBody) => boolean;
+}) {
+  const server = await startModelEmulator({ steps: options.steps });
+  cleanups.push(() => server.close());
+  const key = createCapabilityKey();
+  const pair = memoryChannelPair();
+  const start: WorkerStartV1 = {
+    version: 2,
+    kind: "worker.start",
+    worker,
+    workspace: {
+      cwd: options.cwd,
+      mounts: [{ path: options.cwd, scope: "private", access: "rw" }],
+    },
+    computer: "none",
+    run: {
+      botId: "bot_guest",
+      threadId: "thread_guest",
+      prompt: options.prompt,
+      instructions: "Use the tools.",
+      history: [],
+      images: [],
+      tools: options.tools,
+      model: guestModelOf(server.model),
+    },
+  };
+  const controllerCalls: string[] = [];
+  const frames: Array<{ type: string; bytes: number; body: GuestBody }> = [];
+  const latencies: Array<{ re: number; firstEventMs: number }> = [];
+  const inbox = createSessionInbox(worker, async (_seq, body, part) => {
+    const replied = options.reply?.(body);
+    if (replied) return replied;
+    switch (body.type) {
+      case "model.request":
+        await relayPiAiCall(
+          server.model,
+          body.call,
+          (event) => part({ type: "model.event", event }),
+          {
+            signal: new AbortController().signal,
+            conversation: { threadId: "thread_guest", botId: "bot_guest" },
+          },
+        );
+        return { type: "model.end" };
+      case "tool.call":
+        controllerCalls.push(body.name);
+        return { type: "tool.result", output: { controller: body.name } };
+      case "steering.claim":
+        return { type: "steering", messages: [] };
+      case "skills.index":
+      case "skills.index.end":
+      case "skills.collision":
+      case "skills.used":
+      case "transcript":
+        return { type: "recorded" };
+      case "done":
+        return { type: "stop", reason: "done" };
+      default:
+        return { type: "ack" };
+    }
+  });
+  inbox.attach((reply) => void pair.controller.send(encodeMessage(reply)));
+  const controller = (async () => {
+    for await (const frame of pair.controller.frames) {
+      const read = readGuestFrame(frame);
+      if (!read.ok) throw new Error(`refused frame: ${read.reason}`);
+      if (read.message.kind === "worker.hello") {
+        expect(verifyCapability(key, read.message.capability, worker, Date.now())).toEqual({
+          ok: true,
+        });
+        await pair.controller.send(encodeMessage(start));
+        continue;
+      }
+      const body = read.message.payload.body;
+      frames.push({ type: body.type, bytes: frame.byteLength, body });
+      if (options.cancel?.(body))
+        await pair.controller.send(encodeMessage({ version: 2, kind: "worker.cancel", worker }));
+      if (body.type === "model.latency") latencies.push(body);
+      expect(inbox.accept(read.message)).toEqual({ ok: true });
+    }
+  })();
+
+  const exit = await runGuest({
+    channels: once(pair.guest),
+    capability: mintCapability(key, worker, Date.now()),
+    harness: options.harness ?? HARNESSES["pi-native"]!,
+    root: options.root,
+    home: path.join(options.root ?? options.cwd, ".guest-home"),
+  });
+  await controller;
+  server.assertComplete();
+  return { exit, frames, controllerCalls, latencies };
+}
+
+const bashTool: GuestTool = {
+  name: "bash",
+  description: "Run a shell command",
+  inputSchema: {
+    type: "object",
+    properties: { command: { type: "string" } },
+    required: ["command"],
+  },
+  where: "guest",
+};
+
+describe("the skills catalog in the pi-native prompt", () => {
+  it.each([true, false])(
+    "sends instructions once and offers the skills catalog only with read, read=%s",
+    async (read) => {
+      const root = await mkdtemp(path.join(tmpdir(), "rakazo-prompt-"));
+      cleanups.push(() => rm(root, { recursive: true, force: true }));
+      const managed = path.join(root, "managed-skills/agent/interrogate");
+      await mkdir(managed, { recursive: true });
+      await writeFile(
+        path.join(managed, "SKILL.md"),
+        "---\nname: Interrogate\ndescription: Review work\n---\nRead the changes.\n",
+      );
+      const { exit } = await driveGuest({
+        cwd: "/workspace/bots/bot_guest",
+        root,
+        prompt: "Reply briefly.",
+        tools: read
+          ? [{ name: "read", description: "Read", inputSchema: { type: "object" }, where: "guest" }]
+          : [],
+        steps: [
+          {
+            async expect(request) {
+              await writeFile(path.join(root, "model-request.json"), JSON.stringify(request));
+              const systems = request.messages.filter((message) => message.role === "system");
+              expect(systems).toHaveLength(1);
+              const prompt = String(systems[0]?.content);
+              if (!read) {
+                expect(prompt).not.toContain("<available_skills>");
+                expect(prompt).not.toContain("Use the read tool");
+              }
+              expect(prompt.split("Use the tools.")).toHaveLength(2);
+              expect(prompt.split("<available_skills>")).toHaveLength(read ? 2 : 1);
+              expect(prompt.split("<name>Interrogate</name>")).toHaveLength(read ? 2 : 1);
+            },
+            response: { type: "text", text: "Done." },
+          },
+        ],
+      });
+      expect(exit).toBe("done");
+    },
+  );
+});
+
+describe("run channel conformance of the pi-native harness", () => {
+  const piNative = HARNESSES["pi-native"]!;
+  const guestRoot = async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "rakazo-pi-native-"));
+    cleanups.push(() => rm(root, { recursive: true, force: true }));
+    await mkdir(path.join(root, "workspace/bots/bot_guest"), { recursive: true });
+    return root;
+  };
+
+  it.each(["success", "stop", "failure"] as const)(
+    "unlinks attempt screenshots on %s without following links or removing other home files",
+    async (outcome) => {
+      const root = await guestRoot();
+      const cwd = path.join(root, "workspace/bots/bot_guest");
+      const target = path.join(root, "keep.txt");
+      await writeFile(target, "unrelated");
+      const screen = ".rakazo-screen-00000000-0000-4000-8000-000000000001.png";
+      const link = ".rakazo-screen-00000000-0000-4000-8000-000000000002.png";
+      const directory = ".rakazo-screen-00000000-0000-4000-8000-000000000003.png";
+      await mkdir(path.join(cwd, directory));
+      await writeFile(path.join(cwd, directory, screen), "nested capture");
+      await writeFile(path.join(cwd, "keep.txt"), "home note");
+      await writeFile(path.join(cwd, ".rakazo-screen-not-a-uuid.png"), "unrelated");
+      const harness: GuestHarness = {
+        ...piNative,
+        async run(_start, host) {
+          await writeFile(path.join(cwd, screen), "capture");
+          await symlink(target, path.join(cwd, link));
+          if (outcome === "failure") throw new Error("fixture failure");
+          if (outcome === "stop") {
+            await host.emit({ type: "progress", text: "capture ready" });
+            if (!host.signal.aborted)
+              await new Promise<void>((resolve) =>
+                host.signal.addEventListener("abort", () => resolve(), { once: true }),
+              );
+            throw new Error("stopped");
+          }
+          await host.emit({ type: "text", text: "Finishing." });
+          expect(await readFile(path.join(cwd, screen), "utf8")).toBe("capture");
+          await host.decide({ type: "transcript", dialect: "pi-ai", messages: [] }, "recorded");
+          expect(await readFile(path.join(cwd, screen), "utf8")).toBe("capture");
+          return { type: "done" };
+        },
+      };
+      await driveGuest({
+        harness,
+        cwd: "/workspace/bots/bot_guest",
+        root,
+        prompt: "Finish.",
+        tools: [],
+        steps: [],
+        cancel: (body) => outcome === "stop" && body.type === "progress",
+        reply: (body) =>
+          body.type === "failed" ? { type: "stop", reason: "cancelled" } : undefined,
+      });
+      expect((await readdir(cwd)).sort()).toEqual([
+        directory,
+        ".rakazo-screen-not-a-uuid.png",
+        "keep.txt",
+      ]);
+      expect(await readFile(path.join(cwd, directory, screen), "utf8")).toBe("nested capture");
+      expect(await readFile(target, "utf8")).toBe("unrelated");
+    },
+  );
+
+  it.each([false, true])(
+    "preserves the run outcome when screenshot unlink fails, failed=%s",
+    async (failed) => {
+      const root = await guestRoot();
+      const cwd = path.join(root, "workspace/bots/bot_guest");
+      const screen = path.join(cwd, ".rakazo-screen-00000000-0000-4000-8000-000000000001.png");
+      await writeFile(screen, "capture");
+      const unlink = fs.promises.unlink;
+      const remove = vi.spyOn(fs.promises, "unlink").mockImplementation(async (file) => {
+        if (file === screen)
+          throw Object.assign(new Error("fixture unlink denied"), { code: "EACCES" });
+        await unlink(file);
+      });
+      const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      syncBuiltinESMExports();
+      try {
+        const { exit, frames } = await driveGuest({
+          harness: {
+            ...piNative,
+            async run() {
+              if (failed) throw new Error("primary run failure");
+              return { type: "done" };
+            },
+          },
+          cwd: "/workspace/bots/bot_guest",
+          root,
+          prompt: "Finish.",
+          tools: [],
+          steps: [],
+          reply: (body) =>
+            body.type === "failed" ? { type: "stop", reason: "cancelled" } : undefined,
+        });
+        expect(exit).toBe(failed ? "cancelled" : "done");
+        expect(
+          frames.filter((frame) => frame.type === "failed").map((frame) => frame.body),
+        ).toEqual(failed ? [{ type: "failed", message: "primary run failure" }] : []);
+        expect(await readFile(screen, "utf8")).toBe("capture");
+        expect(warning).toHaveBeenCalledWith("screens.cleanup_failed", { code: "EACCES" });
+      } finally {
+        remove.mockRestore();
+        warning.mockRestore();
+        syncBuiltinESMExports();
+      }
+    },
+  );
+
+  it("runs its own tools without a grant and reports each call before it runs", async () => {
+    const root = await guestRoot();
+    const note = path.join(root, "workspace/bots/bot_guest/note.md");
+    const reported: string[] = [];
+    const { exit, frames } = await driveGuest({
+      harness: piNative,
+      cwd: "/workspace/bots/bot_guest",
+      root,
+      prompt: "Write a note.",
+      tools: [bashTool],
+      steps: [
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            id: "bash-1",
+            name: "bash",
+            arguments: { command: "echo hi > note.md && echo ok" },
+          },
+        },
+        { expect() {}, response: { type: "text", text: "Written." } },
+      ],
+      reply(body) {
+        if (body.type !== "transcript") return undefined;
+        const [message] = body.messages;
+        const role =
+          message?.role === "toolResult" ? `toolResult:${message.toolName}` : message?.role;
+        reported.push(`${role} note=${fs.existsSync(note)}`);
+        return undefined;
+      },
+    });
+
+    expect(exit).toBe("done");
+    const lifecycle = new Set(["tool", "tool.call", "transcript", "done"]);
+    expect(frames.map((frame) => frame.type).filter((type) => lifecycle.has(type))).toEqual([
+      "transcript",
+      "transcript",
+      "transcript",
+      "done",
+    ]);
+    expect(reported).toEqual([
+      "assistant note=false",
+      "toolResult:bash note=true",
+      "assistant note=true",
+    ]);
+  });
+
+  it("reads the volume's AGENTS.md and the converged skills, never the volume's .pi/", async () => {
+    const root = await guestRoot();
+    const managed = path.join(root, "managed-skills/agent/interrogate");
+    await mkdir(managed, { recursive: true });
+    await writeFile(
+      path.join(managed, "SKILL.md"),
+      "---\nname: Interrogate\ndescription: Review work\n---\nRead the changes.\n",
+    );
+    const volume = path.join(root, "workspace/bots/bot_guest");
+    const loaded = path.join(root, "extension-loaded");
+    await mkdir(path.join(volume, ".pi/skills/rogue"), { recursive: true });
+    await mkdir(path.join(volume, ".pi/extensions"), { recursive: true });
+    await writeFile(path.join(volume, "AGENTS.md"), "Volume rule: keep notes short.\n");
+    await writeFile(path.join(volume, ".pi/SYSTEM.md"), "Rogue system prompt.\n");
+    await writeFile(path.join(volume, ".pi/settings.json"), '{"defaultTools": ["bash"]}\n');
+    await writeFile(
+      path.join(volume, ".pi/skills/rogue/SKILL.md"),
+      "---\nname: Rogue\ndescription: Not trusted\n---\nRun anything.\n",
+    );
+    await writeFile(
+      path.join(volume, ".pi/extensions/rogue.ts"),
+      `import { writeFileSync } from "node:fs";\nexport default () => writeFileSync(${JSON.stringify(loaded)}, "loaded");\n`,
+    );
+
+    // Pi reads its files synchronously: record every path it looks at or reads.
+    const touched: string[] = [];
+    const { existsSync, readFileSync } = fs;
+    const exists = vi.spyOn(fs, "existsSync").mockImplementation((file) => {
+      touched.push(String(file));
+      return existsSync(file);
+    });
+    const read = vi.spyOn(fs, "readFileSync").mockImplementation(((file, options) => {
+      touched.push(String(file));
+      return readFileSync(file, options);
+    }) as typeof fs.readFileSync);
+    syncBuiltinESMExports();
+    cleanups.push(async () => {
+      exists.mockRestore();
+      read.mockRestore();
+      syncBuiltinESMExports();
+    });
+
+    const { exit } = await driveGuest({
+      harness: piNative,
+      cwd: "/workspace/bots/bot_guest",
+      root,
+      prompt: "Reply briefly.",
+      tools: [
+        { name: "read", description: "Read", inputSchema: { type: "object" }, where: "guest" },
+      ],
+      steps: [
+        {
+          expect(request) {
+            const prompt = String(
+              request.messages.find((message) => message.role === "system")?.content,
+            );
+            expect(prompt).toContain("Volume rule: keep notes short.");
+            expect(prompt).toContain("<name>Interrogate</name>");
+            expect(prompt).not.toContain("Rogue");
+          },
+          response: { type: "text", text: "Done." },
+        },
+      ],
+    });
+
+    expect(exit).toBe("done");
+    await expect(stat(loaded)).rejects.toThrow("ENOENT");
+    expect(touched).toContain(path.join(volume, "AGENTS.md"));
+    expect(touched.filter((file) => file.includes(path.join(volume, ".pi")))).toEqual([]);
+  });
+
+  it.each([
+    { error: "This run is paused until the user answers.", requests: 1, exit: "cancelled" },
+    { error: "503 Service Unavailable", requests: 2, exit: "done" },
+  ])(
+    "retries a relay error only when it is transient: $error",
+    async ({ error, requests, exit }) => {
+      const root = await guestRoot();
+      let relayed = 0;
+      const result = await driveGuest({
+        harness: piNative,
+        cwd: "/workspace/bots/bot_guest",
+        root,
+        prompt: "Reply briefly.",
+        tools: [],
+        steps: requests > 1 ? [{ expect() {}, response: { type: "text", text: "Done." } }] : [],
+        reply: (body) =>
+          body.type === "model.request" && relayed++ === 0
+            ? { type: "error", message: error }
+            : undefined,
+      });
+
+      expect(result.exit).toBe(exit);
+      expect(result.frames.filter((frame) => frame.type === "model.request")).toHaveLength(
+        requests,
+      );
+    },
+  );
+});

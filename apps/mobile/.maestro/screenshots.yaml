@@ -81,6 +81,15 @@ tags:
 - takeScreenshot: "10b-change-password"
 - back
 
+- scrollUntilVisible:
+    element: "Computer"
+    direction: DOWN
+- tapOn: "Computer"
+- extendedWaitUntil:
+    visible: "Update all computers|No computers"
+    timeout: 10000
+- takeScreenshot: "10c-computer-settings"
+
 - openLink: "rakazo:///models"
 - extendedWaitUntil:
     visible: "Active model"
@@ -116,6 +125,10 @@ tags:
     visible: "New skill"
     timeout: 10000
 - takeScreenshot: "14b-skills"
+- tapOn: "team-review"
+- assertVisible: "Review shared work before publishing."
+- assertVisible: "Content lives on the shared volume."
+- takeScreenshot: "14c-shared-skill"
 
 - openLink: "rakazo:///thread?botId=${RAKAZO_SCREENSHOT_BOT_ID}&name=Researcher"
 - extendedWaitUntil:
@@ -147,7 +160,18 @@ tags:
 - longPressOn: "Researcher"
 - assertVisible: "Clear conversation"
 - takeScreenshot: "16-bot-actions"
-- back
+# iOS menus close on a tap outside; Android's list closes on back.
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          point: "50%,92%"
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
 
 - openLink: "rakazo:///bot?botId=${RAKAZO_SCREENSHOT_BOT_ID}&tab=settings"
 - extendedWaitUntil:
@@ -238,3 +262,17 @@ tags:
     timeout: 10000
 - assertNotVisible: "Reply"
 - takeScreenshot: "15c-message-reaction"
+
+# The computer was booted above, so its update runs through the real fixture API.
+- openLink: "rakazo:///computer-settings"
+- extendedWaitUntil:
+    visible: "Update computer"
+    timeout: 10000
+- tapOn: "Update computer"
+- extendedWaitUntil:
+    visible: "Computer updated"
+    timeout: 30000
+- assertVisible: "Done"
+- takeScreenshot: "30-computer-updated"
+- tapOn: "Done"
+- assertNotVisible: "Computer updated"

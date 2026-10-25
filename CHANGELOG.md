@@ -12,7 +12,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **A message a bot writes in your name now waits as a draft you send yourself, on web, desktop and iPhone.** An email through Gmail, Outlook or another mail app, or a Slack message, shows as it will leave, with every recipient (a Slack person or channel as Slack names them) and its text; you can change the text, and an email's recipients and subject, then Send, or discard it, with Undo for a moment. This replaces sends that went out with no card, or behind a card that only asked to allow the tool call.
 
+#### Changed
+
+- On web, desktop and iPhone, global Settings now lists each computer with its bots and visible maintenance actions, and can update all available computers at once, reporting busy computers for a later retry without opening their screens or taking control.
+
+#### Fixed
+
+- Opening a bot computer screen or taking control on web, desktop and iPhone no longer fails after the dock starts.
+- Computer updates and recovery on web, desktop and iPhone now show an explicit successful result until you select Done, instead of closing the progress view without confirmation.
+- Every bot's computer screen now has the dock with Browser, Files and Terminal, on E2B and for the additional bots of a Docker Team Computer, instead of a bare desktop with only the browser.
+- On a self-hosted E2B reached through `E2B_SANDBOX_URL`, a bot's computer screen and taking control of it now open instead of showing a "Bad gateway" page.
+- Bots running in isolated Pi workers on E2B now send you their answers instead of sometimes finishing a run without a word.
+- Bots signed in with ChatGPT Plus/Pro answer again on E2B workers instead of failing every run with "No API key found for openai-codex".
+- Existing self-hosted bots can move from Docker or snapshot-based E2B computers to isolated Pi workers through the [setup command](docs/self-host-e2b-workers.md#configure-an-existing-source-deployment-with-one-command), with backups and a resumable home migration.
+
 ### 2026-10-24
+
+#### Added
+
+- **On E2B, each bot run now works in its own temporary isolated VM with the native Pi harness, its files on persistent volumes shared with its computer.** This replaces runs inside the Rakazo server and home snapshots on E2B deployments, for conversations on web, desktop and iPhone. A computer created before this release moves its home onto volumes once with a script ([setup and move](docs/self-host-e2b-workers.md)).
+
+#### Changed
+
+- On iPhone, menus open from the button you tapped as native iOS menus without the extra Cancel row, and deleting a skill now asks for confirmation on every phone.
+- Daytona and Box are no longer supported as computer providers: a self-hosted server set to `SANDBOX_PROVIDER=daytona` or `box` now refuses to start until you switch to `docker` or `e2b` ([upgrade notes](docs/self-host-sandbox-providers.md#remote-provider)).
 
 #### Fixed
 

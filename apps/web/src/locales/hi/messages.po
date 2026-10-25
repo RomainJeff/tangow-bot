@@ -67,6 +67,11 @@ msgstr ""
 msgid "{0} handling"
 msgstr ""
 
+#. placeholder {0}: item.status.busyBotName
+#: src/pages/ComputerSettingsPanel.tsx:112
+msgid "{0} is using it"
+msgstr ""
+
 #. placeholder {0}: format(size / 1024)
 #: src/components/ArtifactFileCard.tsx:223
 msgid "{0} KB"
@@ -98,7 +103,7 @@ msgstr ""
 msgid "{0}'s screen"
 msgstr "{0} की स्क्रीन"
 
-#: src/components/DraftCard.tsx:280
+#: src/components/DraftCard.tsx:282
 msgid "{app} is disconnected."
 msgstr ""
 
@@ -257,7 +262,7 @@ msgstr ""
 #: src/pages/bot-page/RoutineCreateForm.tsx:118
 #: src/pages/bot-page/RoutineDetail.tsx:127
 #: src/pages/bot-page/RoutinesTab.tsx:107
-#: src/pages/KnowledgeSection.tsx:446
+#: src/pages/KnowledgeSection.tsx:447
 msgid "Active"
 msgstr "सक्रिय"
 
@@ -398,7 +403,7 @@ msgstr "उन्नत…"
 msgid "Agent connections"
 msgstr "एजेंट कनेक्शन"
 
-#: src/pages/KnowledgeSection.tsx:449
+#: src/pages/KnowledgeSection.tsx:450
 msgid "Agents"
 msgstr "एजेंट"
 
@@ -407,7 +412,7 @@ msgstr "एजेंट"
 msgid "Agents:"
 msgstr "एजेंट:"
 
-#: src/pages/KnowledgeSection.tsx:445
+#: src/pages/KnowledgeSection.tsx:446
 msgid "All"
 msgstr "सभी"
 
@@ -676,7 +681,7 @@ msgstr "साइन इन पर वापस जाएँ"
 msgid "Base URL"
 msgstr "बेस URL"
 
-#: src/components/DraftCard.tsx:273
+#: src/components/DraftCard.tsx:275
 msgid "Bcc"
 msgstr ""
 
@@ -690,7 +695,7 @@ msgid "Booting live desktop…"
 msgstr "लाइव डेस्कटॉप शुरू हो रहा है…"
 
 #. placeholder {0}: active?.name
-#: src/pages/shell/side-panel.tsx:290
+#: src/pages/shell/side-panel.tsx:275
 msgid "Booting up {0}’s computer"
 msgstr "{0} का कंप्यूटर शुरू हो रहा है"
 
@@ -713,7 +718,7 @@ msgstr "बॉट"
 msgid "Bot"
 msgstr "बॉट"
 
-#: src/pages/shell/side-panel.tsx:417
+#: src/pages/shell/side-panel.tsx:402
 msgid "Bot screen"
 msgstr "बॉट स्क्रीन"
 
@@ -740,6 +745,11 @@ msgstr "बॉट डिफ़ॉल्ट रूप से बिना पू�
 msgid "Bots are working"
 msgstr "बॉट काम कर रहे हैं"
 
+#. placeholder {0}: item.bots.map((bot) => bot.name).join(", ")
+#: src/pages/ComputerSettingsPanel.tsx:104
+msgid "Bots: {0}"
+msgstr ""
+
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:63
 msgid "Brain label"
 msgstr ""
@@ -748,18 +758,22 @@ msgstr ""
 msgid "Browse MCP servers"
 msgstr ""
 
+#: src/pages/ComputerSettingsPanel.tsx:68
+msgid "Busy. Try again when idle."
+msgstr ""
+
 #: src/App.tsx:168
 msgid "Can't reach the server."
 msgstr "सर्वर तक नहीं पहुंचा जा सका।"
 
-#: src/components/ComputerMaintenanceActions.tsx:102
-#: src/components/ComputerUpdateProgress.tsx:233
+#: src/components/ComputerMaintenanceActions.tsx:100
+#: src/components/ComputerUpdateProgress.tsx:258
 #: src/components/teach/TeachComputerOverlay.tsx:271
 #: src/lib/approval-labels.ts:14
 #: src/pages/bot-page/page-kit.tsx:148
 #: src/pages/bot-page/RoutineTriggers.tsx:296
-#: src/pages/KnowledgeSection.tsx:226
-#: src/pages/KnowledgeSection.tsx:684
+#: src/pages/KnowledgeSection.tsx:227
+#: src/pages/KnowledgeSection.tsx:692
 #: src/pages/plugins/advanced-integrations.tsx:337
 #: src/pages/shell/dialogs.tsx:88
 #: src/pages/shell/dialogs.tsx:199
@@ -797,7 +811,7 @@ msgstr "उत्तर रद्द करें"
 msgid "Cancelled"
 msgstr "रद्द किया गया"
 
-#: src/components/DraftCard.tsx:273
+#: src/components/DraftCard.tsx:275
 msgid "Cc"
 msgstr ""
 
@@ -903,8 +917,8 @@ msgstr ""
 msgid "Client secret"
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:684
-#: src/pages/KnowledgeSection.tsx:840
+#: src/pages/KnowledgeSection.tsx:692
+#: src/pages/KnowledgeSection.tsx:848
 #: src/pages/MessagingSettingsOverlay.tsx:362
 #: src/pages/PeerMessagesOverlay.tsx:133
 #: src/pages/PeerMessagesOverlay.tsx:136
@@ -917,7 +931,7 @@ msgstr "बंद करें"
 msgid "Close chart"
 msgstr "चार्ट बंद करें"
 
-#: src/pages/shell/side-panel.tsx:395
+#: src/pages/shell/side-panel.tsx:380
 msgid "Close computer"
 msgstr "कंप्यूटर बंद करें"
 
@@ -934,7 +948,7 @@ msgid "Close MCP servers"
 msgstr "MCP सर्वर बंद करें"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:116
+#: src/pages/SettingsOverlay.tsx:117
 msgid "Close memory settings"
 msgstr "मेमोरी सेटिंग्स बंद करें"
 
@@ -943,12 +957,12 @@ msgid "Close messaging settings"
 msgstr "मैसेजिंग सेटिंग्स बंद करें"
 
 #: src/pages/ModelSettingsOverlay.tsx:68
-#: src/pages/SettingsOverlay.tsx:114
+#: src/pages/SettingsOverlay.tsx:115
 msgid "Close model settings"
 msgstr "मॉडल सेटिंग्स बंद करें"
 
 #: src/pages/bot-page/BotPage.tsx:183
-#: src/pages/shell/side-panel.tsx:172
+#: src/pages/shell/side-panel.tsx:157
 msgid "Close panel"
 msgstr "पैनल बंद करें"
 
@@ -960,11 +974,11 @@ msgstr "प्रीव्यू बंद करें"
 msgid "Close skills"
 msgstr "स्किल्स बंद करें"
 
-#: src/pages/SettingsOverlay.tsx:119
+#: src/pages/SettingsOverlay.tsx:120
 msgid "Close user settings"
 msgstr "उपयोगकर्ता सेटिंग्स बंद करें"
 
-#: src/pages/SettingsOverlay.tsx:118
+#: src/pages/SettingsOverlay.tsx:119
 #: src/pages/VoiceSettingsOverlay.tsx:174
 msgid "Close voice settings"
 msgstr "आवाज़ सेटिंग्स बंद करें"
@@ -997,7 +1011,7 @@ msgstr "पूर्ण"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:104
+#: src/pages/SettingsOverlay.tsx:105
 #: src/pages/shell/block-views.tsx:131
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
@@ -1007,7 +1021,7 @@ msgstr "कंप्यूटर"
 msgid "Computer failed to boot"
 msgstr "कंप्यूटर शुरू नहीं हो सका"
 
-#: src/pages/shell/side-panel.tsx:436
+#: src/pages/shell/side-panel.tsx:421
 msgid "Computer is asleep"
 msgstr "कंप्यूटर निष्क्रिय है"
 
@@ -1019,17 +1033,25 @@ msgstr "कंप्यूटर निष्क्रिय है। जगा
 msgid "Computer is stopped"
 msgstr "कंप्यूटर रुका हुआ है"
 
+#: src/components/ComputerUpdateProgress.tsx:65
+msgid "Computer recovered"
+msgstr ""
+
 #: src/pages/bot-page/routine-copy.ts:44
 msgid "Computer unavailable"
 msgstr "कंप्यूटर उपलब्ध नहीं"
+
+#: src/components/ComputerUpdateProgress.tsx:66
+msgid "Computer updated"
+msgstr ""
 
 #: src/pages/AccountSettingsOverlay.tsx:252
 msgid "Computers"
 msgstr "कंप्यूटर"
 
 #: src/components/ComputersUnavailableHint.tsx:7
-msgid "Computers are off. Set SANDBOX_PROVIDER=docker with SANDBOX_SUPERVISOR_TOKEN, or set SANDBOX_PROVIDER to e2b, daytona, or box with its API key. Recreate the stack after changing .env."
-msgstr "कंप्यूटर बंद हैं। SANDBOX_PROVIDER=docker और SANDBOX_SUPERVISOR_TOKEN सेट करें, या SANDBOX_PROVIDER को e2b, daytona, या box पर सेट कर उसका API key दें। .env बदलने के बाद स्टैक फिर बनाएँ।"
+msgid "Computers are off. Set SANDBOX_PROVIDER=docker with SANDBOX_SUPERVISOR_TOKEN, or set SANDBOX_PROVIDER to e2b with its API key. Recreate the stack after changing .env."
+msgstr "कंप्यूटर बंद हैं। SANDBOX_PROVIDER=docker और SANDBOX_SUPERVISOR_TOKEN सेट करें, या SANDBOX_PROVIDER को e2b पर सेट कर उसका API key दें। .env बदलने के बाद स्टैक फिर बनाएँ।"
 
 #: src/pages/ModelSettingsOverlay.tsx:88
 msgid "Configured by deployment"
@@ -1039,7 +1061,7 @@ msgstr "डिप्लॉयमेंट द्वारा कॉन्फ़�
 msgid "Configured servers"
 msgstr "कॉन्फ़िगर किए गए सर्वर"
 
-#: src/pages/KnowledgeSection.tsx:679
+#: src/pages/KnowledgeSection.tsx:687
 #: src/pages/McpServersOverlay.tsx:507
 msgid "Confirm delete"
 msgstr "डिलीट की पुष्टि करें"
@@ -1137,6 +1159,10 @@ msgstr "कनेक्ट हो रहा है…"
 msgid "Connection to {0} is still pending. You can close this and check again."
 msgstr "{0} से कनेक्शन अभी लंबित है। आप इसे बंद करके बाद में जांच सकते हैं।"
 
+#: src/pages/KnowledgeSection.tsx:658
+msgid "Content lives on the shared volume."
+msgstr ""
+
 #: src/pages/model-settings/model-detail.tsx:199
 #: src/pages/Onboarding.tsx:517
 msgid "Context limit"
@@ -1147,7 +1173,7 @@ msgstr "कॉन्टेक्स्ट सीमा"
 msgid "Continue"
 msgstr "जारी रखें"
 
-#: src/components/ComputerUpdateProgress.tsx:194
+#: src/components/ComputerUpdateProgress.tsx:219
 msgid "Continue in Background"
 msgstr ""
 
@@ -1159,7 +1185,7 @@ msgstr "ईमेल से जारी रखें"
 msgid "Conversation cleared"
 msgstr ""
 
-#: src/components/DraftCard.tsx:369
+#: src/components/DraftCard.tsx:371
 #: src/pages/shell/message-actions-sheet.tsx:75
 #: src/pages/shell/message-hover-actions.tsx:98
 #: src/pages/shell/message-hover-actions.tsx:169
@@ -1202,7 +1228,7 @@ msgstr "सिखाने की स्थिति जाँची नही�
 msgid "Could not clear conversation"
 msgstr "बातचीत साफ़ नहीं की जा सकी"
 
-#: src/components/ComputerUpdateProgress.tsx:174
+#: src/components/ComputerUpdateProgress.tsx:195
 msgid "Could not complete action"
 msgstr ""
 
@@ -1282,7 +1308,7 @@ msgstr "MCP सर्वर डिलीट नहीं किया जा स
 msgid "Could not delete routine"
 msgstr "रूटीन डिलीट नहीं किया जा सका"
 
-#: src/pages/KnowledgeSection.tsx:640
+#: src/pages/KnowledgeSection.tsx:641
 msgid "Could not delete skill"
 msgstr "स्किल हटाई नहीं जा सकी"
 
@@ -1319,7 +1345,7 @@ msgstr "{0} डाउनलोड नहीं हो सका। पुनः 
 msgid "Could not download {name}. Try again."
 msgstr "{name} डाउनलोड नहीं हो सका। पुनः प्रयास करें।"
 
-#: src/pages/KnowledgeSection.tsx:365
+#: src/pages/KnowledgeSection.tsx:366
 msgid "Could not import skill"
 msgstr "स्किल आयात नहीं की जा सकी"
 
@@ -1329,12 +1355,12 @@ msgstr "कनेक्टर इंस्टॉल नहीं हो सक�
 
 #: src/pages/bot-page/KnowledgeTab.tsx:148
 #: src/pages/bot-page/page-kit.tsx:80
-#: src/pages/KnowledgeSection.tsx:89
-#: src/pages/KnowledgeSection.tsx:118
-#: src/pages/KnowledgeSection.tsx:300
-#: src/pages/KnowledgeSection.tsx:321
-#: src/pages/KnowledgeSection.tsx:361
-#: src/pages/KnowledgeSection.tsx:753
+#: src/pages/KnowledgeSection.tsx:90
+#: src/pages/KnowledgeSection.tsx:119
+#: src/pages/KnowledgeSection.tsx:301
+#: src/pages/KnowledgeSection.tsx:322
+#: src/pages/KnowledgeSection.tsx:362
+#: src/pages/KnowledgeSection.tsx:761
 msgid "Could not load"
 msgstr "लोड नहीं हो सका"
 
@@ -1348,6 +1374,10 @@ msgstr "अनुमोदन नियम लोड नहीं हो सक�
 
 #: src/pages/IntegrationSetup.tsx:72
 msgid "Could not load bots. Reload to try again."
+msgstr ""
+
+#: src/pages/ComputerSettingsPanel.tsx:79
+msgid "Could not load computers"
 msgstr ""
 
 #: src/pages/DecisionModelSettingsPanel.tsx:37
@@ -1368,7 +1398,7 @@ msgstr "MCP सर्वर लोड नहीं हो सके"
 msgid "Could not load model settings"
 msgstr "मॉडल सेटिंग्स लोड नहीं हो सकीं"
 
-#: src/pages/KnowledgeSection.tsx:601
+#: src/pages/KnowledgeSection.tsx:602
 msgid "Could not load skill"
 msgstr "स्किल लोड नहीं हो सकी"
 
@@ -1415,7 +1445,7 @@ msgstr "सर्वर से संपर्क नहीं हो सका"
 msgid "Could not reach this model server"
 msgstr "इस मॉडल सर्वर तक नहीं पहुंचा जा सका"
 
-#: src/pages/KnowledgeSection.tsx:773
+#: src/pages/KnowledgeSection.tsx:781
 msgid "Could not read this file"
 msgstr "यह फ़ाइल पढ़ी नहीं जा सकी"
 
@@ -1463,7 +1493,7 @@ msgstr "रूटीन चलाया नहीं जा सका"
 #: src/pages/bot-page/page-kit.tsx:51
 #: src/pages/bot-page/RoutineDetail.tsx:87
 #: src/pages/ExternalConversationSettings.tsx:250
-#: src/pages/KnowledgeSection.tsx:206
+#: src/pages/KnowledgeSection.tsx:207
 msgid "Could not save"
 msgstr "सहेजा नहीं जा सका"
 
@@ -1487,7 +1517,7 @@ msgstr "रूटीन सहेजा नहीं जा सका"
 msgid "Could not save rule"
 msgstr "नियम सहेजा नहीं जा सका"
 
-#: src/pages/KnowledgeSection.tsx:623
+#: src/pages/KnowledgeSection.tsx:624
 msgid "Could not save skill"
 msgstr "स्किल सहेजी नहीं जा सकी"
 
@@ -1525,8 +1555,8 @@ msgid "Could not start teaching"
 msgstr "सिखाना शुरू नहीं किया जा सका"
 
 #: src/components/AskCard.tsx:199
-#: src/components/DraftCard.tsx:161
-#: src/components/DraftCard.tsx:174
+#: src/components/DraftCard.tsx:163
+#: src/components/DraftCard.tsx:176
 msgid "Could not submit this answer"
 msgstr "यह उत्तर सबमिट नहीं किया जा सका"
 
@@ -1538,14 +1568,19 @@ msgstr "नियंत्रण नहीं लिया जा सका"
 msgid "Could not update"
 msgstr "अपडेट नहीं हो सका"
 
-#: src/pages/KnowledgeSection.tsx:343
+#: src/pages/KnowledgeSection.tsx:344
 #: src/pages/McpServersOverlay.tsx:210
 msgid "Could not update agent access"
 msgstr "एजेंट एक्सेस अपडेट नहीं हो सका"
 
-#: src/components/ComputerMaintenanceActions.tsx:69
+#: src/components/ComputerMaintenanceActions.tsx:67
+#: src/pages/ComputerSettingsPanel.tsx:71
 msgid "Could not update computer"
 msgstr "कंप्यूटर अपडेट नहीं हो सका"
+
+#: src/pages/ComputerSettingsPanel.tsx:81
+msgid "Could not update computers"
+msgstr ""
 
 #: src/pages/shell/use-thread-send.ts:115
 msgid "Could not update reaction"
@@ -1693,7 +1728,7 @@ msgstr "दिन"
 msgid "days"
 msgstr "दिन"
 
-#: src/pages/SettingsOverlay.tsx:101
+#: src/pages/SettingsOverlay.tsx:102
 msgid "Decision Model"
 msgstr ""
 
@@ -1718,7 +1753,7 @@ msgstr "डिफ़ॉल्ट स्कोप"
 
 #: src/pages/bot-page/BotPage.tsx:378
 #: src/pages/BotContextMenu.tsx:150
-#: src/pages/KnowledgeSection.tsx:679
+#: src/pages/KnowledgeSection.tsx:687
 #: src/pages/McpServersOverlay.tsx:509
 #: src/pages/shell/dialogs.tsx:409
 #: src/pages/shell/dialogs.tsx:470
@@ -1807,17 +1842,17 @@ msgstr ""
 msgid "Direct MCP"
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:386
-#: src/pages/KnowledgeSection.tsx:447
+#: src/pages/KnowledgeSection.tsx:387
+#: src/pages/KnowledgeSection.tsx:448
 msgid "Disabled"
 msgstr "निष्क्रिय"
 
-#: src/components/DraftCard.tsx:360
+#: src/components/DraftCard.tsx:362
 msgid "Discard"
 msgstr ""
 
-#: src/components/DraftCard.tsx:240
-#: src/components/DraftCard.tsx:250
+#: src/components/DraftCard.tsx:242
+#: src/components/DraftCard.tsx:252
 msgid "Discarded"
 msgstr ""
 
@@ -1834,7 +1869,7 @@ msgstr "डिस्कनेक्ट करें"
 msgid "Disconnecting…"
 msgstr "डिस्कनेक्ट हो रहा है…"
 
-#: src/components/ComputerUpdateProgress.tsx:190
+#: src/components/ComputerUpdateProgress.tsx:215
 #: src/components/teach/TeachComputerOverlay.tsx:291
 #: src/pages/shell/message-cards.tsx:89
 msgid "Dismiss"
@@ -1874,13 +1909,14 @@ msgstr "Docker अतिरिक्त सुरक्षा के लिए �
 msgid "Don’t have an account?"
 msgstr "खाता नहीं है?"
 
+#: src/components/ComputerUpdateProgress.tsx:206
 #: src/pages/ActivityList.tsx:158
 #: src/pages/bot-page/BotActivity.tsx:312
 #: src/pages/bot-page/RoutineTriggers.tsx:304
 msgid "Done"
 msgstr "पूर्ण"
 
-#: src/pages/KnowledgeSection.tsx:833
+#: src/pages/KnowledgeSection.tsx:841
 msgid "Download"
 msgstr "डाउनलोड"
 
@@ -1895,7 +1931,7 @@ msgstr "{0} डाउनलोड करें"
 msgid "Download {name}"
 msgstr "{name} डाउनलोड करें"
 
-#: src/pages/KnowledgeSection.tsx:170
+#: src/pages/KnowledgeSection.tsx:171
 msgid "Download as markdown"
 msgstr "मार्कडाउन के रूप में डाउनलोड करें"
 
@@ -1933,7 +1969,7 @@ msgstr "संपादित करें"
 msgid "Edit and resend"
 msgstr "संपादित करके फिर भेजें"
 
-#: src/components/DraftCard.tsx:412
+#: src/components/DraftCard.tsx:414
 msgid "Edit message"
 msgstr ""
 
@@ -1941,11 +1977,11 @@ msgstr ""
 msgid "Edit Profile"
 msgstr "प्रोफ़ाइल संपादित करें"
 
-#: src/components/DraftCard.tsx:277
+#: src/components/DraftCard.tsx:279
 msgid "Edited"
 msgstr ""
 
-#: src/components/DraftCard.tsx:276
+#: src/components/DraftCard.tsx:278
 msgid "Editing"
 msgstr ""
 
@@ -2094,7 +2130,7 @@ msgstr "विशेष"
 msgid "Files"
 msgstr "फ़ाइलें"
 
-#: src/pages/KnowledgeSection.tsx:442
+#: src/pages/KnowledgeSection.tsx:443
 msgid "Filter skills"
 msgstr "स्किल्स फ़िल्टर करें"
 
@@ -2143,8 +2179,8 @@ msgstr "फ़ुलस्क्रीन"
 msgid "FYI"
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:98
-#: src/pages/SettingsOverlay.tsx:110
+#: src/pages/SettingsOverlay.tsx:99
+#: src/pages/SettingsOverlay.tsx:111
 msgid "General"
 msgstr "सामान्य"
 
@@ -2152,7 +2188,7 @@ msgstr "सामान्य"
 msgid "Get credentials"
 msgstr ""
 
-#: src/components/ComputerUpdateProgress.tsx:50
+#: src/components/ComputerUpdateProgress.tsx:54
 msgid "Getting ready"
 msgstr ""
 
@@ -2162,7 +2198,7 @@ msgstr ""
 msgid "Git event"
 msgstr "Git इवेंट"
 
-#: src/pages/KnowledgeSection.tsx:387
+#: src/pages/KnowledgeSection.tsx:388
 msgid "Global"
 msgstr "वैश्विक"
 
@@ -2261,7 +2297,7 @@ msgstr "यह बॉट कैसा व्यवहार करे"
 msgid "How to check"
 msgstr "जांच कैसे करें"
 
-#: src/pages/shell/side-panel.tsx:466
+#: src/pages/shell/side-panel.tsx:451
 msgid "I’m done"
 msgstr "मेरा काम हो गया"
 
@@ -2273,7 +2309,7 @@ msgstr "अगर आपने वह सुना, तो आवाज़ त�
 msgid "Ignore"
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:426
+#: src/pages/KnowledgeSection.tsx:427
 msgid "Import"
 msgstr "आयात करें"
 
@@ -2485,7 +2521,7 @@ msgstr "लॉग आउट"
 msgid "Low"
 msgstr "निम्न"
 
-#: src/components/ComputerUpdateProgress.tsx:228
+#: src/components/ComputerUpdateProgress.tsx:253
 msgid "Make sure nothing is still running on this computer."
 msgstr "सुनिश्चित करें कि इस कंप्यूटर पर कुछ भी चल नहीं रहा है।"
 
@@ -2558,7 +2594,7 @@ msgstr "सदस्य ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX} चुनें
 
 #: src/pages/bot-page/KnowledgeTab.tsx:36
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:100
+#: src/pages/SettingsOverlay.tsx:101
 msgid "Memory"
 msgstr "मेमोरी"
 
@@ -2686,7 +2722,7 @@ msgstr "मॉडल अपडेट किया गया।"
 
 #: src/pages/LocalSettings.tsx:36
 #: src/pages/ModelSettingsOverlay.tsx:61
-#: src/pages/SettingsOverlay.tsx:99
+#: src/pages/SettingsOverlay.tsx:100
 msgid "Models"
 msgstr "मॉडल्स"
 
@@ -2707,7 +2743,7 @@ msgstr "मासिक"
 msgid "Monthly on day {day} at {time}"
 msgstr "हर महीने की {day} तारीख को {time} बजे"
 
-#: src/components/ComputerMaintenanceActions.tsx:123
+#: src/components/ComputerMaintenanceActions.tsx:152
 msgid "More computer actions"
 msgstr "और कंप्यूटर क्रियाएँ"
 
@@ -2754,7 +2790,7 @@ msgstr "इस रूटीन का नाम दें"
 msgid "Needs takeover"
 msgstr "नियंत्रण लेना ज़रूरी"
 
-#: src/pages/shell/side-panel.tsx:339
+#: src/pages/shell/side-panel.tsx:324
 msgid "Needs you"
 msgstr "आपकी ज़रूरत है"
 
@@ -2790,7 +2826,7 @@ msgstr "नया रूटीन"
 msgid "New section"
 msgstr "नया सेक्शन"
 
-#: src/pages/KnowledgeSection.tsx:406
+#: src/pages/KnowledgeSection.tsx:407
 msgid "New skill"
 msgstr "नई स्किल"
 
@@ -2835,11 +2871,15 @@ msgstr "कोई मेल खाता बॉट नहीं"
 msgid "No chat apps linked yet."
 msgstr "अभी कोई चैट ऐप नहीं जुड़ा।"
 
+#: src/pages/ComputerSettingsPanel.tsx:91
+msgid "No computers"
+msgstr ""
+
 #: src/components/ApprovalRulesSettings.tsx:163
 msgid "No exceptions. Actions run automatically."
 msgstr "कोई अपवाद नहीं। कार्रवाइयां स्वतः चलती हैं।"
 
-#: src/pages/KnowledgeSection.tsx:847
+#: src/pages/KnowledgeSection.tsx:855
 msgid "No files yet"
 msgstr "अभी कोई फ़ाइल नहीं"
 
@@ -2853,7 +2893,7 @@ msgstr "अभी कोई इंटीग्रेशन इंस्टॉल
 
 #: src/components/ask/AskSettled.tsx:28
 #: src/components/AskCard.tsx:260
-#: src/components/DraftCard.tsx:257
+#: src/components/DraftCard.tsx:259
 msgid "No longer active"
 msgstr "अब सक्रिय नहीं"
 
@@ -2902,11 +2942,11 @@ msgstr "कोई रिपोर्ट नहीं"
 msgid "No results"
 msgstr "कोई परिणाम नहीं"
 
-#: src/pages/KnowledgeSection.tsx:463
+#: src/pages/KnowledgeSection.tsx:464
 msgid "No skills match"
 msgstr "कोई मेल खाती स्किल नहीं"
 
-#: src/pages/KnowledgeSection.tsx:463
+#: src/pages/KnowledgeSection.tsx:464
 msgid "No skills yet"
 msgstr "अभी तक कोई स्किल नहीं"
 
@@ -2940,16 +2980,16 @@ msgstr "प्लगइन कैटलॉग में नहीं"
 msgid "Not now"
 msgstr "अभी नहीं"
 
-#: src/components/DraftCard.tsx:275
+#: src/components/DraftCard.tsx:277
 msgid "Not sent"
 msgstr ""
 
-#: src/components/ComputerUpdateProgress.tsx:251
+#: src/components/ComputerUpdateProgress.tsx:276
 msgid "Nothing is still running"
 msgstr "कुछ भी नहीं चल रहा"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:42
-#: src/pages/KnowledgeSection.tsx:41
+#: src/pages/KnowledgeSection.tsx:42
 msgid "Nothing remembered yet"
 msgstr "अभी तक कुछ याद नहीं किया गया"
 
@@ -3178,6 +3218,10 @@ msgstr "{0} का प्रीव्यू"
 msgid "Private"
 msgstr "निजी"
 
+#: src/pages/ComputerSettingsPanel.tsx:103
+msgid "Private Computer"
+msgstr ""
+
 #: src/pages/shell/dialogs.tsx:137
 msgid "Private workspace with its own bots and groups."
 msgstr ""
@@ -3223,7 +3267,7 @@ msgstr "प्रतिक्रियाएँ"
 msgid "Read replies aloud"
 msgstr "उत्तर पढ़कर सुनाएं"
 
-#: src/pages/KnowledgeSection.tsx:492
+#: src/pages/KnowledgeSection.tsx:493
 msgid "read-only"
 msgstr "केवल पढ़ने योग्य"
 
@@ -3252,7 +3296,7 @@ msgstr ""
 msgid "Recommended · {description}"
 msgstr ""
 
-#: src/components/DraftCard.tsx:385
+#: src/components/DraftCard.tsx:387
 msgid "Reconnect {app}"
 msgstr ""
 
@@ -3261,7 +3305,7 @@ msgid "Reconnect OAuth"
 msgstr "OAuth पुनः कनेक्ट करें"
 
 #: src/App.tsx:166
-#: src/components/ComputerUpdateProgress.tsx:54
+#: src/components/ComputerUpdateProgress.tsx:58
 #: src/pages/shell/screen-frame.tsx:44
 msgid "Reconnecting"
 msgstr "पुनः कनेक्ट हो रहा है"
@@ -3282,37 +3326,37 @@ msgstr "रिकॉर्डिंग शुरू हुई। जारी �
 msgid "Recording: {0}"
 msgstr "रिकॉर्डिंग: {0}"
 
-#: src/components/ComputerMaintenanceActions.tsx:145
-#: src/components/ComputerUpdateProgress.tsx:209
+#: src/components/ComputerMaintenanceActions.tsx:131
+#: src/components/ComputerUpdateProgress.tsx:234
 msgid "Recover computer"
 msgstr "कंप्यूटर रिकवर करें"
 
 #. placeholder {0}: update.name
-#: src/components/ComputerUpdateProgress.tsx:64
+#: src/components/ComputerUpdateProgress.tsx:74
 msgid "Recovering {0}’s Computer"
 msgstr ""
 
-#: src/components/ComputerUpdateProgress.tsx:63
+#: src/components/ComputerUpdateProgress.tsx:73
 msgid "Recovering Team Computer"
 msgstr ""
 
-#: src/components/ComputerMaintenanceActions.tsx:145
+#: src/components/ComputerMaintenanceActions.tsx:131
 msgid "Recovering…"
 msgstr "रिकवर हो रहा है…"
 
-#: src/components/ComputerUpdateProgress.tsx:59
+#: src/components/ComputerUpdateProgress.tsx:69
 msgid "Recovery failed"
 msgstr ""
 
-#: src/components/ComputerUpdateProgress.tsx:160
+#: src/components/ComputerUpdateProgress.tsx:181
 msgid "Recovery is unavailable until the previous operation has stopped."
 msgstr ""
 
-#: src/components/ComputerUpdateProgress.tsx:162
+#: src/components/ComputerUpdateProgress.tsx:183
 msgid "Recovery restores the last saved workspace. Unsaved work may be lost."
 msgstr ""
 
-#: src/components/ComputerUpdateProgress.tsx:52
+#: src/components/ComputerUpdateProgress.tsx:56
 msgid "Recreating the computer"
 msgstr ""
 
@@ -3324,15 +3368,15 @@ msgstr "दृश्य रिफ़्रेश करें"
 msgid "Refreshing…"
 msgstr "रिफ़्रेश हो रहा है…"
 
-#: src/pages/shell/side-panel.tsx:456
+#: src/pages/shell/side-panel.tsx:441
 msgid "Release"
 msgstr "नियंत्रण छोड़ें"
 
-#: src/components/ComputerUpdateProgress.tsx:180
+#: src/components/ComputerUpdateProgress.tsx:201
 msgid "Release computer"
 msgstr ""
 
-#: src/components/ComputerUpdateProgress.tsx:225
+#: src/components/ComputerUpdateProgress.tsx:250
 msgid "Release interrupted computer?"
 msgstr ""
 
@@ -3353,7 +3397,7 @@ msgstr "हटाएं"
 msgid "Remove {0}"
 msgstr "{0} हटाएं"
 
-#: src/components/DraftLines.tsx:97
+#: src/components/DraftLines.tsx:84
 msgid "Remove {address}"
 msgstr ""
 
@@ -3422,7 +3466,7 @@ msgstr "API कुंजी बदलें"
 msgid "Replace key"
 msgstr "कुंजी बदलें"
 
-#: src/components/DraftCard.tsx:254
+#: src/components/DraftCard.tsx:256
 msgid "Replaced"
 msgstr ""
 
@@ -3444,15 +3488,15 @@ msgstr "{replyName} को उत्तर दे रहे हैं"
 msgid "Request"
 msgstr ""
 
-#: src/components/ComputerMaintenanceActions.tsx:105
+#: src/components/ComputerMaintenanceActions.tsx:103
 msgid "Reset"
 msgstr "रीसेट करें"
 
-#: src/components/ComputerMaintenanceActions.tsx:150
+#: src/components/ComputerMaintenanceActions.tsx:139
 msgid "Reset computer"
 msgstr "कंप्यूटर रीसेट करें"
 
-#: src/components/ComputerMaintenanceActions.tsx:93
+#: src/components/ComputerMaintenanceActions.tsx:91
 msgid "Reset computer?"
 msgstr "कंप्यूटर रीसेट करें?"
 
@@ -3464,8 +3508,8 @@ msgstr "पासवर्ड रीसेट करें"
 msgid "Reset your password"
 msgstr "अपना पासवर्ड रीसेट करें"
 
-#: src/components/ComputerMaintenanceActions.tsx:105
-#: src/components/ComputerMaintenanceActions.tsx:150
+#: src/components/ComputerMaintenanceActions.tsx:103
+#: src/components/ComputerMaintenanceActions.tsx:139
 msgid "Resetting…"
 msgstr "रीसेट हो रहा है…"
 
@@ -3480,7 +3524,7 @@ msgstr ""
 msgid "Restore"
 msgstr "बहाल करें"
 
-#: src/components/ComputerMaintenanceActions.tsx:96
+#: src/components/ComputerMaintenanceActions.tsx:94
 msgid "Restore the last saved workspace. Unsaved work on the computer is lost."
 msgstr "अंतिम सहेजे गए वर्कस्पेस को बहाल करें। कंप्यूटर पर बिना सहेजा काम खो जाएगा।"
 
@@ -3488,7 +3532,7 @@ msgstr "अंतिम सहेजे गए वर्कस्पेस क�
 msgid "Restore unsaved text"
 msgstr "बिना सहेजा टेक्स्ट बहाल करें"
 
-#: src/components/ComputerUpdateProgress.tsx:53
+#: src/components/ComputerUpdateProgress.tsx:57
 msgid "Restoring your workspace"
 msgstr ""
 
@@ -3498,6 +3542,7 @@ msgstr ""
 
 #: src/pages/bot-page/page-kit.tsx:52
 #: src/pages/bot-page/page-kit.tsx:88
+#: src/pages/ComputerSettingsPanel.tsx:84
 msgid "Retry"
 msgstr "फिर से कोशिश करें"
 
@@ -3516,7 +3561,7 @@ msgid "Return to Rakazo"
 msgstr "Rakazo पर लौटें"
 
 #. placeholder {0}: doc.revision
-#: src/pages/KnowledgeSection.tsx:144
+#: src/pages/KnowledgeSection.tsx:145
 msgid "rev {0}"
 msgstr "रिवीज़न {0}"
 
@@ -3592,8 +3637,8 @@ msgstr ""
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:255
 #: src/pages/GroupPanel.tsx:279
-#: src/pages/KnowledgeSection.tsx:234
-#: src/pages/KnowledgeSection.tsx:698
+#: src/pages/KnowledgeSection.tsx:235
+#: src/pages/KnowledgeSection.tsx:706
 #: src/pages/model-settings/model-detail.tsx:329
 #: src/pages/shell/dialogs.tsx:266
 msgid "Save"
@@ -3615,7 +3660,7 @@ msgstr "सहेजा गया, लेकिन सूची रिफ़्�
 msgid "Saved."
 msgstr "सहेजा गया।"
 
-#: src/components/ComputerUpdateProgress.tsx:51
+#: src/components/ComputerUpdateProgress.tsx:55
 msgid "Saving your workspace"
 msgstr ""
 
@@ -3679,8 +3724,8 @@ msgstr "मॉडल खोजें"
 msgid "Search providers"
 msgstr "प्रोवाइडर्स खोजें"
 
-#: src/pages/KnowledgeSection.tsx:432
 #: src/pages/KnowledgeSection.tsx:433
+#: src/pages/KnowledgeSection.tsx:434
 msgid "Search skills"
 msgstr "स्किल्स खोजें"
 
@@ -3695,7 +3740,7 @@ msgstr "एक बॉट चुनें"
 
 #: src/components/ask/QuestionCard.tsx:205
 #: src/components/ask/QuestionCard.tsx:306
-#: src/components/DraftCard.tsx:396
+#: src/components/DraftCard.tsx:398
 #: src/pages/shell/composer.tsx:407
 msgid "Send"
 msgstr "भेजें"
@@ -3709,11 +3754,11 @@ msgid "Send reset link"
 msgstr "रीसेट लिंक भेजें"
 
 #: src/components/AskCard.tsx:304
-#: src/components/DraftCard.tsx:396
+#: src/components/DraftCard.tsx:398
 msgid "Sending…"
 msgstr "भेजा जा रहा है…"
 
-#: src/components/DraftCard.tsx:227
+#: src/components/DraftCard.tsx:229
 msgid "Sent to {recipient} · {time}"
 msgstr ""
 
@@ -3737,8 +3782,8 @@ msgstr "सर्वर URL"
 
 #: src/pages/bot-page/BotPage.tsx:101
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:110
-#: src/pages/SettingsOverlay.tsx:166
+#: src/pages/SettingsOverlay.tsx:111
+#: src/pages/SettingsOverlay.tsx:167
 #: src/pages/shell/sidebar-footer.tsx:199
 #: src/pages/shell/sidebar-footer.tsx:206
 msgid "Settings"
@@ -3771,7 +3816,7 @@ msgstr "साझा"
 msgid "Shared chat with 2-6 bots. They all reply in the same thread."
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:36
+#: src/pages/KnowledgeSection.tsx:37
 msgid "Shared documents"
 msgstr "साझा दस्तावेज़"
 
@@ -3789,13 +3834,13 @@ msgstr "पहले के दिखाएँ"
 msgid "Show key"
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:885
+#: src/pages/KnowledgeSection.tsx:893
 #: src/pages/shell/block-views.tsx:54
 msgid "Show less"
 msgstr ""
 
 #: src/pages/bot-page/BotActivity.tsx:471
-#: src/pages/KnowledgeSection.tsx:885
+#: src/pages/KnowledgeSection.tsx:893
 #: src/pages/PluginsOverlay.tsx:309
 #: src/pages/shell/block-views.tsx:54
 msgid "Show more"
@@ -3851,7 +3896,7 @@ msgstr "स्किल्स"
 
 #: src/components/ask/QuestionCard.tsx:194
 #: src/components/integrations/IntegrationSetup.tsx:364
-#: src/pages/shell/side-panel.tsx:463
+#: src/pages/shell/side-panel.tsx:448
 msgid "Skip"
 msgstr "छोड़ें"
 
@@ -3900,7 +3945,7 @@ msgstr "केवल बोलें"
 msgid "Speak this reply"
 msgstr "यह उत्तर बोलकर सुनाएं"
 
-#: src/pages/KnowledgeSection.tsx:388
+#: src/pages/KnowledgeSection.tsx:389
 msgid "Specific agents"
 msgstr "विशिष्ट एजेंट"
 
@@ -3927,8 +3972,8 @@ msgid "Steps"
 msgstr "चरण"
 
 #: src/pages/shell/composer.tsx:299
-#: src/pages/shell/side-panel.tsx:355
-#: src/pages/shell/side-panel.tsx:360
+#: src/pages/shell/side-panel.tsx:340
+#: src/pages/shell/side-panel.tsx:345
 msgid "Stop"
 msgstr "रोकें"
 
@@ -3959,8 +4004,8 @@ msgstr "सुरक्षित रूप से संग्रहीत। �
 msgid "subagent"
 msgstr "सबएजेंट"
 
-#: src/components/DraftCard.tsx:343
-#: src/components/DraftCard.tsx:349
+#: src/components/DraftCard.tsx:345
+#: src/components/DraftCard.tsx:351
 msgid "Subject"
 msgstr ""
 
@@ -3991,7 +4036,7 @@ msgstr "बदला जा रहा है…"
 msgid "System"
 msgstr "सिस्टम"
 
-#: src/components/ComputerMaintenanceActions.tsx:136
+#: src/components/ComputerMaintenanceActions.tsx:160
 #: src/components/teach/TeachComputerOverlay.tsx:219
 #: src/components/teach/TeachComputerOverlay.tsx:230
 msgid "Teach a task"
@@ -4006,6 +4051,8 @@ msgstr "सिखाना जारी है। नया संदेश भ�
 msgid "Team"
 msgstr "टीम"
 
+#: src/components/ComputerUpdateProgress.tsx:61
+#: src/pages/ComputerSettingsPanel.tsx:103
 #: src/pages/shell/computer-preview.tsx:115
 msgid "Team Computer"
 msgstr "टीम कंप्यूटर"
@@ -4112,7 +4159,7 @@ msgstr "दिन का समय"
 msgid "Title"
 msgstr "शीर्षक"
 
-#: src/components/DraftCard.tsx:273
+#: src/components/DraftCard.tsx:275
 msgid "To"
 msgstr ""
 
@@ -4142,7 +4189,7 @@ msgstr ""
 msgid "Treg token"
 msgstr "Treg टोकन"
 
-#: src/components/DraftCard.tsx:396
+#: src/components/DraftCard.tsx:398
 #: src/pages/Onboarding.tsx:685
 msgid "Try again"
 msgstr "फिर से कोशिश करें"
@@ -4159,7 +4206,7 @@ msgstr "असाइन नहीं किया गया"
 msgid "Unavailable"
 msgstr "अनुपलब्ध"
 
-#: src/components/DraftCard.tsx:246
+#: src/components/DraftCard.tsx:248
 msgid "Undo"
 msgstr ""
 
@@ -4189,15 +4236,19 @@ msgstr "अद्यतन"
 msgid "Update"
 msgstr "अपडेट करें"
 
+#: src/pages/ComputerSettingsPanel.tsx:58
+msgid "Update all computers"
+msgstr ""
+
 #: src/components/SoftwareUpdateSection.tsx:260
 msgid "Update available"
 msgstr "अपडेट उपलब्ध"
 
-#: src/components/ComputerMaintenanceActions.tsx:159
+#: src/components/ComputerMaintenanceActions.tsx:122
 msgid "Update computer"
 msgstr "कंप्यूटर अपडेट करें"
 
-#: src/components/ComputerUpdateProgress.tsx:60
+#: src/components/ComputerUpdateProgress.tsx:70
 #: src/components/SoftwareUpdateSection.tsx:185
 msgid "Update failed"
 msgstr "अपडेट विफल"
@@ -4207,7 +4258,7 @@ msgstr "अपडेट विफल"
 msgid "Update finished with errors"
 msgstr "अपडेट त्रुटियों के साथ पूरा हुआ"
 
-#: src/components/ComputerUpdateProgress.tsx:118
+#: src/components/ComputerUpdateProgress.tsx:139
 msgid "Update progress"
 msgstr ""
 
@@ -4216,26 +4267,36 @@ msgstr ""
 msgid "Updated"
 msgstr "अपडेट किया गया"
 
-#: src/pages/SettingsOverlay.tsx:105
+#: src/pages/SettingsOverlay.tsx:106
 msgid "Updates"
 msgstr "अपडेट"
 
+#: src/pages/ComputerSettingsPanel.tsx:70
+msgid "Updates are unavailable on this device"
+msgstr ""
+
+#. placeholder {0}: result.queued.length
+#: src/pages/ComputerSettingsPanel.tsx:62
+msgid "Updates queued: {0}"
+msgstr ""
+
 #. placeholder {0}: update.name
-#: src/components/ComputerUpdateProgress.tsx:67
+#: src/components/ComputerUpdateProgress.tsx:77
 msgid "Updating {0}’s Computer"
 msgstr ""
 
-#: src/components/ComputerUpdateProgress.tsx:66
+#: src/components/ComputerUpdateProgress.tsx:76
 msgid "Updating Team Computer"
 msgstr ""
 
-#: src/components/ComputerMaintenanceActions.tsx:159
+#: src/components/ComputerMaintenanceActions.tsx:122
 #: src/components/SoftwareUpdateSection.tsx:81
+#: src/pages/ComputerSettingsPanel.tsx:58
 msgid "Updating…"
 msgstr "अपडेट हो रहा है…"
 
 #: src/pages/AccountSettingsOverlay.tsx:229
-#: src/pages/SettingsOverlay.tsx:103
+#: src/pages/SettingsOverlay.tsx:104
 #: src/pages/shell/sidebar-footer.tsx:211
 #: src/pages/shell/sidebar-footer.tsx:222
 msgid "Usage"
@@ -4269,7 +4330,7 @@ msgstr "पुष्टि की जा रही है…"
 
 #: src/pages/bot-page/SettingDetails.tsx:183
 #: src/pages/bot-page/SettingDetails.tsx:187
-#: src/pages/SettingsOverlay.tsx:102
+#: src/pages/SettingsOverlay.tsx:103
 #: src/pages/shell/thread-header.tsx:139
 #: src/pages/shell/thread-header.tsx:140
 #: src/pages/VoiceSettingsOverlay.tsx:170
@@ -4372,7 +4433,7 @@ msgstr "बॉट कहां चलने चाहिए?"
 msgid "Working…"
 msgstr "काम चल रहा है…"
 
-#: src/pages/KnowledgeSection.tsx:795
+#: src/pages/KnowledgeSection.tsx:803
 msgid "Workspace root"
 msgstr "वर्कस्पेस रूट"
 
@@ -4390,7 +4451,7 @@ msgstr "हर साल {date} को {time} बजे"
 msgid "Yesterday"
 msgstr "कल"
 
-#: src/components/DraftCard.tsx:61
+#: src/components/DraftCard.tsx:64
 #: src/pages/Shell.tsx:136
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"
@@ -4404,7 +4465,8 @@ msgstr "अगर यह अपने आप रीडायरेक्ट न 
 msgid "You can close this window."
 msgstr "आप यह विंडो बंद कर सकते हैं।"
 
-#: src/pages/shell/side-panel.tsx:343
+#: src/pages/ComputerSettingsPanel.tsx:109
+#: src/pages/shell/side-panel.tsx:328
 msgid "You have control"
 msgstr "नियंत्रण आपके पास है"
 

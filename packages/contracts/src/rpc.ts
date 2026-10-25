@@ -17,9 +17,11 @@ import {
   BotSchema,
   BotSectionSchema,
   CapabilityInstallSchema,
+  ComputerListItemSchema,
   ComputerModeSchema,
   ComputerReleaseReasonSchema,
   ComputerStatusSchema,
+  ComputerUpdateAllResultSchema,
   ComputerUpdateSchema,
   ConnectionCatalogItemSchema,
   ConnectionSchema,
@@ -393,13 +395,17 @@ export const appContract = {
     markUnread: oc.input(threadTarget).output(z.object({ ok: z.literal(true) })),
   },
   computer: {
+    list: oc.output(z.array(ComputerListItemSchema)),
+    updateAll: oc.output(ComputerUpdateAllResultSchema),
     status: oc.input(botId).output(ComputerStatusSchema),
     boot: oc.input(botId).output(ComputerStatusSchema),
     stop: oc.input(botId).output(ComputerStatusSchema),
     recover: oc.input(botId).output(ComputerUpdateSchema),
     reset: oc.input(botId).output(ComputerStatusSchema),
     update: oc.input(botId).output(ComputerUpdateSchema),
-    updates: oc.output(z.array(ComputerUpdateSchema)),
+    updates: oc
+      .input(z.object({ ids: z.array(Id).optional() }).nullish())
+      .output(z.array(ComputerUpdateSchema)),
     releaseInterrupted: oc
       .input(z.object({ id: Id, workersStopped: z.literal(true) }))
       .output(z.object({ ok: z.literal(true) })),

@@ -5,7 +5,7 @@ import {
   SingleScreenClaimTracker,
   withComputerScreenAvailability,
 } from "./computer-screens.js";
-import { ManagedSandboxEmulator } from "./e2b-emulator.js";
+import { E2BSandboxEmulator } from "./e2b-emulator.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 
 const writer = {
@@ -115,7 +115,7 @@ describe("Team Computer parallel screens", () => {
   });
 
   it("lets Team bots use independent emulator screens concurrently", async () => {
-    const emulator = new ManagedSandboxEmulator();
+    const emulator = new E2BSandboxEmulator();
     expect(emulator.describe().capabilities.multiScreen).toBe(true);
     const computer = await emulator.provision({ botId: "team-home", homePath: "/tmp" }, writer);
     await emulator.observe(computer, writer);

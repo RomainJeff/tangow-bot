@@ -8,6 +8,7 @@ import type {
   SandboxProvider,
 } from "@rakazo/adapter-kit";
 import type { ComputerMode } from "@rakazo/contracts";
+import { WORKSPACE_ROOT } from "@rakazo/core";
 
 export function toComputerRef(computer: {
   homeKey: string;
@@ -95,6 +96,21 @@ export function resolveBotWorkspacePath(
   const normalized = normalizeWorkspacePath(explicitRootPath ?? requestedPath);
   if (explicitRootPath !== null || isTeamRootPath(normalized)) return normalized;
   return path.posix.join(teamBotWorkspaceDirectory(botId), normalized);
+}
+
+/**
+ * On a computer whose home is on volumes, `/workspace/...` is a real path and the one every worker
+ * shows. It names the same file in the computer's workspace: the team root, or the dedicated bot's
+ * home. Any other path is returned unchanged.
+ */
+export function fromVolumePath(scope: ComputerMode, botId: string, requested: string): string {
+  const portable = requested.replace(/\\/g, "/");
+  if (portable !== WORKSPACE_ROOT && !portable.startsWith(`${WORKSPACE_ROOT}/`)) return requested;
+  const fromRoot = portable.slice(WORKSPACE_ROOT.length) || "/";
+  if (scope === "team") return fromRoot;
+  const home = `/${teamBotWorkspaceDirectory(botId)}`;
+  if (fromRoot === home) return "/";
+  return fromRoot.startsWith(`${home}/`) ? fromRoot.slice(home.length) : requested;
 }
 
 export async function workspaceFileExists(

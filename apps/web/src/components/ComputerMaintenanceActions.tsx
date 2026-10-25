@@ -29,12 +29,14 @@ export function ComputerMaintenanceActions({
   computer,
   onChanged,
   teach = null,
+  disabled = false,
 }: {
   botId: string;
   computer: ComputerStatus | null;
   onChanged: () => Promise<void>;
   /** Teach a task, offered here only below the sm breakpoint where the chrome hides its button. */
   teach?: TeachMenuAction | null;
+  disabled?: boolean;
 }) {
   const { t } = useLingui();
   // The chrome hides its Teach a task button below Tailwind's sm breakpoint (40rem).
@@ -44,16 +46,12 @@ export function ComputerMaintenanceActions({
   const [confirmReset, setConfirmReset] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const busy = Boolean(computer?.busyBotName) || computer?.state === "booting";
-  const showRecover =
-    computer?.state === "error" ||
-    computer?.state === "running" ||
-    computer?.state === "suspended" ||
-    computer?.state === "stopped";
-  const showReset = showRecover;
-  const showUpdate = Boolean(computer?.canUpdate);
-  const hasMaintenance = showRecover || showReset || showUpdate;
-  if (!hasMaintenance && !teachInMenu) return null;
+  const busy =
+    disabled ||
+    Boolean(computer?.busyBotName) ||
+    computer?.state === "booting" ||
+    computer?.controlHolder === "user";
+  if (!computer && !teachInMenu) return null;
 
   async function run(action: Action) {
     setPending(action);
@@ -111,57 +109,60 @@ export function ComputerMaintenanceActions({
 
   return (
     <>
-      <DropdownMenu
-        open={menuOpen}
-        onOpenChange={(open) => {
-          if (open) setError(null);
-          setMenuOpen(open);
-        }}
-      >
-        <DropdownMenuTrigger
-          data-testid="computer-more-button"
-          aria-label={t`More computer actions`}
-          disabled={busy && pending === null}
-          render={<Button variant="ghost" size="icon-sm" className="text-muted-foreground" />}
-        >
-          <MoreHorizontal />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="end"
-          data-testid="computer-more-menu"
-          className="w-auto min-w-44"
-        >
-          {teachInMenu ? (
-            <DropdownMenuItem disabled={teachInMenu.disabled} onClick={teachInMenu.onSelect}>
-              <Trans>Teach a task</Trans>
-            </DropdownMenuItem>
-          ) : null}
-          {showRecover ? (
-            <DropdownMenuItem
-              closeOnClick={false}
+      {computer ? (
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap gap-2">
+            {computer.canUpdate ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy || pending !== null}
+                onClick={() => void run("update")}
+              >
+                {pending === "update" ? <Trans>Updating…</Trans> : <Trans>Update computer</Trans>}
+              </Button>
+            ) : null}
+            <Button
+              variant="outline"
+              size="sm"
               disabled={busy || pending !== null}
               onClick={() => void run("recover")}
             >
               {pending === "recover" ? <Trans>Recovering…</Trans> : <Trans>Recover computer</Trans>}
-            </DropdownMenuItem>
-          ) : null}
-          {showReset ? (
-            <DropdownMenuItem disabled={busy || pending !== null} onClick={openResetConfirm}>
-              {pending === "reset" ? <Trans>Resetting…</Trans> : <Trans>Reset computer</Trans>}
-            </DropdownMenuItem>
-          ) : null}
-          {showUpdate ? (
-            <DropdownMenuItem
-              closeOnClick={false}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               disabled={busy || pending !== null}
-              onClick={() => void run("update")}
+              onClick={openResetConfirm}
             >
-              {pending === "update" ? <Trans>Updating…</Trans> : <Trans>Update computer</Trans>}
-            </DropdownMenuItem>
+              {pending === "reset" ? <Trans>Resetting…</Trans> : <Trans>Reset computer</Trans>}
+            </Button>
+          </div>
+          {error ? (
+            <p role="alert" className="text-meta text-destructive">
+              {error}
+            </p>
           ) : null}
-          {error ? <p className="px-1.5 py-1 text-[12.5px] text-destructive">{error}</p> : null}
-        </DropdownMenuContent>
-      </DropdownMenu>
+        </div>
+      ) : (
+        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+          <DropdownMenuTrigger
+            data-testid="computer-more-button"
+            aria-label={t`More computer actions`}
+            render={<Button variant="ghost" size="icon-sm" className="text-muted-foreground" />}
+          >
+            <MoreHorizontal />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" data-testid="computer-more-menu">
+            {teachInMenu ? (
+              <DropdownMenuItem disabled={teachInMenu.disabled} onClick={teachInMenu.onSelect}>
+                <Trans>Teach a task</Trans>
+              </DropdownMenuItem>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
       {resetDialog}
     </>
   );

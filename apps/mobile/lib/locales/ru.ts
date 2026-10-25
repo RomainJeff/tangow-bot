@@ -1,4 +1,16 @@
 export const RU_MESSAGES: Record<string, string> = {
+  "Private Computer": "Личный компьютер",
+  Bots: "Боты",
+  "Busy. Try again when idle.": "Занят. Повторите, когда освободится.",
+  "Could not queue update. Try again.":
+    "Не удалось поставить обновление в очередь. Повторите попытку.",
+  "Could not update computers": "Не удалось обновить компьютеры",
+  "No computers": "Нет компьютеров",
+  Stopped: "Остановлен",
+  "Update all computers": "Обновить все компьютеры",
+  "Updates queued: {count}": "Обновлений в очереди: {count}",
+  "Updates unavailable": "Обновления недоступны",
+  "Content lives on the shared volume.": "Содержимое хранится на общем томе.",
   "Update your server to use AI data sharing in this mobile version.":
     "Обновите сервер, чтобы использовать обмен данными с ИИ в этой версии мобильного приложения.",
   "Ask the server owner to configure this provider.":
@@ -6,6 +18,8 @@ export const RU_MESSAGES: Record<string, string> = {
   "Client ID": "ID клиента",
   "Client secret": "Секрет клиента",
   Continue: "Продолжить",
+  "Computer updated": "Компьютер обновлён",
+  "Computer recovered": "Компьютер восстановлен",
   "Continue in Background": "Продолжить в фоне",
   "Could not complete action": "Не удалось выполнить действие",
   "Could not verify or save these credentials":

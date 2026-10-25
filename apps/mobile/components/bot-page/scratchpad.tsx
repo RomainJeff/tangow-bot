@@ -4,8 +4,7 @@ import { Alert, StyleSheet, TextInput } from "react-native";
 import { rpc } from "../../lib/api";
 import { mobileTokens } from "../../lib/appearance";
 import { useI18n } from "../../lib/i18n";
-import { presentMessageActionSheet } from "../../lib/message-action-sheet";
-import { useMobileTokens, useResolvedAppearance, useThemedStyles } from "../../lib/native";
+import { useMobileTokens, useThemedStyles } from "../../lib/native";
 import { serverMessage } from "../../lib/server-error";
 import { nativeTextStyle } from "../../lib/typography";
 import { Group, LoadFailed, LoadingRows, QuietLine, Row, useFocusedRead } from "./kit";
@@ -29,7 +28,6 @@ export function ScratchpadGroup({
   const { t } = useI18n();
   const styles = useThemedStyles(createScratchpadStyles);
   const tokens = useMobileTokens();
-  const colorScheme = useResolvedAppearance();
   const { read, write, retry } = useFocusedRead(
     () => rpc<ScratchpadItem[]>("scratchpad/list", { botId }),
     [botId, epoch],
@@ -83,20 +81,16 @@ export function ScratchpadGroup({
         );
     });
 
-  const open = (item: ScratchpadItem) =>
-    presentMessageActionSheet({
-      title: item.title,
-      actions: [
-        { text: t("Complete"), onPress: () => void act(item, "done") },
-        item.status === "parked"
-          ? { text: t("Reopen"), onPress: () => void act(item, "open") }
-          : { text: t("Park"), onPress: () => void act(item, "parked") },
-        { text: t("Remove"), destructive: true, onPress: () => void act(item, null) },
-      ],
-      colorScheme,
-      cancel: t("Cancel"),
-      more: t("More"),
-    });
+  const menuFor = (item: ScratchpadItem) => ({
+    title: item.title,
+    actions: [
+      { label: t("Complete"), onPress: () => void act(item, "done") },
+      item.status === "parked"
+        ? { label: t("Reopen"), onPress: () => void act(item, "open") }
+        : { label: t("Park"), onPress: () => void act(item, "parked") },
+      { label: t("Remove"), destructive: true, onPress: () => void act(item, null) },
+    ],
+  });
 
   const items = read.kind === "ready" ? read.value : [];
   return (
@@ -116,7 +110,7 @@ export function ScratchpadGroup({
           sublineLines={2}
           value={item.status === "parked" ? t("Paused") : null}
           disabled={busy}
-          onPress={readOnly ? undefined : () => open(item)}
+          menu={readOnly ? undefined : menuFor(item)}
         />
       ))}
       {read.kind === "ready" && !readOnly ? (

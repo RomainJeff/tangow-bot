@@ -4,6 +4,7 @@ import type {
   ConnectionCatalogItem,
   SandboxKind,
 } from "@rakazo/contracts";
+import type { SkillCollision, WorkerSkill } from "./worker-protocol.js";
 
 export interface AdapterContext {
   operationId: string;
@@ -55,6 +56,8 @@ export interface PortableFile {
   path: string;
   content: Uint8Array;
   executable?: boolean;
+  /** Permission bits (`0o777`), when the source knows them. */
+  mode?: number;
 }
 
 export interface ComputerRef {
@@ -64,6 +67,11 @@ export interface ComputerRef {
   providerRef: string;
   /** True when the provider created an empty replacement rather than reconnecting existing state. */
   fresh?: boolean;
+  /**
+   * On a machine whose home is on volumes, the workspace directories on a volume ("" for all of
+   * it). Files written anywhere else would be lost with the machine, so writes there are refused.
+   */
+  writableRoots?: string[];
 }
 
 export interface CommandRequest {
@@ -90,6 +98,8 @@ export interface ScreenRequest {
 
 export interface ScreenSession {
   url: string | null;
+  /** Host header for a `url` that points at a gateway routing screens by host name. */
+  host?: string;
   mimeType: string;
   close(): Promise<void>;
 }
@@ -192,6 +202,8 @@ export interface ConnectorTool {
   route?: ConnectorRoute;
   /** Display name of the connected app, for the live activity line only. Never exposed to the model. */
   appName?: string;
+  /** On a lazy catalog's execute tool: the tools it runs by id. Never exposed to the model. */
+  catalog?: ReadonlyArray<{ id: string; tool: ConnectorTool }>;
 }
 
 export interface ConnectorRoute {
@@ -390,6 +402,8 @@ export interface AgentRunRequest {
   sourceMessageId?: string | null;
   prompt: string;
   instructions: string;
+  /** For a harness that keeps its own system prompt: what Rakazo appends to it instead. */
+  harnessAddendum?: string;
   history: AgentHistoryTurn[];
   currentTurnImages?: AgentInputImage[];
   tools: ConnectorTool[];
@@ -422,12 +436,38 @@ export interface AgentRunRequest {
     /** Present only when the runtime traces this run. */
     trace?: ToolCallTrace,
   ) => Promise<unknown>;
+  /** Fenced, untrusted guest observations; secrets are scanned by the controller. */
+  onSkillIndex?: (
+    skills: WorkerSkill[],
+    sources: WorkerSkill["source"][],
+    receivedAt: Date,
+  ) => Promise<void>;
+  onSkillCollision?: (collision: SkillCollision) => Promise<void>;
+  onSkillUsed?: (name: string) => Promise<void>;
+  /** The attempt this run belongs to, for a runtime that binds a remote guest to it. */
+  attempt?: { id: string; fence: number };
   /** Called after a tool returns; implementations must not persist raw result contents. */
   onToolCompleted?: (completion: AgentToolCompletion) => Promise<void> | void;
   /** Atomically claim durable user steering at the runtime's next safe turn boundary. */
   claimSteering?: (seenIds: string[]) => Promise<AgentSteeringMessage[]>;
   /** Open the log of one `run_subagent` call: the helper runs in a session of its own. */
   startSubagent?: (call: SubagentCall) => Promise<SubagentLog>;
+}
+
+/** A runtime could not start or was lost. The executor retries within its setup budget. */
+export class AgentRuntimeUnavailableError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "AgentRuntimeUnavailableError";
+  }
+}
+
+/** Another attempt still owns resources the runtime needs. Waiting does not consume setup retries. */
+export class AgentRuntimeBusyError extends AgentRuntimeUnavailableError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "AgentRuntimeBusyError";
+  }
 }
 
 export interface SubagentCall {
@@ -452,6 +492,11 @@ export interface SubagentLog {
   }): Promise<void>;
   /** Answer the parent's call with `result` as an error when `finish` cannot close the log. */
   abandon(result: string): Promise<void>;
+  /**
+   * Log what the helper's native session did, as the root run's `transcript` event does. Only
+   * the controller's log has it: a guest's in-process helpers keep no native session.
+   */
+  transcript?(event: Extract<AgentRuntimeEvent, { type: "transcript" }>): Promise<void>;
 }
 
 /**
@@ -492,6 +537,20 @@ export interface ScriptedTurn {
   complete?: boolean;
 }
 
+/**
+ * One step of a harness with its own loop, in the order of the attempt's transcript. `turn` counts
+ * the attempt's model responses from 0; a summary takes the index of the turn after it. A `call`
+ * is one of the harness's own tools and its `result` the outcome the harness reported, which
+ * arrives later or never. A `controller` call names a call of any other tool: its content is in
+ * the controller's log, never taken from the transcript.
+ */
+export type HarnessTranscriptEntry =
+  | { kind: "text"; turn: number; text: string }
+  | { kind: "call"; turn: number; callId: string; name: string; args: Record<string, unknown> }
+  | { kind: "result"; callId: string; output: string; isError: boolean }
+  | { kind: "controller"; turn: number; name: string }
+  | { kind: "summary"; turn: number; summary: string; tokensBefore: number };
+
 export type AgentRuntimeEvent =
   | { type: "text"; text: string }
   | {
@@ -521,6 +580,13 @@ export type AgentRuntimeEvent =
     }
   | { type: "checkpoint"; blob: string }
   | {
+      /** The steps an agent's transcript added since its previous one. */
+      type: "transcript";
+      entries: HarnessTranscriptEntry[];
+      /** Results it claims for calls of controller tools that the controller never answered. */
+      unverifiedCalls: number;
+    }
+  | {
       type: "subagent";
       agentId: string;
       name: string;
@@ -542,6 +608,13 @@ export interface AgentRuntimeCapabilities {
   compaction: boolean;
   tools: boolean;
   scripted: boolean;
+  /** Tools the runtime's own loop runs next to the model, offered with the rest. */
+  localTools?: readonly ConnectorTool[];
+  /**
+   * The model reads screens from the bot's home with its own file tool, so a screen tool saves the
+   * image there and returns its path instead of the image.
+   */
+  screensByPath?: boolean;
 }
 
 export interface VoiceInfo {

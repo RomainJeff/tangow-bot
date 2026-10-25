@@ -15,13 +15,14 @@ export function addScreenProxyCapability(
   secret: string,
   origin: string,
   scope: ScreenCapabilityScope,
+  host?: string,
   now = Date.now(),
 ) {
   // Local/desktop providers return non-http schemes (e.g. desktop://). Those never
   // traverse the web proxy, so seal only http(s) upstream URLs.
   const protocol = new URL(url).protocol;
   if (protocol !== "http:" && protocol !== "https:") return url;
-  return sealScreenCapability(url, secret, origin, scope, now);
+  return sealScreenCapability(url, secret, origin, scope, now, host);
 }
 
 export function mountScreenTarget(app: Hono, prisma: PrismaClient, secret: string) {

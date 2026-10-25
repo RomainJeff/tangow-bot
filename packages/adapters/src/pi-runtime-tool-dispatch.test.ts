@@ -1794,10 +1794,10 @@ describe("Pi connector tool dispatch", () => {
     const result = fakeAgentState.toolResult as {
       content: Array<{ type: string; text?: string }>;
     };
-    expect(result.content).toHaveLength(3);
-    expect(result.content[0]).toEqual({ type: "text", text: first });
-    expect(result.content[1]).toEqual(image);
-    expect(result.content[2]).toEqual({ type: "text", text: "bbbbb…" });
+    expect(result.content).toEqual([
+      { type: "text", text: `${"a".repeat(11_972)}\n[40 more characters cut]` },
+      image,
+    ]);
   });
 
   it("serialises object content instead of writing [object Object] for write_file", async () => {

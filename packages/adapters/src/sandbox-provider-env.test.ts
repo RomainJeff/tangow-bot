@@ -13,8 +13,18 @@ describe("resolveSandboxProvider", () => {
 
   it("falls back to none when a remote provider key is missing", () => {
     expect(resolveSandboxProvider({ SANDBOX_PROVIDER: "e2b" })).toBe("none");
-    expect(resolveSandboxProvider({ SANDBOX_PROVIDER: "daytona" })).toBe("none");
-    expect(resolveSandboxProvider({ SANDBOX_PROVIDER: "box" })).toBe("none");
+  });
+
+  it("refuses the removed daytona and box providers", () => {
+    expect(() =>
+      resolveSandboxProvider({
+        SANDBOX_PROVIDER: "daytona",
+        DAYTONA_API_KEY: "test-key",
+      }),
+    ).toThrow("The daytona computer provider was removed. Set SANDBOX_PROVIDER to docker or e2b.");
+    expect(() => resolveSandboxProvider({ SANDBOX_PROVIDER: "box" })).toThrow(
+      "The box computer provider was removed. Set SANDBOX_PROVIDER to docker or e2b.",
+    );
   });
 
   it("falls back to none in production when Docker has no supervisor token", () => {

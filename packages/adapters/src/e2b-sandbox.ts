@@ -1,4 +1,5 @@
-import { type CommandResult, Sandbox, TimeoutError } from "@e2b/desktop";
+import { createHash } from "node:crypto";
+import path from "node:path";
 import type {
   AdapterContext,
   CommandRequest,
@@ -8,38 +9,153 @@ import type {
   ComputerObservation,
   ComputerRef,
   ControlLeaseRef,
+  PageBrowserCommand,
+  PageBrowserResult,
   PortableFile,
   ProcessEvent,
   SandboxProvider,
   ScreenRequest,
   ScreenSession,
 } from "@rakazo/adapter-kit";
-import { boundedSandboxCommandTimeoutMs } from "@rakazo/core";
+import {
+  boundedSandboxCommandTimeoutMs,
+  underVolumeMounts,
+  type VolumeHome,
+  WORKSPACE_ROOT,
+} from "@rakazo/core";
+import { stopAllDesktopBrowsersCommand } from "@rakazo/core/node/desktop-runtime";
+import type { CommandHandle, CommandResult, ConnectionOpts } from "e2b";
+import { CommandExitError, ConnectionConfig, Sandbox, TimeoutError } from "e2b";
 import { sandboxIdleMs } from "./computer-idle.js";
+import { ComputerScreenUnavailableError } from "./computer-screens.js";
 import { normalizeWorkspacePath, shellQuote, workspacePath } from "./computer-support.js";
 import {
   PORTABLE_TRANSFER_BATCH_BYTES,
   shouldSkipPortableWorkspaceFile,
+  skippedBrowserProfileDirectories,
+  skippedBrowserProfileFiles,
 } from "./computer-workspace.js";
+import type { DesktopExecutionOptions } from "./linux-desktop.js";
 import { LinuxDesktop, PREPARE_LINUX_DESKTOP } from "./linux-desktop.js";
 
 const E2B_WORKSPACE = "/home/user/rakazo-home";
-const E2B_BROWSER_PROFILES = `${E2B_WORKSPACE}/.browser-profiles`;
+const E2B_DESKTOP_ENV = {
+  homeDir: "/home/user",
+  workspaceDir: E2B_WORKSPACE,
+  browserProfilesDir: `${E2B_WORKSPACE}/.browser-profiles`,
+  displayStart: 20,
+  portStart: 6100,
+};
+/**
+ * On volumes each bot's Chrome profile stays on the machine's own disk: the volumes are NFS, which
+ * Chrome's file locks cannot use. A pause keeps the disk; a replacement archives the profile to
+ * the bot's private volume first, and a new machine restores it.
+ */
+const E2B_LOCAL_PROFILES = "/home/user/.browser-profiles";
+const PROFILE_ARCHIVE = ".rakazo/browser-profiles.tgz";
+
+function saveBrowserProfilesCommand(): string {
+  const excludes = [...skippedBrowserProfileDirectories, ...skippedBrowserProfileFiles]
+    .map((name) => `--exclude=${shellQuote(name)}`)
+    .join(" ");
+  return [
+    "set -eu",
+    `for profiles in ${shellQuote(E2B_LOCAL_PROFILES)}/*; do`,
+    '  [ -d "$profiles" ] || continue',
+    `  volume=${shellQuote(WORKSPACE_ROOT)}/bots/"$(basename "$profiles")"`,
+    '  [ -d "$volume" ] || continue',
+    `  archive="$volume"/${PROFILE_ARCHIVE}`,
+    '  mkdir -p "$(dirname "$archive")"',
+    `  tar -C "$profiles" ${excludes} -czf "$archive.tmp" .`,
+    '  mv -f "$archive.tmp" "$archive"',
+    "done",
+  ].join("\n");
+}
+
+const RESTORE_BROWSER_PROFILES = [
+  "set -eu",
+  `for archive in ${shellQuote(WORKSPACE_ROOT)}/bots/*/${PROFILE_ARCHIVE}; do`,
+  '  [ -f "$archive" ] || continue',
+  `  profiles=${shellQuote(E2B_LOCAL_PROFILES)}/"$(basename "$(dirname "$(dirname "$archive")")")"`,
+  '  mkdir -p "$profiles"',
+  '  tar -C "$profiles" -xzf "$archive"',
+  "done",
+].join("\n");
 
 export interface E2BSandboxSdk {
-  create(options: ReturnType<typeof e2bCreateOptions>): Promise<Sandbox>;
+  create(
+    options: ReturnType<typeof e2bCreateOptions> & { metadata: Record<string, string> },
+  ): Promise<Sandbox>;
   connect(id: string, options: { apiKey: string; timeoutMs: number }): Promise<Sandbox>;
   pause(id: string, options: { apiKey: string }): Promise<void>;
 }
 
-export function e2bCreateOptions(botId: string, apiKey: string) {
+export function e2bComputerSdk(
+  connection: ConnectionOpts = {},
+  template = "desktop",
+): E2BSandboxSdk {
+  return {
+    create: (options) => Sandbox.create(template, { ...connection, ...options }),
+    connect: (id, options) => Sandbox.connect(id, { ...connection, ...options }),
+    pause: async (id, options) => {
+      await Sandbox.pause(id, { ...connection, ...options });
+    },
+  };
+}
+
+/**
+ * The set of volumes a computer mounts, as recorded in its metadata: part of its identity, since a
+ * running machine cannot mount another volume. A machine created before its home moved has none.
+ */
+function mountSet(volumeHome: VolumeHome): string {
+  const mounts = volumeHome.mounts.map((mount) => [mount.path, mount.volumeRef]).sort();
+  return createHash("sha256")
+    .update(JSON.stringify({ root: volumeHome.root, mounts }))
+    .digest("hex");
+}
+
+/** The workspace directories on a volume, relative to the workspace ("" for all of it). */
+function writableRoots(volumeHome: VolumeHome): string[] {
+  return volumeHome.mounts.flatMap((mount) => {
+    if (volumeHome.root === mount.path || volumeHome.root.startsWith(`${mount.path}/`)) return [""];
+    return mount.path.startsWith(`${volumeHome.root}/`)
+      ? [mount.path.slice(volumeHome.root.length + 1)]
+      : [];
+  });
+}
+
+export function e2bCreateOptions(botId: string, apiKey: string, volumeHome?: VolumeHome) {
   return {
     apiKey,
     timeoutMs: sandboxIdleMs(),
-    metadata: { botId, rakazo: "computer" },
-    resolution: [1280, 800] as [number, number],
+    metadata: {
+      botId,
+      rakazo: "computer",
+      ...(volumeHome ? { home: "volumes", mounts: mountSet(volumeHome) } : {}),
+    },
     lifecycle: { onTimeout: "pause" as const, autoResume: false },
+    ...(volumeHome && {
+      volumeMounts: Object.fromEntries(
+        volumeHome.mounts.map((mount) => [mount.path, mount.volumeRef]),
+      ),
+    }),
   };
+}
+
+/**
+ * Points `link` at `target`. `ln -sfn` would nest the link inside a real directory and succeed, so
+ * an empty directory is removed first, a directory with files in it fails, and the result is read
+ * back.
+ */
+export function linkWorkspaceCommand(target: string, link: string): string {
+  const [to, at] = [shellQuote(target), shellQuote(link)];
+  return [
+    `if [ -L ${at} ]; then rm -f ${at}`,
+    `elif [ -d ${at} ]; then rmdir ${at} 2>/dev/null || { echo ${shellQuote(`${link} has files in it, so it cannot link to ${target}`)} >&2; exit 1; }`,
+    `elif [ -e ${at} ]; then echo ${shellQuote(`${link} is a file, so it cannot link to ${target}`)} >&2; exit 1; fi`,
+    `ln -s ${to} ${at}`,
+    `[ "$(readlink ${at})" = ${to} ] || { echo ${shellQuote(`${link} does not link to ${target}`)} >&2; exit 1; }`,
+  ].join("\n");
 }
 
 // How the E2B SDK words a sandbox that no longer exists. It does not always say "not found":
@@ -64,21 +180,37 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/**
+ * A self-hosted E2B reached through `E2B_SANDBOX_URL` serves screens from that sandbox proxy,
+ * which routes by host name. Otherwise a proxy on a local `*.localhost` domain serves plain HTTP.
+ */
+function e2bScreenUrl(host: string): { url: string; host?: string } {
+  const sandboxUrl = new ConnectionConfig().sandboxUrl;
+  if (sandboxUrl) return { url: new URL("/embed.html", sandboxUrl).toString(), host };
+  const scheme = /^([^.:]+\.)*localhost(:\d+)?$/.test(host) ? "http" : "https";
+  return { url: `${scheme}://${host}/embed.html` };
+}
+
 export class E2BSandboxProvider implements SandboxProvider {
   private readonly desktops = new LinuxDesktop({
-    environment: async () => ({
-      homeDir: "/home/user",
-      workspaceDir: E2B_WORKSPACE,
-      browserProfilesDir: E2B_BROWSER_PROFILES,
-      displayStart: 20,
-      portStart: 6100,
-    }),
-    run: async (computer, command, context) => {
-      const result = await this.runSetupCommand(await this.box(computer), command, context.signal);
+    environment: async (computer, context) => {
+      const onVolumes =
+        computer.writableRoots !== undefined ||
+        (await (await this.box(computer)).getInfo()).metadata.home === "volumes";
+      if (!onVolumes) return E2B_DESKTOP_ENV;
+      if (!context.botId) throw new ComputerScreenUnavailableError();
+      return {
+        ...E2B_DESKTOP_ENV,
+        browserProfilesDir: `${E2B_LOCAL_PROFILES}/${context.botId}`,
+      };
+    },
+    run: async (computer, command, context, options) => {
+      const desktop = await this.box(computer);
+      if (options) return this.runDesktopOperation(desktop, command, context.signal, options);
+      const result = await this.runSetupCommand(desktop, command, context.signal);
       return { code: result.exitCode, stdout: result.stdout, stderr: result.stderr };
     },
-    screenUrl: async (computer, port) =>
-      `https://${(await this.box(computer)).getHost(port)}/vnc.html`,
+    screenUrl: async (computer, port) => e2bScreenUrl((await this.box(computer)).getHost(port)),
   });
   private readonly boxes = new Map<string, Sandbox>();
   private readonly connections = new Map<string, Promise<Sandbox>>();
@@ -86,7 +218,7 @@ export class E2BSandboxProvider implements SandboxProvider {
 
   constructor(
     private readonly apiKey: string,
-    private readonly sdk: E2BSandboxSdk = Sandbox as unknown as E2BSandboxSdk,
+    private readonly sdk: E2BSandboxSdk = e2bComputerSdk({ apiKey }),
   ) {}
 
   describe() {
@@ -144,36 +276,67 @@ export class E2BSandboxProvider implements SandboxProvider {
   }
 
   async provision(
-    request: {
-      botId: string;
-      homePath: string;
-      providerRef?: string;
-      providerKind?: ComputerRef["kind"];
-    },
-    _context: AdapterContext,
+    request: Parameters<SandboxProvider["provision"]>[0],
+    context: AdapterContext,
   ): Promise<ComputerRef> {
+    const volumeHome = request.volumeHome;
+    const onVolumes = volumeHome ? { writableRoots: writableRoots(volumeHome) } : {};
     if (request.providerRef && request.providerKind === "e2b") {
       try {
-        const desktop = await this.box({
+        const machine: ComputerRef = {
           id: request.providerRef,
           providerRef: request.providerRef,
           kind: "e2b",
           botId: request.botId,
-        });
-        return {
-          id: desktop.sandboxId,
-          botId: request.botId,
-          kind: "e2b",
-          providerRef: desktop.sandboxId,
-          fresh: false,
         };
+        const desktop = await this.box(machine);
+        const metadata = volumeHome ? (await desktop.getInfo()).metadata : {};
+        if (!volumeHome || metadata.mounts === mountSet(volumeHome)) {
+          return {
+            id: desktop.sandboxId,
+            botId: request.botId,
+            kind: "e2b",
+            providerRef: desktop.sandboxId,
+            fresh: false,
+            ...onVolumes,
+          };
+        }
+        // Created before its home moved, or with another set of volumes: what it holds off the
+        // volumes may be newer than any copy, so it is archived before the machine goes.
+        if (metadata.home === "volumes") await this.preserveBeforeReplace(machine, context);
+        await volumeHome.archive(
+          this.filesOffVolumes(
+            machine,
+            desktop,
+            metadata.home === "volumes" ? volumeHome.root : null,
+            context,
+          ),
+        );
+        this.forget(desktop.sandboxId);
+        await desktop.kill();
       } catch (error) {
         this.boxes.delete(request.providerRef);
         // A transport failure says nothing about the workspace still on the server.
         if (!isSandboxGoneError(error)) throw error;
       }
     }
-    const desktop = await this.sdk.create(e2bCreateOptions(request.botId, this.apiKey));
+    const desktop = await this.sdk.create(e2bCreateOptions(request.botId, this.apiKey, volumeHome));
+    if (volumeHome) {
+      // The workspace is the volumes' own root, so a file has the same path here as in a worker.
+      const linked = await this.runSetupCommand(
+        desktop,
+        linkWorkspaceCommand(volumeHome.root, E2B_WORKSPACE),
+      );
+      if (linked.exitCode !== 0) {
+        await desktop.kill().catch(() => undefined);
+        throw new Error(linked.stderr || "could not link the computer workspace to its volumes");
+      }
+      const restored = await this.runSetupCommand(desktop, RESTORE_BROWSER_PROFILES);
+      if (restored.exitCode !== 0) {
+        await desktop.kill().catch(() => undefined);
+        throw new Error(restored.stderr || "could not restore the computer's browser profiles");
+      }
+    }
     this.boxes.set(desktop.sandboxId, desktop);
     this.lastTouchedAt.set(desktop.sandboxId, Date.now());
     return {
@@ -182,12 +345,50 @@ export class E2BSandboxProvider implements SandboxProvider {
       kind: "e2b",
       providerRef: desktop.sandboxId,
       fresh: true,
+      ...onVolumes,
     };
+  }
+
+  private async stopBrowsers(computer: ComputerRef, context: AdapterContext) {
+    const profiles = "RAKAZO_INTERNAL_PROFILES";
+    const stop = stopAllDesktopBrowsersCommand({
+      ...E2B_DESKTOP_ENV,
+      browserProfilesDir: profiles,
+    }).replaceAll(shellQuote(profiles), '"$1"');
+    const result = await this.runSetupCommand(
+      await this.box(computer),
+      [
+        "set -eu",
+        `for profiles in ${shellQuote(E2B_DESKTOP_ENV.browserProfilesDir)} ${shellQuote(E2B_LOCAL_PROFILES)}/*; do`,
+        '  [ -d "$profiles" ] || continue',
+        `  bash -eu -c ${shellQuote(stop)} desktop "$profiles"`,
+        "done",
+      ].join("\n"),
+      context.signal,
+    );
+    if (result.exitCode !== 0) throw new Error(result.stderr || "computer browsers failed to stop");
+  }
+
+  /**
+   * A discarded machine's workspace files on no volume: all of them on a machine created before
+   * its home moved (`root` null), else those outside the mount points under the volumes' root.
+   */
+  private async *filesOffVolumes(
+    machine: ComputerRef,
+    desktop: Sandbox,
+    root: string | null,
+    context: AdapterContext,
+  ): AsyncIterable<PortableFile> {
+    await this.stopBrowsers(machine, context);
+    yield* walkE2BWorkspace(desktop, "", context, (relative) =>
+      root === null ? true : !underVolumeMounts(path.posix.join(root, relative)),
+    );
   }
 
   async prepare(computer: ComputerRef, _context: AdapterContext): Promise<void> {
     const desktop = await this.box(computer);
-    if (computer.fresh) await desktop.files.makeDir(E2B_WORKSPACE);
+    // On volumes the workspace is a link provision made: a directory there would break it.
+    if (computer.fresh && !computer.writableRoots) await desktop.files.makeDir(E2B_WORKSPACE);
     const result = await this.runSetupCommand(desktop, PREPARE_LINUX_DESKTOP, _context.signal);
     if (result.exitCode !== 0)
       throw new Error(result.stderr || "could not prepare computer desktop tools");
@@ -203,7 +404,7 @@ export class E2BSandboxProvider implements SandboxProvider {
     const timeoutMs = boundedSandboxCommandTimeoutMs(request.timeoutMs);
     try {
       const result = await desktop.commands.run(cmd, {
-        cwd: e2bCwd(request.cwd),
+        cwd: e2bCwd(computer, request.cwd),
         envs: request.env,
         signal: context.signal,
         timeoutMs,
@@ -254,6 +455,14 @@ export class E2BSandboxProvider implements SandboxProvider {
     return this.desktops.act(computer, request, context);
   }
 
+  async pageBrowser(
+    computer: ComputerRef,
+    request: PageBrowserCommand,
+    context: AdapterContext,
+  ): Promise<PageBrowserResult> {
+    return this.desktops.pageBrowser(computer, request, context);
+  }
+
   async listFiles(
     computer: ComputerRef,
     directory: string,
@@ -300,6 +509,16 @@ export class E2BSandboxProvider implements SandboxProvider {
   }
 
   async writeFile(computer: ComputerRef, file: PortableFile, context: AdapterContext) {
+    const roots = computer.writableRoots;
+    const relative = normalizeWorkspacePath(file.path);
+    if (
+      roots &&
+      !roots.some((root) => !root || relative === root || relative.startsWith(`${root}/`))
+    ) {
+      throw new Error(
+        `${file.path} is on no mounted volume, so it would be lost when this computer is replaced; write under ${roots.join(", ") || "a mounted volume"}`,
+      );
+    }
     const desktop = await this.box(computer);
     await writeE2BFiles(desktop, [file], context);
   }
@@ -309,7 +528,7 @@ export class E2BSandboxProvider implements SandboxProvider {
     context: AdapterContext,
   ): AsyncIterable<PortableFile> {
     const desktop = await this.box(computer);
-    await this.desktops.stopBrowsers(computer, context);
+    await this.stopBrowsers(computer, context);
     yield* walkE2BWorkspace(desktop, "", context);
   }
 
@@ -319,7 +538,7 @@ export class E2BSandboxProvider implements SandboxProvider {
     context: AdapterContext,
   ): Promise<void> {
     const desktop = await this.box(computer);
-    await this.desktops.stopBrowsers(computer, context);
+    await this.stopBrowsers(computer, context);
     let batch: PortableFile[] = [];
     let batchBytes = 0;
     const flush = async () => {
@@ -366,15 +585,30 @@ export class E2BSandboxProvider implements SandboxProvider {
     return this.desktops.releaseScreen(computer, context);
   }
 
+  async preserveBeforeReplace(computer: ComputerRef, context: AdapterContext): Promise<void> {
+    await this.stopBrowsers(computer, context);
+    const saved = await this.runSetupCommand(
+      await this.box(computer),
+      saveBrowserProfilesCommand(),
+      context.signal,
+    );
+    if (saved.exitCode !== 0)
+      throw new Error(saved.stderr || "could not save the computer's browser profiles");
+  }
+
   async stop(computer: ComputerRef, _context: AdapterContext): Promise<void> {
     const id = computer.providerRef || computer.id;
     const desktop = this.boxes.get(id);
     this.forget(id);
     if (desktop) {
-      await desktop.pause().catch(() => undefined);
+      await desktop.pause().catch((error: unknown) => {
+        if (!isSandboxGoneError(error)) throw error;
+      });
       return;
     }
-    await this.sdk.pause(id, { apiKey: this.apiKey }).catch(() => undefined);
+    await this.sdk.pause(id, { apiKey: this.apiKey }).catch((error: unknown) => {
+      if (!isSandboxGoneError(error)) throw error;
+    });
   }
 
   async destroy(computer: ComputerRef, _context: AdapterContext): Promise<void> {
@@ -389,6 +623,88 @@ export class E2BSandboxProvider implements SandboxProvider {
     this.boxes.delete(id);
     this.connections.delete(id);
     this.lastTouchedAt.delete(id);
+  }
+
+  private async runDesktopOperation(
+    desktop: Sandbox,
+    command: string,
+    signal: AbortSignal,
+    options: DesktopExecutionOptions,
+  ) {
+    let handle: CommandHandle | undefined;
+    let inputDispatched = false;
+    let bytes = 0;
+    let stdout = "";
+    let stderr = "";
+    let finished = false;
+    const bounded = new AbortController();
+    const operationSignal = AbortSignal.any([signal, bounded.signal]);
+    const collect = (chunk: string, output: "stdout" | "stderr") => {
+      bytes += Buffer.byteLength(chunk);
+      if (bytes > options.maxOutputBytes) {
+        const error = new Error("page browser output exceeds limit");
+        bounded.abort(error);
+        throw error;
+      }
+      if (output === "stdout") stdout += chunk;
+      else stderr += chunk;
+    };
+    try {
+      operationSignal.throwIfAborted();
+      const timeoutMs = Math.max(1, options.deadline - Date.now());
+      handle = await desktop.commands.run(command, {
+        background: true,
+        stdin: true,
+        signal: operationSignal,
+        timeoutMs,
+        requestTimeoutMs: timeoutMs,
+        onStdout: (chunk) => collect(chunk, "stdout"),
+        onStderr: (chunk) => collect(chunk, "stderr"),
+      });
+      operationSignal.throwIfAborted();
+      if (Date.now() >= options.deadline) throw new Error("page browser operation timed out");
+      // A failed send may still have delivered the permit. Never send it twice.
+      inputDispatched = true;
+      await handle.sendStdin(options.input, {
+        signal: operationSignal,
+        requestTimeoutMs: Math.max(1, options.deadline - Date.now()),
+      });
+      const result = await handle.wait();
+      operationSignal.throwIfAborted();
+      finished = true;
+      return { code: result.exitCode, stdout, stderr, inputDispatched };
+    } catch (error) {
+      return {
+        code: error instanceof CommandExitError ? error.exitCode : 1,
+        stdout,
+        stderr: stderr || errorMessage(error),
+        inputDispatched,
+      };
+    } finally {
+      if (handle) {
+        // EOF stops the helper; a fresh group signal also covers a shell waiting for a lock.
+        // SDK kill is PID-only, so it must never be the first way we stop timeout.
+        const cleanupSignal = AbortSignal.timeout(3000);
+        await Promise.allSettled([
+          handle.closeStdin({ signal: cleanupSignal, requestTimeoutMs: 1000 }),
+          ...(!finished
+            ? [
+                desktop.commands.run(`kill -KILL -- -${handle.pid}`, {
+                  signal: cleanupSignal,
+                  requestTimeoutMs: 2000,
+                  timeoutMs: 2000,
+                }),
+              ]
+            : []),
+        ]);
+        // If group cleanup cannot reach an armed operation, retain its remote watchdog.
+        if (!inputDispatched)
+          await desktop.commands
+            .kill(handle.pid, { signal: cleanupSignal, requestTimeoutMs: 1000 })
+            .catch(() => undefined);
+        await handle.disconnect().catch(() => undefined);
+      }
+    }
   }
 
   /** Apply the deployment timeout (SDK default is 60s) and return failed results instead of throwing. */
@@ -446,6 +762,7 @@ async function* walkE2BWorkspace(
   desktop: Sandbox,
   directory: string,
   context: AdapterContext,
+  keep: (relative: string) => boolean = () => true,
 ): AsyncIterable<PortableFile> {
   const entries = await desktop.files.list(workspacePath(E2B_WORKSPACE, directory), {
     signal: context.signal,
@@ -454,7 +771,7 @@ async function* walkE2BWorkspace(
   const directories: string[] = [];
   for (const entry of entries) {
     const relative = normalizeWorkspacePath(directory ? `${directory}/${entry.name}` : entry.name);
-    if (shouldSkipPortableWorkspaceFile(relative)) continue;
+    if (shouldSkipPortableWorkspaceFile(relative) || !keep(relative)) continue;
     if (entry.type === "dir") directories.push(relative);
     else if (entry.type === "file") files.push({ relative, mode: entry.mode });
   }
@@ -478,10 +795,15 @@ async function* walkE2BWorkspace(
       if (file) yield file;
     }
   }
-  for (const relative of directories) yield* walkE2BWorkspace(desktop, relative, context);
+  for (const relative of directories) yield* walkE2BWorkspace(desktop, relative, context, keep);
 }
 
-function e2bCwd(cwd: string | undefined): string {
+/** A worker's path is a real one on a computer that mounts its volumes. */
+function e2bCwd(computer: ComputerRef, cwd: string | undefined): string {
+  if (computer.writableRoots && cwd?.startsWith("/")) {
+    const absolute = `/${normalizeWorkspacePath(cwd)}`;
+    if (underVolumeMounts(absolute)) return absolute;
+  }
   if (
     !cwd ||
     cwd === "." ||

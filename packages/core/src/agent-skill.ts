@@ -12,7 +12,7 @@ import { hasHiddenText } from "./spawn-bot.js";
 
 const FRONTMATTER_FENCE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 
-export type SkillSource = "user" | "builtin";
+export type SkillSource = "user" | "builtin" | "bot" | "shared";
 
 export type ParsedSkillMd = {
   name: string;
@@ -369,12 +369,12 @@ export function extractRoutineSkillMentions(prompt: string, knownNames?: string[
   return names;
 }
 
-/** Keep user-owned skills reachable when a later builtin claims the same name. */
-export function mergeBuiltinSkills<T extends { name: string }>(
-  builtins: readonly T[],
+/** Managed skills always take precedence over same-named user skills. */
+export function mergeManagedSkills<T extends { name: string }>(
+  managed: readonly T[],
   userSkills: readonly T[],
 ): T[] {
-  return [...builtins.filter((skill) => !findSkillByName(userSkills, skill.name)), ...userSkills];
+  return [...managed, ...userSkills.filter((skill) => !findSkillByName(managed, skill.name))];
 }
 
 const SLASH_SKILL_LIMIT = 8;

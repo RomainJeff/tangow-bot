@@ -1,9 +1,14 @@
+import { spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { Sandbox, SandboxNotFoundError, TimeoutError } from "@e2b/desktop";
-import { describe, expect, it, vi } from "vitest";
-import { shouldSkipPortableWorkspaceFile } from "./computer-workspace.js";
+import { Sandbox as RawSandbox } from "e2b";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
+import { fakeE2BMachine } from "./e2b-machine.test-support.js";
 import type { E2BSandboxSdk } from "./e2b-sandbox.js";
-import { E2BSandboxProvider, isSandboxGoneError } from "./e2b-sandbox.js";
+import { E2BSandboxProvider, isSandboxGoneError, linkWorkspaceCommand } from "./e2b-sandbox.js";
 import { desktopCommandResponder } from "./linux-desktop.test-support.js";
 
 const context = {
@@ -15,6 +20,38 @@ const context = {
 };
 
 describe("E2B computer backend", () => {
+  it("does not report a stopped computer when pausing fails at the provider", async () => {
+    const sdk: E2BSandboxSdk = {
+      create: vi.fn(),
+      connect: vi.fn(),
+      pause: vi.fn(async () => {
+        throw new Error("provider unreachable");
+      }),
+    };
+    await expect(
+      new E2BSandboxProvider("test-key", sdk).stop(
+        { id: "old", providerRef: "old", kind: "e2b", botId: "home" },
+        context,
+      ),
+    ).rejects.toThrow("provider unreachable");
+  });
+
+  it("creates the canonical computer without starting a second SDK desktop", async () => {
+    const machine = fakeE2BMachine("canonical-computer");
+    const create = vi.spyOn(RawSandbox, "create").mockResolvedValue(machine.sandbox);
+    onTestFinished(() => create.mockRestore());
+    const computer = await new E2BSandboxProvider("test-key").provision(
+      { botId: "bot", homePath: "/tmp/test-home" },
+      context,
+    );
+    expect(computer.providerRef).toBe("canonical-computer");
+    expect(machine.killed).toBe(false);
+    expect(create).toHaveBeenCalledWith(
+      "desktop",
+      expect.objectContaining({ metadata: expect.objectContaining({ rakazo: "computer" }) }),
+    );
+  });
+
   it("revokes an extra display's control without starting or waiting for its view", async () => {
     const command = vi.fn(async (value: string) => {
       if (value.includes("RAKAZO_SCREEN_INDEX=")) {
@@ -28,6 +65,7 @@ describe("E2B computer backend", () => {
     const provider = new E2BSandboxProvider("test-key", {
       connect: vi.fn(async () => ({
         sandboxId: "existing",
+        getInfo: async () => ({ metadata: {} }),
         display: ":0",
         commands: { run: command },
       })),
@@ -48,6 +86,67 @@ describe("E2B computer backend", () => {
     );
   });
 
+  it.each([
+    ["6080-sbx.localhost:13002", "http:"],
+    ["6080-sbx.e2b.app", "https:"],
+    ["6080-sbx.localhost.example.com", "https:"],
+  ])("serves the screen embed page from %s over %s", async (host, protocol) => {
+    const sdk = {
+      connect: vi.fn(async () => ({
+        sandboxId: "existing",
+        getInfo: async () => ({ metadata: {} }),
+        display: ":0",
+        getHost: () => host,
+        commands: {
+          run: vi.fn(async () => ({ stdout: "RAKAZO_DESKTOP=0:key\n", stderr: "", exitCode: 0 })),
+        },
+      })),
+    } as unknown as E2BSandboxSdk;
+    const computer = {
+      id: "existing",
+      providerRef: "existing",
+      kind: "e2b" as const,
+      botId: "bot",
+    };
+    const screen = await new E2BSandboxProvider("test-key", sdk).connectScreen(
+      computer,
+      { view: "stream" },
+      context,
+    );
+    const url = new URL(screen.url!);
+    expect([url.protocol, url.host, url.pathname]).toEqual([protocol, host, "/embed.html"]);
+  });
+
+  it("serves the screen through the self-hosted sandbox proxy, routed by host name", async () => {
+    vi.stubEnv("E2B_SANDBOX_URL", "http://172.18.0.1:3002");
+    try {
+      const sdk = {
+        connect: vi.fn(async () => ({
+          sandboxId: "existing",
+          getInfo: async () => ({ metadata: {} }),
+          display: ":0",
+          getHost: (port: number) => `${port}-existing.e2b.example.com`,
+          commands: {
+            run: vi.fn(async () => ({ stdout: "RAKAZO_DESKTOP=0:key\n", stderr: "", exitCode: 0 })),
+          },
+        })),
+      } as unknown as E2BSandboxSdk;
+      const screen = await new E2BSandboxProvider("test-key", sdk).connectScreen(
+        { id: "existing", providerRef: "existing", kind: "e2b" as const, botId: "bot" },
+        { view: "stream" },
+        context,
+      );
+      const url = new URL(screen.url!);
+      expect([url.origin, url.pathname, screen.host]).toEqual([
+        "http://172.18.0.1:3002",
+        "/embed.html",
+        "6100-existing.e2b.example.com",
+      ]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("reconnects concurrent primary viewers without using the SDK's global VNC lifecycle", async () => {
     const command = vi.fn(async (_value: string) => ({
       stdout: "RAKAZO_DESKTOP=0:savedkey\n",
@@ -60,6 +159,7 @@ describe("E2B computer backend", () => {
     const sdk = {
       connect: vi.fn(async () => ({
         sandboxId: "existing",
+        getInfo: async () => ({ metadata: {} }),
         display: ":0",
         getHost: (port: number) => `${port}-desktop.test`,
         commands: { run: command },
@@ -89,13 +189,6 @@ describe("E2B computer backend", () => {
     await first.close();
     expect(command).toHaveBeenCalledTimes(commandsBeforeClose);
     expect(globalStream).not.toHaveBeenCalled();
-  });
-
-  it("only filters transient cache files inside portable browser profiles", () => {
-    expect(shouldSkipPortableWorkspaceFile("project/Cache/important.txt")).toBe(false);
-    expect(shouldSkipPortableWorkspaceFile("project/lock")).toBe(false);
-    expect(shouldSkipPortableWorkspaceFile(".browser-profiles/chromium/Cache/data")).toBe(true);
-    expect(shouldSkipPortableWorkspaceFile(".browser-profiles/chromium/SingletonLock")).toBe(true);
   });
 
   it.each([
@@ -220,6 +313,7 @@ describe("E2B computer backend", () => {
     });
     const desktop = {
       sandboxId: "screen-e2b-box",
+      getInfo: async () => ({ metadata: {} }),
       display: ":0",
       commands: { run },
     } as unknown as Sandbox;
@@ -243,12 +337,19 @@ describe("E2B computer backend", () => {
     expect(run.mock.calls[0]?.[1]?.timeoutMs).toBeGreaterThan(60_000);
   });
 
-  it("surfaces a setup timeout without treating it as a missing sandbox", async () => {
+  it.each([
+    new TimeoutError("the operation timed out"),
+    Object.assign(new Error("command failed"), {
+      name: "CommandExitError",
+      result: { exitCode: 1, stdout: "", stderr: "browser metrics: unexpected metrics mount" },
+    }),
+  ])("surfaces setup failure without replacing the sandbox (%s)", async (failure) => {
     const run = vi.fn(async () => {
-      throw new TimeoutError("the operation timed out");
+      throw failure;
     });
     const desktop = {
       sandboxId: "timeout-e2b-box",
+      getInfo: async () => ({ metadata: {} }),
       display: ":0",
       commands: { run },
     } as unknown as Sandbox;
@@ -269,6 +370,7 @@ describe("E2B computer backend", () => {
     await expect(provider.connectScreen(computer, { view: "stream" }, context)).rejects.toThrow(
       Error,
     );
+    expect(sdk.create).not.toHaveBeenCalled();
   });
 
   it("prepares a reused computer idempotently", async () => {
@@ -309,6 +411,197 @@ describe("E2B computer backend", () => {
     expect(desktop.launch).not.toHaveBeenCalled();
   });
 
+  describe("a computer whose home is on volumes", () => {
+    const teamHome = (mounts: Array<[string, string]>) => ({
+      root: "/workspace",
+      mounts: mounts.map(([path, volumeRef]) => ({ path, volumeRef })),
+    });
+    const ada: [string, string] = ["/workspace/bots/bot_a", "rakazo-vol_a"];
+    const bob: [string, string] = ["/workspace/bots/bot_b", "rakazo-vol_b"];
+    const shared: [string, string] = ["/workspace/shared", "rakazo-vol_shared"];
+
+    async function provisionOver(
+      existing: ReturnType<typeof fakeE2BMachine> | null,
+      volumeHome: ReturnType<typeof teamHome>,
+    ) {
+      const replacement = fakeE2BMachine("replacement", {});
+      const sdk = {
+        create: vi.fn(async () => replacement.sandbox),
+        connect: vi.fn(async () => {
+          if (!existing) throw new SandboxNotFoundError("sandbox gone not found");
+          return existing.sandbox;
+        }),
+        pause: vi.fn(),
+      } as unknown as E2BSandboxSdk;
+      const provider = new E2BSandboxProvider("test-key", sdk);
+      const archived: string[] = [];
+      const computer = await provider.provision(
+        {
+          botId: "team-home",
+          homePath: "/unused",
+          ...(existing ? { providerRef: existing.sandbox.sandboxId, providerKind: "e2b" } : {}),
+          volumeHome: {
+            ...volumeHome,
+            archive: async (files) => {
+              for await (const file of files) archived.push(file.path);
+            },
+          },
+        },
+        context,
+      );
+      return { provider, computer, sdk, archived, replacement };
+    }
+
+    it("mounts its volumes at the workers' paths and records which", async () => {
+      const first = await provisionOver(null, teamHome([ada, shared]));
+      const created = vi.mocked(first.sdk.create).mock.calls[0]![0];
+
+      expect(created.volumeMounts).toEqual({
+        "/workspace/bots/bot_a": "rakazo-vol_a",
+        "/workspace/shared": "rakazo-vol_shared",
+      });
+      expect(created.metadata).toMatchObject({ botId: "team-home", home: "volumes" });
+      const sameSet = fakeE2BMachine("same", {}, created.metadata);
+      const reused = await provisionOver(sameSet, teamHome([shared, ada]));
+      expect(reused.computer.providerRef).toBe("same");
+      expect(sameSet.killed).toBe(false);
+    });
+
+    it("archives every file of a machine created before its home moved, then replaces it", async () => {
+      const before = fakeE2BMachine("before", { "notes.md": "late edit", "bots/bot_a/a.txt": "a" });
+
+      const { computer, archived } = await provisionOver(before, teamHome([ada, shared]));
+
+      expect(computer.providerRef).toBe("replacement");
+      expect(before.killed).toBe(true);
+      expect(archived.sort()).toEqual(["bots/bot_a/a.txt", "notes.md"]);
+    });
+
+    it("archives the root files of a machine with other volumes, not its volumes, then replaces it", async () => {
+      const first = await provisionOver(null, teamHome([ada, shared]));
+      const created = vi.mocked(first.sdk.create).mock.calls[0]![0];
+      const older = fakeE2BMachine(
+        "older",
+        { "root.txt": "on disk", "bots/bot_a/a.txt": "a", "shared/s.txt": "s" },
+        created.metadata,
+      );
+
+      const { computer, archived } = await provisionOver(older, teamHome([ada, bob, shared]));
+
+      expect(computer.providerRef).toBe("replacement");
+      expect(older.killed).toBe(true);
+      expect(archived).toEqual(["root.txt"]);
+    });
+
+    it("keeps a machine whose files could not be archived", async () => {
+      const before = fakeE2BMachine("before", { "notes.md": "late edit" });
+      vi.spyOn(before.sandbox.files, "read").mockRejectedValue(new Error("read failed"));
+
+      await expect(provisionOver(before, teamHome([ada, shared]))).rejects.toThrow("read failed");
+      expect(before.killed).toBe(false);
+    });
+
+    it("runs a command at a worker's path as is, and any other directory in its workspace", async () => {
+      const { provider, computer, replacement } = await provisionOver(
+        null,
+        teamHome([ada, shared]),
+      );
+      const run = vi.spyOn(replacement.sandbox.commands, "run");
+      for (const cwd of [
+        undefined,
+        "bots/bot_a",
+        "/workspace/shared",
+        "/workspace/bots/bot_a",
+        "/workspace//shared/",
+      ]) {
+        for await (const _ of provider.execute(computer, { argv: ["pwd"], cwd }, context));
+      }
+
+      expect(run.mock.calls.map(([, options]) => options?.cwd)).toEqual([
+        "/home/user/rakazo-home",
+        "/home/user/rakazo-home/bots/bot_a",
+        "/workspace/shared",
+        "/workspace/bots/bot_a",
+        "/workspace/shared",
+      ]);
+    });
+
+    it.each([
+      "/workspace/shared/../../tmp",
+      "/workspace/bots/bot_a/../../../etc",
+      "/workspace/bots/bot_a/../bot_b",
+      "/workspace/shared/..\\bots/bot_b",
+    ])("refuses to run a command at %s, which climbs out of the volumes", async (cwd) => {
+      const { provider, computer } = await provisionOver(null, teamHome([ada, shared]));
+      const command = async () => {
+        for await (const _ of provider.execute(computer, { argv: ["pwd"], cwd }, context));
+      };
+
+      await expect(command()).rejects.toThrow("Path escapes the computer workspace");
+    });
+
+    it("refuses a computer write that would land on no volume", async () => {
+      const { provider, computer, replacement } = await provisionOver(
+        null,
+        teamHome([ada, shared]),
+      );
+      const write = (file: string) =>
+        provider.writeFile(
+          computer,
+          { path: file, content: new TextEncoder().encode("x") },
+          context,
+        );
+
+      await write("bots/bot_a/notes.md");
+      await write("shared/team.md");
+      await expect(write("notes.md")).rejects.toThrow("notes.md is on no mounted volume");
+      await expect(write("bots/bot_b/notes.md")).rejects.toThrow("on no mounted volume");
+      expect([...replacement.files.keys()].sort()).toEqual([
+        "/home/user/rakazo-home/bots/bot_a/notes.md",
+        "/home/user/rakazo-home/shared/team.md",
+      ]);
+    });
+  });
+
+  describe("linking the workspace to its volumes", () => {
+    async function link(prepare: (at: string) => Promise<void>) {
+      const dir = await mkdtemp(path.join(tmpdir(), "rakazo-link-"));
+      onTestFinished(() => rm(dir, { recursive: true, force: true }));
+      const [target, at] = [path.join(dir, "workspace"), path.join(dir, "rakazo-home")];
+      await mkdir(target);
+      await prepare(at);
+      const result = spawnSync("bash", ["-c", linkWorkspaceCommand(target, at)], {
+        encoding: "utf8",
+      });
+      const linked = await readlink(at).catch(() => null);
+      return { code: result.status, stderr: result.stderr, linked, target, at };
+    }
+
+    it.each([
+      ["nothing there", async () => undefined],
+      ["an empty directory", (at: string) => mkdir(at)],
+      ["an older link", (at: string) => symlink("/elsewhere", at)],
+    ])("links in place of %s", async (_name, prepare) => {
+      const result = await link(prepare);
+
+      expect({ code: result.code, linked: result.linked }).toEqual({
+        code: 0,
+        linked: result.target,
+      });
+    });
+
+    it("fails, and keeps the files, when the path is a directory with files in it", async () => {
+      const result = await link(async (at) => {
+        await mkdir(at);
+        await writeFile(path.join(at, "kept.txt"), "kept");
+      });
+
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain("has files in it");
+      expect(await readFile(path.join(result.at, "kept.txt"), "utf8")).toBe("kept");
+    });
+  });
+
   it("opens http(s) URLs through the named browser launcher", async () => {
     const respond = desktopCommandResponder();
     const command = vi.fn(
@@ -318,6 +611,7 @@ describe("E2B computer backend", () => {
     const open = vi.fn(async () => undefined);
     const desktop = {
       sandboxId: "e2b-open-url-box",
+      getInfo: async () => ({ metadata: {} }),
       display: ":0",
       commands: { run: command },
       files: { makeDir: vi.fn(async () => undefined) },
@@ -369,7 +663,7 @@ describe("E2B computer backend", () => {
     const command = vi.fn(async (value: string, _options?: Record<string, unknown>) => {
       const response = respond(value);
       if (response) return response;
-      if (value.includes("hang")) {
+      if (value.includes("'hang'")) {
         throw new TimeoutError("command timed out");
       }
       return {
@@ -384,6 +678,7 @@ describe("E2B computer backend", () => {
     const streamStop = vi.fn(async () => undefined);
     const desktop = {
       sandboxId: "e2b-test-box",
+      getInfo: async () => ({ metadata: {} }),
       display: ":0",
       getHost: (port: number) => `${port}-desktop.test`,
       commands: { run: command },
@@ -543,6 +838,7 @@ describe("E2B computer backend", () => {
     );
     const desktop = {
       sandboxId: "e2b-shared",
+      getInfo: async () => ({ metadata: {} }),
       display: ":0",
       getHost: (port: number) => `${port}-desktop.test`,
       commands: { run: command },

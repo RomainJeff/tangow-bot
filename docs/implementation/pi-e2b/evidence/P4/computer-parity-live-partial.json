@@ -1,0 +1,176 @@
+{
+  "status": "PARTIAL_BLOCKED_DYNAMIC_DESKTOP_PROFILE_PERMISSION_NOT_N13_COMPLETE",
+  "createdAt": "2026-10-22T16:29:57.655785+00:00",
+  "sourceSha": "066c4c2d7d8d41e9610cbaec8ab3c7fd13ef2c5a",
+  "modelMode": "Controlled emulator configured; no emulator/model request reached. Real-model computer/vision not executed.",
+  "provenance": {
+    "canonicalSource": "infra/sandboxes/computer/Dockerfile",
+    "canonicalSourceDigestReceiptSha256": "b35621411ac0e10227a54df987c99b4bd303d036e6d2cfbd57232905a037d72d",
+    "canonicalAmd64ManifestSha256": "06deb7f46edaf249682ff1f7b6a2587d679edfa0542152e450934f1e7789b057",
+    "canonicalConfigSha256": "dbc3303b8361e9c7ab576999153f7fa621229329a943e431f227bbe85d89ce2c",
+    "bootstrapSha256": "4c7bd934ffeb6ce6c408b13bb40bcefba4498e5852ecdee3eeef8672bf6d6225",
+    "registryImageDigest": "sha256:1290056e2357eceb0c047cb60ae9abb370305a218e2df650eb8d3ea021b1c151",
+    "runnerSha256": "884d1a14d84845630f3dda96fc2c1641c1bd2f6d611ef67c3a622d9b269ae0a5",
+    "guestSha256": "b3ace799b31495b1dcdd446864e18c639814cdd204e1937f763e9f0f7b983c3f",
+    "managedSkillsArchiveSha256": "54ad7d11c9a21a17a08a5522b1886489b288611ab3f46aca44f671678ffb64c2",
+    "sdkVersion": "2.49.1",
+    "sdkLockSha256": "84d38b2b6d391c86fd407e165ca6c813a83a2984db408474bbb3d5db4969e825",
+    "stagedSkillsVerifiedAgainstSourcePin": 31,
+    "profile": {
+      "cpuCount": 2,
+      "memoryMB": 4096
+    }
+  },
+  "transport": {
+    "manifestBytesMatch": true,
+    "configBytesMatch": true,
+    "manifestSha256": "06deb7f46edaf249682ff1f7b6a2587d679edfa0542152e450934f1e7789b057",
+    "configSha256": "dbc3303b8361e9c7ab576999153f7fa621229329a943e431f227bbe85d89ce2c",
+    "loopbackOnly": true
+  },
+  "build": {
+    "status": "PASS",
+    "attempts": 1,
+    "terminal": "ready",
+    "accountReconciliationPassed": true,
+    "providerFinalizePassed": true,
+    "canonicalStartReadinessPassed": true
+  },
+  "gates": {
+    "realProductPrepare": {
+      "status": "PASS",
+      "bypassed": false
+    },
+    "actualSudo": {
+      "status": "PASS",
+      "present": true,
+      "exit": 0,
+      "uid": "0"
+    },
+    "uniqueCanonicalIdentity": {
+      "status": "PASS",
+      "uid1000": ["user"],
+      "gid1000": ["user"],
+      "oldHomeExists": false
+    },
+    "envdIdentityAndFiles": {
+      "status": "PASS",
+      "uid": 1000,
+      "gid": 1000,
+      "user": "user",
+      "home": "/home/user",
+      "passwdHome": "/home/user",
+      "group": "user",
+      "cacheWritable": true
+    },
+    "canonicalDesktop": {
+      "status": "PASS",
+      "display": 1,
+      "noVncPort": 6080
+    },
+    "mountCoherence": {
+      "status": "PASS",
+      "privateBothDirections": true,
+      "shared": true,
+      "rootNonreplaceable": true
+    },
+    "dynamicProductDesktop": {
+      "status": "UNVERIFIED",
+      "reason": "Dynamic desktop setup failed before screenshot and native worker steps."
+    },
+    "captureLibraryAndActualDesktopImage": {
+      "status": "UNVERIFIED",
+      "reason": "Dynamic desktop setup failed before screenshot and native worker steps."
+    },
+    "canonicalApplication": {
+      "status": "UNVERIFIED",
+      "reason": "Dynamic desktop setup failed before screenshot and native worker steps."
+    },
+    "screenPathMcpAndP2WithoutBlob": {
+      "status": "UNVERIFIED",
+      "reason": "Dynamic desktop setup failed before screenshot and native worker steps."
+    },
+    "nativeReadImageOnce": {
+      "status": "UNVERIFIED",
+      "reason": "Dynamic desktop setup failed before screenshot and native worker steps."
+    },
+    "normalExactUuidSymlinkSafeScreenCleanup": {
+      "status": "UNVERIFIED",
+      "reason": "Dynamic desktop setup failed before screenshot and native worker steps."
+    },
+    "openCodeComputerPlacementAndReadonlySkills": {
+      "status": "UNVERIFIED",
+      "reason": "Dynamic desktop setup failed before screenshot and native worker steps."
+    },
+    "realModelComputerVision": {
+      "status": "UNVERIFIED",
+      "reason": "Dynamic desktop setup failed before screenshot and native worker steps."
+    },
+    "productBrowserForm": {
+      "status": "UNVERIFIED",
+      "reason": "Dynamic desktop setup failed before screenshot and native worker steps."
+    },
+    "approvalBeforeSubmissionEffect": {
+      "status": "UNVERIFIED",
+      "reason": "Dynamic desktop setup failed before screenshot and native worker steps."
+    },
+    "takeoverAndHandback": {
+      "status": "UNVERIFIED",
+      "reason": "Dynamic desktop setup failed before screenshot and native worker steps."
+    }
+  },
+  "blocker": {
+    "status": "FAIL",
+    "sourcePin": "066c4c2d7d8d41e9610cbaec8ab3c7fd13ef2c5a",
+    "entry": "E2BSandboxProvider.observe -> LinuxDesktop.ensure",
+    "error": "mkdir: cannot create directory /home/user/rakazo-home/.browser-profiles: Permission denied",
+    "cause": "Browser profile root resolves through workspace link to protected /workspace root rather than a writable mounted child.",
+    "ownerAction": "Root coordinates production correction; no product changes made by this test worker."
+  },
+  "privateRunnerCorrections": [
+    {
+      "failure": "Bundled PGlite data asset missing before any runtime resource creation.",
+      "correction": "Exact installed PGlite 0.4.3 pglite.data, pglite.wasm and initdb.wasm staged beside unchanged runner in live/bin with unchanged migration resolution.",
+      "verification": "Local and remote hash checks plus full offline initialization, migration, Prisma connection and close passed."
+    },
+    {
+      "failure": "Private helper export collided with a dependency symbol before dynamic desktop.",
+      "correction": "Private probe supplies the adapter context directly; runtime bundle remained unchanged.",
+      "cleanup": "First actual runtime probe swept two VMs and two volumes before resuming against same ready template."
+    }
+  ],
+  "runtimeAttempts": 2,
+  "cleanup": {
+    "sandboxesCreated": 4,
+    "sandboxesIndependentlyAbsent": 4,
+    "volumesCreated": 4,
+    "volumesIndependentlyAbsent": 4,
+    "left": {
+      "sandboxes": 0,
+      "volumes": 0
+    },
+    "independentEvidence": "Scoped API logs recovered exact IDs in the two fixture windows; sandbox IDs return 404, successful volume deletion IDs absent from independent Volume.list. Two canonical computers match exact owned template; buddy/volume ownership uses fixture windows and exclusive coordinator slot.",
+    "transport": {
+      "registryContainersCreated": 1,
+      "registryContainersLeft": 0,
+      "anonymousVolumesCreated": 1,
+      "anonymousVolumesLeft": 0,
+      "tunnelsCreated": 1,
+      "tunnelsLeft": 0,
+      "extraImageTagsCreated": 1,
+      "extraImageTagsLeft": 0,
+      "remoteScratchLeft": 0,
+      "canonicalImagesRetained": 2
+    },
+    "retainedUsableTemplates": 1,
+    "retainedTemplatePurpose": "Remaining N13 runtime tests after root-owned browser profile correction; exact handle and deletion instructions in private handoff.",
+    "canonicalImagesRetained": 2,
+    "canonicalImageIdsUnchanged": true
+  },
+  "limitations": [
+    "No actual E2B screenshot captured.",
+    "No native file/read-image or OpenCode computer proof executed.",
+    "No real-model computer/vision request made and no credential read by this test worker.",
+    "No full N13 completion claim."
+  ]
+}

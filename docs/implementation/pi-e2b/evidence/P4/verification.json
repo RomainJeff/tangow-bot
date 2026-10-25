@@ -1,0 +1,309 @@
+{
+  "status": "partial draft; N13 acceptance blocked",
+  "testedImplementationSha": "5ecfcbc9186b5dab3acaa52c333433750fc07d0b",
+  "guestSha256": "b3ace799b31495b1dcdd446864e18c639814cdd204e1937f763e9f0f7b983c3f",
+  "model": "local protocol emulator; no real-model intelligence claim",
+  "offline": {
+    "pnpm check": "24 tasks passed",
+    "pnpm lint": "passed with 49 existing warnings and 2 informational diagnostics",
+    "pnpm test:worker-live:bundle": "passed; remote runner and guest hashes match the local artifacts",
+    "focusedWorkerSuite": {
+      "files": 4,
+      "passed": 48,
+      "temporaryHome": true,
+      "maxWorkers": 2
+    },
+    "pnpm test:integration": {
+      "passed": 174,
+      "exitCode": 0,
+      "database": "disposable PostgreSQL",
+      "serialized": true
+    },
+    "pnpm test:e2e:affected": {
+      "passed": 216,
+      "failed": 6,
+      "baselineFailures": 5,
+      "additionalFailure": "computer-update menu click timed out after the element became unstable and detached",
+      "isolatedRerun": {
+        "spec": "computer-update.spec.ts",
+        "passed": 1,
+        "seconds": 10.1
+      },
+      "limits": "Five supplied baseline failures remain; search-jump is unverified. The full run is not green. One affected run and one isolated rerun each held the E2E lock separately."
+    },
+    "testAudit": "Catalog authority, assigned names, deferred schemas, revocation and secret redaction protect the E2B transport boundary. Compaction exercises actual Pi overflow recovery and canonical history after resume. The integrated six-result fixture failed live and offline after bounded output reduced its history; nine bounded results restore split-turn compaction without weakening assertions. No production seam or runtime change was added."
+  },
+  "live": {
+    "receipt": "integrated-runtime-lanes.json",
+    "passed": 19,
+    "failed": 0,
+    "allLaneCleanupZero": true,
+    "mcpOnly": {
+      "computersCreated": 0,
+      "volumesCreated": 0
+    },
+    "scope": "One complete batch of all 19 registered lanes on the tested implementation SHA; not a combination of earlier runs",
+    "limits": "Real Pi, controller, E2B runtime, mounts and effects with local model and MCP protocol fixtures. Plain computer preparation is skipped; no desktop parity or real-model intelligence claim."
+  },
+  "cleanup": {
+    "checkedAt": "2026-10-22T15:57:01.984Z",
+    "sandboxesCreated": 51,
+    "sandboxesDeleted": 50,
+    "sandboxesAbsentAfterTimeout": 1,
+    "volumesCreated": 41,
+    "volumesDeleted": 41,
+    "left": {
+      "sandboxes": 0,
+      "volumes": 0
+    },
+    "scope": "Final integrated 19-lane batch only",
+    "resourceIds": "Private handoff only",
+    "remoteScratchRemoved": true
+  },
+  "media": {
+    "video": "media/native-runtime.mp4",
+    "seconds": 45.56,
+    "poster": "media/native-runtime.png",
+    "recordedLanes": ["b", "c", "native-helper-approval"],
+    "receipts": "video-lanes.json",
+    "note": "Historical E2B CLI recording at its original source SHA; not the final integrated batch. Product browser/app screenshots remain unverified."
+  },
+  "measurements": {
+    "initialProviderTokens": null,
+    "mcpScreenActionLatency": null,
+    "mcpOnlyComputerWakeCount": 0,
+    "performanceImprovementClaim": false
+  },
+  "remaining": [
+    "E2B canonical computer parity boot, real product prepare and screen-path/read-once/cleanup",
+    "Real app/browser form, submission approval and takeover",
+    "OpenCode job placement, paths and authentication on E2B",
+    "Applicable product screenshots"
+  ],
+  "externalChanges": {
+    "registryPublication": false,
+    "imageImport": false,
+    "sharedTemplateBuild": false,
+    "infrastructureDeployment": false,
+    "applicationDeployment": false,
+    "featureOrMainMerge": false
+  },
+  "outputTimeoutFollowup": {
+    "testedSourceSha": "9c8d15f3dbe07a12c5bbfe36c64e2612c20cbc40",
+    "guestSha256": "b3ace799b31495b1dcdd446864e18c639814cdd204e1937f763e9f0f7b983c3f",
+    "receipt": "output-timeout-lanes.json",
+    "live": {
+      "passed": 2,
+      "failed": 0,
+      "lanes": ["f", "g-timeout"],
+      "allLaneCleanupZero": true
+    },
+    "offline": {
+      "focusedWorkerTests": 65,
+      "files": 6,
+      "pnpm check": "24 tasks passed",
+      "pnpm lint": "passed with existing warnings",
+      "pnpm test:worker-live:bundle": "passed",
+      "pnpm test:integration": {
+        "passed": 174,
+        "serialized": true
+      },
+      "pnpm test:e2e:affected": {
+        "passed": 217,
+        "failed": 5,
+        "limits": "Supplied baseline failures only; search-jump remains unverified"
+      },
+      "negativeControls": {
+        "output": "Old code exposed 14,132 model characters, above 12,000",
+        "uploadTimeout": "Restoring the old connect serialized 300 seconds instead of at most 18"
+      },
+      "testAudit": "Owner-boundary regressions run actual Pi shells and the installed E2B SDK. Lifecycle read, failure, timeout, cancellation and concurrent-helper cases protect distinct observable outcomes; no production test seams added."
+    },
+    "cleanup": {
+      "sandboxesCreated": 5,
+      "sandboxesDeleted": 4,
+      "sandboxesAbsentAfterTimeout": 1,
+      "volumesCreated": 4,
+      "volumesDeleted": 4,
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      }
+    },
+    "limits": "This follow-up does not revalidate earlier lanes on the new source SHA. It uses a local model protocol fixture, with no real-model intelligence claim."
+  },
+  "historicalInitialBatch": {
+    "testedImplementationSha": "ff827ef7eb472bc19863705a8b4dee33b487930e",
+    "guestSha256": "73c00166fdfb617926929026568395e71423e745968c0dcbdaad7960329b9ba0",
+    "offline": {
+      "pnpm check": "24 tasks passed",
+      "pnpm lint": "passed with existing warnings",
+      "pnpm test:worker-live:bundle": "passed",
+      "workerSuite": {
+        "files": 21,
+        "passed": 260
+      },
+      "defaultNegativeControl": {
+        "failedWithLegacyDefaults": 2,
+        "passedAfterRestore": 23
+      },
+      "pnpm test:integration": {
+        "passed": 174,
+        "exitCode": 0,
+        "database": "disposable PostgreSQL",
+        "serialized": true
+      },
+      "pnpm test:e2e:affected": {
+        "first": {
+          "passed": 217,
+          "failed": 5
+        },
+        "final": {
+          "passed": 216,
+          "failed": 6
+        },
+        "limits": "Five supplied baseline failures plus approval-button alignment geometry; explicitly excluded from investigation. Search-jump remains unverified."
+      },
+      "testAudit": "Existing default/stop contracts retained; live helper adds actual E2B lifecycle proof without production seams"
+    },
+    "live": {
+      "passed": 15,
+      "failed": 2,
+      "failedLanes": ["f", "g-timeout"],
+      "allLaneCleanupZero": true,
+      "mcpOnly": {
+        "computersCreated": 0,
+        "volumesCreated": 0
+      },
+      "scope": "Historical batch at the original implementation SHA, not the follow-up source SHA"
+    },
+    "cleanup": {
+      "scope": "Instrumented final batch and video rerun only; earlier exploratory lanes also reported zero final census",
+      "sandboxesCreated": 48,
+      "sandboxesDeleted": 48,
+      "volumesCreated": 43,
+      "volumesDeleted": 43,
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "resourceIds": "Private handoff only",
+      "offlineContainersRemoved": 5,
+      "offlineVolumesRemoved": 1,
+      "localImagesRetainedForParent": 2
+    }
+  },
+  "runnerSha256": "aee878d916b1fcb9c9097cf3224b89bfdff35f83f4ca186ef887d97b8f85c523",
+  "integrationCorrection": {
+    "initialSourceSha": "c5cbedc0e9f238d70e878a1c9dcef9ffdc2a02f2",
+    "initialRunnerSha256": "09d69028863898d52545621cccbea60dbd77106213174e36440bf9a91cc150aa",
+    "passed": 18,
+    "failed": 1,
+    "failedLane": "native-compaction",
+    "failure": "The second expected summary request had tools; bounded native output left six results below the SDK retained-tail split boundary. Reproduced offline with actual Pi.",
+    "change": "Nine bounded bash results exercise split-turn compaction; the two-summary, canonical-pair, approval and replay assertions remain intact.",
+    "offlineAfterCorrection": {
+      "summaryRequests": 2,
+      "canonicalNativeCalls": 10,
+      "canonicalToolPairs": 13
+    },
+    "initialCleanup": {
+      "checkedAt": "2026-10-22T15:49:42.839Z",
+      "sandboxesCreated": 50,
+      "sandboxesDeleted": 49,
+      "sandboxesAbsentAfterTimeout": 1,
+      "volumesCreated": 41,
+      "volumesDeleted": 41,
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      }
+    },
+    "remoteScratchRemoved": true
+  },
+  "compactionReadProofFollowup": {
+    "testedSourceSha": "a554f2875cbccdbbd2b13032597138684bef04f1",
+    "receipt": "compaction-read-proof.json",
+    "live": {
+      "passed": 1,
+      "failed": 0,
+      "lanes": ["native-compaction"]
+    },
+    "negativeControls": "Wrong read output, missing read exit 1, and correct output exit 1 all pass the old assertion and fail the strengthened assertion through actual Pi. Real read passes.",
+    "productionChanges": false,
+    "guestUnchanged": true,
+    "cleanup": {
+      "checkedAt": "2026-10-22T16:19:51.262Z",
+      "sandboxesCreated": 3,
+      "sandboxesDeleted": 3,
+      "sandboxesAbsentAfterTimeout": 0,
+      "volumesCreated": 2,
+      "volumesDeleted": 2,
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      }
+    },
+    "remoteScratchRemoved": true,
+    "offline": {
+      "pnpm check": "24 tasks passed",
+      "pnpm lint": "passed with existing 49 warnings and 2 informational diagnostics",
+      "pnpm test:worker-live:bundle": "passed",
+      "testAudit": "Paired literal output and success protect actual read execution after compaction. The old marker search accepted three actual-Pi negative controls; the strengthened check rejects them. No production seam or duplicate checked-in test added.",
+      "pnpm test:e2e:affected": {
+        "passed": 215,
+        "failed": 7,
+        "baselineFailures": 5,
+        "additionalFailures": [
+          "mention-picker-keyboard: expected selected mention chip did not appear",
+          "computer-update: update menu click timed out"
+        ],
+        "limits": "Full suite selected because no readable impact map. Five accepted baseline failures remain. Both extra timeouts passed in a separate two-spec run under a fresh lock. The original full run is not green. No unrelated test edits.",
+        "isolatedRerun": {
+          "specs": ["mention-picker-keyboard.spec.ts", "computer-update.spec.ts"],
+          "passed": 2,
+          "failed": 0,
+          "separateLockAcquisition": true
+        }
+      }
+    },
+    "limits": "Only native-compaction rerun on this source. Historical 19-lane batch remains pinned to its original source. Local model protocol fixture; no desktop parity or real-model intelligence claim.",
+    "independentReview": "Root reviewed the full lane, assertion delta, actual-Pi negative failures and positive, live receipt and independent cleanup census. READY for the assertion source; no further code edit requested.",
+    "historicalChecks": "The prior 174 PostgreSQL integration tests and 48 focused tests remain historical; no product code changed and those suites were not repeated for this assertion-only follow-up."
+  },
+  "realModelFollowup": {
+    "receipt": "go-real-model.json",
+    "testedSourceSha": "066c4c2d7d8d41e9610cbaec8ab3c7fd13ef2c5a",
+    "status": "PASS_WITH_LIMITS",
+    "scope": "Actual OpenCode Go model with computerless E2B native worker and controller-owned synthetic MCP task. Three successful model requests, one lookup effect.",
+    "initialFailure": {
+      "status": "FAIL",
+      "modelHTTPStatus": 400,
+      "reason": "Private request limiter lost Headers object entries, so Go rejected the missing session ID. Fixed in private transport wrapper before second worker. No fixture effect.",
+      "usage": {
+        "inputTokens": 0,
+        "outputTokens": 0
+      },
+      "cleanupLeft": {
+        "sandboxes": 0,
+        "volumes": 0
+      }
+    },
+    "cleanup": {
+      "ownedWorkerVMsCreated": 2,
+      "ownedWorkerVMsReleased": 2,
+      "volumesCreated": 0,
+      "left": {
+        "sandboxes": 0,
+        "volumes": 0
+      },
+      "remoteScratchRemoved": true
+    },
+    "limits": [
+      "Computerless controlled MCP lookup only; no native file or bash tools exercised.",
+      "No screenshot, vision, desktop parity, OpenCode computer job, helper, approval, queued-chat or full integration validation.",
+      "N13 remains incomplete pending remaining desktop and other planned lanes.",
+      "One canary and two workers. No extra model selection, subscriptions, infrastructure mutation, shared build or tracked edit."
+    ]
+  }
+}

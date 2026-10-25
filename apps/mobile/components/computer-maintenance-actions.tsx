@@ -1,10 +1,10 @@
 import type { ComputerStatus } from "@rakazo/contracts";
-import { useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { useState, useSyncExternalStore } from "react";
+import { Alert } from "react-native";
 import { rpc } from "../lib/api";
 import { computerUpdates } from "../lib/computer-updates";
 import { useI18n } from "../lib/i18n";
-import { useMobileTokens } from "../lib/native";
+import { Row, Separated } from "./bot-page/kit";
 
 type Action = "recover" | "reset" | "update";
 
@@ -12,19 +12,29 @@ export function ComputerMaintenanceActions({
   botId,
   computer,
   onChanged,
+  disabled = false,
 }: {
   botId: string;
   computer: ComputerStatus | null;
   onChanged: () => Promise<void>;
+  disabled?: boolean;
 }) {
   const { t } = useI18n();
-  const tokens = useMobileTokens();
+  const { updates } = useSyncExternalStore(computerUpdates.subscribe, computerUpdates.getSnapshot);
   const [pending, setPending] = useState<Action | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   if (!computer) return null;
 
-  const busy = Boolean(computer.busyBotName) || computer.state === "booting";
+  const busy =
+    disabled ||
+    Boolean(computer.busyBotName) ||
+    computer.state === "booting" ||
+    computer.controlHolder === "user" ||
+    updates.some(
+      (update) =>
+        update.botId === botId && update.status !== "completed" && update.status !== "failed",
+    );
 
   async function run(action: Action) {
     setPending(action);
@@ -53,37 +63,32 @@ export function ComputerMaintenanceActions({
   }
 
   return (
-    <View style={{ marginTop: 16, gap: 10 }}>
-      <Pressable
+    <Separated>
+      <Row
+        label={pending === "recover" ? t("Recovering…") : t("Recover computer")}
         disabled={busy || pending !== null}
         onPress={() => void run("recover")}
-        style={{ opacity: busy || pending !== null ? 0.4 : 1 }}
-      >
-        <Text style={{ color: tokens.mutedForeground, fontSize: 14 }}>
-          {pending === "recover" ? t("Recovering…") : t("Recover computer")}
-        </Text>
-      </Pressable>
-      <Pressable
+      />
+      <Row
+        label={pending === "reset" ? t("Resetting…") : t("Reset computer")}
         disabled={busy || pending !== null}
         onPress={confirmReset}
-        style={{ opacity: busy || pending !== null ? 0.4 : 1 }}
-      >
-        <Text style={{ color: tokens.mutedForeground, fontSize: 14 }}>
-          {pending === "reset" ? t("Resetting…") : t("Reset computer")}
-        </Text>
-      </Pressable>
+      />
       {computer.canUpdate ? (
-        <Pressable
+        <Row
+          label={pending === "update" ? t("Updating…") : t("Update computer")}
           disabled={busy || pending !== null}
           onPress={() => void run("update")}
-          style={{ opacity: busy || pending !== null ? 0.4 : 1 }}
-        >
-          <Text style={{ color: tokens.mutedForeground, fontSize: 14 }}>
-            {pending === "update" ? t("Updating…") : t("Update computer")}
-          </Text>
-        </Pressable>
+        />
       ) : null}
-      {error ? <Text style={{ color: tokens.destructive, fontSize: 13 }}>{error}</Text> : null}
-    </View>
+      {error ? (
+        <Row
+          label={t("Could not update computer")}
+          subline={error}
+          sublineTone="destructive"
+          sublineLines={0}
+        />
+      ) : null}
+    </Separated>
   );
 }

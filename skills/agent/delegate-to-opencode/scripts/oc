@@ -7,11 +7,39 @@ shopt -s nullglob
 
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SELF="$SKILL_DIR/scripts/oc"
-JOBS="$HOME/oc-jobs"
+JOBS="${OC_JOBS_DIR:-$HOME/oc-jobs}"
 MAX_RUNNING=3
 STALL_MINUTES=10
 
 die() { echo "error: $*" >&2; exit 1; }
+absolute_path() {
+  local name=$1 value=$2
+  [[ "$value" == /* ]] || die "$name must be absolute"
+  [[ "/${value#/}/" != */../* ]] || die "$name must not contain .."
+  realpath -m -- "$value" || die "$name cannot be resolved"
+}
+
+BOT_ROOT=""
+if [[ -n "${OC_JOBS_DIR:-}" ]]; then
+  JOBS=$(absolute_path OC_JOBS_DIR "$JOBS")
+  [[ "${OC_BOT_ID:-}" =~ ^[A-Za-z0-9_-]+$ ]] || die "OC_JOBS_DIR requires OC_BOT_ID"
+  BOT_ROOT="/workspace/bots/$OC_BOT_ID"
+  [[ "$JOBS" == "$BOT_ROOT/oc-jobs" ]] || die "OC_JOBS_DIR resolves outside the bot job directory"
+fi
+export OC_BOT_ID="${OC_BOT_ID:-}" OC_JOBS_DIR="${OC_JOBS_DIR:-}"
+
+volume_path() {
+  local name=$1 value
+  value=$(absolute_path "$name" "$2")
+  if [[ -n "$BOT_ROOT" ]]; then
+    case "$value" in
+      "$BOT_ROOT"|"$BOT_ROOT"/*|/workspace/shared|/workspace/shared/*) ;;
+      *) die "$name must resolve under $BOT_ROOT or /workspace/shared" ;;
+    esac
+  fi
+  echo "$value"
+}
+
 meta() { cat "$1/$2" 2>/dev/null || true; }
 
 job_dir() {
@@ -140,7 +168,7 @@ cmd_login() {
     copilot | github-copilot) args=(-p github-copilot); input=$'\r' ;;
     *) die "usage: oc login openai|copilot" ;;
   esac
-  local d="$JOBS/.login"
+  local d="$HOME/.local/state/rakazo/oc-login"
   mkdir -p "$d"
   : >"$d/log"
   printf '%s' "$input" >"$d/input"
@@ -183,9 +211,12 @@ cmd_start() {
     esac
   done
   [[ -n "$repo" && -n "$brief" ]] || die "usage: oc start --repo PATH --brief FILE [--push] [--plan] [--model M] [--effort high]"
+  repo=$(volume_path --repo "$repo")
+  brief=$(volume_path --brief "$brief")
   [[ -f "$brief" ]] || die "brief not found: $brief"
   local root
   root=$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null) || die "not a git repository: $repo"
+  root=$(volume_path --repo "$root")
   check_capacity
 
   mkdir -p "$JOBS"
@@ -266,6 +297,7 @@ cmd_send() {
   local id=${1:?usage: oc send ID FILE [--push]} file=${2:?usage: oc send ID FILE [--push]} d
   d=$(job_dir "$id")
   [[ ! -e "$d/review" ]] || die "$id is a review; send follow-ups to the job itself"
+  file=$(volume_path --file "$file")
   [[ -f "$file" ]] || die "file not found: $file"
   if alive "$d"; then echo "state=running (wait until it finishes, or stop it)"; return; fi
   [[ -n "$(meta "$d" session)" ]] || die "job $id has no OpenCode session to continue; start a new job"

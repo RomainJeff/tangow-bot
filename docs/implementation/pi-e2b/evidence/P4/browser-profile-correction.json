@@ -1,0 +1,115 @@
+{
+  "status": "OFFLINE_PASS_SOURCE_REVIEW_READY_E2B_RERUN_NOT_EXECUTED",
+  "sourceSha": "17046afe246df98253acee7710b151c47f2fca10",
+  "previousSourceSha": "a8a77d90a32858899b0416fdd8cb667cfc03f031",
+  "runnerSha256": "a3a66f1c510fe685ee430f613617d6f22c12020f81def74b53736c9346a3d42f",
+  "guestSha256": "b3ace799b31495b1dcdd446864e18c639814cdd204e1937f763e9f0f7b983c3f",
+  "testOwner": "packages/adapters/src/e2b-browser-profiles.test.ts",
+  "offlineLinuxProof": {
+    "status": "PASS",
+    "transport": "Existing offline computer-image Docker fixture; network disabled; actual generated commands, X11, Chrome and screenshot capture.",
+    "entry": "E2BSandboxProvider.observe -> LinuxDesktop.ensure",
+    "uid": 1000,
+    "gid": 1000,
+    "workspaceOwnerAndModeBefore": "0:0:755",
+    "workspaceOwnerAndModeAfter": "0:0:755",
+    "writableChildren": ["/workspace/bots/bot_a", "/workspace/bots/bot_b", "/workspace/shared"],
+    "observations": ["bot_a", "bot_b", "bot_a"],
+    "privateProfiles": 2,
+    "oldProfileRootCreation": "Team layout only: mkdir /home/user/rakazo-home/.browser-profiles fails with Permission denied. Dedicated aliases already point inside a writable private child.",
+    "correctedProfiles": "PASS: /workspace/bots/<context.botId>/.browser-profiles/chromium-bot-<stable-screen-hash>",
+    "wholeMachineImportWithoutBotContext": "PASS in all three layouts: no live process retains a --user-data-dir argument, no managed PID file or SingletonLock remains, and profile data persists.",
+    "fixtureCleanup": "All owned offline fixture containers removed; scoped Docker census found none remaining, and fixture image declares no anonymous volumes. No live provider resources or template builds performed by this correction.",
+    "layouts": [
+      "Team workspace alias -> /workspace.",
+      "Dedicated workspace alias -> /workspace/bots/bot_a.",
+      "Historical alias-spelled Chrome on the dedicated mounted home, followed by canonical volume-backed observe on the same machine."
+    ],
+    "historicalLiveTransition": "PASS: exactly two main Chrome PIDs remain the same after canonical observe, PID-file contents and profile device/inode identities remain stable; no duplicate browser starts."
+  },
+  "ownerBoundaryProof": {
+    "status": "PASS",
+    "contracts": [
+      "Reconstructed team ComputerRef without writableRoots uses metadata.home=volumes and context.botId, never either home key.",
+      "Dedicated volume and legacy no-volume paths; repeated and distinct screen identities.",
+      "Volume screen without bot context returns existing ComputerScreenUnavailableError.",
+      "Export/import/replacement archive quiesce all existing private and legacy directories without bot context.",
+      "Portable export skips nested private and legacy caches/locks, retains cookies and ordinary project Cache/lock files; replacement archives legacy root cookies."
+    ],
+    "preFixControl": "Original source a8a77d90 fails the protected-root permission probe and initial identity/lifecycle owner regressions. Source 792a7c04 fails all three new identity regressions: dedicated stop leaves Chrome alive, historical canonical ensure starts a third main Chrome process for the same directory, and shared stop fails to quiesce a directory alias.",
+    "aliasRegression": "Both dedicated and team workspace geometry are covered. Shared identity matching at the existing ensure/stop owner replaces the rejected provider-local process selector.",
+    "sharedNegative": "Generated stop command rejects a tracked PID using a different directory with the same basename, follows the valid lock PID using an alias of the expected directory, stops only that process, and removes its tracking."
+  },
+  "verification": {
+    "focused": "94 passed in seven files, including three actual-Chrome layouts, the shared generated-command identity/negative test and E2B/Box/Daytona/shared runtime siblings.",
+    "typecheck": "Full pnpm check failed solely on the explicitly waived expo-notifications 57.0.23 / expected ~57.0.24 mismatch. All 23 non-mobile workspace tasks passed separately. No dependency changes.",
+    "lint": "Passed with existing 49 warnings and two infos.",
+    "bundle": "Passed; runner and guest hashes recorded above.",
+    "integration": "174 passed in 24 PostgreSQL suites on source 17046afe under the integration lock.",
+    "affectedWebE2e": "Full affected run selected the full suite: 216 passed and six failed. Five are the accepted baseline failures; the extra floating hover-action pill Copy click timed out while the composer intercepted pointer events. That test passed alone in 8.9 seconds under a fresh E2E lock after integration finished. The full run remains non-green. Computer-update and mention-picker had no extra failure on this source.",
+    "electronE2e": "Not run per repository policy.",
+    "webBaselineFailures": [
+      "ask-card-motion: CA5 390px short thread",
+      "message-hover-actions: send after search jump",
+      "message-quote: selecting a span quotes a reply",
+      "team-computer: team/private home isolation",
+      "team-computer: user control preserves another bot screen"
+    ],
+    "isolatedRerun": {
+      "test": "message-hover-actions: floating action pill and reply links to parent",
+      "testSeconds": 8.9,
+      "runSeconds": 10.2,
+      "result": "PASS",
+      "sourceUnchanged": true,
+      "freshLock": true,
+      "scope": "Only the extra failure was rerun. This does not change the full-run result."
+    }
+  },
+  "testAudit": {
+    "status": "COMPLETE",
+    "removed": "One redundant direct filtering-helper assertion inventory replaced by actual portable export/archive results.",
+    "retained": "E2B owner tests protect context identity, reconnect and all workspace lifecycle entries. Real Chrome proves team/dedicated permissions, actual process cleanup and continuity; the small direct shared generated-command test protects alias matching and rejection of a different directory with the same basename. No private predicate export or production test seam added.",
+    "productionTestSeamsAdded": 0,
+    "productionLines": {
+      "added": 68,
+      "removed": 22
+    },
+    "testLines": {
+      "added": 463,
+      "removed": 8
+    }
+  },
+  "limitations": [
+    "No corrected-source E2B run or template rebuild authorized or executed.",
+    "Offline screenshot bytes prove capture in the Linux fixture; no product frontend screenshot or E2B screenshot is claimed.",
+    "Actual screen/native/OpenCode/vision/browser/approval/takeover gates remain unverified.",
+    "Feature changelog remains deferred to P6."
+  ],
+  "historicalParityReceipt": {
+    "reviewedInputSha256": "22a9c4a2af5aa468f6c09fedfe411ccb7146ad6c8330680bc4eb6cb4b8841070",
+    "publishedSha256": "3e172bbabe10e454aa576f28d0f2d4bc8162bbab1dec4133593d27b1ddd88358",
+    "difference": "JSON formatting only; parsed values equal."
+  },
+  "reviewInvalidation": "Independent final review blocked 792a7c04 because dedicated alias enumeration deleted tracking before canonical-spelled Chrome was found. Actual Chrome also proved canonical ensure could start a duplicate for the same profile inode. Root accepted every finding of an independent founding scope review for the shared owner correction in 17046afe; fresh independent final review r2 accepted 17046afe with no material findings and closed P1.",
+  "initialCorrectionSha": "792a7c04dee8f88a3b94c1fd825ba43d99ed71f8",
+  "sharedIdentityOwner": "packages/core/src/node/desktop-runtime.ts browser_runningFunction, used by both ensure and stop.",
+  "processIdentityBounds": {
+    "discovery": "Existing tracked PID and SingletonLock PID candidates only; numeric PID checks and kill -0 retained.",
+    "match": "Complete NUL-separated --user-data-dir= arguments; exact path or shell -ef identity of existing directories. Prior acceptance of any complete matching argument is retained; no claim about duplicate-flag precedence.",
+    "unchanged": "Lifecycle locks, leases, fences and execution permissions; no process-wide scan, path evaluation, prefix match or new UID check.",
+    "providerSelector": "Pending E2B /proc selector deleted. E2B only enumerates existing legacy/private profile roots and calls the shared stop generator."
+  },
+  "finalReview": {
+    "status": "READY",
+    "sourceSha": "17046afe246df98253acee7710b151c47f2fca10",
+    "review": "Independent final review r2; no material findings; dedicated alias P1 closed.",
+    "scope": "Reviewed changed owners/callers and isolated alias, hostile-literal, NUL, prefix, same-basename, embedded-flag and incomplete-argument probes.",
+    "remaining": "PR CI and root-owned retained-template E2B rerun; all final-source local outcomes are recorded."
+  },
+  "historicalVerification": {
+    "sourceSha": "792a7c04dee8f88a3b94c1fd825ba43d99ed71f8",
+    "status": "BLOCKED by independent dedicated-alias P1, not ready.",
+    "integration": "174 passed in 24 suites.",
+    "web": "216 passed, five accepted baseline failures plus computer-update menu click timeout; no isolated rerun after source was superseded."
+  }
+}

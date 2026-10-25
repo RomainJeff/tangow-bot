@@ -28,6 +28,7 @@ import type {
   PiOAuthLogins,
   RemoteConnectorDependencies,
   SkillOwnerLock,
+  WorkerLifecycle,
 } from "@rakazo/adapters";
 import {
   acquireComputerExecutionLease,
@@ -64,6 +65,7 @@ import {
   probeOpenAiCompatibleModels,
   provisionComputer,
   queueComputerUpdate,
+  recoverBrowserApprovalScreens,
   releaseBotScreen,
   releaseComputerExecutionLease,
   replaceComputer,
@@ -86,7 +88,15 @@ import {
   verifyMcpInstall,
 } from "@rakazo/adapters";
 import type { Auth } from "@rakazo/auth";
-import type { Actor, ComputerStatus, McpServer, Me, SpaceNavigation } from "@rakazo/contracts";
+import type {
+  Actor,
+  ComputerListItem,
+  ComputerStatus,
+  ComputerUpdateAllResult,
+  McpServer,
+  Me,
+  SpaceNavigation,
+} from "@rakazo/contracts";
 import {
   appContract,
   IntegrationProviderIdSchema,
@@ -133,6 +143,7 @@ import {
   lockOwnedGroup,
   newestModelCredentialOrder,
   newestVoiceCredentialOrder,
+  OwnerWorkerLiveError,
   Prisma,
   parseComputerMode,
   RESOURCE_NOT_FOUND,
@@ -490,6 +501,7 @@ export interface RouterDeps {
   auth: Auth;
   jobs: JobPublisher;
   sandbox: SandboxProvider;
+  workerLifecycle?: Pick<WorkerLifecycle, "releaseOwnerWorkers" | "sweepVolumes">;
   memory: MemoryStore;
   memoryProviders: MemoryProviderResolver;
   home: AgentHomeStore;
@@ -723,12 +735,25 @@ export function createRouter(deps: RouterDeps) {
             });
           }
           await assertClaim();
+          // Destroying a worker reaches the provider: like a computer teardown, only a finished
+          // deletion may then unblock the space.
+          const released = await deps.workerLifecycle?.releaseOwnerWorkers(
+            { spaceId: input.spaceId },
+            adapterContext,
+          );
+          if (released) claimReleasable = false;
+          await assertClaim();
           claimActive = false;
           if (claimRenewal) {
             clearInterval(claimRenewal);
             claimRenewal = null;
           }
           const fallback = await deleteEmptySpaceForMember(deps.prisma, claimedInput);
+          await deps.workerLifecycle
+            ?.sweepVolumes(adapterContext)
+            .catch((sweepError) =>
+              getLogger().error("volume sweep after space deletion", sweepError),
+            );
           return { ok: true as const, activeSpaceId: fallback.id };
         } catch (error) {
           if (context.signal?.aborted) claimReleasable = false;
@@ -745,7 +770,10 @@ export function createRouter(deps: RouterDeps) {
           if (error instanceof CannotDeleteSpaceAsNonOwnerError) {
             throw new ORPCError("FORBIDDEN", { message: error.message });
           }
-          if (error instanceof SpaceDeletionInProgressError) {
+          if (
+            error instanceof SpaceDeletionInProgressError ||
+            error instanceof OwnerWorkerLiveError
+          ) {
             throw new ORPCError("CONFLICT", { message: error.message });
           }
           if (
@@ -1308,6 +1336,7 @@ export function createRouter(deps: RouterDeps) {
             events: deps.events,
             artifacts: deps.artifacts,
             dataDir: deps.dataDir,
+            workerLifecycle: deps.workerLifecycle,
           },
           bot,
           {
@@ -1318,7 +1347,12 @@ export function createRouter(deps: RouterDeps) {
             signal: new AbortController().signal,
           },
           { deleteMemories: input.deleteMemories },
-        );
+        ).catch((error: unknown) => {
+          if (error instanceof OwnerWorkerLiveError) {
+            throw new ORPCError("CONFLICT", { message: error.message });
+          }
+          throw error;
+        });
         return { ok: true as const };
       }),
       webhookSecret: authed.bots.webhookSecret.handler(async ({ context, input }) => {
@@ -1557,6 +1591,7 @@ export function createRouter(deps: RouterDeps) {
         await Promise.all(
           cancelledRunIds.map((runId) => deps.jobs.cancel(runJobKey(runId)).catch(() => undefined)),
         );
+        await recoverBrowserApprovalScreens(deps, { runIds: cancelledRunIds });
         await purgeCompactedHistoryMemory(
           deps,
           context.actor,
@@ -1592,6 +1627,7 @@ export function createRouter(deps: RouterDeps) {
             deps.jobs.cancel(runJobKey(runId)).catch(() => undefined),
           ),
         );
+        await recoverBrowserApprovalScreens(deps, { runIds: rewound.cancelledRunIds });
         if (rewound.historyGeneration !== undefined) {
           await purgeCompactedHistoryMemory(
             deps,
@@ -1748,6 +1784,49 @@ export function createRouter(deps: RouterDeps) {
       }),
     },
     computer: {
+      list: authed.computer.list.handler(async ({ context }) => {
+        const computers = await listAccessibleComputers(deps.prisma, context.actor);
+        const result: ComputerListItem[] = [];
+        for (const computer of computers) {
+          const [bot, ...otherBots] = computer.bots;
+          if (!bot) continue;
+          const status = await computerStatus(deps, context.actor, bot.id);
+          for (const other of otherBots) {
+            if (status.busyBotName) break;
+            status.busyBotName = await resolveBusyBotName(deps.prisma, {
+              computerId: computer.id,
+              botId: other.id,
+              botName: other.name,
+            });
+          }
+          result.push({ botId: bot.id, name: bot.name, bots: computer.bots, status });
+        }
+        return result;
+      }),
+      updateAll: authed.computer.updateAll.handler(async ({ context }) => {
+        const computers = await listAccessibleComputers(deps.prisma, context.actor);
+        const result: ComputerUpdateAllResult = { queued: [], skipped: [] };
+        for (const computer of computers) {
+          const bot = computer.bots[0];
+          if (!bot) continue;
+          if (!computerSupportsUpdate(computer.kind)) {
+            result.skipped.push({ botId: bot.id, name: bot.name, reason: "unsupported" });
+            continue;
+          }
+          try {
+            result.queued.push(await queueComputerUpdate(deps, computer.id, bot.id));
+          } catch (error) {
+            const reason = error instanceof ComputerBusyError ? "busy" : "failed";
+            if (reason === "failed") {
+              getLogger().error("computer batch update admission failed", error, {
+                computerId: computer.id,
+              });
+            }
+            result.skipped.push({ botId: bot.id, name: bot.name, reason });
+          }
+        }
+        return result;
+      }),
       status: authed.computer.status.handler(async ({ context, input }) =>
         computerStatus(deps, context.actor, input.botId),
       ),
@@ -1891,10 +1970,13 @@ export function createRouter(deps: RouterDeps) {
           throw error;
         }
       }),
-      updates: authed.computer.updates.handler(async ({ context }) => {
+      updates: authed.computer.updates.handler(async ({ context, input }) => {
         const rows = await deps.prisma.computerUpdate.findMany({
           where: {
-            status: { in: ["queued", "running", "interrupted", "failed"] },
+            OR: [
+              { status: { in: ["queued", "running", "interrupted", "failed"] } },
+              { status: "completed", id: { in: input?.ids ?? [] } },
+            ],
             computer: {
               spaceId: context.actor.spaceId,
               bots: { some: { userId: context.actor.userId, archivedAt: null } },
@@ -2335,13 +2417,19 @@ export function createRouter(deps: RouterDeps) {
           !(hasActiveComputerControl(bot.computer) && bot.computer.controlBotId === bot.id),
         );
         return {
-          url: addScreenProxyCapability(viewUrl, deps.env.screenProxySecret, deps.env.webOrigin, {
-            botId: bot.id,
-            computerId: computer.id,
-            botGeneration: bot.screenGeneration,
-            computerGeneration: computer.screenGeneration,
-            controlLeaseId: computer.controlLeaseId,
-          }),
+          url: addScreenProxyCapability(
+            viewUrl,
+            deps.env.screenProxySecret,
+            deps.env.webOrigin,
+            {
+              botId: bot.id,
+              computerId: computer.id,
+              botGeneration: bot.screenGeneration,
+              computerGeneration: computer.screenGeneration,
+              controlLeaseId: computer.controlLeaseId,
+            },
+            session.host,
+          ),
         };
       }),
       heartbeat: authed.computer.heartbeat.handler(async ({ context, input }) => {
@@ -5051,6 +5139,23 @@ async function modelSetup(deps: RouterDeps, actor: Actor) {
     settings,
     needsModel: deps.env.agentRuntime !== "scripted" && !credential && !hasDeployment,
   };
+}
+
+function listAccessibleComputers(prisma: PrismaClient, actor: Actor) {
+  const ownedActiveBot = { spaceId: actor.spaceId, userId: actor.userId, archivedAt: null };
+  return prisma.computer.findMany({
+    where: { spaceId: actor.spaceId, bots: { some: ownedActiveBot } },
+    select: {
+      id: true,
+      kind: true,
+      bots: {
+        where: ownedActiveBot,
+        select: { id: true, name: true },
+        orderBy: { id: "asc" },
+      },
+    },
+    orderBy: { id: "asc" },
+  });
 }
 
 async function computerStatus(

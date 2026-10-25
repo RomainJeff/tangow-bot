@@ -3,10 +3,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { ComputerRef, ProcessEvent, SandboxProvider } from "@rakazo/adapter-kit";
 import { describe, expect, it } from "vitest";
-import { BoxSandboxEmulator } from "./box-emulator.js";
-import { DaytonaSandboxEmulator } from "./daytona-emulator.js";
 import { DesktopSandboxProvider } from "./desktop-sandbox.js";
-import { ManagedSandboxEmulator } from "./e2b-emulator.js";
+import { E2BSandboxEmulator } from "./e2b-emulator.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { provisionPrepared } from "./sandbox-test-support.js";
 
@@ -28,41 +26,29 @@ async function drain(provider: SandboxProvider, computer: ComputerRef) {
 }
 
 describe("sandbox conformance", () => {
-  it("runs the same graphical command across fake, managed-provider emulators, and desktop", async () => {
+  it("runs the same graphical command across fake, the E2B emulator, and desktop", async () => {
     const fake = new FakeSandboxProvider();
-    const managed = new ManagedSandboxEmulator();
-    const daytona = new DaytonaSandboxEmulator();
-    const box = new BoxSandboxEmulator();
+    const managed = new E2BSandboxEmulator();
     const desktop = new DesktopSandboxProvider();
     const a = await provisionPrepared(fake, { botId: "bot-a", homePath: "/tmp/a" }, ctx);
     const b = await provisionPrepared(managed, { botId: "bot-b", homePath: "/tmp/b" }, ctx);
-    const c = await provisionPrepared(daytona, { botId: "bot-c", homePath: "/tmp/c" }, ctx);
-    const d = await provisionPrepared(box, { botId: "bot-d", homePath: "/tmp/d" }, ctx);
-    const e = await provisionPrepared(desktop, { botId: "bot-e", homePath: "/tmp/e" }, ctx);
+    const c = await provisionPrepared(desktop, { botId: "bot-c", homePath: "/tmp/c" }, ctx);
     const outA = await drain(fake, a);
     const outB = await drain(managed, b);
-    const outC = await drain(daytona, c);
-    const outD = await drain(box, d);
-    const outE = await drain(desktop, e);
+    const outC = await drain(desktop, c);
     expect(outA).toContain("graphical-ok");
     expect(outB).toContain("graphical-ok");
     expect(outC).toContain("graphical-ok");
-    expect(outD).toContain("graphical-ok");
-    expect(outE).toContain("graphical-ok");
-    expect(new Set([a.id, b.id, c.id, d.id, e.id]).size).toBe(5);
+    expect(new Set([a.id, b.id, c.id]).size).toBe(3);
     await fake.destroy(a, ctx);
     await managed.destroy(b, ctx);
-    await daytona.destroy(c, ctx);
-    await box.destroy(d, ctx);
-    await desktop.destroy(e, ctx);
+    await desktop.destroy(c, ctx);
   });
 
   it("offers the same observation, action, and workspace contract across providers", async () => {
     const providers: SandboxProvider[] = [
       new FakeSandboxProvider(),
-      new ManagedSandboxEmulator(),
-      new DaytonaSandboxEmulator(),
-      new BoxSandboxEmulator(),
+      new E2BSandboxEmulator(),
       new DesktopSandboxProvider(),
     ];
     for (const [index, provider] of providers.entries()) {
@@ -188,9 +174,7 @@ describe("sandbox conformance", () => {
     const root = mkdtempSync(path.join(tmpdir(), "rakazo-destroy-idempotent-"));
     const providers: SandboxProvider[] = [
       new FakeSandboxProvider(),
-      new ManagedSandboxEmulator(),
-      new DaytonaSandboxEmulator(),
-      new BoxSandboxEmulator(),
+      new E2BSandboxEmulator(),
       new DesktopSandboxProvider({ root }),
     ];
     for (const [index, provider] of providers.entries()) {

@@ -32,6 +32,7 @@ export const ProductEventType = z.enum([
   "agent.tool.completed",
   /** A run followed a skill: read it, was forced or cited to it, or opened its files; payload { name, via }. */
   "agent.skill.used",
+  "agent.skill.collision",
   /**
    * The end-of-exchange skill nudge: { phase: "decided", mode, signal, toolCount, skill? } before
    * it runs (or, in shadow mode, instead of it), then { phase: "ended" } once its turn is over;

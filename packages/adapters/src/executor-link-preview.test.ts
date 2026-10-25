@@ -194,6 +194,7 @@ function fixture({
       ),
     },
     attempt: {
+      count: vi.fn(async () => 0),
       create: vi.fn(async () => ({ id: "attempt-1" })),
       update: vi.fn(),
       updateMany: vi.fn(async () => ({ count: 1 })),

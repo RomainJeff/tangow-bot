@@ -5,9 +5,9 @@ import {
   ComposioEmulator,
   createScheduleFromTool,
   DesktopSandboxProvider,
+  E2BSandboxEmulator,
   FakeSandboxProvider,
   handoffToGroupBot,
-  ManagedSandboxEmulator,
   toComputerRef,
 } from "@rakazo/adapters";
 import type { SessionId, ThreadEntry } from "@rakazo/contracts";
@@ -1371,7 +1371,7 @@ describeJourneys("required product journeys", () => {
       signal: new AbortController().signal,
     };
     const fake = new FakeSandboxProvider();
-    const managed = new ManagedSandboxEmulator();
+    const managed = new E2BSandboxEmulator();
     const desktop = new DesktopSandboxProvider();
     const a = await fake.provision({ botId: "ja", homePath: "/tmp/ja" }, ctx);
     const b = await managed.provision({ botId: "jb", homePath: "/tmp/jb" }, ctx);
@@ -1702,6 +1702,17 @@ describeJourneys("required product journeys", () => {
       instructions: "",
       notifyOnFinish: true,
     });
+    await prisma.volume.createMany({
+      data: [
+        {
+          kind: "space_shared",
+          spaceId: me.spaceId,
+          providerKind: "e2b",
+          providerRef: `shared-${stamp}`,
+        },
+        { kind: "bot_private", spaceId: me.spaceId, botId: bot.id, providerKind: "e2b" },
+      ],
+    });
 
     const deleted = await app.request("/api/auth/delete-user", {
       method: "POST",
@@ -1717,6 +1728,7 @@ describeJourneys("required product journeys", () => {
     expect(await prisma.user.findUnique({ where: { id: me.userId } })).toBeNull();
     expect(await prisma.organization.findUnique({ where: { id: me.spaceId } })).toBeNull();
     expect(await prisma.bot.findUnique({ where: { id: bot.id } })).toBeNull();
+    expect(await prisma.volume.count({ where: { spaceId: me.spaceId } })).toBe(0);
     expect((await raw(app, cookie, "me")).status).toBeGreaterThanOrEqual(400);
   });
 

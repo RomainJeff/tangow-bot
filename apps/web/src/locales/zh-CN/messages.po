@@ -67,6 +67,11 @@ msgstr ""
 msgid "{0} handling"
 msgstr ""
 
+#. placeholder {0}: item.status.busyBotName
+#: src/pages/ComputerSettingsPanel.tsx:112
+msgid "{0} is using it"
+msgstr ""
+
 #. placeholder {0}: format(size / 1024)
 #: src/components/ArtifactFileCard.tsx:223
 msgid "{0} KB"
@@ -98,7 +103,7 @@ msgstr ""
 msgid "{0}'s screen"
 msgstr "{0} 的屏幕"
 
-#: src/components/DraftCard.tsx:280
+#: src/components/DraftCard.tsx:282
 msgid "{app} is disconnected."
 msgstr ""
 
@@ -257,7 +262,7 @@ msgstr ""
 #: src/pages/bot-page/RoutineCreateForm.tsx:118
 #: src/pages/bot-page/RoutineDetail.tsx:127
 #: src/pages/bot-page/RoutinesTab.tsx:107
-#: src/pages/KnowledgeSection.tsx:446
+#: src/pages/KnowledgeSection.tsx:447
 msgid "Active"
 msgstr "启用"
 
@@ -398,7 +403,7 @@ msgstr "高级..."
 msgid "Agent connections"
 msgstr "Agent 连接"
 
-#: src/pages/KnowledgeSection.tsx:449
+#: src/pages/KnowledgeSection.tsx:450
 msgid "Agents"
 msgstr "智能体"
 
@@ -407,7 +412,7 @@ msgstr "智能体"
 msgid "Agents:"
 msgstr "Agent："
 
-#: src/pages/KnowledgeSection.tsx:445
+#: src/pages/KnowledgeSection.tsx:446
 msgid "All"
 msgstr "全部"
 
@@ -676,7 +681,7 @@ msgstr "返回登录"
 msgid "Base URL"
 msgstr "Base URL"
 
-#: src/components/DraftCard.tsx:273
+#: src/components/DraftCard.tsx:275
 msgid "Bcc"
 msgstr ""
 
@@ -690,7 +695,7 @@ msgid "Booting live desktop…"
 msgstr "正在启动实时桌面…"
 
 #. placeholder {0}: active?.name
-#: src/pages/shell/side-panel.tsx:290
+#: src/pages/shell/side-panel.tsx:275
 msgid "Booting up {0}’s computer"
 msgstr "正在启动 {0} 的电脑"
 
@@ -713,7 +718,7 @@ msgstr "Bot"
 msgid "Bot"
 msgstr "Bot"
 
-#: src/pages/shell/side-panel.tsx:417
+#: src/pages/shell/side-panel.tsx:402
 msgid "Bot screen"
 msgstr "Bot 屏幕"
 
@@ -740,6 +745,11 @@ msgstr "默认情况下 Bot 会直接执行。只有当你想先审核某类操�
 msgid "Bots are working"
 msgstr "Bot 正在工作"
 
+#. placeholder {0}: item.bots.map((bot) => bot.name).join(", ")
+#: src/pages/ComputerSettingsPanel.tsx:104
+msgid "Bots: {0}"
+msgstr ""
+
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:63
 msgid "Brain label"
 msgstr ""
@@ -748,18 +758,22 @@ msgstr ""
 msgid "Browse MCP servers"
 msgstr ""
 
+#: src/pages/ComputerSettingsPanel.tsx:68
+msgid "Busy. Try again when idle."
+msgstr ""
+
 #: src/App.tsx:168
 msgid "Can't reach the server."
 msgstr "无法连接服务器。"
 
-#: src/components/ComputerMaintenanceActions.tsx:102
-#: src/components/ComputerUpdateProgress.tsx:233
+#: src/components/ComputerMaintenanceActions.tsx:100
+#: src/components/ComputerUpdateProgress.tsx:258
 #: src/components/teach/TeachComputerOverlay.tsx:271
 #: src/lib/approval-labels.ts:14
 #: src/pages/bot-page/page-kit.tsx:148
 #: src/pages/bot-page/RoutineTriggers.tsx:296
-#: src/pages/KnowledgeSection.tsx:226
-#: src/pages/KnowledgeSection.tsx:684
+#: src/pages/KnowledgeSection.tsx:227
+#: src/pages/KnowledgeSection.tsx:692
 #: src/pages/plugins/advanced-integrations.tsx:337
 #: src/pages/shell/dialogs.tsx:88
 #: src/pages/shell/dialogs.tsx:199
@@ -797,7 +811,7 @@ msgstr "取消回复"
 msgid "Cancelled"
 msgstr "已取消"
 
-#: src/components/DraftCard.tsx:273
+#: src/components/DraftCard.tsx:275
 msgid "Cc"
 msgstr ""
 
@@ -903,8 +917,8 @@ msgstr ""
 msgid "Client secret"
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:684
-#: src/pages/KnowledgeSection.tsx:840
+#: src/pages/KnowledgeSection.tsx:692
+#: src/pages/KnowledgeSection.tsx:848
 #: src/pages/MessagingSettingsOverlay.tsx:362
 #: src/pages/PeerMessagesOverlay.tsx:133
 #: src/pages/PeerMessagesOverlay.tsx:136
@@ -917,7 +931,7 @@ msgstr "关闭"
 msgid "Close chart"
 msgstr "关闭图表"
 
-#: src/pages/shell/side-panel.tsx:395
+#: src/pages/shell/side-panel.tsx:380
 msgid "Close computer"
 msgstr "关闭电脑"
 
@@ -934,7 +948,7 @@ msgid "Close MCP servers"
 msgstr "关闭 MCP 服务器"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:116
+#: src/pages/SettingsOverlay.tsx:117
 msgid "Close memory settings"
 msgstr "关闭记忆设置"
 
@@ -943,12 +957,12 @@ msgid "Close messaging settings"
 msgstr "关闭消息设置"
 
 #: src/pages/ModelSettingsOverlay.tsx:68
-#: src/pages/SettingsOverlay.tsx:114
+#: src/pages/SettingsOverlay.tsx:115
 msgid "Close model settings"
 msgstr "关闭模型设置"
 
 #: src/pages/bot-page/BotPage.tsx:183
-#: src/pages/shell/side-panel.tsx:172
+#: src/pages/shell/side-panel.tsx:157
 msgid "Close panel"
 msgstr "关闭面板"
 
@@ -960,11 +974,11 @@ msgstr "关闭预览"
 msgid "Close skills"
 msgstr "关闭技能"
 
-#: src/pages/SettingsOverlay.tsx:119
+#: src/pages/SettingsOverlay.tsx:120
 msgid "Close user settings"
 msgstr "关闭用户设置"
 
-#: src/pages/SettingsOverlay.tsx:118
+#: src/pages/SettingsOverlay.tsx:119
 #: src/pages/VoiceSettingsOverlay.tsx:174
 msgid "Close voice settings"
 msgstr "关闭语音设置"
@@ -997,7 +1011,7 @@ msgstr "完成"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:104
+#: src/pages/SettingsOverlay.tsx:105
 #: src/pages/shell/block-views.tsx:131
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
@@ -1007,7 +1021,7 @@ msgstr "电脑"
 msgid "Computer failed to boot"
 msgstr "电脑启动失败"
 
-#: src/pages/shell/side-panel.tsx:436
+#: src/pages/shell/side-panel.tsx:421
 msgid "Computer is asleep"
 msgstr "电脑已休眠"
 
@@ -1019,17 +1033,25 @@ msgstr "电脑处于睡眠状态。打开以唤醒。"
 msgid "Computer is stopped"
 msgstr "电脑已停止"
 
+#: src/components/ComputerUpdateProgress.tsx:65
+msgid "Computer recovered"
+msgstr ""
+
 #: src/pages/bot-page/routine-copy.ts:44
 msgid "Computer unavailable"
 msgstr "电脑不可用"
+
+#: src/components/ComputerUpdateProgress.tsx:66
+msgid "Computer updated"
+msgstr ""
 
 #: src/pages/AccountSettingsOverlay.tsx:252
 msgid "Computers"
 msgstr "电脑"
 
 #: src/components/ComputersUnavailableHint.tsx:7
-msgid "Computers are off. Set SANDBOX_PROVIDER=docker with SANDBOX_SUPERVISOR_TOKEN, or set SANDBOX_PROVIDER to e2b, daytona, or box with its API key. Recreate the stack after changing .env."
-msgstr "电脑未开启。请设置 SANDBOX_PROVIDER=docker 并提供 SANDBOX_SUPERVISOR_TOKEN，或将 SANDBOX_PROVIDER 设为 e2b、daytona 或 box 并提供对应 API 密钥。更改 .env 后请重建环境。"
+msgid "Computers are off. Set SANDBOX_PROVIDER=docker with SANDBOX_SUPERVISOR_TOKEN, or set SANDBOX_PROVIDER to e2b with its API key. Recreate the stack after changing .env."
+msgstr "电脑未开启。请设置 SANDBOX_PROVIDER=docker 并提供 SANDBOX_SUPERVISOR_TOKEN，或将 SANDBOX_PROVIDER 设为 e2b 并提供对应 API 密钥。更改 .env 后请重建环境。"
 
 #: src/pages/ModelSettingsOverlay.tsx:88
 msgid "Configured by deployment"
@@ -1039,7 +1061,7 @@ msgstr "由部署配置"
 msgid "Configured servers"
 msgstr "已配置的服务器"
 
-#: src/pages/KnowledgeSection.tsx:679
+#: src/pages/KnowledgeSection.tsx:687
 #: src/pages/McpServersOverlay.tsx:507
 msgid "Confirm delete"
 msgstr "确认删除"
@@ -1137,6 +1159,10 @@ msgstr "正在连接…"
 msgid "Connection to {0} is still pending. You can close this and check again."
 msgstr "与 {0} 的连接仍在等待。可以关闭此窗口稍后再看。"
 
+#: src/pages/KnowledgeSection.tsx:658
+msgid "Content lives on the shared volume."
+msgstr ""
+
 #: src/pages/model-settings/model-detail.tsx:199
 #: src/pages/Onboarding.tsx:517
 msgid "Context limit"
@@ -1147,7 +1173,7 @@ msgstr "上下文限制"
 msgid "Continue"
 msgstr "继续"
 
-#: src/components/ComputerUpdateProgress.tsx:194
+#: src/components/ComputerUpdateProgress.tsx:219
 msgid "Continue in Background"
 msgstr ""
 
@@ -1159,7 +1185,7 @@ msgstr "使用邮箱继续"
 msgid "Conversation cleared"
 msgstr ""
 
-#: src/components/DraftCard.tsx:369
+#: src/components/DraftCard.tsx:371
 #: src/pages/shell/message-actions-sheet.tsx:75
 #: src/pages/shell/message-hover-actions.tsx:98
 #: src/pages/shell/message-hover-actions.tsx:169
@@ -1202,7 +1228,7 @@ msgstr "无法检查教学状态。请刷新视图以继续。"
 msgid "Could not clear conversation"
 msgstr "无法清空对话"
 
-#: src/components/ComputerUpdateProgress.tsx:174
+#: src/components/ComputerUpdateProgress.tsx:195
 msgid "Could not complete action"
 msgstr ""
 
@@ -1282,7 +1308,7 @@ msgstr "无法删除 MCP 服务器"
 msgid "Could not delete routine"
 msgstr "无法删除例行任务"
 
-#: src/pages/KnowledgeSection.tsx:640
+#: src/pages/KnowledgeSection.tsx:641
 msgid "Could not delete skill"
 msgstr "无法删除技能"
 
@@ -1319,7 +1345,7 @@ msgstr "无法下载 {0}。请重试。"
 msgid "Could not download {name}. Try again."
 msgstr "无法下载 {name}。请重试。"
 
-#: src/pages/KnowledgeSection.tsx:365
+#: src/pages/KnowledgeSection.tsx:366
 msgid "Could not import skill"
 msgstr "无法导入技能"
 
@@ -1329,12 +1355,12 @@ msgstr "无法安装连接器"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:148
 #: src/pages/bot-page/page-kit.tsx:80
-#: src/pages/KnowledgeSection.tsx:89
-#: src/pages/KnowledgeSection.tsx:118
-#: src/pages/KnowledgeSection.tsx:300
-#: src/pages/KnowledgeSection.tsx:321
-#: src/pages/KnowledgeSection.tsx:361
-#: src/pages/KnowledgeSection.tsx:753
+#: src/pages/KnowledgeSection.tsx:90
+#: src/pages/KnowledgeSection.tsx:119
+#: src/pages/KnowledgeSection.tsx:301
+#: src/pages/KnowledgeSection.tsx:322
+#: src/pages/KnowledgeSection.tsx:362
+#: src/pages/KnowledgeSection.tsx:761
 msgid "Could not load"
 msgstr "无法加载"
 
@@ -1348,6 +1374,10 @@ msgstr "无法加载审批规则"
 
 #: src/pages/IntegrationSetup.tsx:72
 msgid "Could not load bots. Reload to try again."
+msgstr ""
+
+#: src/pages/ComputerSettingsPanel.tsx:79
+msgid "Could not load computers"
 msgstr ""
 
 #: src/pages/DecisionModelSettingsPanel.tsx:37
@@ -1368,7 +1398,7 @@ msgstr "无法加载 MCP 服务器"
 msgid "Could not load model settings"
 msgstr "无法加载模型设置"
 
-#: src/pages/KnowledgeSection.tsx:601
+#: src/pages/KnowledgeSection.tsx:602
 msgid "Could not load skill"
 msgstr "无法加载技能"
 
@@ -1415,7 +1445,7 @@ msgstr "无法连接服务器"
 msgid "Could not reach this model server"
 msgstr "无法访问此模型服务器"
 
-#: src/pages/KnowledgeSection.tsx:773
+#: src/pages/KnowledgeSection.tsx:781
 msgid "Could not read this file"
 msgstr "无法读取此文件"
 
@@ -1463,7 +1493,7 @@ msgstr "无法运行例行任务"
 #: src/pages/bot-page/page-kit.tsx:51
 #: src/pages/bot-page/RoutineDetail.tsx:87
 #: src/pages/ExternalConversationSettings.tsx:250
-#: src/pages/KnowledgeSection.tsx:206
+#: src/pages/KnowledgeSection.tsx:207
 msgid "Could not save"
 msgstr "无法保存"
 
@@ -1487,7 +1517,7 @@ msgstr "无法保存例行任务"
 msgid "Could not save rule"
 msgstr "无法保存规则"
 
-#: src/pages/KnowledgeSection.tsx:623
+#: src/pages/KnowledgeSection.tsx:624
 msgid "Could not save skill"
 msgstr "无法保存技能"
 
@@ -1525,8 +1555,8 @@ msgid "Could not start teaching"
 msgstr "无法开始教学"
 
 #: src/components/AskCard.tsx:199
-#: src/components/DraftCard.tsx:161
-#: src/components/DraftCard.tsx:174
+#: src/components/DraftCard.tsx:163
+#: src/components/DraftCard.tsx:176
 msgid "Could not submit this answer"
 msgstr "无法提交此回答"
 
@@ -1538,14 +1568,19 @@ msgstr "无法接管"
 msgid "Could not update"
 msgstr "无法更新"
 
-#: src/pages/KnowledgeSection.tsx:343
+#: src/pages/KnowledgeSection.tsx:344
 #: src/pages/McpServersOverlay.tsx:210
 msgid "Could not update agent access"
 msgstr "无法更新 Agent 权限"
 
-#: src/components/ComputerMaintenanceActions.tsx:69
+#: src/components/ComputerMaintenanceActions.tsx:67
+#: src/pages/ComputerSettingsPanel.tsx:71
 msgid "Could not update computer"
 msgstr "无法更新电脑"
+
+#: src/pages/ComputerSettingsPanel.tsx:81
+msgid "Could not update computers"
+msgstr ""
 
 #: src/pages/shell/use-thread-send.ts:115
 msgid "Could not update reaction"
@@ -1693,7 +1728,7 @@ msgstr "天"
 msgid "days"
 msgstr "天"
 
-#: src/pages/SettingsOverlay.tsx:101
+#: src/pages/SettingsOverlay.tsx:102
 msgid "Decision Model"
 msgstr ""
 
@@ -1718,7 +1753,7 @@ msgstr "默认范围"
 
 #: src/pages/bot-page/BotPage.tsx:378
 #: src/pages/BotContextMenu.tsx:150
-#: src/pages/KnowledgeSection.tsx:679
+#: src/pages/KnowledgeSection.tsx:687
 #: src/pages/McpServersOverlay.tsx:509
 #: src/pages/shell/dialogs.tsx:409
 #: src/pages/shell/dialogs.tsx:470
@@ -1807,17 +1842,17 @@ msgstr ""
 msgid "Direct MCP"
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:386
-#: src/pages/KnowledgeSection.tsx:447
+#: src/pages/KnowledgeSection.tsx:387
+#: src/pages/KnowledgeSection.tsx:448
 msgid "Disabled"
 msgstr "已停用"
 
-#: src/components/DraftCard.tsx:360
+#: src/components/DraftCard.tsx:362
 msgid "Discard"
 msgstr ""
 
-#: src/components/DraftCard.tsx:240
-#: src/components/DraftCard.tsx:250
+#: src/components/DraftCard.tsx:242
+#: src/components/DraftCard.tsx:252
 msgid "Discarded"
 msgstr ""
 
@@ -1834,7 +1869,7 @@ msgstr "断开"
 msgid "Disconnecting…"
 msgstr "正在断开…"
 
-#: src/components/ComputerUpdateProgress.tsx:190
+#: src/components/ComputerUpdateProgress.tsx:215
 #: src/components/teach/TeachComputerOverlay.tsx:291
 #: src/pages/shell/message-cards.tsx:89
 msgid "Dismiss"
@@ -1874,13 +1909,14 @@ msgstr "Docker 限制对你电脑的访问，以提高安全性。使用{hostLab
 msgid "Don’t have an account?"
 msgstr "还没有账户？"
 
+#: src/components/ComputerUpdateProgress.tsx:206
 #: src/pages/ActivityList.tsx:158
 #: src/pages/bot-page/BotActivity.tsx:312
 #: src/pages/bot-page/RoutineTriggers.tsx:304
 msgid "Done"
 msgstr "完成"
 
-#: src/pages/KnowledgeSection.tsx:833
+#: src/pages/KnowledgeSection.tsx:841
 msgid "Download"
 msgstr "下载"
 
@@ -1895,7 +1931,7 @@ msgstr "下载 {0}"
 msgid "Download {name}"
 msgstr "下载 {name}"
 
-#: src/pages/KnowledgeSection.tsx:170
+#: src/pages/KnowledgeSection.tsx:171
 msgid "Download as markdown"
 msgstr "下载为 Markdown"
 
@@ -1933,7 +1969,7 @@ msgstr "编辑"
 msgid "Edit and resend"
 msgstr "编辑并重新发送"
 
-#: src/components/DraftCard.tsx:412
+#: src/components/DraftCard.tsx:414
 msgid "Edit message"
 msgstr ""
 
@@ -1941,11 +1977,11 @@ msgstr ""
 msgid "Edit Profile"
 msgstr "编辑资料"
 
-#: src/components/DraftCard.tsx:277
+#: src/components/DraftCard.tsx:279
 msgid "Edited"
 msgstr ""
 
-#: src/components/DraftCard.tsx:276
+#: src/components/DraftCard.tsx:278
 msgid "Editing"
 msgstr ""
 
@@ -2094,7 +2130,7 @@ msgstr "精选"
 msgid "Files"
 msgstr "文件"
 
-#: src/pages/KnowledgeSection.tsx:442
+#: src/pages/KnowledgeSection.tsx:443
 msgid "Filter skills"
 msgstr "筛选技能"
 
@@ -2143,8 +2179,8 @@ msgstr "全屏"
 msgid "FYI"
 msgstr "供参考"
 
-#: src/pages/SettingsOverlay.tsx:98
-#: src/pages/SettingsOverlay.tsx:110
+#: src/pages/SettingsOverlay.tsx:99
+#: src/pages/SettingsOverlay.tsx:111
 msgid "General"
 msgstr "通用"
 
@@ -2152,7 +2188,7 @@ msgstr "通用"
 msgid "Get credentials"
 msgstr ""
 
-#: src/components/ComputerUpdateProgress.tsx:50
+#: src/components/ComputerUpdateProgress.tsx:54
 msgid "Getting ready"
 msgstr ""
 
@@ -2162,7 +2198,7 @@ msgstr ""
 msgid "Git event"
 msgstr "Git 事件"
 
-#: src/pages/KnowledgeSection.tsx:387
+#: src/pages/KnowledgeSection.tsx:388
 msgid "Global"
 msgstr "全局"
 
@@ -2261,7 +2297,7 @@ msgstr "此机器人应如何表现"
 msgid "How to check"
 msgstr "如何检查"
 
-#: src/pages/shell/side-panel.tsx:466
+#: src/pages/shell/side-panel.tsx:451
 msgid "I’m done"
 msgstr "我做完了"
 
@@ -2273,7 +2309,7 @@ msgstr "如果听到了，说明语音已就绪。"
 msgid "Ignore"
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:426
+#: src/pages/KnowledgeSection.tsx:427
 msgid "Import"
 msgstr "导入"
 
@@ -2485,7 +2521,7 @@ msgstr "退出登录"
 msgid "Low"
 msgstr "低"
 
-#: src/components/ComputerUpdateProgress.tsx:228
+#: src/components/ComputerUpdateProgress.tsx:253
 msgid "Make sure nothing is still running on this computer."
 msgstr "请确认这台电脑上没有仍在运行的任务。"
 
@@ -2558,7 +2594,7 @@ msgstr "成员（选择 {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX} 个）"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:36
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:100
+#: src/pages/SettingsOverlay.tsx:101
 msgid "Memory"
 msgstr "记忆"
 
@@ -2686,7 +2722,7 @@ msgstr "模型已更新。"
 
 #: src/pages/LocalSettings.tsx:36
 #: src/pages/ModelSettingsOverlay.tsx:61
-#: src/pages/SettingsOverlay.tsx:99
+#: src/pages/SettingsOverlay.tsx:100
 msgid "Models"
 msgstr "模型"
 
@@ -2707,7 +2743,7 @@ msgstr "每月"
 msgid "Monthly on day {day} at {time}"
 msgstr "每月 {day} 日 {time}"
 
-#: src/components/ComputerMaintenanceActions.tsx:123
+#: src/components/ComputerMaintenanceActions.tsx:152
 msgid "More computer actions"
 msgstr "更多电脑操作"
 
@@ -2754,7 +2790,7 @@ msgstr "给这个例行任务命名"
 msgid "Needs takeover"
 msgstr "需要接管"
 
-#: src/pages/shell/side-panel.tsx:339
+#: src/pages/shell/side-panel.tsx:324
 msgid "Needs you"
 msgstr "需要你处理"
 
@@ -2790,7 +2826,7 @@ msgstr "新建例行任务"
 msgid "New section"
 msgstr "新建分组"
 
-#: src/pages/KnowledgeSection.tsx:406
+#: src/pages/KnowledgeSection.tsx:407
 msgid "New skill"
 msgstr "新建技能"
 
@@ -2835,11 +2871,15 @@ msgstr "没有匹配的机器人"
 msgid "No chat apps linked yet."
 msgstr "还没有关联聊天应用。"
 
+#: src/pages/ComputerSettingsPanel.tsx:91
+msgid "No computers"
+msgstr ""
+
 #: src/components/ApprovalRulesSettings.tsx:163
 msgid "No exceptions. Actions run automatically."
 msgstr "没有例外。操作会自动执行。"
 
-#: src/pages/KnowledgeSection.tsx:847
+#: src/pages/KnowledgeSection.tsx:855
 msgid "No files yet"
 msgstr "尚无文件"
 
@@ -2853,7 +2893,7 @@ msgstr "尚未安装任何集成。"
 
 #: src/components/ask/AskSettled.tsx:28
 #: src/components/AskCard.tsx:260
-#: src/components/DraftCard.tsx:257
+#: src/components/DraftCard.tsx:259
 msgid "No longer active"
 msgstr "已停用"
 
@@ -2902,11 +2942,11 @@ msgstr "无报告"
 msgid "No results"
 msgstr "无结果"
 
-#: src/pages/KnowledgeSection.tsx:463
+#: src/pages/KnowledgeSection.tsx:464
 msgid "No skills match"
 msgstr "没有匹配的技能"
 
-#: src/pages/KnowledgeSection.tsx:463
+#: src/pages/KnowledgeSection.tsx:464
 msgid "No skills yet"
 msgstr "暂无技能"
 
@@ -2940,16 +2980,16 @@ msgstr "不在插件目录中"
 msgid "Not now"
 msgstr "暂不"
 
-#: src/components/DraftCard.tsx:275
+#: src/components/DraftCard.tsx:277
 msgid "Not sent"
 msgstr ""
 
-#: src/components/ComputerUpdateProgress.tsx:251
+#: src/components/ComputerUpdateProgress.tsx:276
 msgid "Nothing is still running"
 msgstr "没有仍在运行的任务"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:42
-#: src/pages/KnowledgeSection.tsx:41
+#: src/pages/KnowledgeSection.tsx:42
 msgid "Nothing remembered yet"
 msgstr "暂无记忆"
 
@@ -3178,6 +3218,10 @@ msgstr "预览 {0}"
 msgid "Private"
 msgstr "私有"
 
+#: src/pages/ComputerSettingsPanel.tsx:103
+msgid "Private Computer"
+msgstr ""
+
 #: src/pages/shell/dialogs.tsx:137
 msgid "Private workspace with its own bots and groups."
 msgstr ""
@@ -3223,7 +3267,7 @@ msgstr "表情回应"
 msgid "Read replies aloud"
 msgstr "朗读回复"
 
-#: src/pages/KnowledgeSection.tsx:492
+#: src/pages/KnowledgeSection.tsx:493
 msgid "read-only"
 msgstr "只读"
 
@@ -3252,7 +3296,7 @@ msgstr ""
 msgid "Recommended · {description}"
 msgstr ""
 
-#: src/components/DraftCard.tsx:385
+#: src/components/DraftCard.tsx:387
 msgid "Reconnect {app}"
 msgstr ""
 
@@ -3261,7 +3305,7 @@ msgid "Reconnect OAuth"
 msgstr "重新连接 OAuth"
 
 #: src/App.tsx:166
-#: src/components/ComputerUpdateProgress.tsx:54
+#: src/components/ComputerUpdateProgress.tsx:58
 #: src/pages/shell/screen-frame.tsx:44
 msgid "Reconnecting"
 msgstr "正在重新连接"
@@ -3282,37 +3326,37 @@ msgstr "录制已开始。请刷新视图以继续。"
 msgid "Recording: {0}"
 msgstr "录制中：{0}"
 
-#: src/components/ComputerMaintenanceActions.tsx:145
-#: src/components/ComputerUpdateProgress.tsx:209
+#: src/components/ComputerMaintenanceActions.tsx:131
+#: src/components/ComputerUpdateProgress.tsx:234
 msgid "Recover computer"
 msgstr "恢复电脑"
 
 #. placeholder {0}: update.name
-#: src/components/ComputerUpdateProgress.tsx:64
+#: src/components/ComputerUpdateProgress.tsx:74
 msgid "Recovering {0}’s Computer"
 msgstr ""
 
-#: src/components/ComputerUpdateProgress.tsx:63
+#: src/components/ComputerUpdateProgress.tsx:73
 msgid "Recovering Team Computer"
 msgstr ""
 
-#: src/components/ComputerMaintenanceActions.tsx:145
+#: src/components/ComputerMaintenanceActions.tsx:131
 msgid "Recovering…"
 msgstr "正在恢复…"
 
-#: src/components/ComputerUpdateProgress.tsx:59
+#: src/components/ComputerUpdateProgress.tsx:69
 msgid "Recovery failed"
 msgstr ""
 
-#: src/components/ComputerUpdateProgress.tsx:160
+#: src/components/ComputerUpdateProgress.tsx:181
 msgid "Recovery is unavailable until the previous operation has stopped."
 msgstr ""
 
-#: src/components/ComputerUpdateProgress.tsx:162
+#: src/components/ComputerUpdateProgress.tsx:183
 msgid "Recovery restores the last saved workspace. Unsaved work may be lost."
 msgstr ""
 
-#: src/components/ComputerUpdateProgress.tsx:52
+#: src/components/ComputerUpdateProgress.tsx:56
 msgid "Recreating the computer"
 msgstr ""
 
@@ -3324,15 +3368,15 @@ msgstr "刷新视图"
 msgid "Refreshing…"
 msgstr "正在刷新…"
 
-#: src/pages/shell/side-panel.tsx:456
+#: src/pages/shell/side-panel.tsx:441
 msgid "Release"
 msgstr "释放"
 
-#: src/components/ComputerUpdateProgress.tsx:180
+#: src/components/ComputerUpdateProgress.tsx:201
 msgid "Release computer"
 msgstr ""
 
-#: src/components/ComputerUpdateProgress.tsx:225
+#: src/components/ComputerUpdateProgress.tsx:250
 msgid "Release interrupted computer?"
 msgstr ""
 
@@ -3353,7 +3397,7 @@ msgstr "移除"
 msgid "Remove {0}"
 msgstr "移除 {0}"
 
-#: src/components/DraftLines.tsx:97
+#: src/components/DraftLines.tsx:84
 msgid "Remove {address}"
 msgstr ""
 
@@ -3422,7 +3466,7 @@ msgstr "替换 API 密钥"
 msgid "Replace key"
 msgstr "替换密钥"
 
-#: src/components/DraftCard.tsx:254
+#: src/components/DraftCard.tsx:256
 msgid "Replaced"
 msgstr ""
 
@@ -3444,15 +3488,15 @@ msgstr "正在回复 {replyName}"
 msgid "Request"
 msgstr "请求"
 
-#: src/components/ComputerMaintenanceActions.tsx:105
+#: src/components/ComputerMaintenanceActions.tsx:103
 msgid "Reset"
 msgstr "重置"
 
-#: src/components/ComputerMaintenanceActions.tsx:150
+#: src/components/ComputerMaintenanceActions.tsx:139
 msgid "Reset computer"
 msgstr "重置电脑"
 
-#: src/components/ComputerMaintenanceActions.tsx:93
+#: src/components/ComputerMaintenanceActions.tsx:91
 msgid "Reset computer?"
 msgstr "重置电脑？"
 
@@ -3464,8 +3508,8 @@ msgstr "重置密码"
 msgid "Reset your password"
 msgstr "重置你的密码"
 
-#: src/components/ComputerMaintenanceActions.tsx:105
-#: src/components/ComputerMaintenanceActions.tsx:150
+#: src/components/ComputerMaintenanceActions.tsx:103
+#: src/components/ComputerMaintenanceActions.tsx:139
 msgid "Resetting…"
 msgstr "正在重置…"
 
@@ -3480,7 +3524,7 @@ msgstr ""
 msgid "Restore"
 msgstr "恢复"
 
-#: src/components/ComputerMaintenanceActions.tsx:96
+#: src/components/ComputerMaintenanceActions.tsx:94
 msgid "Restore the last saved workspace. Unsaved work on the computer is lost."
 msgstr "还原上次保存的工作区。电脑上未保存的工作会丢失。"
 
@@ -3488,7 +3532,7 @@ msgstr "还原上次保存的工作区。电脑上未保存的工作会丢失。
 msgid "Restore unsaved text"
 msgstr "恢复未保存的文本"
 
-#: src/components/ComputerUpdateProgress.tsx:53
+#: src/components/ComputerUpdateProgress.tsx:57
 msgid "Restoring your workspace"
 msgstr ""
 
@@ -3498,6 +3542,7 @@ msgstr "结果"
 
 #: src/pages/bot-page/page-kit.tsx:52
 #: src/pages/bot-page/page-kit.tsx:88
+#: src/pages/ComputerSettingsPanel.tsx:84
 msgid "Retry"
 msgstr "重试"
 
@@ -3516,7 +3561,7 @@ msgid "Return to Rakazo"
 msgstr "返回 Rakazo"
 
 #. placeholder {0}: doc.revision
-#: src/pages/KnowledgeSection.tsx:144
+#: src/pages/KnowledgeSection.tsx:145
 msgid "rev {0}"
 msgstr "版本 {0}"
 
@@ -3592,8 +3637,8 @@ msgstr ""
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:255
 #: src/pages/GroupPanel.tsx:279
-#: src/pages/KnowledgeSection.tsx:234
-#: src/pages/KnowledgeSection.tsx:698
+#: src/pages/KnowledgeSection.tsx:235
+#: src/pages/KnowledgeSection.tsx:706
 #: src/pages/model-settings/model-detail.tsx:329
 #: src/pages/shell/dialogs.tsx:266
 msgid "Save"
@@ -3615,7 +3660,7 @@ msgstr "已保存，但列表刷新失败"
 msgid "Saved."
 msgstr "已保存。"
 
-#: src/components/ComputerUpdateProgress.tsx:51
+#: src/components/ComputerUpdateProgress.tsx:55
 msgid "Saving your workspace"
 msgstr ""
 
@@ -3679,8 +3724,8 @@ msgstr "搜索模型"
 msgid "Search providers"
 msgstr "搜索提供方"
 
-#: src/pages/KnowledgeSection.tsx:432
 #: src/pages/KnowledgeSection.tsx:433
+#: src/pages/KnowledgeSection.tsx:434
 msgid "Search skills"
 msgstr "搜索技能"
 
@@ -3695,7 +3740,7 @@ msgstr "选择 Bot"
 
 #: src/components/ask/QuestionCard.tsx:205
 #: src/components/ask/QuestionCard.tsx:306
-#: src/components/DraftCard.tsx:396
+#: src/components/DraftCard.tsx:398
 #: src/pages/shell/composer.tsx:407
 msgid "Send"
 msgstr "发送"
@@ -3709,11 +3754,11 @@ msgid "Send reset link"
 msgstr "发送重置链接"
 
 #: src/components/AskCard.tsx:304
-#: src/components/DraftCard.tsx:396
+#: src/components/DraftCard.tsx:398
 msgid "Sending…"
 msgstr "正在发送…"
 
-#: src/components/DraftCard.tsx:227
+#: src/components/DraftCard.tsx:229
 msgid "Sent to {recipient} · {time}"
 msgstr ""
 
@@ -3737,8 +3782,8 @@ msgstr "服务器 URL"
 
 #: src/pages/bot-page/BotPage.tsx:101
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:110
-#: src/pages/SettingsOverlay.tsx:166
+#: src/pages/SettingsOverlay.tsx:111
+#: src/pages/SettingsOverlay.tsx:167
 #: src/pages/shell/sidebar-footer.tsx:199
 #: src/pages/shell/sidebar-footer.tsx:206
 msgid "Settings"
@@ -3771,7 +3816,7 @@ msgstr "共享"
 msgid "Shared chat with 2-6 bots. They all reply in the same thread."
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:36
+#: src/pages/KnowledgeSection.tsx:37
 msgid "Shared documents"
 msgstr "共享文档"
 
@@ -3789,13 +3834,13 @@ msgstr "显示更早的"
 msgid "Show key"
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:885
+#: src/pages/KnowledgeSection.tsx:893
 #: src/pages/shell/block-views.tsx:54
 msgid "Show less"
 msgstr ""
 
 #: src/pages/bot-page/BotActivity.tsx:471
-#: src/pages/KnowledgeSection.tsx:885
+#: src/pages/KnowledgeSection.tsx:893
 #: src/pages/PluginsOverlay.tsx:309
 #: src/pages/shell/block-views.tsx:54
 msgid "Show more"
@@ -3851,7 +3896,7 @@ msgstr "技能"
 
 #: src/components/ask/QuestionCard.tsx:194
 #: src/components/integrations/IntegrationSetup.tsx:364
-#: src/pages/shell/side-panel.tsx:463
+#: src/pages/shell/side-panel.tsx:448
 msgid "Skip"
 msgstr "跳过"
 
@@ -3900,7 +3945,7 @@ msgstr "仅朗读"
 msgid "Speak this reply"
 msgstr "朗读这条回复"
 
-#: src/pages/KnowledgeSection.tsx:388
+#: src/pages/KnowledgeSection.tsx:389
 msgid "Specific agents"
 msgstr "指定智能体"
 
@@ -3927,8 +3972,8 @@ msgid "Steps"
 msgstr "步骤"
 
 #: src/pages/shell/composer.tsx:299
-#: src/pages/shell/side-panel.tsx:355
-#: src/pages/shell/side-panel.tsx:360
+#: src/pages/shell/side-panel.tsx:340
+#: src/pages/shell/side-panel.tsx:345
 msgid "Stop"
 msgstr "停止"
 
@@ -3959,8 +4004,8 @@ msgstr "已安全存储。不会显示在这里。"
 msgid "subagent"
 msgstr "子 Agent"
 
-#: src/components/DraftCard.tsx:343
-#: src/components/DraftCard.tsx:349
+#: src/components/DraftCard.tsx:345
+#: src/components/DraftCard.tsx:351
 msgid "Subject"
 msgstr ""
 
@@ -3991,7 +4036,7 @@ msgstr "正在切换…"
 msgid "System"
 msgstr "系统"
 
-#: src/components/ComputerMaintenanceActions.tsx:136
+#: src/components/ComputerMaintenanceActions.tsx:160
 #: src/components/teach/TeachComputerOverlay.tsx:219
 #: src/components/teach/TeachComputerOverlay.tsx:230
 msgid "Teach a task"
@@ -4006,6 +4051,8 @@ msgstr "正在示范，发送新消息前请先停止示范。"
 msgid "Team"
 msgstr "团队"
 
+#: src/components/ComputerUpdateProgress.tsx:61
+#: src/pages/ComputerSettingsPanel.tsx:103
 #: src/pages/shell/computer-preview.tsx:115
 msgid "Team Computer"
 msgstr "团队电脑"
@@ -4112,7 +4159,7 @@ msgstr "时间"
 msgid "Title"
 msgstr "标题"
 
-#: src/components/DraftCard.tsx:273
+#: src/components/DraftCard.tsx:275
 msgid "To"
 msgstr ""
 
@@ -4142,7 +4189,7 @@ msgstr ""
 msgid "Treg token"
 msgstr "Treg token"
 
-#: src/components/DraftCard.tsx:396
+#: src/components/DraftCard.tsx:398
 #: src/pages/Onboarding.tsx:685
 msgid "Try again"
 msgstr "重试"
@@ -4159,7 +4206,7 @@ msgstr "未分配"
 msgid "Unavailable"
 msgstr "不可用"
 
-#: src/components/DraftCard.tsx:246
+#: src/components/DraftCard.tsx:248
 msgid "Undo"
 msgstr ""
 
@@ -4189,15 +4236,19 @@ msgstr "已是最新"
 msgid "Update"
 msgstr "更新"
 
+#: src/pages/ComputerSettingsPanel.tsx:58
+msgid "Update all computers"
+msgstr ""
+
 #: src/components/SoftwareUpdateSection.tsx:260
 msgid "Update available"
 msgstr "有可用更新"
 
-#: src/components/ComputerMaintenanceActions.tsx:159
+#: src/components/ComputerMaintenanceActions.tsx:122
 msgid "Update computer"
 msgstr "更新电脑"
 
-#: src/components/ComputerUpdateProgress.tsx:60
+#: src/components/ComputerUpdateProgress.tsx:70
 #: src/components/SoftwareUpdateSection.tsx:185
 msgid "Update failed"
 msgstr "更新失败"
@@ -4207,7 +4258,7 @@ msgstr "更新失败"
 msgid "Update finished with errors"
 msgstr "更新完成但有错误"
 
-#: src/components/ComputerUpdateProgress.tsx:118
+#: src/components/ComputerUpdateProgress.tsx:139
 msgid "Update progress"
 msgstr ""
 
@@ -4216,26 +4267,36 @@ msgstr ""
 msgid "Updated"
 msgstr "已更新"
 
-#: src/pages/SettingsOverlay.tsx:105
+#: src/pages/SettingsOverlay.tsx:106
 msgid "Updates"
 msgstr "更新"
 
+#: src/pages/ComputerSettingsPanel.tsx:70
+msgid "Updates are unavailable on this device"
+msgstr ""
+
+#. placeholder {0}: result.queued.length
+#: src/pages/ComputerSettingsPanel.tsx:62
+msgid "Updates queued: {0}"
+msgstr ""
+
 #. placeholder {0}: update.name
-#: src/components/ComputerUpdateProgress.tsx:67
+#: src/components/ComputerUpdateProgress.tsx:77
 msgid "Updating {0}’s Computer"
 msgstr ""
 
-#: src/components/ComputerUpdateProgress.tsx:66
+#: src/components/ComputerUpdateProgress.tsx:76
 msgid "Updating Team Computer"
 msgstr ""
 
-#: src/components/ComputerMaintenanceActions.tsx:159
+#: src/components/ComputerMaintenanceActions.tsx:122
 #: src/components/SoftwareUpdateSection.tsx:81
+#: src/pages/ComputerSettingsPanel.tsx:58
 msgid "Updating…"
 msgstr "正在更新…"
 
 #: src/pages/AccountSettingsOverlay.tsx:229
-#: src/pages/SettingsOverlay.tsx:103
+#: src/pages/SettingsOverlay.tsx:104
 #: src/pages/shell/sidebar-footer.tsx:211
 #: src/pages/shell/sidebar-footer.tsx:222
 msgid "Usage"
@@ -4269,7 +4330,7 @@ msgstr "正在校验…"
 
 #: src/pages/bot-page/SettingDetails.tsx:183
 #: src/pages/bot-page/SettingDetails.tsx:187
-#: src/pages/SettingsOverlay.tsx:102
+#: src/pages/SettingsOverlay.tsx:103
 #: src/pages/shell/thread-header.tsx:139
 #: src/pages/shell/thread-header.tsx:140
 #: src/pages/VoiceSettingsOverlay.tsx:170
@@ -4372,7 +4433,7 @@ msgstr "Bot 应在哪里运行？"
 msgid "Working…"
 msgstr "处理中…"
 
-#: src/pages/KnowledgeSection.tsx:795
+#: src/pages/KnowledgeSection.tsx:803
 msgid "Workspace root"
 msgstr "工作区根目录"
 
@@ -4390,7 +4451,7 @@ msgstr "每年{date} {time}"
 msgid "Yesterday"
 msgstr "昨天"
 
-#: src/components/DraftCard.tsx:61
+#: src/components/DraftCard.tsx:64
 #: src/pages/Shell.tsx:136
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"
@@ -4404,7 +4465,8 @@ msgstr "如果没有自动跳转，可以关闭此标签页。"
 msgid "You can close this window."
 msgstr "可以关闭此窗口。"
 
-#: src/pages/shell/side-panel.tsx:343
+#: src/pages/ComputerSettingsPanel.tsx:109
+#: src/pages/shell/side-panel.tsx:328
 msgid "You have control"
 msgstr "你已接管"
 

@@ -1,0 +1,123 @@
+{
+  "tag": "p3live-<session>",
+  "harness": "pi-native",
+  "model": "local protocol emulator; not a real-model intelligence evaluation",
+  "desktopPreparation": "skipped for plain P3 fixtures; not computer parity evidence",
+  "guestSha256": "b3ace799b31495b1dcdd446864e18c639814cdd204e1937f763e9f0f7b983c3f",
+  "startedAt": "2026-10-22T15:27:08.831Z",
+  "workerTemplate": "i1-worker",
+  "computerTemplate": "i1-computer",
+  "lanes": [
+    {
+      "lane": "f",
+      "issue": "sortie volumineuse conserv\u00e9e apr\u00e8s destruction",
+      "scenario": "bash prints seq 1 900000 (over 5 MiB) in a worker with a private volume; the VM is destroyed at the end of the run",
+      "passWhen": "The model sees at most 12,000 characters, the log at most 64 KiB, and the whole output is read back from the volume after the VM is gone",
+      "result": "pass",
+      "observed": {
+        "outputBytes": 6188895,
+        "modelVisibleChars": 9906,
+        "loggedResultBytes": 5016,
+        "workerReleased": true,
+        "workerSandboxes": 1,
+        "sandboxesAliveWhenRead": 0,
+        "reportedPathMatchesStoredFile": true,
+        "spoolFiles": ["<id>"],
+        "spoolBytesReadAfterDestroy": 6188895,
+        "spoolMatchesOutput": true
+      },
+      "seconds": 9.6,
+      "memAvailableMiB": {
+        "before": 3112,
+        "after": 2368
+      },
+      "controllerRssMiB": 986,
+      "cleanup": {
+        "killed": 0,
+        "destroyed": 2,
+        "left": {
+          "sandboxes": 0,
+          "volumes": 0
+        }
+      }
+    },
+    {
+      "lane": "g-timeout",
+      "issue": "panne apr\u00e8s provisioning (VM tu\u00e9e au timeout)",
+      "scenario": "A provider whose deployment allows a 20 s sandbox timeout, below the worker TTL; the guest sleeps in bash past it, so E2B kills the VM mid-call",
+      "passWhen": "E2B kills the VM, the attempt ends released with its writer lease free and its bash effect never rerun, and the run completes on a new attempt",
+      "result": "pass",
+      "observed": {
+        "sandboxTimeoutMs": 20000,
+        "firstContinue": "Run setup failed; retrying",
+        "firstAttemptEndedAfterMs": 22844,
+        "afterKill": {
+          "status": "queued",
+          "attempts": [
+            {
+              "workerState": "released",
+              "stopPhase": "process_ended"
+            }
+          ],
+          "writerLeasesHeld": 0,
+          "sandboxesAlive": 0
+        },
+        "retriedCallResult": "started\nrecovered\n",
+        "nativeMarkers": {
+          "started": "started\n",
+          "completed": false
+        },
+        "guestUploadDeadlines": [
+          {
+            "before": "2026-10-22T15:27:46.117Z",
+            "after": "2026-10-22T15:27:46.136Z",
+            "timeoutMs": 19984
+          },
+          {
+            "before": "2026-10-22T15:28:08.942Z",
+            "after": "2026-10-22T15:28:08.956Z",
+            "timeoutMs": 19988
+          }
+        ],
+        "final": {
+          "status": "completed",
+          "attempts": ["released", "released"],
+          "effects": [
+            {
+              "kind": "message_user",
+              "status": "completed"
+            }
+          ],
+          "sandboxesLeft": 0
+        }
+      },
+      "seconds": 31.8,
+      "memAvailableMiB": {
+        "before": 3118,
+        "after": 2672
+      },
+      "controllerRssMiB": 730,
+      "cleanup": {
+        "killed": 0,
+        "destroyed": 2,
+        "left": {
+          "sandboxes": 0,
+          "volumes": 0
+        }
+      }
+    }
+  ],
+  "testedSourceSha": "9c8d15f3dbe07a12c5bbfe36c64e2612c20cbc40",
+  "scope": "Targeted follow-up only; the earlier 17-lane batch was not rerun on this source SHA",
+  "cleanupSummary": {
+    "sandboxesCreated": 5,
+    "sandboxesDeleted": 4,
+    "sandboxesAbsentAfterTimeout": 1,
+    "volumesCreated": 4,
+    "volumesDeleted": 4,
+    "left": {
+      "sandboxes": 0,
+      "volumes": 0
+    }
+  }
+}

@@ -1,8 +1,8 @@
 import { motion, radii, sizes } from "@rakazo/ui-tokens";
 import type { ReactNode } from "react";
-import { forwardRef, useEffect } from "react";
+import { useEffect } from "react";
 import type { ViewProps } from "react-native";
-import { Pressable, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import Animated, {
   cancelAnimation,
   Easing,
@@ -18,10 +18,12 @@ import { mobileTokens, resolveMobileAppearance } from "../lib/appearance";
 import { selectionHaptic } from "../lib/haptics";
 import { t } from "../lib/i18n";
 import { useMobileTokens, useResolvedAppearance, useThemedStyles } from "../lib/native";
+import type { MenuAction } from "../lib/native-menu";
 import { shadowsForAppearance } from "../lib/theme";
 import type { VolumeStore } from "../lib/volume-store";
 import { useVolume } from "../lib/volume-store";
 import { GlassBackdrop } from "./glass";
+import { NativeMenu } from "./native-menu";
 import { NativeSymbol } from "./native-symbol";
 
 export type ComposerState = "idle" | "typing" | "dictating" | "speaking";
@@ -126,14 +128,21 @@ function ComposerDictationWaveform({ volume: store }: { volume?: VolumeStore }) 
 }
 
 /**
- * The detached "+" bubble: 48×48, full round, the capsule's own
- * glass and rest/focus edge. While the attach sheet is open it pivots
- * 45° into a "×" over `motion.morph`, and its label switches to "Close".
+ * The detached "+" bubble: 48×48, full round, the capsule's own glass and rest/focus edge. On iOS
+ * it opens a native menu; Android shows its own dialog and, while that is open, the bubble pivots
+ * 45° into a "×" over `motion.morph` and its label switches to "Close".
  */
-export const ComposerAttachBubble = forwardRef<
-  View,
-  { open: boolean; focused: boolean; onPress: () => void }
->(function ComposerAttachBubble({ open, focused, onPress }, ref) {
+export function ComposerAttachBubble({
+  open,
+  focused,
+  actions,
+  onAndroidOpen,
+}: {
+  open: boolean;
+  focused: boolean;
+  actions: MenuAction[];
+  onAndroidOpen: () => void;
+}) {
   const tokens = useMobileTokens();
   const shadows = shadowsForAppearance(useResolvedAppearance());
   const reducedMotion = useReducedMotion();
@@ -156,13 +165,13 @@ export const ComposerAttachBubble = forwardRef<
   }));
 
   return (
-    <Pressable
-      ref={ref}
-      accessibilityRole="button"
+    <NativeMenu
+      compact
+      actions={actions}
       accessibilityLabel={open ? t("Close") : t("Attach file")}
-      onPress={() => {
+      onAndroidOpen={() => {
         selectionHaptic();
-        onPress();
+        onAndroidOpen();
       }}
       style={{
         width: sizes.composerAttach,
@@ -177,9 +186,9 @@ export const ComposerAttachBubble = forwardRef<
       <Animated.View style={animatedStyle}>
         <NativeSymbol ios="plus" android="add" size={20} color={tokens.foreground} />
       </Animated.View>
-    </Pressable>
+    </NativeMenu>
   );
-});
+}
 
 /** One bar of the waveform. With a live `volume` (`-2`..`10`, from the
  * engine's `volumechange`) it tracks that level directly; otherwise it loops

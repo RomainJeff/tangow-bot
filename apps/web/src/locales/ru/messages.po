@@ -67,6 +67,11 @@ msgstr "{0} по умолчанию"
 msgid "{0} handling"
 msgstr "Обработка {0}"
 
+#. placeholder {0}: item.status.busyBotName
+#: src/pages/ComputerSettingsPanel.tsx:112
+msgid "{0} is using it"
+msgstr ""
+
 #. placeholder {0}: format(size / 1024)
 #: src/components/ArtifactFileCard.tsx:223
 msgid "{0} KB"
@@ -98,7 +103,7 @@ msgstr "{0} по-прежнему будет отвечать на прямые 
 msgid "{0}'s screen"
 msgstr "Экран {0}"
 
-#: src/components/DraftCard.tsx:280
+#: src/components/DraftCard.tsx:282
 msgid "{app} is disconnected."
 msgstr ""
 
@@ -257,7 +262,7 @@ msgstr "Действия для пространства"
 #: src/pages/bot-page/RoutineCreateForm.tsx:118
 #: src/pages/bot-page/RoutineDetail.tsx:127
 #: src/pages/bot-page/RoutinesTab.tsx:107
-#: src/pages/KnowledgeSection.tsx:446
+#: src/pages/KnowledgeSection.tsx:447
 msgid "Active"
 msgstr "Активный"
 
@@ -398,7 +403,7 @@ msgstr "Расширенные..."
 msgid "Agent connections"
 msgstr "Подключения агента"
 
-#: src/pages/KnowledgeSection.tsx:449
+#: src/pages/KnowledgeSection.tsx:450
 msgid "Agents"
 msgstr ""
 
@@ -407,7 +412,7 @@ msgstr ""
 msgid "Agents:"
 msgstr "Агенты:"
 
-#: src/pages/KnowledgeSection.tsx:445
+#: src/pages/KnowledgeSection.tsx:446
 msgid "All"
 msgstr ""
 
@@ -676,7 +681,7 @@ msgstr "Вернуться ко входу"
 msgid "Base URL"
 msgstr "Базовый URL"
 
-#: src/components/DraftCard.tsx:273
+#: src/components/DraftCard.tsx:275
 msgid "Bcc"
 msgstr ""
 
@@ -690,7 +695,7 @@ msgid "Booting live desktop…"
 msgstr "Загрузка рабочего стола…"
 
 #. placeholder {0}: active?.name
-#: src/pages/shell/side-panel.tsx:290
+#: src/pages/shell/side-panel.tsx:275
 msgid "Booting up {0}’s computer"
 msgstr "Загрузка компьютера {0}"
 
@@ -713,7 +718,7 @@ msgstr "Бот"
 msgid "Bot"
 msgstr "Бот"
 
-#: src/pages/shell/side-panel.tsx:417
+#: src/pages/shell/side-panel.tsx:402
 msgid "Bot screen"
 msgstr "Экран бота"
 
@@ -740,6 +745,11 @@ msgstr "По умолчанию боты действуют, не спрашив
 msgid "Bots are working"
 msgstr "Боты работают"
 
+#. placeholder {0}: item.bots.map((bot) => bot.name).join(", ")
+#: src/pages/ComputerSettingsPanel.tsx:104
+msgid "Bots: {0}"
+msgstr ""
+
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:63
 msgid "Brain label"
 msgstr ""
@@ -748,18 +758,22 @@ msgstr ""
 msgid "Browse MCP servers"
 msgstr "Просмотреть MCP-серверы"
 
+#: src/pages/ComputerSettingsPanel.tsx:68
+msgid "Busy. Try again when idle."
+msgstr ""
+
 #: src/App.tsx:168
 msgid "Can't reach the server."
 msgstr "Не удаётся связаться с сервером."
 
-#: src/components/ComputerMaintenanceActions.tsx:102
-#: src/components/ComputerUpdateProgress.tsx:233
+#: src/components/ComputerMaintenanceActions.tsx:100
+#: src/components/ComputerUpdateProgress.tsx:258
 #: src/components/teach/TeachComputerOverlay.tsx:271
 #: src/lib/approval-labels.ts:14
 #: src/pages/bot-page/page-kit.tsx:148
 #: src/pages/bot-page/RoutineTriggers.tsx:296
-#: src/pages/KnowledgeSection.tsx:226
-#: src/pages/KnowledgeSection.tsx:684
+#: src/pages/KnowledgeSection.tsx:227
+#: src/pages/KnowledgeSection.tsx:692
 #: src/pages/plugins/advanced-integrations.tsx:337
 #: src/pages/shell/dialogs.tsx:88
 #: src/pages/shell/dialogs.tsx:199
@@ -797,7 +811,7 @@ msgstr "Отменить ответ"
 msgid "Cancelled"
 msgstr "Отменено"
 
-#: src/components/DraftCard.tsx:273
+#: src/components/DraftCard.tsx:275
 msgid "Cc"
 msgstr ""
 
@@ -903,8 +917,8 @@ msgstr "ID клиента"
 msgid "Client secret"
 msgstr "Секрет клиента"
 
-#: src/pages/KnowledgeSection.tsx:684
-#: src/pages/KnowledgeSection.tsx:840
+#: src/pages/KnowledgeSection.tsx:692
+#: src/pages/KnowledgeSection.tsx:848
 #: src/pages/MessagingSettingsOverlay.tsx:362
 #: src/pages/PeerMessagesOverlay.tsx:133
 #: src/pages/PeerMessagesOverlay.tsx:136
@@ -917,7 +931,7 @@ msgstr "Закрыть"
 msgid "Close chart"
 msgstr "Закрыть график"
 
-#: src/pages/shell/side-panel.tsx:395
+#: src/pages/shell/side-panel.tsx:380
 msgid "Close computer"
 msgstr "Закрыть компьютер"
 
@@ -934,7 +948,7 @@ msgid "Close MCP servers"
 msgstr "Закрыть серверы MCP"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:116
+#: src/pages/SettingsOverlay.tsx:117
 msgid "Close memory settings"
 msgstr "Закрыть настройки памяти"
 
@@ -943,12 +957,12 @@ msgid "Close messaging settings"
 msgstr "Закрыть настройки обмена сообщениями"
 
 #: src/pages/ModelSettingsOverlay.tsx:68
-#: src/pages/SettingsOverlay.tsx:114
+#: src/pages/SettingsOverlay.tsx:115
 msgid "Close model settings"
 msgstr "Закрыть настройки модели"
 
 #: src/pages/bot-page/BotPage.tsx:183
-#: src/pages/shell/side-panel.tsx:172
+#: src/pages/shell/side-panel.tsx:157
 msgid "Close panel"
 msgstr "Закрыть панель"
 
@@ -960,11 +974,11 @@ msgstr "Закрыть предварительный просмотр"
 msgid "Close skills"
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:119
+#: src/pages/SettingsOverlay.tsx:120
 msgid "Close user settings"
 msgstr "Закрыть настройки пользователя"
 
-#: src/pages/SettingsOverlay.tsx:118
+#: src/pages/SettingsOverlay.tsx:119
 #: src/pages/VoiceSettingsOverlay.tsx:174
 msgid "Close voice settings"
 msgstr "Закрыть настройки голоса"
@@ -997,7 +1011,7 @@ msgstr "Завершить"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:104
+#: src/pages/SettingsOverlay.tsx:105
 #: src/pages/shell/block-views.tsx:131
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
@@ -1007,7 +1021,7 @@ msgstr "Компьютер"
 msgid "Computer failed to boot"
 msgstr "Компьютер не смог загрузиться"
 
-#: src/pages/shell/side-panel.tsx:436
+#: src/pages/shell/side-panel.tsx:421
 msgid "Computer is asleep"
 msgstr "Компьютер спит"
 
@@ -1019,17 +1033,25 @@ msgstr "Компьютер спит. Откройте его, чтобы раз�
 msgid "Computer is stopped"
 msgstr "Компьютер остановлен"
 
+#: src/components/ComputerUpdateProgress.tsx:65
+msgid "Computer recovered"
+msgstr ""
+
 #: src/pages/bot-page/routine-copy.ts:44
 msgid "Computer unavailable"
 msgstr "Компьютер недоступен"
+
+#: src/components/ComputerUpdateProgress.tsx:66
+msgid "Computer updated"
+msgstr ""
 
 #: src/pages/AccountSettingsOverlay.tsx:252
 msgid "Computers"
 msgstr "Компьютеры"
 
 #: src/components/ComputersUnavailableHint.tsx:7
-msgid "Computers are off. Set SANDBOX_PROVIDER=docker with SANDBOX_SUPERVISOR_TOKEN, or set SANDBOX_PROVIDER to e2b, daytona, or box with its API key. Recreate the stack after changing .env."
-msgstr "Компьютеры выключены. Установите SANDBOX_PROVIDER=docker с помощью SANDBOX_SUPERVISOR_TOKEN или установите для SANDBOX_PROVIDER значение e2b, Daytona или Box с его ключом API. Воссоздайте стек после изменения .env."
+msgid "Computers are off. Set SANDBOX_PROVIDER=docker with SANDBOX_SUPERVISOR_TOKEN, or set SANDBOX_PROVIDER to e2b with its API key. Recreate the stack after changing .env."
+msgstr "Компьютеры выключены. Установите SANDBOX_PROVIDER=docker с помощью SANDBOX_SUPERVISOR_TOKEN или установите для SANDBOX_PROVIDER значение e2b с его ключом API. Воссоздайте стек после изменения .env."
 
 #: src/pages/ModelSettingsOverlay.tsx:88
 msgid "Configured by deployment"
@@ -1039,7 +1061,7 @@ msgstr "Настраивается путем развертывания"
 msgid "Configured servers"
 msgstr "Настроенные серверы"
 
-#: src/pages/KnowledgeSection.tsx:679
+#: src/pages/KnowledgeSection.tsx:687
 #: src/pages/McpServersOverlay.tsx:507
 msgid "Confirm delete"
 msgstr "Подтвердить удаление"
@@ -1137,6 +1159,10 @@ msgstr "Подключение…"
 msgid "Connection to {0} is still pending. You can close this and check again."
 msgstr "Соединение с {0} все еще не завершено. Вы можете закрыть это и проверить еще раз."
 
+#: src/pages/KnowledgeSection.tsx:658
+msgid "Content lives on the shared volume."
+msgstr ""
+
 #: src/pages/model-settings/model-detail.tsx:199
 #: src/pages/Onboarding.tsx:517
 msgid "Context limit"
@@ -1147,7 +1173,7 @@ msgstr ""
 msgid "Continue"
 msgstr "Продолжить"
 
-#: src/components/ComputerUpdateProgress.tsx:194
+#: src/components/ComputerUpdateProgress.tsx:219
 msgid "Continue in Background"
 msgstr "Продолжить в фоне"
 
@@ -1159,7 +1185,7 @@ msgstr "Продолжить по электронной почте"
 msgid "Conversation cleared"
 msgstr ""
 
-#: src/components/DraftCard.tsx:369
+#: src/components/DraftCard.tsx:371
 #: src/pages/shell/message-actions-sheet.tsx:75
 #: src/pages/shell/message-hover-actions.tsx:98
 #: src/pages/shell/message-hover-actions.tsx:169
@@ -1202,7 +1228,7 @@ msgstr "Не удалось проверить статус преподаван
 msgid "Could not clear conversation"
 msgstr "Не удалось очистить диалог"
 
-#: src/components/ComputerUpdateProgress.tsx:174
+#: src/components/ComputerUpdateProgress.tsx:195
 msgid "Could not complete action"
 msgstr "Не удалось выполнить действие"
 
@@ -1282,7 +1308,7 @@ msgstr "Не удалось удалить сервер MCP."
 msgid "Could not delete routine"
 msgstr "Не удалось удалить задачу"
 
-#: src/pages/KnowledgeSection.tsx:640
+#: src/pages/KnowledgeSection.tsx:641
 msgid "Could not delete skill"
 msgstr "Не удалось удалить навык"
 
@@ -1319,7 +1345,7 @@ msgstr "Не удалось загрузить {0}. Попробуйте еще 
 msgid "Could not download {name}. Try again."
 msgstr "Не удалось загрузить {name}. Попробуйте еще раз."
 
-#: src/pages/KnowledgeSection.tsx:365
+#: src/pages/KnowledgeSection.tsx:366
 msgid "Could not import skill"
 msgstr ""
 
@@ -1329,12 +1355,12 @@ msgstr "Не удалось установить коннектор"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:148
 #: src/pages/bot-page/page-kit.tsx:80
-#: src/pages/KnowledgeSection.tsx:89
-#: src/pages/KnowledgeSection.tsx:118
-#: src/pages/KnowledgeSection.tsx:300
-#: src/pages/KnowledgeSection.tsx:321
-#: src/pages/KnowledgeSection.tsx:361
-#: src/pages/KnowledgeSection.tsx:753
+#: src/pages/KnowledgeSection.tsx:90
+#: src/pages/KnowledgeSection.tsx:119
+#: src/pages/KnowledgeSection.tsx:301
+#: src/pages/KnowledgeSection.tsx:322
+#: src/pages/KnowledgeSection.tsx:362
+#: src/pages/KnowledgeSection.tsx:761
 msgid "Could not load"
 msgstr "Не удалось загрузить"
 
@@ -1349,6 +1375,10 @@ msgstr "Не удалось загрузить правила одобрения
 #: src/pages/IntegrationSetup.tsx:72
 msgid "Could not load bots. Reload to try again."
 msgstr "Не удалось загрузить ботов. Обновите страницу и попробуйте снова."
+
+#: src/pages/ComputerSettingsPanel.tsx:79
+msgid "Could not load computers"
+msgstr ""
 
 #: src/pages/DecisionModelSettingsPanel.tsx:37
 msgid "Could not load decision model settings"
@@ -1368,7 +1398,7 @@ msgstr "Не удалось загрузить серверы MCP."
 msgid "Could not load model settings"
 msgstr "Не удалось загрузить настройки модели."
 
-#: src/pages/KnowledgeSection.tsx:601
+#: src/pages/KnowledgeSection.tsx:602
 msgid "Could not load skill"
 msgstr "Не удалось загрузить навык"
 
@@ -1415,7 +1445,7 @@ msgstr "Не удалось связаться с сервером"
 msgid "Could not reach this model server"
 msgstr "Не удалось связаться с сервером этой модели."
 
-#: src/pages/KnowledgeSection.tsx:773
+#: src/pages/KnowledgeSection.tsx:781
 msgid "Could not read this file"
 msgstr ""
 
@@ -1463,7 +1493,7 @@ msgstr "Не удалось запустить задачу"
 #: src/pages/bot-page/page-kit.tsx:51
 #: src/pages/bot-page/RoutineDetail.tsx:87
 #: src/pages/ExternalConversationSettings.tsx:250
-#: src/pages/KnowledgeSection.tsx:206
+#: src/pages/KnowledgeSection.tsx:207
 msgid "Could not save"
 msgstr "Не удалось сохранить"
 
@@ -1487,7 +1517,7 @@ msgstr "Не удалось сохранить задачу"
 msgid "Could not save rule"
 msgstr "Не удалось сохранить правило."
 
-#: src/pages/KnowledgeSection.tsx:623
+#: src/pages/KnowledgeSection.tsx:624
 msgid "Could not save skill"
 msgstr "Не удалось сохранить навык"
 
@@ -1525,8 +1555,8 @@ msgid "Could not start teaching"
 msgstr "Не удалось начать обучение"
 
 #: src/components/AskCard.tsx:199
-#: src/components/DraftCard.tsx:161
-#: src/components/DraftCard.tsx:174
+#: src/components/DraftCard.tsx:163
+#: src/components/DraftCard.tsx:176
 msgid "Could not submit this answer"
 msgstr "Не удалось отправить этот ответ"
 
@@ -1538,14 +1568,19 @@ msgstr "Не смог взять под контроль"
 msgid "Could not update"
 msgstr "Не удалось обновить"
 
-#: src/pages/KnowledgeSection.tsx:343
+#: src/pages/KnowledgeSection.tsx:344
 #: src/pages/McpServersOverlay.tsx:210
 msgid "Could not update agent access"
 msgstr "Не удалось обновить доступ агента."
 
-#: src/components/ComputerMaintenanceActions.tsx:69
+#: src/components/ComputerMaintenanceActions.tsx:67
+#: src/pages/ComputerSettingsPanel.tsx:71
 msgid "Could not update computer"
 msgstr "Не удалось обновить компьютер"
+
+#: src/pages/ComputerSettingsPanel.tsx:81
+msgid "Could not update computers"
+msgstr ""
 
 #: src/pages/shell/use-thread-send.ts:115
 msgid "Could not update reaction"
@@ -1693,7 +1728,7 @@ msgstr "день"
 msgid "days"
 msgstr "дни"
 
-#: src/pages/SettingsOverlay.tsx:101
+#: src/pages/SettingsOverlay.tsx:102
 msgid "Decision Model"
 msgstr ""
 
@@ -1718,7 +1753,7 @@ msgstr "Область действия по умолчанию"
 
 #: src/pages/bot-page/BotPage.tsx:378
 #: src/pages/BotContextMenu.tsx:150
-#: src/pages/KnowledgeSection.tsx:679
+#: src/pages/KnowledgeSection.tsx:687
 #: src/pages/McpServersOverlay.tsx:509
 #: src/pages/shell/dialogs.tsx:409
 #: src/pages/shell/dialogs.tsx:470
@@ -1807,17 +1842,17 @@ msgstr ""
 msgid "Direct MCP"
 msgstr "Прямой MCP"
 
-#: src/pages/KnowledgeSection.tsx:386
-#: src/pages/KnowledgeSection.tsx:447
+#: src/pages/KnowledgeSection.tsx:387
+#: src/pages/KnowledgeSection.tsx:448
 msgid "Disabled"
 msgstr ""
 
-#: src/components/DraftCard.tsx:360
+#: src/components/DraftCard.tsx:362
 msgid "Discard"
 msgstr ""
 
-#: src/components/DraftCard.tsx:240
-#: src/components/DraftCard.tsx:250
+#: src/components/DraftCard.tsx:242
+#: src/components/DraftCard.tsx:252
 msgid "Discarded"
 msgstr ""
 
@@ -1834,7 +1869,7 @@ msgstr "Отключить"
 msgid "Disconnecting…"
 msgstr "Отключение…"
 
-#: src/components/ComputerUpdateProgress.tsx:190
+#: src/components/ComputerUpdateProgress.tsx:215
 #: src/components/teach/TeachComputerOverlay.tsx:291
 #: src/pages/shell/message-cards.tsx:89
 msgid "Dismiss"
@@ -1874,13 +1909,14 @@ msgstr "Docker ограничивает доступ к вашему компь�
 msgid "Don’t have an account?"
 msgstr "У вас нет учетной записи?"
 
+#: src/components/ComputerUpdateProgress.tsx:206
 #: src/pages/ActivityList.tsx:158
 #: src/pages/bot-page/BotActivity.tsx:312
 #: src/pages/bot-page/RoutineTriggers.tsx:304
 msgid "Done"
 msgstr "Готово"
 
-#: src/pages/KnowledgeSection.tsx:833
+#: src/pages/KnowledgeSection.tsx:841
 msgid "Download"
 msgstr ""
 
@@ -1895,7 +1931,7 @@ msgstr "Скачать {0}"
 msgid "Download {name}"
 msgstr "Скачать {name}"
 
-#: src/pages/KnowledgeSection.tsx:170
+#: src/pages/KnowledgeSection.tsx:171
 msgid "Download as markdown"
 msgstr "Скачать как Markdown"
 
@@ -1933,7 +1969,7 @@ msgstr "Изменить"
 msgid "Edit and resend"
 msgstr ""
 
-#: src/components/DraftCard.tsx:412
+#: src/components/DraftCard.tsx:414
 msgid "Edit message"
 msgstr ""
 
@@ -1941,11 +1977,11 @@ msgstr ""
 msgid "Edit Profile"
 msgstr "Редактировать профиль"
 
-#: src/components/DraftCard.tsx:277
+#: src/components/DraftCard.tsx:279
 msgid "Edited"
 msgstr ""
 
-#: src/components/DraftCard.tsx:276
+#: src/components/DraftCard.tsx:278
 msgid "Editing"
 msgstr ""
 
@@ -2094,7 +2130,7 @@ msgstr ""
 msgid "Files"
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:442
+#: src/pages/KnowledgeSection.tsx:443
 msgid "Filter skills"
 msgstr ""
 
@@ -2143,8 +2179,8 @@ msgstr "Полноэкранный"
 msgid "FYI"
 msgstr "К сведению"
 
-#: src/pages/SettingsOverlay.tsx:98
-#: src/pages/SettingsOverlay.tsx:110
+#: src/pages/SettingsOverlay.tsx:99
+#: src/pages/SettingsOverlay.tsx:111
 msgid "General"
 msgstr "Общие"
 
@@ -2152,7 +2188,7 @@ msgstr "Общие"
 msgid "Get credentials"
 msgstr "Получить учетные данные"
 
-#: src/components/ComputerUpdateProgress.tsx:50
+#: src/components/ComputerUpdateProgress.tsx:54
 msgid "Getting ready"
 msgstr "Подготовка"
 
@@ -2162,7 +2198,7 @@ msgstr "Подготовка"
 msgid "Git event"
 msgstr "Git-событие"
 
-#: src/pages/KnowledgeSection.tsx:387
+#: src/pages/KnowledgeSection.tsx:388
 msgid "Global"
 msgstr ""
 
@@ -2261,7 +2297,7 @@ msgstr ""
 msgid "How to check"
 msgstr "Как проверить"
 
-#: src/pages/shell/side-panel.tsx:466
+#: src/pages/shell/side-panel.tsx:451
 msgid "I’m done"
 msgstr "Готово"
 
@@ -2273,7 +2309,7 @@ msgstr "Если вы это услышали, голос готов."
 msgid "Ignore"
 msgstr "игнорировать"
 
-#: src/pages/KnowledgeSection.tsx:426
+#: src/pages/KnowledgeSection.tsx:427
 msgid "Import"
 msgstr ""
 
@@ -2485,7 +2521,7 @@ msgstr "Выйти"
 msgid "Low"
 msgstr "Низкий"
 
-#: src/components/ComputerUpdateProgress.tsx:228
+#: src/components/ComputerUpdateProgress.tsx:253
 msgid "Make sure nothing is still running on this computer."
 msgstr ""
 
@@ -2558,7 +2594,7 @@ msgstr "Участники (выберите {GROUP_MEMBER_MIN}–{GROUP_MEMBER_
 
 #: src/pages/bot-page/KnowledgeTab.tsx:36
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:100
+#: src/pages/SettingsOverlay.tsx:101
 msgid "Memory"
 msgstr "Память"
 
@@ -2686,7 +2722,7 @@ msgstr "Модель обновлена."
 
 #: src/pages/LocalSettings.tsx:36
 #: src/pages/ModelSettingsOverlay.tsx:61
-#: src/pages/SettingsOverlay.tsx:99
+#: src/pages/SettingsOverlay.tsx:100
 msgid "Models"
 msgstr "Модели"
 
@@ -2707,7 +2743,7 @@ msgstr "Ежемесячно"
 msgid "Monthly on day {day} at {time}"
 msgstr "Ежемесячно {day}-го числа в {time}"
 
-#: src/components/ComputerMaintenanceActions.tsx:123
+#: src/components/ComputerMaintenanceActions.tsx:152
 msgid "More computer actions"
 msgstr "Больше действий с компьютером"
 
@@ -2754,7 +2790,7 @@ msgstr "Назовите эту задачу"
 msgid "Needs takeover"
 msgstr "Требуется передача управления"
 
-#: src/pages/shell/side-panel.tsx:339
+#: src/pages/shell/side-panel.tsx:324
 msgid "Needs you"
 msgstr "Требуется ваше участие"
 
@@ -2790,7 +2826,7 @@ msgstr "Новая задача"
 msgid "New section"
 msgstr "Новый раздел"
 
-#: src/pages/KnowledgeSection.tsx:406
+#: src/pages/KnowledgeSection.tsx:407
 msgid "New skill"
 msgstr "Новый навык"
 
@@ -2835,11 +2871,15 @@ msgstr "Ни один бот не подходит"
 msgid "No chat apps linked yet."
 msgstr "Приложения для чата пока не связаны."
 
+#: src/pages/ComputerSettingsPanel.tsx:91
+msgid "No computers"
+msgstr ""
+
 #: src/components/ApprovalRulesSettings.tsx:163
 msgid "No exceptions. Actions run automatically."
 msgstr "Никаких исключений. Действия выполняются автоматически."
 
-#: src/pages/KnowledgeSection.tsx:847
+#: src/pages/KnowledgeSection.tsx:855
 msgid "No files yet"
 msgstr ""
 
@@ -2853,7 +2893,7 @@ msgstr ""
 
 #: src/components/ask/AskSettled.tsx:28
 #: src/components/AskCard.tsx:260
-#: src/components/DraftCard.tsx:257
+#: src/components/DraftCard.tsx:259
 msgid "No longer active"
 msgstr "Больше не активен"
 
@@ -2902,11 +2942,11 @@ msgstr "Без отчёта"
 msgid "No results"
 msgstr "Нет результатов"
 
-#: src/pages/KnowledgeSection.tsx:463
+#: src/pages/KnowledgeSection.tsx:464
 msgid "No skills match"
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:463
+#: src/pages/KnowledgeSection.tsx:464
 msgid "No skills yet"
 msgstr "Навыков пока нет"
 
@@ -2940,16 +2980,16 @@ msgstr "Нет в каталоге плагинов"
 msgid "Not now"
 msgstr "Не сейчас"
 
-#: src/components/DraftCard.tsx:275
+#: src/components/DraftCard.tsx:277
 msgid "Not sent"
 msgstr ""
 
-#: src/components/ComputerUpdateProgress.tsx:251
+#: src/components/ComputerUpdateProgress.tsx:276
 msgid "Nothing is still running"
 msgstr ""
 
 #: src/pages/bot-page/KnowledgeTab.tsx:42
-#: src/pages/KnowledgeSection.tsx:41
+#: src/pages/KnowledgeSection.tsx:42
 msgid "Nothing remembered yet"
 msgstr "Пока ничего не запомнено"
 
@@ -3178,6 +3218,10 @@ msgstr "Предварительный просмотр {0}"
 msgid "Private"
 msgstr "Личный"
 
+#: src/pages/ComputerSettingsPanel.tsx:103
+msgid "Private Computer"
+msgstr ""
+
 #: src/pages/shell/dialogs.tsx:137
 msgid "Private workspace with its own bots and groups."
 msgstr "Приватное пространство со своими ботами и группами."
@@ -3223,7 +3267,7 @@ msgstr ""
 msgid "Read replies aloud"
 msgstr "Читать ответы вслух"
 
-#: src/pages/KnowledgeSection.tsx:492
+#: src/pages/KnowledgeSection.tsx:493
 msgid "read-only"
 msgstr "только для чтения"
 
@@ -3252,7 +3296,7 @@ msgstr ""
 msgid "Recommended · {description}"
 msgstr ""
 
-#: src/components/DraftCard.tsx:385
+#: src/components/DraftCard.tsx:387
 msgid "Reconnect {app}"
 msgstr ""
 
@@ -3261,7 +3305,7 @@ msgid "Reconnect OAuth"
 msgstr "Переподключить OAuth"
 
 #: src/App.tsx:166
-#: src/components/ComputerUpdateProgress.tsx:54
+#: src/components/ComputerUpdateProgress.tsx:58
 #: src/pages/shell/screen-frame.tsx:44
 msgid "Reconnecting"
 msgstr "Повторное подключение"
@@ -3282,37 +3326,37 @@ msgstr "Запись началась. Обновите вид, чтобы пр�
 msgid "Recording: {0}"
 msgstr "Запись: {0}"
 
-#: src/components/ComputerMaintenanceActions.tsx:145
-#: src/components/ComputerUpdateProgress.tsx:209
+#: src/components/ComputerMaintenanceActions.tsx:131
+#: src/components/ComputerUpdateProgress.tsx:234
 msgid "Recover computer"
 msgstr "Восстановить компьютер"
 
 #. placeholder {0}: update.name
-#: src/components/ComputerUpdateProgress.tsx:64
+#: src/components/ComputerUpdateProgress.tsx:74
 msgid "Recovering {0}’s Computer"
 msgstr "Восстановление компьютера {0}"
 
-#: src/components/ComputerUpdateProgress.tsx:63
+#: src/components/ComputerUpdateProgress.tsx:73
 msgid "Recovering Team Computer"
 msgstr "Восстановление компьютера команды"
 
-#: src/components/ComputerMaintenanceActions.tsx:145
+#: src/components/ComputerMaintenanceActions.tsx:131
 msgid "Recovering…"
 msgstr "Восстановление…"
 
-#: src/components/ComputerUpdateProgress.tsx:59
+#: src/components/ComputerUpdateProgress.tsx:69
 msgid "Recovery failed"
 msgstr "Не удалось восстановить"
 
-#: src/components/ComputerUpdateProgress.tsx:160
+#: src/components/ComputerUpdateProgress.tsx:181
 msgid "Recovery is unavailable until the previous operation has stopped."
 msgstr "Восстановление недоступно, пока не завершится предыдущая операция."
 
-#: src/components/ComputerUpdateProgress.tsx:162
+#: src/components/ComputerUpdateProgress.tsx:183
 msgid "Recovery restores the last saved workspace. Unsaved work may be lost."
 msgstr "Восстановление возвращает последнее сохраненное рабочее пространство. Несохраненные изменения могут быть потеряны."
 
-#: src/components/ComputerUpdateProgress.tsx:52
+#: src/components/ComputerUpdateProgress.tsx:56
 msgid "Recreating the computer"
 msgstr "Повторное создание компьютера"
 
@@ -3324,15 +3368,15 @@ msgstr "Обновить экран"
 msgid "Refreshing…"
 msgstr "Обновление…"
 
-#: src/pages/shell/side-panel.tsx:456
+#: src/pages/shell/side-panel.tsx:441
 msgid "Release"
 msgstr "Освободить управление"
 
-#: src/components/ComputerUpdateProgress.tsx:180
+#: src/components/ComputerUpdateProgress.tsx:201
 msgid "Release computer"
 msgstr "Освободить компьютер"
 
-#: src/components/ComputerUpdateProgress.tsx:225
+#: src/components/ComputerUpdateProgress.tsx:250
 msgid "Release interrupted computer?"
 msgstr "Освободить прерванный компьютер?"
 
@@ -3353,7 +3397,7 @@ msgstr "Удалить"
 msgid "Remove {0}"
 msgstr "Удалить {0}"
 
-#: src/components/DraftLines.tsx:97
+#: src/components/DraftLines.tsx:84
 msgid "Remove {address}"
 msgstr ""
 
@@ -3422,7 +3466,7 @@ msgstr "Заменить ключ API"
 msgid "Replace key"
 msgstr "Заменить ключ"
 
-#: src/components/DraftCard.tsx:254
+#: src/components/DraftCard.tsx:256
 msgid "Replaced"
 msgstr ""
 
@@ -3444,15 +3488,15 @@ msgstr "Ответ на {replyName}"
 msgid "Request"
 msgstr "Запрос"
 
-#: src/components/ComputerMaintenanceActions.tsx:105
+#: src/components/ComputerMaintenanceActions.tsx:103
 msgid "Reset"
 msgstr "Сбросить"
 
-#: src/components/ComputerMaintenanceActions.tsx:150
+#: src/components/ComputerMaintenanceActions.tsx:139
 msgid "Reset computer"
 msgstr "Сбросить компьютер"
 
-#: src/components/ComputerMaintenanceActions.tsx:93
+#: src/components/ComputerMaintenanceActions.tsx:91
 msgid "Reset computer?"
 msgstr "Сбросить компьютер?"
 
@@ -3464,8 +3508,8 @@ msgstr "Сбросить пароль"
 msgid "Reset your password"
 msgstr "Сбросить пароль"
 
-#: src/components/ComputerMaintenanceActions.tsx:105
-#: src/components/ComputerMaintenanceActions.tsx:150
+#: src/components/ComputerMaintenanceActions.tsx:103
+#: src/components/ComputerMaintenanceActions.tsx:139
 msgid "Resetting…"
 msgstr "Сброс…"
 
@@ -3480,7 +3524,7 @@ msgstr "Перезапустить для обновления"
 msgid "Restore"
 msgstr "Восстановить"
 
-#: src/components/ComputerMaintenanceActions.tsx:96
+#: src/components/ComputerMaintenanceActions.tsx:94
 msgid "Restore the last saved workspace. Unsaved work on the computer is lost."
 msgstr "Восстановите последнее сохраненное рабочее пространство. Несохраненная работа на компьютере теряется."
 
@@ -3488,7 +3532,7 @@ msgstr "Восстановите последнее сохраненное ра�
 msgid "Restore unsaved text"
 msgstr "Восстановить несохранённый текст"
 
-#: src/components/ComputerUpdateProgress.tsx:53
+#: src/components/ComputerUpdateProgress.tsx:57
 msgid "Restoring your workspace"
 msgstr "Восстановление вашего рабочего пространства"
 
@@ -3498,6 +3542,7 @@ msgstr "Результат"
 
 #: src/pages/bot-page/page-kit.tsx:52
 #: src/pages/bot-page/page-kit.tsx:88
+#: src/pages/ComputerSettingsPanel.tsx:84
 msgid "Retry"
 msgstr "Повторить"
 
@@ -3516,7 +3561,7 @@ msgid "Return to Rakazo"
 msgstr "Вернуться в Rakazo"
 
 #. placeholder {0}: doc.revision
-#: src/pages/KnowledgeSection.tsx:144
+#: src/pages/KnowledgeSection.tsx:145
 msgid "rev {0}"
 msgstr "версия {0}"
 
@@ -3592,8 +3637,8 @@ msgstr "Запускается, когда этот бот получает пр
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:255
 #: src/pages/GroupPanel.tsx:279
-#: src/pages/KnowledgeSection.tsx:234
-#: src/pages/KnowledgeSection.tsx:698
+#: src/pages/KnowledgeSection.tsx:235
+#: src/pages/KnowledgeSection.tsx:706
 #: src/pages/model-settings/model-detail.tsx:329
 #: src/pages/shell/dialogs.tsx:266
 msgid "Save"
@@ -3615,7 +3660,7 @@ msgstr "Сохранено, но обновить список не удалос
 msgid "Saved."
 msgstr "Сохранено."
 
-#: src/components/ComputerUpdateProgress.tsx:51
+#: src/components/ComputerUpdateProgress.tsx:55
 msgid "Saving your workspace"
 msgstr "Сохранение вашего рабочего пространства"
 
@@ -3679,8 +3724,8 @@ msgstr "Поиск моделей"
 msgid "Search providers"
 msgstr "Поиск поставщиков"
 
-#: src/pages/KnowledgeSection.tsx:432
 #: src/pages/KnowledgeSection.tsx:433
+#: src/pages/KnowledgeSection.tsx:434
 msgid "Search skills"
 msgstr ""
 
@@ -3695,7 +3740,7 @@ msgstr "Выберите бота"
 
 #: src/components/ask/QuestionCard.tsx:205
 #: src/components/ask/QuestionCard.tsx:306
-#: src/components/DraftCard.tsx:396
+#: src/components/DraftCard.tsx:398
 #: src/pages/shell/composer.tsx:407
 msgid "Send"
 msgstr "Отправить"
@@ -3709,11 +3754,11 @@ msgid "Send reset link"
 msgstr "Отправить ссылку для сброса"
 
 #: src/components/AskCard.tsx:304
-#: src/components/DraftCard.tsx:396
+#: src/components/DraftCard.tsx:398
 msgid "Sending…"
 msgstr "Отправка…"
 
-#: src/components/DraftCard.tsx:227
+#: src/components/DraftCard.tsx:229
 msgid "Sent to {recipient} · {time}"
 msgstr ""
 
@@ -3737,8 +3782,8 @@ msgstr "URL-адрес сервера"
 
 #: src/pages/bot-page/BotPage.tsx:101
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:110
-#: src/pages/SettingsOverlay.tsx:166
+#: src/pages/SettingsOverlay.tsx:111
+#: src/pages/SettingsOverlay.tsx:167
 #: src/pages/shell/sidebar-footer.tsx:199
 #: src/pages/shell/sidebar-footer.tsx:206
 msgid "Settings"
@@ -3771,7 +3816,7 @@ msgstr "Общий"
 msgid "Shared chat with 2-6 bots. They all reply in the same thread."
 msgstr "Общий чат с 2-6 ботами. Все отвечают в одной ветке."
 
-#: src/pages/KnowledgeSection.tsx:36
+#: src/pages/KnowledgeSection.tsx:37
 msgid "Shared documents"
 msgstr "Общие документы"
 
@@ -3789,13 +3834,13 @@ msgstr "Показать более ранние"
 msgid "Show key"
 msgstr ""
 
-#: src/pages/KnowledgeSection.tsx:885
+#: src/pages/KnowledgeSection.tsx:893
 #: src/pages/shell/block-views.tsx:54
 msgid "Show less"
 msgstr ""
 
 #: src/pages/bot-page/BotActivity.tsx:471
-#: src/pages/KnowledgeSection.tsx:885
+#: src/pages/KnowledgeSection.tsx:893
 #: src/pages/PluginsOverlay.tsx:309
 #: src/pages/shell/block-views.tsx:54
 msgid "Show more"
@@ -3851,7 +3896,7 @@ msgstr "Навыки"
 
 #: src/components/ask/QuestionCard.tsx:194
 #: src/components/integrations/IntegrationSetup.tsx:364
-#: src/pages/shell/side-panel.tsx:463
+#: src/pages/shell/side-panel.tsx:448
 msgid "Skip"
 msgstr "Пропустить"
 
@@ -3900,7 +3945,7 @@ msgstr "Только озвучить"
 msgid "Speak this reply"
 msgstr "Озвучить этот ответ"
 
-#: src/pages/KnowledgeSection.tsx:388
+#: src/pages/KnowledgeSection.tsx:389
 msgid "Specific agents"
 msgstr ""
 
@@ -3927,8 +3972,8 @@ msgid "Steps"
 msgstr "Шаги"
 
 #: src/pages/shell/composer.tsx:299
-#: src/pages/shell/side-panel.tsx:355
-#: src/pages/shell/side-panel.tsx:360
+#: src/pages/shell/side-panel.tsx:340
+#: src/pages/shell/side-panel.tsx:345
 msgid "Stop"
 msgstr "Остановить"
 
@@ -3959,8 +4004,8 @@ msgstr "Хранится безопасно. Здесь не отображае�
 msgid "subagent"
 msgstr "субагент"
 
-#: src/components/DraftCard.tsx:343
-#: src/components/DraftCard.tsx:349
+#: src/components/DraftCard.tsx:345
+#: src/components/DraftCard.tsx:351
 msgid "Subject"
 msgstr ""
 
@@ -3991,7 +4036,7 @@ msgstr "Переключение…"
 msgid "System"
 msgstr "Системная"
 
-#: src/components/ComputerMaintenanceActions.tsx:136
+#: src/components/ComputerMaintenanceActions.tsx:160
 #: src/components/teach/TeachComputerOverlay.tsx:219
 #: src/components/teach/TeachComputerOverlay.tsx:230
 msgid "Teach a task"
@@ -4006,6 +4051,8 @@ msgstr "Обучение в процессе. Прекратите обучен�
 msgid "Team"
 msgstr "Команда"
 
+#: src/components/ComputerUpdateProgress.tsx:61
+#: src/pages/ComputerSettingsPanel.tsx:103
 #: src/pages/shell/computer-preview.tsx:115
 msgid "Team Computer"
 msgstr "Командный компьютер"
@@ -4112,7 +4159,7 @@ msgstr "Время суток"
 msgid "Title"
 msgstr "Заголовок"
 
-#: src/components/DraftCard.tsx:273
+#: src/components/DraftCard.tsx:275
 msgid "To"
 msgstr ""
 
@@ -4142,7 +4189,7 @@ msgstr "Считать человеком"
 msgid "Treg token"
 msgstr "Токен Treg"
 
-#: src/components/DraftCard.tsx:396
+#: src/components/DraftCard.tsx:398
 #: src/pages/Onboarding.tsx:685
 msgid "Try again"
 msgstr ""
@@ -4159,7 +4206,7 @@ msgstr "Без раздела"
 msgid "Unavailable"
 msgstr "Недоступно"
 
-#: src/components/DraftCard.tsx:246
+#: src/components/DraftCard.tsx:248
 msgid "Undo"
 msgstr ""
 
@@ -4189,15 +4236,19 @@ msgstr "Актуально"
 msgid "Update"
 msgstr "Обновить"
 
+#: src/pages/ComputerSettingsPanel.tsx:58
+msgid "Update all computers"
+msgstr ""
+
 #: src/components/SoftwareUpdateSection.tsx:260
 msgid "Update available"
 msgstr "Доступно обновление"
 
-#: src/components/ComputerMaintenanceActions.tsx:159
+#: src/components/ComputerMaintenanceActions.tsx:122
 msgid "Update computer"
 msgstr "Обновить компьютер"
 
-#: src/components/ComputerUpdateProgress.tsx:60
+#: src/components/ComputerUpdateProgress.tsx:70
 #: src/components/SoftwareUpdateSection.tsx:185
 msgid "Update failed"
 msgstr "Обновление не выполнено"
@@ -4207,7 +4258,7 @@ msgstr "Обновление не выполнено"
 msgid "Update finished with errors"
 msgstr "Обновление завершено с ошибками"
 
-#: src/components/ComputerUpdateProgress.tsx:118
+#: src/components/ComputerUpdateProgress.tsx:139
 msgid "Update progress"
 msgstr "Ход обновления"
 
@@ -4216,26 +4267,36 @@ msgstr "Ход обновления"
 msgid "Updated"
 msgstr "Обновлено"
 
-#: src/pages/SettingsOverlay.tsx:105
+#: src/pages/SettingsOverlay.tsx:106
 msgid "Updates"
 msgstr "Обновления"
 
+#: src/pages/ComputerSettingsPanel.tsx:70
+msgid "Updates are unavailable on this device"
+msgstr ""
+
+#. placeholder {0}: result.queued.length
+#: src/pages/ComputerSettingsPanel.tsx:62
+msgid "Updates queued: {0}"
+msgstr ""
+
 #. placeholder {0}: update.name
-#: src/components/ComputerUpdateProgress.tsx:67
+#: src/components/ComputerUpdateProgress.tsx:77
 msgid "Updating {0}’s Computer"
 msgstr "Обновление компьютера {0}"
 
-#: src/components/ComputerUpdateProgress.tsx:66
+#: src/components/ComputerUpdateProgress.tsx:76
 msgid "Updating Team Computer"
 msgstr "Обновление компьютера команды"
 
-#: src/components/ComputerMaintenanceActions.tsx:159
+#: src/components/ComputerMaintenanceActions.tsx:122
 #: src/components/SoftwareUpdateSection.tsx:81
+#: src/pages/ComputerSettingsPanel.tsx:58
 msgid "Updating…"
 msgstr "Обновление…"
 
 #: src/pages/AccountSettingsOverlay.tsx:229
-#: src/pages/SettingsOverlay.tsx:103
+#: src/pages/SettingsOverlay.tsx:104
 #: src/pages/shell/sidebar-footer.tsx:211
 #: src/pages/shell/sidebar-footer.tsx:222
 msgid "Usage"
@@ -4269,7 +4330,7 @@ msgstr "Проверка…"
 
 #: src/pages/bot-page/SettingDetails.tsx:183
 #: src/pages/bot-page/SettingDetails.tsx:187
-#: src/pages/SettingsOverlay.tsx:102
+#: src/pages/SettingsOverlay.tsx:103
 #: src/pages/shell/thread-header.tsx:139
 #: src/pages/shell/thread-header.tsx:140
 #: src/pages/VoiceSettingsOverlay.tsx:170
@@ -4372,7 +4433,7 @@ msgstr "Где должны работать боты?"
 msgid "Working…"
 msgstr "Выполняется…"
 
-#: src/pages/KnowledgeSection.tsx:795
+#: src/pages/KnowledgeSection.tsx:803
 msgid "Workspace root"
 msgstr ""
 
@@ -4390,7 +4451,7 @@ msgstr "Ежегодно {date} в {time}"
 msgid "Yesterday"
 msgstr ""
 
-#: src/components/DraftCard.tsx:61
+#: src/components/DraftCard.tsx:64
 #: src/pages/Shell.tsx:136
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"
@@ -4404,7 +4465,8 @@ msgstr "Вы можете закрыть эту вкладку, если она 
 msgid "You can close this window."
 msgstr "Вы можете закрыть это окно."
 
-#: src/pages/shell/side-panel.tsx:343
+#: src/pages/ComputerSettingsPanel.tsx:109
+#: src/pages/shell/side-panel.tsx:328
 msgid "You have control"
 msgstr "Вы управляете"
 
