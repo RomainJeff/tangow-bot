@@ -1,4 +1,4 @@
-import type { AskDraftRecipient } from "@rakazo/contracts";
+import type { AskDraftConversation, AskDraftRecipient } from "@rakazo/contracts";
 import { ASK_DRAFT_SUBJECT_MAX_LENGTH } from "@rakazo/contracts";
 import { connectorKindFromToolName, isEmailConnectorKind } from "./action-approval.js";
 import type { DraftPath, DraftSlots, RecipientRole, RecipientSlot } from "./draft-fields.js";
@@ -41,16 +41,20 @@ export type OutboundDraft = {
   textPath: DraftPath;
   /** Where the recipients and subject sit in `args`, when every one can be written back. */
   fields?: DraftSlots;
+  /** A chat message's recipient as its app named it; the one recipient holds the app's id. */
+  conversation?: AskDraftConversation;
 };
 
 /**
- * How a connector call that may send a message is gated. `draft` is a mail whose every
- * argument is explained; `classic` looks like a send the reader cannot fully show; `none` is
- * not a mail send and keeps today's gate.
+ * How a connector call that may send a message is gated. `draft` is a message whose every
+ * argument is explained; `chat` is one sent to a conversation, a draft only once its app names
+ * who that is; `classic` looks like a send the reader cannot fully show; `none` is not a send it
+ * knows and keeps today's gate.
  */
 export type OutboundCall =
   | { kind: "none" }
   | { kind: "draft"; draft: OutboundDraft }
+  | { kind: "chat"; draft: OutboundDraft }
   | { kind: "classic" }
   | { kind: "refuse"; error: string };
 
@@ -66,6 +70,8 @@ type FieldRole =
   | "sender"
   | "flag"
   | "attachment"
+  | "conversation"
+  | "toggle"
   | "inert";
 
 /** Argument names, lowercased without `_` or `-`. A connector with new names adds a line here. */
@@ -93,6 +99,7 @@ const FIELD_ROLES: Record<string, FieldRole> = {
   message: "text",
   text: "text",
   content: "text",
+  markdowntext: "text",
   subject: "subject",
   from: "sender",
   fromemail: "sender",
@@ -110,14 +117,23 @@ const FIELD_ROLES: Record<string, FieldRole> = {
   files: "attachment",
   attachmentid: "attachment",
   attachmentids: "attachment",
+  channel: "conversation",
+  channelid: "conversation",
+  conversation: "conversation",
+  conversationid: "conversation",
   threadid: "inert",
+  threadts: "inert",
   messageid: "inert",
   savetosentitems: "inert",
   thought: "inert",
+  replybroadcast: "toggle",
+  unfurllinks: "toggle",
+  unfurlmedia: "toggle",
 };
 
 const INHERITED_ROLES = new Set<FieldRole | undefined>(["to", "cc", "bcc", "sender", "attachment"]);
 const SEND_VERBS = new Set(["send", "sendmail", "sendemail", "reply", "forward"]);
+const CHAT_VERBS = new Set(["send", "post"]);
 
 export const REFUSE_UNSHOWABLE: OutboundCall = {
   kind: "refuse",
@@ -129,6 +145,7 @@ type Reading = {
   texts: string[];
   subjects: string[];
   sender?: string;
+  conversations: string[];
   addressed: boolean;
   unexplained: boolean;
   /** Every recipient-role value, nested ones included: the card prints each whole. */
@@ -138,24 +155,36 @@ type Reading = {
   buried: boolean;
 };
 
-/** Reads a whole connector call: a batch that sends must send alone. */
+/**
+ * Reads a whole connector call: a batch that sends must send alone. A chat send is read only for
+ * the `chatApps` whose recipients the card can name; any other keeps today's gate.
+ */
 export function readOutboundCall(
   actions: readonly OutboundAction[],
   connectorKinds: string[] = [],
+  chatApps: ReadonlySet<string> = new Set(),
 ): OutboundCall {
-  const reads = actions.map((action) => readOutbound(action, connectorKinds));
+  const reads = actions.map((action) => readOutbound(action, connectorKinds, chatApps));
   if (reads.every((read) => read.kind === "none")) return { kind: "none" };
   if (reads.length > 1) return { kind: "refuse", error: "Send this message on its own." };
   return reads[0]!;
 }
 
-function readOutbound(action: OutboundAction, connectorKinds: string[]): OutboundCall {
+function readOutbound(
+  action: OutboundAction,
+  connectorKinds: string[],
+  chatApps: ReadonlySet<string>,
+): OutboundCall {
   const words = toolWords(action.toolName);
-  if (!words.some((word) => SEND_VERBS.has(word))) return { kind: "none" };
+  const connectorKind = connectorKindFromToolName(action.toolName, connectorKinds);
+  const sends = words.some((word) => SEND_VERBS.has(word));
+  const chats = chatApps.has(connectorKind) && words.some((word) => CHAT_VERBS.has(word));
+  if (!sends && !chats) return { kind: "none" };
   const reading: Reading = {
     recipients: [],
     texts: [],
     subjects: [],
+    conversations: [],
     addressed: false,
     unexplained: false,
     recipientValues: [],
@@ -163,12 +192,14 @@ function readOutbound(action: OutboundAction, connectorKinds: string[]): Outboun
     buried: false,
   };
   const args = readValue(action.args, undefined, reading, 0) as Record<string, unknown>;
-  const connectorKind = connectorKindFromToolName(action.toolName, connectorKinds);
   const mail =
-    reading.addressed ||
-    words.some((word) => word.endsWith("mail")) ||
-    isEmailConnectorKind(connectorKind);
-  if (!mail) return { kind: "none" };
+    sends &&
+    (reading.addressed ||
+      words.some((word) => word.endsWith("mail")) ||
+      isEmailConnectorKind(connectorKind));
+  if (!mail) {
+    return chats ? readChat(action, args, reading, connectorKind) : { kind: "none" };
+  }
   if (reading.tooDeep) {
     return { kind: "refuse", error: "Send this message with simpler arguments." };
   }
@@ -186,6 +217,7 @@ function readOutbound(action: OutboundAction, connectorKinds: string[]): Outboun
   if (
     words.includes("forward") ||
     reading.unexplained ||
+    reading.conversations.length > 0 ||
     texts.length !== 1 ||
     reading.subjects.length > 1 ||
     reading.subjects.some((subject) => subject.length > ASK_DRAFT_SUBJECT_MAX_LENGTH) ||
@@ -216,6 +248,45 @@ function readOutbound(action: OutboundAction, connectorKinds: string[]): Outboun
   };
 }
 
+/**
+ * A chat app's send: one conversation and one text, every other argument explained, or else the
+ * classic card. The card names the conversation only once its app has, so it is not yet a draft.
+ */
+function readChat(
+  action: OutboundAction,
+  args: Record<string, unknown>,
+  reading: Reading,
+  connectorKind: string,
+): OutboundCall {
+  if (reading.tooDeep) {
+    return { kind: "refuse", error: "Send this message with simpler arguments." };
+  }
+  const texts = textLeaves(args);
+  if (
+    reading.unexplained ||
+    reading.recipientValues.length > 0 ||
+    reading.subjects.length > 0 ||
+    reading.sender !== undefined ||
+    reading.conversations.length !== 1 ||
+    texts.length !== 1
+  ) {
+    return cardFitsArguments(action.args) ? { kind: "classic" } : REFUSE_UNSHOWABLE;
+  }
+  const [{ path: textPath, value: body }] = texts as [{ path: DraftPath; value: string }];
+  const error = draftTextError(body);
+  if (error) return { kind: "refuse", error };
+  return {
+    kind: "chat",
+    draft: {
+      connectorKind,
+      recipients: [{ role: "to", address: reading.conversations[0]! }],
+      body,
+      args,
+      textPath,
+    },
+  };
+}
+
 function toolWords(toolName: string): string[] {
   return toolName
     .replace(/^mcp__.+?__/, "")
@@ -240,6 +311,11 @@ function readValue(
     if (value != null) reading.unexplained = true;
     return value;
   }
+  // An option that changes nothing the card shows, sent as the bot set it.
+  if (role === "toggle") {
+    if (typeof value !== "boolean" && value != null) reading.unexplained = true;
+    return value;
+  }
   if (role === "inert" && value && typeof value === "object") {
     reading.unexplained = true;
     return value;
@@ -258,6 +334,8 @@ function readValue(
           reading.recipientValues.push(child);
           if (depth > 0) reading.buried = true;
         }
+        // A send takes its conversation as an argument of its own, never inside another one.
+        if (childRole === "conversation" && depth > 0) reading.unexplained = true;
         return [key, readValue(child, childRole, reading, depth + 1)];
       }),
     );
@@ -296,6 +374,9 @@ function readString(value: string, role: FieldRole | undefined, reading: Reading
       } else reading.sender ??= sender;
       return;
     }
+    case "conversation":
+      reading.conversations.push(value);
+      return;
     case "inert":
       return;
     default:
@@ -308,9 +389,10 @@ export function isRecipientField(key: string): boolean {
   return isRecipientRole(FIELD_ROLES[fieldKey(key)]);
 }
 
-/** Arguments a card shows whole: recipients, and the items of a batch it cannot read. */
+/** Arguments a card shows whole: recipients, conversations, and a batch's unread items. */
 export function isWholeField(key: string): boolean {
-  return isRecipientField(key) || fieldKey(key) === "tools";
+  const field = fieldKey(key);
+  return isRecipientField(key) || FIELD_ROLES[field] === "conversation" || field === "tools";
 }
 
 /**

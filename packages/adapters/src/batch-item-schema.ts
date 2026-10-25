@@ -1,10 +1,10 @@
 import type { AdapterContext, ConnectorCall, ConnectorProvider } from "@rakazo/adapter-kit";
 import { isRecipientField } from "@rakazo/core";
 import { isComposioBatch } from "./connector-actions.js";
+import { findInResult, isRecord, readConnector, remember } from "./connector-read.js";
 
 /** How long a draft waits for its batch item's schema before showing only what its call holds. */
 const TIMEOUT_MS = 1_500;
-const CACHE_LIMIT = 500;
 const SCHEMA_TOOL = "COMPOSIO_GET_TOOL_SCHEMAS";
 
 /** The recipient lines of input schemas already looked up, by route, revision and slug. */
@@ -35,35 +35,10 @@ export async function lookUpBatchItemSchema(
   ].join("\0");
   const cached = cache.get(key);
   if (cached) return cached;
-  const controller = new AbortController();
-  const abort = () => controller.abort();
-  context.signal.addEventListener("abort", abort, { once: true });
-  const timer = setTimeout(abort, TIMEOUT_MS);
-  const stopped = new Promise<undefined>((resolve) => {
-    controller.signal.addEventListener("abort", () => resolve(undefined), { once: true });
-  });
-  const read = (async () => {
-    for await (const event of connector.execute(lookup, {
-      ...context,
-      signal: controller.signal,
-    })) {
-      if (event.type === "result") return batchItemSchemaIn(event.data, slug);
-      if (event.type === "error") return undefined;
-    }
-    return undefined;
-  })().catch(() => undefined);
-  try {
-    const schema = await Promise.race([read, stopped]);
-    if (schema) {
-      const oldest = cache.size >= CACHE_LIMIT ? cache.keys().next().value : undefined;
-      if (oldest !== undefined) cache.delete(oldest);
-      cache.set(key, schema);
-    }
-    return schema;
-  } finally {
-    clearTimeout(timer);
-    context.signal.removeEventListener("abort", abort);
-  }
+  const data = await readConnector(connector, lookup, context, TIMEOUT_MS);
+  const schema = data === undefined ? undefined : batchItemSchemaIn(data, slug);
+  if (schema) remember(cache, key, schema);
+  return schema;
 }
 
 /**
@@ -90,7 +65,10 @@ export function batchItemSchemaIn(
   result: unknown,
   slug: string,
 ): Record<string, unknown> | undefined {
-  const schemas = toolSchemasIn(result, 0);
+  const schemas = findInResult(result, (record) => {
+    const own = record.tool_schemas ?? record.toolSchemas;
+    return isRecord(own) ? own : undefined;
+  });
   if (!schemas) return undefined;
   const key = Object.keys(schemas).find((each) => each.toUpperCase() === slug.toUpperCase());
   const entry = key === undefined ? undefined : schemas[key];
@@ -101,34 +79,4 @@ export function batchItemSchemaIn(
   return recipients.length
     ? { type: schema.type, properties: Object.fromEntries(recipients) }
     : undefined;
-}
-
-function toolSchemasIn(value: unknown, depth: number): Record<string, unknown> | undefined {
-  if (depth > 6) return undefined;
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = toolSchemasIn(item, depth + 1);
-      if (found) return found;
-    }
-    return undefined;
-  }
-  if (!isRecord(value)) return undefined;
-  const own = value.tool_schemas ?? value.toolSchemas;
-  if (isRecord(own)) return own;
-  if (value.type === "text" && typeof value.text === "string") {
-    try {
-      return toolSchemasIn(JSON.parse(value.text), depth + 1);
-    } catch {
-      return undefined;
-    }
-  }
-  for (const key of ["data", "structuredContent", "content"]) {
-    const found = toolSchemasIn(value[key], depth + 1);
-    if (found) return found;
-  }
-  return undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

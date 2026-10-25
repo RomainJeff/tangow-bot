@@ -82,6 +82,7 @@ import {
   BOT_OFFER_PROPOSALS,
   botMessageAllowsSilence,
   botMessageRelaysToUser,
+  cardFitsArguments,
   connectorKindFromToolName,
   containsSecret,
   DEFAULT_SKILL_LEARNING,
@@ -125,6 +126,7 @@ import {
   proposalPlaceError,
   proposalRefusal,
   proposalShown,
+  REFUSE_UNSHOWABLE,
   readDraft,
   redactSecrets,
   renderBotDirectory,
@@ -407,6 +409,8 @@ import {
   skillUpdateFromTool,
   userSkillsOpenedIn,
 } from "./skill-tools.js";
+import type { ChatRecipientCache } from "./slack-recipient.js";
+import { lookUpChatRecipient } from "./slack-recipient.js";
 import {
   continueRunClaimFence,
   DESKTOP_HELD_FOR_TAKEOVER_MESSAGE,
@@ -1092,6 +1096,7 @@ export function buildSystemInstructions(parts: SystemInstructionParts): string {
 
 export function createRunExecutor(deps: ExecutorDeps) {
   const batchItemSchemas: BatchItemSchemaCache = new Map();
+  const chatRecipients: ChatRecipientCache = new Map();
   const web = deps.web ?? createWebProvider();
   // Skills live under DATA_DIR/skills; same default as apps/api env + apps/worker.
   const learning = deps.skillLearning ?? DEFAULT_SKILL_LEARNING;
@@ -2673,6 +2678,27 @@ export function createRunExecutor(deps: ExecutorDeps) {
               );
               if (reread.kind === "draft") outbound = reread;
             }
+          }
+          // A chat names its recipient as its app does, or its send shows the classic card. A
+          // resumed send asks nothing: its effect already holds what it shows and what leaves.
+          if (outbound.kind === "chat" && approvedReplayConsumed) outbound = { kind: "classic" };
+          if (outbound.kind === "chat") {
+            const { draft } = outbound;
+            const conversation = connector
+              ? await lookUpChatRecipient(
+                  connector,
+                  { ...connectorCall, tool: name, args, executionId },
+                  draft.recipients[0]!.address,
+                  context,
+                  chatRecipients,
+                )
+              : undefined;
+            context.signal.throwIfAborted();
+            outbound = conversation
+              ? { kind: "draft", draft: { ...draft, conversation } }
+              : cardFitsArguments(args)
+                ? { kind: "classic" }
+                : REFUSE_UNSHOWABLE;
           }
           if (outbound.kind === "refuse") return { error: outbound.error };
           const drafted =
