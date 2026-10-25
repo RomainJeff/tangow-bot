@@ -98,6 +98,8 @@ export interface ScreenRequest {
 
 export interface ScreenSession {
   url: string | null;
+  /** Host header for a `url` that points at a gateway routing screens by host name. */
+  host?: string;
   mimeType: string;
   close(): Promise<void>;
 }
