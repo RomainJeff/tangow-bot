@@ -27,7 +27,7 @@ const sendsTo = (request: ModelEmulatorRequest | undefined, address: string) =>
     .filter((step) => step.split(")")[0]!.includes(address));
 
 describe.skipIf(!databaseAvailable)("mail drafts in a worker run", () => {
-  it("tells the bot about a sent draft once, however many drafts follow it", async () => {
+  it("tells the bot how each draft was sent, once, however many drafts follow it", async () => {
     const composio = new ComposioEmulator();
     let third: ModelEmulatorRequest | undefined;
     const run = await startWorkerRun({
@@ -110,7 +110,12 @@ describe.skipIf(!databaseAvailable)("mail drafts in a worker run", () => {
         ["anna@example.test", "First draft."],
         ["ben@example.test", "Second draft."],
       ]);
-      expect(sendsTo(third, "anna@example.test")).toHaveLength(1);
+      for (const address of ["anna@example.test", "ben@example.test"]) {
+        const [call, ...rest] = sendsTo(third, address);
+        expect(rest).toEqual([]);
+        expect(call).toContain("The user sent this message from the draft card.");
+      }
+      expect(JSON.stringify(third?.messages)).not.toContain("paused: awaiting approval");
       expect(JSON.stringify(third?.messages)).not.toContain(
         "Rakazo already ran what they approved",
       );

@@ -1,27 +1,19 @@
-import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { ComposioEmulator, composioEntityId, PostgresSessionLog } from "@rakazo/adapters";
+import { ComposioEmulator, composioEntityId } from "@rakazo/adapters";
 import type { AskDraftEdits, SessionEntry, SessionId, ThreadEntry } from "@rakazo/contracts";
 import { askDraftState, EntrySeq, SessionId as SessionIdSchema } from "@rakazo/contracts";
 import { projectThreadItems } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
-import type { createApp } from "../../../apps/api/src/app.ts";
-import { latestCard, sessionCookieHeader } from "./index.js";
+import { latestCard } from "./index.js";
 import type {
   ModelEmulatorRequest,
   ModelEmulatorResponse,
   ModelEmulatorStep,
 } from "./model-emulator.js";
-import { startModelEmulator } from "./model-emulator.js";
+import type { JourneyFixture } from "./pi-journey.test-support.js";
+import { DONE, fixtureKey, journey, payloadOf, reply, rpc } from "./pi-journey.test-support.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
 
-type App = { request: (input: string, init?: RequestInit) => Promise<Response> };
-type Handles = Awaited<ReturnType<typeof createApp>>;
 const databaseAvailable = process.env.VERIFY_DATABASE === "1" && Boolean(process.env.DATABASE_URL);
-const fixtureOrigin = "http://127.0.0.1:5173";
-const fixtureKey = "offline-product-fixture-key";
 
 describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
   it("runs the bench controller fixture on disposable PostgreSQL without a live provider", async () => {
@@ -899,9 +891,10 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           {
             expect(request) {
               expect(JSON.stringify(request.messages)).toContain(
-                "The user sent your draft from its card.",
+                "The user sent this message from the draft card.",
               );
               expect(JSON.stringify(request.messages)).toContain("Edited by me.");
+              expect(JSON.stringify(request.messages)).not.toContain("paused: awaiting approval");
             },
             response: reply("Sent."),
           },
@@ -1211,10 +1204,11 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
             expect(request) {
               const seen = JSON.stringify(request.messages);
               expect(seen).toContain(
-                "The user sent the message below instead of sending your draft, so nothing was sent.",
+                "The user wrote to you instead of sending this draft, so nothing was sent.",
               );
               expect(seen).toContain("Edited by me.");
               expect(seen).toContain("Make it shorter.");
+              expect(seen).not.toContain("paused: awaiting approval");
             },
             response: reply("Here is a shorter one."),
           },
@@ -1258,20 +1252,19 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
       );
     }, 30_000);
 
-    it("tells the bot about the replaced draft once, not again after its next card", async () => {
+    it("tells the bot about the replaced draft once, as its call's result, whatever it does next", async () => {
       const composio = new ComposioEmulator();
-      // How often the bot reads the replaced draft, and whether only beside the user's message.
-      const told = (request: ModelEmulatorRequest) => {
-        const seen = JSON.stringify(request.messages);
-        const besideMessage = seen.slice(seen.indexOf("Additional user context:"));
-        return [seen.split("editedByUser").length - 1, besideMessage.includes("editedByUser")];
-      };
+      // An answer to the bot's next card quotes the run's steps as they were, so only the history counts.
+      const told = (request: ModelEmulatorRequest) =>
+        JSON.stringify(request.messages)
+          .replace(/<reply_target>[\s\S]*?<\/reply_target>/g, "")
+          .split("editedByUser").length - 1;
       await journey(
         [
           proposeMail,
           {
             expect(request) {
-              expect(told(request)).toEqual([1, true]);
+              expect(told(request)).toBe(1);
             },
             response: {
               type: "tool",
@@ -1282,7 +1275,7 @@ describe.skipIf(!databaseAvailable)("offline Pi product journey", () => {
           },
           {
             expect(request) {
-              expect(told(request)).toEqual([1, true]);
+              expect(told(request)).toBe(1);
             },
             response: reply("Here is a casual one."),
           },
@@ -1891,14 +1884,6 @@ const DELEGATE = {
   arguments: { name: "checker", task: "Say checked." },
 } as const;
 
-/** What the model tells the person, which only message_user carries. */
-function reply(message: string, id = "journey-reply") {
-  return { type: "tool", id, name: "message_user", arguments: { message } } as const;
-}
-
-/** The model's turn after its message_user call, with nothing left to say. */
-const DONE: ModelEmulatorStep = { expect() {}, response: { type: "text", text: "" } };
-
 /** Fails a helper's first text entry and the first subagent entry, once each, at the database. */
 async function withEntryFaults(
   prisma: JourneyFixture["prisma"],
@@ -1989,159 +1974,4 @@ function turnsOf(messages: ModelEmulatorRequest["messages"]) {
       message.role === "tool" ? [[message.tool_call_id, JSON.parse(textOf(message.content))]] : [],
     ),
   };
-}
-
-function payloadOf(entry: SessionEntry | undefined) {
-  return (entry?.payload ?? {}) as Record<string, unknown>;
-}
-
-type JourneyFixture = {
-  app: App;
-  cookie: string;
-  bot: { id: string };
-  userId: string;
-  prisma: Handles["prisma"];
-  log: PostgresSessionLog;
-  send: (
-    text: string,
-    options?: {
-      replyToMessageId?: string;
-      replyQuote?: string;
-      clientNonce?: string;
-      draft?: AskDraftEdits & { messageId: string; text: string };
-    },
-  ) => Promise<{
-    runId: string;
-    sessionId: SessionId;
-    executionSessionId: () => Promise<SessionId>;
-    settled: (status: string) => Promise<void>;
-  }>;
-};
-
-async function journey(
-  steps: ModelEmulatorStep[],
-  drive: (fixture: JourneyFixture) => Promise<void>,
-  app: Pick<
-    NonNullable<Parameters<typeof createApp>[0]>,
-    "agentRuntime" | "skillLearning" | "composio"
-  > = {},
-) {
-  const model = await startModelEmulator({ apiKey: fixtureKey, steps });
-  const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-offline-product-"));
-  let stop: (() => Promise<void>) | undefined;
-  try {
-    const { createApp } = await import("../../../apps/api/src/app.ts");
-    const handles = await createApp({
-      databaseUrl: process.env.DATABASE_URL!,
-      realtimeDatabaseUrl: process.env.DATABASE_URL!,
-      authUrl: fixtureOrigin,
-      webOrigin: fixtureOrigin,
-      dataDir,
-      sandboxProvider: "fake",
-      agentRuntime: "pi",
-      wakeupDriver: "memory",
-      signupsEnabled: "true",
-      composio: new ComposioEmulator(),
-      encryptionKey: "offline-model-fixture-encryption-key",
-      ...app,
-    });
-    stop = handles.stop;
-    const email = `offline-pi-${randomUUID()}@rakazo.test`;
-    const signup = await handles.app.request("/api/auth/sign-up/email", {
-      method: "POST",
-      headers: { "content-type": "application/json", origin: fixtureOrigin },
-      body: JSON.stringify({ email, password: "password12", name: "Offline fixture" }),
-    });
-    expect(signup.status).toBeLessThan(400);
-    const cookie = sessionCookieHeader(signup);
-    const user = await handles.prisma.user.findUniqueOrThrow({ where: { email } });
-    await rpc(handles.app, cookie, "models/connect", {
-      provider: model.model.provider,
-      modelId: model.model.id,
-      baseUrl: model.baseUrl,
-      apiKey: fixtureKey,
-    });
-    const bot = await rpc<{ id: string }>(handles.app, cookie, "bots/create", {
-      name: "File fixture",
-      title: "",
-      description: "",
-      instructions: "Complete the task.",
-      notifyOnFinish: false,
-    });
-    await rpc(handles.app, cookie, "bots/update", {
-      botId: bot.id,
-      modelProvider: model.model.provider,
-      modelId: model.model.id,
-    });
-    await drive({
-      app: handles.app,
-      cookie,
-      bot,
-      userId: user.id,
-      prisma: handles.prisma,
-      log: new PostgresSessionLog(handles.prisma),
-      async send(text, options) {
-        const sent = await rpc<{ runId: string }>(handles.app, cookie, "threads/send", {
-          botId: bot.id,
-          text,
-          ...options,
-        });
-        const thread = await handles.prisma.thread.findFirstOrThrow({
-          where: { botId: bot.id },
-          select: { sessionId: true },
-        });
-        return {
-          runId: sent.runId,
-          sessionId: thread.sessionId as SessionId,
-          async executionSessionId() {
-            const run = await handles.prisma.run.findUniqueOrThrow({
-              where: { id: sent.runId },
-              select: { sessionId: true },
-            });
-            return SessionIdSchema.parse(run.sessionId);
-          },
-          async settled(status) {
-            await expect
-              .poll(
-                async () => {
-                  const run = await handles.prisma.run.findUnique({
-                    where: { id: sent.runId },
-                    select: { status: true },
-                  });
-                  if (run?.status === "failed") model.assertComplete();
-                  return run?.status;
-                },
-                { timeout: 15_000, interval: 100 },
-              )
-              .toBe(status);
-          },
-        };
-      },
-    });
-    model.assertComplete();
-  } finally {
-    try {
-      await stop?.();
-    } finally {
-      await model.close();
-      await rm(dataDir, { recursive: true, force: true });
-    }
-  }
-}
-
-async function rpc<T>(
-  app: App,
-  cookie: string,
-  procedure: string,
-  input: unknown = {},
-): Promise<T> {
-  const response = await app.request(`/rpc/${procedure}`, {
-    method: "POST",
-    headers: { "content-type": "application/json", cookie, origin: fixtureOrigin },
-    body: JSON.stringify({ json: input }),
-  });
-  const body = (await response.json()) as { json?: T; error?: { message?: string } };
-  if (response.status >= 400 || body.error)
-    throw new Error(`${procedure}: ${body.error?.message ?? response.status}`);
-  return body.json as T;
 }
