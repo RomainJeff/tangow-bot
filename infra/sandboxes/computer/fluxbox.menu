@@ -1,6 +1,6 @@
 [begin] (Rakazo)
   [exec] (Browser) {rakazo-browser}
-  [exec] (Files) {pcmanfm /home/rakazo}
+  [exec] (Files) {rakazo-files}
   [exec] (Office) {libreoffice}
   [exec] (Terminal) {rakazo-terminal}
 [end]
