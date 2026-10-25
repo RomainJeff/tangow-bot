@@ -410,7 +410,7 @@ import {
   userSkillsOpenedIn,
 } from "./skill-tools.js";
 import type { ChatRecipientCache } from "./slack-recipient.js";
-import { lookUpChatRecipient } from "./slack-recipient.js";
+import { lookUpChatRecipient, slackServer } from "./slack-recipient.js";
 import {
   continueRunClaimFence,
   DESKTOP_HELD_FOR_TAKEOVER_MESSAGE,
@@ -2684,10 +2684,20 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (outbound.kind === "chat" && approvedReplayConsumed) outbound = { kind: "classic" };
           if (outbound.kind === "chat") {
             const { draft } = outbound;
+            const call = { ...connectorCall, tool: name, args, executionId };
+            // An MCP server is known by its endpoint, never by the name its user gave it.
+            const mcp =
+              call.route?.connectorId === "mcp" && call.route.resourceId
+                ? await deps.prisma.mcpServer.findFirst({
+                    where: { id: call.route.resourceId, spaceId: run.spaceId, userId: run.userId },
+                    select: { endpoint: true },
+                  })
+                : null;
             const conversation = connector
               ? await lookUpChatRecipient(
                   connector,
-                  { ...connectorCall, tool: name, args, executionId },
+                  call,
+                  slackServer(call, mcp?.endpoint ?? undefined),
                   draft.recipients[0]!.address,
                   context,
                   chatRecipients,

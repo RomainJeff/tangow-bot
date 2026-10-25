@@ -517,6 +517,26 @@ describe("readOutboundCall on a chat app's send", () => {
     });
   });
 
+  it("reads Slack's own server's send, a user id standing for a direct message", () => {
+    const args = {
+      channel_id: "U0MARIE",
+      message: "Thursday instead?",
+      thread_ts: "1.2",
+      reply_broadcast: false,
+      unfurl_app_links: true,
+    };
+    expect(chat("slack_send_message", args)).toMatchObject({
+      kind: "chat",
+      draft: {
+        recipients: [{ role: "to", address: "U0MARIE" }],
+        body: "Thursday instead?",
+        textPath: ["message"],
+      },
+    });
+    // A Slack draft of its own, deleted once sent, is not something the card shows.
+    expect(chat("slack_send_message", { ...args, draft_id: "Dr0" })).toEqual({ kind: "classic" });
+  });
+
   it.each([
     ["Block Kit content the card does not show", { blocks: [{ type: "section" }] }],
     ["a second text", { text: "Something else" }],
