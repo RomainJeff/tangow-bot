@@ -369,19 +369,46 @@ describe("lookUpChatRecipient through Slack's MCP server", () => {
     expect(await lookUp(text({ result: "User ID: U0BOB\nReal Name: Bob" }), "U0MARIE")).toBe(
       undefined,
     );
-    expect(
-      await lookUp(text({ messages: "Ana: see Channel: #general (C0GENERAL)" }), "C0GENERAL"),
-    ).toBeUndefined();
+    for (const messages of [
+      "Ana: see Channel: #general (C0GENERAL)",
+      "Channel: DM (C0GENERAL)\n\nChannel: #ceo (C0GENERAL)",
+    ]) {
+      expect(await lookUp(text({ messages }), "C0GENERAL")).toBeUndefined();
+    }
   });
 
-  it("reads a profile sent as plain text, and names nothing for a direct message id", async () => {
-    const plain = answering({
+  it("names nothing from an answer the server marked as an error", async () => {
+    const failed = answering({
+      content: [
+        { type: "text", text: JSON.stringify({ result: "User ID: U0MARIE\nReal Name: Marie" }) },
+      ],
+      isError: true,
+    });
+    expect(await lookUp(failed, "U0MARIE")).toBeUndefined();
+  });
+
+  it("reads only the answer's JSON fields, never a raw text part", async () => {
+    const raw = answering({
       content: [
         { type: "text", text: "User ID: U0MARIE\nDisplay Name: marie\nReal Name: Marie Dupont" },
       ],
     });
-    expect(await lookUp(plain, "U0MARIE")).toEqual(marie);
-    expect(await lookUp(new SlackMcpEmulator(), "D0MARIE")).toBeUndefined();
+    expect(await lookUp(raw, "U0MARIE")).toBeUndefined();
+  });
+
+  it.each([
+    ["a direct message, headed without a name", new SlackMcpEmulator(), "D0MARIE"],
+    [
+      "a group message",
+      answering({
+        content: [
+          { type: "text", text: JSON.stringify({ messages: "Channel: #mpdm-ana--bo-1 (G0TEAM)" }) },
+        ],
+      }),
+      "G0TEAM",
+    ],
+  ])("names nothing for %s", async (_, slack, id) => {
+    expect(await lookUp(slack, id)).toBeUndefined();
   });
 
   it("asks nothing of a server it does not know", async () => {

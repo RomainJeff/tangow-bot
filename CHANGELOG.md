@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
-- **A message a bot writes in your name now waits as a draft you send yourself, on web, desktop and iPhone.** An email through Gmail, Outlook or another mail app, or a Slack message, shows as it will leave, with every recipient (a Slack person or channel as Slack names them) and its text; you can change the text, and an email's recipients and subject, then Send, or discard it with Undo. This replaces sends that went out with no card, or behind a card that only asked to allow the tool call.
+- **A message a bot writes in your name now waits as a draft you send yourself, on web, desktop and iPhone.** An email through Gmail, Outlook or another mail app, or a Slack message, shows as it will leave, with every recipient (a Slack person or channel as Slack names them) and its text; you can change the text, and an email's recipients and subject, then Send, or discard it, with Undo for a moment. This replaces sends that went out with no card, or behind a card that only asked to allow the tool call.
 
 ### 2026-10-24
 

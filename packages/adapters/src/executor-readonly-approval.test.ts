@@ -63,6 +63,8 @@ function fixture({
   /** The connector the tool's route names, and the endpoint of its MCP server when it is one. */
   connectorId = "demo",
   mcpEndpoint = undefined as string | undefined,
+  /** Whose that MCP server is: the run's own unless a test says otherwise. */
+  mcpOwner = { spaceId: "space-1", userId: "user-1" },
   secrets = [] as string[],
   /** The connector that answers every call, such as the Composio emulator; a stub by default. */
   connector = undefined as
@@ -237,8 +239,14 @@ function fixture({
     task: { findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: "Read the item" })) },
     connection: { findMany: vi.fn(async () => []) },
     mcpServer: {
-      findFirst: vi.fn(async ({ where }: { where: { id: string } }) =>
-        where.id === "resource-1" && mcpEndpoint ? { endpoint: mcpEndpoint } : null,
+      findFirst: vi.fn(
+        async ({ where }: { where: { id: string; spaceId?: string; userId?: string } }) =>
+          where.id === "resource-1" &&
+          where.spaceId === mcpOwner.spaceId &&
+          where.userId === mcpOwner.userId &&
+          mcpEndpoint
+            ? { endpoint: mcpEndpoint }
+            : null,
       ),
     },
     user: { findUnique: vi.fn(async () => ({ name: "Ana Lima" })) },
@@ -276,7 +284,7 @@ function fixture({
     for (const call of calls) {
       const result = await request.executeTool!(
         catalog ? "demo_execute_tool" : name,
-        catalog ? { id: `resource-1:${name}`, arguments: call.args } : call.args,
+        catalog ? { id: `resource-1:${routeToolName ?? name}`, arguments: call.args } : call.args,
         call.executionId,
       );
       results.push(result);
@@ -871,14 +879,15 @@ describe("connector read-only metadata and approval enforcement", () => {
         },
       };
       const mcpSend = { channel_id: "U0MARIE", message: "Thursday instead?" };
-      function viaMcp(slack: SlackMcpEmulator, mcpEndpoint = "https://mcp.slack.com/mcp") {
+      function viaMcp(slack: SlackMcpEmulator, options: Parameters<typeof fixture>[0] = {}) {
         const f = fixture({
           name: "mcp__slack__slack_send_message",
           routeToolName: "slack_send_message",
           inputSchema: mcpSchema,
           connector: slack,
           connectorId: "mcp",
-          mcpEndpoint,
+          mcpEndpoint: "https://mcp.slack.com/mcp",
+          ...options,
         });
         f.setCalls([{ args: mcpSend, executionId: "c1" }]);
         return f;
@@ -886,34 +895,44 @@ describe("connector read-only metadata and approval enforcement", () => {
       const mcpSends = (slack: SlackMcpEmulator) =>
         slack.executions.filter((call) => call.tool === "slack_send_message");
 
-      it("pauses on a draft naming the person as Slack's server does, then sends the edit once", async () => {
-        const slack = new SlackMcpEmulator();
-        const f = viaMcp(slack);
-        await f.run();
-        expect(mcpSends(slack)).toEqual([]);
-        expect(card(f).draft).toMatchObject({
-          app: { name: "Slack" },
-          recipients: [{ role: "to", address: "U0MARIE" }],
-          conversation: { kind: "person", name: "Marie Dupont", handle: "marie" },
-          body: "Thursday instead?",
-        });
-        approve(f.effects[0]!, "Thursday at 10 instead?");
-        f.setCalls([]);
-        await f.run();
-        expect(slack.executions.map((call) => [call.tool, call.args])).toEqual([
-          ["slack_read_user_profile", { user_id: "U0MARIE", response_format: "detailed" }],
-          ["slack_send_message", { ...mcpSend, message: "Thursday at 10 instead?" }],
-        ]);
-        expect(f.effects[0]).toMatchObject({ status: "completed", draft: { state: "sent" } });
-      });
+      it.each([
+        ["called directly", false],
+        ["called through the tool catalog", true],
+      ])(
+        "pauses on a draft naming the person as Slack's server does, then sends the edit once, %s",
+        async (_, catalog) => {
+          const slack = new SlackMcpEmulator();
+          const f = viaMcp(slack, { catalog });
+          await f.run();
+          expect(mcpSends(slack)).toEqual([]);
+          expect(card(f).draft).toMatchObject({
+            app: { name: "Slack" },
+            recipients: [{ role: "to", address: "U0MARIE" }],
+            conversation: { kind: "person", name: "Marie Dupont", handle: "marie" },
+            body: "Thursday instead?",
+          });
+          approve(f.effects[0]!, "Thursday at 10 instead?");
+          f.setCalls([]);
+          await f.run();
+          expect(slack.executions.map((call) => [call.tool, call.args])).toEqual([
+            ["slack_read_user_profile", { user_id: "U0MARIE", response_format: "detailed" }],
+            ["slack_send_message", { ...mcpSend, message: "Thursday at 10 instead?" }],
+          ]);
+          expect(f.effects[0]).toMatchObject({ status: "completed", draft: { state: "sent" } });
+        },
+      );
 
       it.each([
-        ["a server reached elsewhere", "https://slack-tools.example.test/mcp", undefined],
-        ["a read the server refuses", "https://mcp.slack.com/mcp", "user_not_found"],
-      ])("shows the classic card for %s, sending nothing", async (_, endpoint, refusal) => {
+        ["a server reached elsewhere", { mcpEndpoint: "https://slack-tools.example.test/mcp" }],
+        ["a read the server refuses", {}, "user_not_found"],
+        [
+          "a server row of another user's, under the same id",
+          { mcpOwner: { spaceId: "space-1", userId: "user-2" } },
+        ],
+      ])("shows the classic card for %s, sending nothing", async (_, options, refusal?: string) => {
         const slack = new SlackMcpEmulator();
         if (refusal) slack.failNext("slack_read_user_profile", { kind: "fail", error: refusal });
-        const f = viaMcp(slack, endpoint);
+        const f = viaMcp(slack, options);
         await f.run();
         expect(mcpSends(slack)).toEqual([]);
         expect(card(f).draft).toBeUndefined();
