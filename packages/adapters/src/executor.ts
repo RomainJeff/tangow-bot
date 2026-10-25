@@ -2318,14 +2318,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
             entry.type === "tool.call" ? [entry.payload.callId] : [],
           ),
         );
-        // sendApprovedDrafts sends an approved draft before any turn and tells the model what left,
-        // so neither the settling below nor the model replays it.
-        const draftsToSend = answeredEffects.filter(
-          (effect) =>
-            (effect.status === "approved" || effect.status === "executing") &&
-            readDraft(effect.status, effect.draft),
-        );
-        const answeredCalls = answeredEffects.filter((effect) => !draftsToSend.includes(effect));
+        // A draft is never settled or replayed, whatever became of it: sendApprovedDrafts sends an
+        // approved one before any turn, and the draft tells the model itself how it ended.
+        const answeredDrafts = answeredEffects.filter((effect) => effect.draft !== null);
+        const answeredCalls = answeredEffects.filter((effect) => effect.draft === null);
         const settledEffects = answeredCalls.filter(
           (effect) =>
             settlesApprovals &&
@@ -2337,7 +2333,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             effect.status === "approved" && (!settlesApprovals || localTools.has(effect.kind)),
         );
         const approvedEffectReplays = createApprovedEffectReplayQueue(
-          [...draftsToSend, ...settledEffects, ...replayedEffects].filter(
+          [...answeredDrafts, ...settledEffects, ...replayedEffects].filter(
             (effect) => effect.status === "approved",
           ),
         );
