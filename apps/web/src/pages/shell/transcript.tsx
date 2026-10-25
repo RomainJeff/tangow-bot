@@ -232,10 +232,11 @@ export const Transcript = memo(function Transcript({
         ref={scrollRef}
         data-testid="transcript"
         {...scrollerHandlers}
-        // px-3 keeps a card's soft drop shadow (shadow-card reaches ~14px sideways and
-        // ~26px down) from being clipped by this scroll container's overflow or hidden under
-        // the rk-scroll scrollbar on the right.
-        className="rk-scroll rk-thread-mask flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-3 pt-21"
+        // The scroller reaches past the column's own padding (-mx) and pads back in (px), so the
+        // cards keep their place while a card's shadow (shadow-card reaches 28px sideways in dark)
+        // has room inside this overflow instead of being cut. At phone width the screen's edge is
+        // the limit, so it only cancels the padding.
+        className="rk-scroll rk-thread-mask flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto -mx-3.5 px-6.5 pt-21 md:-mx-4 md:px-7"
       >
         {olderCursor != null ? (
           <button
