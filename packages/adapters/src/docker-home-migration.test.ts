@@ -1,23 +1,32 @@
 import {
+  chmod,
   lstat,
   mkdir,
   mkdtemp,
   readdir,
   readFile,
   readlink,
-  rename,
   symlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { PrismaClient } from "@rakazo/db";
+import { createThreadEvents } from "@rakazo/db";
 import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { moveDockerHomeToVolumes, moveIdleDockerHomes } from "./docker-home-migration.js";
+import { provisionComputer } from "./computer-lifecycle.js";
+import {
+  homeMovePending,
+  moveDockerHomeToVolumes,
+  moveIdleDockerHomes,
+} from "./docker-home-migration.js";
 import { DockerWorkerProvider } from "./docker-worker.js";
+import { FakeSandboxProvider } from "./fake-sandbox.js";
+import { LocalAgentHomeStore } from "./home.js";
 import { assertE2BHomesOnVolumes, E2BHomesNotMigrated } from "./home-volume-migration.js";
+import { InMemoryJobQueue } from "./wakeup.js";
 import { workerFixture } from "./worker-fixture.test-support.js";
 import { createWorkerLifecycle } from "./worker-lifecycle.js";
 
@@ -123,7 +132,7 @@ describe("moving a Docker home onto its volumes", () => {
     });
   });
 
-  it("moves a dedicated home's entries but its dot entries and workspace link", async () => {
+  it("moves a dedicated home's entries but its dot entries, then never touches the home again", async () => {
     const { computer, bots } = await dockerComputer("dedicated");
     const home = `homes/${computer.homeKey}`;
     await put(`${home}/project/main.py`, "print()");
@@ -136,11 +145,13 @@ describe("moving a Docker home onto its volumes", () => {
     const volume = await volumeDir("bot_private", { botId: bots[0]!.id });
     expect((await readdir(volume)).sort()).toEqual(["notes.md", "project"]);
     expect(await readdir(path.join(dataDir, home))).toEqual([".config"]);
-    // The link a computer on volumes makes is not a leftover.
-    await symlink(volume, path.join(dataDir, home, "workspace"));
-    await expect(moveDockerHomeToVolumes(deps, computer.id, fixture.context)).resolves.toEqual({
-      outcome: "already_on_volumes",
+    // What the person makes in ~ afterwards is theirs: no marker, so no sweep moves it.
+    await mkdir(path.join(dataDir, home, "notes"));
+    await expect(moveIdleDockerHomes(deps, fixture.context, computer.id)).resolves.toEqual({
+      adopted: 0,
+      deferred: 0,
     });
+    expect((await readdir(path.join(dataDir, home))).sort()).toEqual([".config", "notes"]);
   });
 
   it("renames nothing when adoption is refused, so the computer boots on its whole home", async () => {
@@ -165,40 +176,64 @@ describe("moving a Docker home onto its volumes", () => {
     expect(await readdir(await volumeDir("space_shared", { spaceId: computer.spaceId }))).toEqual(
       [],
     );
+    expect(await homeMovePending(path.join(dataDir, home))).toBe(false);
   });
 
-  it("finishes a move that stopped after adoption, dropping an empty folder a boot recreated", async () => {
-    const { computer, bots } = await dockerComputer("team");
-    const ada = bots[0]!;
-    const home = `homes/${computer.homeKey}`;
-    await put(`${home}/bots/${ada.id}/notes.md`, "ada");
-    await put(`${home}/shared/team.txt`, "team");
-    // The process dies once the computer adopted its volumes, after the bot folder moved.
-    const crashing = {
-      ...deps,
-      workers: {
-        ...deps.workers,
-        adoptVolumeHome: async (...args: Parameters<typeof deps.workers.adoptVolumeHome>) => {
-          await deps.workers.adoptVolumeHome(...args);
-          const adaVolume = await volumeDir("bot_private", { botId: ada.id });
-          await rename(path.join(dataDir, home, "bots", ada.id), adaVolume);
-          await mkdir(path.join(dataDir, home, "bots", ada.id));
-          throw new Error("killed");
+  it.skipIf(process.getuid?.() === 0)(
+    "keeps a computer whose move failed midway from booting until a sweep finishes it",
+    async () => {
+      const { computer, bots } = await dockerComputer("team");
+      const ada = bots[0]!;
+      const home = path.join(dataDir, "homes", computer.homeKey);
+      await put(`homes/${computer.homeKey}/bots/${ada.id}/notes.md`, "ada");
+      await put(`homes/${computer.homeKey}/shared/team.txt`, "team");
+      // The bot folder moves, then the shared folder cannot leave the read-only home.
+      const failing = {
+        ...deps,
+        workers: {
+          ...deps.workers,
+          adoptVolumeHome: async (...args: Parameters<typeof deps.workers.adoptVolumeHome>) => {
+            const adopted = await deps.workers.adoptVolumeHome(...args);
+            await chmod(home, 0o555);
+            return adopted;
+          },
         },
-      },
-    };
-    await expect(moveDockerHomeToVolumes(crashing, computer.id, fixture.context)).rejects.toThrow(
-      "killed",
-    );
-    expect(await storageOf(computer.id)).toBe("volumes");
+      };
 
-    const move = await moveDockerHomeToVolumes(deps, computer.id, fixture.context);
+      // Storage the move cannot write is the deployment's problem: the sweep fails, not defers.
+      await expect(moveIdleDockerHomes(failing, fixture.context, computer.id)).rejects.toThrow(
+        /EACCES/,
+      );
+      await chmod(home, 0o755);
+      expect(await storageOf(computer.id)).toBe("volumes");
+      expect(await homeMovePending(home)).toBe(true);
+      const boot = provisionComputer(
+        {
+          prisma,
+          sandbox: new FakeSandboxProvider(),
+          home: new LocalAgentHomeStore(dataDir),
+          jobs: new InMemoryJobQueue(),
+          events: createThreadEvents(prisma),
+          dataDir,
+        },
+        computer.id,
+        { ...fixture.context, spaceId: computer.spaceId },
+      );
+      await expect(boot).rejects.toMatchObject({ reason: "home_move_incomplete" });
 
-    expect(move).toEqual({ outcome: "adopted", moved: ["shared"] });
-    expect(await readdir(await volumeDir("bot_private", { botId: ada.id }))).toEqual(["notes.md"]);
-    expect(await readdir(path.join(dataDir, home, "bots"))).toEqual([]);
-    expect(await readdir(path.join(dataDir, home)).then((names) => names.sort())).toEqual(["bots"]);
-  });
+      await expect(moveIdleDockerHomes(deps, fixture.context, computer.id)).resolves.toEqual({
+        adopted: 1,
+        deferred: 0,
+      });
+      expect(await homeMovePending(home)).toBe(false);
+      expect(await readdir(await volumeDir("bot_private", { botId: ada.id }))).toEqual([
+        "notes.md",
+      ]);
+      expect(await readdir(await volumeDir("space_shared", { spaceId: computer.spaceId }))).toEqual(
+        ["team.txt"],
+      );
+    },
+  );
 
   it("moves a link or a file a guest planted in place of a folder as it is, never followed", async () => {
     const { computer, bots } = await dockerComputer("team");

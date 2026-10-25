@@ -59,7 +59,9 @@ its dot entries. The `migrate` service moves every idle computer before the API 
 start (`scripts/migrate-docker-homes.ts` for a source checkout). A computer still running moves
 when it next goes to sleep. Nothing is copied, and a home on volumes stays there. A home whose
 folder and volume both hold files is left as it is and logged with its computer id, and the
-others still move.
+others still move. A move that stops partway keeps its computer from booting until the next run of
+`migrate` or the next sleep of that computer finishes it; storage the move cannot write (another
+filesystem, permissions, a full or read-only disk) stops `migrate` with the error.
 
 On Docker Desktop (macOS, Windows), a worker can reach the host's localhost through
 `host.docker.internal`, so the API, web and Postgres published on `127.0.0.1` answer it. They still

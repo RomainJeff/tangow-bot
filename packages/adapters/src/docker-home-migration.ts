@@ -1,5 +1,6 @@
 import type { Stats } from "node:fs";
-import { lstat, readdir, rename, rmdir } from "node:fs/promises";
+import { constants } from "node:fs";
+import { lstat, open, readdir, rename, rm, rmdir, unlink } from "node:fs/promises";
 import path from "node:path";
 import type { AdapterContext } from "@rakazo/adapter-kit";
 import type { PrismaClient } from "@rakazo/db";
@@ -38,6 +39,8 @@ type Rename =
   | { kind: "drop"; source: string; label: string };
 
 const RENEW_AFTER_MS = HOME_MOVE_TTL_MS / 3;
+/** A dot entry, so it stays in the home and is never one of the entries the move renames. */
+export const HOME_MOVE_MARKER = ".rakazo-move-pending";
 
 /**
  * Moves one idle Docker computer's home onto its volumes by renaming, on the storage that holds
@@ -45,9 +48,10 @@ const RENEW_AFTER_MS = HOME_MOVE_TTL_MS / 3;
  * private volume and `shared` to the space volume; a dedicated home gives every root entry but its
  * dot entries to its bot's private volume. Dotfiles and browser profiles stay in `/home/rakazo`.
  *
- * The computer adopts its volumes before the first rename, under the move reservation, so it never
- * boots on a half-moved home. A rename that fails afterwards leaves the rest in the home directory,
- * and the next run, which also visits computers already on volumes, finishes it.
+ * Every conflict is checked first. Then a marker file in the home directory records the move, the
+ * computer adopts its volumes, the renames run, and the marker goes. While the marker exists the
+ * computer refuses to boot (`homeMovePending`), so a half-moved home never runs, and the next sweep
+ * resumes the move. A computer already on volumes is visited again only when it has the marker.
  */
 export async function moveDockerHomeToVolumes(
   deps: { prisma: PrismaClient; workers: WorkerLifecycle; dataDir: string },
@@ -75,9 +79,7 @@ export async function moveDockerHomeToVolumes(
     botIds: computer.bots.map((bot) => bot.id),
     homeKey: computer.homeKey,
   };
-  if (onVolumes && (await leftovers(home, layout)).length === 0) {
-    return { outcome: "already_on_volumes" };
-  }
+  if (onVolumes && !(await homeMovePending(home))) return { outcome: "already_on_volumes" };
 
   const { start } = await workers.inspectHomeMove(computerId);
   const reservation = await workers.reserveHomeMove(computerId);
@@ -116,10 +118,15 @@ export async function moveDockerHomeToVolumes(
       renames.push(await planRename(leftover, await volumeOf(leftover.destination)));
     }
 
+    if (renames.length > 0) await writeMarker(home);
     if (!onVolumes) {
       await keepReserved();
       const adoption = await workers.adoptVolumeHome(computerId, start, reservation.marker);
-      if (adoption !== "adopted") return { outcome: "refused", code: adoption };
+      if (adoption !== "adopted") {
+        // Nothing moved yet: the computer boots on its whole home again.
+        if (renames.length > 0) await unlink(path.join(home, HOME_MOVE_MARKER));
+        return { outcome: "refused", code: adoption };
+      }
     }
     const moved: string[] = [];
     for (const step of renames) {
@@ -128,6 +135,7 @@ export async function moveDockerHomeToVolumes(
       else await renameOnStorage(step.source, step.target);
       if (step.kind !== "drop") moved.push(step.label);
     }
+    await rm(path.join(home, HOME_MOVE_MARKER), { force: true });
     return { outcome: "adopted", moved };
   } finally {
     await workers.releaseHomeMove(reservation.marker);
@@ -136,9 +144,9 @@ export async function moveDockerHomeToVolumes(
 
 /**
  * Moves the Docker homes left to move, every one or only `computerId`: those still off volumes,
- * and those whose move stopped after the computer adopted its volumes. A busy computer, or one whose
- * home conflicts with its volumes, is logged and skipped; the others still move. Only a deployment
- * error, homes and volumes on different filesystems, or a database failure throws.
+ * and those whose home still holds the move marker. A busy computer, or one whose home conflicts
+ * with its volumes, is logged and skipped; the others still move. Any other error throws: storage
+ * the move cannot use (EXDEV, EACCES, EROFS, ENOSPC, EIO) or a database failure.
  */
 export async function moveIdleDockerHomes(
   deps: { prisma: PrismaClient; workers: WorkerLifecycle; dataDir: string },
@@ -160,7 +168,7 @@ export async function moveIdleDockerHomes(
         getLogger().info("docker home move deferred", { computerId: id, reason: move.code });
       }
     } catch (error) {
-      if (!(error instanceof DockerHomeConflict || isFileSystemError(error))) throw error;
+      if (!isHomeConflict(error)) throw error;
       counts.deferred += 1;
       getLogger().warn("docker home move deferred", {
         computerId: id,
@@ -171,8 +179,36 @@ export async function moveIdleDockerHomes(
   return counts;
 }
 
-function isFileSystemError(error: unknown): boolean {
-  return error instanceof Error && "syscall" in error;
+/** What a home or a volume a guest shaped can raise: only that computer waits. */
+const CONFLICT_CODES = new Set(["ENOTEMPTY", "EEXIST", "ENOTDIR", "EISDIR"]);
+
+function isHomeConflict(error: unknown): boolean {
+  return (
+    error instanceof DockerHomeConflict ||
+    CONFLICT_CODES.has((error as NodeJS.ErrnoException | undefined)?.code ?? "")
+  );
+}
+
+/** Records, inside the home itself, that its move started; never through a link a guest made. */
+async function writeMarker(home: string): Promise<void> {
+  const marker = path.join(home, HOME_MOVE_MARKER);
+  try {
+    const handle = await open(
+      marker,
+      constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
+      0o600,
+    );
+    await handle.close();
+  } catch (error) {
+    // A move that stopped before resumes on its own marker.
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    if (!(await lstat(marker)).isFile()) throw new DockerHomeConflict(`${marker} is not a file`);
+  }
+}
+
+/** Whether a Docker home's move onto its volumes started and has not finished. */
+export async function homeMovePending(home: string): Promise<boolean> {
+  return (await lstatOrNull(path.join(home, HOME_MOVE_MARKER))) !== null;
 }
 
 async function lstatOrNull(target: string): Promise<Stats | null> {
@@ -192,8 +228,7 @@ async function realDirectory(parent: string, name: string): Promise<string> {
 /**
  * What the home still holds for its volumes. The home root and `bots` are descended only when they
  * are real directories, so a link a guest planted there is never followed: a `bots` that is not a
- * directory holds no bot folder. A dedicated home keeps its dot entries and the `workspace` link a
- * computer on volumes makes.
+ * directory holds no bot folder. A dedicated home keeps its dot entries, the marker included.
  */
 async function leftovers(
   home: string,
@@ -210,9 +245,7 @@ async function leftovers(
   if (!layout.team) {
     for (const name of (await readdir(home)).sort()) {
       if (name.startsWith(".")) continue;
-      const source = path.join(home, name);
-      if (name === "workspace" && (await lstat(source)).isSymbolicLink()) continue;
-      await add(source, name, { scope: "private", botId: layout.homeKey });
+      await add(path.join(home, name), name, { scope: "private", botId: layout.homeKey });
     }
     return found;
   }
