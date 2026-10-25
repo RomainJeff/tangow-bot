@@ -1,16 +1,15 @@
 # Self-host secrets checklist
 
-Required and optional credentials for published-images and Compose deploys.
+Required and optional credentials for Compose deploys from a source checkout.
 
 **Never commit `.env`, never paste secret values into issues/PRs, and never
 overwrite an existing `.env` without an explicit backup and operator consent.**
 
-## Published images: what the installer fills
+## Required keys
 
-`bash install-images.sh` (without a pre-existing `.env`) copies
-`.env.images.example` and fills empty required keys with `openssl`:
+Copy `.env.example` to `.env` and fill these before the first `compose up`:
 
-| Key | Installer fill | Role |
+| Key | Generate with | Role |
 | --- | --- | --- |
 | `POSTGRES_PASSWORD` | `openssl rand -hex 16` | Postgres role password inside Compose |
 | `BETTER_AUTH_SECRET` | `openssl rand -hex 32` | Auth/session signing |
@@ -18,34 +17,17 @@ overwrite an existing `.env` without an explicit backup and operator consent.**
 | `SCREEN_PROXY_SECRET` | `openssl rand -hex 32` | Signs short-lived `/novnc/*` screen capabilities |
 | `SANDBOX_SUPERVISOR_TOKEN` | `openssl rand -hex 32` | API ↔ sandbox supervisor auth |
 
-Re-runs **preserve** an existing `.env` (they do not rotate secrets). Empty
-required keys still fail closed at Compose validate time
-(`${VAR:?Set … in .env}`).
+Empty required keys fail closed at Compose validate time (`${VAR:?Set … in .env}`).
 
-Manual generation (same shapes the installer uses):
-
-```bash
-openssl rand -hex 16   # POSTGRES_PASSWORD
-openssl rand -hex 32   # BETTER_AUTH_SECRET, ENCRYPTION_KEY, SCREEN_PROXY_SECRET, SANDBOX_SUPERVISOR_TOKEN
-```
-
-Source-checkout `.env.example` also requires `POSTGRES_PASSWORD` (same
-`openssl rand -hex 16` shape) for `infra/compose/docker-compose.yml`. Put the
-same value in host-side `DATABASE_URL` when using the optional
+Put the same `POSTGRES_PASSWORD` in host-side `DATABASE_URL` when using the optional
 `docker-compose.postgres-host.yml` overlay. Keep the password URI-safe: Compose
-interpolates it into `DATABASE_URL` the same way the images stack does. Hex from
-`openssl rand` is safe; characters such as `@ : / ? # %` are not.
+interpolates it into `DATABASE_URL`. Hex from `openssl rand` is safe; characters such as
+`@ : / ? # %` are not.
 
-Existing source-checkout `pgdata` volumes keep the user, password, and database
-from first init (often the former hardcoded `rakazo` / `rakazo`). Keep those
-values in `.env`, or change them in place with `ALTER ROLE` / rename. Recreate
-the volume only after a backup (or when the data is disposable);
-`docker compose down -v` deletes all Postgres state.
-
-Source-checkout `.env.example` asks for a **64-hex** `ENCRYPTION_KEY` in
-comments; published-images installer uses 32 bytes of hex (64 hex chars) via
-`openssl rand -hex 32`. Prefer long independent random values either way.
-Do not reuse one string across keys.
+Existing `pgdata` volumes keep the user, password, and database from first init (often the
+former hardcoded `rakazo` / `rakazo`). Keep those values in `.env`, or change them in place
+with `ALTER ROLE` / rename. Recreate the volume only after a backup (or when the data is
+disposable); `docker compose down -v` deletes all Postgres state.
 
 ## Distinctness rules
 
@@ -65,28 +47,14 @@ intentionally wipe encrypted material.
 
 ## Optional keys (leave blank if unused)
 
-From `.env.images.example` (images installer). Leave blank if unused:
-
 | Key(s) | When needed |
 | --- | --- |
 | `OPENROUTER_API_KEY` | Deployment-wide OpenRouter models |
 | `COMPOSIO_API_KEY` | Composio managed catalog |
+| `PIPEDREAM_CLIENT_ID` / `PIPEDREAM_CLIENT_SECRET` / `PIPEDREAM_PROJECT_ID` | Pipedream Connect managed catalog |
 | `E2B_API_KEY` | Remote computers and run workers when `SANDBOX_PROVIDER=e2b` ([E2B workers](./self-host-e2b-workers.md)) |
 | `SMTP_URL` / `EMAIL_FROM` | Password-recovery email |
 | Messaging tokens (Slack, Telegram, …) | Only if you enable those surfaces |
-
-Blank optional keys are normal for a minimal published-images boot. Pipedream
-Connect keys appear only in source/Compose `.env.example`, not the images
-example.
-
-## Operator workflow
-
-```bash
-bash install-images.sh --prepare-only   # creates .env + fills empties
-# inspect key NAMES only if debugging; never log values
-bash install-images.sh                  # pull + up; preserves .env
-curl -fsS http://127.0.0.1:3100/health
-```
 
 If `sandbox` in `/health` is `"none"` or the supervisor never becomes healthy,
 check that `SANDBOX_SUPERVISOR_TOKEN` is set and non-empty for the Docker
