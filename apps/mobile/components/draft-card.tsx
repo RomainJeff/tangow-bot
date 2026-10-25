@@ -4,6 +4,7 @@ import {
   DRAFT_UNDO_MS,
   draftAddresses,
   draftCardView,
+  draftChanges,
   draftPrimaryAction,
   draftSentTo,
 } from "@rakazo/core";
@@ -188,8 +189,17 @@ export function DraftCard({
   const discardTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const commitDiscardRef = useRef<() => void>(() => undefined);
 
-  const text = edit ?? draft.body;
-  const edited = text !== draft.body;
+  const text = edit?.text ?? draft.body;
+  // The card shows the mail as it will leave, with the sheet's changes.
+  const shown: AskDraft = {
+    ...draft,
+    recipients: edit?.recipients ?? draft.recipients,
+    subject: edit?.subject ?? draft.subject,
+  };
+  const changes = draftChanges(draft, edit);
+  const edited = Object.keys(changes).length > 0;
+  const sendable =
+    text.trim() !== "" && shown.recipients.some((recipient) => recipient.role === "to");
   const own = !draft.owner || draft.owner.userId === viewerUserId;
   const view = draftCardView(
     { ...block, draft },
@@ -197,12 +207,12 @@ export function DraftCard({
   );
 
   async function send() {
-    if (pending || !text.trim()) return;
+    if (pending || !sendable) return;
     setReconnectOpened(false);
     setPending("send");
     setError(null);
     try {
-      await onAnswer("allow", edited ? { text } : undefined);
+      await onAnswer("allow", edited ? changes : undefined);
       dropDraftEdit(messageId);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("Could not submit answer"));
@@ -296,7 +306,7 @@ export function DraftCard({
 
   const roleLabel = { to: t("To"), cc: t("Cc"), bcc: t("Bcc") };
   const lines = ROLES.flatMap((role) => {
-    const addresses = draftAddresses(draft, role);
+    const addresses = draftAddresses(shown, role);
     if (!addresses) return [];
     return [
       <Text key={role} style={role === "to" ? undefined : styles.detail}>
@@ -304,10 +314,10 @@ export function DraftCard({
       </Text>,
     ];
   });
-  if (draft.subject) {
+  if (shown.subject) {
     lines.push(
       <Text key="subject" style={styles.detail}>
-        <Text style={styles.label}>{t("Subject")}</Text> {draft.subject}
+        <Text style={styles.label}>{t("Subject")}</Text> {shown.subject}
       </Text>,
     );
   }
@@ -361,7 +371,7 @@ export function DraftCard({
                 <CapsuleButton
                   kind="primary"
                   height={sizes.mobileAction}
-                  disabled={view.sending || !text.trim()}
+                  disabled={view.sending || !sendable}
                   onPress={() => void send()}
                   icon={
                     <NativeSymbol

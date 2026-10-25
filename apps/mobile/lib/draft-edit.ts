@@ -1,16 +1,16 @@
-import type { AskDraft } from "@rakazo/contracts";
+import type { AskDraft, AskDraftEdits } from "@rakazo/contracts";
 import type { SpawnBotEdits } from "./spawn-bot-edit";
 
-/** What a card's owner changed before Send: a Create bot card's fields, or a mail draft's text. */
-export type CardEdits = SpawnBotEdits | { text: string };
+/** What a card's owner changed before Send: a Create bot card's fields, or a mail draft's. */
+export type CardEdits = SpawnBotEdits | AskDraftEdits;
 
 /** The draft the Edit message sheet edits, put here by the card on screen, and its thread. */
 export type DraftEditTarget = { threadKey: string; messageId: string; draft: AskDraft };
 
-// The text typed on each draft card, by card: it stays on this device until the card is sent or
-// replaced, and a relaunch drops it. The sheet's content never travels in route params, so a deep
+// What the person changed on each draft card, by card: it stays on this device until the card is
+// sent or replaced, and a relaunch drops it. The sheet's content never travels in route params, so a deep
 // link has nothing to show.
-const edits = new Map<string, string>();
+const edits = new Map<string, AskDraftEdits>();
 let sheet: DraftEditTarget | null = null;
 const listeners = new Set<() => void>();
 
@@ -25,13 +25,13 @@ export function subscribeDraftEdit(listener: () => void): () => void {
   };
 }
 
-/** The card's text as the person left it, or undefined when they have not touched it. */
-export function draftEdit(messageId: string): string | undefined {
+/** The card's text, recipients and subject as the person left them, or undefined when untouched. */
+export function draftEdit(messageId: string): AskDraftEdits | undefined {
   return edits.get(messageId);
 }
 
-export function keepDraftEdit(messageId: string, text: string): void {
-  edits.set(messageId, text);
+export function keepDraftEdit(messageId: string, edit: AskDraftEdits): void {
+  edits.set(messageId, edit);
   emit();
 }
 
