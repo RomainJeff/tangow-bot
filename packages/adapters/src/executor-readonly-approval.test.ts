@@ -169,7 +169,7 @@ function fixture({
   };
   const log = recordingSessionLog();
   /** When the person wrote in the thread, as the executor counts the messages after a card. */
-  const userMessages: Date[] = [];
+  const userMessages: Array<{ at: Date; source: string }> = [];
   const pauseRunForInput = vi.fn(
     async (input: { blocks: unknown[]; effect?: { id: string; reopen?: unknown } }) => {
       if (input.effect?.reopen) {
@@ -206,8 +206,10 @@ function fixture({
       ),
       findUnique: vi.fn(async () => ({ sessionId: "session-main" })),
       count: vi.fn(
-        async ({ where }: { where: { createdAt: { gt: Date } } }) =>
-          userMessages.filter((at) => at > where.createdAt.gt).length,
+        async ({ where }: { where: { createdAt: { gt: Date }; payload: { equals: string } } }) =>
+          userMessages.filter(
+            (message) => message.at > where.createdAt.gt && message.source === where.payload.equals,
+          ).length,
       ),
     },
     $queryRaw: log.queryRaw,
@@ -1650,7 +1652,7 @@ describe("connector read-only metadata and approval enforcement", () => {
           "opens a new card for the same mail whose draft was %s",
           async (state) => {
             const f = await answered(state);
-            f.userMessages.push(after);
+            f.userMessages.push({ at: after, source: "app" });
             f.setCalls([{ args: send, executionId: "c2" }]);
             await f.run();
             expect(f.effects.map((effect) => effect.status)).toEqual(["denied", "intended"]);
@@ -1661,7 +1663,7 @@ describe("connector read-only metadata and approval enforcement", () => {
 
         it("keeps the stored outcome when the person wrote only before the card was answered", async () => {
           const f = await answered("discarded");
-          f.userMessages.push(before);
+          f.userMessages.push({ at: before, source: "app" });
           f.setCalls([{ args: { ...send, thought: "Again." }, executionId: "c2" }]);
           await f.run();
           expect(f.results.at(-1)).toMatchObject({ ok: false, discarded: true });
@@ -1669,9 +1671,21 @@ describe("connector read-only metadata and approval enforcement", () => {
           expect(f.pauseRunForInput).not.toHaveBeenCalled();
         });
 
+        it.each(["channel", "routine", "card", "steering"])(
+          "keeps the stored outcome when what came after was a %s message, not one typed in the app",
+          async (source) => {
+            const f = await answered("discarded");
+            f.userMessages.push({ at: after, source });
+            f.setCalls([{ args: send, executionId: "c2" }]);
+            await f.run();
+            expect(f.results.at(-1)).toMatchObject({ ok: false, discarded: true });
+            expect(f.effects).toHaveLength(1);
+          },
+        );
+
         it("keeps the stored outcome of the new card once it was discarded with nothing written since", async () => {
           const f = await answered("discarded");
-          f.userMessages.push(after);
+          f.userMessages.push({ at: after, source: "app" });
           f.setCalls([{ args: send, executionId: "c2" }]);
           await f.run();
           f.effects[1]!.status = "denied";
@@ -1691,7 +1705,7 @@ describe("connector read-only metadata and approval enforcement", () => {
           f.effects[0]!.answeredAt = answeredAt;
           f.effects[0]!.result = { ok: true, note: "The user sent this message." };
           f.effects[0]!.draft = { ...(f.effects[0]!.draft as DraftRecord), state: "sent", at: "x" };
-          f.userMessages.push(after);
+          f.userMessages.push({ at: after, source: "app" });
           f.pauseRunForInput.mockClear();
           f.setCalls([{ args: send, executionId: "c2" }]);
           await f.run();
