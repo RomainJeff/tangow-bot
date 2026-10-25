@@ -25,6 +25,19 @@ test("internal run memory stays out of chat and a cancelled recap retires its qu
       payload: { sessionId: "memory-internal-session" },
     },
     {
+      id: "memory-person-update",
+      ts: at(12),
+      type: "assistant.text",
+      botId,
+      runId: "memory-run",
+      payload: {
+        toPerson: true,
+        midTurn: true,
+        originSessionId: "memory-internal-session",
+        blocks: [{ kind: "text", text: "I am checking the regional report." }],
+      },
+    },
+    {
       id: "memory-person-reply",
       ts: at(12),
       type: "assistant.text",
@@ -87,6 +100,10 @@ test("internal run memory stays out of chat and a cancelled recap retires its qu
     await expect(
       transcript.getByText("The regional report is ready for review.", { exact: true }),
     ).toBeVisible();
+    await expect(transcript.getByTestId("message-bot-bubble")).toHaveText([
+      "I am checking the regional report.",
+      "The regional report is ready for review.",
+    ]);
     await expect(
       transcript.getByText("Which region should I send first?", { exact: true }),
     ).toBeVisible();
@@ -98,6 +115,7 @@ test("internal run memory stays out of chat and a cancelled recap retires its qu
     drafts.push(recap);
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(transcript.getByTestId("message-bot-bubble")).toHaveText([
+      "I am checking the regional report.",
       "The regional report is ready for review.",
     ]);
     await expect(
