@@ -24,6 +24,7 @@ import {
   createRunSecretWriter,
   createSandboxProvider,
   createSkillLineSweep,
+  createTraceExporterFromEnv,
   createWebProvider,
   createWorkerProvider,
   databaseCapacityBackoffMs,
@@ -155,7 +156,14 @@ async function main() {
   const home = new LocalAgentHomeStore(dataDir);
   const artifacts = new LocalArtifactStore(dataDir);
   const workers = composeWorkers(prisma, createWorkerProvider(resolveWorkerProvider(process.env)));
-  const runtime = composeInProcessRuntime(process.env.AGENT_RUNTIME ?? "", workers);
+  // Optional trace export of the controller's model calls. Without configuration this resolves
+  // to nothing, so no span is recorded and no vendor endpoint is ever contacted.
+  const traceExport = createTraceExporterFromEnv(process.env);
+  if (traceExport.warning) logger.warn(traceExport.warning);
+  const runtime = composeInProcessRuntime(process.env.AGENT_RUNTIME ?? "", workers, {
+    exporter: traceExport.exporter,
+    serviceName: SERVICE_NAMES.worker,
+  });
   const inMemoryJobs = process.env.WAKEUP_DRIVER === "memory" ? new InMemoryJobQueue() : undefined;
   const jobs: JobPublisher = inMemoryJobs ?? new GraphileJobPublisher(pool);
   const jobHost: JobWorkerHost =
@@ -298,6 +306,7 @@ async function main() {
       await pool.end().catch(() => undefined);
       await skillLockPool.end().catch(() => undefined);
     } finally {
+      await traceExport.exporter?.flush(2_000);
       await logger.flush({ timeoutMs: 2_000 });
     }
   };

@@ -35,6 +35,7 @@ import {
   createRunSecretWriter,
   createSandboxProvider,
   createSkillLineSweep,
+  createTraceExporterFromEnv,
   createWebProvider,
   createWorkerProvider,
   destroyBot,
@@ -241,7 +242,14 @@ export async function createApp(
     prisma,
     workersOverride ?? createWorkerProvider(env.workerProvider),
   );
-  const runtime = composeInProcessRuntime(env.agentRuntime, workers);
+  // Optional trace export of the controller's model calls. Without configuration this resolves
+  // to nothing, so no span is recorded and no vendor endpoint is ever contacted.
+  const traceExport = createTraceExporterFromEnv(process.env);
+  if (traceExport.warning) logger.warn(traceExport.warning);
+  const runtime = composeInProcessRuntime(env.agentRuntime, workers, {
+    exporter: traceExport.exporter,
+    serviceName: SERVICE_NAMES.api,
+  });
   const memory = new MarkdownMemoryStore(prisma);
   const mcp = new McpConnector(
     prisma,
@@ -895,6 +903,7 @@ export async function createApp(
       await created.pool?.end().catch(() => undefined);
       await ownedJobPool?.end().catch(() => undefined);
       await skillLockPool.end().catch(() => undefined);
+      await traceExport.exporter?.flush(2_000);
       await logger.flush({ timeoutMs: 2_000 });
     },
   };

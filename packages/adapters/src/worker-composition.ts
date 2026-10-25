@@ -97,10 +97,13 @@ export function composeWorkers(
 export function composeInProcessRuntime(
   agentRuntime: string,
   workers: Pick<ReturnType<typeof composeWorkers>, "runWorkers">,
+  trace: ConstructorParameters<typeof ModelCallRuntime>[0] = {},
 ): AgentRuntime {
   if (agentRuntime === "scripted") return new ScriptedAgentRuntime();
   if (!workers.runWorkers) {
-    throw new Error("Bot runs need workers: set SANDBOX_PROVIDER to docker or e2b.");
+    throw new Error(
+      "Bot runs need workers: set SANDBOX_PROVIDER to docker, or provide E2B_API_KEY for e2b.",
+    );
   }
-  return new ModelCallRuntime();
+  return new ModelCallRuntime(trace);
 }

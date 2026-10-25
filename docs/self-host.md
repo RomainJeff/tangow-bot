@@ -123,8 +123,8 @@ child commands do not receive them.
 
 ### Agent traces
 
-Bot runs in workers do not export traces yet, so these settings currently send nothing; the export
-below described the in-process runtime, which was removed.
+Bot runs in workers are not exported yet; Rakazo's own model calls (history compaction, learned
+facts, the team-chat judge and auto-review) are, one trace per call.
 
 Exporting agent traces is optional and off unless configured. Set both `LANGFUSE_PUBLIC_KEY` and
 `LANGFUSE_SECRET_KEY` to send each run to an OpenTelemetry endpoint as a tree: the run, one

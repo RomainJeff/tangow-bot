@@ -1,5 +1,5 @@
 import type { AgentRunRequest, AgentRuntimeEvent } from "@rakazo/adapter-kit";
-import { ModelCallRuntime } from "@rakazo/adapters";
+import { ModelCallRuntime, TraceExporter } from "@rakazo/adapters";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ModelEmulatorStep } from "./model-emulator.js";
 import { startModelEmulator } from "./model-emulator.js";
@@ -9,11 +9,15 @@ afterEach(async () => {
   await Promise.all(closers.splice(0).map((close) => close()));
 });
 
-async function call(step: ModelEmulatorStep, tools: AgentRunRequest["tools"] = []) {
+async function call(
+  step: ModelEmulatorStep,
+  tools: AgentRunRequest["tools"] = [],
+  runtime = new ModelCallRuntime(),
+) {
   const model = await startModelEmulator({ apiKey: "model-call-key", steps: [step] });
   closers.push(() => model.close());
   const events: AgentRuntimeEvent[] = [];
-  for await (const event of new ModelCallRuntime().run({
+  for await (const event of runtime.run({
     botId: "bot",
     threadId: "thread",
     runId: "compact:thread:1",
@@ -63,5 +67,21 @@ describe("the controller's own model call", () => {
         { name: "write", description: "Write a file.", inputSchema: { type: "object" } },
       ]),
     ).rejects.toThrow("A model call takes no tools");
+  });
+
+  it("exports each call as a trace when an exporter is set", async () => {
+    const payloads: unknown[] = [];
+    const exporter = new TraceExporter({ send: async (payload) => void payloads.push(payload) });
+    const answer: ModelEmulatorStep = {
+      expect() {},
+      response: { type: "text", text: "- The launch is Tuesday." },
+    };
+    await call(answer, [], new ModelCallRuntime({ exporter, serviceName: "rakazo-worker" }));
+    await exporter.flush();
+
+    expect(payloads).toHaveLength(1);
+    const exported = JSON.stringify(payloads[0]);
+    expect(exported).toContain("rakazo-worker");
+    expect(exported).toContain("The launch is Tuesday.");
   });
 });
