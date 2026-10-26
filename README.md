@@ -26,8 +26,8 @@ You need Git, Docker with Compose, and Node.js 22.22.2 or newer in the 22.x line
 Node.js 24.x, or Node.js 26+. Node.js 23.x and 25.x are not supported.
 
 ```bash
-git clone https://github.com/RomainJeff/rakazo-bot.git
-cd rakazo-bot
+git clone https://github.com/RomainJeff/tangow-bot.git
+cd tangow-bot
 ./tangow setup
 ```
 
@@ -50,8 +50,8 @@ You need Node.js 22.22.2 or newer in the 22.x line, Node.js 24.x, or Node.js 26+
 pnpm 9; and Docker. Node.js 23.x and 25.x are not supported.
 
 ```bash
-git clone https://github.com/RomainJeff/rakazo-bot.git
-cd rakazo-bot
+git clone https://github.com/RomainJeff/tangow-bot.git
+cd tangow-bot
 cp .env.example .env
 ```
 
