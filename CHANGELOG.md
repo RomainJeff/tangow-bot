@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Tangow guides your first source deployment from configuration to verified startup.** Run `./tangow setup` to generate private secrets, deploy the current checkout, and open Rakazo for account and model setup. Retries preserve saved credentials, and E2B can continue through the existing provider setup ([getting started](README.md#getting-started)).
 
+#### Changed
+
+- The desktop app on macOS, Windows and Linux is now called Tangow instead of Dax, in its window, menus, setup screen and installer.
+
 #### Fixed
 
 - Source deployments using Docker or E2B computers restart their server services automatically after a host reboot unless explicitly stopped.

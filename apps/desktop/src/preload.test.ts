@@ -120,7 +120,7 @@ describe("setup preload bridge", () => {
 
     expect(exposeInMainWorld).toHaveBeenCalledTimes(1);
     const [globalName, bridge] = exposeInMainWorld.mock.calls[0] as [string, RakazoSetup];
-    expect(globalName).toBe("daxSetup");
+    expect(globalName).toBe("tangowSetup");
     expect(bridge.platform).toBe("linux");
     expect(Object.keys(bridge).sort()).toEqual(["platform", "quit", "save", "state", "test"]);
 
