@@ -1,30 +1,53 @@
 {
-  "fill": "system-dark",
+  "fill-specializations": [
+    {
+      "value": {
+        "linear-gradient": [
+          "srgb:0.87451,0.85882,0.81569,1.00000",
+          "srgb:0.94510,0.93333,0.90588,1.00000"
+        ]
+      }
+    },
+    {
+      "appearance": "dark",
+      "value": {
+        "linear-gradient": [
+          "srgb:0.87451,0.85882,0.81569,1.00000",
+          "srgb:0.94510,0.93333,0.90588,1.00000"
+        ]
+      }
+    }
+  ],
   "groups": [
     {
       "layers": [
         {
           "glass": false,
-          "image-name": "orange-bot.png",
-          "name": "orange-bot"
+          "image-name": "clay-bot.png",
+          "name": "clay-bot"
         }
       ],
       "position": {
-        "scale": 1,
-        "translation-in-points": [0, 90]
+        "scale": 0.6,
+        "translation-in-points": [
+          0,
+          30
+        ]
       },
       "shadow": {
         "kind": "neutral",
         "opacity": 0.5
       },
       "translucency": {
-        "enabled": true,
+        "enabled": false,
         "value": 0.5
       }
     }
   ],
   "supported-platforms": {
-    "circles": ["watchOS"],
+    "circles": [
+      "watchOS"
+    ],
     "squares": "shared"
   }
 }
