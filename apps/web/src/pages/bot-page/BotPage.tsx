@@ -248,7 +248,10 @@ export function BotPage({
           <BotHero page={page} />
           {archived ? (
             <div className="px-4 pt-5">
-              <BotActivity botId={bot.id} commands={{ activityEpoch: commands.activityEpoch }} />
+              <BotActivity
+                botId={bot.id}
+                commands={{ activityEpoch: commands.activityEpoch, viewRun: commands.viewRun }}
+              />
             </div>
           ) : (
             <Tabs

@@ -39,10 +39,11 @@ export const RunsCursorSchema = z.object({ createdAt: z.iso.datetime(), id: Id }
 export type RunsCursor = z.infer<typeof RunsCursorSchema>;
 
 /**
- * One entry of a bot's activity, newest first: a run of one of its routines, a routine being
- * created, or the bot itself being created. New kinds join the union.
+ * One entry of a bot's activity, newest first: one of its runs (only its routines' unless asked
+ * for all), a routine being created, or the bot itself being created. New kinds join the union.
  */
 export const BotActivityItemSchema = z.discriminatedUnion("kind", [
+  // Any run, from chat as well as from a routine: the name stays for the builds that read it.
   z.object({ kind: z.literal("routine_run"), run: RunActivityRowSchema }),
   z.object({
     kind: z.literal("routine_created"),
@@ -69,6 +70,8 @@ export const BotActivityInputSchema = z.object({
   botId: Id,
   /** Only this routine's runs, for its own page. */
   routineId: Id.optional(),
+  /** Every run of the bot, not only its routines' (debug mode); ignored with `routineId`. */
+  allRuns: z.boolean().optional(),
   cursor: RunsCursorSchema.optional(),
   limit: z.number().int().min(1).max(RUNS_PAGE_MAX).optional(),
 });

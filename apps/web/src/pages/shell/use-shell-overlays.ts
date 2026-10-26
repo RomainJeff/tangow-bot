@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { rpc } from "../../lib/rpc";
 import type { ContextMenuPosition } from "../BotContextMenu";
 import type { SettingsSection } from "../SettingsOverlay";
+import type { RunView } from "./bot-commands";
 import { isCommandPaletteHotkey } from "./command-palette";
 
 type ChatTarget = { kind: "bot"; chat: Bot } | { kind: "group"; chat: Group };
@@ -29,6 +30,7 @@ export function useShellOverlays(sessionUser: unknown) {
     peerBotId: string;
     peerBotName: string;
   } | null>(null);
+  const [runView, setRunView] = useState<RunView | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [newSpaceOpen, setNewSpaceOpen] = useState(false);
@@ -155,6 +157,8 @@ export function useShellOverlays(sessionUser: unknown) {
     changeMemoryConfig,
     peerConversation,
     setPeerConversation,
+    runView,
+    setRunView,
     menuOpen,
     setMenuOpen,
     createMenuOpen,

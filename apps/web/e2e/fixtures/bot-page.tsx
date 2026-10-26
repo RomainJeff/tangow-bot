@@ -11,6 +11,7 @@ import type {
 import { SaveStoreProvider } from "@rakazo/ui-web";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { setDebugMode } from "../../src/lib/debug-mode";
 import { saveStore as store } from "../../src/lib/save-store";
 import { applyResolvedAppearance } from "../../src/lib/ui-appearance";
 import { BotPage } from "../../src/pages/bot-page/BotPage";
@@ -28,6 +29,7 @@ import "../../src/styles.css";
  *   activity=empty|error (what reading the activity answers; by default 39 routine runs
  *   and 3 creations, 30 a page; a routine's page reads only its runs)
  *   fail=1 (every save fails)   refuse=1 (the server refuses a computer change)   theme=dark
+ *   debug=1 (debug mode: Activity also lists the runs started from chat)
  *   read=loading|error (the page's read of the bot and its routines never answers, or fails
  *   until "Fail reads" is unchecked; the routines stay unknown until a read answers)
  * Writes go through in-memory commands that answer after 400 ms; reads are
@@ -43,6 +45,7 @@ const READ = params.get("read");
 const SAVE_DELAY = 400;
 
 applyResolvedAppearance(params.get("theme") === "dark" ? "dark" : "light");
+setDebugMode(params.get("debug") === "1");
 
 // The app activates the global catalog; module-level `t` calls read it too.
 i18n.loadAndActivate({ locale: "en", messages: {} });
@@ -172,6 +175,22 @@ const RUNS: RunActivityRow[] = NEW
       ),
     ];
 
+/** Runs started from chat, which only debug mode lists. */
+const chat = { trigger: "user" } as const;
+const CHAT_RUNS: RunActivityRow[] = NEW
+  ? []
+  : [
+      run(50, 0.5, { ...chat, promptSnippet: "Compare flights from Paris to Copenhagen on Nov 14" }),
+      run(51, 1.5, { ...chat, promptSnippet: "Draft a reply to the supplier about the late invoice" }),
+      run(52, 3, {
+        ...chat,
+        promptSnippet: "Prepare the agenda for Thursday's committee",
+        status: "failed",
+        failureKind: "missing_model",
+      }),
+      run(53, 25.5, { ...chat, promptSnippet: "Find a slot with Lea next week" }),
+    ];
+
 /** What each run left in its thread; run-07 said nothing. */
 const RECAPS: Record<string, string | null> = {
   "run-01":
@@ -234,7 +253,9 @@ const CREATIONS: Entry[] = [
 const ACTIVE = new Set(["queued", "leased", "running", "waiting_input", "waiting_takeover"]);
 
 function listActivity(input: BotActivityInput) {
-  const runs = RUNS.filter((row) => !input.routineId || row.routineId === input.routineId);
+  const runs = (input.allRuns && !input.routineId ? [...RUNS, ...CHAT_RUNS] : RUNS).filter(
+    (row) => !input.routineId || row.routineId === input.routineId,
+  );
   const entries: Entry[] = [
     ...runs
       .filter((row) => !ACTIVE.has(row.status))
@@ -500,6 +521,7 @@ function Fixture() {
       refreshRoutines: async () => undefined,
       activityEpoch: 0,
       openRun: (row) => console.info(`open run from ${row.sourceMessageId ?? "the end"}`),
+      viewRun: (run) => console.info(`view run ${run.runId}`),
       skillsChanged: () => undefined,
     };
   }, []);

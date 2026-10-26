@@ -108,7 +108,7 @@ test("the thread reads as names, prose and asides", async ({ page }, testInfo) =
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   const settings = page.getByTestId("user-settings");
   await expect(settings).toBeVisible();
-  await settings.getByTestId("display-agent-steps").click();
+  await settings.getByTestId("debug-mode").click();
   await settings.getByRole("button", { name: "Close user settings" }).click();
 
   await showThread(page, quietThread(botId));

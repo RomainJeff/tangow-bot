@@ -4,7 +4,7 @@ import { isToolActivityBlock, narrationSegments } from "@rakazo/core";
 
 /**
  * The blocks the thread is about to draw: tool activity is hidden, except the
- * `steps` the "Display agent steps" setting asks for. Mirrors the web `isHiddenActivityBlock`;
+ * `steps` debug mode asks for. Mirrors the web `isHiddenActivityBlock`;
  * the thread passes the result to `isAsideOnlyMessage` so a hidden block cannot change how a
  * message reads.
  */

@@ -32,8 +32,8 @@ import { ArtifactFileCard } from "../../components/ArtifactFileCard";
 import type { SpawnBotCardEdits } from "../../components/AskCard";
 import { AskCard } from "../../components/AskCard";
 import { SkillDraftCard } from "../../components/teach/SkillDraftCard";
-import { useDisplayAgentSteps } from "../../lib/agent-steps-pref";
 import type { ArtifactTarget } from "../../lib/artifact-open";
+import { useDebugMode } from "../../lib/debug-mode";
 import { hasRenderableBlock, isHiddenActivityBlock } from "../../lib/message-blocks";
 import { messageProviderLabel } from "../../lib/messaging";
 import type { MessageItem } from "../../lib/thread-items";
@@ -178,7 +178,7 @@ export const MessageView = memo(function MessageView({
   const isNarration = isNarrationMessage(message);
   const botId = botIdOf(message);
   const isLive = message.role === "bot" && message.live === true;
-  const showSteps = useDisplayAgentSteps();
+  const showSteps = useDebugMode();
   const narrationBlocks = message.blocks.filter(
     (block) => block.kind === "steps" || !isHiddenActivityBlock(block, showSteps),
   );

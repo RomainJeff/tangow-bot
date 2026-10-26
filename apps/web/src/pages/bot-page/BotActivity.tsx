@@ -8,6 +8,7 @@ import {
   foldActivity,
   recapView,
   reduceActivity,
+  runTitle,
   threadTimeMarkerLabel,
 } from "@rakazo/core";
 import { Button, ClippedPreview, Shimmer, Skeleton } from "@rakazo/ui-web";
@@ -32,6 +33,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useDebugMode } from "../../lib/debug-mode";
 import { rpc } from "../../lib/rpc";
 import type { BotCommands } from "../shell/bot-commands";
 import { CouldNotLoad, LoadingRows } from "./page-kit";
@@ -39,9 +41,14 @@ import { useRoutineCopy } from "./routine-copy";
 
 /**
  * A bot's activity, or one routine's runs, newest first, a page at a time. Reads again when a run
- * ends (`epoch`) and when the window comes back into focus.
+ * ends (`epoch`) and when the window comes back into focus. With `allRuns`, every run of the bot.
  */
-function useBotActivity(botId: string, routineId: string | undefined, epoch: number) {
+function useBotActivity(
+  botId: string,
+  routineId: string | undefined,
+  allRuns: boolean,
+  epoch: number,
+) {
   const [read, dispatch] = useReducer(reduceActivity, { kind: "loading" });
   const readRef = useRef(read);
   readRef.current = read;
@@ -51,12 +58,12 @@ function useBotActivity(botId: string, routineId: string | undefined, epoch: num
   const load = useCallback(async () => {
     const mine = ++token.current;
     try {
-      const page = await rpc.bots.activity({ botId, routineId });
+      const page = await rpc.bots.activity({ botId, routineId, allRuns: allRuns || undefined });
       if (mine === token.current) dispatch({ type: "first", page });
     } catch {
       if (mine === token.current) dispatch({ type: "first-failed" });
     }
-  }, [botId, routineId]);
+  }, [botId, routineId, allRuns]);
 
   const showEarlier = useCallback(async () => {
     const current = readRef.current;
@@ -65,12 +72,17 @@ function useBotActivity(botId: string, routineId: string | undefined, epoch: num
     const cursor = current.next;
     dispatch({ type: "earlier-started" });
     try {
-      const page = await rpc.bots.activity({ botId, routineId, cursor });
+      const page = await rpc.bots.activity({
+        botId,
+        routineId,
+        allRuns: allRuns || undefined,
+        cursor,
+      });
       if (mine === token.current) dispatch({ type: "earlier", page });
     } catch {
       if (mine === token.current) dispatch({ type: "earlier-failed" });
     }
-  }, [botId, routineId]);
+  }, [botId, routineId, allRuns]);
 
   const retry = useCallback(() => {
     dispatch({ type: "retry" });
@@ -120,6 +132,9 @@ const OpenRuns = createContext<{ open: ReadonlySet<string>; toggle: (runId: stri
 /** On a routine's own page every line is that routine: lines lead with their time instead. */
 const OneRoutine = createContext(false);
 
+/** In debug mode a run line opens the run's whole log instead of its recap. */
+const ViewRun = createContext<BotCommands["viewRun"] | null>(null);
+
 function useOpenRuns() {
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
   const toggle = useCallback((runId: string) => {
@@ -165,28 +180,47 @@ function itemKey(item: ActivityItem): string {
 /** Absent on an archived bot's page: its chat cannot be opened. */
 type OpenRun = BotCommands["openRun"] | undefined;
 
+type BotActivityProps = {
+  botId: string;
+  routineId?: string;
+  commands: Pick<BotCommands, "activityEpoch" | "viewRun"> & { openRun?: OpenRun };
+  onOpenRoutine?: (routineId: string) => void;
+  onWriteInstructions?: () => void;
+};
+
 /**
  * The bot's routine runs, the routines it was given and its own creation, grouped by day; with
  * `routineId`, only that routine's runs. A run opens its recap in place, with a way into the chat;
  * a routine's creation opens the routine. With `onWriteInstructions` (a bot with no instructions
- * yet) its creation offers to write them.
+ * yet) its creation offers to write them. In debug mode it lists every run of the bot, and a run
+ * opens its whole log.
  */
-export function BotActivity({
+export function BotActivity(props: BotActivityProps) {
+  const debug = useDebugMode();
+  // Pages read under one scope must not mix with the other's.
+  return (
+    <ViewRun.Provider value={debug ? props.commands.viewRun : null}>
+      <ActivityList key={debug ? "all" : "routines"} allRuns={debug} {...props} />
+    </ViewRun.Provider>
+  );
+}
+
+function ActivityList({
   botId,
   routineId,
+  allRuns,
   commands,
   onOpenRoutine,
   onWriteInstructions,
-}: {
-  botId: string;
-  routineId?: string;
-  commands: Pick<BotCommands, "activityEpoch"> & { openRun?: OpenRun };
-  onOpenRoutine?: (routineId: string) => void;
-  onWriteInstructions?: () => void;
-}) {
+}: BotActivityProps & { allRuns: boolean }) {
   const { openRun } = commands;
   const { t, i18n } = useLingui();
-  const { read, showEarlier, retry } = useBotActivity(botId, routineId, commands.activityEpoch);
+  const { read, showEarlier, retry } = useBotActivity(
+    botId,
+    routineId,
+    allRuns,
+    commands.activityEpoch,
+  );
   const openRuns = useOpenRuns();
   const locale = i18n.locale || "en";
 
@@ -317,7 +351,12 @@ function useRunWords() {
   };
   const time = (iso: string) =>
     new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit" }).format(new Date(iso));
-  return { words, time, reason: copy.failureReason, routine: t`Routine` };
+  return {
+    words,
+    time,
+    reason: copy.failureReason,
+    title: { routine: t`Routine`, message: t`Message` },
+  };
 }
 
 /** A filled symbol draws its mark in the day card's colour so it stays readable on the fill. */
@@ -341,14 +380,15 @@ function Disclosure({ open }: { open: boolean }) {
 function RunLine({ row, openRun }: { row: RunActivityRow; openRun: OpenRun }) {
   const run = useRunWords();
   const runs = useContext(OpenRuns);
-  const open = runs.open.has(row.runId);
+  const viewRun = useContext(ViewRun);
+  const open = !viewRun && runs.open.has(row.runId);
   const recap = useRunRecap(row.runId, row.status, open);
   const view = recapView(recap.read, {
     failed: row.status === "failed",
     sourceMessageId: row.sourceMessageId,
   });
   const state = RUN_STATE[row.status];
-  const name = row.routineName ?? run.routine;
+  const name = runTitle(row, run.title);
   const word = run.words[state.word];
   const reason = row.status === "failed" ? run.reason(row.failureKind) : null;
   const time = run.time(row.createdAt);
@@ -358,9 +398,9 @@ function RunLine({ row, openRun }: { row: RunActivityRow; openRun: OpenRun }) {
     <div>
       <button
         type="button"
-        aria-expanded={open}
+        aria-expanded={viewRun ? undefined : open}
         aria-label={[title, reason, word, oneRoutine ? null : time].filter(Boolean).join(", ")}
-        onClick={() => runs.toggle(row.runId)}
+        onClick={() => (viewRun ? viewRun({ ...row, title: name }) : runs.toggle(row.runId))}
         data-testid="activity-run"
         className={LINE}
       >
@@ -533,7 +573,7 @@ function FoldedLine({
 }) {
   const run = useRunWords();
   const [open, setOpen] = useState(false);
-  const title = name ?? run.routine;
+  const title = name ?? run.title.routine;
   const count = plural(runs.length, { one: "# run", other: "# runs" });
   const newest = runs[0];
   const time = newest ? run.time(newest.createdAt) : "";

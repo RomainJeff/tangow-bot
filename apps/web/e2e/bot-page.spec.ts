@@ -12,6 +12,7 @@ const STATES: Array<{ name: string; query: string; trigger?: RegExp }> = [
   { name: "activity-new", query: "tab=activity&new=1" },
   { name: "activity-empty", query: "tab=activity&activity=empty" },
   { name: "activity-error", query: "tab=activity&activity=error" },
+  { name: "activity-debug", query: "tab=activity&debug=1" },
   { name: "routines", query: "tab=routines" },
   { name: "routines-error", query: "tab=routines&read=error" },
   { name: "routine", query: "tab=routines&detail=routine&routine=routine-2" },
@@ -391,4 +392,14 @@ test("a routine's webhook key stays behind dots until shown, copies whole, and r
   await editor.getByRole("button", { name: "Done", exact: true }).click();
   await expect(editor).toHaveCount(0);
   await expect(panel.getByRole("button", { name: /^When a webhook fires/ })).toBeVisible();
+});
+
+test("bot page activity in debug mode, at phone width", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${FIXTURE}?tab=activity&debug=1`);
+  const activity = page.getByTestId("bot-activity");
+  await expect(
+    activity.getByRole("button", { name: /^Compare flights from Paris to Copenhagen/ }),
+  ).toBeVisible();
+  await captureScreenshot(page, testInfo, "bot-page-activity-debug-phone");
 });

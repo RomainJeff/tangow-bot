@@ -9,8 +9,8 @@ import {
 } from "@rakazo/core";
 import type { GroupAvatarMember } from "@rakazo/ui-web";
 import { useCallback, useMemo, useRef } from "react";
-import { useDisplayAgentSteps } from "../../lib/agent-steps-pref";
 import type { ArtifactTarget } from "../../lib/artifact-open";
+import { useDebugMode } from "../../lib/debug-mode";
 import { hasRenderableBlock } from "../../lib/message-blocks";
 import { copyableMessageText } from "../../lib/message-text";
 import type { ThreadState } from "../../lib/thread-events";
@@ -44,7 +44,7 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
     : snapshot?.botId === active?.id
       ? snapshot
       : null;
-  const showSteps = useDisplayAgentSteps();
+  const showSteps = useDebugMode();
   const activeEntries = activeSnapshot?.entries;
   const activeLayer = activeSnapshot?.layer;
   const view = useMemo(

@@ -81,6 +81,12 @@ export function foldActivity(
   return items;
 }
 
+/** A run's line title: its routine's name, else the start of the message that started it. */
+export function runTitle(row: RunActivityRow, words: { routine: string; message: string }): string {
+  if (row.routineId !== null || row.trigger === "routine") return row.routineName ?? words.routine;
+  return row.promptSnippet || words.message;
+}
+
 function itemTime(item: ActivityItem): string {
   switch (item.kind) {
     case "run":

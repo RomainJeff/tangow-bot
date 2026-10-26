@@ -21,6 +21,7 @@ vi.mock("@lingui/core/macro", () => ({
     (count === 1 ? forms.one : forms.other).replace("#", String(count)),
 }));
 
+import { setDebugMode } from "../../lib/debug-mode";
 import { BotActivity } from "./BotActivity";
 
 const NOW = Date.UTC(2026, 9, 6, 12, 0);
@@ -63,6 +64,7 @@ function page(
 let container: HTMLElement;
 let root: Root;
 const openRun = vi.fn();
+const viewRun = vi.fn();
 const openRoutine = vi.fn();
 
 async function render(epoch = 0) {
@@ -70,7 +72,7 @@ async function render(epoch = 0) {
     root.render(
       <BotActivity
         botId="bot-1"
-        commands={{ activityEpoch: epoch, openRun }}
+        commands={{ activityEpoch: epoch, openRun, viewRun }}
         onOpenRoutine={openRoutine}
       />,
     ),
@@ -94,6 +96,7 @@ beforeEach(() => {
 
 afterEach(() => {
   act(() => root.unmount());
+  setDebugMode(false);
   container.remove();
   vi.unstubAllGlobals();
   vi.resetAllMocks();
@@ -337,4 +340,25 @@ it("offers a retry when the list cannot be read", async () => {
   await act(async () => button("Retry")?.click());
 
   expect(container.textContent).toContain("No activity yet");
+});
+
+it("in debug mode, lists every run by the message that started it and opens its whole log", async () => {
+  setDebugMode(true);
+  const chat = { trigger: "user" as const, routineId: null, routineName: null };
+  api.bots.activity.mockResolvedValueOnce(
+    page([run("run-1", 10, { ...chat, promptSnippet: "Compare flights to Copenhagen" })]),
+  );
+  await render();
+
+  expect(api.bots.activity).toHaveBeenCalledWith({ botId: "bot-1", allRuns: true });
+  expect(lines()).toEqual([expect.stringMatching(/^Compare flights to Copenhagen, Done, /)]);
+
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>('[data-testid="activity-run"]')?.click(),
+  );
+
+  expect(viewRun).toHaveBeenCalledWith(
+    expect.objectContaining({ runId: "run-1", title: "Compare flights to Copenhagen" }),
+  );
+  expect(api.runs.recap).not.toHaveBeenCalled();
 });

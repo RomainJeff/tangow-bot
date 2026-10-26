@@ -148,6 +148,16 @@ describe("bots.activity", () => {
     expect(prisma.routine.findMany.mock.calls[0]?.[0]).toMatchObject({ where: owner, take: 31 });
   });
 
+  it("reads every run of the bot but helper runs when asked for all", async () => {
+    const { prisma, activity } = setup();
+    await activity({ botId: "bot-1", allRuns: true });
+    const botRuns = { spaceId: "space-1", userId: "user-1", botId: "bot-1", parentRunId: null };
+    const runWheres = prisma.run.findMany.mock.calls.map(([args]) => args.where);
+    expect(runWheres[1]).toEqual({
+      AND: [botRuns, { status: { in: ["completed", "failed", "cancelled"] } }, {}],
+    });
+  });
+
   it("lists active runs, then runs and creations newest first, with the bot's creation last", async () => {
     const { body } = await setup({
       active: [runRow("live", at(9), { status: "running", completedAt: null })],
