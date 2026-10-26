@@ -273,7 +273,7 @@ finally:
 
 const composeAvailable =
   spawnSync("docker", ["compose", "version"], { stdio: "ignore" }).status === 0;
-test("real Compose merges the generated override over the forced Docker provider without a daemon", {
+test("real Compose preserves restart policies for Docker and the generated E2B override without a daemon", {
   skip: !composeAvailable,
 }, (t) => {
   const f = fixture(t);
@@ -282,6 +282,24 @@ test("real Compose merges the generated override over the forced Docker provider
     fileURLToPath(new URL("./docker-compose.yml", import.meta.url)),
     path.join(f.root, "infra/compose/docker-compose.yml"),
   );
+  const dockerConfig = spawnSync(
+    "docker",
+    [
+      "compose",
+      "--env-file",
+      path.join(f.root, ".env"),
+      "-f",
+      path.join(f.root, "infra/compose/docker-compose.yml"),
+      "config",
+      "--format",
+      "json",
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(dockerConfig.status, 0, dockerConfig.stderr);
+  const dockerServices = JSON.parse(dockerConfig.stdout).services;
+  assert.equal(dockerServices.api.environment.SANDBOX_PROVIDER, "docker");
+  assert.equal(dockerServices.supervisor.restart, "unless-stopped");
   const result = spawnSync(
     "docker",
     [
@@ -305,6 +323,14 @@ test("real Compose merges the generated override over the forced Docker provider
   assert.equal(config.services.worker.environment.SCREEN_PROXY_SECRET, "");
   assert.equal(config.services.api.environment.SCREEN_PROXY_SECRET, "fake-screen");
   assert.equal(config.services.api.environment.E2B_API_KEY, "fake-test-secret");
+  for (const services of [dockerServices, config.services]) {
+    for (const name of ["postgres", "api", "worker", "web"]) {
+      assert.equal(services[name].restart, "unless-stopped", name);
+    }
+    for (const name of ["data-init", "migrate"]) {
+      assert.equal(services[name].restart, "no", name);
+    }
+  }
 });
 
 test("startup failures retain E2B configuration for forward recovery", {
