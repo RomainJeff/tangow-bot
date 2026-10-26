@@ -1373,6 +1373,16 @@ msgstr ""
 msgid "Could not load this chat."
 msgstr "Не удалось загрузить этот чат."
 
+#: src/pages/shell/session-view.tsx:245
+msgid "Copy diagnostic"
+msgstr "Скопировать диагностику"
+
+#. placeholder {0}: run.usage.inputTokens.toLocaleString()
+#. placeholder {1}: run.usage.outputTokens.toLocaleString()
+#: src/pages/shell/session-view.tsx:215
+msgid "{0} tokens in · {1} out"
+msgstr "{0} токенов на входе · {1} на выходе"
+
 #: src/components/ArtifactFileCard.tsx:142
 msgid "Could not load this file."
 msgstr "Не удалось загрузить этот файл."

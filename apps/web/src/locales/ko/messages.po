@@ -1373,6 +1373,16 @@ msgstr "스킬을 불러오지 못했습니다"
 msgid "Could not load this chat."
 msgstr "이 채팅을 불러오지 못했습니다."
 
+#: src/pages/shell/session-view.tsx:245
+msgid "Copy diagnostic"
+msgstr "진단 정보 복사"
+
+#. placeholder {0}: run.usage.inputTokens.toLocaleString()
+#. placeholder {1}: run.usage.outputTokens.toLocaleString()
+#: src/pages/shell/session-view.tsx:215
+msgid "{0} tokens in · {1} out"
+msgstr "입력 {0} 토큰 · 출력 {1}"
+
 #: src/components/ArtifactFileCard.tsx:142
 msgid "Could not load this file."
 msgstr "파일을 불러오지 못했습니다."
