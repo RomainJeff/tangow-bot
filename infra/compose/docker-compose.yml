@@ -17,6 +17,7 @@ x-app-env: &app-env
 services:
   postgres:
     image: ${POSTGRES_IMAGE:-postgres:16}
+    restart: unless-stopped
     environment:
       # USER/PASSWORD/DB apply only on first pgdata init. Keep existing values in
       # .env, or ALTER ROLE / rename in place. Recreate pgdata only after backup
@@ -34,6 +35,7 @@ services:
 
   supervisor:
     image: rakazo/supervisor:local
+    restart: unless-stopped
     build:
       context: ../..
       dockerfile: infra/sandboxes/supervisor/Dockerfile
@@ -110,6 +112,7 @@ services:
         condition: service_completed_successfully
 
   api:
+    restart: unless-stopped
     # One image for api, worker and web: same context, same Dockerfile, only the
     # command differs. Naming it here builds it once instead of leaving Compose to
     # derive a per-service tag and keep three copies of the same 6 GB image.
@@ -139,6 +142,7 @@ services:
 
   worker:
     image: rakazo/app:local
+    restart: unless-stopped
     pull_policy: never
     command: ["pnpm", "--filter", "@rakazo/worker", "start"]
     env_file:
@@ -159,6 +163,7 @@ services:
 
   web:
     image: rakazo/app:local
+    restart: unless-stopped
     pull_policy: never
     command: ["pnpm", "--filter", "@rakazo/web", "preview", "--host", "0.0.0.0", "--port", "5173"]
     environment:

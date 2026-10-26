@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-26
+
+#### Fixed
+
+- Source deployments using Docker or E2B computers restart their server services automatically after a host reboot unless explicitly stopped.
+
 ### 2026-10-25
 
 #### Added
