@@ -8,8 +8,8 @@ never enters the worker. The worker is destroyed when the run attempt ends.
 Every run goes to a worker. A Docker deployment runs its workers as containers instead
 ([self-host](self-host.md)).
 
-To add a worker provider, see
-[how to add a worker provider](./implementation/pi-e2b/adding-a-worker-provider.md).
+Worker providers implement the
+[`WorkerProvider` contract](../packages/adapter-kit/src/worker-provider.ts).
 
 ## Prerequisites
 
