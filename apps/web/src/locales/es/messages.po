@@ -1373,6 +1373,16 @@ msgstr "No se pudieron cargar los skills"
 msgid "Could not load this chat."
 msgstr "No se pudo cargar este chat."
 
+#: src/pages/shell/session-view.tsx:245
+msgid "Copy diagnostic"
+msgstr "Copiar diagnóstico"
+
+#. placeholder {0}: run.usage.inputTokens.toLocaleString()
+#. placeholder {1}: run.usage.outputTokens.toLocaleString()
+#: src/pages/shell/session-view.tsx:215
+msgid "{0} tokens in · {1} out"
+msgstr "{0} tokens de entrada · {1} de salida"
+
 #: src/components/ArtifactFileCard.tsx:142
 msgid "Could not load this file."
 msgstr "No se pudo cargar este archivo."

@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
-- On web, desktop and iOS, the "Display agent steps" setting is now "Debug mode": besides agent steps, it lists every run of a bot in its Activity tab, titled by the message that started it, and on web and desktop a run opens its whole log.
+- On web, desktop and iOS, the "Display agent steps" setting is now "Debug mode": besides agent steps, it lists every run of a bot in its Activity tab, titled by the message that started it, and on web and desktop a run opens its whole log with its model, tokens, duration, trigger and id, and a button to copy a diagnostic of it.
 - The desktop app on macOS, Windows and Linux and the iOS app have a new icon: the black clay bot from the tangow site on a linen background, replacing the orange bot.
 
 #### Added

@@ -1373,6 +1373,16 @@ msgstr "无法加载技能"
 msgid "Could not load this chat."
 msgstr "无法加载此对话。"
 
+#: src/pages/shell/session-view.tsx:245
+msgid "Copy diagnostic"
+msgstr "复制诊断信息"
+
+#. placeholder {0}: run.usage.inputTokens.toLocaleString()
+#. placeholder {1}: run.usage.outputTokens.toLocaleString()
+#: src/pages/shell/session-view.tsx:215
+msgid "{0} tokens in · {1} out"
+msgstr "输入 {0} 个令牌 · 输出 {1}"
+
 #: src/components/ArtifactFileCard.tsx:142
 msgid "Could not load this file."
 msgstr "无法加载此文件。"
