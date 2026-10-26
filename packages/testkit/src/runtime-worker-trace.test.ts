@@ -79,6 +79,20 @@ describe("a traced worker run", () => {
       "tool message_user",
     ]);
     expect(children.every((span) => span.parentSpanId && span.status.code === 1)).toBe(true);
+    const first = attributes(named.get("generation 1")!);
+    const second = attributes(named.get("generation 2")!);
+    const third = attributes(named.get("generation 3")!);
+    expect(first["langfuse.observation.input"]).toContain("Show my key.");
+    expect(JSON.parse(first["langfuse.observation.output"]!)).toMatchObject({
+      role: "assistant",
+      content: [{ type: "toolCall", name: "bash", arguments: { command: "echo [redacted]" } }],
+    });
+    expect(second["langfuse.observation.input"]).toContain("toolResult");
+    expect(second["langfuse.observation.output"]).toContain("Your key is [redacted].");
+    expect(JSON.parse(third["langfuse.observation.output"]!)).toMatchObject({
+      role: "assistant",
+      content: [{ type: "text", text: '{"version":1,"results":["Sent"],"references":[]}' }],
+    });
     // The relay counts cached prompt tokens as input; the trace reports them apart.
     expect(
       JSON.parse(attributes(named.get("generation 3")!)["langfuse.observation.usage_details"]!),

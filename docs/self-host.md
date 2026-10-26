@@ -130,11 +130,12 @@ child commands do not receive them.
 
 Exporting agent traces is optional and off unless configured. Set both `LANGFUSE_PUBLIC_KEY` and
 `LANGFUSE_SECRET_KEY` to send each bot run to an OpenTelemetry endpoint as a tree: the run with its
-instructions, prompt and final output, one generation per model request with its model, token counts and latency,
-and one span per tool call with its arguments, result and status. The controller records this from
-what it relays for the worker, never from the worker itself: a generation carries no prompt or
-response of its own, and a call of the worker's own tools (shell, files) is timed by when the worker
-reports it. A `browser_run` call nests one generation per decision step under its tool span,
+instructions, prompt and final output, one generation per model request with its transcript, response,
+model, token counts and latency, and one span per tool call with its arguments, result and status. The controller records this from
+what it relays for the worker. Each generation includes the normalized transcript sent to the model
+and its response, including thinking and tool calls when provided. Image bytes are omitted. A call
+of the worker's own tools (shell, files) is timed by when the worker reports it. A `browser_run` call
+nests one generation per decision step under its tool span,
 carrying the redacted request, the answers (or why none was usable), the gate, model, tokens and
 cost. Rakazo's own model calls (history compaction, learned facts, the team-chat judge and
 auto-review) are exported too, one trace per call.

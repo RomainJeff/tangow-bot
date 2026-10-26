@@ -1,5 +1,5 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { Usage } from "@earendil-works/pi-ai";
+import type { Message, Usage } from "@earendil-works/pi-ai";
 import type {
   AgentRuntimeEvent,
   ToolCallGenerationResult,
@@ -175,9 +175,11 @@ export class RunTraceRecorder {
 
   /**
    * Opens a generation for one model request relayed for a worker. Requests can overlap, so each
-   * gets its own span. The guest's context is not recorded: every request repeats the whole history.
+   * gets its own span, including its transcript and the model response.
    */
   modelRequest(agent: string): {
+    input(messages: readonly Message[]): void;
+    output(message: Message): void;
     end(usage?: Extract<AgentRuntimeEvent, { type: "usage" }>, error?: unknown): void;
   } {
     this.turns += 1;
@@ -194,6 +196,21 @@ export class RunTraceRecorder {
       this.root,
     );
     return {
+      input: (messages) => {
+        span?.setAttributes({
+          "langfuse.observation.input": JSON.stringify(
+            messages.map((message) => ({ ...message, content: traceContent(message.content) })),
+          ),
+        });
+      },
+      output: (message) => {
+        span?.setAttributes({
+          "langfuse.observation.output": JSON.stringify({
+            ...message,
+            content: traceContent(message.content),
+          }),
+        });
+      },
       end: (usage, error) => {
         if (!span) return;
         if (usage) {

@@ -110,7 +110,7 @@ export const relayPiAiCall: ModelRelay<PiAiModelCall, PiAiModelEvent> = async (
   config,
   call,
   send,
-  { signal, conversation },
+  { signal, conversation, trace },
 ) => {
   let model: Model<Api> | undefined;
   let usage: RelayUsage | undefined;
@@ -141,6 +141,7 @@ export const relayPiAiCall: ModelRelay<PiAiModelCall, PiAiModelEvent> = async (
         config.maxImagesPerPrompt,
       ) as unknown as Message[],
     });
+    trace?.input(context.messages);
     const relayed = streamRunModel(config, context, {
       sessionId: conversationSessionId(
         conversation.threadId,
@@ -152,19 +153,27 @@ export const relayPiAiCall: ModelRelay<PiAiModelCall, PiAiModelEvent> = async (
     model = relayed.model;
     for await (const event of relayed.stream) {
       if ("partial" in event) observe(event.partial.usage);
-      if (event.type === "done") observe(event.message.usage, true);
-      if (event.type === "error") observe(event.error.usage, true);
+      if (event.type === "done") {
+        observe(event.message.usage, true);
+        trace?.output(event.message);
+      }
+      if (event.type === "error") {
+        observe(event.error.usage, true);
+        trace?.output(event.error);
+      }
       send(encodeModelEvent(event));
       if (event.type === "done" || event.type === "error") return usage;
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const target = model ?? { api: "unknown", provider: config.provider, id: config.id };
+    const failed = failedMessage(target, "error", message);
+    trace?.output(failed);
     try {
       send({
         type: "error",
         reason: "error",
-        error: snapshot(failedMessage(target, "error", message)),
+        error: snapshot(failed),
       });
     } catch {
       // A closed guest channel cannot receive the failure, but its spend still counts.
