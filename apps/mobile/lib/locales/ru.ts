@@ -351,6 +351,7 @@ export const RU_MESSAGES: Record<string, string> = {
   Members: "Участники",
   "Members ({min}–{max})": "Участники ({min}–{max})",
   "Message…": "Сообщение…",
+  Message: "Сообщение",
   "Message {name}": "Написать {name}",
   Model: "Модель",
   "Model id": "Идентификатор модели",
