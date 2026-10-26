@@ -1825,8 +1825,8 @@ msgstr "Dismissed. Reconnect anytime from MCP settings."
 
 #: src/pages/AccountSettingsOverlay.tsx:136
 #: src/pages/AccountSettingsOverlay.tsx:144
-msgid "Display agent steps"
-msgstr "Display agent steps"
+msgid "Debug mode"
+msgstr "Debug mode"
 
 #: src/pages/PluginsOverlay.tsx:1078
 msgid "Display name"
@@ -3728,8 +3728,8 @@ msgid "Show password"
 msgstr "Show password"
 
 #: src/pages/AccountSettingsOverlay.tsx:139
-msgid "Show the tools a bot used, with their input and output."
-msgstr "Show the tools a bot used, with their input and output."
+msgid "Show agent steps, and every run in a bot's activity."
+msgstr "Show agent steps, and every run in a bot's activity."
 
 #: src/lib/localized-provider-hint.ts:7
 #: src/pages/Auth.tsx:232

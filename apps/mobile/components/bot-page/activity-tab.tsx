@@ -6,6 +6,7 @@ import {
   foldActivity,
   recapView,
   reduceActivity,
+  runTitle,
   threadTimeMarkerLabel,
 } from "@rakazo/core";
 import { radii } from "@rakazo/ui-tokens";
@@ -27,6 +28,7 @@ import { rpc } from "../../lib/api";
 import { mobileTokens } from "../../lib/appearance";
 import type { StateWord } from "../../lib/bot-activity";
 import { failureReason, runOpening, stateWord } from "../../lib/bot-activity";
+import { useDebugMode } from "../../lib/debug-mode";
 import { dateLocaleForUi, useI18n } from "../../lib/i18n";
 import { useMobileTokens, useResolvedAppearance, useThemedStyles } from "../../lib/native";
 import { nativeTextStyle } from "../../lib/typography";
@@ -36,9 +38,14 @@ import { Group, LoadFailed, LoadingRows, QuietLine } from "./kit";
 
 /**
  * A bot's activity, or one routine's runs, newest first, a page at a time. Reads again when a run
- * ends (`epoch`) and whenever the page comes back into view.
+ * ends (`epoch`) and whenever the page comes back into view. With `allRuns`, every run of the bot.
  */
-function useBotActivity(botId: string, routineId: string | undefined, epoch: number) {
+function useBotActivity(
+  botId: string,
+  routineId: string | undefined,
+  allRuns: boolean,
+  epoch: number,
+) {
   const [read, dispatch] = useReducer(reduceActivity, { kind: "loading" });
   const readRef = useRef(read);
   readRef.current = read;
@@ -48,12 +55,16 @@ function useBotActivity(botId: string, routineId: string | undefined, epoch: num
   const load = useCallback(async () => {
     const mine = ++token.current;
     try {
-      const page = await rpc<BotActivityOutput>("bots/activity", { botId, routineId });
+      const page = await rpc<BotActivityOutput>("bots/activity", {
+        botId,
+        routineId,
+        allRuns: allRuns || undefined,
+      });
       if (mine === token.current) dispatch({ type: "first", page });
     } catch {
       if (mine === token.current) dispatch({ type: "first-failed" });
     }
-  }, [botId, routineId]);
+  }, [botId, routineId, allRuns]);
 
   const showEarlier = useCallback(async () => {
     const current = readRef.current;
@@ -62,12 +73,17 @@ function useBotActivity(botId: string, routineId: string | undefined, epoch: num
     const cursor = current.next;
     dispatch({ type: "earlier-started" });
     try {
-      const page = await rpc<BotActivityOutput>("bots/activity", { botId, routineId, cursor });
+      const page = await rpc<BotActivityOutput>("bots/activity", {
+        botId,
+        routineId,
+        allRuns: allRuns || undefined,
+        cursor,
+      });
       if (mine === token.current) dispatch({ type: "earlier", page });
     } catch {
       if (mine === token.current) dispatch({ type: "earlier-failed" });
     }
-  }, [botId, routineId]);
+  }, [botId, routineId, allRuns]);
 
   const retry = useCallback(() => {
     dispatch({ type: "retry" });
@@ -189,20 +205,7 @@ function itemKey(item: ActivityItem): string {
 /** Absent on an archived bot's page: its chat cannot be opened. */
 type OpenRun = ((row: RunActivityRow) => void) | undefined;
 
-/**
- * The bot's routine runs, the routines it was given and its own creation, grouped by day; with
- * `routineId`, only that routine's runs. A run opens its recap in place, with a way into the chat;
- * a routine's creation opens the routine. With `onWriteInstructions` (a bot with no instructions
- * yet) its creation offers to write them.
- */
-export function ActivityTab({
-  botId,
-  routineId,
-  epoch,
-  onOpenRun,
-  onOpenRoutine,
-  onWriteInstructions,
-}: {
+type ActivityTabProps = {
   botId: string;
   routineId?: string;
   epoch: number;
@@ -210,10 +213,32 @@ export function ActivityTab({
   onOpenRun?: OpenRun;
   onOpenRoutine?: (routineId: string) => void;
   onWriteInstructions?: () => void;
-}) {
+};
+
+/**
+ * The bot's routine runs, the routines it was given and its own creation, grouped by day; with
+ * `routineId`, only that routine's runs. A run opens its recap in place, with a way into the chat;
+ * a routine's creation opens the routine. With `onWriteInstructions` (a bot with no instructions
+ * yet) its creation offers to write them. In debug mode it lists every run of the bot.
+ */
+export function ActivityTab(props: ActivityTabProps) {
+  const debug = useDebugMode();
+  // Pages read under one scope must not mix with the other's.
+  return <ActivityList key={debug ? "all" : "routines"} allRuns={debug} {...props} />;
+}
+
+function ActivityList({
+  botId,
+  routineId,
+  allRuns,
+  epoch,
+  onOpenRun,
+  onOpenRoutine,
+  onWriteInstructions,
+}: ActivityTabProps & { allRuns: boolean }) {
   const styles = useThemedStyles(createActivityStyles);
   const { t } = useI18n();
-  const { read, showEarlier, retry } = useBotActivity(botId, routineId, epoch);
+  const { read, showEarlier, retry } = useBotActivity(botId, routineId, allRuns, epoch);
   const openRuns = useOpenRuns();
 
   if (read.kind !== "ready" || read.entries.length === 0) {
@@ -355,7 +380,7 @@ function RunLine({
   const word = stateWord(state.word);
   const reason = row.status === "failed" ? failureReason(row.failureKind) : null;
   const time = formatTime(row.createdAt);
-  const title = oneRoutine ? time : (row.routineName ?? t("Routine"));
+  const title = oneRoutine ? time : runTitle(row, { routine: t("Routine"), message: t("Message") });
   const tone =
     state.tone === "success"
       ? tokens.success

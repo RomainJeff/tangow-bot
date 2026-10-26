@@ -5,7 +5,7 @@ import { drawsNothing, projectThreadView, unshownRunReport } from "@rakazo/core"
 import { Button, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
 import { X } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { useDisplayAgentSteps } from "../../lib/agent-steps-pref";
+import { useDebugMode } from "../../lib/debug-mode";
 import { hasRenderableBlock } from "../../lib/message-blocks";
 import { rpc } from "../../lib/rpc";
 import type { SessionViewTarget } from "../../lib/thread-items";
@@ -24,7 +24,7 @@ export function SessionView({
   onClose: () => void;
 }) {
   const { t } = useLingui();
-  const showSteps = useDisplayAgentSteps();
+  const showSteps = useDebugMode();
   const [current, setCurrent] = useState(target);
   const [reloadKey, setReloadKey] = useState(0);
   const [read, setRead] = useState<Read>({ entries: null, failed: false });

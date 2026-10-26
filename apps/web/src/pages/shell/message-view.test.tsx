@@ -17,7 +17,7 @@ vi.mock("@lingui/react/macro", () => ({
 }));
 vi.mock("../../lib/rpc", () => ({ rpc: {} }));
 
-import { setDisplayAgentSteps } from "../../lib/agent-steps-pref";
+import { setDebugMode } from "../../lib/debug-mode";
 import type { MessageItem } from "../../lib/thread-items";
 import { MessageView } from "./message-view";
 
@@ -34,7 +34,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
-  setDisplayAgentSteps(false);
+  setDebugMode(false);
   vi.unstubAllGlobals();
 });
 
@@ -45,7 +45,7 @@ describe("a bot's narration", () => {
   ])(
     "draws its words and its steps (shown: %s) in the order the bot produced them",
     async (showSteps, expected) => {
-      setDisplayAgentSteps(showSteps);
+      setDebugMode(showSteps);
       const message: MessageItem = {
         kind: "message",
         id: "m1" as MessageItem["id"],

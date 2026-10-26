@@ -643,8 +643,9 @@ export const ZH_MESSAGES: Record<string, string> = {
   "{name} (permission denied)": "{name}（未授予权限）",
   "{name} (unsupported type)": "{name}（不支持的类型）",
   "Saved {name} locally": "已将 {name} 保存在本地",
-  "Display agent steps": "显示智能体步骤",
-  "Show the tools a bot used, with their input and output.": "显示机器人使用的工具及其输入和输出。",
+  "Debug mode": "调试模式",
+  "Show agent steps, and every run in a bot's activity.":
+    "显示智能体步骤，以及机器人动态中的每次运行。",
   "Thought for {duration} · {steps}": "思考了 {duration} · {steps}",
   "1 step": "1 个步骤",
   "{count} steps": "{count} 个步骤",

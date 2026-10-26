@@ -14,7 +14,7 @@ import { Link } from "react-router-dom";
 import { ApprovalRulesSettings } from "../components/ApprovalRulesSettings";
 import { DesktopUpdateSection } from "../components/DesktopUpdates";
 import { SoftwareUpdateSection } from "../components/SoftwareUpdateSection";
-import { getDisplayAgentSteps, setDisplayAgentSteps } from "../lib/agent-steps-pref";
+import { getDebugMode, setDebugMode } from "../lib/debug-mode";
 import { getActiveUiLocale, setUiLocale } from "../lib/i18n";
 import {
   type AppearancePreference,
@@ -51,7 +51,7 @@ export function GeneralSettingsPanels({
   const [appearance, setAppearance] = useState<AppearancePreference>(() =>
     getUiAppearancePreference(),
   );
-  const [agentSteps, setAgentSteps] = useState<boolean>(() => getDisplayAgentSteps());
+  const [debug, setDebug] = useState<boolean>(() => getDebugMode());
   const [avatarPending, setAvatarPending] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
 
@@ -122,19 +122,19 @@ export function GeneralSettingsPanels({
         <div className="flex items-center justify-between gap-4">
           <div>
             <h3 className="text-[15px] font-medium text-foreground">
-              <Trans>Display agent steps</Trans>
+              <Trans>Debug mode</Trans>
             </h3>
             <p className="mt-1 text-[12.5px] text-muted-foreground/80">
-              <Trans>Show the tools a bot used, with their input and output.</Trans>
+              <Trans>Show agent steps, and every run in a bot's activity.</Trans>
             </p>
           </div>
           <Switch
-            data-testid="display-agent-steps"
-            aria-label={t`Display agent steps`}
-            checked={agentSteps}
+            data-testid="debug-mode"
+            aria-label={t`Debug mode`}
+            checked={debug}
             onCheckedChange={(next) => {
-              setAgentSteps(next);
-              setDisplayAgentSteps(next);
+              setDebug(next);
+              setDebugMode(next);
             }}
           />
         </div>
