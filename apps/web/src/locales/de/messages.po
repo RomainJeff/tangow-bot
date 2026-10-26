@@ -1825,8 +1825,8 @@ msgstr "Verworfen. Du kannst die Verbindung jederzeit in den MCP-Einstellungen w
 
 #: src/pages/AccountSettingsOverlay.tsx:136
 #: src/pages/AccountSettingsOverlay.tsx:144
-msgid "Display agent steps"
-msgstr "Agent-Schritte anzeigen"
+msgid "Debug mode"
+msgstr "Debug-Modus"
 
 #: src/pages/PluginsOverlay.tsx:1078
 msgid "Display name"
@@ -3728,8 +3728,8 @@ msgid "Show password"
 msgstr "Passwort anzeigen"
 
 #: src/pages/AccountSettingsOverlay.tsx:139
-msgid "Show the tools a bot used, with their input and output."
-msgstr "Zeigt die von einem Bot verwendeten Tools mit Eingabe und Ausgabe."
+msgid "Show agent steps, and every run in a bot's activity."
+msgstr "Zeigt Agent-Schritte und jeden Lauf in der Aktivität eines Bots."
 
 #: src/lib/localized-provider-hint.ts:7
 #: src/pages/Auth.tsx:232

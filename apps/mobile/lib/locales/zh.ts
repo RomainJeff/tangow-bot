@@ -348,6 +348,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   Medium: "中",
   "Members ({min}–{max})": "成员（{min}–{max}）",
   "Message…": "发消息…",
+  Message: "消息",
   "Message {name}": "给 {name} 发消息",
   Model: "模型",
   "Model id": "模型 ID",
