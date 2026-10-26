@@ -1,6 +1,6 @@
 {
   "name": "@rakazo/desktop-new",
-  "productName": "Dax",
+  "productName": "Tangow",
   "version": "0.1.6",
   "license": "Apache-2.0",
   "type": "module",
@@ -28,7 +28,7 @@
     "vitest": "4.1.11"
   },
   "build": {
-    "appId": "dev.dax.desktop",
+    "appId": "dev.tangow.desktop",
     "directories": {
       "output": "out",
       "buildResources": "assets"
@@ -63,7 +63,7 @@
       "verifyUpdateCodeSignature": true
     },
     "linux": {
-      "executableName": "dax",
+      "executableName": "tangow",
       "icon": "assets/icon.png",
       "target": [
         "AppImage"
