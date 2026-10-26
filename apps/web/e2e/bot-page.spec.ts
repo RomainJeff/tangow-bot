@@ -403,3 +403,35 @@ test("bot page activity in debug mode, at phone width", async ({ page }, testInf
   ).toBeVisible();
   await captureScreenshot(page, testInfo, "bot-page-activity-debug-phone");
 });
+
+test("in debug mode a run's dialog shows its facts and copies a diagnostic without the raw error", async ({
+  page,
+  context,
+}, testInfo) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`${FIXTURE}?tab=activity&debug=1`);
+  await page
+    .getByTestId("bot-activity")
+    .getByRole("button", { name: /^Prepare the agenda for Thursday/ })
+    .click();
+
+  const details = page.getByTestId("session-view").getByTestId("run-details");
+  await expect(details).toContainText("anthropic/claude-sonnet");
+  await expect(details).toContainText("1,840 tokens in · 96 out");
+  await expect(details).toContainText("run-52");
+  await captureScreenshot(page, testInfo, "run-dialog-debug");
+
+  await details.getByRole("button", { name: "Copy diagnostic" }).click();
+  const copied = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
+  expect(copied.run).toMatchObject({
+    runId: "run-52",
+    status: "failed",
+    failureKind: "missing_model",
+  });
+  expect(copied.entries).toHaveLength(5);
+  expect(JSON.stringify(copied)).not.toContain("Connect a model in Settings");
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await captureScreenshot(page, testInfo, "run-dialog-debug-phone");
+});

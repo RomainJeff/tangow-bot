@@ -1,9 +1,21 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown, truncateMarkdownForRender } from "@rakazo/chat-ui/web";
-import type { SessionEntry } from "@rakazo/contracts";
-import { drawsNothing, projectThreadView, unshownRunReport } from "@rakazo/core";
-import { Button, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
-import { X } from "lucide-react";
+import type { SessionEntry, SessionEntryOf } from "@rakazo/contracts";
+import {
+  classifyRunFailure,
+  drawsNothing,
+  projectThreadView,
+  unshownRunReport,
+} from "@rakazo/core";
+import {
+  Button,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+  formatShortDuration,
+} from "@rakazo/ui-web";
+import { Check, Copy, X } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useDebugMode } from "../../lib/debug-mode";
 import { hasRenderableBlock } from "../../lib/message-blocks";
@@ -12,7 +24,7 @@ import type { SessionViewTarget } from "../../lib/thread-items";
 import type { RowContext } from "./thread-row";
 import { RowMarker, rowChrome, ThreadRowBody } from "./thread-row";
 
-type Read = { entries: SessionEntry[] | null; failed: boolean };
+type Read = { entries: SessionEntry[] | null; truncated?: true; failed: boolean };
 
 export function SessionView({
   target,
@@ -37,8 +49,8 @@ export function SessionView({
         ? rpc.sessions.entries({ sessionId: current.sessionId }, { signal: abort.signal })
         : rpc.runs.entries({ runId: current.runId }, { signal: abort.signal });
     void load.then(
-      ({ entries }) => {
-        if (!abort.signal.aborted) setRead({ entries, failed: false });
+      ({ entries, truncated }) => {
+        if (!abort.signal.aborted) setRead({ entries, truncated, failed: false });
       },
       () => {
         if (!abort.signal.aborted) setRead({ entries: null, failed: true });
@@ -96,6 +108,13 @@ export function SessionView({
             <X />
           </DialogClose>
         </div>
+        {showSteps && read.entries ? (
+          <RunDetails
+            entries={read.entries}
+            truncated={read.truncated}
+            runId={current.kind === "run" ? current.runId : undefined}
+          />
+        ) : null}
         {read.failed ? (
           <div className="flex flex-col items-center gap-3 py-8 text-meta text-muted-foreground">
             <Trans>Could not load this chat.</Trans>
@@ -133,5 +152,98 @@ export function SessionView({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** A failed outcome as the server shows it: its classified kind, never the raw error. */
+function withoutRawErrors(_key: string, value: unknown): unknown {
+  if (value && typeof value === "object" && "status" in value && "error" in value) {
+    const { error, ...rest } = value as { status: unknown; error: unknown };
+    if (rest.status === "failed" && typeof error === "string") {
+      return { ...rest, failureKind: classifyRunFailure("failed", error) };
+    }
+  }
+  return value;
+}
+
+/**
+ * Debug mode's facts about the run the view shows (the named one, else the session's first),
+ * read from its own log, and a copy of them with the entries to hand to someone.
+ */
+function RunDetails({
+  entries,
+  truncated,
+  runId,
+}: {
+  entries: SessionEntry[];
+  truncated?: true;
+  runId?: string;
+}) {
+  const { t } = useLingui();
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  const started = entries.find(
+    (entry): entry is SessionEntryOf<"run.started"> =>
+      entry.type === "run.started" && (!runId || entry.runId === runId),
+  );
+  // A run past the read's cap lost its start: nothing to say about it.
+  if (!started) return null;
+  const finished = entries.find(
+    (entry): entry is SessionEntryOf<"run.finished"> =>
+      entry.type === "run.finished" && entry.runId === started.runId,
+  );
+  const outcome = finished?.payload;
+  const durationMs = finished ? Date.parse(finished.ts) - Date.parse(started.ts) : null;
+  const run = {
+    runId: started.runId,
+    model: started.payload.model,
+    effort: started.payload.effort,
+    trigger: started.payload.trigger.kind,
+    startedAt: started.ts,
+    status: outcome?.status ?? "running",
+    failureKind: outcome?.status === "failed" ? classifyRunFailure("failed", outcome.error) : null,
+    usage: outcome?.usage ?? null,
+    durationMs,
+  };
+  const facts = [
+    `${run.model.provider}/${run.model.id}`,
+    run.usage
+      ? t`${run.usage.inputTokens.toLocaleString()} tokens in · ${run.usage.outputTokens.toLocaleString()} out`
+      : null,
+    durationMs === null ? null : formatShortDuration(durationMs),
+    run.trigger,
+  ].filter((fact) => fact !== null);
+  const copy = () =>
+    void navigator.clipboard
+      ?.writeText(JSON.stringify({ run, truncated, entries }, withoutRawErrors, 2))
+      .then(
+        () => setCopied(true),
+        () => undefined,
+      );
+  return (
+    <div
+      data-testid="run-details"
+      className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-meta text-muted-foreground"
+    >
+      <p className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex flex-wrap gap-x-1">
+          {facts.map((fact, index) => (
+            <span key={fact} className="whitespace-nowrap">
+              {index > 0 ? "· " : null}
+              {fact}
+            </span>
+          ))}
+        </span>
+        <span className="truncate font-mono text-mono select-all">{run.runId}</span>
+      </p>
+      <Button variant="outline" size="sm" onClick={copy}>
+        {copied ? <Check /> : <Copy />}
+        <Trans>Copy diagnostic</Trans>
+      </Button>
+    </div>
   );
 }
