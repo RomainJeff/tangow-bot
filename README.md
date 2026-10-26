@@ -1,5 +1,7 @@
 # Tangow
 
+![tangow](docs/assets/readme-header.png)
+
 Rakazo is an open-source platform for running persistent AI teammates. It is available on the web,
 as an Electron desktop app, and through an Expo mobile app. Bring your own model and computer
 provider, or run the complete stack locally.
