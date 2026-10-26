@@ -480,6 +480,7 @@ export function createSession(
         (event) => part({ type: "model.event", event } as ReplyPart),
         {
           signal: abort.signal,
+          trace: generation,
           conversation: {
             threadId: request.threadId,
             botId: request.botId,
