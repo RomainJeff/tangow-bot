@@ -180,8 +180,14 @@ const chat = { trigger: "user" } as const;
 const CHAT_RUNS: RunActivityRow[] = NEW
   ? []
   : [
-      run(50, 0.5, { ...chat, promptSnippet: "Compare flights from Paris to Copenhagen on Nov 14" }),
-      run(51, 1.5, { ...chat, promptSnippet: "Draft a reply to the supplier about the late invoice" }),
+      run(50, 0.5, {
+        ...chat,
+        promptSnippet: "Compare flights from Paris to Copenhagen on Nov 14",
+      }),
+      run(51, 1.5, {
+        ...chat,
+        promptSnippet: "Draft a reply to the supplier about the late invoice",
+      }),
       run(52, 3, {
         ...chat,
         promptSnippet: "Prepare the agenda for Thursday's committee",
