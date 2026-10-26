@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - The desktop app on macOS, Windows and Linux and the iOS app have a new icon: the black clay bot from the tangow site on a linen background, replacing the orange bot.
 
+#### Added
+
+- **Tangow guides your first source deployment from configuration to verified startup.** Run `./tangow setup` to generate private secrets, deploy the current checkout, and open Rakazo for account and model setup. Retries preserve saved credentials, and E2B can continue through the existing provider setup ([getting started](README.md#getting-started)).
+
 #### Fixed
 
 - Source deployments using Docker or E2B computers restart their server services automatically after a host reboot unless explicitly stopped.

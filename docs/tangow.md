@@ -48,6 +48,49 @@ Any remaining snapshot homes or Docker volumes block restart. Use the existing
 worker after migration consent, and can migrate before the new API is first started. Tangow never
 starts an API with an incomplete E2B upgrade.
 
+## First deployment
+
+From a source checkout on the deployment machine, run:
+
+```bash
+./tangow setup
+```
+
+Install Git, Docker with Compose, and a supported Node version first: Node 22.22.2+ in the 22.x
+line, 24.x, or 26+. Use `--sudo` if Docker needs passwordless `sudo -n`. Setup checks Docker
+access before writing configuration; it does not install host tools.
+
+The wizard asks for the web origin and computer provider, generates independent database and
+application secrets, then builds and starts **the current checkout**. It never fetches or switches
+branches. It verifies startup migrations, the running revision/provider and service images,
+and API and web readiness. The final URL is where you create the first owner account and
+connect a model. Send a bot a message to check a real model-backed run after onboarding.
+
+Loopback defaults to `http://127.0.0.1:5173`. For a public origin, use HTTPS and configure a reverse
+proxy to `127.0.0.1:5173` first. Setup asks for SMTP, an email sender and a signup allowlist before
+the first startup, applies that policy to the database on public setup and retries, and checks web
+access from the deployment machine afterwards. The allowlist also applies to existing accounts;
+those users must verify their email when the deployment becomes public. It does not
+configure DNS, TLS, email-provider credentials or external-client connectivity. Use an email
+address or an `@example.com` domain in the allowlist. Delivery must work to verify the first
+account's email. See [self-hosting](self-host.md#verification-and-password-recovery-email).
+
+Docker needs no host pnpm installation. If you select E2B, enable Corepack and pnpm 9, prepare
+an existing E2B service and log in to a pushable registry first. The wizard starts and verifies
+Docker before continuing through the existing E2B setup, which requests the domain and hidden
+API key, builds templates and checks provider readiness. It does not provision E2B infrastructure.
+
+`.env` and `.env.tangow.json` stay private with owner-only permissions. Secret input is hidden.
+Retries preserve saved secrets, unrelated settings and comments. If containers, volumes or local data
+already exist but required credentials are missing, restore the original `.env`; setup refuses
+to regenerate credentials that could disconnect the database or make stored credentials unreadable.
+
+After a build or readiness failure, fix the reported stage and rerun `./tangow setup` from the
+same checkout. Select E2B again if its continuation has not yet saved the provider override.
+If a provider migration journal exists, follow its [recovery instructions](#recover-an-interrupted-operation)
+instead. Setup never deletes data or rolls back. For later upgrades use `./tangow update`.
+`./tangow setup --dry-run` describes the flow without prompting or changing anything.
+
 ## Configure once
 
 The deployment needs Git, Docker Compose, a configured `.env` and Node.js. E2B builds need a Node

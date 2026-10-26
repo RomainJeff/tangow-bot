@@ -8,7 +8,7 @@ Two projections read the same entries, one for the turns the model reads and one
 
 No hosted vendor is required to run the core product, since models, sandboxes, memory and integrations sit behind optional provider-neutral ports.
 
-This page describes the shape the [session log plan](plans/2026-10-10-thread-log.md) left. Threads from before it were backfilled into their sessions, and the `messages` table and the message events are gone.
+This page describes the session log. Threads from before it were backfilled into their sessions, and the `messages` table and the message events are gone.
 
 ## Messages are entries on a chain
 
@@ -61,7 +61,7 @@ In the Model column, `context` means one short line in the model's history. A Th
 
 In a top-level bot's own conversation, its closing free text is not logged, since only what it sends with `message_user` reaches the person. A routine run, a helper, a sub-bot and a delegated run have their final reply as their output, and it is logged.
 
-A harness with its own loop logs its own tool calls once its attempt ends, so they reach the chain after the controller calls of that attempt. Their `ts` places them where the attempt made them, which is the order `readRun` returns; a resumed run's replay follows the chain instead. See [Adding a harness](implementation/pi-e2b/adding-a-harness.md).
+A harness with its own loop logs its own tool calls once its attempt ends, so they reach the chain after the controller calls of that attempt. Their `ts` places them where the attempt made them, which is the order `readRun` returns; a resumed run's replay follows the chain instead.
 
 Nothing writes `attachment.added`, `session.title` or `harness.session` yet. Streamed text deltas (`thread.progress`), computer status, the takeover negotiation, per-call usage records and a bot's or a group's settings and members stay out of the log, in the `events` table or their own tables.
 
@@ -172,5 +172,3 @@ Migration `20261012000000_drop_messages` defines `drop_messages_when_logged()`, 
 - A state change is a new entry that names its card, never a rewrite, so clients only merge.
 - Frontends render state from the same projection on every surface, as [AGENTS.md](../AGENTS.md) requires.
 - A new provider sits behind a port and passes an offline conformance test, here [`conformance.ts`](../packages/adapters/src/session-log/conformance.ts).
-
-Later work is listed in Appendix D of the [session log plan](plans/2026-10-10-thread-log.md).
