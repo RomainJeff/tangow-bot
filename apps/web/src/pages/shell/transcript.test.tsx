@@ -16,12 +16,15 @@ vi.mock("@lingui/core/macro", () => ({ t: identityTag }));
 vi.mock("@lingui/react/macro", () => ({
   useLingui: () => ({ t: identityTag }),
   Trans: ({ children }: { children?: ReactNode }) => children,
+  Plural: ({ value, one, other }: { value: number; one: string; other: string }) =>
+    (value === 1 ? one : other).replace("#", String(value)),
 }));
 
 const api = vi.hoisted(() => ({ sessionEntries: vi.fn() }));
 vi.mock("../../lib/rpc", () => ({ rpc: { sessions: { entries: api.sessionEntries } } }));
 
 import streamedReply from "../../../../../packages/core/src/session-log/fixtures/streamed-reply.jsonl?raw";
+import { setDebugMode } from "../../lib/debug-mode";
 import { hasRenderableBlock } from "../../lib/message-blocks";
 import { Transcript } from "./transcript";
 
@@ -76,6 +79,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   vi.useRealTimers();
+  setDebugMode(false);
 });
 
 async function renderThread(
@@ -124,15 +128,14 @@ const text = (selector: string) =>
   [...document.querySelectorAll(selector)].map((element) => element.textContent);
 
 describe("the transcript", () => {
-  it("draws a reply as its bubble with nothing for the run, the helper's card and a rewind divider", async () => {
+  it("draws a reply as its bubble with nothing for the run or its helper, and a rewind divider", async () => {
     await renderThread(17);
 
     expect(
       [...document.querySelectorAll("[data-message-id]")].map((row) =>
         row.getAttribute("data-message-id"),
       ),
-    ).toEqual(["str-00", "str-05", "str-06", "str-08", "str-09", "str-17"]);
-    expect(text('[data-testid="task-card"] span[dir="auto"]')).toEqual(["scout"]);
+    ).toEqual(["str-00", "str-02", "str-08", "str-09", "str-17"]);
     expect(text('[data-testid="thread-divider"]')).toEqual(["Message edited"]);
     expect(text('[data-testid="message-user-bubble"]')).toEqual([
       "Find three competitors and summarize Acme's site",
@@ -348,11 +351,17 @@ describe("the transcript", () => {
     ]);
   });
 
-  it("opens a finished helper's own session, read-only", async () => {
+  it("opens a finished helper's own session from its step in debug mode, read-only", async () => {
+    setDebugMode(true);
     await renderThread(9);
 
-    const card = document.querySelector<HTMLButtonElement>('[data-testid="task-card"] button');
-    await act(async () => card?.click());
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('[data-testid="agent-steps-toggle"]')?.click(),
+    );
+    const step = [...document.querySelectorAll("button")].find(
+      (button) => button.textContent === "run_subagent",
+    );
+    await act(async () => step?.click());
 
     expect(api.sessionEntries).toHaveBeenCalledWith(
       { sessionId: "ses_scout" },

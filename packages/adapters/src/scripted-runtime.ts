@@ -74,40 +74,24 @@ export class ScriptedAgentRuntime implements AgentRuntime {
         }
         for (const call of turn.toolCalls ?? []) {
           const executionId = `${request.runId}:${call.name}:${toolCallSeq++}`;
-          if (call.name === "run_subagent") {
-            const agentId = `${request.runId}:subagent`;
-            const name = String(call.args.name ?? "helper");
+          yield { type: "tool", name: call.name, args: call.args, executionId };
+          if (call.name === "run_subagent" && request.startSubagent) {
             const task = String(call.args.task ?? request.prompt);
-            yield {
-              type: "subagent",
-              agentId,
-              name,
+            const log = await request.startSubagent({
+              callId: executionId,
+              name: String(call.args.name ?? "helper"),
               task,
-              status: "running",
-              progress: "working…",
-            };
-            yield {
-              type: "tool",
-              name: call.name,
               args: call.args,
-              executionId,
-            };
-            yield {
-              type: "subagent",
-              agentId,
-              name,
-              task,
+              model: request.model,
+            });
+            const result = helperResult(task);
+            await log.text(result);
+            await log.finish({
               status: "completed",
-              result: `done. i handled: ${task.slice(0, 180)}`,
-            };
-            continue;
+              result,
+              usage: { inputTokens: 0, outputTokens: 0 },
+            });
           }
-          yield {
-            type: "tool",
-            name: call.name,
-            args: call.args,
-            executionId,
-          };
         }
         if (turn.ask) {
           asked.add(request.runId);
@@ -144,6 +128,10 @@ export class ScriptedAgentRuntime implements AgentRuntime {
       running.delete(request.runId);
     }
   }
+}
+
+function helperResult(task: string): string {
+  return `it found: ${task.slice(0, 180)}`;
 }
 
 function messageUser(runId: string, message: string, seq: number): AgentRuntimeEvent {
@@ -398,8 +386,8 @@ export function inferScript(
       {
         assistant: "spinning up a helper for that.",
         toolCalls: [{ name: "run_subagent", args: { name: "helper", task: prompt } }],
-        complete: true,
       },
+      { assistant: `the helper is done. ${helperResult(prompt)}`, complete: true },
     ];
   }
   if (

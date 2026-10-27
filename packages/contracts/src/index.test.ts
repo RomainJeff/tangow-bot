@@ -100,9 +100,6 @@ describe("contracts", () => {
       canReactToThreadMessage({ id: "message-1", blocks: [{ kind: "text", text: "hi" }] }),
     ).toBe(true);
     expect(
-      canReactToThreadMessage({ id: "subagent:agent-1", blocks: [{ kind: "text", text: "hi" }] }),
-    ).toBe(false);
-    expect(
       canReactToThreadMessage({
         id: "message-2",
         blocks: [

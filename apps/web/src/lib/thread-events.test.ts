@@ -458,10 +458,9 @@ describe("a streamed reply fed through the reducer", () => {
 
   const asked = "user: Find three competitors and summarize Acme's site";
   const steps = "steps Web search, Run subagent";
-  const answered = "bot: Acme, Globex, Initech | ask Compare prices too? (answered)";
-  const scout = "subagent scout completed";
+  const answered = `bot: ${steps} | Acme, Globex, Initech | ask Compare prices too? (answered)`;
   const summary = "bot: Summary of https://acme.example";
-  const firstRun = [asked, "run completed", `bot: ${steps}`, scout, answered, "user: Yes", summary];
+  const firstRun = [asked, "run completed", answered, "user: Yes", summary];
   const idle = { run: null, streaming: [], waiting: null };
   const working = (runId: string, streaming: string[] = []) => ({
     run: `${runId} running`,
@@ -497,19 +496,19 @@ describe("a streamed reply fed through the reducer", () => {
       {
         cursor: 6,
         ...working("run_str_1"),
-        rows: [asked, "run running", `bot: ${steps}`, "subagent scout running"],
+        rows: [asked, "run running", `bot: ${steps}`],
       },
     ],
     [
       appendedAt(7, "str-05"),
-      { cursor: 7, ...working("run_str_1"), rows: [asked, "run running", `bot: ${steps}`, scout] },
+      { cursor: 7, ...working("run_str_1"), rows: [asked, "run running", `bot: ${steps}`] },
     ],
     [
       delta(8, "run_str_1", "Acme, "),
       {
         cursor: 8,
         ...working("run_str_1", ["run_str_1"]),
-        rows: [asked, "run running", `bot: ${steps}`, scout, "bot live: Acme, "],
+        rows: [asked, "run running", `bot: ${steps}`, "bot live: Acme, "],
       },
     ],
     [
@@ -517,7 +516,7 @@ describe("a streamed reply fed through the reducer", () => {
       {
         cursor: 9,
         ...working("run_str_1", ["run_str_1"]),
-        rows: [asked, "run running", `bot: ${steps}`, scout, "bot live: Acme, Globex, Initech"],
+        rows: [asked, "run running", `bot: ${steps}`, "bot live: Acme, Globex, Initech"],
       },
     ],
     [
@@ -525,7 +524,7 @@ describe("a streamed reply fed through the reducer", () => {
       {
         cursor: 10,
         ...working("run_str_1"),
-        rows: [asked, "run running", `bot: ${steps}`, scout, "bot: Acme, Globex, Initech"],
+        rows: [asked, "run running", `bot: ${steps} | Acme, Globex, Initech`],
       },
     ],
     [
@@ -537,9 +536,7 @@ describe("a streamed reply fed through the reducer", () => {
         rows: [
           asked,
           "run running",
-          `bot: ${steps}`,
-          scout,
-          "bot: Acme, Globex, Initech | ask Compare prices too?",
+          `bot: ${steps} | Acme, Globex, Initech | ask Compare prices too?`,
         ],
       },
     ],
@@ -548,7 +545,7 @@ describe("a streamed reply fed through the reducer", () => {
       {
         cursor: 12,
         ...working("run_str_1"),
-        rows: [asked, "run running", `bot: ${steps}`, scout, answered, "user: Yes"],
+        rows: [asked, "run running", answered, "user: Yes"],
       },
     ],
     [
@@ -556,15 +553,7 @@ describe("a streamed reply fed through the reducer", () => {
       {
         cursor: 13,
         ...working("run_str_1", ["run_str_1"]),
-        rows: [
-          asked,
-          "run running",
-          `bot: ${steps}`,
-          scout,
-          answered,
-          "user: Yes",
-          "bot live: Summary of ",
-        ],
+        rows: [asked, "run running", answered, "user: Yes", "bot live: Summary of "],
       },
     ],
     [
@@ -572,7 +561,7 @@ describe("a streamed reply fed through the reducer", () => {
       {
         cursor: 14,
         ...working("run_str_1"),
-        rows: [asked, "run running", `bot: ${steps}`, scout, answered, "user: Yes", summary],
+        rows: [asked, "run running", answered, "user: Yes", summary],
       },
     ],
     [appendedAt(15, "str-10"), { cursor: 15, ...working("run_str_1"), rows: firstRun }],
@@ -674,8 +663,6 @@ describe("a streamed reply fed through the reducer", () => {
             .join(" | ")}`;
         case "run":
           return `run ${item.finished?.outcome.status ?? "running"}`;
-        case "subagent":
-          return `subagent ${item.name} ${item.status}`;
         case "divider":
           return `divider ${item.reason}`;
         default:

@@ -1,4 +1,4 @@
-import type { MessageBlock } from "@rakazo/contracts";
+import type { MessageBlock, SessionId } from "@rakazo/contracts";
 import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -11,7 +11,7 @@ import { NativeSymbol } from "./native-symbol";
 import { ShimmerText } from "./shimmer-text";
 
 type StepsBlock = Extract<MessageBlock, { kind: "steps" }>;
-type StepCall = { name: string; input: string; output: string };
+type StepCall = NonNullable<StepsBlock["steps"][number]["calls"]>[number];
 
 /** Flattens collapsed steps back to one entry per call, detail-free calls included. */
 export function stepCalls(block: StepsBlock): StepCall[] {
@@ -25,10 +25,18 @@ export function stepCalls(block: StepsBlock): StepCall[] {
 /**
  * What the bot thought, folded away until someone asks: "Thought for 41s · 4
  * steps" over the tools it used, each name opening its own sheet with that
- * call's input and output. The native counterpart of `ReasoningDisclosure`;
- * web counterpart: apps/web/src/components/AgentSteps.tsx.
+ * call's input and output, a helper's its own session. The native counterpart
+ * of `ReasoningDisclosure`; web counterpart: apps/web/src/components/AgentSteps.tsx.
  */
-export function AgentSteps({ block, live = false }: { block: StepsBlock; live?: boolean }) {
+export function AgentSteps({
+  block,
+  live = false,
+  onOpenSession,
+}: {
+  block: StepsBlock;
+  live?: boolean;
+  onOpenSession?: (sessionId: SessionId, title: string) => void;
+}) {
   const { t } = useI18n();
   const styles = useThemedStyles(createAgentStepsStyles);
   const tokens = useMobileTokens();
@@ -72,7 +80,10 @@ export function AgentSteps({ block, live = false }: { block: StepsBlock; live?: 
               accessibilityRole="button"
               accessibilityLabel={call.name}
               hitSlop={8}
-              onPress={() => setOpenIndex(index)}
+              onPress={() => {
+                if (call.sessionId && onOpenSession) onOpenSession(call.sessionId, call.name);
+                else setOpenIndex(index);
+              }}
               style={({ pressed }) => [styles.call, pressed && styles.pressed]}
             >
               {live && index === lastIndex ? (
