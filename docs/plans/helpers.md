@@ -1,6 +1,6 @@
 # Specialized helpers plan
 
-Issue #386. A bot delegates a task to a helper chosen by a versioned profile, and a background helper keeps working after the bot's turn ends and wakes the bot with a short report. The person using Rakazo sees only the bot's replies. Helpers are invisible on web, desktop and mobile, and the cards `run_subagent` draws today go away. The rule the program enforces is that the controller owns the trust boundary (profiles, tool selection, exclusive locks, helper state, the report and the wake), and the harness only runs the loop. Scope is the mechanism plus example profiles. The real managed profiles (`general`, `computer-use`, `coding`, `video`), the real routing skills, the `delegate-to-opencode` migration and the removal of computer and browser tools from the main bot come next. PRs in order are H1 (remove helper cards), H2 (managed profiles on sync `run_subagent`), H3 (exclusive lock), H4 (background lifecycle and wake) and H5 (helper status, message and stop, examples and CHANGELOG).
+Issue #386. A bot delegates a task to a helper chosen by a versioned profile, and a background helper keeps working after the bot's turn ends and wakes the bot with a short report. The person using Rakazo sees only the bot's replies. Helpers are invisible on web, desktop and mobile, and the cards `run_subagent` draws today go away. The rule the program enforces is that the controller owns the trust boundary (profiles, tool selection, exclusive locks, helper state, the report and the wake), and the harness only runs the loop. Scope is the mechanism plus example profiles. The real managed profiles (`general`, `computer-use`, `coding`, `video`), the real routing skills, the `delegate-to-opencode` migration and the removal of computer and browser tools from the main bot come next. PRs in order are H1 (remove helper cards), H2 (managed profiles on sync `run_subagent`), H3 (exclusive lock), H4 (background lifecycle and wake) and H5 (helper status, message, stop and `ask_parent`, examples and CHANGELOG).
 
 ## How to read this
 
@@ -17,6 +17,7 @@ These come from issue #386 and its two decision comments. They are settled and e
 - Context. A helper is not a fork of the parent. It starts from its profile instructions, the parent's brief and its selected tools. Files and images travel by volume path. `search_runs` stays available. There is no `context: "fork"` option.
 - Tools. A profiled helper gets every native harness tool by default, plus an `allow` list, minus a `block` list. The main bot goes through the same selection with `MAIN_BOT_BLOCKED_TOOLS`, empty in this program. The next phase puts `computer_*` and `browser_*` there, so computer and browser tools leave the main bot (H2).
 - Visibility. Helpers are invisible in the conversation on every surface. No helper cards. Traces stay in debug mode and in Langfuse.
+- Questions. A background helper that is blocked or unsure asks its parent with `ask_parent` instead of assuming, and waits paused until the parent answers with `helper_message`. The parent decides what to do, including asking the user in its own voice. The parent never approves an action on the user's behalf.
 - Planning. Rakazo adds no todo list. Each harness plans with what it already knows (scratchpad, todo tools). `helper_status` only reports which helpers are running.
 - Depth. Delegation depth is 1. A helper never gets `run_subagent` or the `helper_*` tools (`isHelperTool`).
 - Sources. Profiles are managed only for now, as a typed TypeScript registry `HELPER_PROFILES` in `packages/core`. Bot and shared sources come later, in files.
@@ -335,7 +336,7 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 - [ ] `feature/helpers` merged into the slice after the verdict, patch-id unchanged.
 - [ ] The owner merges H4 into `feature/helpers` after the operator's click.
 
-## Let the bot check, message and stop its helpers, with examples (H5)
+## Let the bot and its helpers talk, check and stop, with examples (H5)
 
 **Depends on.** H4.
 
@@ -343,6 +344,8 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 
 - [ ] Edit `packages/adapters/src/builtin-tools.ts` and `packages/adapters/src/executor.ts`.
 - [ ] Edit `packages/db/src/events.ts` and `packages/db/src/cancel-runs.ts`.
+- [ ] Edit `packages/contracts/src/session-log.ts`, `packages/core/src/session-log/project-inference.ts` and `packages/adapters/src/runtime-worker/session.ts`.
+- [ ] Edit `apps/api/src/thread-target.ts`.
 - [ ] Create `docs/examples/helpers/README.md` and `packages/testkit/src/helper-profiles.fixture.ts`.
 - [ ] Create `docs/examples/helpers/parallel-research/SKILL.md`.
 - [ ] Edit `skills/README.md` and `CHANGELOG.md`.
@@ -350,8 +353,13 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 **Build.**
 
 - [ ] Add `helper_status`, `helper_message` and `helper_stop` to the builtin tools and to `DELEGATION_TOOL_NAMES`, so `isHelperTool` keeps them from helpers.
-- [ ] `helper_status` returns the bot's active helpers in this thread, `{ helperId, profile, brief, status, startedAt }`. It is a status, not a todo list. Planning stays with the harness's own tools. Finished helpers are already in the mainline as reports.
-- [ ] `helper_message` writes a `SteeringMessage` with `runId` set to the child, in the child's session. `claimSteering` accepts a targeted row outside the main session only for its own run. A message to a finished helper returns an error saying it ended.
+- [ ] Add `ask_parent({ question })`. The controller adds it only to runs with trigger `helper`, never to the main bot or a sync helper. A sync helper runs while its parent waits on it, so a question would deadlock both; it keeps returning its result.
+- [ ] Add `pauseRunForParent` next to `pauseRunForInput` in `packages/db/src/events.ts`. In one transaction under the thread lock it moves the child from `running` to `waiting_input`, parks the attempt so the VM is released, and appends `helper.question { helperId, question }` to the parent's main session with audience `{ inference: "yes", ui: false }`, rendered to the model as `<helper_question>`. It posts no ask card and sends no notification, unlike the `ask_user` path. The exclusive lock stays held, since `waiting_input` is an active status.
+- [ ] Count `helper.question` like `helper.report` in the H4 wake rule, so a question wakes the parent once its current turn ends.
+- [ ] Add `parentRunId: null` to the reads that treat a waiting run as waiting on the user, the thread snapshot in `apps/api/src/thread-target.ts` and `proposalPreflight` in `executor.ts`, so a waiting helper neither shows the bot as waiting on the user nor blocks the parent's own approval cards.
+- [ ] `helper_status` returns the bot's active helpers in this thread, `{ helperId, profile, brief, status, startedAt, question? }`, where a helper waiting on its parent shows `waiting` and its question. It is a status, not a todo list. Planning stays with the harness's own tools. Finished helpers are already in the mainline as reports.
+- [ ] `helper_message` routes by the helper's status under the thread lock. Any message to a waiting helper answers its question. In one transaction it writes the `tool.result` for the paused `ask_parent` call, so resume does not replay the call, moves the child from `waiting_input` to `queued`, and enqueues it. The task prompt is not rewritten. Otherwise it writes a `SteeringMessage` with `runId` set to the child, in the child's session, and `claimSteering` accepts a targeted row outside the main session only for its own run. A message to a finished helper returns an error saying it ended.
+- [ ] An approval-gated call from a background helper keeps the H4 error, which now tells the helper to ask its parent. The parent does the action itself under its own approval, or asks the user. Forwarding a verified approval to the helper is deferred until H6 shows it is needed.
 - [ ] `helper_stop` takes a `helperId` or `all` and cancels through `cancelRunsInTransaction` plus `jobs.cancel(runJobKey(id))`. The child's guest aborts on its next lease renewal. The spike found it does not today with a cancelled child, so the owner proves it on the real worker.
 - [ ] Write `researcher`, a read-only profile meant for background research, that blocks `bash`, `edit` and `write`, and `screen-operator`, which allows `computer_*`, `browser_*` and `search_runs` and holds `computer`. Both are typed fixtures in `packages/testkit/src/helper-profiles.fixture.ts`, outside `HELPER_PROFILES`, so they never ship. Tests and the demo pass them on the request.
 - [ ] Write one example routing skill that says when to start `researcher` in background, how to write its brief and what to do with the report.
@@ -362,20 +370,21 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 
 - [ ] The bot answers "where are you at?" from `helper_status` without stopping the helper.
 - [ ] The user says "actually, also check trains" and the running helper's next model request contains that text.
+- [ ] A background helper asks "which dates?". The bot is woken with the question, asks the user in its own words, gets an answer, answers the helper, and the helper resumes and reports. The thread shows only the bot's messages.
 - [ ] The user says "stop everything" and every helper of the bot in the thread ends as cancelled within one lease renewal, with no report afterwards.
 - [ ] Adding both fixtures to `HELPER_PROFILES` and `computer_*` and `browser_*` to `MAIN_BOT_BLOCKED_TOOLS` in a dev checkout makes the bot's prompt list them, removes computer and browser tools from the main bot, and lets the bot run the demo end to end.
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] `packages/testkit/src/executor-background-helper.test.ts` gains literal cases for the status list, a steered message the parent cannot claim, `helper_stop` on one id and on `all`, and a helper that calls `helper_status` and gets `unknown_tool`. Run `pnpm exec vitest run packages/testkit/src/executor-background-helper.test.ts`.
+- [ ] `packages/testkit/src/executor-background-helper.test.ts` gains literal cases for the status list, a steered message the parent cannot claim, `helper_stop` on one id and on `all`, a helper that calls `helper_status` and gets `unknown_tool`, an `ask_parent` that writes the literal `helper.question`, parks the child, wakes the parent once and resumes with the literal answer as its tool result, a sync helper whose tools lack `ask_parent`, a stop while waiting that cancels with no report, a waiting helper that leaves the thread snapshot and the parent's approval cards unchanged, a resumed helper that does not call `ask_parent` again, and an approval-gated call whose error names `ask_parent`. Run `pnpm exec vitest run packages/testkit/src/executor-background-helper.test.ts`.
 - [ ] `helper-profile.test.ts` gains a case asserting the literal tools granted to each fixture and hidden from the main bot. Run `pnpm exec vitest run packages/core/src/helper-profile.test.ts`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `sonnet` at the PR head, per the boot recipe.
 
 - [ ] Lane 1. Regression lane against trunk. Ask "where are you at?" during a long task at trunk and head. Trunk has no helper tools, so record that and gate the head's status answer. Save `h5-trunk-vs-head.png`. Pass when head answers with the helper's brief and elapsed time.
 - [ ] Lane 2. Add an instruction during the task. Save `h5-message.png`. Pass when the helper's next model request contains it.
-- [ ] Lane 3. Stop one of two helpers. Save `h5-stop-one.png`. Pass when only that one ends cancelled.
-- [ ] Lane 4. Stop all helpers. Save `h5-stop-all.png`. Pass when every helper ends cancelled and no report wakes the bot afterwards.
+- [ ] Lane 3. Stop one of two helpers, then all. Save `h5-stop.png`. Pass when the first stop ends only that one, the second ends the rest, and no report wakes the bot afterwards.
+- [ ] Lane 4. A background helper asks its parent a question that needs the user. Save `h5-ask-parent.png`. Pass when the bot asks the user in its own words, relays the answer, the helper resumes from where it stopped, and no helper question renders in the thread.
 - [ ] Lane 5. Stop a helper that holds an exclusive lock. Save `h5-stop-lock.png`. Pass when a new exclusive helper starts right after.
 - [ ] Lane 6. Watch the worker logs after `helper_stop`. Save `h5-guest-abort.png`. Pass when the child's guest exits within one lease renewal.
 - [ ] Lane 7. With the routing skill installed, send a long research request, then a short question. Save `h5-routing.png`. Pass when the first starts `researcher` in background and the second gets a direct answer.
@@ -445,6 +454,11 @@ npx vitest run packages/testkit/src/spike-helpers-wakeup.test.ts | grep OBS
 - A separate `helper_report` trigger and a `wakeForHelperReports` function. The existing `follow_up` trigger and `createSteeringContinuation` already cover the wake, under the lock every finalize takes.
 - Deriving the main bot's hidden tools from profiles, either every tool of an exclusive profile or the tools mapped to its resource. The first takes base tools such as `bash` away from the main bot, and both hide tools by inference. An explicit `MAIN_BOT_BLOCKED_TOOLS` list and per-profile `allow` and `block` lists say the same thing in plain sight.
 - A Rakazo todo list built from helper state. The operator left planning to each harness's own tools.
+- The parent approving a helper's action itself. Approvals record a human's consent under the bot's policy, and the parent would need that same approval for the action. Letting it say yes would turn delegation into a way around approvals.
+- `ask_parent` for sync helpers. The parent waits on the sync helper's result, so a question would deadlock both.
+- Reusing the whole `ask_user` pause and resume path for `ask_parent`. It posts an ask card, notifies the user and resumes with a `user.message` that claims the user answered. `ask_parent` reuses only the run status change and the attempt parking.
+- A separate tool to answer a question. Routing `helper_message` by the helper's status means the parent never has to know whether the helper waits.
+- Folding questions into `helper.report`. A report means the helper finished, and every reader would have to tell the two apart.
 - Seven slices. The profile registry had no observable behavior alone, and the examples and CHANGELOG belong in the last slice anyway, so they merged into H2 and H5.
 - A separate lock table or advisory locks for `exclusive`. A partial unique index on the helper's own run row releases itself on every terminal status.
 - Steering the report into an active parent turn. The spike showed steering drops non-user text, and waking after the turn needs no steering changes.
@@ -454,6 +468,7 @@ npx vitest run packages/testkit/src/spike-helpers-wakeup.test.ts | grep OBS
 
 - Team computer contention between a parent and its child (H4, H5). Until the next phase removes computer tools from the main bot, a parent that holds a team computer lease blocks its child's computer calls with `ComputerBusyError`. The H5 owner watches lane 8. The next phase removes the conflict by design.
 - A cancelled child's guest keeps running (H5). The owner proves the abort on the real worker before merge.
+- A helper waiting on a parent that never answers keeps its exclusive lock (H5). The question is in the parent's context and `helper_status` shows it, and the parent can always stop the helper. There is no timeout.
 - Lost or doubled reports when the child and the parent finish together (H4). The wake branch runs inside `createSteeringContinuation`, under the thread row lock every finalize already takes. Lanes 3 and 4 watch it.
 - The child's final answer may be missing from its session (H4). The owner checks the pi-native transcript first.
 - The main bot can still call a tool an exclusive helper uses, and so bypass the lock, until the next phase fills `MAIN_BOT_BLOCKED_TOOLS` (H2, H3). Nothing in this program ships a profile that holds `computer`, so no user hits it.
@@ -506,3 +521,16 @@ The same reviewer role reviewed H1, H2, H4 and Appendix B again. Its verdict was
 5. State that a running sync helper is not openable in debug. Accepted in H1.
 
 6. Say how the open action reaches the steps view. Accepted in H1.
+
+### Third review, on `ask_parent`
+
+The same reviewer role reviewed the H5 change that lets a background helper ask its parent. Its verdict was simplify. It kept background only, the lock held while waiting, `helper_message` answering a pending question, and `helper.question` as its own entry type.
+
+1. Reuse only the status change, not the `ask_user` card path, which posts a card, notifies and claims the user answered. Accepted, as `pauseRunForParent`.
+2. Filter child runs out of reads that treat a waiting run as waiting on the user. Accepted, for the thread snapshot and `proposalPreflight`.
+3. Write the `tool.result` before requeueing, so resume does not replay `ask_parent`. Accepted. The H5 owner checks against H4 where the child's brief lives.
+4. Keep `ask_parent` away from the main bot. Accepted, offered only to runs with trigger `helper`.
+5. Keep the overloaded `helper_message` and say any message to a waiting helper answers it. Accepted.
+6. Drop `questionId`. Accepted, since a paused run has at most one question.
+7. Keep `helper.question` separate. Accepted.
+
