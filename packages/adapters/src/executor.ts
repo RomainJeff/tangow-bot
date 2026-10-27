@@ -2511,7 +2511,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
               },
               select: { id: true },
             });
-            const helperRun = await tx.run.create({
+            const exclusive = call.profile?.exclusive;
+            // The run row is the lock: a bot's active runs hold each resource once.
+            const [helperRun] = await tx.run.createManyAndReturn({
               data: {
                 spaceId: run.spaceId,
                 botId: bot.id,
@@ -2524,10 +2526,20 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 parentRunId: runId,
                 modelProvider: call.model.provider,
                 modelId: call.model.id,
+                helper: call.profile?.name ?? null,
+                exclusive: exclusive ?? null,
                 startedAt: new Date(),
               },
+              skipDuplicates: true,
               select: { id: true },
             });
+            if (!helperRun) {
+              const holder = await tx.run.findFirstOrThrow({
+                where: { botId: bot.id, exclusive, status: { in: [...ACTIVE_RUN_STATUSES] } },
+                select: { id: true, helper: true },
+              });
+              throw new Error(`${exclusive} is held by helper ${holder.id} (${holder.helper})`);
+            }
             await deps.sessionLog.append(tx, {
               type: "run.started",
               sessionId,

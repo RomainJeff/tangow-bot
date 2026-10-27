@@ -359,6 +359,7 @@ export function createSession(
           task: call.task,
           args: body.args,
           model: { provider: model.provider, id: model.id },
+          profile,
         });
         helper = {
           log,

@@ -588,6 +588,9 @@ model Run {
   parentRunId          String?
   parentRun            Run?                @relation("RunChildren", fields: [parentRunId], references: [id], onDelete: SetNull)
   childRuns            Run[]               @relation("RunChildren")
+  // A helper run only: the profile it runs, and the resource it holds while active.
+  helper               String?
+  exclusive            String?
 
   @@unique([spaceId, clientNonce])
   @@index([status, leaseExpiresAt])

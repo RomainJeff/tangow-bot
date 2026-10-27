@@ -1,5 +1,6 @@
 import { createWorkerAgentRuntime, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
 import { HARNESSES } from "@rakazo/agent-run-worker";
+import type { HelperProfile } from "@rakazo/core";
 import { afterEach, expect, it, vi } from "vitest";
 import { stopThreadRuns } from "../../../apps/api/src/thread-target.js";
 import {
@@ -346,4 +347,94 @@ it("runs native Pi helpers in separate persisted sessions and resumes the parent
     (await run.runEntries(runId)).filter((entry) => entry.type === "assistant.ask"),
   ).toHaveLength(1);
   expect(provision).not.toHaveBeenCalled();
+});
+
+it("lends a bot's computer to one exclusive helper at a time", async () => {
+  const launcher = manualLauncher({
+    name: "pi-native",
+    capabilities: ["native-loop", "subagents"],
+  });
+  const runtime = createWorkerAgentRuntime({
+    launcher: launcher.launcher,
+    stops: { mark: async () => undefined },
+  });
+  const helperProfiles: HelperProfile[] = [
+    {
+      name: "operator",
+      description: "Uses the computer.",
+      exclusive: "computer",
+      instructions: "",
+    },
+    { name: "writer", description: "Writes.", instructions: "" },
+  ];
+  const run = await startWorkerRun({
+    steps: [],
+    computerScope: "none",
+    runtime: () => ({
+      describe: () => runtime.describe(),
+      run: (request, context) => runtime.run({ ...request, helperProfiles }, context),
+      abort: (runId) => runtime.abort(runId),
+    }),
+  });
+  cleanups.push(() => run.close());
+  const runId = await run.send("Book it.");
+  const continued = run.continueRun(runId);
+  const launched = await launcher.launchedFor(runId);
+  const guest = rawGuest(launched.connect(), launched.capability, {
+    name: "pi-native",
+    capabilities: ["native-loop", "subagents"],
+  });
+  await guest.hello();
+  let seq = 0;
+  const delegate = async (helper: string) => {
+    const callId = `call-${seq}`;
+    guest.send(++seq, { type: "tool", name: "run_subagent", args: {}, executionId: callId });
+    guest.send(++seq, {
+      type: "tool.call",
+      agent: "root",
+      callId,
+      name: "run_subagent",
+      args: { name: helper, task: "Do it.", helper },
+    });
+    return { seq, reply: (await guest.replies(seq, 1))[0] };
+  };
+  const finish = async (agent: string) => {
+    guest.send(++seq, { type: "subagent.finish", agent, status: "completed", result: "Done." });
+    expect(await guest.replies(seq)).toEqual([{ type: "recorded" }]);
+  };
+
+  const first = await delegate("operator");
+  expect(first.reply).toMatchObject({ type: "subagent.start", agent: "helper:1" });
+  const holder = await run.prisma.run.findFirstOrThrow({
+    where: { parentRunId: runId, helper: "operator" },
+  });
+  expect(await delegate("writer")).toMatchObject({
+    reply: { type: "subagent.start", agent: "helper:2" },
+  });
+  expect((await delegate("operator")).reply).toEqual({
+    type: "error",
+    message: `computer is held by helper ${holder.id} (operator)`,
+  });
+
+  await finish("helper:1");
+  expect((await guest.replies(first.seq)).at(-1)).toEqual({ type: "tool.result", output: "Done." });
+  expect(await delegate("operator")).toMatchObject({
+    reply: { type: "subagent.start", agent: "helper:3" },
+  });
+  await finish("helper:2");
+  await finish("helper:3");
+  guest.send(++seq, { type: "done" });
+  await continued;
+
+  expect(
+    await run.prisma.run.findMany({
+      where: { parentRunId: runId },
+      orderBy: { createdAt: "asc" },
+      select: { helper: true, exclusive: true, status: true },
+    }),
+  ).toEqual([
+    { helper: "operator", exclusive: "computer", status: "completed" },
+    { helper: "writer", exclusive: null, status: "completed" },
+    { helper: "operator", exclusive: "computer", status: "completed" },
+  ]);
 });

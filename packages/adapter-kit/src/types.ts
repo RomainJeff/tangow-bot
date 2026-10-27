@@ -498,6 +498,8 @@ export interface SubagentCall {
   task: string;
   args: Record<string, unknown>;
   model: { provider: string; id: string };
+  /** The profile the helper runs; its `exclusive` resource is held for the helper's run. */
+  profile?: Pick<HelperProfile, "name" | "exclusive">;
 }
 
 /** Where a helper writes what it does. Writes land in the order they are made. */
