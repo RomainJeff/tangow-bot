@@ -1,7 +1,9 @@
 import type { Request, Route } from "@playwright/test";
 import { activeBotId, captureScreenshot, completeOnboarding, rpc, signup } from "./helpers";
-import { expect, type Locator, type Page, type TestInfo, test } from "./test";
-import { at, type EntryDraft, runStarted, showThread } from "./thread-log";
+import type { Locator, Page, TestInfo } from "./test";
+import { expect, test } from "./test";
+import type { EntryDraft } from "./thread-log";
+import { at, runStarted, showThread } from "./thread-log";
 
 const RUN = "draft-run";
 const EFFECT = "draft-effect";

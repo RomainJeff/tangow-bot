@@ -361,7 +361,18 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
       const composio = new ComposioEmulator();
       composio.failNext("GMAIL_SEND_EMAIL", { kind: "fail", error: "Invalid recipient" });
       await journey(
-        [proposeMail, WAITING, { expect() {}, response: reply("Sent.") }, DONE],
+        [
+          proposeMail,
+          WAITING,
+          {
+            expect(request) {
+              const seen = JSON.stringify(request.messages);
+              expect(seen).toContain("The user sent this message from the draft card.");
+            },
+            response: reply("Sent."),
+          },
+          DONE,
+        ],
         async (fixture) => {
           const mailed = await connectGmail(composio, fixture);
           const sent = await fixture.send("Mail them hello.");

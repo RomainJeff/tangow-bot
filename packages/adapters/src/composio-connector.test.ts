@@ -544,7 +544,11 @@ describe("native Composio tools", () => {
       logId: "",
     });
     expect(await executeEvents(connector, tool!, {})).toEqual([
-      expect.objectContaining({ type: "error", message: "denied Bearer [redacted]" }),
+      expect.objectContaining({
+        type: "error",
+        message: "denied Bearer [redacted]",
+        details: { successful: false, error: "denied Bearer [redacted]" },
+      }),
     ]);
     composioSdkState.execute.mockRejectedValueOnce(new Error("denied Bearer test-token"));
     expect(await executeEvents(connector, tool!, {})).toEqual([

@@ -178,6 +178,17 @@ describe("draftRequest", () => {
       [2, "arguments", "tools", 0, "arguments", "body"],
     ],
     [
+      "a native send over the lazy catalog, which has no batch",
+      catalogApprovalRequest(
+        "composio_execute_tool",
+        { id: "r1:GMAIL_SEND_EMAIL", arguments: send },
+        marker,
+        { ...route, toolName: "GMAIL_SEND_EMAIL" },
+      ),
+      false,
+      [2, "arguments", "body"],
+    ],
+    [
       "a bound batch",
       boundDirectApprovalRequest(route, { tools: [tracedItem] }, marker),
       true,
@@ -224,6 +235,15 @@ describe("readSendResult", () => {
     ],
     ["a connector error, which a timeout also gives", { error: "Request timed out" }, "uncertain"],
     [
+      "a connector error the app reported",
+      {
+        error: "Invalid recipient",
+        kind: "unknown",
+        details: { successful: false, error: "Invalid recipient" },
+      },
+      "Invalid recipient",
+    ],
+    [
       "a failed action in a batch",
       batch({ successful: false, error: "Invalid recipient" }),
       "Invalid recipient",
@@ -239,9 +259,32 @@ describe("readSendResult", () => {
       "Quota",
     ],
     [
-      "an MCP error result",
-      { content: [{ type: "text", text: "Token expired" }], isError: true },
-      "Token expired",
+      "an MCP error, which a server also gives for what failed after the send",
+      {
+        error: "Connector tool reported an error. See details.",
+        kind: "unknown",
+        details: { content: [{ type: "text", text: "Token expired" }], isError: true },
+      },
+      "uncertain",
+    ],
+    [
+      "a failed action in MCP-hosted Composio's error",
+      {
+        error: "Connector tool reported an error. See details.",
+        kind: "unknown",
+        details: {
+          content: [
+            { type: "text", text: JSON.stringify(batch({ successful: false, error: "Quota" })) },
+          ],
+          isError: true,
+        },
+      },
+      "Quota",
+    ],
+    [
+      "a send that left, whose response has details of its own",
+      { successful: true, data: { details: { successful: false, error: "Not this" } } },
+      "sent",
     ],
     ["a failure with no words", { successful: false }, "The app did not send it."],
   ])("reads %s", (_, result, outcome) => {
