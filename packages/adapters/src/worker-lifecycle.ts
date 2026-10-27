@@ -60,13 +60,13 @@ export class VolumeBusyError extends Error {
 export type StartedWorker = { providerRef: string; start: Omit<WorkerStartV1, "run"> };
 
 /** Why a home cannot move onto volumes now. */
-export type HomeMoveBlocker = "computer_active" | "volume_busy" | "space_worker_live";
+export type HomeMoveBlocker = "computer_active" | "space_worker_live";
 
 /**
  * What a home move saw when it started. Adoption refuses once the home has a new revision, or once
- * a worker of the space has appeared, since that worker may have written the shared volume.
+ * a worker in its scope has appeared, since that worker may have written the volumes.
  */
-export type HomeMoveStart = { homeRevision: string; spaceWorkers: number };
+export type HomeMoveStart = { homeRevision: string; workerCount: number };
 
 export type HomeAdoption =
   | "adopted"
@@ -159,18 +159,20 @@ async function computerBlocker(
   return idle ? null : "computer_active";
 }
 
-/**
- * Any worker of the space that may still run can write its shared volume, which takes no writer
- * lease, so a team home must not be copied or adopted under it. `total` counts every attempt of
- * the space that ever had a worker: workerState is never cleared, so it only grows, and comparing
- * it needs no clock.
- */
-async function spaceWorkers(db: Db, spaceId: string): Promise<{ live: number; total: number }> {
+/** All workers in the home's scope, including finished runs and superseded attempts. */
+async function homeWorkers(
+  db: Db,
+  computerId: string,
+  computer: HomeComputer,
+): Promise<{ live: number; total: number }> {
   const [counts] = await db.$queryRaw<{ live: number; total: number }[]>`
     SELECT count(*) FILTER (WHERE a."workerState" IN (${RELEASABLE}))::int AS live,
       count(a."workerState")::int AS total
     FROM attempts a JOIN runs r ON r.id = a."runId"
-    WHERE r."spaceId" = ${spaceId}`;
+    WHERE r."spaceId" = ${computer.spaceId}
+      AND (${computer.scope === "team"} OR r."botId" IN (
+        SELECT id FROM bots WHERE "computerId" = ${computerId}
+      ))`;
   return counts ?? { live: 0, total: 0 };
 }
 
@@ -208,8 +210,8 @@ async function inspectHomeMove(db: Db, computerId: string, lock: boolean) {
     WHERE "spaceId" = ${source.spaceId} ORDER BY id ${lock ? Prisma.sql`FOR UPDATE` : Prisma.empty}`;
   const computer = computers.find((row) => row.id === computerId);
   if (!computer) throw new Error("Computer not found");
-  const workers = await spaceWorkers(db, computer.spaceId);
-  const start = { homeRevision: computer.homeRevision, spaceWorkers: workers.total };
+  const workers = await homeWorkers(db, computerId, computer);
+  const start = { homeRevision: computer.homeRevision, workerCount: workers.total };
   let blocker: HomeMoveBlocker | null = computers.some(
     (row) =>
       Boolean(row.maintenanceId) &&
@@ -220,9 +222,8 @@ async function inspectHomeMove(db: Db, computerId: string, lock: boolean) {
     ? "computer_active"
     : await computerBlocker(db, computerId, computer);
   if (!blocker) {
-    const { team, volumes } = await homeVolumes(db, computerId, computer, lock);
-    if (volumes.some((volume) => volume.writerAttemptId)) blocker = "volume_busy";
-    else if (team && workers.live > 0) blocker = "space_worker_live";
+    await homeVolumes(db, computerId, computer, lock);
+    if (workers.live > 0) blocker = "space_worker_live";
   }
   return { blocker, start, computer };
 }
@@ -728,8 +729,8 @@ export function createWorkerLifecycle(deps: {
     /**
      * The only change of computers.homeStorage: moves an existing home from snapshots to volumes
      * once every bot on the computer, and the space for a team computer, has a provisioned volume
-     * nobody writes, nothing runs on the computer, and for a team computer no worker of the space
-     * may still write the shared volume. Called after the files were copied, with the start taken
+     * nobody writes, nothing runs on the computer, and no worker in its scope may still write
+     * the volumes. Called after the files were copied, with the start taken
      * before the copy; stops automatic import and export for good.
      */
     async adoptVolumeHome(
@@ -756,13 +757,10 @@ export function createWorkerLifecycle(deps: {
           botIds.some((botId) => !provisioned.some((volume) => volume.botId === botId)) ||
           (team && !provisioned.some((volume) => volume.kind === "space_shared"));
         if (missing) return "volume_missing";
-        if (volumes.some((volume) => volume.writerAttemptId)) return "volume_busy";
-        // Read after the volume locks, so a start that locked the shared volume first is seen.
-        if (team) {
-          const workers = await spaceWorkers(tx, computer.spaceId);
-          if (workers.live > 0) return "space_worker_live";
-          if (workers.total !== start.spaceWorkers) return "space_worker_ran";
-        }
+        // Read after the volume locks, so a start that locked a volume first is seen.
+        const workers = await homeWorkers(tx, computerId, computer);
+        if (workers.live > 0) return "space_worker_live";
+        if (workers.total !== start.workerCount) return "space_worker_ran";
         await tx.computer.update({ where: { id: computerId }, data: { homeStorage: "volumes" } });
         return "adopted";
       });

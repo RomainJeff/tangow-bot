@@ -177,6 +177,38 @@ describe("carrying a Docker computer's volumes to E2B", () => {
     ]);
   });
 
+  it.each(["expired", "missing"])(
+    "refuses cutover with %s reservation and retains Docker data",
+    async (failure) => {
+      const { computer, own } = await dockerTeamOnVolumes();
+      await put(own.providerRef, "notes.md", "notes");
+      class LostReservation extends MemoryVolumeFiles {
+        override async write(ref: string, file: PortableFile, context: AdapterContext) {
+          await super.write(ref, file, context);
+          if (failure === "expired") {
+            await prisma.$executeRaw`UPDATE computers SET "homeMoveExpiresAt" = (now() AT TIME ZONE 'UTC') - interval '1 second'
+            WHERE id = ${computer.id}`;
+          } else {
+            await prisma.computer.update({
+              where: { id: computer.id },
+              data: { maintenanceId: null },
+            });
+          }
+        }
+      }
+      const files = new LostReservation();
+      const report = await carry(files, computer.id, fixture.context);
+      expect(report).toMatchObject({ outcome: "refused", refusal: { code: "computer_active" } });
+      expect(
+        (await prisma.volume.findUniqueOrThrow({ where: { id: own.volumeId } })).providerKind,
+      ).toBe("docker-worker");
+      expect((await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } })).kind).toBe(
+        "docker",
+      );
+      expect(await text(files, `rakazo-${own.volumeId}`, "notes.md")).toBe("notes");
+    },
+  );
+
   it("refuses an E2B volume holding files it did not copy, and keeps the volume on Docker", async () => {
     const { computer, own } = await dockerTeamOnVolumes();
     await put(own.providerRef, "notes.md", "notes");

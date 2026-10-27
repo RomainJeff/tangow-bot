@@ -4,6 +4,7 @@ import path from "node:path";
 import type { AdapterContext, WorkerProvider } from "@rakazo/adapter-kit";
 import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
+import { Prisma } from "@rakazo/db";
 import { z } from "zod";
 import type { VolumeImportSource } from "./docker-volume-import.js";
 import {
@@ -252,6 +253,18 @@ export async function migrateE2BToDocker(
     ctx.signal.throwIfAborted();
     // No row changes supplier until every source volume has a verified destination.
     await prisma.$transaction(async (tx) => {
+      const owners = reservations.length
+        ? await tx.$queryRaw<{ id: string; maintenanceId: string }[]>`
+            SELECT id, "maintenanceId" FROM computers
+            WHERE "maintenanceId" IN (${Prisma.join(reservations)})
+              AND "homeMoveExpiresAt" > (now() AT TIME ZONE 'UTC') ORDER BY id FOR UPDATE`
+        : [];
+      if (
+        reservations.some((marker) => !owners.some((owner) => owner.maintenanceId === marker)) ||
+        state.computers.some((computer) => !owners.some((owner) => owner.id === computer.id))
+      ) {
+        throw new Error("Migration reservation expired");
+      }
       for (const volume of state.volumes) {
         const changed = await tx.volume.updateMany({
           where: {
