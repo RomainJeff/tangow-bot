@@ -1036,6 +1036,14 @@ const SETTLED_APPROVAL_NOTE =
   "Rakazo is resuming after the user answered your approval request. Rakazo already ran what they approved, or recorded their refusal, and its result is in your history. Continue from it and do not call the tool again for the same action.";
 
 /**
+ * A resumed attempt gets the run's source message after the run's own steps, where it reads as the
+ * user asking again. A draft is never settled, so nothing else tells the model it is a resume, and
+ * that the send it just read back is not a reason to stop sending.
+ */
+const DRAFT_RESUME_NOTE =
+  "Rakazo is resuming this run after the user answered your draft card. Its outcome is that call's result in your history. The request above is the one this run started from, not a new message: carry on with what is left of it and of later messages, and to send another message call the send tool again.";
+
+/**
  * The call that replays an answered effect under the tools the run exposes now: a catalog or bound
  * approval may resume through a direct tool, a renamed one or a catalog wrapper.
  */
@@ -5508,6 +5516,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           approvalContinuation,
           settledEffects.length > 0 ? SETTLED_APPROVAL_NOTE : undefined,
           activeHelpers ? redactSecrets(activeHelpers, promptSecrets) : undefined,
+          answeredDrafts.length > 0 || draftOutcomes.length > 0 ? DRAFT_RESUME_NOTE : undefined,
         ];
         const turnPrompt = (recall: string | undefined) =>
           [clock, ...turnHead, recall, ...turnTail].filter(Boolean).join("\n\n");
