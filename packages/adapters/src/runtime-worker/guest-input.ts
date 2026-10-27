@@ -9,7 +9,7 @@ import type {
   WorkerStartV1,
 } from "@rakazo/adapter-kit";
 import type { HelperProfile } from "@rakazo/core";
-import { selectTools } from "@rakazo/core";
+import { delegatedTools, selectTools } from "@rakazo/core";
 import { isBackgroundHelperTool, isHelperTool } from "../builtin-tools.js";
 import { catalogIndexText, isLazyCatalogControlRoute } from "../lazy-tool-catalog.js";
 import { encodeMessage } from "./framing.js";
@@ -48,9 +48,28 @@ const TOOL_CAPABILITY: Readonly<Record<string, HarnessCapability>> = {
 
 export type ToolRule = Pick<HelperProfile, "allow" | "block">;
 
-export const mainBotRule = (request: AgentRunRequest): ToolRule => ({
+/** The profiles the run's own agent can start: none for a helper or a harness without subagents. */
+export const startableHelpers = (request: AgentRunRequest, harness: HarnessDeclaration) =>
+  !request.helper &&
+  harness.capabilities.includes("subagents") &&
+  request.tools.some((tool) => tool.name === "run_subagent")
+    ? (request.helperProfiles ?? [])
+    : [];
+
+/**
+ * The main bot's rule: every tool but those it hands to one of `helpers`. A helper without a
+ * profile starts none, so it keeps them.
+ */
+export const mainBotRule = (
+  request: AgentRunRequest,
+  helpers: readonly HelperProfile[] = [],
+): ToolRule => ({
   allow: ["*"],
-  block: request.blockedTools,
+  block: delegatedTools(
+    request.tools.flatMap((tool) => [tool, ...(tool.catalog ?? []).map((entry) => entry.tool)]),
+    request.blockedTools ?? [],
+    helpers,
+  ),
 });
 
 type CatalogEntry = NonNullable<ConnectorTool["catalog"]>[number];
@@ -147,7 +166,11 @@ export function workerStart(
   request: AgentRunRequest,
   harness: HarnessDeclaration,
 ): WorkerStartV1 {
-  const offered = agentTools(request.tools, harness, mainBotRule(request));
+  const offered = agentTools(
+    request.tools,
+    harness,
+    mainBotRule(request, startableHelpers(request, harness)),
+  );
   // Helpers are named only to an agent that can start one.
   const profiles = offered.some((tool) => tool.name === "run_subagent")
     ? (request.helperProfiles ?? [])

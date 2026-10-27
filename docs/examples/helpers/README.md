@@ -33,8 +33,9 @@ interface HelperProfile {
 - `exclusive` holds a resource for the helper's whole run. A second helper of the same bot that
   needs it is refused until the first one ends.
 - `model` replaces the bot's model for the helper, unless the call names one.
-- `MAIN_BOT_BLOCKED_TOOLS` in the same file removes tools from the bot itself. A profile can still
-  allow them.
+- `MAIN_BOT_BLOCKED_TOOLS` in the same file lists the tools the bot hands to a helper. The bot
+  loses one only when it can start a helper whose profile allows it, and a helper without a
+  profile keeps it. It holds the computer and browser tools, which `computer-use` takes.
 
 The two examples:
 
@@ -57,12 +58,11 @@ The two examples:
 
 ## Try it
 
-1. In a dev checkout, put both profiles in the registry and take the screen tools from the bot:
+1. In a dev checkout, put both profiles in the registry:
 
    ```ts
    // packages/core/src/helper-profile.ts
    export const HELPER_PROFILES: readonly HelperProfile[] = [researcher, screenOperator];
-   export const MAIN_BOT_BLOCKED_TOOLS: readonly string[] = ["computer_*", "browser_*"];
    ```
 
    Paste the two objects from `packages/testkit/src/helper-profiles.fixture.ts` above the

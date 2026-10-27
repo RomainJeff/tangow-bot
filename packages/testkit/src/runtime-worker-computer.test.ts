@@ -7,7 +7,9 @@ import { queryObjects } from "node:v8";
 import type { CommandHandle, CommandStartOpts } from "@e2b/desktop";
 import type { ConnectorProvider } from "@rakazo/adapter-kit";
 import { E2BSandboxProvider } from "@rakazo/adapters";
+import type { GuestHarness } from "@rakazo/agent-run-worker";
 import { HARNESSES } from "@rakazo/agent-run-worker";
+import { HELPER_PROFILES } from "@rakazo/core";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { fakeE2BMachine } from "../../adapters/src/e2b-machine.test-support.js";
 import type { E2BSandboxSdk } from "../../adapters/src/e2b-sandbox.js";
@@ -64,15 +66,27 @@ const toolResults = (request: ModelEmulatorRequest) =>
       .map((message) => [message.tool_call_id, message.content]),
   );
 
+const PI = HARNESSES["pi-native"]!;
+/** Pi native without subagents: the bot has no helper to hand the computer to, so it keeps it. */
+const DIRECT: GuestHarness = {
+  ...PI,
+  declaration: {
+    ...PI.declaration,
+    capabilities: PI.declaration.capabilities.filter((capability) => capability !== "subagents"),
+  },
+};
+
 /** A worker run of a bot, on a team computer by default, with a vision model that sees the screen. */
 async function botRun(
   steps: ModelEmulatorStep[],
   computerScope: "team" | "dedicated" | "none" = "team",
+  harness = DIRECT,
 ) {
   const seen: Seen[] = [];
   const run = await startWorkerRun({
     steps,
     computerScope,
+    harness,
     protocol: "anthropic",
     tools: lookup,
     connector: (provider) => tapConnector(provider, seen, []),
@@ -148,7 +162,7 @@ describe("a worker run's computer", () => {
     let result: unknown;
     const run = await startWorkerRun({
       sandbox: new E2BSandboxProvider("test-key", sdk),
-      harness: HARNESSES["pi-native"]!,
+      harness: DIRECT,
       protocol: "anthropic",
       computerScope: "team",
       steps: [
@@ -489,6 +503,7 @@ describe("a worker run's screens by path", () => {
         finish[1]!,
       ],
       computerScope: "team",
+      harness: DIRECT,
       protocol: "anthropic",
       screensByPath: true,
       connector: (provider) => tapConnector(provider, seen, []),
@@ -713,4 +728,31 @@ it("hands a screenshot to the guest's model as an image", async () => {
       text: expect.stringMatching(/^Screenshot saved at .+ Read it to see it again\.$/),
     },
   ]);
+});
+
+it("hands the computer to computer-use: the bot that can start it has none of its tools in its tools or its prompt", async () => {
+  let names: string[] = [];
+  const bot = await botRun(
+    [
+      {
+        expect(request) {
+          names = (request.tools ?? []).map((tool) =>
+            tool.function.name.replace(/^mcp__rakazo__/, ""),
+          );
+        },
+        response: finish[0]!.response,
+      },
+      finish[1]!,
+    ],
+    "team",
+    PI,
+  );
+  await bot.start();
+
+  const delegable = /^(computer_|browser_|open_path$|launch_app$)/;
+  expect(names.filter((name) => delegable.test(name))).toEqual([]);
+  expect(names).toEqual(expect.arrayContaining(["bash", "run_subagent"]));
+  const system = JSON.stringify((bot.run.model.rawRequests[0] as { system: unknown }).system);
+  expect(system).toContain(`- computer-use: ${HELPER_PROFILES[0]!.description}`);
+  expect(system).not.toMatch(/computer_observe|computer_exec|browser_navigate|open_path/);
 });

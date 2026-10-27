@@ -18,8 +18,8 @@ export const HELPER_PROFILES: readonly HelperProfile[] = [
   {
     name: "computer-use",
     description:
-      "Uses the bot's computer and its browser: opens websites, reads pages and fills forms, then reports what it found.",
-    allow: ["computer_*", "browser_*", "search_runs", "ask_parent"],
+      "Use for work that needs a web page or the computer's screen: browsing sites, reading pages that need a browser, filling forms, clicking through flows, opening files or apps on the computer. Not for what the conversation, memory, your files, a web search or a plain page fetch already answers, and only one at a time, since it holds the computer.",
+    allow: ["computer_*", "browser_*", "open_path", "launch_app", "search_runs", "ask_parent"],
     exclusive: "computer",
     instructions: [
       "You do one task in the computer's browser for your parent bot, then report.",
@@ -48,10 +48,17 @@ export const HELPER_PROFILES: readonly HelperProfile[] = [
 ];
 
 /**
- * Tools the main bot is never offered. A helper's profile can still allow them.
+ * Tools the main bot hands to a helper instead of using them itself; see `delegatedTools`.
  * It keeps tools from the main bot's model. It is no security boundary: the guest names the calling `agent`.
  */
-export const MAIN_BOT_BLOCKED_TOOLS: readonly string[] = [];
+export const MAIN_BOT_BLOCKED_TOOLS: readonly string[] = [
+  "computer_observe",
+  "computer_act",
+  "computer_exec",
+  "browser_*",
+  "open_path",
+  "launch_app",
+];
 
 const matches = (patterns: readonly string[] | undefined, name: string) =>
   patterns?.some((pattern) =>
@@ -66,4 +73,21 @@ export function selectTools<T extends { name: string; where?: "guest" | "control
   return catalog.filter(
     (tool) => (tool.where === "guest" || matches(allow, tool.name)) && !matches(block, tool.name),
   );
+}
+
+/**
+ * The tools of `catalog` that `blocked` names and one of `helpers`, those the bot can start,
+ * allows. The bot keeps every other tool, so it never loses work no helper can take.
+ */
+export function delegatedTools<T extends { name: string; where?: "guest" | "controller" }>(
+  catalog: readonly T[],
+  blocked: readonly string[],
+  helpers: readonly HelperProfile[],
+): string[] {
+  return catalog
+    .filter(
+      (tool) =>
+        matches(blocked, tool.name) && helpers.some((helper) => selectTools([tool], helper).length),
+    )
+    .map((tool) => tool.name);
 }

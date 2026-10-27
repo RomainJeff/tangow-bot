@@ -449,6 +449,13 @@ const RESEARCHER: HelperProfile = {
   instructions: "Cite every source.",
 };
 
+const OPERATOR: HelperProfile = {
+  name: "operator",
+  description: "Uses the computer.",
+  allow: ["computer_*"],
+  instructions: "",
+};
+
 const startOf = (guest: Guest) =>
   guest.received.find((message) => message.kind === "worker.start")!.run;
 
@@ -575,14 +582,7 @@ describe("a helper the call names by profile", () => {
     const run = helperRun("run_main_blocked", {
       tools: ["bash", "computer_observe", "run_subagent", "message_user"].map(tool),
       blockedTools: ["computer_*"],
-      helperProfiles: [
-        {
-          name: "operator",
-          description: "Uses the computer.",
-          allow: ["computer_*"],
-          instructions: "",
-        },
-      ],
+      helperProfiles: [OPERATOR],
     });
     const guest = await run.guest();
     expect(startOf(guest).tools.map((offered) => offered.name)).toEqual([
@@ -613,23 +613,57 @@ describe("a helper the call names by profile", () => {
 });
 
 describe("a tool rule", () => {
-  it("gives a helper without a profile the main bot's block list", async () => {
+  it("keeps a tool the main bot hands off for a helper without a profile", async () => {
     const run = helperRun("run_unprofiled_blocked", {
       tools: ["bash", "computer_observe", "run_subagent", "message_user"].map(tool),
       blockedTools: ["computer_*"],
+      helperProfiles: [OPERATOR],
     });
     const guest = await run.guest();
+    expect(startOf(guest).tools.map((offered) => offered.name)).toEqual([
+      "bash",
+      "run_subagent",
+      "message_user",
+    ]);
 
     callHelper(guest, 1, "h1");
     const [start] = await guest.replies(2, 1);
-    expect(start).toMatchObject({ run: { tools: [{ name: "bash", where: "guest" }] } });
+    expect(start).toMatchObject({
+      run: {
+        tools: [
+          { name: "bash", where: "guest" },
+          { name: "computer_observe", where: "controller" },
+        ],
+      },
+    });
     helperRemembers(guest, 3, "helper:1", "computer_observe");
-    expect(await guest.replies(4)).toEqual([{ type: "refused", reason: "unknown_tool" }]);
+    expect(await guest.replies(4)).toEqual([{ type: "tool.result", output: "Saved." }]);
+  });
+
+  it("keeps the main bot's blocked tools when no helper it can start takes them", async () => {
+    const tools = ["bash", "computer_observe", "run_subagent", "message_user"].map(tool);
+    const offered = async (runId: string, options: Parameters<typeof helperRun>[1]) =>
+      startOf(
+        await helperRun(runId, { tools, blockedTools: ["computer_*"], ...options }).guest(),
+      ).tools.map((offered) => offered.name);
+
+    expect(
+      await offered("run_kept_no_subagents", {
+        capabilities: ["native-loop"],
+        helperProfiles: [OPERATOR],
+      }),
+    ).toEqual(["bash", "computer_observe", "message_user"]);
+    expect(await offered("run_kept_no_profile", { helperProfiles: [RESEARCHER] })).toEqual([
+      "bash",
+      "computer_observe",
+      "run_subagent",
+      "message_user",
+    ]);
   });
 
   it("names no helpers to a bot that cannot start one", async () => {
     const run = helperRun("run_no_helpers", {
-      blockedTools: ["run_subagent"],
+      capabilities: ["native-loop"],
       helperProfiles: [RESEARCHER],
     });
     const guest = await run.guest();
@@ -661,9 +695,13 @@ describe("a tool rule", () => {
           "MCP",
           catalogEntries([entry("read_doc"), entry("delete_doc")]),
         ),
+        tool("run_subagent"),
         tool("message_user"),
       ],
       blockedTools: ["delete_doc"],
+      helperProfiles: [
+        { name: "archivist", description: "", allow: ["delete_doc"], instructions: "" },
+      ],
     });
     const guest = await run.guest();
     expect(

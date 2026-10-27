@@ -199,9 +199,6 @@ export const piNativeHarness: GuestHarness = {
                     scope: "extension",
                     config: {
                       command: "rakazo-in-process",
-                      // Pi's 60 s default would hand the model a timeout while a helper or
-                      // browser_run still works; the controller's own limits bound every call.
-                      timeout: 0,
                       exposure: "direct",
                       toolExposure: Object.fromEntries(
                         listed.map((tool) => [tool.name, tool.exposure]),

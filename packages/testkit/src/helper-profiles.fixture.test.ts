@@ -1,7 +1,7 @@
 import { builtinAgentTools, computerExecTool } from "@rakazo/adapters";
 import { nativeToolsForHarness } from "@rakazo/adapters/runtime-worker";
 import type { HelperProfile } from "@rakazo/core";
-import { HELPER_PROFILES, selectTools } from "@rakazo/core";
+import { delegatedTools, HELPER_PROFILES, MAIN_BOT_BLOCKED_TOOLS, selectTools } from "@rakazo/core";
 import { expect, it } from "vitest";
 import { researcher, screenOperator } from "./helper-profiles.fixture.js";
 
@@ -51,6 +51,40 @@ it("grants each example profile its literal tools", () => {
 
 it("grants the managed computer-use helper the computer, the browser and past runs, and holds the computer", () => {
   const computerUse = HELPER_PROFILES.find((profile) => profile.name === "computer-use");
-  expect(computerUse && names(computerUse)).toEqual(COMPUTER_AND_BROWSER);
+  expect(computerUse && names(computerUse)).toEqual([
+    "read",
+    "write",
+    "edit",
+    "bash",
+    "grep",
+    "find",
+    "ls",
+    "tool_search",
+    "search_runs",
+    "computer_observe",
+    "computer_act",
+    "browser_navigate",
+    "browser_snapshot",
+    "browser_act",
+    "browser_run",
+    "open_path",
+    "launch_app",
+    "ask_parent",
+    "computer_exec",
+  ]);
   expect(computerUse?.exclusive).toBe("computer");
+});
+
+it("hands the computer and the browser to computer-use", () => {
+  expect(delegatedTools(CATALOG, MAIN_BOT_BLOCKED_TOOLS, HELPER_PROFILES)).toEqual([
+    "computer_observe",
+    "computer_act",
+    "browser_navigate",
+    "browser_snapshot",
+    "browser_act",
+    "browser_run",
+    "open_path",
+    "launch_app",
+    "computer_exec",
+  ]);
 });

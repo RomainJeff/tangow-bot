@@ -142,8 +142,6 @@ export async function createApp(
     email?: TransactionalEmailProvider;
     remoteConnectors?: RemoteConnectorDependencies;
     logger?: Logger;
-    /** The tools the main bot is not offered, in place of `MAIN_BOT_BLOCKED_TOOLS`. */
-    mainBotBlockedTools?: readonly string[];
   } = {},
 ): Promise<AppHandles> {
   const {
@@ -157,7 +155,6 @@ export async function createApp(
     email: emailOverride,
     remoteConnectors,
     logger: loggerOverride,
-    mainBotBlockedTools,
     ...envOverrides
   } = overrides;
   const env = { ...loadEnv(process.env), ...envOverrides };
@@ -427,7 +424,6 @@ export async function createApp(
     web: createWebProvider(),
     shutdownSignal: shutdown.signal,
     skillLearning: env.skillLearning,
-    mainBotBlockedTools,
   });
 
   const jobHandlers = createBackgroundJobHandlers({

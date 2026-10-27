@@ -7,7 +7,6 @@ import { ModelConnectInputSchema } from "@rakazo/contracts";
 import { DEFAULT_SKILL_LEARNING } from "@rakazo/core";
 import { loadRootEnv } from "@rakazo/core/node/load-root-env";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
-import { startDockerSupervisor } from "../docker-supervisor.js";
 import { EVAL_CASES } from "../evals/cases.js";
 import { emptyTrial, redact, summarize, validateControls } from "../evals/report.js";
 
@@ -26,7 +25,6 @@ async function main() {
       "timeout-ms": { type: "string", default: "180000" },
       "max-tool-calls": { type: "string", default: "30" },
       output: { type: "string", default: "test-report/evals/report.json" },
-      computer: { type: "string", default: "fake" },
     },
   });
   if (values.list) {
@@ -39,20 +37,14 @@ async function main() {
     maxToolCalls: Number(values["max-tool-calls"]),
   };
   validateControls(controls);
-  if (values.computer !== "fake" && values.computer !== "docker")
-    throw new Error("--computer is fake or docker");
-  const docker = values.computer === "docker";
   const selected = values.case?.length
     ? EVAL_CASES.filter((c) => values.case!.includes(c.id))
-    : EVAL_CASES.filter((c) => docker || !c.browserSite);
+    : EVAL_CASES;
   if (!selected.length || values.case?.some((id) => !EVAL_CASES.some((c) => c.id === id)))
     throw new Error("Unknown eval case; use --list");
-  if (!docker && selected.some((c) => c.browserSite))
-    throw new Error("Browser cases need --computer docker");
-  // Trial by trial across cases, so drift and warmup do not favor one case.
-  const trials = Array.from({ length: controls.trials }, (_, i) =>
-    selected.map((c) => emptyTrial(c.id, i + 1)),
-  ).flat();
+  const trials = selected.flatMap((c) =>
+    Array.from({ length: controls.trials }, (_, i) => emptyTrial(c.id, i + 1)),
+  );
   const output = path.resolve(values.output!);
   const report = {
     version: 1,
@@ -61,9 +53,7 @@ async function main() {
     model: values.model ?? process.env.PI_DEFAULT_MODEL ?? null,
     provider: values.provider ?? null,
     controls,
-    fixtures: docker
-      ? "synthetic services, messaging and a Docker computer serving the bench travel site"
-      : "synthetic services, messaging and fake sandbox",
+    fixtures: "synthetic services, messaging and fake sandbox",
     assistedRetries: false,
     limitations: [
       "Does not evaluate browser perception, native recording perception, or real external services.",
@@ -106,7 +96,6 @@ async function main() {
   // This CLI owns a disposable database. Never migrate or evaluate against an inherited database.
   const dataDir = mkdtempSync(path.join(tmpdir(), "rakazo-evals-"));
   let postgres: StartedPostgreSqlContainer | undefined;
-  let supervisor: { url: string; stop: () => void } | undefined;
   try {
     postgres = await new PostgreSqlContainer("postgres:16-alpine").start();
     const databaseUrl = postgres.getConnectionUri();
@@ -152,19 +141,6 @@ async function main() {
     const { runTrial } = await import("../evals/runner.js");
     const { EvalSandboxProvider } = await import("../evals/sandbox.js");
     const { computerOnVolumes, LocalWorkerProvider } = await import("../local-worker-provider.js");
-    const { TravelSiteComputer } = await import("../bench/travel-site/computer.js");
-    const { DockerWorkerProvider } = await import("@rakazo/adapters");
-    // One supervisor for the run; each trial's bot is new, so its computer is a new container.
-    const computers = docker ? path.join(dataDir, "computers") : undefined;
-    const supervisorToken = process.env.SANDBOX_SUPERVISOR_TOKEN!;
-    if (computers) {
-      mkdirSync(computers, { recursive: true });
-      supervisor = await startDockerSupervisor({
-        dataDir: computers,
-        token: supervisorToken,
-        env: dockerEnv(),
-      });
-    }
     for (let i = 0; i < trials.length; i++) {
       const planned = trials[i]!;
       const scenario = selected.find((c) => c.id === planned.caseId)!;
@@ -172,29 +148,21 @@ async function main() {
         ...controls,
         connection,
         createApp: async (composio, messaging) => {
-          // The supervisor binds homes and volumes from its own data directory, so the app shares it.
-          const trialDataDir = computers ?? path.join(dataDir, `${scenario.id}-${planned.trial}`);
-          // A guest is a child process with none of this process's keys, or with a Docker computer,
-          // a worker container that reaches neither this machine's files nor the computer's loopback.
-          const workers = supervisor
-            ? new DockerWorkerProvider({
-                supervisorUrl: supervisor.url,
-                supervisorToken,
-                dataDir: trialDataDir,
-              })
-            : new LocalWorkerProvider({ mode: "child", root: path.join(trialDataDir, "workers") });
-          const sandbox = supervisor
-            ? new TravelSiteComputer(supervisor.url, supervisorToken)
-            : new EvalSandboxProvider((volumeRef) => workers.volumePath(volumeRef));
+          const trialDataDir = path.join(dataDir, `${scenario.id}-${planned.trial}`);
+          // Each guest is a child process with none of this process's keys.
+          const workers = new LocalWorkerProvider({
+            mode: "child",
+            root: path.join(trialDataDir, "workers"),
+          });
+          const sandbox = new EvalSandboxProvider((volumeRef) => workers.volumePath(volumeRef));
           const handles = await createApp({
             sandbox,
             workers,
-            mainBotBlockedTools: scenario.mainBotBlockedTools,
             agentRuntime: "worker",
             databaseUrl,
             realtimeDatabaseUrl: databaseUrl,
             dataDir: trialDataDir,
-            sandboxProvider: docker ? "docker" : "fake",
+            sandboxProvider: "fake",
             wakeupDriver: "memory",
             composio,
             messaging,
@@ -226,18 +194,13 @@ async function main() {
           return {
             ...handles,
             dataDir: trialDataDir,
-            harnessIssues: "harnessIssues" in sandbox ? sandbox.harnessIssues : undefined,
-            prepareBot: (botId) =>
-              computerOnVolumes(handles.prisma, botId, docker ? "docker" : "e2b"),
+            harnessIssues: sandbox.harnessIssues,
+            prepareBot: (botId) => computerOnVolumes(handles.prisma, botId),
             async stop() {
               try {
                 await handles.stop();
               } finally {
-                try {
-                  if ("destroyPrepared" in sandbox) await sandbox.destroyPrepared();
-                } finally {
-                  if ("dispose" in workers) await workers.dispose();
-                }
+                await workers.dispose();
               }
             },
           };
@@ -246,7 +209,7 @@ async function main() {
       save();
       const result = trials[i]!;
       console.log(
-        `${result.caseId} trial ${result.trial}: ${result.status}${result.category ? ` (${result.category})` : ""}; ${result.toolCalls} tool calls; ${result.helperToolCalls} helper tool calls; ${result.latencyMs}ms; run ${result.runMs ?? "-"}ms; first reply ${result.firstReplyMs ?? "-"}ms; ${(result.inputTokens ?? 0) + (result.outputTokens ?? 0)} tokens; main context ${result.mainContextTokens ?? "-"}`,
+        `${result.caseId} trial ${result.trial}: ${result.status}${result.category ? ` (${result.category})` : ""}; ${result.toolCalls} tool calls; ${result.latencyMs}ms`,
       );
       if (result.cleanupFailed) {
         process.exitCode = 1;
@@ -255,29 +218,12 @@ async function main() {
     }
     if (trials.some((r) => r.status !== "passed")) process.exitCode = 1;
   } finally {
-    supervisor?.stop();
     try {
       await postgres?.stop();
     } finally {
       rmSync(dataDir, { recursive: true, force: true });
     }
   }
-}
-
-/** What the supervisor needs to reach this machine's Docker as the `docker` CLI does. */
-function dockerEnv(): Record<string, string> {
-  const docker = (...args: string[]) =>
-    execFileSync("docker", args, { encoding: "utf8", timeout: 30_000 }).trim();
-  return {
-    // The supervisor defaults to /var/run/docker.sock; follow the CLI's context instead.
-    ...(process.env.DOCKER_HOST || process.env.DOCKER_SOCKET
-      ? {}
-      : { DOCKER_HOST: docker("context", "inspect", "--format", "{{.Endpoints.docker.Host}}") }),
-    // A supervisor on the host of Docker Desktop cannot reach container addresses.
-    ...(docker("info", "--format", "{{.OperatingSystem}}") === "Docker Desktop"
-      ? { SANDBOX_CONTROL_VIA_LOOPBACK: "true" }
-      : {}),
-  };
 }
 
 function readConnection(file: string): unknown {

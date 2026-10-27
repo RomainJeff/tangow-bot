@@ -43,6 +43,7 @@ import {
   keepsEntry,
   mainBotRule,
   nativeToolsForHarness,
+  startableHelpers,
   workerStart,
 } from "./guest-input.js";
 import type { SessionInbox } from "./inbox.js";
@@ -449,7 +450,15 @@ export function createSession(
     if (agent !== "root" && !helper) return refuse("invalid");
     if (paused) return pausedToolCall(paused);
     if (!(helper?.tools ?? rootTools).has(name)) return refuse("unknown_tool");
-    if (blockedEntry(name, args, helper?.rule ?? helperProfile ?? mainBotRule(request))) {
+    if (
+      blockedEntry(
+        name,
+        args,
+        helper?.rule ??
+          helperProfile ??
+          mainBotRule(request, startableHelpers(request, launched!.expectedHarness)),
+      )
+    ) {
       return refuse("unknown_tool");
     }
     if (name === "run_subagent" && runsOwnLoop()) {

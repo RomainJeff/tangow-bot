@@ -1,5 +1,3 @@
-import type { BrowserTask } from "../bench/travel-site/tasks.js";
-import { BENCHMARK_TASK, DEVELOPMENT_TASKS } from "../bench/travel-site/tasks.js";
 import { CUSTOMER_SUPPORT_PROVIDERS, CUSTOMER_SUPPORT_TOOLS } from "./service-contract.js";
 import type { EvalServices, ServiceCall } from "./services.js";
 
@@ -63,30 +61,8 @@ export type EvalCase = {
   /** Skills the user wrote before the trial. */
   skills?: Array<{ name: string; description: string; body: string }>;
   configure?: (services: EvalServices) => void;
-  /** Needs a Docker computer serving the bench travel site. */
-  browserSite?: true;
-  /** The tools the main bot is not offered in this case's trials. */
-  mainBotBlockedTools?: readonly string[];
   grade: (evidence: Evidence) => Criterion[];
 };
-
-/** The main bot drives the browser itself, with no helper to hand it to. */
-const DIRECT = ["run_subagent"];
-/** The main bot has no computer, so it hands the browser work to its computer-use helper. */
-const VIA_HELPER = ["computer_*", "browser_*", "open_path", "launch_app"];
-const browserCase = (
-  id: string,
-  purpose: string,
-  task: BrowserTask,
-  mainBotBlockedTools: readonly string[],
-): EvalCase => ({
-  id,
-  purpose,
-  browserSite: true,
-  mainBotBlockedTools,
-  steps: [{ ask: task.ask }],
-  grade: (e) => task.grade(e.text),
-});
 const check = (id: string, pass: boolean): Criterion => ({ id, pass });
 /** A proposal card the user answered by typing: the bot may propose a corrected one. */
 const dismissed = (p: Evidence["proposals"][number]) =>
@@ -706,26 +682,6 @@ export const EVAL_CASES: EvalCase[] = [
       noWrites(e),
     ],
   },
-  browserCase(
-    "browser-direct",
-    "Find a circuit on a multi-page travel site with the browser tools in the main bot.",
-    BENCHMARK_TASK,
-    DIRECT,
-  ),
-  browserCase(
-    "browser-helper",
-    "Find a circuit on a multi-page travel site through the computer-use helper.",
-    BENCHMARK_TASK,
-    VIA_HELPER,
-  ),
-  ...DEVELOPMENT_TASKS.map((task) =>
-    browserCase(
-      `browser-dev-${task.id}`,
-      "Tune the computer-use helper's instructions on a small task apart from the benchmark.",
-      task,
-      VIA_HELPER,
-    ),
-  ),
 ];
 
 function isExactApprovalRequest(request: unknown, expected: Record<string, string>): boolean {

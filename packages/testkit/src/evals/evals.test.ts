@@ -189,25 +189,15 @@ describe("independent outcome graders", () => {
     e.files["results/language.txt"] = "French";
     expect(passes("updated-preference", e)).toBe(false);
   });
-  it("has 30 distinct cases, each rejects empty evidence and a completion claim", () => {
-    expect(EVAL_CASES).toHaveLength(30);
-    expect(new Set(EVAL_CASES.map((c) => c.id)).size).toBe(30);
+  it("has 25 distinct cases, each rejects empty evidence and a completion claim", () => {
+    expect(EVAL_CASES).toHaveLength(25);
+    expect(new Set(EVAL_CASES.map((c) => c.id)).size).toBe(25);
     for (const scenario of EVAL_CASES) {
       expect(
         passes(scenario.id, { ...evidence(), text: "Done! I completed everything." }),
         scenario.id,
       ).toBe(false);
     }
-  });
-  it("grades both browser variants on the bot's reply alone", () => {
-    const e = evidence();
-    e.text =
-      "Rising Sun Discovery, 5 600 € for 2 adults, 13 days: http://127.0.0.1:8765/circuits/rising-sun-discovery.html";
-    expect(passes("browser-direct", e)).toBe(true);
-    expect(passes("browser-helper", e)).toBe(true);
-    e.text = e.text.replace("5 600", "5 480");
-    expect(passes("browser-direct", e)).toBe(false);
-    expect(passes("browser-helper", e)).toBe(false);
   });
   it("grades the requested unknown artifact without relying on explanatory wording", () => {
     const e = evidence();
