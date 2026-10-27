@@ -72,6 +72,7 @@ async function seedExistingDeployment() {
       prompt: "",
       status: "completed",
     },
+    select: { id: true },
   });
   const run = await prisma.run.create({
     data: {

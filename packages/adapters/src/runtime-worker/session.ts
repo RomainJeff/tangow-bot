@@ -157,6 +157,10 @@ export function createSession(
 ) {
   const { recorder } = deps;
   if (!request.attempt) throw new Error("A worker run needs its attempt");
+  /** A background helper's profile, looked up when it starts so a deploy in between applies. */
+  const helperProfile =
+    request.helper &&
+    helperProfileOf(request.helperProfiles, { helper: request.helper.profile ?? "" });
   const worker: WorkerIdentity = {
     runId: request.runId,
     attemptId: request.attempt.id,
@@ -347,8 +351,20 @@ export function createSession(
         const model = await helperModel(request, call, profile);
         if (!live()) return { type: "error", message: "The worker stopped" };
         if (paused) return pausedToolCall(paused);
+        if (call.background) {
+          if (!request.startHelper) throw new Error("Background helpers are unavailable here");
+          const started = await request.startHelper({
+            callId: body.callId,
+            name: call.name,
+            task: call.task,
+            args: body.args,
+            model: { provider: model.provider, id: model.id },
+            profile,
+          });
+          return { type: "tool.result", output: started };
+        }
         run = helperRunInput(launched!.start, request, launched!.expectedHarness, {
-          task: call.task || "Complete the delegated task.",
+          task: call.task,
           instructions: helperInstructions(call.name, profile?.instructions, call.instructions),
           model,
           profile,
@@ -433,7 +449,7 @@ export function createSession(
     if (agent !== "root" && !helper) return refuse("invalid");
     if (paused) return pausedToolCall(paused);
     if (!(helper?.tools ?? rootTools).has(name)) return refuse("unknown_tool");
-    if (blockedEntry(name, args, helper?.rule ?? mainBotRule(request))) {
+    if (blockedEntry(name, args, helper?.rule ?? helperProfile ?? mainBotRule(request))) {
       return refuse("unknown_tool");
     }
     if (name === "run_subagent" && runsOwnLoop()) {
@@ -502,12 +518,14 @@ export function createSession(
     try {
       // The guest's own tool output reaches its transcript unredacted: mask it before the provider.
       const call = redactTranscript(body.call, secretRedactor([...(request.secrets ?? [])]));
+      // A background helper is the root of its own attempt, keyed apart from its parent's turns.
+      const agentId = helper ? body.agent : request.helper ? request.runId : undefined;
       // Measurements describe the same redacted transcript the provider receives.
       prefix = measureRelayPrefix(
         {
           threadId: request.threadId,
           botId: request.botId,
-          helper: helper ? body.agent : undefined,
+          helper: agentId,
           attemptId: worker.attemptId,
         },
         call as typeof body.call,
@@ -522,7 +540,7 @@ export function createSession(
           conversation: {
             threadId: request.threadId,
             botId: request.botId,
-            ...(helper ? { helper: body.agent } : {}),
+            ...(agentId ? { helper: agentId } : {}),
           },
         },
       );
@@ -828,7 +846,21 @@ export function createSession(
           bound = channel;
           helloReceived = true;
           helloSettled.resolve();
-          const start = workerStart(launched!.start, request, expected);
+          const start = request.helper
+            ? {
+                ...launched!.start,
+                run: helperRunInput(launched!.start, request, expected, {
+                  task: request.helper.task,
+                  instructions: helperInstructions(
+                    request.helper.name,
+                    helperProfile?.instructions,
+                    request.helper.instructions,
+                  ),
+                  model: request.model,
+                  profile: helperProfile,
+                }),
+              }
+            : workerStart(launched!.start, request, expected);
           rootTools = new Set(start.run.tools.map((tool) => tool.name));
           await channel.send(encodeMessage(start));
           inbox.attach((reply) => void channel.send(encodeMessage(reply)));

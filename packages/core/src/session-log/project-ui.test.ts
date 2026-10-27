@@ -1007,6 +1007,64 @@ describe("projectThreadItems", () => {
     ]);
   });
 
+  it("shows a background helper only as its call's step, which opens its session, and its report not at all", () => {
+    const run = { botId: "bot_ada", runId: "run_1" };
+    const chain = linkEntries("background", [
+      {
+        ...run,
+        type: "tool.call",
+        payload: { callId: "call_bg", name: "run_subagent", input: '{"background":true}' },
+      },
+      {
+        ...run,
+        type: "tool.result",
+        payload: {
+          callId: "call_bg",
+          output: '{"helperId":"run_helper"}',
+          isError: false,
+          artifactIds: [],
+          sessionId: "ses_helper",
+        },
+      },
+      {
+        botId: "bot_ada",
+        type: "helper.report",
+        payload: { helperId: "run_helper", profile: null, status: "completed", report: "Found." },
+      },
+      { ...run, type: "assistant.text", payload: { blocks: text("Started it.") } },
+    ]);
+    expect(projectThreadItems(chain)).toEqual([
+      {
+        kind: "message",
+        role: "bot",
+        id: "background-0",
+        ts: at(0),
+        ...run,
+        blocks: [
+          {
+            kind: "steps",
+            steps: [
+              {
+                label: "Run subagent",
+                count: 1,
+                calls: [
+                  {
+                    name: "run_subagent",
+                    input: '{"background":true}',
+                    output: '{"helperId":"run_helper"}',
+                    id: "call_bg",
+                    sessionId: "ses_helper",
+                  },
+                ],
+              },
+            ],
+          },
+          ...text("Started it."),
+        ],
+      },
+    ]);
+  });
+
   it("shows a bot's words outside a run as their own message, splitting a run's stretch", () => {
     const run = { botId: "bot_ada", runId: "run_1" };
     const chain = linkEntries("aside", [

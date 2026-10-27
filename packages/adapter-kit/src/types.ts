@@ -474,6 +474,13 @@ export interface AgentRunRequest {
   claimSteering?: (seenIds: string[]) => Promise<AgentSteeringMessage[]>;
   /** Open the log of one `run_subagent` call: the helper runs in a session of its own. */
   startSubagent?: (call: SubagentCall) => Promise<SubagentLog>;
+  /** Queue one background `run_subagent` call as a run of its own, which reports when it ends. */
+  startHelper?: (call: SubagentCall) => Promise<{ helperId: string }>;
+  /**
+   * This run is a background helper: its call's brief and instructions and the profile it names
+   * among `helperProfiles` replace the bot's.
+   */
+  helper?: { name: string; task: string; instructions: string; profile: string | null };
 }
 
 /** A runtime could not start or was lost. The executor retries within its setup budget. */

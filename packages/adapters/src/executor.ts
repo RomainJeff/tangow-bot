@@ -264,6 +264,7 @@ import {
   builtinAgentTools,
   COMPUTER_COMMAND_TOOLS,
   computerExecTool,
+  helperCallOf,
 } from "./builtin-tools.js";
 import { archiveSpawnedBot, spawnBot } from "./child-bots.js";
 import type { ConnectionScope, PluginConnectionRow } from "./composio-connector.js";
@@ -1166,7 +1167,7 @@ export function buildSystemInstructions(parts: SystemInstructionParts): string {
       : undefined,
     parts.subagentsExposed === false
       ? undefined
-      : `${tool("run_subagent")} is a short helper inside this turn only. It is not a bot, has no thread, and does not show in the list. Use it for parallel work you will summarize here.`,
+      : `${tool("run_subagent")} is a helper for parallel work. It is not a bot, has no thread, and does not show in the list. It works inside this turn, or with background after it, and then its report wakes you to tell the user.`,
     parts.botDirectory
       ? BOT_DELEGATION_GUIDANCE.replaceAll("ask_user", tool("ask_user"))
       : undefined,
@@ -1723,10 +1724,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const channelId = messagingChannelId(sourceBlocks);
         const messagingChannelRun = isMessagingChannelRun(run.trigger, sourceBlocks);
         const archiveHistory = run.trigger !== "messaging" && !channelId;
+        // A background helper reads only its own session: its brief, never its parent's conversation.
+        const backgroundHelper = run.trigger === "helper";
         let sessionId = run.sessionId as SessionId;
         const historyStartedAt = performance.now();
         let historyMs = 0;
         const threadLoad = deps.prisma.thread.findUniqueOrThrow({ where: { id: run.threadId } });
+        const historySessionOf = (loaded: { sessionId: string | null }) =>
+          backgroundHelper ? run.sessionId : (loaded.sessionId ?? run.sessionId);
         const compacts = (owner: { botId: string | null }) =>
           Boolean(owner.botId) && deps.runtime.describe().capabilities.compaction;
         const [
@@ -1753,14 +1758,27 @@ export function createRunExecutor(deps: ExecutorDeps) {
             .then((loaded) =>
               readRunHistory(
                 deps.sessionLog,
-                { ...run, sessionId: loaded.sessionId ?? run.sessionId },
+                { ...run, sessionId: historySessionOf(loaded) },
                 channelId,
                 compacts(loaded) ? undefined : UNCOMPACTED_HISTORY_LIMIT,
               ),
             )
             .then(async (entries) => {
               const loaded = await threadLoad;
-              sessionId = loaded.sessionId ? SessionId.parse(loaded.sessionId) : sessionId;
+              if (loaded.sessionId && !backgroundHelper)
+                sessionId = SessionId.parse(loaded.sessionId);
+              // The tail is one read from the head, so its newest seq marks what this attempt saw;
+              // a helper report after it wakes the bot once the turn ends.
+              if (!backgroundHelper && run.routineId == null && !channelId) {
+                const historyThroughSeq = entries.reduce(
+                  (next, entry) => Math.max(next, entry.seq + 1),
+                  0,
+                );
+                await deps.prisma.run.updateMany({
+                  where: { id: runId },
+                  data: { historyThroughSeq },
+                });
+              }
               if (run.routineId == null && archiveHistory) {
                 entries = await activeInteractiveHistory(deps.sessionLog, entries, run, sessionId);
               }
@@ -1808,10 +1826,20 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const agentEnvironment = decryptAgentEnvironment(agentSecretRows, deps.secretStore);
         runSecrets.push(...Object.values(agentEnvironment));
         const agentEnvironmentInstruction = formatAgentEnvironmentInstruction(agentEnvironment);
-        const hasModelOverride = Boolean(bot.modelProvider && bot.modelId);
+        // A background helper runs the model its call chose, as a bot override would be.
+        const modelOwner =
+          backgroundHelper && run.modelProvider && run.modelId
+            ? { ...bot, modelProvider: run.modelProvider, modelId: run.modelId }
+            : bot;
+        const hasModelOverride = Boolean(modelOwner.modelProvider && modelOwner.modelId);
         const overrideCredential =
-          hasModelOverride && bot.modelProvider
-            ? await findModelCredential(deps.prisma, run, bot.modelProvider, bot.modelId)
+          hasModelOverride && modelOwner.modelProvider
+            ? await findModelCredential(
+                deps.prisma,
+                run,
+                modelOwner.modelProvider,
+                modelOwner.modelId,
+              )
             : null;
         runAbortController = new AbortController();
         if (!leaseValid) runAbortController.abort();
@@ -1860,14 +1888,17 @@ export function createRunExecutor(deps: ExecutorDeps) {
           : null;
         const semanticMemory: SemanticMemoryProvider | null = configuredMemory?.provider ?? null;
 
-        await deps.events.append({
-          spaceId: run.spaceId,
-          threadId: thread.id,
-          botId: bot.id,
-          type: "run.started",
-          runId,
-          payload: { trigger: run.trigger, routineId: run.routineId },
-        });
+        // A background helper is no turn of the thread: the person sees only its parent's words.
+        if (!backgroundHelper) {
+          await deps.events.append({
+            spaceId: run.spaceId,
+            threadId: thread.id,
+            botId: bot.id,
+            type: "run.started",
+            runId,
+            payload: { trigger: run.trigger, routineId: run.routineId },
+          });
+        }
 
         // Background routine work gets a run card in the thread instead of conversation turns
         // (background-work-visibility CA1/CA2); a top-level bot's scheduled routine (the
@@ -1875,8 +1906,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const isRoutineCardRun = showsRoutineRunCard(run, bot.parentBotId != null);
         const routineRun =
           run.routineId != null && (run.trigger === "routine" || run.trigger === "webhook");
+        // A helper's final text is its report to its parent.
         const messageUserExposed =
           !routineRun &&
+          !backgroundHelper &&
           (bot.parentBotId == null || runStartedByUser({ trigger: run.trigger, sourceRole }));
         const publishRecoveryNotice = messageUserExposed && run.trigger !== "bot_message";
         // Text the model writes outside message_user is private scratch, and a turn that never
@@ -2020,7 +2053,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const runDeployment = deps.deploymentModelKey ? resolveDeploymentModel() : null;
         const runtimeFallback = runtimeFallbackModel(deps.runtime);
         const selected = selectConfiguredModel({
-          bot,
+          bot: modelOwner,
           overrideCredential,
           defaultCredential,
           settings,
@@ -2500,78 +2533,116 @@ export function createRunExecutor(deps: ExecutorDeps) {
         };
         const writeRunEntry = (entry: ToolLogEntry) => logEntry({ ...runLog, ...entry });
         const effort = thinkingLevel ?? resolved.thinkingLevel ?? null;
-        const startSubagent = async (call: SubagentCall): Promise<SubagentLog> => {
-          await afterToolAnnounced(call.callId);
+        /**
+         * The call, then the helper's session and run under it. A sync helper runs at once in
+         * this attempt; a background one waits for an attempt of its own.
+         */
+        const openHelperRun = async (
+          tx: Prisma.TransactionClient,
+          call: SubagentCall,
+          background: boolean,
+        ) => {
           const callEntryId = EntryId.parse(randomUUID());
-          const helper = await deps.prisma.$transaction(async (tx) => {
+          await deps.sessionLog.append(tx, {
+            ...runLog,
+            id: callEntryId,
+            ...toolCall(call.callId, "run_subagent", call.args),
+          });
+          const sessionId = await deps.sessionLog.createSession(tx, {
+            kind: "subagent",
+            id: SessionId.parse(randomUUID()),
+            spaceId: run.spaceId,
+            parentSessionId: runLog.sessionId,
+            parentEntryId: callEntryId,
+          });
+          const status = background ? "queued" : "running";
+          const task = await tx.task.create({
+            data: {
+              spaceId: run.spaceId,
+              botId: bot.id,
+              threadId: thread.id,
+              userId: run.userId,
+              prompt: call.task,
+              helperName: call.name,
+              helperInstructions: helperCallOf(call.args).instructions || null,
+              status,
+            },
+            select: { id: true },
+          });
+          const exclusive = call.profile?.exclusive;
+          // The run row is the lock: a bot's active runs hold each resource once.
+          const [helperRun] = await tx.run.createManyAndReturn({
+            data: {
+              spaceId: run.spaceId,
+              botId: bot.id,
+              threadId: thread.id,
+              taskId: task.id,
+              userId: run.userId,
+              status,
+              trigger: background ? "helper" : "subagent",
+              sessionId,
+              parentRunId: runId,
+              modelProvider: call.model.provider,
+              modelId: call.model.id,
+              helper: call.profile?.name ?? null,
+              exclusive: exclusive ?? null,
+              startedAt: background ? null : new Date(),
+            },
+            skipDuplicates: true,
+            select: { id: true },
+          });
+          if (!helperRun) {
+            const holder = await tx.run.findFirst({
+              where: { botId: bot.id, exclusive, status: { in: [...ACTIVE_RUN_STATUSES] } },
+              select: { id: true, helper: true },
+            });
+            throw new Error(
+              holder
+                ? `${exclusive} is held by helper ${holder.id} (${holder.helper})`
+                : `${exclusive} was busy, try again`,
+            );
+          }
+          return { callEntryId, sessionId, runId: helperRun.id, taskId: task.id };
+        };
+        const startHelper = async (call: SubagentCall) => {
+          await afterToolAnnounced(call.callId);
+          const helperId = await deps.prisma.$transaction(async (tx) => {
+            const opened = await openHelperRun(tx, call, true);
             await deps.sessionLog.append(tx, {
               ...runLog,
-              id: callEntryId,
-              ...toolCall(call.callId, "run_subagent", call.args),
-            });
-            const sessionId = await deps.sessionLog.createSession(tx, {
-              kind: "subagent",
-              id: SessionId.parse(randomUUID()),
-              spaceId: run.spaceId,
-              parentSessionId: runLog.sessionId,
-              parentEntryId: callEntryId,
-            });
-            const task = await tx.task.create({
-              data: {
-                spaceId: run.spaceId,
-                botId: bot.id,
-                threadId: thread.id,
-                userId: run.userId,
-                prompt: call.task,
-                status: "running",
+              type: "tool.result",
+              payload: {
+                callId: call.callId,
+                output: describeToolPayload({ helperId: opened.runId }),
+                isError: false,
+                artifactIds: [],
+                sessionId: opened.sessionId,
               },
-              select: { id: true },
             });
-            const exclusive = call.profile?.exclusive;
-            // The run row is the lock: a bot's active runs hold each resource once.
-            const [helperRun] = await tx.run.createManyAndReturn({
-              data: {
-                spaceId: run.spaceId,
-                botId: bot.id,
-                threadId: thread.id,
-                taskId: task.id,
-                userId: run.userId,
-                status: "running",
-                trigger: "subagent",
-                sessionId,
-                parentRunId: runId,
-                modelProvider: call.model.provider,
-                modelId: call.model.id,
-                helper: call.profile?.name ?? null,
-                exclusive: exclusive ?? null,
-                startedAt: new Date(),
-              },
-              skipDuplicates: true,
-              select: { id: true },
-            });
-            if (!helperRun) {
-              const holder = await tx.run.findFirst({
-                where: { botId: bot.id, exclusive, status: { in: [...ACTIVE_RUN_STATUSES] } },
-                select: { id: true, helper: true },
-              });
-              throw new Error(
-                holder
-                  ? `${exclusive} is held by helper ${holder.id} (${holder.helper})`
-                  : `${exclusive} was busy, try again`,
-              );
-            }
+            return opened.runId;
+          });
+          await deps.jobs.enqueue(runContinueJob(helperId));
+          return { helperId };
+        };
+        const startSubagent = async (call: SubagentCall): Promise<SubagentLog> => {
+          await afterToolAnnounced(call.callId);
+          const helper = await deps.prisma.$transaction(async (tx) => {
+            const opened = await openHelperRun(tx, call, false);
             await deps.sessionLog.append(tx, {
               type: "run.started",
-              sessionId,
+              sessionId: opened.sessionId,
               botId: bot.id,
-              runId: helperRun.id,
+              runId: opened.runId,
               payload: {
-                trigger: { kind: "subagent", entryId: callEntryId },
+                trigger: { kind: "subagent", entryId: opened.callEntryId },
                 model: call.model,
                 effort,
               },
             });
-            return { log: { sessionId, runId: helperRun.id, botId: bot.id }, taskId: task.id };
+            return {
+              log: { sessionId: opened.sessionId, runId: opened.runId, botId: bot.id },
+              taskId: opened.taskId,
+            };
           });
           const inOrder = serialWrites();
           const writeHelperEntry = (entry: ToolLogEntry) =>
@@ -3485,6 +3556,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
           };
 
           const requestApproval = async () => {
+            // Nobody watches a background helper: it reports what needs a person instead.
+            if (backgroundHelper) {
+              return {
+                error: `${name} needs the user's approval, which a background helper cannot ask for. Say so in your report.`,
+              };
+            }
             if (!(await renewRunLease(deps, runId, workerId, fence))) {
               // Another worker owns the run now; exit without leaving a local pause card.
               return pauseForApproval();
@@ -5268,6 +5345,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
           );
           runLog.sessionId = opened.sessionId;
           for (const [callId, input] of opened.awaitingResult) unansweredCalls.set(callId, input);
+          const helperCall = backgroundHelper
+            ? {
+                name: task.helperName ?? "helper",
+                task: task.prompt,
+                instructions: task.helperInstructions ?? "",
+                profile: run.helper,
+              }
+            : undefined;
           const runtimeModel: AgentRunRequest["model"] = {
             provider: runModelProvider,
             id: runModelId,
@@ -5296,9 +5381,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
               threadId: thread.id,
               runId,
               sourceMessageId: run.sourceMessageId,
-              prompt,
+              prompt: helperCall?.task ?? prompt,
               instructions,
               ...(harnessAddendum ? { harnessAddendum } : {}),
+              ...(helperCall ? { helper: helperCall } : {}),
               history: runtimeHistory,
               currentTurnImages,
               tools,
@@ -5343,6 +5429,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 ),
               attempt: { id: attempt.id, fence },
               startSubagent,
+              startHelper,
               resolveModel: scripted
                 ? undefined
                 : (provider, modelId) =>
@@ -5468,7 +5555,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             } else if (event.type === "progress") {
               toolCallStreak = { key: undefined, count: 0 };
               // A routine card run's only surface is its run card: skip the activity line.
-              if (!isRoutineCardRun) {
+              if (!isRoutineCardRun && !backgroundHelper) {
                 await deps.events.append({
                   spaceId: run.spaceId,
                   threadId: thread.id,
@@ -6396,6 +6483,8 @@ export function notifiesUserOnRunEnd(
   trigger: string,
   opts?: { isSubBot?: boolean; notify?: boolean; relaysToUser?: boolean; routineCard?: boolean },
 ): boolean {
+  // A background helper's end wakes its parent, whose reply pages instead.
+  if (trigger === "helper") return false;
   if (trigger === "bot_message") return !opts?.isSubBot && opts?.relaysToUser === true;
   if (opts?.routineCard) return opts.notify === true;
   return true;
@@ -6749,6 +6838,8 @@ type RunLogFacts = {
   routineNotify: boolean | null;
   spawnPromptId: string | null;
   sessionKind: string;
+  /** The entry that opened the run's own session: a helper's `run_subagent` call. */
+  sessionParentEntryId: string | null;
   parentSessionId: string;
   channelSource: boolean;
 };
@@ -6773,6 +6864,7 @@ export async function openRunLog(
       SELECT
         (SELECT "sessionId" FROM runs WHERE id = ${run.id}) AS "sessionId",
         (SELECT kind FROM sessions WHERE id = (SELECT "sessionId" FROM runs WHERE id = ${run.id})) AS "sessionKind",
+        (SELECT "parentEntryId" FROM sessions WHERE id = (SELECT "sessionId" FROM runs WHERE id = ${run.id})) AS "sessionParentEntryId",
         (SELECT "sessionId" FROM threads WHERE id = ${run.threadId}) AS "parentSessionId",
         (SELECT json_agg(json_build_object('type', type, 'payload', payload) ORDER BY seq)
           FROM session_entries
@@ -6898,6 +6990,11 @@ function sessionRunTrigger(run: RunTriggerSource, facts: RunLogFacts): SessionRu
     case "bot_message":
     case "resume":
       return carrier();
+    case "subagent":
+    case "helper":
+      return facts.sessionParentEntryId
+        ? { kind: "subagent", entryId: facts.sessionParentEntryId as EntryId }
+        : { kind: "direct" };
   }
 }
 

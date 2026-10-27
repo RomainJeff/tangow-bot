@@ -757,6 +757,8 @@ export async function claimSteering(
         threadId: input.threadId,
         botId: input.botId,
         status: "running",
+        // A helper is no turn of the conversation: what the person sends goes to its parent.
+        parentRunId: null,
         leaseOwner: input.leaseOwner,
         leaseFence: input.leaseFence,
       },
@@ -1756,6 +1758,9 @@ export function completedRunBlocks(
   );
 }
 
+/** How much of a background helper's final answer its parent reads. */
+const HELPER_REPORT_MAX_CHARS = 4_000;
+
 async function finalizeRunOnce(
   prisma: PrismaClient,
   input: FinalizeRunInput,
@@ -1790,6 +1795,12 @@ async function finalizeRunOnce(
       },
     });
     if (terminal.count !== 1) return null;
+    const ended = await tx.run.findUniqueOrThrow({
+      where: { id: input.runId },
+      select: { trigger: true, helper: true },
+    });
+    // A background helper's end is news for its parent only, never for the person.
+    const background = ended.trigger === "helper";
 
     const attempt = await tx.attempt.updateMany({
       where: {
@@ -1825,7 +1836,7 @@ async function finalizeRunOnce(
           botId: input.botId,
           runId: input.runId,
           blocks: completedBlocks,
-          markUnread: input.markUnread,
+          markUnread: background ? false : input.markUnread,
         });
       }
       if (input.publicBlocks?.length) {
@@ -1839,8 +1850,13 @@ async function finalizeRunOnce(
         });
       }
     }
+    // A background helper outlives its parent's turn.
     const strandedHelpers = await tx.run.findMany({
-      where: { parentRunId: input.runId, status: { in: [...ACTIVE_RUN_STATUSES] } },
+      where: {
+        parentRunId: input.runId,
+        trigger: "subagent",
+        status: { in: [...ACTIVE_RUN_STATUSES] },
+      },
       select: { id: true, taskId: true },
     });
     await cancelRunsInTransaction(tx, strandedHelpers, now);
@@ -1852,14 +1868,37 @@ async function finalizeRunOnce(
         : { status: "failed", error: input.error },
       { result: input.outcome === "completed" ? input.result : undefined, recap: input.recap },
     );
-    const lastEvent = await appendEventInTransaction(tx, {
-      spaceId: input.spaceId,
-      threadId: input.threadId,
-      botId: input.botId,
-      type: input.outcome === "completed" ? "run.completed" : "run.failed",
-      runId: input.runId,
-      payload: input.outcome === "completed" ? {} : { error: input.error },
-    });
+    if (background) {
+      const { sessionId } = await tx.thread.findUniqueOrThrow({
+        where: { id: input.threadId },
+        select: { sessionId: true },
+      });
+      const report = input.outcome === "completed" ? (input.result ?? "") : input.error;
+      await appendSessionEntryInTransaction(tx, {
+        type: "helper.report",
+        sessionId: sessionId as SessionId,
+        botId: input.botId,
+        payload: {
+          helperId: input.runId,
+          profile: ended.helper,
+          status: input.outcome,
+          report:
+            report.length > HELPER_REPORT_MAX_CHARS
+              ? `${report.slice(0, HELPER_REPORT_MAX_CHARS)}… truncated`
+              : report,
+        },
+      });
+    }
+    const lastEvent = background
+      ? { threadId: input.threadId, seq: await threadEventSeq(tx, input.threadId) }
+      : await appendEventInTransaction(tx, {
+          spaceId: input.spaceId,
+          threadId: input.threadId,
+          botId: input.botId,
+          type: input.outcome === "completed" ? "run.completed" : "run.failed",
+          runId: input.runId,
+          payload: input.outcome === "completed" ? {} : { error: input.error },
+        });
     await tx.event.deleteMany({ where: { runId: input.runId, type: "thread.progress" } });
     if (input.outcome === "completed") {
       await tx.steeringMessage.deleteMany({
@@ -1886,7 +1925,7 @@ async function finalizeRunOnce(
     }
     const continuationRunId = await createSteeringContinuation(tx, input);
     // A run with nothing to say leaves the bot's row time on its last visible activity.
-    if (input.outcome === "failed" || input.markUnread !== false) {
+    if (!background && (input.outcome === "failed" || input.markUnread !== false)) {
       await tx.bot.update({ where: { id: input.botId }, data: { updatedAt: now } });
     }
     return { threadId: lastEvent.threadId, seq: lastEvent.seq, continuationRunId };
@@ -1901,6 +1940,7 @@ async function createSteeringContinuation(
     where: {
       threadId: input.threadId,
       botId: input.botId,
+      ...conversationRunFilter,
       status: { in: [...ACTIVE_RUN_STATUSES] },
     },
     select: { id: true },
@@ -1915,35 +1955,73 @@ async function createSteeringContinuation(
     include: { message: { select: { id: true } } },
     orderBy: [{ message: { seq: "asc" } }, { id: "asc" }],
   });
-  if (pending.length === 0) return null;
+  const followUp = async (userId: string, prompt: string, sourceMessageId: string | null) => {
+    const task = await tx.task.create({
+      data: {
+        spaceId: input.spaceId,
+        botId: input.botId,
+        threadId: input.threadId,
+        userId,
+        prompt,
+        status: "queued",
+      },
+    });
+    return tx.run.create({
+      data: {
+        spaceId: input.spaceId,
+        botId: input.botId,
+        threadId: input.threadId,
+        taskId: task.id,
+        userId,
+        status: "queued",
+        trigger: "follow_up",
+        sourceMessageId,
+      },
+    });
+  };
+  if (pending.length === 0) {
+    // As the source message, the report would stand in for the prompt and never reach the model.
+    if (!(await hasUnreadHelperReport(tx, input))) return null;
+    const { userId } = await tx.thread.findUniqueOrThrow({
+      where: { id: input.threadId },
+      select: { userId: true },
+    });
+    const woken = await followUp(userId, "A helper you started reported back.", null);
+    return woken.id;
+  }
   const last = pending.at(-1)!;
-  const task = await tx.task.create({
-    data: {
-      spaceId: input.spaceId,
-      botId: input.botId,
-      threadId: input.threadId,
-      userId: pending[0]!.userId,
-      prompt: "Respond to the user's steering context.",
-      status: "queued",
-    },
-  });
-  const run = await tx.run.create({
-    data: {
-      spaceId: input.spaceId,
-      botId: input.botId,
-      threadId: input.threadId,
-      taskId: task.id,
-      userId: pending[0]!.userId,
-      status: "queued",
-      trigger: "follow_up",
-      sourceMessageId: last.message.id,
-    },
-  });
+  const run = await followUp(
+    pending[0]!.userId,
+    "Respond to the user's steering context.",
+    last.message.id,
+  );
   await tx.steeringMessage.updateMany({
     where: { id: { in: pending.map((item) => item.id) }, runId: null },
     data: { runId: run.id, claimedAt: null },
   });
   return run.id;
+}
+
+/**
+ * Whether the bot's newest helper report in the thread came after every history its turns read,
+ * so no turn has seen it yet. Session seqs order the two without any clock.
+ */
+async function hasUnreadHelperReport(tx: Prisma.TransactionClient, input: FinalizeRunBase) {
+  const report = await tx.sessionEntry.findFirst({
+    where: {
+      botId: input.botId,
+      type: "helper.report",
+      session: { threadId: input.threadId, kind: "thread" },
+    },
+    orderBy: { seq: "desc" },
+    select: { seq: true },
+  });
+  if (!report) return false;
+  const { _max: read } = await tx.run.aggregate({
+    where: { threadId: input.threadId, botId: input.botId, ...conversationRunFilter },
+    _max: { historyThroughSeq: true },
+  });
+  return read.historyThroughSeq == null || report.seq >= read.historyThroughSeq;
 }
 
 export async function appendEventInTransaction(
