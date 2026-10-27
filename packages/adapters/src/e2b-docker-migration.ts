@@ -274,7 +274,6 @@ export async function migrateE2BToDocker(
             botId: volume.botId,
             providerKind: "e2b-worker",
             providerRef: volume.providerRef,
-            writerAttemptId: null,
           },
           data: {
             providerKind: "docker-worker",

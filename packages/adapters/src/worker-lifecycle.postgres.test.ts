@@ -17,7 +17,7 @@ import { carryDockerVolumesToE2B } from "./e2b-home-upgrade.js";
 import { MemoryVolumeFiles } from "./fake-volume-files.js";
 import { FakeWorkerProvider } from "./fake-worker-provider.js";
 import { allFiles, mcpOnly, privateFiles, workerFixture } from "./worker-fixture.test-support.js";
-import { createWorkerLifecycle, StaleAttemptError, VolumeBusyError } from "./worker-lifecycle.js";
+import { createWorkerLifecycle, StaleAttemptError } from "./worker-lifecycle.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const describePostgres =
@@ -276,7 +276,7 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
     }
   });
 
-  it("lets one of two runs racing for the same volumes write, whatever their grant order", async () => {
+  it("starts both runs racing for the same volumes, whatever their grant order", async () => {
     for (let round = 0; round < ROUNDS; round++) {
       const fake = new FakeWorkerProvider();
       const workers = createWorkerLifecycle({ prisma, provider: fake });
@@ -294,17 +294,21 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
         ),
       ]);
 
-      expect(results.map((result) => result.status).sort()).toEqual(["fulfilled", "rejected"]);
-      const refused = results.find((result) => result.status === "rejected");
-      expect(refused?.reason).toBeInstanceOf(VolumeBusyError);
-      const winner = results[0]!.status === "fulfilled" ? first.id : second.id;
-      expect(
-        fake.calls.filter((call) => call.op === "ensure").map((call) => call.spec.attemptId),
-      ).toEqual([winner]);
+      expect(results.map((result) => result.status)).toEqual(["fulfilled", "fulfilled"]);
+      const mounts = [
+        { volumeRef: privateVolume.providerRef, path: `/workspace/bots/${bot.id}`, access: "rw" },
+        { volumeRef: sharedVolume.providerRef, path: "/workspace/shared", access: "rw" },
+      ];
+      expect(fake.live.get(`fake-worker-${first.id}`)?.mounts).toEqual(mounts);
+      expect(fake.live.get(`fake-worker-${second.id}`)?.mounts).toEqual([...mounts].reverse());
       expect([
-        await fixture.writerOf(privateVolume.id),
-        await fixture.writerOf(sharedVolume.id),
-      ]).toEqual([winner, null]);
+        await fixture.workerStateOf(first.id),
+        await fixture.workerStateOf(second.id),
+      ]).toEqual(["ready", "ready"]);
+      await workers.release(first.id, fixture.context);
+      expect([...fake.live.keys()]).toEqual([`fake-worker-${second.id}`]);
+      await workers.release(second.id, fixture.context);
+      expect(fake.live.size).toBe(0);
     }
   });
 
@@ -312,7 +316,7 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
     for (let round = 0; round < ROUNDS; round++) {
       const fake = new FakeWorkerProvider();
       const workers = createWorkerLifecycle({ prisma, provider: fake });
-      const { computer, bot, sharedVolume } = await fixture.migratedBot();
+      const { computer, bot } = await fixture.migratedBot();
       const teammate = await fixture.teammateOf(computer);
       const first = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
       const second = await fixture.seedAttempt((await fixture.seedRun(teammate.bot)).id);
@@ -331,7 +335,7 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
           .map((call) => call.spec.attemptId)
           .sort(),
       ).toEqual([first.id, second.id].sort());
-      expect(await fixture.writerOf(sharedVolume.id)).toBeNull();
+      expect(fake.live.size).toBe(2);
     }
   });
 
@@ -339,7 +343,7 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
     for (let round = 0; round < ROUNDS; round++) {
       const fake = new FakeWorkerProvider();
       const workers = createWorkerLifecycle({ prisma, provider: fake });
-      const { bot, privateVolume } = await fixture.migratedBot();
+      const { bot } = await fixture.migratedBot();
       const attempt = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
       const launch = await fixture.launchFor(workers, attempt.id, privateFiles);
 
@@ -354,7 +358,7 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
       );
       expect(fake.calls.map((call) => call.op)).toEqual(["ensure", "prepare"]);
       expect(await fixture.workerStateOf(attempt.id)).toBe("ready");
-      expect(await fixture.writerOf(privateVolume.id)).toBe(attempt.id);
+      expect([...fake.live.keys()]).toEqual([`fake-worker-${attempt.id}`]);
     }
   });
 
@@ -362,7 +366,7 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
     for (let round = 0; round < ROUNDS; round++) {
       const fake = new FakeWorkerProvider();
       const workers = createWorkerLifecycle({ prisma, provider: fake });
-      const { bot, privateVolume } = await fixture.migratedBot();
+      const { bot } = await fixture.migratedBot();
       const attempt = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
       const launch = await fixture.launchFor(workers, attempt.id, allFiles);
 
@@ -380,7 +384,7 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
           status: "rejected",
           reason: expect.any(OwnerWorkerLiveError),
         });
-        expect(await fixture.writerOf(privateVolume.id)).toBe(attempt.id);
+        expect([...fake.live.keys()]).toEqual([`fake-worker-${attempt.id}`]);
       } else {
         expect(started.reason).toBeInstanceOf(StaleAttemptError);
         expect(deleted.status).toBe("fulfilled");

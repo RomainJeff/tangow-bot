@@ -371,7 +371,34 @@ describe("where a product run executes", () => {
     expect(run.provider.launches).toEqual([]);
   });
 
-  it.each(["volumes", "ensure", "prepare", "ensure-unreleased", "other-run-unreleased"] as const)(
+  it("completes a new run while another run's worker is still releasing", async () => {
+    const run = await fixture(offeredShellTools([]));
+    const ensure = run.provider.ensure.bind(run.provider);
+    run.provider.ensure = async (spec, context) => {
+      await ensure(spec, context);
+      throw new Error("The controller lost the create response");
+    };
+    const earlier = await run.send("Earlier run.");
+    await expect(run.continueRun(earlier)).rejects.toThrow("Run setup failed; retrying");
+    await run.prisma.run.update({
+      where: { id: earlier },
+      data: { status: "failed", completedAt: new Date() },
+    });
+    expect(await attemptsOf(run, earlier)).toEqual([{ workerState: "releasing" }]);
+    run.provider.ensure = ensure;
+
+    const runId = await run.send("Hello.");
+    await run.continueRun(runId);
+
+    expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+      "completed",
+    );
+    expect(await attemptsOf(run, runId)).toEqual([{ workerState: "released" }]);
+    expect(await attemptsOf(run, earlier)).toEqual([{ workerState: "releasing" }]);
+    run.model.assertComplete();
+  });
+
+  it.each(["volumes", "ensure", "prepare", "ensure-unreleased"] as const)(
     "exhausts a run's setup budget across reconciliation and a restart after %s fails",
     async (step) => {
       const run = await startWorkerRun({ steps: [] });
@@ -381,34 +408,14 @@ describe("where a product run executes", () => {
       };
       const failProvider = () => {
         if (step === "volumes") run.provider.ensureVolume = fail;
-        else if (step === "ensure-unreleased" || step === "other-run-unreleased") {
+        else if (step === "ensure-unreleased") {
           run.provider.ensure = fail;
           run.provider.destroy = fail;
         } else run.provider[step] = fail;
       };
       if (step === "volumes") await run.prisma.volume.deleteMany();
       failProvider();
-      if (step === "other-run-unreleased") {
-        const earlier = await run.send("Earlier run.");
-        await expect(run.continueRun(earlier)).rejects.toThrow("Run setup failed; retrying");
-        await run.prisma.run.update({
-          where: { id: earlier },
-          data: { status: "failed", completedAt: new Date() },
-        });
-      }
       const runId = await run.send("Hello.");
-      if (step === "other-run-unreleased") {
-        for (let wait = 0; wait < 4; wait++) {
-          await run.continueRun(runId);
-          expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
-            "queued",
-          );
-        }
-        await run.prisma.attempt.updateMany({
-          where: { workerState: "releasing" },
-          data: { workerEnsureAt: new Date(0) },
-        });
-      }
       const enqueue = vi.fn(async () => undefined);
       const reconciler = createJobReconciler({
         prisma: run.prisma,
@@ -433,7 +440,7 @@ describe("where a product run executes", () => {
               ).toBe("queued");
             }
           }
-          // A failed ensure keeps its writer lease until its create deadline has passed.
+          // A failed ensure can still create a worker until its setup deadline has passed.
           await run.prisma.attempt.updateMany({
             where: { runId, workerState: { not: null } },
             data: { workerEnsureAt: new Date(0) },

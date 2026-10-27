@@ -6,10 +6,9 @@ import type {
 } from "@rakazo/adapter-kit";
 import { AgentRuntimeBusyError, AgentRuntimeUnavailableError } from "@rakazo/adapter-kit";
 import type { WorkerLaunch } from "@rakazo/core";
-import { attemptHoldsFence, LIVE_WORKER_STATES, workerEnsureDeadline } from "@rakazo/core";
+import { LIVE_WORKER_STATES, workerEnsureDeadline } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import type { ReleaseOutcome, WorkerLifecycle } from "../worker-lifecycle.js";
-import { VolumeBusyError } from "../worker-lifecycle.js";
 import type { FrameChannel } from "./framing.js";
 
 /** An attempt's guest, launched and reachable. */
@@ -30,8 +29,8 @@ export interface LaunchedGuest {
 
 export interface WorkerLauncher {
   /**
-   * Starts the attempt's guest with its capability. Throws AgentRuntimeUnavailableError while an
-   * earlier guest of the run is not confirmed gone, so two never write at once.
+   * Starts the attempt's guest with its capability. Throws AgentRuntimeBusyError while an earlier
+   * guest of the run is not confirmed gone, or AgentRuntimeUnavailableError past its setup deadline.
    */
   launch(worker: WorkerIdentity, capability: string): Promise<LaunchedGuest>;
 }
@@ -92,43 +91,7 @@ export function createLifecycleLauncher(deps: {
           "An earlier worker could not be released before its setup deadline",
         );
       }
-      const started = await deps.lifecycle
-        .start(deps.launch, context)
-        .catch(async (error: unknown) => {
-          if (error instanceof VolumeBusyError) {
-            const volumes = await deps.prisma.volume.findMany({
-              where: { id: { in: error.volumeIds } },
-              select: {
-                writerAttempt: {
-                  select: {
-                    fence: true,
-                    workerState: true,
-                    workerEnsureAt: true,
-                    run: { select: { leaseFence: true, status: true, leaseExpiresAt: true } },
-                  },
-                },
-              },
-            });
-            const now = Date.now();
-            const expired = volumes.some(
-              ({ writerAttempt: writer }) =>
-                writer &&
-                (!writer.workerEnsureAt ||
-                  workerEnsureDeadline(writer.workerEnsureAt).getTime() <= now) &&
-                (writer.workerState === "releasing" ||
-                  !attemptHoldsFence(writer, writer.run) ||
-                  (writer.run.leaseExpiresAt && writer.run.leaseExpiresAt.getTime() <= now)),
-            );
-            if (expired) {
-              throw new AgentRuntimeUnavailableError(
-                "A volume writer could not be released before its setup deadline",
-                { cause: error },
-              );
-            }
-            throw new AgentRuntimeBusyError(error.message, { cause: error });
-          }
-          throw error;
-        });
+      const started = await deps.lifecycle.start(deps.launch, context);
       await deps.prisma.attempt.updateMany({
         where: { id: worker.attemptId, status: "setting_up" },
         data: { status: "running" },

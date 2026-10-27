@@ -354,7 +354,6 @@ export async function carryDockerVolumesToE2B(
             id: report.volumeId,
             providerKind: docker,
             providerRef: dockerRef,
-            writerAttemptId: null,
           },
           data: { providerKind: target.describe().id, providerRef, ensureUntil: null },
         });
