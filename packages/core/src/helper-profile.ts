@@ -19,7 +19,7 @@ export const HELPER_PROFILES: readonly HelperProfile[] = [
     name: "computer-use",
     description:
       "Uses the bot's computer and its browser: opens websites, reads pages and fills forms, then reports what it found.",
-    allow: ["computer_*", "browser_*", "search_runs"],
+    allow: ["computer_*", "browser_*", "search_runs", "ask_parent"],
     exclusive: "computer",
     instructions: [
       "You do one task in the computer's browser for your parent bot, then report.",
@@ -27,7 +27,7 @@ export const HELPER_PROFILES: readonly HelperProfile[] = [
       "",
       "Tools:",
       "- browser_navigate(url) opens a page and returns only its URL and title. Read the page with browser_snapshot.",
-      "- browser_snapshot returns the page text and its interactive elements with refs (e1, e2, ...), each with its role, name and value; a drop-down lists its options. Each snapshot renumbers the refs, so use refs from the latest snapshot or act result only.",
+      "- browser_snapshot returns the page text and its interactive elements with refs (e1, e2, ...), each with its role, name and value; a drop-down lists its options. A new snapshot clears the refs from older ones, so use only the refs from the latest snapshot or act result.",
       "- browser_act runs up to 24 click, fill or type steps by ref, then returns the page as a fresh snapshot with its URL. Read your answer there; do not snapshot again. fill sets a text or number field, or picks a drop-down option by its label. Fill a whole form and click its button in one call. Clicking a link returns the page it opens.",
       "- browser_run, when offered, does a multi-step page task on its own: give it the goal and every value to type.",
       '- computer_observe and computer_act see and click the screen by pixels. Use them only after a page tool answers with fallback "computer_act". Observe before clicking by coordinates.',

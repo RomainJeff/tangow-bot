@@ -1,8 +1,8 @@
 # Computer-use helper on a browser task
 
-Does a bot finish a multi-page browser task better when it hands the work to the managed `computer-use` helper than when it drives the browser itself? On one task, with one model, both ways succeeded 5 times out of 5. The helper way was about 30 seconds slower. It left the bot with about 10 000 fewer context tokens and spent about 100 000 fewer tokens in total.
+Does a bot finish a multi-page browser task better when it hands the work to the managed `computer-use` helper than when it drives the browser itself? On one task, with one model, both ways succeeded 5 times out of 5. The helper way was about 30 seconds slower and left the bot with about 10 000 fewer context tokens. Total tokens overlap between the variants (A 245k to 516k, B 290k to 373k), so that difference is not distinguishable from the spread.
 
-Five trials per variant only show large gaps. The context and token gaps are wider than the run-to-run spread, and so is the wall-time gap. A small gap between these numbers would be noise.
+Five trials per variant only show large gaps. Only the wall-time and bot-context gaps lie outside the run-to-run spread. A small gap between these numbers would be noise.
 
 ## Setup
 
@@ -78,5 +78,7 @@ A defect skewed the first three rows. The guest's MCP client gave the model a ti
 - The computer runs an amd64 image under emulation on an arm64 host. That makes page steps slower than on a native host for both variants alike.
 - B blocks `open_path` and `launch_app` besides `computer_*` and `browser_*`. Otherwise the bot opened the page on a desktop it could not see.
 - The bot could read the site's HTML through `computer_exec` in A, or through the helper in B. The direct bot did so in trial 3.
+- The lock does not stop the main bot from using the browser while `MAIN_BOT_BLOCKED_TOOLS` is empty, so a background `computer-use` helper and the main bot can share it.
+- `ask_parent` was added to the profile's tools and the ref wording corrected after the benchmark ran, so the benchmark measured the profile without them.
 
 Reproduce with `pnpm sandbox:build`, then the command in [Setup](#setup) with `--connection <private-json-file>`, as [agent verification](../agent-verification.md) describes.

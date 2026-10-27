@@ -31,6 +31,7 @@ const COMPUTER_AND_BROWSER = [
   "browser_snapshot",
   "browser_act",
   "browser_run",
+  "ask_parent",
   "computer_exec",
 ];
 

@@ -17,7 +17,7 @@ export const researcher: HelperProfile = {
 export const screenOperator: HelperProfile = {
   name: "screen-operator",
   description: "Works the bot's computer screen and browser, one task at a time.",
-  allow: ["computer_*", "browser_*", "search_runs"],
+  allow: ["computer_*", "browser_*", "search_runs", "ask_parent"],
   exclusive: "computer",
   instructions:
     "Do the brief on the computer's screen and browser. Before any step that needs the user's approval or a login, ask your parent with ask_parent. End with what you did and what you saw.",

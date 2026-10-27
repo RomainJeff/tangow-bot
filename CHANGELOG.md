@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
-- **Bots can hand long tasks to a helper and keep talking.** On web, desktop and mobile, the bot answers at once, keeps chatting while the helper works, and posts the result on its own when the helper finishes. You can ask the bot where the task stands, add to it, or stop it, and when the helper needs a detail the bot asks you in its own words. Bots can also hand browser work, such as searching a site or filling a form, to a helper that works their computer.
+- **Bots can hand long tasks to a helper and keep talking.** On web, desktop and mobile, the bot answers at once, keeps chatting while the helper works, and posts the result on its own when it finishes; you can ask where the task stands, add to it or stop it, and the bot asks you in its own words when the helper needs a detail. Bots can also hand browser work, such as searching a site or filling a form, to a helper that works their computer.
 
 #### Changed
 
