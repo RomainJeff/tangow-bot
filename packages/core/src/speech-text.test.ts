@@ -158,7 +158,10 @@ describe("narrateTool", () => {
     expect(narrateTool("computer_observe")).toBe("looking at the screen");
     expect(narrateTool("browser_snapshot")).toBe("using the page");
     expect(narrateTool("write_file")).toBe("writing a file");
-    expect(narrateTool("run_subagent")).toBe("starting a subagent");
+  });
+
+  it("stays quiet for a helper, which the conversation does not show", () => {
+    expect(narrateTool("run_subagent")).toBeNull();
   });
 
   it("sees through an MCP tool prefix", () => {

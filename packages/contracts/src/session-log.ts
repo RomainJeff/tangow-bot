@@ -623,15 +623,12 @@ export type AgentHistoryTurnPart =
     };
 
 const itemBase = { id: EntryId, ts: IsoDate };
-/**
- * The child session an item's entry rose from, named when the same page holds the routine's start
- * or the helper's entry.
- */
+/** The child session an item's entry rose from, named when the same page holds the routine's start. */
 const itemOrigin = {
   origin: z
     .object({
       sessionId: SessionId,
-      kind: z.enum(["routine", "subagent"]).optional(),
+      kind: z.literal("routine").optional(),
       name: z.string().optional(),
     })
     .optional(),
@@ -674,19 +671,6 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
       .object({ outcome: RunOutcome, durationMs: z.number().int().nonnegative() })
       .nullable(),
   }),
-  z.discriminatedUnion("status", [
-    z.object({ kind: z.literal("subagent"), ...itemBase, runId: Id, ...SubagentPayload.shape }),
-    /** A helper still at work: its `run_subagent` call has no answer yet. */
-    z.object({
-      kind: z.literal("subagent"),
-      status: z.literal("running"),
-      ...itemBase,
-      runId: Id,
-      callId: z.string().min(1),
-      name: z.string(),
-      task: z.string(),
-    }),
-  ]),
   z.object({
     kind: z.literal("routine"),
     ...itemBase,

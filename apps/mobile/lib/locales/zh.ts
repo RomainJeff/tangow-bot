@@ -588,7 +588,6 @@ export const ZH_MESSAGES: Record<string, string> = {
   Image: "图片",
   "Markdown file": "Markdown 文件",
   "Message from {peer}": "来自 {peer} 的消息",
-  subagent: "子智能体",
   "Messaged {peer}": "已给 {peer} 发消息",
   Request: "请求",
   Result: "结果",
@@ -685,7 +684,6 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Opens the full table": "打开完整表格",
   "{count} runs": "{count} 次运行",
   "{count} failures since {time}": "自 {time} 起失败 {count} 次",
-  "Opens in full": "打开完整内容",
   "Show details": "显示详情",
   "Hide details": "隐藏详情",
 

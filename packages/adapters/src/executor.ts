@@ -2347,10 +2347,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
         let assembled = "";
         let currentTextSegment = "";
         let messageSegments: MessageBlock[] = [];
-        // Terminal subagent rows are published as their own messages (not appended to
-        // messageSegments). Treat that like tool/step durable activity so we do not invent
-        // an empty-run "done." completion afterward.
-        let publishedTerminalSubagent = false;
         // With a decision provider, page tasks go through browser_run first; browser_act opens
         // once browser_run has stopped short (a confirmation, a block, the step limit) or failed,
         // never for a missing value, which goes back to browser_run.
@@ -5556,17 +5552,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   throw error;
                 }
               }
-            } else if (event.type === "subagent") {
-              // The helper's card comes from its run_subagent call and its subagent entry.
-              if (event.status === "completed" || event.status === "failed") {
-                publishedTerminalSubagent ||= !subagentMarksUnread(run.trigger, event.status);
-                if (subagentMarksUnread(run.trigger, event.status)) {
-                  await deps.prisma.thread.update({
-                    where: { id: thread.id },
-                    data: { unread: true },
-                  });
-                }
-              }
             } else if (event.type === "usage") {
               await recordRunUsage(deps, { ...run, botId: bot.id, runId }, event);
             } else if (event.type === "transcript") {
@@ -5684,7 +5669,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 allowSilentEmpty || messagingChannelRun || publishedMidTurnUserMessage,
               emptyResponseText,
               suppressOutput: handedOff,
-              skipEmptyFallback: publishedTerminalSubagent || publishedMidTurnUserMessage,
+              skipEmptyFallback: publishedMidTurnUserMessage,
             });
           }
           // A routine card run's free closing text is replaced by the run card below (CA1/CA2):
@@ -6423,10 +6408,6 @@ export async function settleSteeringAttachmentLoads<TImage, TFile>(
     files: loadedFiles.status === "fulfilled" ? loadedFiles.value : [],
     unavailableInstruction: unavailable ? STEERING_ATTACHMENT_UNAVAILABLE : "",
   };
-}
-
-export function subagentMarksUnread(trigger: string, status: "running" | "completed" | "failed") {
-  return status === "failed" || trigger !== "routine";
 }
 
 function computerRunRequeueData(
