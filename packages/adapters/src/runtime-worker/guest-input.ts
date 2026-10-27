@@ -39,7 +39,12 @@ export function nativeToolsForHarness(name: string): readonly ConnectorTool[] {
 }
 
 /** The tools a harness uses only through a capability it declares. */
-const TOOL_CAPABILITY: Readonly<Record<string, HarnessCapability>> = { run_subagent: "subagents" };
+const TOOL_CAPABILITY: Readonly<Record<string, HarnessCapability>> = {
+  run_subagent: "subagents",
+  helper_status: "subagents",
+  helper_message: "subagents",
+  helper_stop: "subagents",
+};
 
 export type ToolRule = Pick<HelperProfile, "allow" | "block">;
 
@@ -226,7 +231,9 @@ export function helperRunInput(
     envelope,
     {
       ...request,
-      history: [],
+      // A background helper's history is its own session, which it resumes on; a sync one starts
+      // from its brief.
+      history: request.helper ? request.history : [],
       currentTurnImages: [],
       tools,
       // The helper's tools are selected already: the parent's block list must not apply again.
@@ -241,7 +248,7 @@ export function helperRunInput(
     sourceMessageId: parent.sourceMessageId,
     prompt: helper.task,
     instructions: [helper.instructions, catalogIndexText(tools)].filter(Boolean).join("\n\n"),
-    history: [],
+    history: parent.history,
     images: [],
     tools: parent.tools.filter((tool) => offered(tool.name)),
     model: guestModelOf(helper.model),

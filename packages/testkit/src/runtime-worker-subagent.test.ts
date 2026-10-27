@@ -514,7 +514,7 @@ describe("a helper the call names by profile", () => {
     ]);
   });
 
-  it("starts a background helper as its attempt's root, with its brief, profile and nothing of the bot", async () => {
+  it("starts a background helper as its attempt's root, on its brief, profile and own session's history", async () => {
     const run = helperRun("run_background_root", {
       tools: ["bash", "read", "remember", "forget", "run_subagent", "message_user"].map(tool),
       helperProfiles: [RESEARCHER],
@@ -533,7 +533,8 @@ describe("a helper the call names by profile", () => {
       prompt: "Find the notes.",
       instructions:
         'You are a Rakazo subagent named "scout". You work for the parent bot — you are not a separate bot chat. Complete the task and return a concise result. Do not spawn bots or further subagents. Cite every source. Be quick.',
-      history: [],
+      // A background helper's run reads its own session, which it resumes on.
+      history: [{ role: "user", content: "Earlier turn." }],
       images: [],
       tools: [
         { ...tool("read"), where: "guest" },

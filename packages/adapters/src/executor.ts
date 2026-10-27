@@ -37,6 +37,7 @@ import {
   routineJobKey,
   routineWakeupJob,
   runContinueJob,
+  runJobKey,
 } from "@rakazo/adapter-kit";
 import type {
   ComputerMode,
@@ -173,6 +174,7 @@ import {
   InvalidSpaceNameError,
   isTooManyDatabaseConnections,
   loadBotMessageContext,
+  messageHelper,
   openRoutineSessionInTransaction,
   Prisma,
   parseComputerMode,
@@ -435,6 +437,7 @@ import { indexWorkerSkills } from "./worker-skills.js";
 const modelCredentialLocks = new Map<string, Promise<void>>();
 const READ_ONLY_AGENT_TOOLS = new Set([
   "search_runs",
+  "helper_status",
   "computer_observe",
   "list_files",
   "read_file",
@@ -2929,6 +2932,30 @@ export function createRunExecutor(deps: ExecutorDeps) {
           else leaseValid = false;
           return reply;
         };
+        const askParent = async (question: string) => {
+          if (!question.trim()) return { error: "Ask a question." };
+          await workspaceCheckpoint.flush();
+          const paused = await deps.events.pauseRunForParent({
+            spaceId: run.spaceId,
+            threadId: run.threadId,
+            botId: run.botId,
+            runId,
+            attemptId: attempt.id,
+            leaseOwner: workerId,
+            leaseFence: fence,
+            question: redactSecrets(question, runSecrets),
+          });
+          if (!paused) {
+            leaseValid = false;
+            return { error: "This attempt no longer holds the run." };
+          }
+          if (paused.wokenRunId) await deps.jobs.enqueue(runContinueJob(paused.wokenRunId));
+          approvalPausePending = true;
+          return inputPausedToolResult(
+            "ask",
+            "Asked. Its answer resumes you as this call's result.",
+          );
+        };
 
         const skillOwner = { spaceId: run.spaceId, userId: run.userId, botId: run.botId };
         /** The skills this run followed, in order. */
@@ -3038,6 +3065,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (handedOff) {
             return { error: "This stage was handed off. End the turn without more tool calls." };
           }
+          if (name === "ask_parent") return askParent(String(args.question ?? ""));
           // Mask secrets before anything else derives from the arguments: the effect key, the
           // stored request, the approval card and the created bot all see the masked value.
           args = redactBotToolArgs(name, args, runSecrets);
@@ -3328,6 +3356,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
           let reviewReason: string | undefined;
           let gateDecision: "ask" | "allow" = plan === "ask" ? "ask" : "allow";
           const needsApprovalEarly = plan === "ask" || plan === "judge";
+          // Nobody watches a background helper, and its parent cannot approve for the person:
+          // refused before any effect is recorded, so no card is left pending.
+          if (backgroundHelper && needsApprovalEarly) {
+            return {
+              error: `${name} needs the user's approval, which a background helper cannot ask for. Ask your parent with ask_parent: it can do it itself or ask the user.`,
+            };
+          }
           // A resumed approval keeps its key even if "Always allow" changed the policy.
           const usesApprovalKey =
             nextApprovedTool ||
@@ -3556,12 +3591,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
           };
 
           const requestApproval = async () => {
-            // Nobody watches a background helper: it reports what needs a person instead.
-            if (backgroundHelper) {
-              return {
-                error: `${name} needs the user's approval, which a background helper cannot ask for. Say so in your report.`,
-              };
-            }
             if (!(await renewRunLease(deps, runId, workerId, fence))) {
               // Another worker owns the run now; exit without leaving a local pause card.
               return pauseForApproval();
@@ -4371,6 +4400,29 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   : "An approval card was posted. The user must approve it before its tools become available."
                 : "The server was registered without assigning it to this bot.",
             });
+          }
+          if (name === "helper_status") return helperStatus(deps.prisma, run);
+          if (name === "helper_message") {
+            const helperId = String(args.helperId ?? "");
+            const text = String(args.message ?? "").trim();
+            if (!text) return finish({ error: "Write a message." });
+            const routed = await messageHelper(deps.prisma, {
+              threadId: run.threadId,
+              botId: run.botId,
+              helperId,
+              text,
+            });
+            if (routed === "answered") await deps.jobs.enqueue(runContinueJob(helperId));
+            return finish(
+              routed === "answered" || routed === "steered"
+                ? { ok: true, delivered: routed }
+                : {
+                    error: `Helper ${helperId} ${routed === "ended" ? "already ended" : "is not one of yours here"}.`,
+                  },
+            );
+          }
+          if (name === "helper_stop") {
+            return finish(await stopHelpers(deps, run, String(args.helperId ?? "")));
           }
           if (name === "search_runs") {
             return searchRunsFromTool(deps, callLog.runId, args, {
@@ -5493,16 +5545,19 @@ export function createRunExecutor(deps: ExecutorDeps) {
                           id: item.id,
                           messageId: item.messageId,
                           historyText: item.text,
-                          text: buildSteeringMessageText(
-                            [
-                              await loadReplyContext(deps.prisma, thread.id, item.messageId),
-                              item.text,
-                            ]
-                              .filter(Boolean)
-                              .join("\n\n"),
-                            filesInstruction,
-                            unavailableInstruction,
-                          ),
+                          // A helper's steering is its parent's words, which name their sender.
+                          text: backgroundHelper
+                            ? item.text
+                            : buildSteeringMessageText(
+                                [
+                                  await loadReplyContext(deps.prisma, thread.id, item.messageId),
+                                  item.text,
+                                ]
+                                  .filter(Boolean)
+                                  .join("\n\n"),
+                                filesInstruction,
+                                unavailableInstruction,
+                              ),
                           images,
                         };
                       }),
@@ -6275,6 +6330,8 @@ export function selectBuiltinToolsForRun(options: {
       (tool.name !== "search_runs" || options.searchRunsExposed !== false) &&
       (tool.name !== "browser_run" || Boolean(options.browserRunAllowed)) &&
       (tool.name !== "message_user" || options.messageUserExposed !== false) &&
+      // Only a background helper has a parent free to answer: a sync one's waits on its result.
+      (tool.name !== "ask_parent" || options.trigger === "helper") &&
       (!options.messagingChannelRun ||
         (!["remember", "save_memory", "recall_memory", "forget_memory"].includes(tool.name) &&
           !tool.name.startsWith("scratchpad_"))),
@@ -7197,6 +7254,88 @@ function isErrorResult(result: unknown): boolean {
   return Boolean(result) && typeof result === "object" && "error" in (result as object);
 }
 
+type HelperScope = { threadId: string; botId: string };
+
+async function helperStatus(prisma: PrismaClient, scope: HelperScope) {
+  const runs = await prisma.run.findMany({
+    where: {
+      threadId: scope.threadId,
+      botId: scope.botId,
+      trigger: "helper",
+      status: { in: [...ACTIVE_RUN_STATUSES] },
+    },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      helper: true,
+      status: true,
+      startedAt: true,
+      task: { select: { prompt: true } },
+    },
+  });
+  const helpers = await Promise.all(
+    runs.map(async (helper) => {
+      const asked =
+        helper.status === "waiting_input"
+          ? await prisma.sessionEntry.findFirst({
+              where: {
+                type: "helper.question",
+                botId: scope.botId,
+                payload: { path: ["helperId"], equals: helper.id },
+              },
+              orderBy: { seq: "desc" },
+              select: { payload: true },
+            })
+          : null;
+      return {
+        helperId: helper.id,
+        profile: helper.helper,
+        brief: helper.task.prompt,
+        status:
+          helper.status === "waiting_input"
+            ? "waiting"
+            : helper.status === "queued"
+              ? "queued"
+              : "running",
+        startedAt: helper.startedAt?.toISOString() ?? null,
+        ...(asked ? { question: (asked.payload as { question: string }).question } : {}),
+      };
+    }),
+  );
+  return { helpers };
+}
+
+async function stopHelpers(
+  deps: Pick<ExecutorDeps, "prisma" | "jobs">,
+  scope: HelperScope,
+  helperId: string,
+) {
+  const stopped = await deps.prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM threads WHERE id = ${scope.threadId} FOR UPDATE`;
+    const helpers = await tx.run.findMany({
+      where: {
+        threadId: scope.threadId,
+        botId: scope.botId,
+        trigger: "helper",
+        status: { in: [...ACTIVE_RUN_STATUSES] },
+        ...(helperId === "all" ? {} : { id: helperId }),
+      },
+      select: { id: true, taskId: true },
+    });
+    await cancelRunsInTransaction(tx, helpers, new Date());
+    return helpers.map((helper) => helper.id);
+  });
+  // A helper's guest stops at its next lease renewal; a queued one never starts.
+  await Promise.all(stopped.map((id) => deps.jobs.cancel(runJobKey(id)).catch(() => undefined)));
+  if (stopped.length > 0) return { stopped };
+  return {
+    error:
+      helperId === "all"
+        ? "No helper of yours is at work here."
+        : `Helper ${helperId} is not at work here: it ended, or it is not yours.`,
+  };
+}
+
 /**
  * Runs only before a first proposal card: what the user already sees or said decides whether the
  * bot may show one (proposalRefusal). Reads a Not now in this run, a Not now to the same proposal in
@@ -7232,7 +7371,13 @@ async function proposalPreflight(
         select: { id: true },
       }),
       deps.prisma.run.findFirst({
-        where: { threadId: run.threadId, status: "waiting_input", id: { not: run.id } },
+        // A helper waiting on its parent waits on no one the person sees.
+        where: {
+          threadId: run.threadId,
+          status: "waiting_input",
+          parentRunId: null,
+          id: { not: run.id },
+        },
         select: { id: true },
       }),
       deps.prisma.externalEffect.findFirst({

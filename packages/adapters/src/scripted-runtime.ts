@@ -152,7 +152,7 @@ function helperResult(task: string): string {
 }
 
 /** The prompt of the run a background helper's report wakes. */
-const HELPER_WAKE = "A helper you started reported back.";
+const HELPER_WAKE = "A helper you started wrote back.";
 
 /** The newest helper report the history hands the bot. */
 function helperReportOf(history: AgentRunRequest["history"]): string | undefined {

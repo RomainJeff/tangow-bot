@@ -88,6 +88,20 @@ describe("projectInferenceTurns", () => {
     ]);
   });
 
+  it("hands a helper its parent's words as its parent's, not the user's", () => {
+    const chain = linkEntries("helper", [
+      { type: "user.message", payload: { blocks: text("Also check trains."), source: "parent" } },
+      { type: "user.message", payload: { blocks: text("Also check buses."), source: "app" } },
+    ]);
+    expect(turnsOf(chain, ada)).toEqual([
+      {
+        role: "user",
+        content: "[from the bot that started you, not the user] Also check trains.",
+      },
+      { role: "user", content: "Also check buses." },
+    ]);
+  });
+
   it("projects escaped own factual recaps, missing markers and truthful legacy references while preserving public messages and active tools", () => {
     const finished = { botId: "bot_ada", runId: "old" };
     const chain = linkEntries("recaps", [
