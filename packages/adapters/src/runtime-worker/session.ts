@@ -43,7 +43,6 @@ import {
   keepsEntry,
   mainBotRule,
   nativeToolsForHarness,
-  startableHelpers,
   workerStart,
 } from "./guest-input.js";
 import type { SessionInbox } from "./inbox.js";
@@ -382,7 +381,7 @@ export function createSession(
           log,
           model,
           tools: new Set(run.tools.map((tool) => tool.name)),
-          rule: profile ?? mainBotRule(request),
+          rule: profile ?? mainBotRule(request, launched!.expectedHarness),
           usage: { inputTokens: 0, outputTokens: 0 },
           modelRequests: 0,
         };
@@ -454,9 +453,7 @@ export function createSession(
       blockedEntry(
         name,
         args,
-        helper?.rule ??
-          helperProfile ??
-          mainBotRule(request, startableHelpers(request, launched!.expectedHarness)),
+        helper?.rule ?? helperProfile ?? mainBotRule(request, launched!.expectedHarness),
       )
     ) {
       return refuse("unknown_tool");
@@ -710,7 +707,7 @@ export function createSession(
           log,
           model,
           tools: new Set([...rootTools].filter(isHelperTool)),
-          rule: mainBotRule(request),
+          rule: mainBotRule(request, launched!.expectedHarness),
           usage: { inputTokens: 0, outputTokens: 0 },
           modelRequests: 0,
         });

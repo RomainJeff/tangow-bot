@@ -48,27 +48,19 @@ const TOOL_CAPABILITY: Readonly<Record<string, HarnessCapability>> = {
 
 export type ToolRule = Pick<HelperProfile, "allow" | "block">;
 
-/** The profiles the run's own agent can start: none for a helper or a harness without subagents. */
-export const startableHelpers = (request: AgentRunRequest, harness: HarnessDeclaration) =>
-  !request.helper &&
-  harness.capabilities.includes("subagents") &&
-  request.tools.some((tool) => tool.name === "run_subagent")
-    ? (request.helperProfiles ?? [])
-    : [];
-
 /**
- * The main bot's rule: every tool but those it hands to one of `helpers`. A helper without a
- * profile starts none, so it keeps them.
+ * The main bot's rule: every tool but those it hands to a helper it can start. A helper without
+ * a profile gets the same rule, so it cannot bypass the profile that holds the tools.
  */
-export const mainBotRule = (
-  request: AgentRunRequest,
-  helpers: readonly HelperProfile[] = [],
-): ToolRule => ({
+export const mainBotRule = (request: AgentRunRequest, harness: HarnessDeclaration): ToolRule => ({
   allow: ["*"],
   block: delegatedTools(
     request.tools.flatMap((tool) => [tool, ...(tool.catalog ?? []).map((entry) => entry.tool)]),
     request.blockedTools ?? [],
-    helpers,
+    harness.capabilities.includes("subagents") &&
+      request.tools.some((tool) => tool.name === "run_subagent")
+      ? (request.helperProfiles ?? [])
+      : [],
   ),
 });
 
@@ -166,11 +158,7 @@ export function workerStart(
   request: AgentRunRequest,
   harness: HarnessDeclaration,
 ): WorkerStartV1 {
-  const offered = agentTools(
-    request.tools,
-    harness,
-    mainBotRule(request, startableHelpers(request, harness)),
-  );
+  const offered = agentTools(request.tools, harness, mainBotRule(request, harness));
   // Helpers are named only to an agent that can start one.
   const profiles = offered.some((tool) => tool.name === "run_subagent")
     ? (request.helperProfiles ?? [])
@@ -250,9 +238,11 @@ export function helperRunInput(
   helper: { task: string; instructions: string; model: AgentRunModel; profile?: HelperProfile },
 ): GuestRunInput {
   const offered = request.helper ? isBackgroundHelperTool : isHelperTool;
-  const tools = agentTools(request.tools, harness, helper.profile ?? mainBotRule(request)).filter(
-    (tool) => offered(tool.name),
-  );
+  const tools = agentTools(
+    request.tools,
+    harness,
+    helper.profile ?? mainBotRule(request, harness),
+  ).filter((tool) => offered(tool.name));
   const parent = workerStart(
     envelope,
     {
