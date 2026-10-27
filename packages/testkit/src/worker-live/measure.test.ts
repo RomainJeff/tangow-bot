@@ -41,6 +41,23 @@ const SCRIPTS: Record<ScenarioId, ModelEmulatorStep[]> = {
 };
 
 describe("token and cache measurements", () => {
+  it("preserves numeric measurements while redacting sandbox identifiers", () => {
+    expect(
+      measureReceipt(
+        {
+          durationMs: 0.00012345678901234567,
+          error: "sandbox h3k9d2m7p4x8c1v6b5n0 did not start",
+        },
+        [],
+        [],
+        {},
+      ),
+    ).toMatchObject({
+      durationMs: 0.00012345678901234567,
+      error: "sandbox <e2b-id> did not start",
+    });
+  });
+
   it("records every relayed request of each scenario through a catalog model's own protocol", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "rakazo-measure-"));
     onTestFinished(() => rm(root, { recursive: true, force: true }));
