@@ -1507,7 +1507,23 @@ export function createRunExecutor(deps: ExecutorDeps) {
       const fence = nextFence(run.leaseFence);
       const now = new Date();
       const claimedRun = run;
-      const claim = async (prisma: Pick<PrismaClient, "run" | "computerExecutionLease">) => {
+      const claim = async (prisma: Prisma.TransactionClient) => {
+        // A sync helper lives inside its parent's attempt, so a new attempt closes the last one's.
+        // A run never started has had no attempt to start one.
+        const strandedHelpers = claimedRun.startedAt
+          ? await prisma.run.findMany({
+              where: {
+                parentRunId: runId,
+                trigger: "subagent",
+                status: { in: [...ACTIVE_RUN_STATUSES] },
+              },
+              select: { id: true, taskId: true },
+            })
+          : [];
+        if (strandedHelpers.length > 0) {
+          // The thread before the runs, the order stop takes.
+          await prisma.$queryRaw`SELECT id FROM threads WHERE id = ${claimedRun.threadId} FOR UPDATE`;
+        }
         const leased = await prisma.run.updateMany({
           where: {
             id: runId,
@@ -1531,7 +1547,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
             checkpoint: approvalHold ? claimedRun.checkpoint : null,
           },
         });
-        if (leased.count !== 1 || !approvalHold) return leased;
+        if (leased.count !== 1) return leased;
+        await cancelRunsInTransaction(prisma, strandedHelpers, now);
+        if (!approvalHold) return leased;
         let lease = approvalHold.lease;
         if (lease) {
           const [reclaimed] = await prisma.computerExecutionLease.updateManyAndReturn({
@@ -1570,7 +1588,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
             }
             return claim(tx);
           })
-        : await claim(deps.prisma);
+        : claimedRun.startedAt
+          ? await deps.prisma.$transaction(claim)
+          : await claim(deps.prisma);
       if (leased.count !== 1) return;
 
       const resumedComputer = approvalHold
@@ -2530,11 +2550,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
               select: { id: true },
             });
             if (!helperRun) {
-              const holder = await tx.run.findFirstOrThrow({
+              const holder = await tx.run.findFirst({
                 where: { botId: bot.id, exclusive, status: { in: [...ACTIVE_RUN_STATUSES] } },
                 select: { id: true, helper: true },
               });
-              throw new Error(`${exclusive} is held by helper ${holder.id} (${holder.helper})`);
+              throw new Error(
+                holder
+                  ? `${exclusive} is held by helper ${holder.id} (${holder.helper})`
+                  : `${exclusive} was busy, try again`,
+              );
             }
             await deps.sessionLog.append(tx, {
               type: "run.started",

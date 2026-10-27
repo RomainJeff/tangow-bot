@@ -44,6 +44,8 @@ function helperRun(
     capabilities?: HarnessCapability[];
     /** Holds `startSubagent` open until it settles. */
     opening?: Promise<void>;
+    /** How many first starts `startSubagent` refuses. */
+    refusals?: number;
   } = {},
 ) {
   const opened: SubagentCall[] = [];
@@ -87,6 +89,9 @@ function helperRun(
         opened.push(call);
         calledStart();
         await options.opening;
+        if (opened.length <= (options.refusals ?? 0)) {
+          throw new Error("computer is held by helper run_holder (operator)");
+        }
         return {
           executeTool: async (name, args, executionId, route, trace) => {
             helperCalls.push(name);
@@ -303,6 +308,24 @@ describe("a helper the controller starts for a harness with its own loop", () =>
     expect(running.map((part) => (part as { type: string }).type)).toEqual(
       Array(WORKER_LIMITS.helpersInParallel).fill("subagent.start"),
     );
+  });
+
+  it("does not spend the helper budget on refused starts", async () => {
+    const run = helperRun("run_helper_refused", { refusals: WORKER_LIMITS.helpersPerAttempt });
+    const guest = await run.guest();
+    let seq = 1;
+    for (; seq < WORKER_LIMITS.helpersPerAttempt * 2; seq += 2) {
+      callHelper(guest, seq, `h${seq}`);
+      expect((await guest.replies(seq + 1, 1))[0]).toEqual({
+        type: "error",
+        message: "computer is held by helper run_holder (operator)",
+      });
+    }
+    callHelper(guest, seq, `h${seq}`);
+    expect((await guest.replies(seq + 1, 1))[0]).toMatchObject({
+      type: "subagent.start",
+      agent: "helper:1",
+    });
   });
 
   it("holds the parent's end while the helper is still opening", async () => {

@@ -1,6 +1,8 @@
+import type { HarnessDeclaration } from "@rakazo/adapter-kit";
 import { createWorkerAgentRuntime, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
 import { HARNESSES } from "@rakazo/agent-run-worker";
 import type { HelperProfile } from "@rakazo/core";
+import { cancelRunsInTransaction } from "@rakazo/db";
 import { afterEach, expect, it, vi } from "vitest";
 import { stopThreadRuns } from "../../../apps/api/src/thread-target.js";
 import {
@@ -349,15 +351,14 @@ it("runs native Pi helpers in separate persisted sessions and resumes the parent
   expect(provision).not.toHaveBeenCalled();
 });
 
-it("lends a bot's computer to one exclusive helper at a time", async () => {
-  const launcher = manualLauncher({
-    name: "pi-native",
-    capabilities: ["native-loop", "subagents"],
-  });
-  const runtime = createWorkerAgentRuntime({
-    launcher: launcher.launcher,
-    stops: { mark: async () => undefined },
-  });
+const PI_NATIVE: HarnessDeclaration = {
+  name: "pi-native",
+  capabilities: ["native-loop", "subagents"],
+};
+
+/** A bot with an `operator` helper that holds the computer; each controller build gets its own guests. */
+async function exclusiveHelpers() {
+  const launchers: Array<ReturnType<typeof manualLauncher>> = [];
   const helperProfiles: HelperProfile[] = [
     {
       name: "operator",
@@ -370,71 +371,147 @@ it("lends a bot's computer to one exclusive helper at a time", async () => {
   const run = await startWorkerRun({
     steps: [],
     computerScope: "none",
-    runtime: () => ({
-      describe: () => runtime.describe(),
-      run: (request, context) => runtime.run({ ...request, helperProfiles }, context),
-      abort: (runId) => runtime.abort(runId),
-    }),
+    runtime: () => {
+      const launcher = manualLauncher(PI_NATIVE);
+      launchers.push(launcher);
+      const runtime = createWorkerAgentRuntime({
+        launcher: launcher.launcher,
+        stops: { mark: async () => undefined },
+      });
+      return {
+        describe: () => runtime.describe(),
+        run: (request, context) => runtime.run({ ...request, helperProfiles }, context),
+        abort: (runId) => runtime.abort(runId),
+      };
+    },
   });
   cleanups.push(() => run.close());
+  /** The guest of `runId` on the latest controller. */
+  const guestOf = async (runId: string) => {
+    const launched = await launchers.at(-1)!.launchedFor(runId);
+    const guest = rawGuest(launched.connect(), launched.capability, PI_NATIVE);
+    await guest.hello();
+    let seq = 0;
+    return {
+      async delegate(helper: string) {
+        const callId = `call-${seq}`;
+        guest.send(++seq, { type: "tool", name: "run_subagent", args: {}, executionId: callId });
+        guest.send(++seq, {
+          type: "tool.call",
+          agent: "root",
+          callId,
+          name: "run_subagent",
+          args: { name: helper, task: "Do it.", helper },
+        });
+        return { seq, reply: (await guest.replies(seq, 1))[0] };
+      },
+      async finish(agent: string) {
+        guest.send(++seq, { type: "subagent.finish", agent, status: "completed", result: "Done." });
+        expect(await guest.replies(seq)).toEqual([{ type: "recorded" }]);
+      },
+      replies: (at: number) => guest.replies(at),
+      done: () => guest.send(++seq, { type: "done" }),
+    };
+  };
+  const helpersOf = (runId: string) =>
+    run.prisma.run.findMany({
+      where: { parentRunId: runId },
+      orderBy: { createdAt: "asc" },
+      select: { helper: true, exclusive: true, status: true },
+    });
+  return { run, guestOf, helpersOf };
+}
+
+it("lends a bot's computer to one exclusive helper at a time", async () => {
+  const { run, guestOf, helpersOf } = await exclusiveHelpers();
   const runId = await run.send("Book it.");
   const continued = run.continueRun(runId);
-  const launched = await launcher.launchedFor(runId);
-  const guest = rawGuest(launched.connect(), launched.capability, {
-    name: "pi-native",
-    capabilities: ["native-loop", "subagents"],
-  });
-  await guest.hello();
-  let seq = 0;
-  const delegate = async (helper: string) => {
-    const callId = `call-${seq}`;
-    guest.send(++seq, { type: "tool", name: "run_subagent", args: {}, executionId: callId });
-    guest.send(++seq, {
-      type: "tool.call",
-      agent: "root",
-      callId,
-      name: "run_subagent",
-      args: { name: helper, task: "Do it.", helper },
-    });
-    return { seq, reply: (await guest.replies(seq, 1))[0] };
-  };
-  const finish = async (agent: string) => {
-    guest.send(++seq, { type: "subagent.finish", agent, status: "completed", result: "Done." });
-    expect(await guest.replies(seq)).toEqual([{ type: "recorded" }]);
-  };
+  const guest = await guestOf(runId);
 
-  const first = await delegate("operator");
+  const first = await guest.delegate("operator");
   expect(first.reply).toMatchObject({ type: "subagent.start", agent: "helper:1" });
   const holder = await run.prisma.run.findFirstOrThrow({
     where: { parentRunId: runId, helper: "operator" },
   });
-  expect(await delegate("writer")).toMatchObject({
+  expect(await guest.delegate("writer")).toMatchObject({
     reply: { type: "subagent.start", agent: "helper:2" },
   });
-  expect((await delegate("operator")).reply).toEqual({
+  expect((await guest.delegate("operator")).reply).toEqual({
     type: "error",
     message: `computer is held by helper ${holder.id} (operator)`,
   });
 
-  await finish("helper:1");
+  await guest.finish("helper:1");
   expect((await guest.replies(first.seq)).at(-1)).toEqual({ type: "tool.result", output: "Done." });
-  expect(await delegate("operator")).toMatchObject({
+  expect(await guest.delegate("operator")).toMatchObject({
     reply: { type: "subagent.start", agent: "helper:3" },
   });
-  await finish("helper:2");
-  await finish("helper:3");
-  guest.send(++seq, { type: "done" });
+  await guest.finish("helper:2");
+  await guest.finish("helper:3");
+  guest.done();
   await continued;
 
-  expect(
-    await run.prisma.run.findMany({
-      where: { parentRunId: runId },
-      orderBy: { createdAt: "asc" },
-      select: { helper: true, exclusive: true, status: true },
-    }),
-  ).toEqual([
+  expect(await helpersOf(runId)).toEqual([
     { helper: "operator", exclusive: "computer", status: "completed" },
     { helper: "writer", exclusive: null, status: "completed" },
+    { helper: "operator", exclusive: "computer", status: "completed" },
+  ]);
+});
+
+it("frees the computer from a crashed attempt's helper when its parent is reclaimed", async () => {
+  const { run, guestOf, helpersOf } = await exclusiveHelpers();
+  const runId = await run.send("Book it.");
+  void run.continueRun(runId).catch(() => undefined);
+  expect((await (await guestOf(runId)).delegate("operator")).reply).toMatchObject({
+    type: "subagent.start",
+  });
+
+  run.restart();
+  await run.prisma.run.update({
+    where: { id: runId },
+    data: { leaseExpiresAt: new Date(Date.now() - 60_000) },
+  });
+  const continued = run.continueRun(runId);
+  const guest = await guestOf(runId);
+  expect((await guest.delegate("operator")).reply).toMatchObject({
+    type: "subagent.start",
+    agent: "helper:1",
+  });
+  await guest.finish("helper:1");
+  guest.done();
+  await continued;
+
+  expect(await helpersOf(runId)).toEqual([
+    { helper: "operator", exclusive: "computer", status: "cancelled" },
+    { helper: "operator", exclusive: "computer", status: "completed" },
+  ]);
+});
+
+it("frees the computer when only the parent run is cancelled", async () => {
+  const { run, guestOf, helpersOf } = await exclusiveHelpers();
+  const firstRunId = await run.send("Book it.");
+  void run.continueRun(firstRunId).catch(() => undefined);
+  expect((await (await guestOf(firstRunId)).delegate("operator")).reply).toMatchObject({
+    type: "subagent.start",
+  });
+  const parent = await run.prisma.run.findUniqueOrThrow({ where: { id: firstRunId } });
+  await run.prisma.$transaction((tx) => cancelRunsInTransaction(tx, [parent], new Date()));
+
+  const runId = await run.send("Book the next one.");
+  const continued = run.continueRun(runId);
+  const guest = await guestOf(runId);
+  expect((await guest.delegate("operator")).reply).toMatchObject({
+    type: "subagent.start",
+    agent: "helper:1",
+  });
+  await guest.finish("helper:1");
+  guest.done();
+  await continued;
+
+  expect(await helpersOf(firstRunId)).toEqual([
+    { helper: "operator", exclusive: "computer", status: "cancelled" },
+  ]);
+  expect(await helpersOf(runId)).toEqual([
     { helper: "operator", exclusive: "computer", status: "completed" },
   ]);
 });

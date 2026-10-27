@@ -2520,7 +2520,10 @@ describe("clearThread", () => {
         findUniqueOrThrow: vi.fn().mockResolvedValue({ nextEventSeq: 1 }),
       },
       run: {
-        findMany: vi.fn().mockResolvedValue([{ id: "run-1", taskId: "task-1" }]),
+        findMany: vi
+          .fn()
+          .mockResolvedValueOnce([{ id: "run-1", taskId: "task-1" }])
+          .mockResolvedValue([]),
         updateMany: vi.fn(),
       },
       attempt: { updateMany: vi.fn() },
@@ -2641,7 +2644,10 @@ describe("rewindThread", () => {
         findMany: vi.fn().mockResolvedValue([]),
       },
       run: {
-        findMany: vi.fn().mockResolvedValue([{ id: "run-1", taskId: "task-1" }]),
+        findMany: vi
+          .fn()
+          .mockResolvedValueOnce([{ id: "run-1", taskId: "task-1" }])
+          .mockResolvedValue([]),
         updateMany: vi.fn(),
       },
       attempt: { updateMany: vi.fn() },
