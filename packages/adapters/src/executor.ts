@@ -5302,7 +5302,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   receivedAt,
                 ),
               attempt: { id: attempt.id, fence },
-              startSubagent: scripted ? undefined : startSubagent,
+              startSubagent,
               resolveModel: scripted
                 ? undefined
                 : (provider, modelId) =>
@@ -5503,7 +5503,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 runAbortController?.abort();
                 return;
               }
-              if (scripted) {
+              // A scripted helper runs through startSubagent, which writes the call and its answer.
+              if (scripted && event.name !== "run_subagent") {
                 const startedAt = Date.now();
                 try {
                   const result = await runLoggedTool(
