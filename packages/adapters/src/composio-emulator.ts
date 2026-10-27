@@ -679,14 +679,10 @@ export class ComposioEmulator implements ComposioProvider {
           : call.tool === "COMPOSIO_GET_TOOL_SCHEMAS"
             ? this.executeSchemaLookup(args)
             : this.executeAction(call.tool, args, context);
+      this.executions.push({ userId: context.userId, tool: call.tool, args });
       // A direct tool the app reported failed reaches the caller as an error, as ComposioConnector
       // gives it, never as a result: a batch carries each action's failure inside its results.
-      if (
-        call.tool !== BATCH_TOOL.name &&
-        result.successful === false &&
-        typeof result.error === "string"
-      ) {
-        this.executions.push({ userId: context.userId, tool: call.tool, args });
+      if (call.tool !== BATCH_TOOL.name && result.successful === false && result.error) {
         yield reportedFailure(result.error);
         return;
       }
@@ -695,7 +691,6 @@ export class ComposioEmulator implements ComposioProvider {
       yield { type: "error", message: error instanceof Error ? error.message : String(error) };
       return;
     }
-    this.executions.push({ userId: context.userId, tool: call.tool, args });
     yield { type: "result", data: result };
   }
 

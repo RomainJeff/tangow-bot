@@ -259,9 +259,32 @@ describe("readSendResult", () => {
       "Quota",
     ],
     [
-      "an MCP error result",
-      { content: [{ type: "text", text: "Token expired" }], isError: true },
-      "Token expired",
+      "an MCP error, which a server also gives for what failed after the send",
+      {
+        error: "Connector tool reported an error. See details.",
+        kind: "unknown",
+        details: { content: [{ type: "text", text: "Token expired" }], isError: true },
+      },
+      "uncertain",
+    ],
+    [
+      "a failed action in MCP-hosted Composio's error",
+      {
+        error: "Connector tool reported an error. See details.",
+        kind: "unknown",
+        details: {
+          content: [
+            { type: "text", text: JSON.stringify(batch({ successful: false, error: "Quota" })) },
+          ],
+          isError: true,
+        },
+      },
+      "Quota",
+    ],
+    [
+      "a send that left, whose response has details of its own",
+      { successful: true, data: { details: { successful: false, error: "Not this" } } },
+      "sent",
     ],
     ["a failure with no words", { successful: false }, "The app did not send it."],
   ])("reads %s", (_, result, outcome) => {

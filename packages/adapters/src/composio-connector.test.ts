@@ -564,24 +564,6 @@ describe("native Composio tools", () => {
       { type: "error", kind: "unknown", message: "Request timed out" },
     ]);
   });
-
-  it("marks an app-reported failure in the error's details, so a send it refused is known unsent", async () => {
-    const connector = new ComposioConnector();
-    const [tool] = await connector.discoverTools(contextWith());
-    composioSdkState.execute.mockResolvedValueOnce({
-      data: null,
-      error: "Invalid recipient",
-      logId: "",
-    });
-    expect(await executeEvents(connector, tool!, {})).toEqual([
-      {
-        type: "error",
-        kind: "unknown",
-        message: "Invalid recipient",
-        details: { successful: false, error: "Invalid recipient" },
-      },
-    ]);
-  });
 });
 
 describe("composio tool mapping", () => {

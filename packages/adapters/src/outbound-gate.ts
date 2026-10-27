@@ -101,13 +101,17 @@ export type SendResult =
   | { kind: "uncertain" };
 
 /**
- * What became of a send, read from the connector's result. Only the app saying so counts as not
- * sent: an MCP error result, or a Composio action marked unsuccessful, inside a batch, a JSON text
- * or a connector error's details included. A bare connector error is also what a timeout after the
- * send gives, so it is uncertain.
+ * What became of a send, read from the connector's result. Only the app saying no counts as not
+ * sent: a Composio action marked `successful: false`, inside a batch, a JSON text or the details
+ * of the connector's error. Anything else is uncertain, a bare connector error and an MCP error
+ * result included: a timeout after the send gives the first, and a server that throws after it
+ * posted gives the second.
  */
 export function readSendResult(result: unknown): SendResult {
-  const reason = failureIn(result, 0);
+  // The details of the executor's error envelope, which only the outermost level has.
+  const details =
+    result && typeof result === "object" ? (result as Record<string, unknown>).details : undefined;
+  const reason = failureIn(result, 0) ?? failureIn(details, 1);
   if (reason !== undefined) {
     return { kind: "not_sent", reason: reason.trim().slice(0, 200) || "The app did not send it." };
   }
@@ -118,6 +122,8 @@ export function readSendResult(result: unknown): SendResult {
 function failureIn(value: unknown, depth: number): string | undefined {
   if (depth > 8) return undefined;
   if (Array.isArray(value)) {
+    // The first failing item is the send because a sending batch holds only one action, which
+    // readOutboundCall enforces.
     for (const item of value) {
       const reason = failureIn(item, depth + 1);
       if (reason !== undefined) return reason;
@@ -126,7 +132,7 @@ function failureIn(value: unknown, depth: number): string | undefined {
   }
   if (!value || typeof value !== "object") return undefined;
   const record = value as Record<string, unknown>;
-  for (const key of ["data", "response", "results", "structuredContent", "content", "details"]) {
+  for (const key of ["data", "response", "results", "structuredContent", "content"]) {
     const reason = failureIn(record[key], depth + 1);
     if (reason !== undefined) return reason;
   }
@@ -137,7 +143,7 @@ function failureIn(value: unknown, depth: number): string | undefined {
       return undefined;
     }
   }
-  if (record.successful === false || record.isError === true) {
+  if (record.successful === false) {
     return (typeof record.error === "string" ? record.error : "") || textOf(record.content);
   }
   return undefined;
