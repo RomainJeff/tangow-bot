@@ -31,6 +31,7 @@ export * from "./events.js";
 export * from "./featured-connectors.js";
 export * from "./field-save.js";
 export * from "./group-mentions.js";
+export * from "./helper-profile.js";
 export * from "./http-response.js";
 export * from "./launch-choreography.js";
 export * from "./link-preview.js";

@@ -8,6 +8,8 @@ import type {
   HarnessDeclaration,
   WorkerStartV1,
 } from "@rakazo/adapter-kit";
+import type { HelperProfile } from "@rakazo/core";
+import { selectTools } from "@rakazo/core";
 import { isHelperTool } from "../builtin-tools.js";
 import { catalogIndexText, isLazyCatalogControlRoute } from "../lazy-tool-catalog.js";
 import { encodeMessage } from "./framing.js";
@@ -38,6 +40,59 @@ export function nativeToolsForHarness(name: string): readonly ConnectorTool[] {
 
 /** The tools a harness uses only through a capability it declares. */
 const TOOL_CAPABILITY: Readonly<Record<string, HarnessCapability>> = { run_subagent: "subagents" };
+
+export type ToolRule = Pick<HelperProfile, "allow" | "block">;
+
+export const mainBotRule = (request: AgentRunRequest): ToolRule => ({
+  allow: ["*"],
+  block: request.blockedTools,
+});
+
+type CatalogEntry = NonNullable<ConnectorTool["catalog"]>[number];
+
+/** Whether `rule` keeps a lazy catalog's entry, which a call reaches through the catalog's tools. */
+export const keepsEntry = (rule: ToolRule) => (entry: CatalogEntry) =>
+  selectTools([entry.tool], rule).length > 0;
+
+/** The tools one agent is offered: those its harness can use, selected by `rule`. */
+function agentTools(tools: readonly ConnectorTool[], harness: HarnessDeclaration, rule: ToolRule) {
+  const nativeNames = new Set(nativeToolsForHarness(harness.name).map((tool) => tool.name));
+  return selectTools(
+    tools
+      .filter((tool) => {
+        const needed = TOOL_CAPABILITY[tool.name];
+        return !needed || harness.capabilities.includes(needed);
+      })
+      .map((tool) => ({
+        ...tool,
+        ...(tool.catalog ? { catalog: tool.catalog.filter(keepsEntry(rule)) } : {}),
+        where: nativeNames.has(tool.name) ? ("guest" as const) : ("controller" as const),
+      })),
+    rule,
+  );
+}
+
+const availableHelpers = (profiles: readonly HelperProfile[]) =>
+  [
+    "<available_helpers>",
+    ...profiles.map(({ name, description }) => `- ${name}: ${description}`),
+    "</available_helpers>",
+  ].join("\n");
+
+const withHelperChoice = (
+  schema: ConnectorTool["inputSchema"],
+  profiles: readonly HelperProfile[],
+): ConnectorTool["inputSchema"] => ({
+  ...schema,
+  properties: {
+    ...(schema.properties as Record<string, unknown>),
+    helper: {
+      type: "string",
+      enum: profiles.map((profile) => profile.name),
+      description: "Optional helper from <available_helpers> to run the task.",
+    },
+  },
+});
 
 /** What marking one search, load or execute tool as a catalog's fallback adds to the frame. */
 const FALLBACK_MARK_BYTES = Buffer.byteLength(',"catalog":"fallback"');
@@ -87,20 +142,20 @@ export function workerStart(
   request: AgentRunRequest,
   harness: HarnessDeclaration,
 ): WorkerStartV1 {
-  const nativeNames = new Set(nativeToolsForHarness(harness.name).map((tool) => tool.name));
-  const offered = request.tools.filter((tool) => {
-    const needed = TOOL_CAPABILITY[tool.name];
-    return !needed || harness.capabilities.includes(needed);
-  });
+  const offered = agentTools(request.tools, harness, mainBotRule(request));
+  const profiles = request.helperProfiles ?? [];
+  // A harness with its own loop keeps its own prompt: Rakazo's part is appended to it.
+  const instructions = harness.capabilities.includes("native-loop")
+    ? (request.harnessAddendum ?? request.instructions)
+    : request.instructions;
   const input: GuestRunInput = {
     botId: request.botId,
     threadId: request.threadId,
     sourceMessageId: request.sourceMessageId,
     prompt: request.prompt,
-    // A harness with its own loop keeps its own prompt: Rakazo's part is appended to it.
-    instructions: harness.capabilities.includes("native-loop")
-      ? (request.harnessAddendum ?? request.instructions)
-      : request.instructions,
+    instructions: profiles.length
+      ? `${instructions}\n\n${availableHelpers(profiles)}`
+      : instructions,
     history: request.history.map((turn) => ({
       ...(turn.id ? { id: turn.id } : {}),
       role: turn.role,
@@ -108,12 +163,15 @@ export function workerStart(
       ...(turn.parts ? { parts: turn.parts } : {}),
     })),
     images: base64Images(request.currentTurnImages),
-    tools: offered.map(({ name, description, inputSchema, readOnly }) => ({
+    tools: offered.map(({ name, description, inputSchema, readOnly, where }) => ({
       name,
       description,
-      inputSchema,
+      inputSchema:
+        name === "run_subagent" && profiles.length
+          ? withHelperChoice(inputSchema, profiles)
+          : inputSchema,
       ...(readOnly === undefined ? {} : { readOnly }),
-      where: nativeNames.has(name) ? ("guest" as const) : ("controller" as const),
+      where,
     })),
     model: guestModelOf(request.model),
     allowSilentEmpty: request.allowSilentEmpty,
@@ -158,15 +216,21 @@ export function helperRunInput(
   envelope: Omit<WorkerStartV1, "run">,
   request: AgentRunRequest,
   harness: HarnessDeclaration,
-  helper: { task: string; instructions: string; model: AgentRunModel },
+  helper: { task: string; instructions: string; model: AgentRunModel; profile?: HelperProfile },
 ): GuestRunInput {
+  const tools = agentTools(request.tools, harness, helper.profile ?? mainBotRule(request)).filter(
+    (tool) => isHelperTool(tool.name),
+  );
   const parent = workerStart(
     envelope,
     {
       ...request,
       history: [],
       currentTurnImages: [],
-      tools: request.tools.filter((tool) => isHelperTool(tool.name)),
+      tools,
+      // The helper's tools are selected already: the parent's block list must not apply again.
+      blockedTools: [],
+      helperProfiles: [],
     },
     harness,
   ).run;
@@ -175,12 +239,7 @@ export function helperRunInput(
     threadId: parent.threadId,
     sourceMessageId: parent.sourceMessageId,
     prompt: helper.task,
-    instructions: [
-      helper.instructions,
-      catalogIndexText(request.tools.filter((tool) => isHelperTool(tool.name))),
-    ]
-      .filter(Boolean)
-      .join("\n\n"),
+    instructions: [helper.instructions, catalogIndexText(tools)].filter(Boolean).join("\n\n"),
     history: [],
     images: [],
     tools: parent.tools.filter((tool) => isHelperTool(tool.name)),

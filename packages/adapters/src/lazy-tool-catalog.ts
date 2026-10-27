@@ -192,10 +192,10 @@ export function searchCatalog(
   };
 }
 
-export function loadCatalogEntry(
-  entries: CatalogEntry[],
+export function loadCatalogEntry<Entry extends Pick<CatalogEntry, "id" | "tool">>(
+  entries: readonly Entry[],
   args: Record<string, unknown>,
-): CatalogEntry {
+): Entry {
   const id = String(args.id ?? "");
   const byId = entries.find((candidate) => candidate.id === id);
   if (byId) {
@@ -215,7 +215,7 @@ export function loadCatalogEntry(
   throw new Error("Tool is unknown or not authorized for this bot");
 }
 
-function assertSchemaSize(entry: CatalogEntry): void {
+function assertSchemaSize(entry: Pick<CatalogEntry, "tool">): void {
   const schemaBytes = Buffer.byteLength(JSON.stringify(entry.tool.inputSchema), "utf8");
   if (schemaBytes > SELECTED_SCHEMA_MAX_BYTES) throw new Error("Tool schema is too large");
 }
@@ -386,7 +386,7 @@ function catalogGroupOf(tool: ConnectorTool): string {
   return "other";
 }
 
-function catalogShortName(entry: CatalogEntry): string {
+function catalogShortName(entry: Pick<CatalogEntry, "tool">): string {
   const routeName = entry.tool.route?.toolName?.trim();
   if (routeName) return routeName;
   return entry.tool.name;

@@ -2,6 +2,7 @@ import type {
   AgentRunModel,
   AgentRunRequest,
   GuestBody,
+  GuestRunInput,
   ModelDialect,
   RefusalReason,
   ReplyFinal,
@@ -23,9 +24,11 @@ import {
   helperCallOf,
   helperInstructions,
   helperModel,
+  helperProfileOf,
   isHelperTool,
 } from "../builtin-tools.js";
 import { redactPayloadWith } from "../connector-safety.js";
+import { loadCatalogEntry } from "../lazy-tool-catalog.js";
 import type { RunTraceRecorder } from "../pi-run-trace.js";
 import type { CapabilityKey } from "./capability.js";
 import { mintCapability, verifyCapability } from "./capability.js";
@@ -33,7 +36,15 @@ import { relayPiAiCall } from "./dialects/pi-ai.js";
 import { eventPipe } from "./event-pipe.js";
 import type { FrameChannel } from "./framing.js";
 import { encodeMessage, readGuestFrame } from "./framing.js";
-import { base64Images, helperRunInput, nativeToolsForHarness, workerStart } from "./guest-input.js";
+import type { ToolRule } from "./guest-input.js";
+import {
+  base64Images,
+  helperRunInput,
+  keepsEntry,
+  mainBotRule,
+  nativeToolsForHarness,
+  workerStart,
+} from "./guest-input.js";
 import type { SessionInbox } from "./inbox.js";
 import { createSessionInbox } from "./inbox.js";
 import type { LaunchedGuest, WorkerLauncher } from "./launcher.js";
@@ -101,6 +112,9 @@ type HelperOutcome = { status: "completed" | "failed"; result: string };
 type Helper = {
   log: SubagentLog;
   model: AgentRunModel;
+  tools: ReadonlySet<string>;
+  /** Selects its tools, and the catalog entries its catalog tools reach by id. */
+  rule: ToolRule;
   usage: { inputTokens: number; outputTokens: number };
   modelRequests: number;
   /** The outcome its log persisted. A helper closes once; later closes keep that outcome. */
@@ -152,6 +166,8 @@ export function createSession(
   const helloSettled = deferred<void>();
   const stopped = deferred<void>();
   const tools = new Map(request.tools.map((tool) => [tool.name, tool]));
+  /** What the parent was offered: `tools` minus what its run blocks. */
+  let rootTools: ReadonlySet<string> = new Set();
   const announced = new Map<string, string>();
   const open = new Map<string, Promise<unknown>>();
   const helpers = new Map<string, Helper>();
@@ -324,21 +340,34 @@ export function createSession(
     try {
       const call = helperCallOf(body.args);
       let helper: Helper;
+      let run: GuestRunInput;
       try {
         if (!request.startSubagent) throw new Error("Helpers are unavailable in this run");
-        const model = await helperModel(request, call);
+        const profile = helperProfileOf(request.helperProfiles, call);
+        const model = await helperModel(request, call, profile);
         if (!live()) return { type: "error", message: "The worker stopped" };
         if (paused) return pausedToolCall(paused);
+        run = helperRunInput(launched!.start, request, launched!.expectedHarness, {
+          task: call.task || "Complete the delegated task.",
+          instructions: helperInstructions(call.name, profile?.instructions, call.instructions),
+          model,
+          profile,
+        });
         const log = await request.startSubagent({
           callId: body.callId,
           name: call.name,
           task: call.task,
           args: body.args,
-          model: call.provider
-            ? { provider: call.provider, id: call.modelId }
-            : { provider: request.model.provider, id: request.model.id },
+          model: { provider: model.provider, id: model.id },
         });
-        helper = { log, model, usage: { inputTokens: 0, outputTokens: 0 }, modelRequests: 0 };
+        helper = {
+          log,
+          model,
+          tools: new Set(run.tools.map((tool) => tool.name)),
+          rule: profile ?? mainBotRule(request),
+          usage: { inputTokens: 0, outputTokens: 0 },
+          modelRequests: 0,
+        };
       } catch (error) {
         return { type: "error", message: clean(messageOf(error)) };
       }
@@ -354,15 +383,7 @@ export function createSession(
       } else {
         const agent = `helper:${helpers.size + 1}`;
         helpers.set(agent, helper);
-        part({
-          type: "subagent.start",
-          agent,
-          run: helperRunInput(launched!.start, request, launched!.expectedHarness, {
-            task: call.task || "Complete the delegated task.",
-            instructions: helperInstructions(call.name, call.instructions),
-            model: helper.model,
-          }),
-        });
+        part({ type: "subagent.start", agent, run });
       }
       const { status, result } = await settled;
       const text = cutText(clean(result), WORKER_LIMITS.controllerResultBytes);
@@ -384,6 +405,17 @@ export function createSession(
     };
   };
 
+  /** A call naming an entry of `name`'s catalog that `rule` drops. An unknown id gets the connector's error. */
+  function blockedEntry(name: string, args: Record<string, unknown>, rule: ToolRule) {
+    const entries = tools.get(name)?.catalog;
+    if (!entries) return false;
+    try {
+      return !keepsEntry(rule)(loadCatalogEntry(entries, args));
+    } catch {
+      return false;
+    }
+  }
+
   async function callTool(
     body: Extract<GuestBody, { type: "tool.call" }>,
     part: (body: ReplyPart) => void,
@@ -397,7 +429,10 @@ export function createSession(
     const helper = helperOf(agent);
     if (agent !== "root" && !helper) return refuse("invalid");
     if (paused) return pausedToolCall(paused);
-    if (helper && !isHelperTool(name)) return refuse("unknown_tool");
+    if (!(helper?.tools ?? rootTools).has(name)) return refuse("unknown_tool");
+    if (blockedEntry(name, args, helper?.rule ?? mainBotRule(request))) {
+      return refuse("unknown_tool");
+    }
     if (name === "run_subagent" && runsOwnLoop()) {
       recorder?.toolStart(callId, name, args);
       const run = runHelper(body, part);
@@ -651,6 +686,8 @@ export function createSession(
         helpers.set(agent, {
           log,
           model,
+          tools: new Set([...rootTools].filter(isHelperTool)),
+          rule: mainBotRule(request),
           usage: { inputTokens: 0, outputTokens: 0 },
           modelRequests: 0,
         });
@@ -788,7 +825,9 @@ export function createSession(
           bound = channel;
           helloReceived = true;
           helloSettled.resolve();
-          await channel.send(encodeMessage(workerStart(launched!.start, request, expected)));
+          const start = workerStart(launched!.start, request, expected);
+          rootTools = new Set(start.run.tools.map((tool) => tool.name));
+          await channel.send(encodeMessage(start));
           inbox.attach((reply) => void channel.send(encodeMessage(reply)));
           continue;
         }

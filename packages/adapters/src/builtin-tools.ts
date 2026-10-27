@@ -7,6 +7,7 @@ import {
   SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH,
   SPAWN_BOT_PROMPT_MAX_LENGTH,
 } from "@rakazo/contracts";
+import type { HelperProfile } from "@rakazo/core";
 import { BOT_SKILL_DESCRIPTION_MAX_LENGTH } from "@rakazo/core";
 import { z } from "zod";
 
@@ -31,21 +32,37 @@ export function helperCallOf(args: Record<string, unknown>) {
         .slice(0, 80) || "helper",
     task: String(args.task ?? "").trim(),
     instructions: args.instructions ? String(args.instructions).trim() : "",
+    helper: String(args.helper ?? "").trim(),
     provider: String(args.model_provider ?? "").trim(),
     modelId: String(args.model_id ?? "").trim(),
   };
 }
 
+/** The profile a call names as its `helper`, if it names one. */
+export function helperProfileOf(
+  profiles: readonly HelperProfile[] = [],
+  call: ReturnType<typeof helperCallOf>,
+) {
+  if (!call.helper) return undefined;
+  const profile = profiles.find((candidate) => candidate.name === call.helper);
+  if (profile) return profile;
+  const names = profiles.map((candidate) => candidate.name).join(", ") || "none";
+  throw new Error(`Unknown helper "${call.helper}". Available helpers: ${names}`);
+}
+
+/** The call's model, then its profile's, then the parent's. */
 export async function helperModel(
   request: Pick<AgentRunRequest, "model" | "resolveModel">,
   call: ReturnType<typeof helperCallOf>,
+  profile?: HelperProfile,
 ): Promise<AgentRunRequest["model"]> {
   if (Boolean(call.provider) !== Boolean(call.modelId)) {
     throw new Error("model_provider and model_id must both be set");
   }
-  if (!call.provider) return request.model;
+  const choice = call.provider ? { provider: call.provider, id: call.modelId } : profile?.model;
+  if (!choice) return request.model;
   if (!request.resolveModel) throw new Error("Per-call subagent model selection is unavailable");
-  return request.resolveModel(call.provider, call.modelId);
+  return request.resolveModel(choice.provider, choice.id);
 }
 
 export const HELPER_STOPPED_FOR_PAUSE = "Stopped: the run is waiting for the user.";
