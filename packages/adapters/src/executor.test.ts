@@ -1801,6 +1801,13 @@ describe("buildSystemInstructions", () => {
     expect(instructions).not.toContain("mcp__rakazo__mcp__rakazo__");
   });
 
+  it("tells both harnesses to call the send tool for a message the user wants to approve first", () => {
+    for (const instructions of [buildSystemInstructions(parts), buildHarnessAddendum(parts)]) {
+      expect(instructions).toContain("call the app's send tool directly");
+      expect(instructions).toContain("Do not save a draft in the app");
+    }
+  });
+
   it("gives a harness with its own prompt the bot's guidance without credentials or helpers", () => {
     const instructions = buildSystemInstructions(parts);
     const addendum = buildHarnessAddendum(parts);
