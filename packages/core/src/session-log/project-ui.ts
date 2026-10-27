@@ -21,7 +21,6 @@ type RunItem = Extract<ThreadItem, { kind: "run" }>;
 type EffectItem = Extract<ThreadItem, { kind: "effect" }>;
 type RoutineItem = Extract<ThreadItem, { kind: "routine" }>;
 type MessageItem = Extract<ThreadItem, { kind: "message" }>;
-type SubagentItem = Extract<ThreadItem, { kind: "subagent" }>;
 type DividerItem = Extract<ThreadItem, { kind: "divider" }>;
 
 type CardSlot = { item: MessageItem; index: number } | { item: EffectItem };
@@ -65,8 +64,13 @@ export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread 
     ]);
   }
   const children = childSessionsOf(visible);
-  const origin = (sessionId: SessionId | undefined) =>
-    sessionId ? { origin: { sessionId, ...children.get(sessionId) } } : {};
+  // Only a routine names its origin: a helper's session stays out of the conversation.
+  const origin = (sessionId: SessionId | undefined) => {
+    if (!sessionId) return {};
+    const child = children.get(sessionId);
+    const named = child?.kind === "routine" ? { kind: "routine" as const, name: child.name } : {};
+    return { origin: { sessionId, ...named } };
+  };
   const answers = toolAnswers(visible);
   const seqOf = new Map<string, number>(visible.map((entry) => [entry.id, entry.seq]));
   const runs = new Map<string, RunItem>();
@@ -100,11 +104,7 @@ export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread 
     return itemId === undefined ? undefined : itemById.get(itemId);
   };
 
-  for (const segment of foldRuns(visible, {
-    answers,
-    splitAtHelpers: true,
-    splitAtPersonMessages: true,
-  })) {
+  for (const segment of foldRuns(visible, { answers, splitAtPersonMessages: true })) {
     switch (segment.type) {
       case "run.message": {
         const { id, ts, botId, runId, blocks, originSessionId } = segment;
@@ -127,22 +127,6 @@ export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread 
         for (const entry of segment.entries) {
           if (entry.type === "assistant.ask" || entry.type === "assistant.choice") {
             runCards.push({ id: entry.id, runId: entry.runId, seq: entry.seq });
-          }
-          if (entry.type !== "tool.call" || entry.payload.name !== "run_subagent") continue;
-          const answer = answers.answerOf.get(entry.id);
-          if (answer?.type === "subagent") {
-            push(subagentItem(answer), answer.id);
-          } else if (!answer && !finishedAt.has(entry.runId)) {
-            const helper: SubagentItem = {
-              kind: "subagent",
-              status: "running",
-              id: `subagent:${entry.id}` as EntryId,
-              ts: entry.ts,
-              runId: entry.runId,
-              callId: entry.payload.callId,
-              ...subagentInput(entry.payload.input),
-            };
-            push(helper);
           }
         }
         break;
@@ -168,6 +152,12 @@ export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread 
       }
       case "user.message": {
         const { originSessionId, targets: _targets, ...payload } = segment.payload;
+        // What a helper's parent sent it, in its session: the bot's words, not the person's.
+        if (payload.source === "parent" && segment.botId) {
+          const { id, ts, botId } = segment;
+          push({ kind: "message", role: "bot", id, ts, botId, blocks: [...payload.blocks] }, id);
+          break;
+        }
         const card = payload.replyTo ? questionAt(cards.get(payload.replyTo.entryId)) : undefined;
         if (card) {
           const block = cardOf(card);
@@ -219,7 +209,7 @@ export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread 
         break;
       }
       case "subagent":
-        if (!answers.callOf.has(segment.id)) push(subagentItem(segment), segment.id);
+        showWith(segment, answers.callOf.get(segment.id));
         break;
       case "routine.started": {
         const { sessionId, routineId, name, notify } = segment.payload;
@@ -509,10 +499,6 @@ export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread 
   return { items, shownBy, messageIds, previewHosts, waiting };
 }
 
-function subagentItem(entry: ThreadEntryOf<"subagent">): SubagentItem {
-  return { kind: "subagent", id: entry.id, ts: entry.ts, runId: entry.runId, ...entry.payload };
-}
-
 function stampDuration(messages: readonly MessageItem[], durationMs: number) {
   for (const message of messages.toReversed()) {
     const index = message.blocks.findLastIndex((block) => block.kind === "steps");
@@ -548,16 +534,4 @@ function isSettled(block: MessageBlock | undefined): boolean {
   if (block?.kind === "ask") return block.status === "answered";
   if (block?.kind === "choice") return block.answerId !== undefined;
   return false;
-}
-
-function subagentInput(input: string): { name: string; task: string } {
-  try {
-    const parsed: unknown = JSON.parse(input);
-    const fields = typeof parsed === "object" && parsed !== null ? parsed : {};
-    const name = "name" in fields && typeof fields.name === "string" ? fields.name : "";
-    const task = "task" in fields && typeof fields.task === "string" ? fields.task : "";
-    return { name, task };
-  } catch {
-    return { name: "", task: "" };
-  }
 }

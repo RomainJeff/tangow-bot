@@ -14,6 +14,7 @@ import type {
   MessageBlock,
   Routine,
   SessionEntry,
+  SessionId,
   ThreadItem,
   ThreadMessagePage,
 } from "@rakazo/contracts";
@@ -99,7 +100,6 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { AppConnectCard } from "../components/AppConnectCard";
 import { AskActions, CapsuleButton } from "../components/AskActions";
 import { AgentSteps } from "../components/agent-steps";
@@ -133,7 +133,6 @@ import { PreviewSheet } from "../components/preview-sheet";
 import { QuestionCard } from "../components/question-card";
 import { ReactionPill } from "../components/reaction-pill";
 import { RoutineCardPreview } from "../components/routine-card-preview";
-import { ShimmerText } from "../components/shimmer-text";
 import { StackedAvatars } from "../components/stacked-avatars";
 import { StopContour } from "../components/stop-contour";
 import { Surface } from "../components/surface";
@@ -176,7 +175,7 @@ import {
 } from "../lib/bot-lifecycle";
 import { botMessageCard } from "../lib/bot-message-card";
 import { noteBotRunEnded } from "../lib/bot-page-state";
-import { CHAT_MOTION, useChatReducedMotion } from "../lib/chat-motion";
+import { CHAT_MOTION } from "../lib/chat-motion";
 import { useDebugMode } from "../lib/debug-mode";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
 import { commitHaptic, selectionHaptic, sendHaptic, successHaptic } from "../lib/haptics";
@@ -508,6 +507,12 @@ function Thread() {
   const messageSheetOwner = useRef<string | null>(null);
   const [markdownPreview, setMarkdownPreview] = useState<MarkdownArtifactPreviewTarget | null>(
     null,
+  );
+  const [stepSession, setStepSession] = useState<OpenedSession | null>(null);
+  const openStepSession = useCallback(
+    (sessionId: SessionId, title: string) =>
+      setStepSession({ title, load: () => sessionEntries(sessionId) }),
+    [],
   );
   // A tapped markdown table opens whole, as records, in `TablePreview`.
   const [tablePreview, setTablePreview] = useState<GridNode | null>(null);
@@ -2145,6 +2150,7 @@ function Thread() {
         isNew={isNew}
         // The card shows the link, so the bubble does not repeat the line that is only that link.
         previewedUrl={previewCard && !cardReplacesBubbleView ? previewCard.url : undefined}
+        onOpenSession={openStepSession}
       />
     );
     const previewNode = previewCard ? (
@@ -3117,6 +3123,16 @@ function Thread() {
         {tablePreview ? (
           <TablePreview table={tablePreview} onClose={() => setTablePreview(null)} />
         ) : null}
+        {stepSession ? (
+          <SessionSheet
+            session={stepSession}
+            botId={botId ?? snap?.members?.[0]?.botId ?? ""}
+            groupId={groupId}
+            bots={mentionBots}
+            members={snap?.members}
+            onClose={() => setStepSession(null)}
+          />
+        ) : null}
       </KeyboardAvoidingView>
       {barTransparent ? <ThreadScrollEdge height={headerHeight + 40} /> : null}
       {error || runError ? (
@@ -3403,6 +3419,7 @@ const MessageBubble = memo(function MessageBubble({
   actionProps,
   isNew,
   previewedUrl,
+  onOpenSession,
 }: {
   botId: string;
   groupId?: string;
@@ -3420,6 +3437,8 @@ const MessageBubble = memo(function MessageBubble({
   isNew: boolean;
   /** The link its card shows: a line that is only this link is left out of the text drawn. */
   previewedUrl?: string;
+  /** Opens the helper session a step ran. */
+  onOpenSession?: (sessionId: SessionId, title: string) => void;
 }) {
   const tokens = mobileTokens();
   const { t } = useI18n();
@@ -3786,7 +3805,12 @@ const MessageBubble = memo(function MessageBubble({
     <View style={{ gap: 8, width: "100%" }}>
       {segments.map((segment, index) =>
         segment.kind === "steps" ? (
-          <AgentSteps key={`${message.id}-steps-${index}`} block={segment.block} live={live} />
+          <AgentSteps
+            key={`${message.id}-steps-${index}`}
+            block={segment.block}
+            live={live}
+            onOpenSession={onOpenSession}
+          />
         ) : (
           <MessageText
             key={`${message.id}-content-${index}`}
@@ -3980,26 +4004,6 @@ const ItemRow = memo(function ItemRow({
     switch (item.kind) {
       case "message":
         return null;
-      case "subagent": {
-        const title = item.name || t("subagent");
-        if (item.status === "running") {
-          return <TaskCard title={title} state="running" meta={item.task} streaming />;
-        }
-        const { sessionId } = item;
-        return (
-          <TaskCard
-            title={title}
-            state={item.status === "failed" ? "failed" : "done"}
-            meta={item.model.id}
-            body={item.result}
-            onOpen={
-              sessionId
-                ? () => setSession({ title, load: () => sessionEntries(sessionId) })
-                : undefined
-            }
-          />
-        );
-      }
       case "routine": {
         const role = row.routine;
         if (role?.kind === "message") {
@@ -4363,19 +4367,10 @@ function CardSkillLines({ message, isNew }: { message: MobileMessage; isNew: boo
   return lines.length > 0 ? <BubbleMeta lines={lines} standalone /> : null;
 }
 
-type TaskCardState = "running" | "done" | "failed" | "cancelled";
-
 /** The run's state as one symbol: the shape tells it apart without colour, the colour only confirms. */
 const ROUTINE_STATE_SYMBOL = {
-  running: { ios: "circle.dotted", android: "ellipse-outline" },
   failed: { ios: "xmark.circle.fill", android: "close-circle" },
-  cancelled: { ios: "stop.circle", android: "stop-circle-outline" },
 } as const;
-
-/** How far the last lines of a cut preview fade into its host. */
-const PREVIEW_FADE_HEIGHT = 56;
-/** A cut task result: five lines. */
-const TASK_PREVIEW_HEIGHT = 5 * 23;
 
 function runSession(item: RoutineItem): OpenedSession {
   return {
@@ -4461,257 +4456,6 @@ function RoutineFailureLine({
         </Text>
       ) : null}
     </Pressable>
-  );
-}
-
-/**
- * Content cut to `maxHeight` when it runs longer: its last lines fade into
- * the host and a round expand badge sits on the fade, bottom right (Photos,
- * Maps). The badge only marks it; the whole preview is the target and opens
- * the rest. Content that fits renders as is.
- */
-function ClippedPreview({
-  maxHeight,
-  fadeColor,
-  onOpen,
-  accessibilityLabel,
-  children,
-}: {
-  maxHeight: number;
-  fadeColor: string;
-  onOpen: () => void;
-  accessibilityLabel: string;
-  children: ReactNode;
-}) {
-  const tokens = mobileTokens();
-  const { t } = useI18n();
-  const reducedMotion = useChatReducedMotion();
-  const [height, setHeight] = useState(0);
-  // Only worth cutting when it hides a few lines, not the last one.
-  const capped = height > maxHeight + 3 * 23;
-  // The content is measured outside the flow, so the row takes its final
-  // height at once: laid out in full first, then cut, it grew and shrank in
-  // one frame and the thread jumped. The last paragraph's bottom margin (9)
-  // is the host's own end.
-  const body = (
-    <View
-      style={{ position: "absolute", top: 0, left: 0, right: 0 }}
-      onLayout={(event) => setHeight(event.nativeEvent.layout.height)}
-    >
-      {children}
-    </View>
-  );
-  if (!capped) {
-    return <View style={{ height: Math.max(0, height - 9), overflow: "hidden" }}>{body}</View>;
-  }
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      accessibilityHint={t("Opens in full")}
-      onPress={onOpen}
-      unstable_pressDelay={130}
-      style={{ height: maxHeight, overflow: "hidden" }}
-    >
-      {({ pressed }) => (
-        <>
-          {/* A cut in the middle of a line is laid out outside the flow: a height
-              cap on the text itself made iOS stop wrapping. */}
-          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-            {body}
-          </View>
-          <Svg
-            pointerEvents="none"
-            width="100%"
-            height={PREVIEW_FADE_HEIGHT}
-            style={{ position: "absolute", left: 0, right: 0, bottom: 0 }}
-          >
-            <Defs>
-              <LinearGradient id="preview-fade" x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0" stopColor={fadeColor} stopOpacity={0} />
-                <Stop offset="0.6" stopColor={fadeColor} stopOpacity={1} />
-              </LinearGradient>
-            </Defs>
-            <Rect width="100%" height={PREVIEW_FADE_HEIGHT} fill="url(#preview-fade)" />
-          </Svg>
-          <View
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              right: 8,
-              bottom: 8,
-              width: sizes.hoverIcon,
-              height: sizes.hoverIcon,
-              borderRadius: sizes.hoverIcon / 2,
-              borderWidth: 1,
-              borderColor: tokens.outline,
-              backgroundColor: pressed ? tokens.surface : tokens.secondary,
-              alignItems: "center",
-              justifyContent: "center",
-              transform: [{ scale: pressed && !reducedMotion ? 0.94 : 1 }],
-            }}
-          >
-            <NativeSymbol
-              ios="arrow.up.left.and.arrow.down.right"
-              android="expand-outline"
-              size={13}
-              weight="semibold"
-              color={tokens.foreground}
-            />
-          </View>
-        </>
-      )}
-    </Pressable>
-  );
-}
-
-/**
- * A delegated task's result (a subagent): the thread's only
- * outlined card, with a document glyph, so a work product reads apart from a
- * bubble, the raised question and a routine's log line. The whole card is one
- * target: it opens the full brief and result in a sheet (a long result fades
- * out under the expand badge). A finished task shows no status word; running,
- * failed and cancelled do, under the title.
- */
-function TaskCard({
-  title,
-  state,
-  meta,
-  body,
-  streaming = false,
-  onOpen,
-}: {
-  title: string;
-  state: TaskCardState;
-  meta?: string;
-  /** Markdown result, shown as a preview and whole in the sheet. */
-  body?: string;
-  streaming?: boolean;
-  onOpen?: () => void;
-}) {
-  const tokens = mobileTokens();
-  const colorScheme = useResolvedAppearance();
-  const { t } = useI18n();
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const statusColor = state === "failed" ? tokens.destructive : tokens.mutedForeground;
-  const statusStyle = { color: statusColor, ...nativeTextStyle("label", { weight: 500 }) };
-  const statusLabel =
-    state === "running" ? t("Running") : state === "failed" ? t("Failed") : t("Cancelled");
-  const statusSymbol =
-    state === "running"
-      ? ROUTINE_STATE_SYMBOL.running
-      : state === "failed"
-        ? ROUTINE_STATE_SYMBOL.failed
-        : ROUTINE_STATE_SYMBOL.cancelled;
-  const open = onOpen ?? (body || meta ? () => setSheetOpen(true) : undefined);
-  const header = (full: boolean) => (
-    <View style={{ gap: 4 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-        <NativeSymbol
-          ios="doc.text"
-          android="document-text-outline"
-          size={18}
-          color={tokens.foreground}
-        />
-        <Text
-          accessibilityRole="header"
-          style={{
-            flex: 1,
-            color: tokens.foreground,
-            ...nativeTextStyle("rowName", { weight: 600 }),
-          }}
-        >
-          {title}
-        </Text>
-      </View>
-      {state === "done" ? null : (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginStart: 28 }}>
-          <NativeSymbol
-            ios={statusSymbol.ios}
-            android={statusSymbol.android}
-            size={13}
-            color={statusColor}
-          />
-          {state === "running" ? (
-            <ShimmerText style={statusStyle}>{statusLabel}</ShimmerText>
-          ) : (
-            <Text style={statusStyle}>{statusLabel}</Text>
-          )}
-        </View>
-      )}
-      {meta ? (
-        <Text
-          numberOfLines={full ? undefined : 2}
-          style={{ color: tokens.mutedForeground, marginStart: 28, ...nativeTextStyle("meta") }}
-        >
-          {meta}
-        </Text>
-      ) : null}
-    </View>
-  );
-  const markdown = body ? (
-    <ChatMarkdown palette={tokens} colorScheme={colorScheme} streaming={streaming} bleed={14}>
-      {body}
-    </ChatMarkdown>
-  ) : null;
-  return (
-    <>
-      <Pressable
-        accessibilityRole={open ? "button" : undefined}
-        accessibilityLabel={[title, meta].filter(Boolean).join(", ")}
-        accessibilityHint={open ? t("Opens in full") : undefined}
-        disabled={!open}
-        onPress={open}
-        unstable_pressDelay={130}
-      >
-        {({ pressed }) => (
-          <Surface
-            variant="outlined"
-            style={{ overflow: "hidden", backgroundColor: pressed ? tokens.secondary : undefined }}
-          >
-            <View style={{ paddingHorizontal: 14, paddingVertical: 12 }}>{header(false)}</View>
-            {markdown ? (
-              <View
-                // The card is the target: the preview (a table included) does not take touches.
-                pointerEvents="none"
-                style={{
-                  borderTopWidth: StyleSheet.hairlineWidth,
-                  borderTopColor: tokens.border,
-                  paddingHorizontal: 14,
-                  paddingTop: 12,
-                  paddingBottom: 12,
-                }}
-              >
-                <ClippedPreview
-                  maxHeight={TASK_PREVIEW_HEIGHT}
-                  fadeColor={pressed ? tokens.secondary : tokens.surface}
-                  onOpen={() => open?.()}
-                  accessibilityLabel={title}
-                >
-                  {markdown}
-                </ClippedPreview>
-              </View>
-            ) : null}
-          </Surface>
-        )}
-      </Pressable>
-      {sheetOpen ? (
-        <PreviewSheet title={title} onClose={() => setSheetOpen(false)}>
-          <View style={{ paddingTop: 16, gap: 16 }}>
-            {meta ? (
-              <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
-                {meta}
-              </Text>
-            ) : null}
-            {body ? (
-              <ChatMarkdown palette={tokens} colorScheme={colorScheme} streaming={streaming}>
-                {body}
-              </ChatMarkdown>
-            ) : null}
-          </View>
-        </PreviewSheet>
-      ) : null}
-    </>
   );
 }
 

@@ -163,7 +163,7 @@ function splitLong(text: string, maxChars: number): string[] {
 export function narrateTool(toolName: string): string | null {
   const name = toolName.replace(/^mcp__[^_]+__/, "").trim();
   if (!name) return null;
-  if (/^(auto-approved|error):/i.test(name)) return null;
+  if (/^(auto-approved|error):/i.test(name) || name === "run_subagent") return null;
 
   const bare = name.toLowerCase();
   const verbs: Array<[RegExp, string]> = [
@@ -180,7 +180,6 @@ export function narrateTool(toolName: string): string | null {
     [/^open_url$/, "opening a page"],
     [/^list_bots$/, "checking who's around"],
     [/^ask_bot$/, "asking a teammate"],
-    [/^run_subagent$/, "starting a subagent"],
     [/^spawn_bot$/, "creating a bot"],
     [/^create_space$/, "creating a space"],
     [/^(archive_bot|delete_bot)$/, "archiving a bot"],

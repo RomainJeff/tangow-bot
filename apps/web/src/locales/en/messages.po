@@ -171,10 +171,6 @@ msgstr "{size} B"
 msgid "{stepCount, plural, one {# step} other {# steps}}"
 msgstr "{stepCount, plural, one {# step} other {# steps}}"
 
-#: src/components/TaskCard.tsx:76
-msgid "{title} · Opens in full"
-msgstr "{title} · Opens in full"
-
 #: src/pages/ActivityList.tsx:97
 msgid "{title}, {label}"
 msgstr "{title}, {label}"
@@ -3887,11 +3883,6 @@ msgstr "Stored encrypted"
 #: src/pages/ModelSettingsOverlay.tsx:643
 msgid "Stored securely. Never shown here."
 msgstr "Stored securely. Never shown here."
-
-#: src/pages/shell/thread-row.tsx:114
-#: src/pages/shell/thread-row.tsx:250
-msgid "subagent"
-msgstr "subagent"
 
 #: src/pages/ModelSettingsOverlay.tsx:688
 #: src/pages/Onboarding.tsx:588

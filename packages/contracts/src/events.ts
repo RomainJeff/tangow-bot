@@ -281,6 +281,9 @@ export const MessageBlock = z.discriminatedUnion("kind", [
               /** Provider tool-call id: lets a later turn replay the call as a real tool
                   turn. Absent on blocks recorded before it was stored. */
               id: z.string().optional(),
+              /** The helper session a `run_subagent` call ran, once its answer landed. Branded
+                  as `SessionId` here, since `session-log.ts` imports this module. */
+              sessionId: Id.brand<"SessionId">().optional(),
             }),
           )
           .optional(),
@@ -433,7 +436,6 @@ export type ThreadMessage = z.infer<typeof ThreadMessageSchema>;
 export function canReactToThreadMessage(message: Pick<ThreadMessage, "id" | "blocks">): boolean {
   return (
     !message.id.startsWith("progress:") &&
-    !message.id.startsWith("subagent:") &&
     !message.blocks.some((block) => block.kind === "channel_message")
   );
 }

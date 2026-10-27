@@ -78,14 +78,14 @@ const search = {
     },
   ],
 };
-const scoutCall = (output: string) => ({
+const scoutCall = (answer: { output: string; sessionId?: string }) => ({
   label: "Run subagent",
   count: 1,
   calls: [
     {
       name: "run_subagent",
       input: '{"name":"scout","task":"List competitors"}',
-      output,
+      ...answer,
       id: "call_scout",
     },
   ],
@@ -106,48 +106,25 @@ const finishedRun = {
   },
   ...alone,
 };
-const work = {
+const answered = {
   item: {
     kind: "message",
     role: "bot",
     id: "str-02",
     ts: at(2),
     ...ada,
-    blocks: [{ kind: "steps", steps: [search, scoutCall("Globex, Initech")], durationMs: 9000 }],
-  },
-  ...alone,
-};
-const answered = {
-  item: {
-    kind: "message",
-    role: "bot",
-    id: "str-06",
-    ts: at(6),
-    ...ada,
     blocks: [
+      {
+        kind: "steps",
+        steps: [search, scoutCall({ output: "Globex, Initech", sessionId: "ses_scout" })],
+        durationMs: 9000,
+      },
       { kind: "text", text: "Acme, Globex, Initech" },
       { kind: "ask", text: "Compare prices too?", status: "answered" },
     ],
   },
   ...alone,
   messageId: "str-06",
-};
-const scout = {
-  item: {
-    kind: "subagent",
-    id: "str-05",
-    ts: at(5),
-    runId: "run_str_1",
-    callId: "call_scout",
-    sessionId: "ses_scout",
-    name: "scout",
-    model,
-    task: "List competitors",
-    status: "completed",
-    result: "Globex, Initech",
-    usage: { inputTokens: 300, outputTokens: 6 },
-  },
-  ...alone,
 };
 const yes = {
   item: {
@@ -204,7 +181,7 @@ describe("projectThreadView on a streamed reply", () => {
     ]);
   });
 
-  it("shows the open run's steps, its helper at work and the streamed text mid-run", () => {
+  it("shows the open run's steps and the streamed text mid-run, while its helper works", () => {
     const view = projectThreadView(upTo(4), {
       progress: streamedProgress("run_str_1", "Looking at ", "the results"),
     });
@@ -218,22 +195,10 @@ describe("projectThreadView on a streamed reply", () => {
           id: "str-02",
           ts: at(2),
           ...ada,
-          blocks: [{ kind: "steps", steps: [search, scoutCall("")] }],
+          blocks: [{ kind: "steps", steps: [search, scoutCall({ output: "" })] }],
         },
         ...alone,
-      },
-      {
-        item: {
-          kind: "subagent",
-          status: "running",
-          id: "subagent:str-04",
-          ts: at(4),
-          runId: "run_str_1",
-          callId: "call_scout",
-          name: "scout",
-          task: "List competitors",
-        },
-        ...alone,
+        lastOfGroup: false,
       },
       {
         item: {
@@ -246,19 +211,18 @@ describe("projectThreadView on a streamed reply", () => {
           live: true,
         },
         ...alone,
+        firstOfGroup: false,
       },
     ]);
     expect(view.waiting).toBeNull();
     expect(view.rowOf.get("str-04")).toBe("str-02");
   });
 
-  it("shows the helper's card, the answered ask and the preview once the reply is in", () => {
+  it("shows the answered ask and the preview once the reply is in", () => {
     const view = projectThreadView(upTo(11));
     expect(view.rows).toEqual([
       firstMessage,
       finishedRun,
-      work,
-      scout,
       answered,
       yes,
       {
@@ -273,7 +237,7 @@ describe("projectThreadView on a streamed reply", () => {
     ]);
     expect(view.waiting).toBeNull();
     expect(["str-07", "str-10", "str-11"].map((id) => [id, view.rowOf.get(id)])).toEqual([
-      ["str-07", "str-06"],
+      ["str-07", "str-02"],
       ["str-10", "str-01"],
       ["str-11", "str-09"],
     ]);
@@ -284,8 +248,6 @@ describe("projectThreadView on a streamed reply", () => {
     expect(view.rows).toEqual([
       firstMessage,
       finishedRun,
-      work,
-      scout,
       answered,
       yes,
       summary(),
@@ -625,7 +587,7 @@ describe("projectThreadView cards", () => {
 });
 
 describe("projectThreadView rows", () => {
-  it("keeps a call's result with the message that made it when a helper splits the run", () => {
+  it("folds a helper into the run's message, its call carrying the helper's session", () => {
     const helper = '{"name":"scout","task":"Look"}';
     const chain = linkEntries("par", [
       {
@@ -660,16 +622,51 @@ describe("projectThreadView rows", () => {
       { ...ada, type: "assistant.text", payload: { blocks: text("Done") } },
     ]);
     const view = projectThreadView(chain);
-    expect(view.rows.map((row) => [row.item.kind, row.item.id, row.messageId])).toEqual([
-      ["message", "par-0", undefined],
-      ["subagent", "par-3", undefined],
-      ["message", "par-4", "par-4"],
+    expect(view.rows).toEqual([
+      {
+        item: {
+          kind: "message",
+          role: "bot",
+          id: "par-0",
+          ts: at(0),
+          ...ada,
+          blocks: [
+            {
+              kind: "steps",
+              steps: [
+                {
+                  label: "Web search",
+                  count: 1,
+                  calls: [{ name: "web_search", input: "{}", output: "Found", id: "call_web" }],
+                },
+                {
+                  label: "Run subagent",
+                  count: 1,
+                  calls: [
+                    {
+                      name: "run_subagent",
+                      input: helper,
+                      output: "Seen",
+                      id: "call_scout",
+                      sessionId: "ses_scout",
+                    },
+                  ],
+                },
+              ],
+            },
+            { kind: "text", text: "Done" },
+          ],
+        },
+        ...alone,
+        marker: { at: at(0), withTime: true },
+        messageId: "par-4",
+      },
     ]);
     expect(["par-1", "par-2", "par-3", "par-4"].map((id) => view.rowOf.get(id))).toEqual([
       "par-0",
       "par-0",
-      "par-3",
-      "par-4",
+      "par-0",
+      "par-0",
     ]);
   });
 

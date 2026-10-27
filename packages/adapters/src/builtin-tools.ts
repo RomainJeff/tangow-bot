@@ -7,11 +7,15 @@ import {
   SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH,
   SPAWN_BOT_PROMPT_MAX_LENGTH,
 } from "@rakazo/contracts";
+import type { HelperProfile } from "@rakazo/core";
 import { BOT_SKILL_DESCRIPTION_MAX_LENGTH } from "@rakazo/core";
 import { z } from "zod";
 
 export const DELEGATION_TOOL_NAMES = new Set([
   "run_subagent",
+  "helper_status",
+  "helper_message",
+  "helper_stop",
   "spawn_bot",
   "archive_bot",
   "delete_bot",
@@ -23,29 +27,50 @@ export const DELEGATION_TOOL_NAMES = new Set([
 export const isHelperTool = (name: string) =>
   !DELEGATION_TOOL_NAMES.has(name) && name !== "message_user";
 
+/** A background helper runs with nobody watching it: no tool may wait on the person. */
+export const isBackgroundHelperTool = (name: string) =>
+  isHelperTool(name) && !["ask_user", "request_takeover", "request_secret"].includes(name);
+
 export function helperCallOf(args: Record<string, unknown>) {
   return {
     name:
       String(args.name ?? "helper")
         .trim()
         .slice(0, 80) || "helper",
-    task: String(args.task ?? "").trim(),
+    task: String(args.task ?? "").trim() || "Complete the delegated task.",
     instructions: args.instructions ? String(args.instructions).trim() : "",
+    helper: String(args.helper ?? "").trim(),
     provider: String(args.model_provider ?? "").trim(),
     modelId: String(args.model_id ?? "").trim(),
+    background: args.background === true,
   };
 }
 
+/** The profile a call names as its `helper`, if it names one. */
+export function helperProfileOf(
+  profiles: readonly HelperProfile[] = [],
+  call: Pick<ReturnType<typeof helperCallOf>, "helper">,
+) {
+  if (!call.helper) return undefined;
+  const profile = profiles.find((candidate) => candidate.name === call.helper);
+  if (profile) return profile;
+  const names = profiles.map((candidate) => candidate.name).join(", ") || "none";
+  throw new Error(`Unknown helper "${call.helper}". Available helpers: ${names}`);
+}
+
+/** The call's model, then its profile's, then the parent's. */
 export async function helperModel(
   request: Pick<AgentRunRequest, "model" | "resolveModel">,
   call: ReturnType<typeof helperCallOf>,
+  profile?: HelperProfile,
 ): Promise<AgentRunRequest["model"]> {
   if (Boolean(call.provider) !== Boolean(call.modelId)) {
     throw new Error("model_provider and model_id must both be set");
   }
-  if (!call.provider) return request.model;
+  const choice = call.provider ? { provider: call.provider, id: call.modelId } : profile?.model;
+  if (!choice) return request.model;
   if (!request.resolveModel) throw new Error("Per-call subagent model selection is unavailable");
-  return request.resolveModel(call.provider, call.modelId);
+  return request.resolveModel(choice.provider, choice.id);
 }
 
 export const HELPER_STOPPED_FOR_PAUSE = "Stopped: the run is waiting for the user.";
@@ -53,7 +78,7 @@ export const HELPER_STOPPED_FOR_PAUSE = "Stopped: the run is waiting for the use
 export function helperInstructions(name: string, ...extra: Array<string | undefined>) {
   return [
     `You are a Rakazo subagent named "${name}".`,
-    "You run inside the parent bot's turn — you are not a separate bot chat.",
+    "You work for the parent bot — you are not a separate bot chat.",
     "Complete the task and return a concise result. Do not spawn bots or further subagents.",
     ...extra,
   ]
@@ -839,7 +864,7 @@ that merely narrate internal operations.`,
   {
     name: "run_subagent",
     description:
-      "Run a short-lived helper inside this turn only. It is not a bot: no list entry, no thread, no computer of its own, and it disappears when this turn ends. Never call this because the user asked to create a bot — that is spawn_bot, and spawn_bot alone.",
+      "Run a helper and get its result in this turn. With background, it returns a helperId at once and keeps working after this turn ends; its report wakes you when it is done. It is not a bot: no list entry, no thread, no computer of its own. Never call this because the user asked to create a bot — that is spawn_bot, and spawn_bot alone.",
     inputSchema: {
       type: "object",
       properties: {
@@ -860,8 +885,55 @@ that merely narrate internal operations.`,
           type: "string",
           description: "Optional connected model ID. Set together with model_provider.",
         },
+        background: {
+          type: "boolean",
+          description:
+            "Keep working after this turn, for a long task. Tell the user it started; its report comes back to you.",
+        },
       },
       required: ["name", "task"],
+    },
+  },
+  {
+    name: "helper_status",
+    description:
+      "List your background helpers still at work in this conversation: each one's helperId, profile, brief, status and start time, and the question of one waiting on you. Finished helpers already reported back.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "helper_message",
+    description:
+      "Send one of your background helpers a message. A helper waiting on its question takes it as the answer and resumes; a working one reads it before its next step.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        helperId: { type: "string" },
+        message: { type: "string", minLength: 1 },
+      },
+      required: ["helperId", "message"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "helper_stop",
+    description:
+      "Stop one of your background helpers in this conversation, or all of them with helperId all. A stopped helper sends no report.",
+    inputSchema: {
+      type: "object",
+      properties: { helperId: { type: "string", description: "A helperId, or all." } },
+      required: ["helperId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "ask_parent",
+    description:
+      "Ask the bot that started you a question when you are blocked or unsure, instead of guessing. You pause until it answers; its answer is this call's result.",
+    inputSchema: {
+      type: "object",
+      properties: { question: { type: "string", minLength: 1 } },
+      required: ["question"],
+      additionalProperties: false,
     },
   },
   {

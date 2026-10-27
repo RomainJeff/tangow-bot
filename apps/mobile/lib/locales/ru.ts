@@ -578,7 +578,6 @@ export const RU_MESSAGES: Record<string, string> = {
   Image: "Изображение",
   "Markdown file": "Файл Markdown",
   "Message from {peer}": "Сообщение от {peer}",
-  subagent: "субагент",
   "Messaged {peer}": "Отправлено сообщение {peer}",
   Request: "Запрос",
   Result: "Результат",
@@ -701,7 +700,6 @@ export const RU_MESSAGES: Record<string, string> = {
   "Opens the full table": "Открывает таблицу целиком",
   "{count} runs": "Запусков: {count}",
   "{count} failures since {time}": "Сбоев с {time}: {count}",
-  "Opens in full": "Открывает целиком",
   "Show details": "Показать детали",
   "Hide details": "Скрыть детали",
 

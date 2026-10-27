@@ -8,8 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-10-27
 
+#### Added
+
+- **Bots can hand long tasks to a helper and keep talking.** On web, desktop and mobile, the bot answers at once, keeps chatting while the helper works, and posts the result on its own when the helper finishes. You can ask the bot where the task stands, add to it, or stop it, and when the helper needs a detail the bot asks you in its own words.
+
 #### Changed
 
+- On web, desktop and mobile, bots now hand browser and desktop work, such as searching a site, filling a form or opening an app, to a helper that works their computer instead of driving it themselves.
+- Helper cards no longer appear in conversations on web, desktop and mobile: only the bot's replies show, and debug mode still lists each helper's steps in the run that started it.
 - Bots no longer carry the built-in recipe for delegating coding work to OpenCode on their computer.
 
 #### Fixed

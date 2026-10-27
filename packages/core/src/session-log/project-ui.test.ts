@@ -463,7 +463,7 @@ describe("projectThreadItems", () => {
     ]);
   });
 
-  it("names the routine or the helper a risen entry came from when the page holds its start", () => {
+  it("names the routine a risen entry came from when the page holds its start, never a helper", () => {
     const approval = {
       kind: "mcp_approval",
       name: "Press",
@@ -610,21 +610,7 @@ describe("projectThreadItems", () => {
         decision: null,
         botId: "bot_ada",
         runId: "run_scout",
-        origin: { sessionId: "ses_scout", kind: "subagent", name: "scout" },
-      },
-      {
-        kind: "subagent",
-        id: "org-6",
-        ts: at(6),
-        runId: "run_main",
-        callId: "call_scout",
-        sessionId: "ses_scout",
-        name: "scout",
-        model,
-        task: "Find a press bot",
-        status: "completed",
-        result: "Asked for Scout.",
-        usage: { inputTokens: 10, outputTokens: 2 },
+        origin: { sessionId: "ses_scout" },
       },
       {
         kind: "note",
@@ -642,7 +628,7 @@ describe("projectThreadItems", () => {
     ]);
   });
 
-  it("places a subagent's item at its call, between the run's words before and after", async () => {
+  it("folds a helper into the run's reply, its step opening the helper's session", async () => {
     expect(projectThreadItems(await fixtureChain("subagent"))).toEqual([
       {
         kind: "message",
@@ -687,35 +673,14 @@ describe("projectThreadItems", () => {
                     input: '{"name":"researcher","task":"List three competitors"}',
                     output: "Acme, Globex, Initech",
                     id: "call_helper",
+                    sessionId: "ses_helper",
                   },
                 ],
               },
             ],
           },
+          ...text("Your competitors are Acme, Globex and Initech."),
         ],
-      },
-      {
-        kind: "subagent",
-        id: "sub-03",
-        ts: at(3),
-        runId: "run_sub_1",
-        callId: "call_helper",
-        sessionId: "ses_helper",
-        name: "researcher",
-        model,
-        task: "List three competitors",
-        status: "completed",
-        result: "Acme, Globex, Initech",
-        usage: { inputTokens: 400, outputTokens: 25 },
-      },
-      {
-        kind: "message",
-        role: "bot",
-        id: "sub-04",
-        ts: at(4),
-        botId: "bot_ada",
-        runId: "run_sub_1",
-        blocks: text("Your competitors are Acme, Globex and Initech."),
       },
     ]);
   });
@@ -1042,6 +1007,89 @@ describe("projectThreadItems", () => {
     ]);
   });
 
+  it("shows a background helper only as its call's step, which opens its session, and its question and report not at all", () => {
+    const run = { botId: "bot_ada", runId: "run_1" };
+    const chain = linkEntries("background", [
+      {
+        ...run,
+        type: "tool.call",
+        payload: { callId: "call_bg", name: "run_subagent", input: '{"background":true}' },
+      },
+      {
+        ...run,
+        type: "tool.result",
+        payload: {
+          callId: "call_bg",
+          output: '{"helperId":"run_helper"}',
+          isError: false,
+          artifactIds: [],
+          sessionId: "ses_helper",
+        },
+      },
+      {
+        botId: "bot_ada",
+        type: "helper.question",
+        payload: { helperId: "run_helper", question: "Which dates?" },
+      },
+      {
+        botId: "bot_ada",
+        type: "helper.report",
+        payload: { helperId: "run_helper", profile: null, status: "completed", report: "Found." },
+      },
+      { ...run, type: "assistant.text", payload: { blocks: text("Started it.") } },
+    ]);
+    expect(projectThreadItems(chain)).toEqual([
+      {
+        kind: "message",
+        role: "bot",
+        id: "background-0",
+        ts: at(0),
+        ...run,
+        blocks: [
+          {
+            kind: "steps",
+            steps: [
+              {
+                label: "Run subagent",
+                count: 1,
+                calls: [
+                  {
+                    name: "run_subagent",
+                    input: '{"background":true}',
+                    output: '{"helperId":"run_helper"}',
+                    id: "call_bg",
+                    sessionId: "ses_helper",
+                  },
+                ],
+              },
+            ],
+          },
+          ...text("Started it."),
+        ],
+      },
+    ]);
+  });
+
+  it("shows what a helper's parent sent it as the bot's words in the helper's session", () => {
+    const chain = linkEntries("helper", [
+      {
+        botId: "bot_ada",
+        type: "user.message",
+        payload: { blocks: text("Also check trains."), source: "parent" },
+      },
+    ]);
+    expect(projectThreadItems(chain)).toEqual([
+      {
+        kind: "message",
+        role: "bot",
+        id: "helper-0",
+        ts: at(0),
+        botId: "bot_ada",
+        blocks: text("Also check trains."),
+      },
+    ]);
+  });
+
   it("shows a bot's words outside a run as their own message, splitting a run's stretch", () => {
     const run = { botId: "bot_ada", runId: "run_1" };
     const chain = linkEntries("aside", [
@@ -1141,54 +1189,6 @@ describe("projectThreadItems", () => {
         readFiles("cut-3", [shown("b.md", "beta")]),
       ]);
     });
-  });
-
-  it("drops the running helper once its run is cancelled before the helper answered", () => {
-    const run = { botId: "bot_ada", runId: "run_1" };
-    const trigger = { kind: "webhook", routineId: "rtn_1" };
-    const input = JSON.stringify({ name: "scout", task: "List competitors" });
-    const usage = { inputTokens: 300, outputTokens: 5 };
-    const chain = linkEntries("stop", [
-      { ...run, type: "run.started", payload: { trigger, model, effort: null } },
-      {
-        ...run,
-        type: "tool.call",
-        payload: { callId: "call_scout", name: "run_subagent", input },
-      },
-      { ...run, type: "run.finished", payload: { status: "cancelled", usage } },
-    ]);
-    expect(projectThreadItems(chain)).toEqual([
-      {
-        kind: "run",
-        id: "stop-0",
-        ts: at(0),
-        ...run,
-        trigger,
-        model,
-        effort: null,
-        finished: { outcome: { status: "cancelled", usage }, durationMs: 2000 },
-      },
-      {
-        kind: "message",
-        role: "bot",
-        id: "stop-1",
-        ts: at(1),
-        ...run,
-        blocks: [
-          {
-            kind: "steps",
-            durationMs: 2000,
-            steps: [
-              {
-                label: "Run subagent",
-                count: 1,
-                calls: [{ name: "run_subagent", input, output: "", id: "call_scout" }],
-              },
-            ],
-          },
-        ],
-      },
-    ]);
   });
 
   it("stamps the run's duration on the last steps block of its words once it finishes", () => {

@@ -9,7 +9,9 @@ and `references/`.
 | `agent` | `skills/agent/<dir>/` | Bot harness | Baked root-owned and read-only at `/managed-skills/agent` in worker templates; also mounted at that path in Docker computers. |
 | `computer` | `skills/computer/<dir>/` | Coding agents on the computer | Computer only: read-only `/managed-skills/computer` mount and OpenCode startup link at `~/.config/opencode/skills`. |
 
-Put bot workflow guidance in `agent`. Put repository coding guidance in `computer`. Managed agent
+Put bot workflow guidance in `agent`. Put repository coding guidance in `computer`. A routing
+skill that hands work to a helper profile is shown, unshipped, in the
+[helper examples](../docs/examples/helpers/README.md). Managed agent
 skill directory names must equal `skillDirName(name)`, the normalized URL-encoded name. Keep the
 family small because every skill adds a catalog line on every run. Existing `builtin:` ids remain
 stable for clients; they do not allow per-bot disable settings to hide managed skills.
@@ -46,9 +48,9 @@ space, after the space's team home has moved.
 ## Coding work by environment
 
 Worker native file tools and `bash` operate on `/workspace/bots/<botId>` and
-`/workspace/shared`. Apps, browser and computer-local services use Rakazo computer
-and browser tools; commands use `computer_exec`. Harnesses expose Rakazo tools
-under their own naming.
+`/workspace/shared`. Apps, browser, computer-local services and commands that only exist on the
+computer go through the managed `computer-use` helper when the bot can start it, and through the
+Rakazo computer and browser tools otherwise. Harnesses expose Rakazo tools under their own naming.
 
 OpenCode is installed on the computer image for terminal use. It loads computer
 skills, while the worker loads agent skills.
