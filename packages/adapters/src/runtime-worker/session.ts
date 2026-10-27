@@ -28,6 +28,7 @@ import {
   isHelperTool,
 } from "../builtin-tools.js";
 import { redactPayloadWith } from "../connector-safety.js";
+import { loadCatalogEntry } from "../lazy-tool-catalog.js";
 import type { RunTraceRecorder } from "../pi-run-trace.js";
 import type { CapabilityKey } from "./capability.js";
 import { mintCapability, verifyCapability } from "./capability.js";
@@ -35,7 +36,15 @@ import { relayPiAiCall } from "./dialects/pi-ai.js";
 import { eventPipe } from "./event-pipe.js";
 import type { FrameChannel } from "./framing.js";
 import { encodeMessage, readGuestFrame } from "./framing.js";
-import { base64Images, helperRunInput, nativeToolsForHarness, workerStart } from "./guest-input.js";
+import type { ToolRule } from "./guest-input.js";
+import {
+  base64Images,
+  helperRunInput,
+  keepsEntry,
+  mainBotRule,
+  nativeToolsForHarness,
+  workerStart,
+} from "./guest-input.js";
 import type { SessionInbox } from "./inbox.js";
 import { createSessionInbox } from "./inbox.js";
 import type { LaunchedGuest, WorkerLauncher } from "./launcher.js";
@@ -104,6 +113,8 @@ type Helper = {
   log: SubagentLog;
   model: AgentRunModel;
   tools: ReadonlySet<string>;
+  /** Selects its tools, and the catalog entries its catalog tools reach by id. */
+  rule: ToolRule;
   usage: { inputTokens: number; outputTokens: number };
   modelRequests: number;
   /** The outcome its log persisted. A helper closes once; later closes keep that outcome. */
@@ -353,6 +364,7 @@ export function createSession(
           log,
           model,
           tools: new Set(run.tools.map((tool) => tool.name)),
+          rule: profile ?? mainBotRule(request),
           usage: { inputTokens: 0, outputTokens: 0 },
           modelRequests: 0,
         };
@@ -393,6 +405,17 @@ export function createSession(
     };
   };
 
+  /** A call naming an entry of `name`'s catalog that `rule` drops. An unknown id gets the connector's error. */
+  function blockedEntry(name: string, args: Record<string, unknown>, rule: ToolRule) {
+    const entries = tools.get(name)?.catalog;
+    if (!entries) return false;
+    try {
+      return !keepsEntry(rule)(loadCatalogEntry(entries, args));
+    } catch {
+      return false;
+    }
+  }
+
   async function callTool(
     body: Extract<GuestBody, { type: "tool.call" }>,
     part: (body: ReplyPart) => void,
@@ -407,6 +430,9 @@ export function createSession(
     if (agent !== "root" && !helper) return refuse("invalid");
     if (paused) return pausedToolCall(paused);
     if (!(helper?.tools ?? rootTools).has(name)) return refuse("unknown_tool");
+    if (blockedEntry(name, args, helper?.rule ?? mainBotRule(request))) {
+      return refuse("unknown_tool");
+    }
     if (name === "run_subagent" && runsOwnLoop()) {
       recorder?.toolStart(callId, name, args);
       const run = runHelper(body, part);
@@ -661,6 +687,7 @@ export function createSession(
           log,
           model,
           tools: new Set([...rootTools].filter(isHelperTool)),
+          rule: mainBotRule(request),
           usage: { inputTokens: 0, outputTokens: 0 },
           modelRequests: 0,
         });

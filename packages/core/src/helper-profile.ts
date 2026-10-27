@@ -16,7 +16,10 @@ export interface HelperProfile {
 
 export const HELPER_PROFILES: readonly HelperProfile[] = [];
 
-/** Tools the main bot is never offered. A helper's profile can still allow them. */
+/**
+ * Tools the main bot is never offered. A helper's profile can still allow them.
+ * It keeps tools from the main bot's model. It is no security boundary: the guest names the calling `agent`.
+ */
 export const MAIN_BOT_BLOCKED_TOOLS: readonly string[] = [];
 
 const matches = (patterns: readonly string[] | undefined, name: string) =>

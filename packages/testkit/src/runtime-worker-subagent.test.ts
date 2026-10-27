@@ -2,12 +2,14 @@ import type {
   AgentRunRequest,
   ConnectorTool,
   GuestBody,
+  HarnessCapability,
   SubagentCall,
   SubagentLog,
 } from "@rakazo/adapter-kit";
 import { createWorkerAgentRuntime, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
 import type { HelperProfile } from "@rakazo/core";
 import { describe, expect, it, onTestFinished } from "vitest";
+import { catalogEntries, lazyCatalogTools } from "../../adapters/src/lazy-tool-catalog.js";
 import {
   consume,
   manualLauncher,
@@ -39,6 +41,7 @@ function helperRun(
     tools?: ConnectorTool[];
     blockedTools?: string[];
     helperProfiles?: HelperProfile[];
+    capabilities?: HarnessCapability[];
     /** Holds `startSubagent` open until it settles. */
     opening?: Promise<void>;
   } = {},
@@ -51,10 +54,11 @@ function helperRun(
   const startCalled = new Promise<void>((resolve) => {
     calledStart = resolve;
   });
-  const launcher = manualLauncher({
+  const harness = {
     name: "pi-native",
-    capabilities: ["native-loop", "subagents"],
-  });
+    capabilities: options.capabilities ?? ["native-loop", "subagents"],
+  };
+  const launcher = manualLauncher(harness);
   const runtime = createWorkerAgentRuntime({
     launcher: launcher.launcher,
     stops: { mark: async () => undefined },
@@ -111,10 +115,7 @@ function helperRun(
     abandoned,
     async guest() {
       const launched = await launcher.launchedFor(runId);
-      const guest = rawGuest(launched.connect(), launched.capability, {
-        name: "pi-native",
-        capabilities: ["native-loop", "subagents"],
-      });
+      const guest = rawGuest(launched.connect(), launched.capability, harness);
       await guest.hello();
       return guest;
     },
@@ -528,5 +529,76 @@ describe("a helper the call names by profile", () => {
     helperRemembers(guest, 6, "root", "computer_observe");
     expect(await guest.replies(7)).toEqual([{ type: "refused", reason: "unknown_tool" }]);
     expect(run.helperCalls).toEqual(["computer_observe"]);
+  });
+});
+
+describe("a tool rule", () => {
+  it("gives a helper without a profile the main bot's block list", async () => {
+    const run = helperRun("run_unprofiled_blocked", {
+      tools: ["bash", "computer_observe", "run_subagent", "message_user"].map(tool),
+      blockedTools: ["computer_*"],
+    });
+    const guest = await run.guest();
+
+    callHelper(guest, 1, "h1");
+    const [start] = await guest.replies(2, 1);
+    expect(start).toMatchObject({ run: { tools: [{ name: "bash", where: "guest" }] } });
+    helperRemembers(guest, 3, "helper:1", "computer_observe");
+    expect(await guest.replies(4)).toEqual([{ type: "refused", reason: "unknown_tool" }]);
+  });
+
+  it("refuses run_subagent to a harness without the subagents capability", async () => {
+    const run = helperRun("run_no_subagents", { capabilities: ["native-loop"] });
+    const guest = await run.guest();
+    expect(startOf(guest).tools.map((offered) => offered.name)).toEqual([
+      "remember",
+      "message_user",
+    ]);
+
+    callHelper(guest, 1, "h1");
+    expect(await guest.replies(2)).toEqual([{ type: "refused", reason: "unknown_tool" }]);
+  });
+
+  it("applies the block list to the entries of a lazy catalog", async () => {
+    const entry = (name: string): ConnectorTool => ({
+      ...tool(name),
+      route: { connectorId: "mcp", resourceId: "srv", toolName: name },
+    });
+    const run = helperRun("run_blocked_entry", {
+      tools: [
+        ...lazyCatalogTools(
+          "mcp",
+          "mcp",
+          "MCP",
+          catalogEntries([entry("read_doc"), entry("delete_doc")]),
+        ),
+        tool("message_user"),
+      ],
+      blockedTools: ["delete_doc"],
+    });
+    const guest = await run.guest();
+    expect(
+      startOf(guest)
+        .tools.filter((offered) => typeof offered.catalog === "object")
+        .map(({ name, catalog }) => ({ name, catalog })),
+    ).toEqual([{ name: "read_doc", catalog: { via: "mcp_execute_tool", id: "srv:read_doc" } }]);
+
+    const execute = (seq: number, callId: string, id: string) => {
+      const args = { id, arguments: {} };
+      guest.send(seq, { type: "tool", name: "mcp_execute_tool", args, executionId: callId });
+      guest.send(seq + 1, {
+        type: "tool.call",
+        agent: "root",
+        callId,
+        name: "mcp_execute_tool",
+        args,
+      });
+    };
+    execute(1, "c1", "srv:delete_doc");
+    expect(await guest.replies(2)).toEqual([{ type: "refused", reason: "unknown_tool" }]);
+    execute(3, "c2", "srv:read_doc");
+    expect(await guest.replies(4)).toEqual([
+      { type: "tool.result", output: "parent ran mcp_execute_tool" },
+    ]);
   });
 });

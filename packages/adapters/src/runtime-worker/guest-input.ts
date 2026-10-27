@@ -41,12 +41,18 @@ export function nativeToolsForHarness(name: string): readonly ConnectorTool[] {
 /** The tools a harness uses only through a capability it declares. */
 const TOOL_CAPABILITY: Readonly<Record<string, HarnessCapability>> = { run_subagent: "subagents" };
 
-type ToolRule = Pick<HelperProfile, "allow" | "block">;
+export type ToolRule = Pick<HelperProfile, "allow" | "block">;
 
-const mainBotRule = (request: AgentRunRequest): ToolRule => ({
+export const mainBotRule = (request: AgentRunRequest): ToolRule => ({
   allow: ["*"],
   block: request.blockedTools,
 });
+
+type CatalogEntry = NonNullable<ConnectorTool["catalog"]>[number];
+
+/** Whether `rule` keeps a lazy catalog's entry, which a call reaches through the catalog's tools. */
+export const keepsEntry = (rule: ToolRule) => (entry: CatalogEntry) =>
+  selectTools([entry.tool], rule).length > 0;
 
 /** The tools one agent is offered: those its harness can use, selected by `rule`. */
 function agentTools(tools: readonly ConnectorTool[], harness: HarnessDeclaration, rule: ToolRule) {
@@ -59,6 +65,7 @@ function agentTools(tools: readonly ConnectorTool[], harness: HarnessDeclaration
       })
       .map((tool) => ({
         ...tool,
+        ...(tool.catalog ? { catalog: tool.catalog.filter(keepsEntry(rule)) } : {}),
         where: nativeNames.has(tool.name) ? ("guest" as const) : ("controller" as const),
       })),
     rule,
