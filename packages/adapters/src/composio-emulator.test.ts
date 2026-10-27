@@ -198,6 +198,17 @@ describe("ComposioEmulator", () => {
     });
     expect(sentCount()).toBe(before);
 
+    emulator.failNext("GMAIL_SEND_EMAIL", { kind: "fail", error: "Token expired" });
+    expect(await collectResults(emulator, "GMAIL_SEND_EMAIL", send)).toEqual([
+      {
+        type: "error",
+        kind: "unknown",
+        message: "Token expired",
+        details: { successful: false, error: "Token expired" },
+      },
+    ]);
+    expect(sentCount()).toBe(before);
+
     emulator.failNext("GMAIL_SEND_EMAIL", { kind: "timeout" });
     expect(await collectResults(emulator, "GMAIL_SEND_EMAIL", send)).toEqual([
       { type: "error", message: "GMAIL_SEND_EMAIL timed out" },

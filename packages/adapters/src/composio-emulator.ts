@@ -10,6 +10,7 @@ import {
   type ConnectionScope,
   composioEntityId,
   filterCatalog,
+  reportedFailure,
 } from "./composio-connector.js";
 import {
   DEFAULT_RAKAZO_EMULATED_RELEASES,
@@ -674,6 +675,17 @@ export class ComposioEmulator implements ComposioProvider {
           : call.tool === "COMPOSIO_GET_TOOL_SCHEMAS"
             ? this.executeSchemaLookup(args)
             : this.executeAction(call.tool, args, context);
+      // A direct tool the app reported failed reaches the caller as an error, as ComposioConnector
+      // gives it, never as a result: a batch carries each action's failure inside its results.
+      if (
+        call.tool !== BATCH_TOOL.name &&
+        result.successful === false &&
+        typeof result.error === "string"
+      ) {
+        this.executions.push({ userId: context.userId, tool: call.tool, args });
+        yield reportedFailure(result.error);
+        return;
+      }
     } catch (error) {
       // ComposioConnector reports every thrown error, a timeout included, as an error event.
       yield { type: "error", message: error instanceof Error ? error.message : String(error) };
