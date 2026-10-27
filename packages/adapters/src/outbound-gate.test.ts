@@ -178,6 +178,17 @@ describe("draftRequest", () => {
       [2, "arguments", "tools", 0, "arguments", "body"],
     ],
     [
+      "a native send over the lazy catalog, which has no batch",
+      catalogApprovalRequest(
+        "composio_execute_tool",
+        { id: "r1:GMAIL_SEND_EMAIL", arguments: send },
+        marker,
+        { ...route, toolName: "GMAIL_SEND_EMAIL" },
+      ),
+      false,
+      [2, "arguments", "body"],
+    ],
+    [
       "a bound batch",
       boundDirectApprovalRequest(route, { tools: [tracedItem] }, marker),
       true,
@@ -223,6 +234,15 @@ describe("readSendResult", () => {
       "sent",
     ],
     ["a connector error, which a timeout also gives", { error: "Request timed out" }, "uncertain"],
+    [
+      "a connector error the app reported",
+      {
+        error: "Invalid recipient",
+        kind: "unknown",
+        details: { successful: false, error: "Invalid recipient" },
+      },
+      "Invalid recipient",
+    ],
     [
       "a failed action in a batch",
       batch({ successful: false, error: "Invalid recipient" }),

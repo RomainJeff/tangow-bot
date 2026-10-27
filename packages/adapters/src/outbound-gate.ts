@@ -102,9 +102,9 @@ export type SendResult =
 
 /**
  * What became of a send, read from the connector's result. Only the app saying so counts as not
- * sent: an MCP error result, or a Composio action marked unsuccessful, inside a batch or a JSON
- * text included. A bare connector error is also what a timeout after the send gives, so it is
- * uncertain.
+ * sent: an MCP error result, or a Composio action marked unsuccessful, inside a batch, a JSON text
+ * or a connector error's details included. A bare connector error is also what a timeout after the
+ * send gives, so it is uncertain.
  */
 export function readSendResult(result: unknown): SendResult {
   const reason = failureIn(result, 0);
@@ -126,7 +126,7 @@ function failureIn(value: unknown, depth: number): string | undefined {
   }
   if (!value || typeof value !== "object") return undefined;
   const record = value as Record<string, unknown>;
-  for (const key of ["data", "response", "results", "structuredContent", "content"]) {
+  for (const key of ["data", "response", "results", "structuredContent", "content", "details"]) {
     const reason = failureIn(record[key], depth + 1);
     if (reason !== undefined) return reason;
   }
