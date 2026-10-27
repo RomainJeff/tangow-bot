@@ -213,7 +213,7 @@ import {
   redactAgentCommandResult,
 } from "./agent-environment.js";
 import { nativeTranscriptText } from "./agent-text-policy.js";
-import { buildApprovalAskBlock } from "./approval-ask.js";
+import { approvalPushBody, buildApprovalAskBlock } from "./approval-ask.js";
 import {
   approvalPausedToolResult,
   approvalReplayPathError,
@@ -3849,6 +3849,21 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   select: { name: true },
                 })
               : null;
+            const approvalBlock = buildApprovalAskBlock(
+              applied!.effect.id,
+              name,
+              args,
+              runSecrets,
+              {
+                reviewReason,
+                routineCard,
+                runUserId: run.userId,
+                ...(owner?.name ? { runUserName: owner.name } : {}),
+                actions: innerActions,
+                draft,
+                unreadable: outbound.kind === "classic",
+              },
+            );
             const paused = await deps.events.pauseRunForInput({
               spaceId: run.spaceId,
               threadId: run.threadId,
@@ -3857,17 +3872,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               attemptId: attempt.id,
               leaseOwner: workerId,
               leaseFence: fence,
-              blocks: [
-                buildApprovalAskBlock(applied!.effect.id, name, args, runSecrets, {
-                  reviewReason,
-                  routineCard,
-                  runUserId: run.userId,
-                  ...(owner?.name ? { runUserName: owner.name } : {}),
-                  actions: innerActions,
-                  draft,
-                  unreadable: outbound.kind === "classic",
-                }),
-              ],
+              blocks: [approvalBlock],
               effect: {
                 id: applied!.effect.id,
                 kind: applied!.effect.kind,
@@ -3892,7 +3897,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               await notifyRun(deps, run, {
                 kind: "help",
                 title: `${bot.name} needs approval`,
-                body: `Review before ${name}`,
+                body: approvalPushBody(approvalBlock),
                 botId: bot.id,
                 threadId: thread.id,
               });

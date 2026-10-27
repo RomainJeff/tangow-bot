@@ -3,6 +3,8 @@ import type { RoutineCard } from "@rakazo/core";
 import {
   askDraftDetail,
   CARD_VALUE_MAX_LENGTH,
+  draftSentLine,
+  draftSentTo,
   isWholeField,
   LINE_BREAKS,
   redactSecrets,
@@ -14,6 +16,19 @@ import type { ConnectorAction } from "./connector-actions.js";
 const MAX_APPROVAL_SUMMARY_LENGTH = 500;
 const MAX_APPROVAL_DETAIL_LENGTH = 4_000;
 const LONG_APPROVAL_VALUE_LENGTH = 500;
+
+type AskBlock = Extract<MessageBlock, { kind: "ask" }>;
+
+/**
+ * What the push for an approval says: a draft names its app, its subject (or first line) and its
+ * recipient, any other approval the card's own summary. Built from the redacted card only.
+ */
+export function approvalPushBody(block: AskBlock): string {
+  const { draft } = block;
+  if (!draft) return block.text;
+  const line = draftSentLine(draft);
+  return `${draft.app.name}: ${line ? `${line} ` : ""}to ${draftSentTo(draft)}`;
+}
 
 export function buildApprovalAskBlock(
   effectId: string,
@@ -34,7 +49,7 @@ export function buildApprovalAskBlock(
     /** A possible send the card cannot read field by field: every argument shows, no "always". */
     unreadable?: boolean;
   },
-): MessageBlock {
+): AskBlock {
   // spawn_bot and schedule_create arguments are redacted before they become the effect request,
   // so the card shows exactly what will be created; a second pass would only inflate short secrets.
   if (toolName === "spawn_bot") return spawnBotApprovalBlock(effectId, args, options?.runUserId);

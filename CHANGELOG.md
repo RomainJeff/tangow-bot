@@ -19,6 +19,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-10-28
 
+#### Fixed
+
+- Approval notifications now name what the bot wants to do (an email's app, subject and recipient, or the action) instead of a tool name.
+
 #### Added
 
 - **Bots can show visual, interactive views in the thread on web, desktop and mobile.** Step-by-step explanations, figures to explore, trips with photos and videos, and comparisons follow the app theme and open in full screen. They replace charts, which were unavailable on mobile; previously sent charts are no longer displayed.
