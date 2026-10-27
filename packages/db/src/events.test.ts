@@ -142,6 +142,7 @@ describe("finalizeRun", () => {
         findMany: vi.fn(async () => []),
         updateMany: vi.fn(async () => ({ count: 0 })),
       },
+      sessionEntry: { findFirst: vi.fn(async () => null) },
       bot: { update: vi.fn(async () => ({})) },
     };
     const transaction = vi
@@ -196,6 +197,7 @@ describe("finalizeRun", () => {
           deleteMany: vi.fn(async () => ({ count: 0 })),
           updateMany: vi.fn(async () => ({ count: 0 })),
         },
+        sessionEntry: { findFirst: vi.fn(async () => null) },
         bot: { update: vi.fn(async () => ({})) },
       };
       await finalizeRun(

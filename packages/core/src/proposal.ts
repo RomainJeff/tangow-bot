@@ -73,6 +73,8 @@ const RUN_STARTERS: Record<RunTrigger, RunStarter> = {
   resume: "nobody",
   bot_message: "nobody",
   webhook: "nobody",
+  subagent: "nobody",
+  helper: "nobody",
 };
 
 /** A stored trigger outside the union, written before it existed, counts as nobody's. */

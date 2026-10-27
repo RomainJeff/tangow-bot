@@ -107,9 +107,7 @@ export function foldRuns(
           input,
           output: answer ? outputOf(answer) : "",
           id: callId,
-          ...(answer?.type === "subagent" && answer.payload.sessionId
-            ? { sessionId: answer.payload.sessionId }
-            : {}),
+          ...(answer?.payload.sessionId ? { sessionId: answer.payload.sessionId } : {}),
         });
         holderOf.set(entry.id, message);
         break;

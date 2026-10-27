@@ -49,7 +49,16 @@ export class ScriptedAgentRuntime implements AgentRuntime {
       // A model takes longer than a card's commit movement to answer the card; replying inside
       // it would move the thread mid-flight and blur what the motion e2e measures.
       if (asked.delete(request.runId)) await abortableDelay(CHOICE_REPLY_DELAY_MS, signal);
-      const script = request.script ?? inferScript(request.prompt, request.resumeFromCheckpoint);
+      if (request.helper) {
+        const result = helperResult(request.helper.task);
+        yield { type: "text", text: result };
+        yield { type: "done", text: result };
+        return;
+      }
+      const report = request.prompt.includes(HELPER_WAKE) && helperReportOf(request.history);
+      const script = report
+        ? [{ assistant: `the helper reported back. ${report}`, complete: true }]
+        : (request.script ?? inferScript(request.prompt, request.resumeFromCheckpoint));
       // Per-run call index so repeated tools (e.g. message_agent) get distinct
       // executionIds — delivery keys and effect replays key off this value.
       let toolCallSeq = 0;
@@ -75,7 +84,15 @@ export class ScriptedAgentRuntime implements AgentRuntime {
         for (const call of turn.toolCalls ?? []) {
           const executionId = `${request.runId}:${call.name}:${toolCallSeq++}`;
           yield { type: "tool", name: call.name, args: call.args, executionId };
-          if (call.name === "run_subagent" && request.startSubagent) {
+          if (call.name === "run_subagent" && call.args.background && request.startHelper) {
+            await request.startHelper({
+              callId: executionId,
+              name: String(call.args.name ?? "helper"),
+              task: String(call.args.task ?? request.prompt),
+              args: call.args,
+              model: request.model,
+            });
+          } else if (call.name === "run_subagent" && request.startSubagent) {
             const task = String(call.args.task ?? request.prompt);
             const log = await request.startSubagent({
               callId: executionId,
@@ -132,6 +149,18 @@ export class ScriptedAgentRuntime implements AgentRuntime {
 
 function helperResult(task: string): string {
   return `it found: ${task.slice(0, 180)}`;
+}
+
+/** The prompt of the run a background helper's report wakes. */
+const HELPER_WAKE = "A helper you started reported back.";
+
+/** The newest helper report the history hands the bot. */
+function helperReportOf(history: AgentRunRequest["history"]): string | undefined {
+  const turn = history.findLast((candidate) => candidate.content.includes("<helper_report>"));
+  const data = turn?.content.split("<helper_report>\n")[1]?.split("\n</helper_report>")[0];
+  if (!data) return undefined;
+  const { report } = JSON.parse(data) as { report?: unknown };
+  return typeof report === "string" ? report : undefined;
 }
 
 function messageUser(runId: string, message: string, seq: number): AgentRuntimeEvent {
@@ -379,6 +408,16 @@ export function inferScript(
         ],
         complete: true,
       },
+    ];
+  }
+  if (lower.includes("in the background")) {
+    return [
+      {
+        toolCalls: [
+          { name: "run_subagent", args: { name: "helper", task: prompt, background: true } },
+        ],
+      },
+      { assistant: "I've started that, I'll come back with it.", complete: true },
     ];
   }
   if (lower.includes("subagent") || lower.includes("delegate to a helper")) {

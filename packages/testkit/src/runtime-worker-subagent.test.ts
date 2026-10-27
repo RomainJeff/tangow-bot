@@ -46,6 +46,8 @@ function helperRun(
     opening?: Promise<void>;
     /** How many first starts `startSubagent` refuses. */
     refusals?: number;
+    /** Runs as this background helper instead of the bot. */
+    helper?: AgentRunRequest["helper"];
   } = {},
 ) {
   const opened: SubagentCall[] = [];
@@ -77,6 +79,11 @@ function helperRun(
       tools: options.tools ?? [tool("remember"), tool("run_subagent"), tool("message_user")],
       blockedTools: options.blockedTools,
       helperProfiles: options.helperProfiles,
+      helper: options.helper,
+      startHelper: async (call) => {
+        opened.push(call);
+        return { helperId: "run_background" };
+      },
       model: options.model ?? {
         provider: "openai-compatible",
         id: "unused",
@@ -470,7 +477,7 @@ describe("a helper the call names by profile", () => {
         threadId: "thread",
         prompt: "Find the notes.",
         instructions:
-          'You are a Rakazo subagent named "scout". You run inside the parent bot\'s turn — you are not a separate bot chat. Complete the task and return a concise result. Do not spawn bots or further subagents. Cite every source. Be quick.',
+          'You are a Rakazo subagent named "scout". You work for the parent bot — you are not a separate bot chat. Complete the task and return a concise result. Do not spawn bots or further subagents. Cite every source. Be quick.',
         history: [],
         images: [],
         tools: [
@@ -487,6 +494,55 @@ describe("a helper the call names by profile", () => {
     helperRemembers(guest, 3, "helper:1", "forget");
     expect(await guest.replies(4)).toEqual([{ type: "refused", reason: "unknown_tool" }]);
     expect(run.helperCalls).toEqual([]);
+  });
+
+  it("answers a background call with the helper's id at once", async () => {
+    const run = helperRun("run_starts_background", { helperProfiles: [RESEARCHER] });
+    const guest = await run.guest();
+
+    callHelper(guest, 1, "h1", { helper: "researcher", background: true });
+    expect(await guest.replies(2)).toEqual([
+      { type: "tool.result", output: { helperId: "run_background" } },
+    ]);
+    expect(run.opened).toMatchObject([
+      {
+        callId: "h1",
+        task: "Find the notes.",
+        model: { provider: "openai-compatible", id: "research-model" },
+        profile: { name: "researcher" },
+      },
+    ]);
+  });
+
+  it("starts a background helper as its attempt's root, with its brief, profile and nothing of the bot", async () => {
+    const run = helperRun("run_background_root", {
+      tools: ["bash", "read", "remember", "forget", "run_subagent", "message_user"].map(tool),
+      helperProfiles: [RESEARCHER],
+      helper: {
+        name: "scout",
+        task: "Find the notes.",
+        instructions: "Be quick.",
+        profile: "researcher",
+      },
+    });
+    const guest = await run.guest();
+
+    expect(startOf(guest)).toEqual({
+      botId: "bot",
+      threadId: "thread",
+      prompt: "Find the notes.",
+      instructions:
+        'You are a Rakazo subagent named "scout". You work for the parent bot — you are not a separate bot chat. Complete the task and return a concise result. Do not spawn bots or further subagents. Cite every source. Be quick.',
+      history: [],
+      images: [],
+      tools: [
+        { ...tool("read"), where: "guest" },
+        { ...tool("remember"), where: "controller" },
+      ],
+      model: { provider: "openai-compatible", id: "unused" },
+    });
+    helperRemembers(guest, 1, "root", "forget");
+    expect(await guest.replies(2)).toEqual([{ type: "refused", reason: "unknown_tool" }]);
   });
 
   it("takes the call's model over its profile's", async () => {

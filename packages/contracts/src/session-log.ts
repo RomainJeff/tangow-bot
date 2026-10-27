@@ -215,6 +215,8 @@ const EntryShapes = z.discriminatedUnion("type", [
       output: z.string(),
       isError: z.boolean(),
       artifactIds: z.array(Id),
+      /** The session of the background helper the call started. */
+      sessionId: SessionId.optional(),
     }),
   ),
   runEntry(
@@ -237,6 +239,19 @@ const EntryShapes = z.discriminatedUnion("type", [
     }),
   ),
   runEntry("subagent", SubagentPayload),
+  /** In the thread's main session, how the background helper `helperId` ended. */
+  z.object({
+    ...envelope,
+    botId: Id,
+    runId: z.never().optional(),
+    type: z.literal("helper.report"),
+    payload: z.object({
+      helperId: Id,
+      profile: z.string().nullable(),
+      status: z.enum(["completed", "failed"]),
+      report: z.string(),
+    }),
+  }),
   /** In the thread's main session, when a routine run opens its own session `sessionId`. */
   runEntry(
     "routine.started",
@@ -466,6 +481,7 @@ export const ENTRY_AUDIENCE = {
   "tool.call": { inference: "yes", ui: true },
   "tool.result": { inference: "yes", ui: true },
   subagent: { inference: "yes", ui: true },
+  "helper.report": { inference: "yes", ui: false },
   "routine.started": { inference: "context", ui: true },
   "routine.finished": { inference: "yes", ui: true },
   "bot.text": { inference: "yes", ui: true },

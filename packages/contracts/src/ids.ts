@@ -57,6 +57,10 @@ export const RunTrigger = z.enum([
   "bot_message",
   "webhook",
   "messaging",
+  /** A helper inside its parent's attempt. */
+  "subagent",
+  /** A background helper on an attempt of its own, which outlives its parent's turn. */
+  "helper",
 ]);
 export type RunTrigger = z.infer<typeof RunTrigger>;
 

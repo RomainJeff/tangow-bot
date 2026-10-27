@@ -35,13 +35,14 @@ export function helperCallOf(args: Record<string, unknown>) {
     helper: String(args.helper ?? "").trim(),
     provider: String(args.model_provider ?? "").trim(),
     modelId: String(args.model_id ?? "").trim(),
+    background: args.background === true,
   };
 }
 
 /** The profile a call names as its `helper`, if it names one. */
 export function helperProfileOf(
   profiles: readonly HelperProfile[] = [],
-  call: ReturnType<typeof helperCallOf>,
+  call: Pick<ReturnType<typeof helperCallOf>, "helper">,
 ) {
   if (!call.helper) return undefined;
   const profile = profiles.find((candidate) => candidate.name === call.helper);
@@ -70,7 +71,7 @@ export const HELPER_STOPPED_FOR_PAUSE = "Stopped: the run is waiting for the use
 export function helperInstructions(name: string, ...extra: Array<string | undefined>) {
   return [
     `You are a Rakazo subagent named "${name}".`,
-    "You run inside the parent bot's turn — you are not a separate bot chat.",
+    "You work for the parent bot — you are not a separate bot chat.",
     "Complete the task and return a concise result. Do not spawn bots or further subagents.",
     ...extra,
   ]
@@ -856,7 +857,7 @@ that merely narrate internal operations.`,
   {
     name: "run_subagent",
     description:
-      "Run a short-lived helper inside this turn only. It is not a bot: no list entry, no thread, no computer of its own, and it disappears when this turn ends. Never call this because the user asked to create a bot — that is spawn_bot, and spawn_bot alone.",
+      "Run a helper and get its result in this turn. With background, it returns a helperId at once and keeps working after this turn ends; its report wakes you when it is done. It is not a bot: no list entry, no thread, no computer of its own. Never call this because the user asked to create a bot — that is spawn_bot, and spawn_bot alone.",
     inputSchema: {
       type: "object",
       properties: {
@@ -876,6 +877,11 @@ that merely narrate internal operations.`,
         model_id: {
           type: "string",
           description: "Optional connected model ID. Set together with model_provider.",
+        },
+        background: {
+          type: "boolean",
+          description:
+            "Keep working after this turn, for a long task. Tell the user it started; its report comes back to you.",
         },
       },
       required: ["name", "task"],
