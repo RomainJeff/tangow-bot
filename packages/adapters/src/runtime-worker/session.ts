@@ -653,13 +653,6 @@ export function createSession(
         });
         return { type: "ack" };
       case "subagent":
-        if (paused) return { type: "ack" };
-        await events.push({
-          ...body,
-          task: clean(body.task),
-          ...(body.progress === undefined ? {} : { progress: clean(body.progress) }),
-          ...(body.result === undefined ? {} : { result: clean(body.result) }),
-        });
         return { type: "ack" };
       case "model.request":
         transcript.requested(body.agent);

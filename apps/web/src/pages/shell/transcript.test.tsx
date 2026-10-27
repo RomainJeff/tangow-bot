@@ -359,7 +359,7 @@ describe("the transcript", () => {
       document.querySelector<HTMLButtonElement>('[data-testid="agent-steps-toggle"]')?.click(),
     );
     const step = [...document.querySelectorAll("button")].find(
-      (button) => button.textContent === "run_subagent",
+      (button) => button.textContent === "scout",
     );
     await act(async () => step?.click());
 

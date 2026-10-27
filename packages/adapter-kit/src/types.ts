@@ -618,15 +618,6 @@ export type AgentRuntimeEvent =
       unverifiedCalls: number;
     }
   | {
-      type: "subagent";
-      agentId: string;
-      name: string;
-      task: string;
-      status: "running" | "completed" | "failed";
-      progress?: string;
-      result?: string;
-    }
-  | {
       type: "done";
       text?: string;
       privateFinalText?: string;
