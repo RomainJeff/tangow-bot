@@ -8,6 +8,7 @@ import type {
 } from "@rakazo/adapter-kit";
 import { createWorkerAgentRuntime, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
 import type { HelperProfile } from "@rakazo/core";
+import { HELPER_PROFILES, MAIN_BOT_BLOCKED_TOOLS } from "@rakazo/core";
 import { describe, expect, it, onTestFinished } from "vitest";
 import { catalogEntries, lazyCatalogTools } from "../../adapters/src/lazy-tool-catalog.js";
 import {
@@ -449,6 +450,13 @@ const RESEARCHER: HelperProfile = {
   instructions: "Cite every source.",
 };
 
+const OPERATOR: HelperProfile = {
+  name: "operator",
+  description: "Uses the computer.",
+  allow: ["computer_*"],
+  instructions: "",
+};
+
 const startOf = (guest: Guest) =>
   guest.received.find((message) => message.kind === "worker.start")!.run;
 
@@ -575,14 +583,7 @@ describe("a helper the call names by profile", () => {
     const run = helperRun("run_main_blocked", {
       tools: ["bash", "computer_observe", "run_subagent", "message_user"].map(tool),
       blockedTools: ["computer_*"],
-      helperProfiles: [
-        {
-          name: "operator",
-          description: "Uses the computer.",
-          allow: ["computer_*"],
-          instructions: "",
-        },
-      ],
+      helperProfiles: [OPERATOR],
     });
     const guest = await run.guest();
     expect(startOf(guest).tools.map((offered) => offered.name)).toEqual([
@@ -613,18 +614,109 @@ describe("a helper the call names by profile", () => {
 });
 
 describe("a tool rule", () => {
-  it("gives a helper without a profile the main bot's block list", async () => {
-    const run = helperRun("run_unprofiled_blocked", {
-      tools: ["bash", "computer_observe", "run_subagent", "message_user"].map(tool),
-      blockedTools: ["computer_*"],
-    });
-    const guest = await run.guest();
+  it("hands a helper without a profile none of the tools the bot hands to computer-use", async () => {
+    const tools = ["bash", "browser_navigate", "computer_exec", "run_subagent", "message_user"];
+    const unprofiledHelper = async (runId: string, helperProfiles: readonly HelperProfile[]) => {
+      const guest = await helperRun(runId, {
+        tools: tools.map(tool),
+        blockedTools: [...MAIN_BOT_BLOCKED_TOOLS],
+        helperProfiles: [...helperProfiles],
+      }).guest();
+      callHelper(guest, 1, "h1");
+      const [start] = await guest.replies(2, 1);
+      helperRemembers(guest, 3, "helper:1", "computer_exec");
+      return { start, reply: await guest.replies(4) };
+    };
 
-    callHelper(guest, 1, "h1");
-    const [start] = await guest.replies(2, 1);
-    expect(start).toMatchObject({ run: { tools: [{ name: "bash", where: "guest" }] } });
-    helperRemembers(guest, 3, "helper:1", "computer_observe");
-    expect(await guest.replies(4)).toEqual([{ type: "refused", reason: "unknown_tool" }]);
+    expect(await unprofiledHelper("run_unprofiled_delegated", HELPER_PROFILES)).toMatchObject({
+      start: { run: { tools: [{ name: "bash" }] } },
+      reply: [{ type: "refused", reason: "unknown_tool" }],
+    });
+    expect(await unprofiledHelper("run_unprofiled_kept", [RESEARCHER])).toMatchObject({
+      start: {
+        run: { tools: [{ name: "bash" }, { name: "browser_navigate" }, { name: "computer_exec" }] },
+      },
+      reply: [{ type: "tool.result", output: "Saved." }],
+    });
+  });
+
+  it("hands a background helper without a profile none of the tools the bot hands to computer-use", async () => {
+    const tools = ["bash", "browser_navigate", "computer_exec", "run_subagent", "message_user"];
+    const backgroundHelper = async (runId: string, helperProfiles: readonly HelperProfile[]) => {
+      const guest = await helperRun(runId, {
+        tools: tools.map(tool),
+        blockedTools: [...MAIN_BOT_BLOCKED_TOOLS],
+        helperProfiles: [...helperProfiles],
+        helper: { name: "scout", task: "Find the notes.", instructions: "" },
+      }).guest();
+      return startOf(guest).tools.map((offered) => offered.name);
+    };
+
+    expect(await backgroundHelper("run_background_delegated", HELPER_PROFILES)).toEqual(["bash"]);
+    expect(await backgroundHelper("run_background_kept", [RESEARCHER])).toEqual([
+      "bash",
+      "browser_navigate",
+      "computer_exec",
+    ]);
+  });
+
+  it("keeps the main bot's blocked tools when no helper it can start takes them", async () => {
+    const tools = ["bash", "computer_observe", "run_subagent", "message_user"].map(tool);
+    const offered = async (runId: string, options: Parameters<typeof helperRun>[1]) =>
+      startOf(
+        await helperRun(runId, { tools, blockedTools: ["computer_*"], ...options }).guest(),
+      ).tools.map((offered) => offered.name);
+
+    expect(
+      await offered("run_kept_no_subagents", {
+        capabilities: ["native-loop"],
+        helperProfiles: [OPERATOR],
+      }),
+    ).toEqual(["bash", "computer_observe", "message_user"]);
+    expect(await offered("run_kept_no_profile", { helperProfiles: [RESEARCHER] })).toEqual([
+      "bash",
+      "computer_observe",
+      "run_subagent",
+      "message_user",
+    ]);
+  });
+
+  it("names a helper only to a bot that can start it and has work for it", async () => {
+    const offer = async (runId: string, options: Parameters<typeof helperRun>[1]) => {
+      const start = startOf(await helperRun(runId, options).guest());
+      return {
+        instructions: start.instructions,
+        tools: start.tools.map((offered) => offered.name),
+        helper: start.tools.find((offered) => offered.name === "run_subagent")?.inputSchema
+          .properties?.helper,
+      };
+    };
+    const computerless = ["bash", "search_runs", "run_subagent", "message_user"];
+
+    expect(
+      await offer("run_no_helpers", {
+        capabilities: ["native-loop"],
+        helperProfiles: [RESEARCHER],
+      }),
+    ).toMatchObject({ instructions: "Be brief." });
+    expect(
+      await offer("run_no_computer", {
+        tools: computerless.map(tool),
+        blockedTools: [...MAIN_BOT_BLOCKED_TOOLS],
+        helperProfiles: [...HELPER_PROFILES],
+      }),
+    ).toEqual({ instructions: "Be brief.", tools: computerless, helper: undefined });
+    expect(
+      await offer("run_computer", {
+        tools: [...computerless, "computer_exec"].map(tool),
+        blockedTools: [...MAIN_BOT_BLOCKED_TOOLS],
+        helperProfiles: [...HELPER_PROFILES],
+      }),
+    ).toMatchObject({
+      instructions: expect.stringContaining("<available_helpers>\n- computer-use: "),
+      tools: computerless,
+      helper: { enum: ["computer-use"] },
+    });
   });
 
   it("refuses run_subagent to a harness without the subagents capability", async () => {
@@ -652,9 +744,13 @@ describe("a tool rule", () => {
           "MCP",
           catalogEntries([entry("read_doc"), entry("delete_doc")]),
         ),
+        tool("run_subagent"),
         tool("message_user"),
       ],
       blockedTools: ["delete_doc"],
+      helperProfiles: [
+        { name: "archivist", description: "", allow: ["delete_doc"], instructions: "" },
+      ],
     });
     const guest = await run.guest();
     expect(

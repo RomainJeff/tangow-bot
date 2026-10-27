@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
+- On web, desktop and mobile, bots now hand browser and desktop work, such as searching a site, filling a form or opening an app, to a helper that works their computer instead of driving it themselves.
 - Helper cards no longer appear in conversations on web, desktop and mobile: only the bot's replies show, and debug mode still lists each helper's steps in the run that started it.
 
 ### 2026-10-26

@@ -27,14 +27,16 @@ interface HelperProfile {
 ```
 
 - `name` is what `run_subagent` passes as `helper`. The bot reads `name` and `description` in its
-  `<available_helpers>` list.
+  `<available_helpers>` list, which names a profile only when it allows one of the bot's tools
+  other than `search_runs` and `ask_parent`.
 - A helper gets every tool its harness runs itself, plus the Rakazo tools `allow` names, minus
   what `block` names. A name ending in `*` is a prefix.
 - `exclusive` holds a resource for the helper's whole run. A second helper of the same bot that
   needs it is refused until the first one ends.
 - `model` replaces the bot's model for the helper, unless the call names one.
-- `MAIN_BOT_BLOCKED_TOOLS` in the same file removes tools from the bot itself. A profile can still
-  allow them.
+- `MAIN_BOT_BLOCKED_TOOLS` in the same file lists the tools the bot hands to a helper. The bot
+  loses one only when it can start a helper whose profile allows it, and a helper without a
+  profile keeps it. It holds the computer and browser tools, which `computer-use` takes.
 
 The two examples:
 
@@ -57,12 +59,15 @@ The two examples:
 
 ## Try it
 
-1. In a dev checkout, put both profiles in the registry and take the screen tools from the bot:
+1. In a dev checkout, add both profiles after `computer-use` in the registry:
 
    ```ts
    // packages/core/src/helper-profile.ts
-   export const HELPER_PROFILES: readonly HelperProfile[] = [researcher, screenOperator];
-   export const MAIN_BOT_BLOCKED_TOOLS: readonly string[] = ["computer_*", "browser_*"];
+   export const HELPER_PROFILES: readonly HelperProfile[] = [
+     { name: "computer-use" /* ... */ },
+     researcher,
+     screenOperator,
+   ];
    ```
 
    Paste the two objects from `packages/testkit/src/helper-profiles.fixture.ts` above the
@@ -75,6 +80,6 @@ The two examples:
 5. While it works, ask "where are you at?", then "also check if breakfast is included". The bot
    answers from `helper_status` and passes the new constraint on with `helper_message`.
 6. Ask it to open a website. The bot has no computer tool of its own, so it hands the task to
-   `screen-operator`. Ask for a second website at once: the second helper is refused while the
+   `computer-use` or `screen-operator`. Ask for a second website at once: the second helper is refused while the
    first holds the computer, and the bot says so or tries again once it is free.
 7. Say "stop everything". Every helper ends, and no report follows.

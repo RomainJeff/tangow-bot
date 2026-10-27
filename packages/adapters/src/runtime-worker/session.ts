@@ -381,7 +381,7 @@ export function createSession(
           log,
           model,
           tools: new Set(run.tools.map((tool) => tool.name)),
-          rule: profile ?? mainBotRule(request),
+          rule: profile ?? mainBotRule(request, launched!.expectedHarness),
           usage: { inputTokens: 0, outputTokens: 0 },
           modelRequests: 0,
         };
@@ -449,7 +449,13 @@ export function createSession(
     if (agent !== "root" && !helper) return refuse("invalid");
     if (paused) return pausedToolCall(paused);
     if (!(helper?.tools ?? rootTools).has(name)) return refuse("unknown_tool");
-    if (blockedEntry(name, args, helper?.rule ?? helperProfile ?? mainBotRule(request))) {
+    if (
+      blockedEntry(
+        name,
+        args,
+        helper?.rule ?? helperProfile ?? mainBotRule(request, launched!.expectedHarness),
+      )
+    ) {
       return refuse("unknown_tool");
     }
     if (name === "run_subagent" && runsOwnLoop()) {
@@ -701,7 +707,7 @@ export function createSession(
           log,
           model,
           tools: new Set([...rootTools].filter(isHelperTool)),
-          rule: mainBotRule(request),
+          rule: mainBotRule(request, launched!.expectedHarness),
           usage: { inputTokens: 0, outputTokens: 0 },
           modelRequests: 0,
         });

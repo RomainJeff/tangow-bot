@@ -441,7 +441,7 @@ it("fails a helper whose profile is gone and wakes the bot with why", async () =
     {
       expect(request) {
         expect(text(request)).toContain(
-          'Unknown helper \\\\\\"ghost\\\\\\". Available helpers: none',
+          'Unknown helper \\\\\\"ghost\\\\\\". Available helpers: computer-use',
         );
       },
       response: say("The helper could not start."),
@@ -459,7 +459,7 @@ it("fails a helper whose profile is gone and wakes the bot with why", async () =
       helperId: child.id,
       profile: "ghost",
       status: "failed",
-      report: 'Unknown helper "ghost". Available helpers: none',
+      report: 'Unknown helper "ghost". Available helpers: computer-use',
     },
   ]);
   const [, , woken] = await runs();
