@@ -141,6 +141,9 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
             expect(rest).toEqual([]);
             expect(count(only!, DISCARDED_NOTE)).toBe(1);
             expect(JSON.stringify(request.messages)).not.toContain(PAUSED);
+            expect(JSON.stringify(request.messages)).toContain(
+              "resuming this run after the user answered your draft card",
+            );
           },
           response: mailTo("anna@example.test", "mail-2", { thought: "Mail Anna again." }).response,
         },
