@@ -152,6 +152,12 @@ export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread 
       }
       case "user.message": {
         const { originSessionId, targets: _targets, ...payload } = segment.payload;
+        // What a helper's parent sent it, in its session: the bot's words, not the person's.
+        if (payload.source === "parent" && segment.botId) {
+          const { id, ts, botId } = segment;
+          push({ kind: "message", role: "bot", id, ts, botId, blocks: [...payload.blocks] }, id);
+          break;
+        }
         const card = payload.replyTo ? questionAt(cards.get(payload.replyTo.entryId)) : undefined;
         if (card) {
           const block = cardOf(card);

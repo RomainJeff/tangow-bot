@@ -904,16 +904,17 @@ it("steers a working helper with its parent's words, which never reach the paren
       await run.prisma.sessionEntry.findMany({
         where: { type: "user.message" },
         orderBy: { createdAt: "asc" },
-        select: { sessionId: true, payload: true },
+        select: { sessionId: true, botId: true, payload: true },
       })
-    ).map(({ sessionId, payload }) => [
+    ).map(({ sessionId, botId, payload }) => [
       sessionId === child.sessionId ? "helper" : "thread",
       (payload as { source: string }).source,
+      botId,
     ]),
   ).toEqual([
-    ["thread", "app"],
-    ["thread", "app"],
-    ["helper", "parent"],
+    ["thread", "app", null],
+    ["thread", "app", null],
+    ["helper", "parent", run.bot.id],
   ]);
   expect(JSON.stringify((await snapshotOf(run)).entries)).not.toContain("Also check trains.");
   expect((await runs()).map(({ trigger, status }) => [trigger, status])).toEqual([
@@ -921,6 +922,122 @@ it("steers a working helper with its parent's words, which never reach the paren
     ["helper", "completed"],
     ["user", "completed"],
     ["follow_up", "queued"],
+  ]);
+});
+
+it("tells the bot what it sent a helper that ended before reading it", async () => {
+  const childAsked = Promise.withResolvers<void>();
+  const releaseChild = Promise.withResolvers<void>();
+  let childId = "";
+  let woken = "";
+  const { run, reports, childOf } = await fixture([
+    ...startedTurn,
+    {
+      async expect() {
+        childAsked.resolve();
+        await releaseChild.promise;
+      },
+      response: { type: "text", text: REPORT },
+    },
+    callWith("tell", "helper_message", () => ({
+      helperId: childId,
+      message: "Also check trains.",
+    })),
+    { expect() {}, response: say("I asked the helper to check trains too.") },
+    { expect() {}, response: { type: "text", text: recap } },
+    {
+      expect(request) {
+        woken = text(request);
+      },
+      response: say(`Found it: ${REPORT}`),
+    },
+    { expect() {}, response: { type: "text", text: recap } },
+  ]);
+  const parentId = await run.send("Book me a hotel in Lisbon.");
+  await run.continueRun(parentId);
+  const child = await childOf(parentId);
+  childId = child.id;
+  const childDone = run.continueRun(child.id);
+  await childAsked.promise;
+  await run.continueRun(await run.send("Ask it to check trains too."));
+  releaseChild.resolve();
+  await childDone;
+  const followUp = await run.prisma.run.findFirstOrThrow({ where: { trigger: "follow_up" } });
+  await run.continueRun(followUp.id);
+  run.model.assertComplete();
+
+  expect(await reports()).toEqual([
+    {
+      helperId: child.id,
+      profile: null,
+      status: "completed",
+      report: REPORT,
+      unreadMessages: ["Also check trains."],
+    },
+  ]);
+  expect(woken).toContain(String.raw`\"unreadMessages\":[\"Also check trains.\"]`);
+});
+
+it("hands a helper each message of its parent once, across its question and its resume", async () => {
+  const childAsked = Promise.withResolvers<void>();
+  const releaseChild = Promise.withResolvers<void>();
+  const TRAINS = "Also check trains.";
+  const OLD_TOWN = "Prefer the old town.";
+  let childId = "";
+  const seen: Record<string, ModelEmulatorRequest> = {};
+  const { run, runs, reports, childOf } = await fixture([
+    ...startedTurn,
+    {
+      async expect() {
+        childAsked.resolve();
+        await releaseChild.promise;
+      },
+      response: { type: "tool", id: "look", name: "search_runs", arguments: { query: "hotel" } },
+    },
+    callWith("tell", "helper_message", () => ({ helperId: childId, message: TRAINS })),
+    { expect() {}, response: say("I asked the helper to check trains too.") },
+    { expect() {}, response: { type: "text", text: recap } },
+    {
+      expect(request) {
+        seen.steered = request;
+      },
+      response: askParent.response,
+    },
+    parked,
+    callWith("answer", "helper_message", () => ({ helperId: childId, message: ANSWER })),
+    callWith("more", "helper_message", () => ({ helperId: childId, message: OLD_TOWN })),
+    { expect() {}, response: say("I gave the helper your dates.") },
+    { expect() {}, response: { type: "text", text: recap } },
+    {
+      expect() {},
+      response: { type: "tool", id: "look-again", name: "search_runs", arguments: { query: "x" } },
+    },
+    {
+      expect(request) {
+        seen.resumed = request;
+      },
+      response: { type: "text", text: REPORT },
+    },
+  ]);
+  const parentId = await run.send("Book me a hotel in Lisbon.");
+  await run.continueRun(parentId);
+  const child = await childOf(parentId);
+  childId = child.id;
+  const childDone = run.continueRun(child.id);
+  await childAsked.promise;
+  await run.continueRun(await run.send("Ask it to check trains too."));
+  releaseChild.resolve();
+  await childDone;
+  const [, , , woken] = await runs();
+  await run.continueRun(woken!.id);
+  await run.continueRun(child.id);
+
+  const times = (request: ModelEmulatorRequest, needle: string) =>
+    text(request).split(needle).length - 1;
+  expect([times(seen.steered!, TRAINS), times(seen.steered!, OLD_TOWN)]).toEqual([1, 0]);
+  expect([times(seen.resumed!, TRAINS), times(seen.resumed!, OLD_TOWN)]).toEqual([1, 1]);
+  expect(await reports()).toEqual([
+    { helperId: childId, profile: null, status: "completed", report: REPORT },
   ]);
 });
 

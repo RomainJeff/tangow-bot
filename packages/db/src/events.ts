@@ -781,6 +781,7 @@ export async function claimSteering(
         id: true,
         trigger: true,
         sessionId: true,
+        historyThroughSeq: true,
         sourceMessage: { select: { payload: true } },
         thread: { select: { sessionId: true } },
       },
@@ -793,8 +794,12 @@ export async function claimSteering(
         botId: input.botId,
         id: input.seenIds.length ? { notIn: input.seenIds } : undefined,
         ...(run.trigger === "helper"
-          ? // A background helper reads only what its parent sent it, in its own session.
-            { runId: input.runId, message: { sessionId: run.sessionId } }
+          ? // A background helper reads only what its parent sent it, in its own session, after
+            // the history this attempt read, which holds every earlier message already.
+            {
+              runId: input.runId,
+              message: { sessionId: run.sessionId, seq: { gte: run.historyThroughSeq ?? 0 } },
+            }
           : {
               OR: [{ runId: null }, { runId: input.runId }],
               message: {
@@ -1648,6 +1653,7 @@ export async function messageHelper(
     const message = await appendSessionEntryInTransaction(tx, {
       type: "user.message",
       sessionId,
+      botId: input.botId,
       payload: { blocks: [{ kind: "text", text: input.text }], source: "parent" },
     });
     await tx.steeringMessage.create({
@@ -1935,7 +1941,7 @@ async function finalizeRunOnce(
     if (terminal.count !== 1) return null;
     const ended = await tx.run.findUniqueOrThrow({
       where: { id: input.runId },
-      select: { trigger: true, helper: true },
+      select: { trigger: true, helper: true, historyThroughSeq: true },
     });
     // A background helper's end is news for its parent only, never for the person.
     const background = ended.trigger === "helper";
@@ -2012,6 +2018,16 @@ async function finalizeRunOnce(
         select: { sessionId: true },
       });
       const report = input.outcome === "completed" ? (input.result ?? "") : input.error;
+      // What the parent sent after the helper's last read of its history and that it never claimed.
+      const unread = await tx.steeringMessage.findMany({
+        where: {
+          runId: input.runId,
+          claimedAt: null,
+          message: { seq: { gte: ended.historyThroughSeq ?? 0 } },
+        },
+        select: { message: { select: { payload: true } } },
+        orderBy: { message: { seq: "asc" } },
+      });
       await appendSessionEntryInTransaction(tx, {
         type: "helper.report",
         sessionId: sessionId as SessionId,
@@ -2024,6 +2040,13 @@ async function finalizeRunOnce(
             report.length > HELPER_REPORT_MAX_CHARS
               ? `${report.slice(0, HELPER_REPORT_MAX_CHARS)}… truncated`
               : report,
+          ...(unread.length
+            ? {
+                unreadMessages: unread.map((item) =>
+                  blocksToAgentHistoryText(blocksOf(item.message)),
+                ),
+              }
+            : {}),
         },
       });
     }

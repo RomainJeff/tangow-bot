@@ -253,6 +253,8 @@ const EntryShapes = z.discriminatedUnion("type", [
       profile: z.string().nullable(),
       status: z.enum(["completed", "failed"]),
       report: z.string(),
+      /** What its parent sent it that it ended before reading. */
+      unreadMessages: z.array(z.string()).optional(),
     }),
   }),
   /** In the thread's main session, the question the paused background helper `helperId` asks. */

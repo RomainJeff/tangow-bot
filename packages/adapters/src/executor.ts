@@ -1770,9 +1770,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
               const loaded = await threadLoad;
               if (loaded.sessionId && !backgroundHelper)
                 sessionId = SessionId.parse(loaded.sessionId);
-              // The tail is one read from the head, so its newest seq marks what this attempt saw;
-              // a helper report after it wakes the bot once the turn ends.
-              if (!backgroundHelper && run.routineId == null && !channelId) {
+              // The tail is one read from the head, so its newest seq marks what this attempt saw:
+              // a helper report after it wakes the bot once the turn ends, and a helper claims as
+              // steering only what its parent sent after it.
+              if (run.routineId == null && !channelId) {
                 const historyThroughSeq = entries.reduce(
                   (next, entry) => Math.max(next, entry.seq + 1),
                   0,
@@ -2933,6 +2934,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
           return reply;
         };
         const askParent = async (question: string) => {
+          if (run.trigger !== "helper")
+            return { error: "Only a background helper has a parent to ask." };
           if (!question.trim()) return { error: "Ask a question." };
           await workspaceCheckpoint.flush();
           const paused = await deps.events.pauseRunForParent({

@@ -1070,6 +1070,26 @@ describe("projectThreadItems", () => {
     ]);
   });
 
+  it("shows what a helper's parent sent it as the bot's words in the helper's session", () => {
+    const chain = linkEntries("helper", [
+      {
+        botId: "bot_ada",
+        type: "user.message",
+        payload: { blocks: text("Also check trains."), source: "parent" },
+      },
+    ]);
+    expect(projectThreadItems(chain)).toEqual([
+      {
+        kind: "message",
+        role: "bot",
+        id: "helper-0",
+        ts: at(0),
+        botId: "bot_ada",
+        blocks: text("Also check trains."),
+      },
+    ]);
+  });
+
   it("shows a bot's words outside a run as their own message, splitting a run's stretch", () => {
     const run = { botId: "bot_ada", runId: "run_1" };
     const chain = linkEntries("aside", [
