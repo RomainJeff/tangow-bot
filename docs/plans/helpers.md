@@ -1,12 +1,12 @@
 # Specialized helpers plan
 
-Issue #386. A bot delegates a task to a helper chosen by a versioned profile, and a background helper keeps working after the bot's turn ends and wakes the bot with a short report. The person using Rakazo sees only the bot's replies. Helpers are invisible on web, desktop and mobile, and the cards `run_subagent` draws today go away. The rule the program enforces is that the controller owns the trust boundary (profiles, tool selection, exclusive locks, helper state, the report and the wake), and the harness only runs the loop. Scope is the mechanism plus example profiles. The real managed profiles (`general`, `computer-use`, `coding`, `video`), the real routing skills, the `delegate-to-opencode` migration and the removal of computer and browser tools from the main bot come next. PRs in order are H1 (remove helper cards), H2 (managed profiles on sync `run_subagent`), H3 (exclusive lock), H4 (background lifecycle and wake) and H5 (helper status, message, stop and `ask_parent`, examples and CHANGELOG).
+Issue #386. A bot delegates a task to a helper chosen by a versioned profile, and a background helper keeps working after the bot's turn ends and wakes the bot with a short report. The person using Rakazo sees only the bot's replies. Helpers are invisible on web, desktop and mobile, and the cards `run_subagent` draws today go away. The rule the program enforces is that the controller owns the trust boundary (profiles, tool selection, exclusive locks, helper state, the report and the wake), and the harness only runs the loop. Scope is the mechanism plus example profiles, then one real managed profile, `computer-use`, measured on a browser task (H6). The other real profiles (`general`, `coding`, `video`), the real routing skills, the `delegate-to-opencode` migration and the removal of computer and browser tools from the main bot come next. PRs in order are H1 (remove helper cards), H2 (managed profiles on sync `run_subagent`), H3 (exclusive lock), H4 (background lifecycle and wake), H5 (helper status, message, stop and `ask_parent`, examples and CHANGELOG) and H6 (a managed `computer-use` profile and a browser benchmark with and without it).
 
 ## How to read this
 
 One box is one unit of work. Every box names the evidence that checks it. A nested box is a sub-step of the box above it. Check a box only when its evidence exists, a file, a log line, a screenshot, a test run, or a SHA. The body is a how-to. The appendices explain and record.
 
-The program runs `.claude/skills/poteto-mode/playbooks/autopilot-full.md` on the slice PRs, adapted to the feature-branch rule in `AGENTS.md`. Every slice PR targets `feature/helpers`, and its owner merges it there after a clean verdict. H1 and H4 are review-gated and stop at merge-ready for the operator. The feature PR `feature/helpers` to `main` is the operator's item. It stays draft until H5 merges, then the operator marks it ready and lands it after bot review.
+The program runs `.claude/skills/poteto-mode/playbooks/autopilot-full.md` on the slice PRs, adapted to the feature-branch rule in `AGENTS.md`. Every slice PR targets `feature/helpers`, and its owner merges it there after a clean verdict. H1, H4 and H6 are review-gated and stop at merge-ready for the operator. The feature PR `feature/helpers` to `main` is the operator's item. It stays draft until H6 merges, then the operator marks it ready and lands it after bot review.
 
 Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
@@ -51,11 +51,12 @@ These come from issue #386 and its two decision comments. They are settled and e
   - [ ] H3 after H2.
   - [ ] H4 after H1 and H3.
   - [ ] H5 after H4.
+  - [ ] H6 after H5.
 - [ ] Hold the file boundaries.
   - [ ] H1 touches only `packages/core/src/session-log/**`, `packages/contracts/src/{session-log,events}.ts`, `apps/web/src/**`, `apps/mobile/{app,lib,components}/**`, `packages/adapters/src/executor.ts` (unread and stale comments) and `packages/core/src/speech-text.ts`.
   - [ ] H2 owns `packages/core/src/helper-profile.ts`, `packages/adapters/src/runtime-worker/**`, `packages/adapters/src/builtin-tools.ts` and `packages/adapter-kit/src/types.ts`.
   - [ ] H3, H4 and H5 own `packages/db/**`, `packages/db/prisma/**`, `packages/adapters/src/executor.ts` and `packages/contracts/src/{ids,session-log}.ts`.
-- [ ] Hold the review gate. H1 and H4 change an interaction. They wait for the operator's review in chat with screenshots and a video before merge.
+- [ ] Hold the review gate. H1, H4 and H6 change an interaction. They wait for the operator's review in chat with screenshots and a video before merge.
 
 ### PR mechanics, for every PR
 
@@ -408,6 +409,76 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 - [ ] `feature/helpers` merged into the slice after the verdict, patch-id unchanged.
 - [ ] The owner merges H5 into `feature/helpers`.
 
+## Ship a computer-use profile and benchmark it on a browser task (H6)
+
+**Depends on.** H5.
+
+**Files.**
+
+- [ ] Edit `packages/core/src/helper-profile.ts`.
+- [ ] Create `packages/testkit/src/bench/travel-site/` with a static multi-page travel site and its expected answers.
+- [ ] Edit `packages/testkit/src/cli/evals.ts`, `packages/testkit/src/evals/runner.ts` and `packages/testkit/src/evals/cases.ts`.
+- [ ] Edit `packages/adapters/src/executor.ts` and the `createApp` options it is built from.
+- [ ] Create `docs/benchmarks/helpers-computer-use.md`.
+- [ ] Edit `CHANGELOG.md`.
+
+**Build.**
+
+- [ ] Connect GLM 5.3 Flash through OpenCode Go as a `ModelConnectInput`, the connection JSON `pnpm` evals already read, with no provider-specific environment variable. Before anything else, prove one tool call works, and declare whether it reads images per `model-modalities.ts`, since `computer_observe` returns screenshots. The key stays in a file outside the repo and reaches the run only as a connection secret. Estimate the total run count against the key's 12 hour validity before starting.
+- [ ] Build the travel site. A search with destination, date picker and duration range, paginated results, detail pages whose itinerary lists the cities, and a quote form that shows the total for 2 adults only once filled. It holds distractors, a cheaper circuit without Hiroshima and one departing in March. It is copied into the Docker computer and served there, so no external site is involved.
+- [ ] Write the benchmark task, "Find the 10 to 14 day Japan circuit departing in April that visits Kyoto and Hiroshima at the lowest price. Give its name, its total price for 2 adults, its duration and its link." The grader compares the four fields with the expected answer, literally.
+- [ ] Write three small development tasks on the same site that differ from the benchmark task, such as reading one detail page, filtering by duration, and filling the quote form once.
+- [ ] Add the managed `computer-use` profile to `HELPER_PROFILES`. It allows `computer_*`, `browser_*` and `search_runs`, holds `exclusive: "computer"`, and has short instructions grounded in the real tool contracts of `browser_navigate`, `browser_snapshot`, `browser_act`, `browser_run`, `computer_observe`, `computer_act` and `computer_exec`.
+- [ ] Iterate the profile instructions on the development tasks only, never on the benchmark task. Try the baseline and at most two variants, three runs each, in one log table of success rate, tool calls and tokens. The instructions freeze before the first benchmark run. The candidates cover observing before acting, preferring the snapshot over screenshots, acting by reference instead of coordinates, checking the result of each action, and a report of done, blocked or evidence.
+- [ ] Run the benchmark through the existing evals runner, with two cases, direct and helper, and a Docker computer option replacing the hard-coded fake sandbox in `cli/evals.ts`. Variant A has the main bot use the computer and browser tools directly. Variant B blocks `computer_*` and `browser_*` for the main bot through one `createApp` option that the executor reads in place of the `MAIN_BOT_BLOCKED_TOOLS` constant, so the bot delegates to `computer-use`. Five trials per variant, interleaved A then B, same model, a fresh thread and a fresh computer per trial so browser history and cache cannot carry an answer over.
+- [ ] Record per trial the success, the wall time, the time to the first reply, the main bot's context tokens at the end, the total tokens across bot and helper, and the main bot's and the total tool call counts. The runner today drops `subagent` sessions, so it counts the helper's calls separately. Write the table, the medians with min and max, a plain note that five trials per variant only shows large gaps, and the cause of each gap to `docs/benchmarks/helpers-computer-use.md`, per the benchmark checklist.
+- [ ] Keep `MAIN_BOT_BLOCKED_TOOLS` empty. Removing the computer and browser tools from every bot is decided on the results, outside this slice.
+- [ ] Extend the H5 Added entry in `CHANGELOG.md` with one sentence that bots can hand browser work to a computer helper.
+
+**You see.**
+
+- [ ] The evals run prints one row per trial and the results document shows variant A and variant B side by side.
+- [ ] In a variant B run with debug mode on, the parent's `run_subagent` step opens the `computer-use` helper's session with its browser steps.
+
+**Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] `helper-profile.test.ts` asserts the literal tools `computer-use` gets from the real catalog and that it holds `computer`. Run `pnpm exec vitest run packages/core/src/helper-profile.test.ts`.
+- [ ] The grader has a literal test against a correct answer, a wrong price, the March distractor and the circuit without Hiroshima. Run `pnpm exec vitest run packages/testkit/src/bench`.
+- [ ] With `HELPER_PROFILES` holding `computer-use`, the prompt-identity test from H2 is updated to the new catalog line only. Run `pnpm exec vitest run packages/testkit/src/runtime-worker-subagent.test.ts`.
+
+**Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `sonnet` at the PR head, per the boot recipe. The lane agents drive on `sonnet`, and every bot and helper inside a lane runs GLM 5.3 Flash.
+
+- [ ] Lane 1. Regression lane against trunk. Run the benchmark task in variant A at trunk and head. Trunk lacks the profile, so record that and gate variant A at head matching trunk's success and tool use. Save `h6-trunk-vs-head.png`. Pass when both succeed with comparable tool calls.
+- [ ] Lane 2. The `createApp` block option with variant B on and off. Save `h6-block-seam.png`. Pass when the main bot's model request lacks `browser_navigate` only with the option on.
+- [ ] Lane 3. The travel site in the Docker computer. Save `h6-site.png`. Pass when search, pagination, a detail page and the quote form all work by hand.
+- [ ] Lane 4. One variant B run with debug mode on. Save `h6-helper-steps.png`. Pass when the helper's session shows its browser steps and the bot's reply holds the four fields.
+- [ ] Lane 5. A variant B trial with a stale browser profile left by the previous trial. Save `h6-fresh-computer.png`. Pass when the trial starts with an empty history and no open tab.
+- [ ] Lane 6. Two browser tasks at once in variant B. Save `h6-lock.png`. Pass when the second `computer-use` helper is refused with the holder's id and the bot handles it.
+- [ ] Lane 7. A helper that cannot find the answer. Save `h6-blocked.png`. Pass when it asks its parent or reports blocked instead of inventing one.
+- [ ] Lane 8. The development task log. Save `h6-prompt-log.png`. Pass when every instruction variant has three runs and the frozen one is named.
+- [ ] Lane 9. The full benchmark. Save `h6-results.png`. Pass when all ten runs finish and the table is written.
+- [ ] Lane 10. Read the results document against the raw rows. Save `h6-explained.png`. Pass when every gap between A and B names its cause from the rows.
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Metric. Success rate, wall time, main bot context tokens and total tokens for the benchmark task, variant A against variant B.
+- [ ] Probe. Five interleaved runs per variant at the PR head with the same model and fresh state, plus variant A once at trunk as the baseline for lane 1.
+- [ ] Baseline. Record variant A's medians first.
+- [ ] Rule. The slice reports the numbers, it does not gate on them. When either variant succeeds in fewer than three of five trials, the document says the comparison is inconclusive and the owner stops for the operator. It fails only when a gap is reported without its cause.
+
+**Review gate.** The operator reviews before merge.
+
+- [ ] Copy lane 4, 5 and 9 screenshots into `docs/assets/helpers/h6-review-<slug>.png`.
+- [ ] Record a 30 to 60 second video of one variant B run. Save it as `docs/assets/helpers/h6-review.mp4`.
+- [ ] Post the screenshots, the video and the results table in chat. Stop at merge-ready. Wait for the operator's click.
+
+**Merge.**
+
+- [ ] Root's clean verdict at the exact head SHA.
+- [ ] Bugbot triage done.
+- [ ] `feature/helpers` merged into the slice after the verdict, patch-id unchanged.
+- [ ] The owner merges H6 into `feature/helpers` after the operator's click.
+
 ## Close the program
 
 - [ ] Every box above is checked with its evidence.
@@ -533,4 +604,18 @@ The same reviewer role reviewed the H5 change that lets a background helper ask 
 5. Keep the overloaded `helper_message` and say any message to a waiting helper answers it. Accepted.
 6. Drop `questionId`. Accepted, since a paused run has at most one question.
 7. Keep `helper.question` separate. Accepted.
+
+### Fourth review, on H6
+
+The same reviewer role reviewed the H6 slice. Its verdict was simplify. It kept the `computer-use` profile, the local travel site with distractors and a literal grader, the split between development and benchmark tasks, interleaved trials and an empty `MAIN_BOT_BLOCKED_TOOLS`.
+
+1. Reuse the evals runner instead of a new CLI. Accepted. It already reads a `ModelConnectInput`, runs trials and collects tokens. A Docker computer option replaces its fake sandbox.
+2. Name the seam for variant B. Accepted, as one `createApp` option the executor reads in place of the constant.
+3. Count the helper's tool calls, which the runner drops. Accepted.
+4. A fresh computer per trial. Accepted.
+5. Check image support and the 12 hour key budget first, and cap prompt iteration at the baseline plus two variants. Accepted.
+6. Report an inconclusive comparison instead of failing on the model's success rate. Accepted.
+7. Cut the lanes to six. Rejected, since the playbook requires ten. Two redundant lanes were replaced by lanes on the block seam and the fresh computer, and the lanes now say which model runs where.
+8. Say plainly that five trials per variant only shows large gaps. Accepted.
+9. Keep the benchmark inside the feature branch or ship it to `main` after the feature merges. Open for the operator. The plan keeps it in H6 by default, as the operator asked for it at the end of this program.
 
