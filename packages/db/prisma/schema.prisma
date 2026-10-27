@@ -521,19 +521,22 @@ model Event {
 }
 
 model Task {
-  id        String   @id @default(cuid())
-  spaceId   String
-  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  botId     String
-  bot       Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
-  threadId  String
-  thread    Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  userId    String
-  prompt    String
-  status    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  runs      Run[]
+  id                 String   @id @default(cuid())
+  spaceId            String
+  space              Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  botId              String
+  bot                Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  threadId           String
+  thread             Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  userId             String
+  prompt             String
+  status             String
+  // A helper's task only: the name and the extra instructions its run_subagent call gave it.
+  helperName         String?
+  helperInstructions String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  runs               Run[]
 
   @@index([spaceId, botId])
   @@map("tasks")
@@ -591,6 +594,9 @@ model Run {
   // A helper run only: the profile it runs, and the resource it holds while active.
   helper               String?
   exclusive            String?
+  // A conversation turn only: the main session's next entry seq when the turn read its history.
+  // A helper report at or after it is one the bot has not read yet.
+  historyThroughSeq    Int?
 
   @@unique([spaceId, clientNonce])
   @@index([status, leaseExpiresAt])

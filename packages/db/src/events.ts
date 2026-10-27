@@ -1940,7 +1940,7 @@ async function createSteeringContinuation(
     where: {
       threadId: input.threadId,
       botId: input.botId,
-      parentRunId: null,
+      ...conversationRunFilter,
       status: { in: [...ACTIVE_RUN_STATUSES] },
     },
     select: { id: true },
@@ -1980,23 +1980,8 @@ async function createSteeringContinuation(
     });
   };
   if (pending.length === 0) {
-    // A report no turn has started since went unread: the bot wakes to it. As the source
-    // message, the report would stand in for the prompt and never reach the model.
-    const report = await tx.sessionEntry.findFirst({
-      where: {
-        botId: input.botId,
-        type: "helper.report",
-        session: { threadId: input.threadId, kind: "thread" },
-      },
-      orderBy: { seq: "desc" },
-      select: { createdAt: true },
-    });
-    if (!report) return null;
-    const { _max: lastTurn } = await tx.run.aggregate({
-      where: { threadId: input.threadId, botId: input.botId, parentRunId: null },
-      _max: { startedAt: true },
-    });
-    if (lastTurn.startedAt && lastTurn.startedAt >= report.createdAt) return null;
+    // As the source message, the report would stand in for the prompt and never reach the model.
+    if (!(await hasUnreadHelperReport(tx, input))) return null;
     const { userId } = await tx.thread.findUniqueOrThrow({
       where: { id: input.threadId },
       select: { userId: true },
@@ -2015,6 +2000,28 @@ async function createSteeringContinuation(
     data: { runId: run.id, claimedAt: null },
   });
   return run.id;
+}
+
+/**
+ * Whether the bot's newest helper report in the thread came after every history its turns read,
+ * so no turn has seen it yet. Session seqs order the two without any clock.
+ */
+async function hasUnreadHelperReport(tx: Prisma.TransactionClient, input: FinalizeRunBase) {
+  const report = await tx.sessionEntry.findFirst({
+    where: {
+      botId: input.botId,
+      type: "helper.report",
+      session: { threadId: input.threadId, kind: "thread" },
+    },
+    orderBy: { seq: "desc" },
+    select: { seq: true },
+  });
+  if (!report) return false;
+  const { _max: read } = await tx.run.aggregate({
+    where: { threadId: input.threadId, botId: input.botId, ...conversationRunFilter },
+    _max: { historyThroughSeq: true },
+  });
+  return read.historyThroughSeq == null || report.seq >= read.historyThroughSeq;
 }
 
 export async function appendEventInTransaction(

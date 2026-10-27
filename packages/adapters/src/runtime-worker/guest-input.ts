@@ -10,7 +10,7 @@ import type {
 } from "@rakazo/adapter-kit";
 import type { HelperProfile } from "@rakazo/core";
 import { selectTools } from "@rakazo/core";
-import { isHelperTool } from "../builtin-tools.js";
+import { isBackgroundHelperTool, isHelperTool } from "../builtin-tools.js";
 import { catalogIndexText, isLazyCatalogControlRoute } from "../lazy-tool-catalog.js";
 import { encodeMessage } from "./framing.js";
 import { WORKER_LIMITS } from "./limits.js";
@@ -218,8 +218,9 @@ export function helperRunInput(
   harness: HarnessDeclaration,
   helper: { task: string; instructions: string; model: AgentRunModel; profile?: HelperProfile },
 ): GuestRunInput {
+  const offered = request.helper ? isBackgroundHelperTool : isHelperTool;
   const tools = agentTools(request.tools, harness, helper.profile ?? mainBotRule(request)).filter(
-    (tool) => isHelperTool(tool.name),
+    (tool) => offered(tool.name),
   );
   const parent = workerStart(
     envelope,
@@ -242,7 +243,7 @@ export function helperRunInput(
     instructions: [helper.instructions, catalogIndexText(tools)].filter(Boolean).join("\n\n"),
     history: [],
     images: [],
-    tools: parent.tools.filter((tool) => isHelperTool(tool.name)),
+    tools: parent.tools.filter((tool) => offered(tool.name)),
     model: guestModelOf(helper.model),
   };
 }

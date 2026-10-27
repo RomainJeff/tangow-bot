@@ -364,7 +364,7 @@ export function createSession(
           return { type: "tool.result", output: started };
         }
         run = helperRunInput(launched!.start, request, launched!.expectedHarness, {
-          task: call.task || "Complete the delegated task.",
+          task: call.task,
           instructions: helperInstructions(call.name, profile?.instructions, call.instructions),
           model,
           profile,

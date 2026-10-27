@@ -1767,6 +1767,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
               const loaded = await threadLoad;
               if (loaded.sessionId && !backgroundHelper)
                 sessionId = SessionId.parse(loaded.sessionId);
+              // The tail is one read from the head, so its newest seq marks what this attempt saw;
+              // a helper report after it wakes the bot once the turn ends.
+              if (!backgroundHelper && run.routineId == null && !channelId) {
+                const historyThroughSeq = entries.reduce(
+                  (next, entry) => Math.max(next, entry.seq + 1),
+                  0,
+                );
+                await deps.prisma.run.updateMany({
+                  where: { id: runId },
+                  data: { historyThroughSeq },
+                });
+              }
               if (run.routineId == null && archiveHistory) {
                 entries = await activeInteractiveHistory(deps.sessionLog, entries, run, sessionId);
               }
@@ -2551,6 +2563,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
               threadId: thread.id,
               userId: run.userId,
               prompt: call.task,
+              helperName: call.name,
+              helperInstructions: helperCallOf(call.args).instructions || null,
               status,
             },
             select: { id: true },
@@ -3542,6 +3556,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
           };
 
           const requestApproval = async () => {
+            // Nobody watches a background helper: it reports what needs a person instead.
+            if (backgroundHelper) {
+              return {
+                error: `${name} needs the user's approval, which a background helper cannot ask for. Say so in your report.`,
+              };
+            }
             if (!(await renewRunLease(deps, runId, workerId, fence))) {
               // Another worker owns the run now; exit without leaving a local pause card.
               return pauseForApproval();
@@ -5326,7 +5346,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
           runLog.sessionId = opened.sessionId;
           for (const [callId, input] of opened.awaitingResult) unansweredCalls.set(callId, input);
           const helperCall = backgroundHelper
-            ? await backgroundHelperCall(deps, run, task.prompt)
+            ? {
+                name: task.helperName ?? "helper",
+                task: task.prompt,
+                instructions: task.helperInstructions ?? "",
+                profile: run.helper,
+              }
             : undefined;
           const runtimeModel: AgentRunRequest["model"] = {
             provider: runModelProvider,
@@ -6802,34 +6827,6 @@ function serialWrites() {
     tail = next.catch(() => undefined);
     return next;
   };
-}
-
-/**
- * What a background helper runs, from the `run_subagent` call that started it: its brief is its
- * task, the rest the call's stored input. A truncated input keeps the defaults.
- */
-async function backgroundHelperCall(
-  deps: Pick<ExecutorDeps, "prisma">,
-  run: { sessionId: string; helper: string | null },
-  task: string,
-): Promise<NonNullable<AgentRunRequest["helper"]>> {
-  const { parentEntryId } = await deps.prisma.conversationSession.findUniqueOrThrow({
-    where: { id: run.sessionId },
-    select: { parentEntryId: true },
-  });
-  const launch = parentEntryId
-    ? await deps.prisma.sessionEntry.findUnique({
-        where: { id: parentEntryId },
-        select: { payload: true },
-      })
-    : null;
-  let args: Record<string, unknown> = {};
-  try {
-    const parsed: unknown = JSON.parse(String((launch?.payload as { input?: unknown })?.input));
-    if (parsed && typeof parsed === "object") args = parsed as Record<string, unknown>;
-  } catch {}
-  const call = helperCallOf(args);
-  return { name: call.name, task, instructions: call.instructions, profile: run.helper };
 }
 
 type RunLogFacts = {

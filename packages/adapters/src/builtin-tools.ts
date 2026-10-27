@@ -24,13 +24,17 @@ export const DELEGATION_TOOL_NAMES = new Set([
 export const isHelperTool = (name: string) =>
   !DELEGATION_TOOL_NAMES.has(name) && name !== "message_user";
 
+/** A background helper runs with nobody watching it: no tool may wait on the person. */
+export const isBackgroundHelperTool = (name: string) =>
+  isHelperTool(name) && !["ask_user", "request_takeover", "request_secret"].includes(name);
+
 export function helperCallOf(args: Record<string, unknown>) {
   return {
     name:
       String(args.name ?? "helper")
         .trim()
         .slice(0, 80) || "helper",
-    task: String(args.task ?? "").trim(),
+    task: String(args.task ?? "").trim() || "Complete the delegated task.",
     instructions: args.instructions ? String(args.instructions).trim() : "",
     helper: String(args.helper ?? "").trim(),
     provider: String(args.model_provider ?? "").trim(),
