@@ -81,6 +81,7 @@ export async function runTrial(
   const skillCalls: Evidence["skillCalls"] = [];
   const secrets = [options.connection.apiKey ?? "", options.connection.baseUrl ?? ""];
   let phase: FailureCategory = "harness";
+  let firstSentAt: Date | undefined;
   const seenTools = new Map<string, { name: string }>();
   let clearedToolCount = 0;
   const seenUsage = new Map<string, { inputTokens: number; outputTokens: number }>();
@@ -217,6 +218,8 @@ export async function runTrial(
         continue;
       }
       let runId: string;
+      const sentAt = Date.now();
+      firstSentAt ??= new Date(sentAt);
       if ("ask" in step) {
         runId = (
           await rpc<{ runId: string }>(app, cookie, "threads/send", { botId, text: step.ask })
@@ -367,6 +370,21 @@ export async function runTrial(
       if ("slack" in step && terminal.status === "completed") {
         await waitForMessagingDelivery(prisma, runId, deadline);
       }
+      // A background helper reports after its parent's turn and wakes it: the step ends with the last wake.
+      let endedAt = Date.now();
+      if (await prisma.run.count({ where: { OR: actorScopes(actors), trigger: "helper" } })) {
+        let quietSince: number | undefined;
+        endedAt = await poll(async () => {
+          const busy = await prisma.run.count({
+            where: { OR: actorScopes(actors), status: { in: [...ACTIVE_RUN_STATUSES] } },
+          });
+          quietSince = busy ? undefined : (quietSince ?? Date.now());
+          return quietSince !== undefined && Date.now() - quietSince >= 2_000
+            ? quietSince
+            : undefined;
+        }, deadline);
+      }
+      result.runMs = (result.runMs ?? 0) + endedAt - sentAt;
       const completions = await prisma.event.findMany({
         where: { runId, type: "agent.tool.completed" },
         orderBy: { seq: "asc" },
@@ -514,6 +532,9 @@ export async function runTrial(
         result.inputTokens = [...seenUsage.values()].reduce((n, u) => n + u.inputTokens, 0);
         result.outputTokens = [...seenUsage.values()].reduce((n, u) => n + u.outputTokens, 0);
       }
+      await measureConversation(handles.prisma, actors, firstSentAt)
+        .then((measured) => Object.assign(result, measured))
+        .catch(() => undefined);
       // Include interrupted and cleared-run calls without retaining raw arguments or ids in reports.
       await captureTools().catch(() => undefined);
       const events = [...seenTools.values()];
@@ -543,6 +564,43 @@ export async function runTrial(
     result.latencyMs = Date.now() - started;
   }
   return result;
+}
+
+/** What the conversation cost the main bot, apart from its helpers, read from what it logged. */
+async function measureConversation(
+  prisma: EvalApp["prisma"],
+  actors: readonly EvalActor[],
+  firstSentAt: Date | undefined,
+): Promise<Pick<TrialResult, "helperToolCalls" | "firstReplyMs" | "mainContextTokens">> {
+  const spaceId = { in: actors.map((actor) => actor.spaceId) };
+  const [helperToolCalls, firstReply, lastCall] = await Promise.all([
+    prisma.sessionEntry.count({
+      where: { type: "tool.call", session: { spaceId, kind: "subagent" } },
+    }),
+    firstSentAt
+      ? prisma.sessionEntry.findFirst({
+          where: {
+            type: "assistant.text",
+            createdAt: { gte: firstSentAt },
+            session: { spaceId, kind: "thread" },
+          },
+          orderBy: { createdAt: "asc" },
+          select: { createdAt: true },
+        })
+      : null,
+    // A sync helper's calls share its parent's run and end before the parent's last call.
+    prisma.usageRecord.findFirst({
+      where: { spaceId, run: { helper: null } },
+      orderBy: { createdAt: "desc" },
+      select: { inputTokens: true },
+    }),
+  ]);
+  return {
+    helperToolCalls,
+    firstReplyMs:
+      firstReply && firstSentAt ? firstReply.createdAt.getTime() - firstSentAt.getTime() : null,
+    mainContextTokens: lastCall?.inputTokens ?? null,
+  };
 }
 
 async function rpc<T>(app: App, cookie: string, proc: string, body: unknown = {}): Promise<T> {

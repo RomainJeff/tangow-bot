@@ -800,6 +800,8 @@ export interface ExecutorDeps {
   skillLock: SkillOwnerLock;
   /** SKILL_LEARNING: whether bots keep their methods as skills on their own. */
   skillLearning?: SkillLearningMode;
+  /** The tools the main bot is not offered, in place of `MAIN_BOT_BLOCKED_TOOLS`. */
+  mainBotBlockedTools?: readonly string[];
 }
 
 function isAuditableToolResult(value: unknown): value is {
@@ -5443,7 +5445,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               history: runtimeHistory,
               currentTurnImages,
               tools,
-              blockedTools: MAIN_BOT_BLOCKED_TOOLS,
+              blockedTools: deps.mainBotBlockedTools ?? MAIN_BOT_BLOCKED_TOOLS,
               helperProfiles: HELPER_PROFILES,
               secrets: runSecrets,
               model: runtimeModel,

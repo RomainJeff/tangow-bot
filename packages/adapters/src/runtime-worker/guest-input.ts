@@ -148,7 +148,10 @@ export function workerStart(
   harness: HarnessDeclaration,
 ): WorkerStartV1 {
   const offered = agentTools(request.tools, harness, mainBotRule(request));
-  const profiles = request.helperProfiles ?? [];
+  // Helpers are named only to an agent that can start one.
+  const profiles = offered.some((tool) => tool.name === "run_subagent")
+    ? (request.helperProfiles ?? [])
+    : [];
   // A harness with its own loop keeps its own prompt: Rakazo's part is appended to it.
   const instructions = harness.capabilities.includes("native-loop")
     ? (request.harnessAddendum ?? request.instructions)

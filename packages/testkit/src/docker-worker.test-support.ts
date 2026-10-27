@@ -1,21 +1,17 @@
-import type { ChildProcess } from "node:child_process";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { WorkerSpec } from "@rakazo/adapter-kit";
 import { DockerWorkerProvider } from "@rakazo/adapters";
 import { afterAll, beforeAll } from "vitest";
+import { startDockerSupervisor } from "./docker-supervisor.js";
+
+export { freePort } from "./docker-supervisor.js";
 
 /** Opt-in: needs Docker and the worker image (apps/agent-run-worker/Dockerfile), no network or keys. */
 export const dockerWorkersEnabled = process.env.VERIFY_DOCKER_WORKERS === "1";
-
-const SUPERVISOR = fileURLToPath(
-  new URL("../../../infra/sandboxes/supervisor/src/index.ts", import.meta.url),
-);
 
 export const docker = (...args: string[]) =>
   execFileSync("docker", args, { encoding: "utf8", timeout: 120_000 }).trim();
@@ -29,14 +25,6 @@ export const sandboxUser =
 
 export const dockerDesktop =
   dockerWorkersEnabled && docker("info", "--format", "{{.OperatingSystem}}") === "Docker Desktop";
-
-export async function freePort(): Promise<number> {
-  const server = createServer();
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const { port } = server.address() as { port: number };
-  await new Promise((resolve) => server.close(resolve));
-  return port;
-}
 
 export function workerSpec(attemptId: string, mounts: WorkerSpec["mounts"]): WorkerSpec {
   return {
@@ -64,38 +52,20 @@ export function useDockerSupervisor() {
         dataDir: state.dataDir,
       }),
   };
-  let child: ChildProcess | undefined;
+  let stop: (() => void) | undefined;
   beforeAll(async () => {
     if (!dockerWorkersEnabled) return;
     state.dir = await mkdtemp(path.join(tmpdir(), "rakazo-docker-workers-"));
     state.dataDir = path.join(state.dir, "data");
     await mkdir(state.dataDir, { recursive: true });
-    state.port = await freePort();
-    state.url = `http://127.0.0.1:${state.port}`;
-    child = spawn(process.execPath, ["--import", "tsx", SUPERVISOR], {
-      cwd: path.dirname(path.dirname(SUPERVISOR)),
-      stdio: ["ignore", "ignore", process.env.RAKAZO_WORKER_DEBUG ? "inherit" : "ignore"],
-      env: {
-        ...process.env,
-        DATA_DIR: state.dataDir,
-        SANDBOX_SUPERVISOR_TOKEN: state.token,
-        SUPERVISOR_PORT: String(state.port),
-        SUPERVISOR_HOST: "127.0.0.1",
-      },
-    });
-    for (let tries = 0; ; tries++) {
-      const ok = await fetch(`${state.url}/health`).then(
-        (response) => response.ok,
-        () => false,
-      );
-      if (ok) break;
-      if (tries > 100) throw new Error("The supervisor did not start");
-      await new Promise((resolve) => setTimeout(resolve, 200));
-    }
+    const supervisor = await startDockerSupervisor({ dataDir: state.dataDir, token: state.token });
+    state.url = supervisor.url;
+    state.port = Number(new URL(supervisor.url).port);
+    stop = supervisor.stop;
   }, 60_000);
   afterAll(async () => {
     if (!dockerWorkersEnabled) return;
-    child?.kill("SIGTERM");
+    stop?.();
     await rm(state.dir, { recursive: true, force: true });
   });
   return state;

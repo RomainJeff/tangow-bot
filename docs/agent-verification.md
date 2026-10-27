@@ -58,6 +58,16 @@ and synthetic services; it does not use production application data. Each trial
 uses fresh accounts and services. The runner disables its routines and cancels
 its work before proceeding; cleanup failure leaves remaining trials not run.
 
+The `browser-*` cases need `--computer docker`, which runs each trial on a new
+Docker computer and Docker workers through a supervisor of the run's own, with
+the computer and worker images built from the checkout
+(`pnpm sandbox:build`). The computer serves a synthetic travel site on its
+loopback, which only its browser reaches. `browser-direct` and `browser-helper`
+are the benchmark in
+[helpers-computer-use.md](benchmarks/helpers-computer-use.md); the
+`browser-dev-*` cases are for tuning the `computer-use` helper's instructions.
+Trials run in turn across the selected cases, so two cases interleave.
+
 Live evaluations run only through an explicit local CLI invocation. They are
 not scheduled by the nightly workflow.
 

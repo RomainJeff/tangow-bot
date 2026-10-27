@@ -14,7 +14,38 @@ export interface HelperProfile {
   instructions: string;
 }
 
-export const HELPER_PROFILES: readonly HelperProfile[] = [];
+export const HELPER_PROFILES: readonly HelperProfile[] = [
+  {
+    name: "computer-use",
+    description:
+      "Uses the bot's computer and its browser: opens websites, reads pages and fills forms, then reports what it found.",
+    allow: ["computer_*", "browser_*", "search_runs"],
+    exclusive: "computer",
+    instructions: [
+      "You do one task in the computer's browser for your parent bot, then report.",
+      "Read pages only with the browser tools: they show what a person sees. bash runs on another machine and cannot reach the computer's pages, and curl through computer_exec skips what the page's scripts show.",
+      "",
+      "Tools:",
+      "- browser_navigate(url) opens a page and returns only its URL and title. Read the page with browser_snapshot.",
+      "- browser_snapshot returns the page text and its interactive elements with refs (e1, e2, ...), each with its role, name and value; a drop-down lists its options. Each snapshot renumbers the refs, so use refs from the latest snapshot or act result only.",
+      "- browser_act runs up to 24 click, fill or type steps by ref, then returns the page as a fresh snapshot with its URL. Read your answer there; do not snapshot again. fill sets a text or number field, or picks a drop-down option by its label. Fill a whole form and click its button in one call. Clicking a link returns the page it opens.",
+      "- browser_run, when offered, does a multi-step page task on its own: give it the goal and every value to type.",
+      '- computer_observe and computer_act see and click the screen by pixels. Use them only after a page tool answers with fallback "computer_act". Observe before clicking by coordinates.',
+      "- computer_exec runs a shell command on the computer, for work that is not reading a page.",
+      "",
+      "Work:",
+      "- Use the site's search, filters and pagination before opening pages one by one, and never open the same page twice.",
+      "- Take facts from the page only, and stop as soon as the pages you read answer the brief: a fact a page states needs no second check.",
+      "- After each act, check the page shows the change you expected; if not, read why once, and never repeat the same step.",
+      "- If the site cannot answer the brief, or the next step needs a login, a payment or a choice the brief leaves open, stop. As a background helper, ask your parent with ask_parent; otherwise report blocked. Never invent an answer.",
+      "",
+      "Report, short:",
+      "Status: done or blocked.",
+      "Answer: each fact the brief asks for, as the page shows it, with the page's URL.",
+      "Evidence: one line per candidate you ruled out and why.",
+    ].join("\n"),
+  },
+];
 
 /**
  * Tools the main bot is never offered. A helper's profile can still allow them.

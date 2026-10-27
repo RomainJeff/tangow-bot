@@ -172,3 +172,77 @@ it("loads original connector names through pi's real MCP registration and wrappe
     ]),
   );
 });
+
+it("waits for a controller tool past a minute, as a helper or browser_run may take", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"], shouldAdvanceTime: true });
+  try {
+    const transcripts: unknown[] = [];
+    const { host } = recordingHost(new AbortController().signal);
+    host.decide = (async (body, expected) => {
+      if (body.type === "transcript") transcripts.push(...body.messages);
+      return expected === "steering" ? { type: "steering", messages: [] } : { type: "recorded" };
+    }) as HarnessHost["decide"];
+    host.callTool = async () => {
+      await vi.advanceTimersByTimeAsync(61_000);
+      return "The helper's report.";
+    };
+    let calls = 0;
+    host.model = async (_body, onPart) => {
+      const call = calls++ === 0;
+      onPart({
+        type: "model.event",
+        event: {
+          type: "done",
+          reason: call ? "toolUse" : "stop",
+          message: {
+            role: "assistant",
+            content: call
+              ? [{ type: "toolCall", id: "slow", name: "mcp__rakazo__slow_step", arguments: {} }]
+              : [{ type: "text", text: "Done." }],
+            api: "openai-completions",
+            provider: "openai-compatible",
+            model: "offline-fixture",
+            usage: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              totalTokens: 0,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+            },
+            stopReason: call ? "toolUse" : "stop",
+            timestamp: 0,
+          },
+        },
+      });
+      return { type: "model.end" };
+    };
+
+    await runPi(host, {
+      run: {
+        ...run,
+        tools: [
+          {
+            name: "slow_step",
+            description: "Takes a while.",
+            inputSchema: { type: "object", properties: {} },
+            where: "controller",
+          },
+        ],
+      },
+    });
+
+    expect(transcripts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "toolResult",
+          toolCallId: "slow",
+          isError: false,
+          content: [{ type: "text", text: "The helper's report." }],
+        }),
+      ]),
+    );
+  } finally {
+    vi.useRealTimers();
+  }
+});

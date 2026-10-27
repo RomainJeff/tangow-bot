@@ -11,7 +11,15 @@ export type TrialResult = {
   assisted: false;
   cleanupFailed: boolean;
   latencyMs: number;
+  /** From each message sent to its run's end, summed over the trial's messages. */
+  runMs: number | null;
+  /** From the first message sent to the bot's first words in the conversation. */
+  firstReplyMs: number | null;
   toolCalls: number;
+  /** Calls made by the bots' helpers in their own sessions, apart from `toolCalls`. */
+  helperToolCalls: number;
+  /** The input of the main bot's last model call: its context when it answered. */
+  mainContextTokens: number | null;
   inputTokens: number | null;
   outputTokens: number | null;
   costUsd: null;
@@ -67,7 +75,11 @@ export function emptyTrial(caseId: string, trial: number): TrialResult {
     assisted: false,
     cleanupFailed: false,
     latencyMs: 0,
+    runMs: null,
+    firstReplyMs: null,
     toolCalls: 0,
+    helperToolCalls: 0,
+    mainContextTokens: null,
     inputTokens: null,
     outputTokens: null,
     costUsd: null,

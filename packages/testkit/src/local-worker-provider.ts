@@ -295,6 +295,7 @@ export function localWorkerApp(root: string, mode: "memory" | "child" = "child")
 export async function computerOnVolumes(
   prisma: Pick<PrismaClient, "bot" | "computer">,
   botId: string,
+  kind: "e2b" | "docker" = "e2b",
 ): Promise<void> {
   const { computerId } = await prisma.bot.findUniqueOrThrow({
     where: { id: botId },
@@ -303,6 +304,6 @@ export async function computerOnVolumes(
   if (!computerId) return;
   await prisma.computer.update({
     where: { id: computerId },
-    data: { kind: "e2b", homeStorage: "volumes" },
+    data: { kind, homeStorage: "volumes" },
   });
 }

@@ -627,6 +627,15 @@ describe("a tool rule", () => {
     expect(await guest.replies(4)).toEqual([{ type: "refused", reason: "unknown_tool" }]);
   });
 
+  it("names no helpers to a bot that cannot start one", async () => {
+    const run = helperRun("run_no_helpers", {
+      blockedTools: ["run_subagent"],
+      helperProfiles: [RESEARCHER],
+    });
+    const guest = await run.guest();
+    expect(startOf(guest).instructions).toBe("Be brief.");
+  });
+
   it("refuses run_subagent to a harness without the subagents capability", async () => {
     const run = helperRun("run_no_subagents", { capabilities: ["native-loop"] });
     const guest = await run.guest();
