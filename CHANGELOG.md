@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
-- Helper profiles can force background execution or waiting for the result in the bot's turn, or leave the choice to the bot, on web, desktop and mobile ([profile configuration](docs/examples/helpers/README.md#the-profile-type)).
+- Helper profiles can force background execution or waiting for the result in the bot's turn, or leave the choice to the bot, on web, desktop and mobile; `computer-use` always works in the background ([profile configuration](docs/examples/helpers/README.md#the-profile-type)).
 - On web, desktop and mobile, bots now hand browser and desktop work, such as searching a site, filling a form or opening an app, to a helper that works their computer instead of driving it themselves.
 - Helper cards no longer appear in conversations on web, desktop and mobile: only the bot's replies show, and debug mode still lists each helper's steps in the run that started it.
 - Bots no longer carry the built-in recipe for delegating coding work to OpenCode on their computer.
