@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-27
+
+#### Added
+
+- **Bots can hand long tasks to a helper and keep talking.** On web, desktop and mobile, the bot answers at once, keeps chatting while the helper works, and posts the result on its own when the helper finishes. You can ask the bot where the task stands, add to it, or stop it, and when the helper needs a detail the bot asks you in its own words.
+
+#### Changed
+
+- Helper cards no longer appear in conversations on web, desktop and mobile: only the bot's replies show, and debug mode still lists each helper's steps in the run that started it.
+
 ### 2026-10-26
 
 #### Changed

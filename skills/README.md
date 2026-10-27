@@ -9,7 +9,9 @@ and `references/`.
 | `agent` | `skills/agent/<dir>/` | Bot harness | Baked root-owned and read-only at `/managed-skills/agent` in worker templates; also mounted at that path in Docker computers. |
 | `computer` | `skills/computer/<dir>/` | Coding agents on the computer | Computer only: read-only `/managed-skills/computer` mount and OpenCode startup link at `~/.config/opencode/skills`. |
 
-Put bot workflow guidance in `agent`. Put repository coding guidance in `computer`. Managed agent
+Put bot workflow guidance in `agent`. Put repository coding guidance in `computer`. A routing
+skill that hands work to a helper profile is shown, unshipped, in the
+[helper examples](../docs/examples/helpers/README.md). Managed agent
 skill directory names must equal `skillDirName(name)`, the normalized URL-encoded name. Keep the
 family small because every skill adds a catalog line on every run. Existing `builtin:` ids remain
 stable for clients; they do not allow per-bot disable settings to hide managed skills.
