@@ -4,6 +4,7 @@ import type {
   ConnectionCatalogItem,
   SandboxKind,
 } from "@rakazo/contracts";
+import type { HelperProfile } from "@rakazo/core";
 import type { SkillCollision, WorkerSkill } from "./worker-protocol.js";
 
 export interface AdapterContext {
@@ -424,6 +425,10 @@ export interface AgentRunRequest {
   history: AgentHistoryTurn[];
   currentTurnImages?: AgentInputImage[];
   tools: ConnectorTool[];
+  /** Tools of `tools` the run's own agent is never offered. A helper's profile can allow them. */
+  blockedTools?: readonly string[];
+  /** The profiles `run_subagent` can name as its `helper`. */
+  helperProfiles?: readonly HelperProfile[];
   /**
    * Values the run must never disclose. Live list: it grows while the run
    * resolves credentials, and anything exported is redacted against it.

@@ -6,6 +6,7 @@ import type {
   SubagentLog,
 } from "@rakazo/adapter-kit";
 import { createWorkerAgentRuntime, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
+import type { HelperProfile } from "@rakazo/core";
 import { describe, expect, it, onTestFinished } from "vitest";
 import {
   consume,
@@ -35,6 +36,9 @@ function helperRun(
     helperTool?: SubagentLog["executeTool"];
     finish?: SubagentLog["finish"];
     model?: AgentRunRequest["model"];
+    tools?: ConnectorTool[];
+    blockedTools?: string[];
+    helperProfiles?: HelperProfile[];
     /** Holds `startSubagent` open until it settles. */
     opening?: Promise<void>;
   } = {},
@@ -64,13 +68,16 @@ function helperRun(
       prompt: "Sort my notes.",
       instructions: "Be brief.",
       history: [{ role: "user", content: "Earlier turn." }],
-      tools: [tool("remember"), tool("run_subagent"), tool("message_user")],
+      tools: options.tools ?? [tool("remember"), tool("run_subagent"), tool("message_user")],
+      blockedTools: options.blockedTools,
+      helperProfiles: options.helperProfiles,
       model: options.model ?? {
         provider: "openai-compatible",
         id: "unused",
         apiKey: "controller-only",
       },
       attempt: { id: `${runId}-attempt`, fence: 1 },
+      resolveModel: async (provider, id) => ({ provider, id, apiKey: "controller-only" }),
       executeTool: async (name) => `parent ran ${name}`,
       startSubagent: async (call) => {
         opened.push(call);
@@ -117,25 +124,25 @@ function helperRun(
 type Guest = Awaited<ReturnType<ReturnType<typeof helperRun>["guest"]>>;
 
 /** Announces and calls `run_subagent` as frames `seq` and `seq + 1`. */
-function callHelper(guest: Guest, seq: number, callId: string) {
+function callHelper(guest: Guest, seq: number, callId: string, args: Record<string, unknown> = {}) {
   guest.send(seq, { type: "tool", name: "run_subagent", args: {}, executionId: callId });
   guest.send(seq + 1, {
     type: "tool.call",
     agent: "root",
     callId,
     name: "run_subagent",
-    args: { name: "scout", task: "Find the notes." },
+    args: { name: "scout", task: "Find the notes.", ...args },
   });
 }
 
-/** The helper calls `remember` as frames `seq` and `seq + 1`. */
-function helperRemembers(guest: Guest, seq: number, agent: string) {
-  guest.send(seq, { type: "tool", name: "remember", args: {}, executionId: `${agent}-c` });
+/** `agent` calls `name` as frames `seq` and `seq + 1`. */
+function helperRemembers(guest: Guest, seq: number, agent: string, name = "remember") {
+  guest.send(seq, { type: "tool", name, args: {}, executionId: `${agent}-c` });
   guest.send(seq + 1, {
     type: "tool.call",
     agent,
     callId: `${agent}-c`,
-    name: "remember",
+    name,
     args: {},
   });
 }
@@ -399,5 +406,127 @@ describe("a helper the controller starts for a harness with its own loop", () =>
     expect(await guest.replies(1)).toEqual([{ type: "refused", reason: "invalid" }]);
     await expect(run.run.done).rejects.toThrow("The worker broke the run protocol: invalid");
     expect(run.opened).toEqual([]);
+  });
+});
+
+const RESEARCHER: HelperProfile = {
+  name: "researcher",
+  description: "Finds sources.",
+  allow: ["rem*", "run_subagent"],
+  block: ["bash"],
+  model: { provider: "openai-compatible", id: "research-model" },
+  instructions: "Cite every source.",
+};
+
+const startOf = (guest: Guest) =>
+  guest.received.find((message) => message.kind === "worker.start")!.run;
+
+describe("a helper the call names by profile", () => {
+  it("runs with its profile's tools, instructions and model, and nothing else", async () => {
+    const run = helperRun("run_profiled", {
+      tools: ["bash", "read", "remember", "forget", "run_subagent", "message_user"].map(tool),
+      helperProfiles: [RESEARCHER],
+    });
+    const guest = await run.guest();
+    const parent = startOf(guest);
+    expect(parent.instructions).toBe(
+      "Be brief.\n\n<available_helpers>\n- researcher: Finds sources.\n</available_helpers>",
+    );
+    expect(
+      parent.tools.find((offered) => offered.name === "run_subagent")?.inputSchema.properties,
+    ).toMatchObject({ helper: { type: "string", enum: ["researcher"] } });
+
+    callHelper(guest, 1, "h1", { helper: "researcher", instructions: "Be quick." });
+    const [start] = await guest.replies(2, 1);
+    expect(start).toEqual({
+      type: "subagent.start",
+      agent: "helper:1",
+      run: {
+        botId: "bot",
+        threadId: "thread",
+        prompt: "Find the notes.",
+        instructions:
+          'You are a Rakazo subagent named "scout". You run inside the parent bot\'s turn — you are not a separate bot chat. Complete the task and return a concise result. Do not spawn bots or further subagents. Cite every source. Be quick.',
+        history: [],
+        images: [],
+        tools: [
+          { ...tool("read"), where: "guest" },
+          { ...tool("remember"), where: "controller" },
+        ],
+        model: { provider: "openai-compatible", id: "research-model" },
+      },
+    });
+    expect(run.opened.map(({ model }) => model)).toEqual([
+      { provider: "openai-compatible", id: "research-model" },
+    ]);
+
+    helperRemembers(guest, 3, "helper:1", "forget");
+    expect(await guest.replies(4)).toEqual([{ type: "refused", reason: "unknown_tool" }]);
+    expect(run.helperCalls).toEqual([]);
+  });
+
+  it("takes the call's model over its profile's", async () => {
+    const run = helperRun("run_profiled_model", { helperProfiles: [RESEARCHER] });
+    const guest = await run.guest();
+
+    callHelper(guest, 1, "h1", {
+      helper: "researcher",
+      model_provider: "openai-compatible",
+      model_id: "call-model",
+    });
+    expect(await guest.replies(2, 1)).toMatchObject([
+      { type: "subagent.start", run: { model: { id: "call-model" } } },
+    ]);
+  });
+
+  it("names the available profiles when the call names another", async () => {
+    const run = helperRun("run_profiled_unknown", { helperProfiles: [RESEARCHER] });
+    const guest = await run.guest();
+
+    callHelper(guest, 1, "h1", { helper: "writer" });
+    expect(await guest.replies(2)).toEqual([
+      { type: "error", message: 'Unknown helper "writer". Available helpers: researcher' },
+    ]);
+    expect(run.opened).toEqual([]);
+  });
+
+  it("keeps a tool the main bot blocks for the helper whose profile allows it", async () => {
+    const run = helperRun("run_main_blocked", {
+      tools: ["bash", "computer_observe", "run_subagent", "message_user"].map(tool),
+      blockedTools: ["computer_*"],
+      helperProfiles: [
+        {
+          name: "operator",
+          description: "Uses the computer.",
+          allow: ["computer_*"],
+          instructions: "",
+        },
+      ],
+    });
+    const guest = await run.guest();
+    expect(startOf(guest).tools.map((offered) => offered.name)).toEqual([
+      "bash",
+      "run_subagent",
+      "message_user",
+    ]);
+
+    callHelper(guest, 1, "h1", { helper: "operator" });
+    const [start] = await guest.replies(2, 1);
+    expect(start).toMatchObject({
+      run: {
+        tools: [
+          { name: "bash", where: "guest" },
+          { name: "computer_observe", where: "controller" },
+        ],
+      },
+    });
+    helperRemembers(guest, 3, "helper:1", "computer_observe");
+    expect(await guest.replies(4)).toEqual([{ type: "tool.result", output: "Saved." }]);
+    guest.send(5, finish("helper:1", "Looked."));
+    expect((await guest.replies(2)).at(-1)).toEqual({ type: "tool.result", output: "Looked." });
+
+    helperRemembers(guest, 6, "root", "computer_observe");
+    expect(await guest.replies(7)).toEqual([{ type: "refused", reason: "unknown_tool" }]);
+    expect(run.helperCalls).toEqual(["computer_observe"]);
   });
 });
