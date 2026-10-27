@@ -85,6 +85,7 @@ async function seedExistingDeployment() {
       trigger: "user",
       leaseFence: 2,
     },
+    select: { id: true },
   });
   for (const [id, fence, status] of [
     ["attempt_one", 1, "interrupted"],

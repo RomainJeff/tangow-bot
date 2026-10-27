@@ -359,6 +359,7 @@ export function createSession(
           task: call.task,
           args: body.args,
           model: { provider: model.provider, id: model.id },
+          profile,
         });
         helper = {
           log,
@@ -369,6 +370,8 @@ export function createSession(
           modelRequests: 0,
         };
       } catch (error) {
+        // A refused start, such as a held resource, leaves the budget for a retry.
+        helpersStarted -= 1;
         return { type: "error", message: clean(messageOf(error)) };
       }
       if (!live()) {
