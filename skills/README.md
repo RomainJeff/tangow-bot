@@ -48,14 +48,9 @@ space, after the space's team home has moved.
 ## Coding work by environment
 
 Worker native file tools and `bash` operate on `/workspace/bots/<botId>` and
-`/workspace/shared`. Apps, browser and computer-local services use Rakazo computer
-and browser tools; commands use `computer_exec`. Harnesses expose Rakazo tools
-under their own naming.
+`/workspace/shared`. Apps, browser, computer-local services and commands that only exist on the
+computer go through the managed `computer-use` helper when the bot can start it, and through the
+Rakazo computer and browser tools otherwise. Harnesses expose Rakazo tools under their own naming.
 
-OpenCode stays on the computer for P4. Invoke the managed helper there at
-`/managed-skills/agent/delegate-to-opencode/scripts/oc`, with
-`OC_BOT_ID=<botId> OC_JOBS_DIR=/workspace/bots/<botId>/oc-jobs` on every call. Briefs, job worktrees
-and reports then share volume paths with the worker. OpenCode loads computer
-skills, while the worker loads agent skills. The [execution decision and N13 live
-lane](../docs/implementation/pi-e2b/opencode-execution.md) describe the boundary
-and its recovery limits.
+OpenCode is installed on the computer image for terminal use. It loads computer
+skills, while the worker loads agent skills.

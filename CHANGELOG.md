@@ -16,6 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - On web, desktop and mobile, bots now hand browser and desktop work, such as searching a site, filling a form or opening an app, to a helper that works their computer instead of driving it themselves.
 - Helper cards no longer appear in conversations on web, desktop and mobile: only the bot's replies show, and debug mode still lists each helper's steps in the run that started it.
+- Bots no longer carry the built-in recipe for delegating coding work to OpenCode on their computer.
+
+#### Fixed
+
+- Long tool calls such as browser actions or helpers no longer lose their result after a minute for bots running on Pi, so the bot now sees what they returned.
 
 ### 2026-10-26
 

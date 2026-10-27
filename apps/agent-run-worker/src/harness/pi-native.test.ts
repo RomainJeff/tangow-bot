@@ -172,3 +172,79 @@ it("loads original connector names through pi's real MCP registration and wrappe
     ]),
   );
 });
+
+it("returns a controller tool result that arrives after pi's 60 s request default", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  try {
+    const transcripts: { role?: string; toolName?: string; isError?: boolean }[] = [];
+    const { host } = recordingHost(new AbortController().signal);
+    host.decide = (async (body, expected) => {
+      if (body.type === "transcript") transcripts.push(...(body.messages as never[]));
+      return expected === "steering" ? { type: "steering", messages: [] } : { type: "recorded" };
+    }) as HarnessHost["decide"];
+    let markStarted: () => void = () => undefined;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    host.callTool = () => {
+      markStarted();
+      return new Promise((resolve) => setTimeout(() => resolve("slow done"), 61_000));
+    };
+    let calls = 0;
+    host.model = async (_body, onPart) => {
+      const call = calls++ === 0;
+      onPart({
+        type: "model.event",
+        event: {
+          type: "done",
+          reason: call ? "toolUse" : "stop",
+          message: {
+            role: "assistant",
+            content: call
+              ? [{ type: "toolCall", id: "slow-1", name: "mcp__rakazo__slow", arguments: {} }]
+              : [{ type: "text", text: "Done." }],
+            api: "openai-completions",
+            provider: "openai-compatible",
+            model: "offline-fixture",
+            usage: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              totalTokens: 0,
+              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+            },
+            stopReason: call ? "toolUse" : "stop",
+            timestamp: 0,
+          },
+        },
+      });
+      return { type: "model.end" };
+    };
+
+    const done = runPi(host, {
+      run: {
+        ...run,
+        tools: [
+          {
+            name: "slow",
+            description: "A long controller tool.",
+            inputSchema: { type: "object", properties: {} },
+            where: "controller",
+          },
+        ],
+      },
+    });
+    await started;
+    await vi.advanceTimersByTimeAsync(70_000);
+    await done;
+
+    expect(transcripts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ role: "toolResult", toolName: "slow", isError: false }),
+      ]),
+    );
+  } finally {
+    vi.useRealTimers();
+  }
+});
