@@ -21,6 +21,7 @@ interface HelperProfile {
   allow?: readonly string[];
   block?: readonly string[];
   exclusive?: "computer";
+  executionMode?: "async" | "sync" | "auto";
   model?: { provider: string; id: string };
   instructions: string;
 }
@@ -34,6 +35,11 @@ interface HelperProfile {
 - `exclusive` holds a resource for the helper's whole run. A second helper of the same bot that
   needs it is refused until the first one ends.
 - `model` replaces the bot's model for the helper, unless the call names one.
+- `executionMode` forces background work with `"async"`, or waits for the result in the bot's
+  current turn with `"sync"`, overriding the call's `background` flag. `"auto"` or no field lets
+  the bot choose with `background` as before. The managed `computer-use` profile sets
+  `executionMode: "async"` to always run computer tasks in the background. If background helpers are
+  unavailable, a forced async call fails instead of switching to sync.
 - `MAIN_BOT_BLOCKED_TOOLS` in the same file lists the tools the bot hands to a helper. The bot
   loses one only when it can start a helper whose profile allows it, and a helper without a
   profile keeps it. It holds the computer and browser tools, which `computer-use` takes.

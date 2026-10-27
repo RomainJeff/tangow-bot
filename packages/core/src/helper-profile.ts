@@ -10,6 +10,8 @@ export interface HelperProfile {
   /** Tools removed after `allow`, the harness's own included. */
   block?: readonly string[];
   exclusive?: HelperResource;
+  /** Overrides the call's background flag; auto or omitted leaves the choice to the bot. */
+  executionMode?: "async" | "sync" | "auto";
   model?: { provider: string; id: string };
   instructions: string;
 }
@@ -21,6 +23,7 @@ export const HELPER_PROFILES: readonly HelperProfile[] = [
       "Use for anything on the computer: browsing sites, filling forms, its screen, and the commands, files or apps that exist only there. Not for what the conversation, memory, your files and shell, a web search or a page fetch already answer, and one at a time, since it holds the computer.",
     allow: ["computer_*", "browser_*", "open_path", "launch_app", "search_runs", "ask_parent"],
     exclusive: "computer",
+    executionMode: "async",
     instructions: [
       "You do one task in the computer's browser for your parent bot, then report.",
       "Read pages only with the browser tools: they show what a person sees. bash runs on another machine and cannot reach the computer's pages, and curl through computer_exec skips what the page's scripts show.",

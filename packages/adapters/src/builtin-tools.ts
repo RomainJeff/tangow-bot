@@ -888,7 +888,7 @@ that merely narrate internal operations.`,
         background: {
           type: "boolean",
           description:
-            "Keep working after this turn, for a long task. Tell the user it started; its report comes back to you.",
+            "Keep working after this turn, for a long task. Tell the user it started; its report comes back to you. A helper profile's forced execution mode overrides this flag.",
         },
       },
       required: ["name", "task"],
