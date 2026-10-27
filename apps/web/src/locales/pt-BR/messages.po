@@ -32,7 +32,7 @@ msgid "{0, plural, one {# routine} other {# routines}}"
 msgstr "{0, plural, one {# rotina} other {# rotinas}}"
 
 #. placeholder {0}: runs.length
-#: src/pages/bot-page/BotActivity.tsx:537
+#: src/pages/bot-page/BotActivity.tsx:577
 msgid "{0, plural, one {# run} other {# runs}}"
 msgstr ""
 
@@ -93,6 +93,12 @@ msgstr ""
 msgid "{0} runs · {1} tokens"
 msgstr "{0} execuções · {1} tokens"
 
+#. placeholder {0}: run.usage.inputTokens.toLocaleString()
+#. placeholder {1}: run.usage.outputTokens.toLocaleString()
+#: src/pages/shell/session-view.tsx:215
+msgid "{0} tokens in · {1} out"
+msgstr "{0} tokens de entrada · {1} de saída"
+
 #. placeholder {0}: bot.name
 #: src/pages/ExternalConversationSettings.tsx:232
 msgid "{0} will still respond to direct mentions."
@@ -144,7 +150,7 @@ msgstr "{hours}h atrás"
 msgid "{minutes}m ago"
 msgstr "{minutes}m atrás"
 
-#: src/pages/bot-page/BotActivity.tsx:290
+#: src/pages/bot-page/BotActivity.tsx:324
 msgid "{name} created"
 msgstr "{name} criado"
 
@@ -247,7 +253,7 @@ msgstr "Confirmações de ação"
 #. placeholder {0}: bot.name
 #. placeholder {0}: group.spaceName
 #. placeholder {0}: sectionMenu.section.name
-#: src/pages/bot-page/BotPage.tsx:343
+#: src/pages/bot-page/BotPage.tsx:346
 #: src/pages/BotContextMenu.tsx:86
 #: src/pages/shell/shell-overlays.tsx:350
 #: src/pages/shell/sidebar-roster.tsx:149
@@ -282,7 +288,7 @@ msgstr "Ativa: {0}"
 msgid "Activity"
 msgstr "Atividade"
 
-#: src/pages/bot-page/BotPage.tsx:268
+#: src/pages/bot-page/BotPage.tsx:271
 msgid "Activity, last run failed"
 msgstr "Atividade, a última execução falhou"
 
@@ -544,7 +550,7 @@ msgstr "Aprove no chat ou diga não para cancelar."
 msgid "Approve this server to let your agent use its tools."
 msgstr "Aprove este servidor para permitir que seu agente use suas ferramentas."
 
-#: src/pages/bot-page/BotPage.tsx:372
+#: src/pages/bot-page/BotPage.tsx:375
 #: src/pages/BotContextMenu.tsx:146
 msgid "Archive"
 msgstr "Arquivar"
@@ -807,7 +813,7 @@ msgstr "cancelar resposta"
 #: src/components/AskCard.tsx:49
 #: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:162
-#: src/pages/bot-page/BotActivity.tsx:314
+#: src/pages/bot-page/BotActivity.tsx:348
 msgid "Cancelled"
 msgstr "Cancelado"
 
@@ -892,7 +898,7 @@ msgstr "Limpar"
 msgid "Clear {0}’s conversation?"
 msgstr "Limpar a conversa do {0}?"
 
-#: src/pages/bot-page/BotPage.tsx:368
+#: src/pages/bot-page/BotPage.tsx:371
 #: src/pages/BotContextMenu.tsx:142
 msgid "Clear conversation"
 msgstr "Limpar conversa"
@@ -922,7 +928,7 @@ msgstr ""
 #: src/pages/MessagingSettingsOverlay.tsx:362
 #: src/pages/PeerMessagesOverlay.tsx:133
 #: src/pages/PeerMessagesOverlay.tsx:136
-#: src/pages/shell/session-view.tsx:95
+#: src/pages/shell/session-view.tsx:107
 #: src/pages/WindowChrome.tsx:21
 msgid "Close"
 msgstr "Fechar"
@@ -1188,6 +1194,10 @@ msgstr "Copiar"
 msgid "Copy {label}"
 msgstr ""
 
+#: src/pages/shell/session-view.tsx:245
+msgid "Copy diagnostic"
+msgstr "Copiar diagnóstico"
+
 #: src/pages/ScratchpadSection.tsx:56
 msgid "Could not add"
 msgstr "Não foi possível adicionar."
@@ -1356,7 +1366,7 @@ msgstr "Não foi possível instalar o conector"
 msgid "Could not load"
 msgstr "Não foi possível carregar"
 
-#: src/pages/bot-page/BotActivity.tsx:249
+#: src/pages/bot-page/BotActivity.tsx:283
 msgid "Could not load · Retry"
 msgstr "Não foi possível carregar · Tentar novamente"
 
@@ -1400,7 +1410,7 @@ msgid "Could not load skills"
 msgstr "Não foi possível carregar as skills"
 
 #: src/pages/PeerMessagesOverlay.tsx:147
-#: src/pages/shell/session-view.tsx:101
+#: src/pages/shell/session-view.tsx:120
 msgid "Could not load this chat."
 msgstr "Não foi possível carregar este chat."
 
@@ -1624,7 +1634,7 @@ msgid "Create group"
 msgstr "Criar grupo"
 
 #: src/pages/shell/bot-picker.tsx:74
-#: src/pages/shell/shell-main.tsx:174
+#: src/pages/shell/shell-main.tsx:175
 msgid "Create new Bot"
 msgstr "Criar novo bot"
 
@@ -1712,6 +1722,11 @@ msgstr "dia"
 msgid "days"
 msgstr "dias"
 
+#: src/pages/AccountSettingsOverlay.tsx:125
+#: src/pages/AccountSettingsOverlay.tsx:133
+msgid "Debug mode"
+msgstr "Modo de depuração"
+
 #: src/pages/SettingsOverlay.tsx:97
 msgid "Decision Model"
 msgstr ""
@@ -1735,7 +1750,7 @@ msgstr ""
 msgid "Default scope"
 msgstr "Escopo padrão"
 
-#: src/pages/bot-page/BotPage.tsx:378
+#: src/pages/bot-page/BotPage.tsx:381
 #: src/pages/BotContextMenu.tsx:150
 #: src/pages/KnowledgeSection.tsx:687
 #: src/pages/McpServersOverlay.tsx:509
@@ -1768,7 +1783,7 @@ msgstr "Excluir o grupo"
 msgid "Delete memories too"
 msgstr "Excluir memórias também"
 
-#: src/pages/bot-page/RoutineDetail.tsx:224
+#: src/pages/bot-page/RoutineDetail.tsx:225
 msgid "Delete routine"
 msgstr "Excluir rotina"
 
@@ -1867,11 +1882,6 @@ msgstr "Dispensar o erro"
 msgid "Dismissed. Reconnect anytime from MCP settings."
 msgstr "Dispensado. Reconecte a qualquer momento a partir das configurações do MCP."
 
-#: src/pages/AccountSettingsOverlay.tsx:125
-#: src/pages/AccountSettingsOverlay.tsx:133
-msgid "Display agent steps"
-msgstr "Exibir as etapas do agente"
-
 #: src/pages/plugins/advanced-integrations.tsx:253
 msgid "Display name"
 msgstr "Nome de exibição"
@@ -1887,7 +1897,7 @@ msgstr "Não tem uma conta?"
 
 #: src/components/ComputerUpdateProgress.tsx:206
 #: src/pages/ActivityList.tsx:158
-#: src/pages/bot-page/BotActivity.tsx:312
+#: src/pages/bot-page/BotActivity.tsx:346
 #: src/pages/bot-page/RoutineTriggers.tsx:304
 msgid "Done"
 msgstr "Concluído"
@@ -1923,7 +1933,7 @@ msgstr ""
 msgid "Draft skill"
 msgstr "Habilidade de rascunho"
 
-#: src/pages/bot-page/BotPage.tsx:359
+#: src/pages/bot-page/BotPage.tsx:362
 #: src/pages/BotContextMenu.tsx:137
 msgid "Duplicate"
 msgstr "Duplicar"
@@ -2047,7 +2057,7 @@ msgstr "Expandir"
 msgid "Expand {0}"
 msgstr "Expandir {0}"
 
-#: src/pages/bot-page/BotPage.tsx:363
+#: src/pages/bot-page/BotPage.tsx:366
 msgid "Export"
 msgstr "Exportar"
 
@@ -2068,7 +2078,7 @@ msgstr "Extra alta"
 
 #: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:160
-#: src/pages/bot-page/BotActivity.tsx:313
+#: src/pages/bot-page/BotActivity.tsx:347
 #: src/pages/bot-page/routine-copy.ts:63
 #: src/pages/shell/routine-run-line.tsx:48
 msgid "Failed"
@@ -2474,7 +2484,7 @@ msgstr "Carregando provedores de voz..."
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
-#: src/pages/shell/session-view.tsx:108
+#: src/pages/shell/session-view.tsx:127
 #: src/pages/shell/transcript.tsx:248
 msgid "Loading…"
 msgstr "Carregando..."
@@ -2583,6 +2593,7 @@ msgstr "Menções"
 msgid "Mentions only"
 msgstr ""
 
+#: src/pages/bot-page/BotActivity.tsx:358
 #: src/pages/shell/composer.tsx:293
 #: src/pages/shell/message-view.tsx:90
 msgid "Message"
@@ -2806,7 +2817,7 @@ msgstr "Novo espaço"
 msgid "Next"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:205
+#: src/pages/bot-page/BotActivity.tsx:239
 msgid "No activity yet"
 msgstr "Ainda não há atividade"
 
@@ -2900,7 +2911,7 @@ msgstr "Nenhum provedor encontrado"
 msgid "No remote MCP servers found"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:439
+#: src/pages/bot-page/BotActivity.tsx:479
 msgid "No report"
 msgstr "Sem relatório"
 
@@ -3036,7 +3047,7 @@ msgstr "Abrir"
 msgid "Open {0}"
 msgstr "Abrir {0}"
 
-#: src/pages/bot-page/BotActivity.tsx:443
+#: src/pages/bot-page/BotActivity.tsx:483
 msgid "Open in chat"
 msgstr "Abrir no chat"
 
@@ -3485,7 +3496,7 @@ msgstr "Redefinindo…"
 msgid "Restart to update"
 msgstr ""
 
-#: src/pages/bot-page/BotPage.tsx:353
+#: src/pages/bot-page/BotPage.tsx:356
 #: src/pages/shell/sidebar-footer.tsx:88
 #: src/pages/shell/sidebar-footer.tsx:119
 msgid "Restore"
@@ -3515,7 +3526,7 @@ msgstr "Tentar novamente"
 
 #: src/App.tsx:173
 #: src/pages/PeerMessagesOverlay.tsx:153
-#: src/pages/shell/session-view.tsx:103
+#: src/pages/shell/session-view.tsx:122
 msgid "Retry now"
 msgstr "Nova tentativa agora"
 
@@ -3556,17 +3567,17 @@ msgstr "Rotacionar a chave"
 msgid "Rotate key?"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:320
+#: src/pages/bot-page/BotActivity.tsx:358
 #: src/pages/bot-page/RoutineCreateForm.tsx:44
 msgid "Routine"
 msgstr "Rotina"
 
 #: src/components/AskCard.tsx:78
-#: src/pages/bot-page/BotActivity.tsx:281
+#: src/pages/bot-page/BotActivity.tsx:315
 msgid "Routine created"
 msgstr "Rotina criada"
 
-#: src/pages/bot-page/BotActivity.tsx:281
+#: src/pages/bot-page/BotActivity.tsx:315
 msgid "Routine created by {by}"
 msgstr "Rotina criada por {by}"
 
@@ -3588,7 +3599,7 @@ msgstr "O horário de execução deve estar no futuro."
 
 #: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:152
-#: src/pages/bot-page/BotActivity.tsx:315
+#: src/pages/bot-page/BotActivity.tsx:349
 msgid "Running"
 msgstr "Em execução"
 
@@ -3786,13 +3797,17 @@ msgstr ""
 msgid "Shared documents"
 msgstr "Documentos compartilhados"
 
+#: src/pages/AccountSettingsOverlay.tsx:128
+msgid "Show agent steps, and every run in a bot's activity."
+msgstr "Mostra as etapas do agente e cada execução na atividade de um bot."
+
 #: src/pages/shell/sidebar.tsx:133
 #: src/pages/shell/thread-header.tsx:84
 #: src/pages/shell/thread-header.tsx:85
 msgid "Show bots"
 msgstr "Mostrar bots"
 
-#: src/pages/bot-page/BotActivity.tsx:249
+#: src/pages/bot-page/BotActivity.tsx:283
 msgid "Show earlier"
 msgstr "Mostrar anteriores"
 
@@ -3805,7 +3820,7 @@ msgstr ""
 msgid "Show less"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:471
+#: src/pages/bot-page/BotActivity.tsx:511
 #: src/pages/KnowledgeSection.tsx:893
 #: src/pages/PluginsOverlay.tsx:309
 #: src/pages/shell/block-views.tsx:54
@@ -3815,10 +3830,6 @@ msgstr "Mostrar mais"
 #: src/pages/Auth.tsx:184
 msgid "Show password"
 msgstr "Mostrar senha"
-
-#: src/pages/AccountSettingsOverlay.tsx:128
-msgid "Show the tools a bot used, with their input and output."
-msgstr "Mostra as ferramentas que um bot usou, com sua entrada e saída."
 
 #: src/lib/localized-provider-hint.ts:7
 #: src/pages/Auth.tsx:233
@@ -4008,7 +4019,7 @@ msgstr "Sistema"
 msgid "Teach a task"
 msgstr "Ensinar uma tarefa"
 
-#: src/pages/shell/shell-main.tsx:218
+#: src/pages/shell/shell-main.tsx:240
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "Ensino em andamento. Pare de ensinar antes de enviar uma nova mensagem."
 
@@ -4125,7 +4136,7 @@ msgstr ""
 msgid "To:"
 msgstr "Para:"
 
-#: src/pages/bot-page/BotActivity.tsx:222
+#: src/pages/bot-page/BotActivity.tsx:256
 #: src/pages/PeerMessagesOverlay.tsx:180
 #: src/pages/shell/thread-row.tsx:108
 msgid "Today"
@@ -4297,7 +4308,7 @@ msgstr "Voz"
 msgid "Voice and replies"
 msgstr "Voz e respostas"
 
-#: src/pages/bot-page/BotActivity.tsx:316
+#: src/pages/bot-page/BotActivity.tsx:350
 msgid "Waiting"
 msgstr "Aguardando"
 
@@ -4387,7 +4398,7 @@ msgstr "Funcionando"
 msgid "Workspace root"
 msgstr "Raiz do espaço de trabalho"
 
-#: src/pages/bot-page/BotActivity.tsx:298
+#: src/pages/bot-page/BotActivity.tsx:332
 msgid "Write its first instructions"
 msgstr "Escrever as primeiras instruções"
 
@@ -4395,7 +4406,7 @@ msgstr "Escrever as primeiras instruções"
 msgid "Yearly on {date} at {time}"
 msgstr "Todo ano em {date} às {time}"
 
-#: src/pages/bot-page/BotActivity.tsx:223
+#: src/pages/bot-page/BotActivity.tsx:257
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/thread-row.tsx:109
 msgid "Yesterday"

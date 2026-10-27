@@ -32,7 +32,7 @@ msgid "{0, plural, one {# routine} other {# routines}}"
 msgstr "{0, plural, one {# задача} few {# задачи} many {# задач} other {# задачи}}"
 
 #. placeholder {0}: runs.length
-#: src/pages/bot-page/BotActivity.tsx:537
+#: src/pages/bot-page/BotActivity.tsx:577
 msgid "{0, plural, one {# run} other {# runs}}"
 msgstr ""
 
@@ -93,6 +93,12 @@ msgstr "{0} ч. сводки"
 msgid "{0} runs · {1} tokens"
 msgstr "Запусков: {0} · токенов: {1}"
 
+#. placeholder {0}: run.usage.inputTokens.toLocaleString()
+#. placeholder {1}: run.usage.outputTokens.toLocaleString()
+#: src/pages/shell/session-view.tsx:215
+msgid "{0} tokens in · {1} out"
+msgstr "{0} токенов на входе · {1} на выходе"
+
 #. placeholder {0}: bot.name
 #: src/pages/ExternalConversationSettings.tsx:232
 msgid "{0} will still respond to direct mentions."
@@ -144,7 +150,7 @@ msgstr "{hours} ч назад"
 msgid "{minutes}m ago"
 msgstr "{minutes} мин назад"
 
-#: src/pages/bot-page/BotActivity.tsx:290
+#: src/pages/bot-page/BotActivity.tsx:324
 msgid "{name} created"
 msgstr "{name} создан"
 
@@ -247,7 +253,7 @@ msgstr "Подтверждения действий"
 #. placeholder {0}: bot.name
 #. placeholder {0}: group.spaceName
 #. placeholder {0}: sectionMenu.section.name
-#: src/pages/bot-page/BotPage.tsx:343
+#: src/pages/bot-page/BotPage.tsx:346
 #: src/pages/BotContextMenu.tsx:86
 #: src/pages/shell/shell-overlays.tsx:350
 #: src/pages/shell/sidebar-roster.tsx:149
@@ -282,7 +288,7 @@ msgstr "Активна: {0}"
 msgid "Activity"
 msgstr "Активность"
 
-#: src/pages/bot-page/BotPage.tsx:268
+#: src/pages/bot-page/BotPage.tsx:271
 msgid "Activity, last run failed"
 msgstr "Активность, последний запуск не удался"
 
@@ -544,7 +550,7 @@ msgstr "Подтвердите в чате или скажите «нет», ч�
 msgid "Approve this server to let your agent use its tools."
 msgstr "Одобрите этот сервер, чтобы ваш агент мог использовать его инструменты."
 
-#: src/pages/bot-page/BotPage.tsx:372
+#: src/pages/bot-page/BotPage.tsx:375
 #: src/pages/BotContextMenu.tsx:146
 msgid "Archive"
 msgstr "Архивировать"
@@ -807,7 +813,7 @@ msgstr "Отменить ответ"
 #: src/components/AskCard.tsx:49
 #: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:162
-#: src/pages/bot-page/BotActivity.tsx:314
+#: src/pages/bot-page/BotActivity.tsx:348
 msgid "Cancelled"
 msgstr "Отменено"
 
@@ -892,7 +898,7 @@ msgstr "Очистить"
 msgid "Clear {0}’s conversation?"
 msgstr "Очистить диалог {0}?"
 
-#: src/pages/bot-page/BotPage.tsx:368
+#: src/pages/bot-page/BotPage.tsx:371
 #: src/pages/BotContextMenu.tsx:142
 msgid "Clear conversation"
 msgstr "Очистить диалог"
@@ -922,7 +928,7 @@ msgstr "Секрет клиента"
 #: src/pages/MessagingSettingsOverlay.tsx:362
 #: src/pages/PeerMessagesOverlay.tsx:133
 #: src/pages/PeerMessagesOverlay.tsx:136
-#: src/pages/shell/session-view.tsx:95
+#: src/pages/shell/session-view.tsx:107
 #: src/pages/WindowChrome.tsx:21
 msgid "Close"
 msgstr "Закрыть"
@@ -1188,6 +1194,10 @@ msgstr "Копировать"
 msgid "Copy {label}"
 msgstr ""
 
+#: src/pages/shell/session-view.tsx:245
+msgid "Copy diagnostic"
+msgstr "Скопировать диагностику"
+
 #: src/pages/ScratchpadSection.tsx:56
 msgid "Could not add"
 msgstr "Не удалось добавить"
@@ -1356,7 +1366,7 @@ msgstr "Не удалось установить коннектор"
 msgid "Could not load"
 msgstr "Не удалось загрузить"
 
-#: src/pages/bot-page/BotActivity.tsx:249
+#: src/pages/bot-page/BotActivity.tsx:283
 msgid "Could not load · Retry"
 msgstr "Не удалось загрузить · Повторить"
 
@@ -1400,7 +1410,7 @@ msgid "Could not load skills"
 msgstr ""
 
 #: src/pages/PeerMessagesOverlay.tsx:147
-#: src/pages/shell/session-view.tsx:101
+#: src/pages/shell/session-view.tsx:120
 msgid "Could not load this chat."
 msgstr "Не удалось загрузить этот чат."
 
@@ -1624,7 +1634,7 @@ msgid "Create group"
 msgstr "Создать группу"
 
 #: src/pages/shell/bot-picker.tsx:74
-#: src/pages/shell/shell-main.tsx:174
+#: src/pages/shell/shell-main.tsx:175
 msgid "Create new Bot"
 msgstr "Создать нового бота"
 
@@ -1712,6 +1722,11 @@ msgstr "день"
 msgid "days"
 msgstr "дни"
 
+#: src/pages/AccountSettingsOverlay.tsx:125
+#: src/pages/AccountSettingsOverlay.tsx:133
+msgid "Debug mode"
+msgstr "Режим отладки"
+
 #: src/pages/SettingsOverlay.tsx:97
 msgid "Decision Model"
 msgstr ""
@@ -1735,7 +1750,7 @@ msgstr ""
 msgid "Default scope"
 msgstr "Область действия по умолчанию"
 
-#: src/pages/bot-page/BotPage.tsx:378
+#: src/pages/bot-page/BotPage.tsx:381
 #: src/pages/BotContextMenu.tsx:150
 #: src/pages/KnowledgeSection.tsx:687
 #: src/pages/McpServersOverlay.tsx:509
@@ -1768,7 +1783,7 @@ msgstr "Удалить группу"
 msgid "Delete memories too"
 msgstr "Удалите воспоминания тоже"
 
-#: src/pages/bot-page/RoutineDetail.tsx:224
+#: src/pages/bot-page/RoutineDetail.tsx:225
 msgid "Delete routine"
 msgstr "Удалить задачу"
 
@@ -1867,11 +1882,6 @@ msgstr "Закрыть ошибку"
 msgid "Dismissed. Reconnect anytime from MCP settings."
 msgstr "Закрыто. Подключиться снова можно в любое время в настройках MCP."
 
-#: src/pages/AccountSettingsOverlay.tsx:125
-#: src/pages/AccountSettingsOverlay.tsx:133
-msgid "Display agent steps"
-msgstr ""
-
 #: src/pages/plugins/advanced-integrations.tsx:253
 msgid "Display name"
 msgstr "Отображаемое имя"
@@ -1887,7 +1897,7 @@ msgstr "У вас нет учетной записи?"
 
 #: src/components/ComputerUpdateProgress.tsx:206
 #: src/pages/ActivityList.tsx:158
-#: src/pages/bot-page/BotActivity.tsx:312
+#: src/pages/bot-page/BotActivity.tsx:346
 #: src/pages/bot-page/RoutineTriggers.tsx:304
 msgid "Done"
 msgstr "Готово"
@@ -1923,7 +1933,7 @@ msgstr "Скачивание…"
 msgid "Draft skill"
 msgstr "Черновик навыка"
 
-#: src/pages/bot-page/BotPage.tsx:359
+#: src/pages/bot-page/BotPage.tsx:362
 #: src/pages/BotContextMenu.tsx:137
 msgid "Duplicate"
 msgstr "Дублировать"
@@ -2047,7 +2057,7 @@ msgstr "Развернуть"
 msgid "Expand {0}"
 msgstr "Развернуть {0}"
 
-#: src/pages/bot-page/BotPage.tsx:363
+#: src/pages/bot-page/BotPage.tsx:366
 msgid "Export"
 msgstr "Экспорт"
 
@@ -2068,7 +2078,7 @@ msgstr "Очень высокий"
 
 #: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:160
-#: src/pages/bot-page/BotActivity.tsx:313
+#: src/pages/bot-page/BotActivity.tsx:347
 #: src/pages/bot-page/routine-copy.ts:63
 #: src/pages/shell/routine-run-line.tsx:48
 msgid "Failed"
@@ -2474,7 +2484,7 @@ msgstr "Загрузка поставщиков голосовой связи…
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
-#: src/pages/shell/session-view.tsx:108
+#: src/pages/shell/session-view.tsx:127
 #: src/pages/shell/transcript.tsx:248
 msgid "Loading…"
 msgstr "Загрузка…"
@@ -2583,6 +2593,7 @@ msgstr "Упоминания"
 msgid "Mentions only"
 msgstr "Только упоминания"
 
+#: src/pages/bot-page/BotActivity.tsx:358
 #: src/pages/shell/composer.tsx:293
 #: src/pages/shell/message-view.tsx:90
 msgid "Message"
@@ -2806,7 +2817,7 @@ msgstr "Новое пространство"
 msgid "Next"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:205
+#: src/pages/bot-page/BotActivity.tsx:239
 msgid "No activity yet"
 msgstr "Пока нет активности"
 
@@ -2900,7 +2911,7 @@ msgstr "Поставщики не найдены."
 msgid "No remote MCP servers found"
 msgstr "Удаленные MCP-серверы не найдены"
 
-#: src/pages/bot-page/BotActivity.tsx:439
+#: src/pages/bot-page/BotActivity.tsx:479
 msgid "No report"
 msgstr "Без отчёта"
 
@@ -3036,7 +3047,7 @@ msgstr "Открыть"
 msgid "Open {0}"
 msgstr "Открыть {0}"
 
-#: src/pages/bot-page/BotActivity.tsx:443
+#: src/pages/bot-page/BotActivity.tsx:483
 msgid "Open in chat"
 msgstr "Открыть в чате"
 
@@ -3485,7 +3496,7 @@ msgstr "Сброс…"
 msgid "Restart to update"
 msgstr "Перезапустить для обновления"
 
-#: src/pages/bot-page/BotPage.tsx:353
+#: src/pages/bot-page/BotPage.tsx:356
 #: src/pages/shell/sidebar-footer.tsx:88
 #: src/pages/shell/sidebar-footer.tsx:119
 msgid "Restore"
@@ -3515,7 +3526,7 @@ msgstr "Повторить"
 
 #: src/App.tsx:173
 #: src/pages/PeerMessagesOverlay.tsx:153
-#: src/pages/shell/session-view.tsx:103
+#: src/pages/shell/session-view.tsx:122
 msgid "Retry now"
 msgstr "Повторить попытку сейчас"
 
@@ -3556,17 +3567,17 @@ msgstr "Сменить ключ"
 msgid "Rotate key?"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:320
+#: src/pages/bot-page/BotActivity.tsx:358
 #: src/pages/bot-page/RoutineCreateForm.tsx:44
 msgid "Routine"
 msgstr "Задача"
 
 #: src/components/AskCard.tsx:78
-#: src/pages/bot-page/BotActivity.tsx:281
+#: src/pages/bot-page/BotActivity.tsx:315
 msgid "Routine created"
 msgstr "Задача создана"
 
-#: src/pages/bot-page/BotActivity.tsx:281
+#: src/pages/bot-page/BotActivity.tsx:315
 msgid "Routine created by {by}"
 msgstr "Задачу создал {by}"
 
@@ -3588,7 +3599,7 @@ msgstr "Время выполнения должно быть в будущем.
 
 #: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:152
-#: src/pages/bot-page/BotActivity.tsx:315
+#: src/pages/bot-page/BotActivity.tsx:349
 msgid "Running"
 msgstr "Выполняется"
 
@@ -3786,13 +3797,17 @@ msgstr "Общий чат с 2-6 ботами. Все отвечают в одн
 msgid "Shared documents"
 msgstr "Общие документы"
 
+#: src/pages/AccountSettingsOverlay.tsx:128
+msgid "Show agent steps, and every run in a bot's activity."
+msgstr "Показывать шаги агента и все запуски в активности бота."
+
 #: src/pages/shell/sidebar.tsx:133
 #: src/pages/shell/thread-header.tsx:84
 #: src/pages/shell/thread-header.tsx:85
 msgid "Show bots"
 msgstr "Показать ботов"
 
-#: src/pages/bot-page/BotActivity.tsx:249
+#: src/pages/bot-page/BotActivity.tsx:283
 msgid "Show earlier"
 msgstr "Показать более ранние"
 
@@ -3805,7 +3820,7 @@ msgstr ""
 msgid "Show less"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:471
+#: src/pages/bot-page/BotActivity.tsx:511
 #: src/pages/KnowledgeSection.tsx:893
 #: src/pages/PluginsOverlay.tsx:309
 #: src/pages/shell/block-views.tsx:54
@@ -3815,10 +3830,6 @@ msgstr "Показать ещё"
 #: src/pages/Auth.tsx:184
 msgid "Show password"
 msgstr "Показать пароль"
-
-#: src/pages/AccountSettingsOverlay.tsx:128
-msgid "Show the tools a bot used, with their input and output."
-msgstr ""
 
 #: src/lib/localized-provider-hint.ts:7
 #: src/pages/Auth.tsx:233
@@ -4008,7 +4019,7 @@ msgstr "Системная"
 msgid "Teach a task"
 msgstr "Научить задачу"
 
-#: src/pages/shell/shell-main.tsx:218
+#: src/pages/shell/shell-main.tsx:240
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "Обучение в процессе. Прекратите обучение, прежде чем отправлять новое сообщение."
 
@@ -4125,7 +4136,7 @@ msgstr ""
 msgid "To:"
 msgstr "К:"
 
-#: src/pages/bot-page/BotActivity.tsx:222
+#: src/pages/bot-page/BotActivity.tsx:256
 #: src/pages/PeerMessagesOverlay.tsx:180
 #: src/pages/shell/thread-row.tsx:108
 msgid "Today"
@@ -4297,7 +4308,7 @@ msgstr "Голос"
 msgid "Voice and replies"
 msgstr "Голос и ответы"
 
-#: src/pages/bot-page/BotActivity.tsx:316
+#: src/pages/bot-page/BotActivity.tsx:350
 msgid "Waiting"
 msgstr "Ожидает"
 
@@ -4387,7 +4398,7 @@ msgstr "Выполняется…"
 msgid "Workspace root"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:298
+#: src/pages/bot-page/BotActivity.tsx:332
 msgid "Write its first instructions"
 msgstr "Написать первые инструкции"
 
@@ -4395,7 +4406,7 @@ msgstr "Написать первые инструкции"
 msgid "Yearly on {date} at {time}"
 msgstr "Ежегодно {date} в {time}"
 
-#: src/pages/bot-page/BotActivity.tsx:223
+#: src/pages/bot-page/BotActivity.tsx:257
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/thread-row.tsx:109
 msgid "Yesterday"

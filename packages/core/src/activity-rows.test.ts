@@ -1,7 +1,14 @@
 import type { BotActivityItem, MessageBlock, RunActivityRow } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import type { ActivityRead } from "./activity-rows.js";
-import { dayMarkers, foldActivity, recapView, reduceActivity, runRecap } from "./activity-rows.js";
+import {
+  dayMarkers,
+  foldActivity,
+  recapView,
+  reduceActivity,
+  runRecap,
+  runTitle,
+} from "./activity-rows.js";
 
 function row(id: string, overrides: Partial<RunActivityRow> = {}): RunActivityRow {
   return {
@@ -404,5 +411,19 @@ describe("recapView", () => {
     expect(recapView({ kind: "failed" }, { failed: false, sourceMessageId: null }).body).toEqual({
       kind: "failed",
     });
+  });
+});
+
+describe("runTitle", () => {
+  const words = { routine: "Routine", message: "Message" };
+
+  it("names a routine run after its routine, and a chat run after the message that started it", () => {
+    expect(runTitle(row("r1"), words)).toBe("Morning digest");
+    expect(runTitle(row("r2", { routineId: null, routineName: null }), words)).toBe("Routine");
+    const chat = { trigger: "user" as const, routineId: null, routineName: null };
+    expect(runTitle(row("r3", { ...chat, promptSnippet: "Compare flights" }), words)).toBe(
+      "Compare flights",
+    );
+    expect(runTitle(row("r4", chat), words)).toBe("Message");
   });
 });

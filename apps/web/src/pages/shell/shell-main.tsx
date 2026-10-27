@@ -9,6 +9,7 @@ import { dictation } from "../../lib/dictation";
 import { rpc } from "../../lib/rpc";
 import { Composer } from "./composer";
 import { botPageFor, threadJumpLocation } from "./layout";
+import { SessionView } from "./session-view";
 import { skillPageView } from "./skill-link";
 import { ThreadHeader } from "./thread-header";
 import { Transcript } from "./transcript";
@@ -75,7 +76,7 @@ export function ShellMain({
   const { panelCoversColumn } = panels;
   const { callOpen, setCallOpen, voiceStatus } = voice;
   const { activeSnapshot, view } = thread;
-  const { openSettings, setUsage, setPeerConversation } = overlays;
+  const { openSettings, setUsage, setPeerConversation, runView, setRunView } = overlays;
   const { setReplyTarget, setRewindArtifacts } = draft;
   const openBot = useCallback(
     (id: string, messageId?: string) => navigate(threadJumpLocation({ botId: id, messageId })),
@@ -213,6 +214,27 @@ export function ShellMain({
               onSpeak={voice.speakMessage}
             />
           )}
+          {runView ? (
+            <SessionView
+              key={runView.runId}
+              target={{ kind: "run", runId: runView.runId, title: runView.title }}
+              context={{
+                // The run's own chat, which need not be the one open behind the dialog.
+                artifactTarget: runView.groupId
+                  ? { groupId: runView.groupId }
+                  : { botId: runView.botId },
+                inGroup: runView.groupId !== null,
+                viewerUserId: userId,
+                peerBot: thread.resolveTranscriptBot,
+                onOpenBot: openBot,
+                onOpenPeerMessages: setPeerConversation,
+                onRefresh: sync.refreshActiveThread,
+                onBotChanged: refreshBots,
+                onAddRoutine: addSkillRoutine,
+              }}
+              onClose={() => setRunView(null)}
+            />
+          ) : null}
           {recording ? (
             <div className="pb-2 text-center text-meta text-destructive">
               <Trans>Teaching in progress. Stop teaching before sending a new message.</Trans>

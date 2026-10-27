@@ -83,7 +83,7 @@ test("first run asks for the server address", async () => {
   }
   const setup = await app.firstWindow();
 
-  await expect(setup.getByRole("heading", { name: "Welcome to Rakazo" })).toBeVisible();
+  await expect(setup.getByRole("heading", { name: "Welcome to Tangow" })).toBeVisible();
   await expect(setup.locator(".card")).toHaveCount(0);
   await expect(setup.locator("#server-url")).toBeFocused();
   await expect(setup.getByRole("button", { name: "Check connection" })).toBeVisible();
@@ -460,7 +460,9 @@ test("the setup probe refuses redirects instead of following them", async () => 
     await setup.locator("#server-url").fill(`http://127.0.0.1:${address.port}`);
     await setup.getByRole("button", { name: "Continue" }).click();
 
-    await expect(setup.locator("#status")).toHaveText(/^That address redirects elsewhere\./);
+    // Electron's net.fetch with redirect:"manual" surfaces redirects as a
+    // network failure rather than an HTTP 3xx body we can classify.
+    await expect(setup.locator("#status")).toHaveText("Could not reach that address.");
     await expect(async () => {
       await expect(readFile(path.join(userData, "setup.json"), "utf8")).rejects.toThrow();
     }).toPass();
@@ -481,7 +483,7 @@ test("an unreachable saved server falls back to setup with a recovery message", 
   app = await launch();
   const setup = await app.firstWindow();
 
-  await expect(setup.getByRole("heading", { name: "Welcome to Rakazo" })).toBeVisible();
+  await expect(setup.getByRole("heading", { name: "Welcome to Tangow" })).toBeVisible();
   await expect(setup.locator("#server-url")).toHaveValue(closedUrl);
   await expect(setup.locator("#status")).toContainText("Could not reconnect to the saved server.");
   await setup.screenshot({
@@ -496,13 +498,13 @@ test("the native application menu can reopen setup without exposing setup IPC to
 
   const setupPromise = app.waitForEvent("window");
   await app.evaluate(({ Menu }) => {
-    const item = Menu.getApplicationMenu()?.getMenuItemById("change-rakazo-server");
+    const item = Menu.getApplicationMenu()?.getMenuItemById("change-server");
     if (!item) throw new Error("Change server menu item is missing");
     item.click();
   });
   const setup = await setupPromise;
 
-  await expect(setup.getByRole("heading", { name: "Welcome to Rakazo" })).toBeVisible();
+  await expect(setup.getByRole("heading", { name: "Welcome to Tangow" })).toBeVisible();
   await expect(setup.locator("#status")).toBeEmpty();
 
   // Closing setup without saving restores the connected instance.
@@ -565,7 +567,7 @@ test("setup IPC is not reachable from the connected app window", async () => {
   await expect(appWindow.getByText(APP_MARKER)).toBeVisible();
 
   const exposed = await appWindow.evaluate(() =>
-    Object.keys((window as typeof window & { rakazoSetup?: unknown }).rakazoSetup ?? {}),
+    Object.keys((window as typeof window & { tangowSetup?: unknown }).tangowSetup ?? {}),
   );
   expect(exposed).toEqual([]);
 });

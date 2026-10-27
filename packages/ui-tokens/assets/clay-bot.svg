@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><g transform="translate(512 512) scale(4.6)"><defs>
+  <path id="body" d="M-48 80 L52 80 C84 80 101 66 101 38 C101 4 90 -22 67.1 -42.15 Q66 -43.85 64.06 -44.33 L-77.06 -79.52 Q-79 -80 -79.45 -78.05 C-81.5 -68 -93 -58 -94 -40 C-95 -28 -93 -18 -93 -6 C-93 10 -101 22 -101 40 C-101 66 -82 80 -48 80Z"/>
+  <clipPath id="bodyClip"><use href="#body"/></clipPath>
+  <linearGradient id="tone" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#38383C"/>
+    <stop offset=".55" stop-color="#202023"/>
+    <stop offset="1" stop-color="#121214"/>
+  </linearGradient>
+  <radialGradient id="sheen" cx="-40" cy="-30" r="95" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#fff" stop-opacity=".10"/>
+    <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+  </radialGradient>
+  <filter id="rim" x="-20%" y="-20%" width="140%" height="140%">
+    <feGaussianBlur in="SourceAlpha" stdDeviation="7"/>
+    <feOffset dx="-6" dy="-7" result="b"/>
+    <feComposite in="SourceAlpha" in2="b" operator="out" result="edge"/>
+    <feFlood flood-color="#000" flood-opacity=".55"/>
+    <feComposite in2="edge" operator="in" result="dark"/>
+    <feGaussianBlur in="SourceAlpha" stdDeviation="4"/>
+    <feOffset dx="3" dy="4" result="b2"/>
+    <feComposite in="SourceAlpha" in2="b2" operator="out" result="edge2"/>
+    <feFlood flood-color="#fff" flood-opacity=".10"/>
+    <feComposite in2="edge2" operator="in" result="light"/>
+    <feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="dark"/><feMergeNode in="light"/></feMerge>
+  </filter>
+  <filter id="grain" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="2" seed="7"/>
+    <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .09 0"/>
+  </filter>
+  <radialGradient id="hole" cx="-58" cy="-30.5" r="11" gradientUnits="userSpaceOnUse">
+    <stop offset=".35" stop-color="#030304"/>
+    <stop offset="1" stop-color="#0b0b0c"/>
+  </radialGradient>
+  <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.2"/></filter>
+</defs>
+<g filter="url(#rim)">
+  <use href="#body" fill="url(#tone)"/>
+  <g clip-path="url(#bodyClip)">
+    <use href="#body" fill="url(#sheen)"/>
+    <rect x="-110" y="-90" width="220" height="180" filter="url(#grain)"/>
+    <g fill="none" stroke="#fff" stroke-opacity=".045" stroke-width="1" stroke-linecap="round">
+      <path d="M-60 -62 Q-30 -60 -4 -52"/><path d="M-62 -57 Q-34 -55 -10 -48"/><path d="M-58 -52 Q-36 -51 -18 -45"/>
+      <path d="M8 -42 Q30 -36 50 -27"/><path d="M12 -37 Q32 -31 48 -22"/><path d="M18 -32 Q34 -27 46 -18"/>
+      <path d="M-6 64 Q14 70 30 76"/><path d="M-2 60 Q16 66 34 73"/>
+    </g>
+  </g>
+</g>
+<ellipse cx="-58" cy="-28.76" rx="10.5" ry="11" fill="#2b2b2e" filter="url(#soft)" transform="translate(1.2 1.6)"/>
+<ellipse cx="-58" cy="-28.76" rx="9.6" ry="10.2" fill="url(#hole)"/>
+<path d="M-49.2 -26 A9.2 9.8 0 0 1 -60 -18.8" fill="none" stroke="#4a4a4f" stroke-opacity=".7" stroke-width="1.1" stroke-linecap="round" filter="url(#soft)"/>
+</g></svg>

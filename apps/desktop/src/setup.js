@@ -1,5 +1,5 @@
 (() => {
-  const bridge = window.rakazoSetup;
+  const bridge = window.tangowSetup;
   document.documentElement.dataset.platform = bridge?.platform ?? "browser";
 
   const form = document.getElementById("setup");
@@ -99,7 +99,7 @@
       if (state.error) setStatus(state.error, "error");
       serverUrl.focus();
     } catch {
-      setStatus("Setup could not start. Quit Rakazo and try again.", "error");
+      setStatus("Setup could not start. Quit Tangow and try again.", "error");
       setBusy(true);
     }
   }

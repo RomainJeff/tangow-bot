@@ -26,6 +26,8 @@ export type EvalApp = {
   /** Where the trial's app keeps its files, skills included. */
   dataDir: string;
   harnessIssues?: readonly string[];
+  /** Readies each bot the trial creates, before its first message. */
+  prepareBot?: (botId: string) => Promise<void>;
   connector?: { records: readonly unknown[] };
   stop: () => Promise<void>;
 };
@@ -77,7 +79,6 @@ export async function runTrial(
   let messagingAddress = "";
   let messagingOriginThreadId: string | null = null;
   const skillCalls: Evidence["skillCalls"] = [];
-  const skillNudges: Evidence["skillNudges"] = [];
   const secrets = [options.connection.apiKey ?? "", options.connection.baseUrl ?? ""];
   let phase: FailureCategory = "harness";
   const seenTools = new Map<string, { name: string }>();
@@ -147,6 +148,7 @@ export async function runTrial(
         notifyOnFinish: false,
       });
       botId = bot.id;
+      await handles?.prepareBot?.(botId);
       const persistedBot = await prisma.bot.findUniqueOrThrow({
         where: { id: botId },
         select: { userId: true, spaceId: true },
@@ -365,10 +367,6 @@ export async function runTrial(
       if ("slack" in step && terminal.status === "completed") {
         await waitForMessagingDelivery(prisma, runId, deadline);
       }
-      // The skill nudge runs after the run completes; the next step must see what it saved.
-      for (const signal of await waitForSkillNudge(prisma, runId, deadline)) {
-        skillNudges.push({ step: stepIndex + 1, signal });
-      }
       const completions = await prisma.event.findMany({
         where: { runId, type: "agent.tool.completed" },
         orderBy: { seq: "asc" },
@@ -403,6 +401,8 @@ export async function runTrial(
         .join("\n");
     }
     const files: Evidence["files"] = {};
+    // A worker run leaves the computer asleep; awake, it reads the files from the bot's volumes.
+    if (scenario.files?.length) await rpc(handles.app, cookie, "computer/boot", { botId });
     for (const path of scenario.files ?? []) {
       try {
         files[path] = (
@@ -477,7 +477,6 @@ export async function runTrial(
       },
       skillsWritten,
       skillCalls,
-      skillNudges,
     };
     phase = "harness";
     result.criteria = scenario.grade(evidence);
@@ -592,26 +591,6 @@ async function waitForMessagingDelivery(
       outbound.every((row) => row.providerHandle !== null || row.status === "failed")
       ? true
       : undefined;
-  }, deadline);
-}
-
-/** A nudge marked as running is waited for until its turn ends; returns the signals it ran on. */
-async function waitForSkillNudge(
-  prisma: EvalApp["prisma"],
-  runId: string,
-  deadline: number,
-): Promise<string[]> {
-  return poll(async () => {
-    const phases = (
-      await prisma.event.findMany({
-        where: { runId, type: "agent.skill.nudge" },
-        select: { payload: true },
-      })
-    ).map(({ payload }) => payload as { phase?: string; mode?: string; signal?: string });
-    const ran = phases.flatMap((p) =>
-      p.phase === "decided" && p.mode === "on" ? [String(p.signal)] : [],
-    );
-    return ran.length === 0 || phases.some((p) => p.phase === "ended") ? ran : undefined;
   }, deadline);
 }
 

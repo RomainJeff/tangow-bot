@@ -3,18 +3,19 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { ComposioEmulator, PostgresSessionLog } from "@rakazo/adapters";
-import type { AskDraftEdits, SessionEntry, SessionId } from "@rakazo/contracts";
-import { SessionId as SessionIdSchema } from "@rakazo/contracts";
+import type { AskDraftEdits } from "@rakazo/contracts";
 import { expect } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
 import { sessionCookieHeader } from "./index.js";
+import { computerOnVolumes, localWorkerApp } from "./local-worker-provider.js";
 import type { ModelEmulatorStep } from "./model-emulator.js";
 import { startModelEmulator } from "./model-emulator.js";
+import { offeredToolNames } from "./worker-run-fixture.js";
 
 type App = { request: (input: string, init?: RequestInit) => Promise<Response> };
 type Handles = Awaited<ReturnType<typeof createApp>>;
 const fixtureOrigin = "http://127.0.0.1:5173";
-export const fixtureKey = "offline-product-fixture-key";
+const fixtureKey = "offline-product-fixture-key";
 
 /** What the model tells the person, which only message_user carries. */
 export function reply(message: string, id = "journey-reply") {
@@ -24,9 +25,11 @@ export function reply(message: string, id = "journey-reply") {
 /** The model's turn after its message_user call, with nothing left to say. */
 export const DONE: ModelEmulatorStep = { expect() {}, response: { type: "text", text: "" } };
 
-export function payloadOf(entry: SessionEntry | undefined) {
-  return (entry?.payload ?? {}) as Record<string, unknown>;
-}
+/** The model's turn after a call that paused the run, which Pi closes once it reads that it waits. */
+export const WAITING: ModelEmulatorStep = {
+  expect() {},
+  response: { type: "text", text: "Waiting." },
+};
 
 export type JourneyFixture = {
   app: App;
@@ -37,41 +40,38 @@ export type JourneyFixture = {
   log: PostgresSessionLog;
   send: (
     text: string,
-    options?: {
-      replyToMessageId?: string;
-      replyQuote?: string;
-      clientNonce?: string;
-      draft?: AskDraftEdits & { messageId: string; text: string };
-    },
+    options?: { draft?: AskDraftEdits & { messageId: string; text: string } },
   ) => Promise<{
     runId: string;
-    sessionId: SessionId;
-    executionSessionId: () => Promise<SessionId>;
     settled: (status: string) => Promise<void>;
   }>;
 };
 
+/**
+ * One user's product journey through the API, each bot run in a local in-memory worker as a
+ * deployment runs it, against the model emulator's `steps`.
+ */
 export async function journey(
   steps: ModelEmulatorStep[],
   drive: (fixture: JourneyFixture) => Promise<void>,
-  app: Pick<
-    NonNullable<Parameters<typeof createApp>[0]>,
-    "agentRuntime" | "skillLearning" | "composio"
-  > = {},
+  app: Pick<NonNullable<Parameters<typeof createApp>[0]>, "composio"> = {},
 ) {
-  const model = await startModelEmulator({ apiKey: fixtureKey, steps });
+  const model = await startModelEmulator({
+    apiKey: fixtureKey,
+    steps: steps.map(offeredToolNames),
+  });
   const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-offline-product-"));
   let stop: (() => Promise<void>) | undefined;
   try {
     const { createApp } = await import("../../../apps/api/src/app.ts");
     const handles = await createApp({
+      ...localWorkerApp(path.join(dataDir, "workers"), "memory"),
       databaseUrl: process.env.DATABASE_URL!,
       realtimeDatabaseUrl: process.env.DATABASE_URL!,
       authUrl: fixtureOrigin,
       webOrigin: fixtureOrigin,
       dataDir,
       sandboxProvider: "fake",
-      agentRuntime: "pi",
       wakeupDriver: "memory",
       signupsEnabled: "true",
       composio: new ComposioEmulator(),
@@ -106,6 +106,7 @@ export async function journey(
       modelProvider: model.model.provider,
       modelId: model.model.id,
     });
+    await computerOnVolumes(handles.prisma, bot.id);
     await drive({
       app: handles.app,
       cookie,
@@ -119,20 +120,8 @@ export async function journey(
           text,
           ...options,
         });
-        const thread = await handles.prisma.thread.findFirstOrThrow({
-          where: { botId: bot.id },
-          select: { sessionId: true },
-        });
         return {
           runId: sent.runId,
-          sessionId: thread.sessionId as SessionId,
-          async executionSessionId() {
-            const run = await handles.prisma.run.findUniqueOrThrow({
-              where: { id: sent.runId },
-              select: { sessionId: true },
-            });
-            return SessionIdSchema.parse(run.sessionId);
-          },
           async settled(status) {
             await expect
               .poll(

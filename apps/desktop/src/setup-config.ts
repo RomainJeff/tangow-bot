@@ -142,7 +142,7 @@ export function sessionPartitionForServerUrl(targetUrl: string): string | null {
     const url = new URL(targetUrl);
     if (url.protocol !== "http:" && url.protocol !== "https:") return null;
     const digest = createHash("sha256").update(url.origin).digest("hex").slice(0, 24);
-    return `persist:rakazo-${digest}`;
+    return `persist:tangow-${digest}`;
   } catch {
     return null;
   }

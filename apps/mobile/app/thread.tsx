@@ -143,7 +143,6 @@ import { Surface } from "../components/surface";
 import { TablePreview } from "../components/table-preview";
 import { TypingBubble } from "../components/typing-bubble";
 import { UserBubble } from "../components/user-bubble";
-import { useDisplayAgentSteps } from "../lib/agent-steps-pref";
 import {
   applyMobileThreadEvent,
   blockText,
@@ -181,6 +180,7 @@ import {
 import { botMessageCard } from "../lib/bot-message-card";
 import { noteBotRunEnded } from "../lib/bot-page-state";
 import { CHAT_MOTION, useChatReducedMotion } from "../lib/chat-motion";
+import { useDebugMode } from "../lib/debug-mode";
 import type { CardEdits } from "../lib/draft-edit";
 import { draftEdit, dropDraftEdit, syncDraftEdit } from "../lib/draft-edit";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
@@ -524,7 +524,7 @@ function Thread() {
     () => ({ open: setTablePreview, label: () => t("Table"), hint: t("Opens the full table") }),
     [t],
   );
-  const showSteps = useDisplayAgentSteps();
+  const showSteps = useDebugMode();
   const drawnRows = useRef<ReadonlyMap<string, ThreadRow>>(new Map());
   const view = useMemo((): ThreadView => {
     const projected = projectThreadView(snap?.entries ?? [], {
@@ -3433,7 +3433,7 @@ const MessageBubble = memo(function MessageBubble({
 }) {
   const tokens = mobileTokens();
   const { t } = useI18n();
-  const showSteps = useDisplayAgentSteps();
+  const showSteps = useDebugMode();
   const artifactTarget: MobileArtifactTarget = groupId ? { groupId } : { botId };
   const cardBotId = message.role === "bot" ? message.botId : botId;
   // The projection rebuilds the message on every event: keyed on its mentions' content, the
@@ -4276,7 +4276,7 @@ function SessionSheet({
   const tokens = mobileTokens();
   const colorScheme = useResolvedAppearance();
   const { t } = useI18n();
-  const showSteps = useDisplayAgentSteps();
+  const showSteps = useDebugMode();
   const [entries, setEntries] = useState<SessionEntry[] | "failed" | null>(null);
   useEffect(() => {
     let open = true;

@@ -22,7 +22,6 @@ import { BotAvatar } from "../components/bot-avatar";
 import { NativeMenu } from "../components/native-menu";
 import { ServerSheet } from "../components/server-sheet";
 import { UserAvatar } from "../components/user-avatar";
-import { setDisplayAgentSteps, useDisplayAgentSteps } from "../lib/agent-steps-pref";
 import type { MobileBot, MobileMe } from "../lib/api";
 import {
   currentApiBase,
@@ -43,6 +42,7 @@ import {
 } from "../lib/appearance";
 import { explicitSignInRoute } from "../lib/auth-routing";
 import { confirmDeleteBot } from "../lib/bot-lifecycle";
+import { setDebugMode, useDebugMode } from "../lib/debug-mode";
 import { setUiLocale, useI18n } from "../lib/i18n";
 import { userInitials } from "../lib/inbox";
 import type { LiveNotificationSettings } from "../lib/live-notifications";
@@ -94,7 +94,7 @@ export default function Account() {
   } | null>(null);
   const { avatarStyle, updateAvatarStyle } = useAvatarStyle();
   const appearance = getCachedAppearancePreference();
-  const agentSteps = useDisplayAgentSteps();
+  const debug = useDebugMode();
   const styles = useThemedStyles(createAccountStyles);
   const versionInfo = getAppVersionInfo();
   const updateLabel = formatUpdateLabel(versionInfo.update, t);
@@ -304,13 +304,13 @@ export default function Account() {
           </View>
         </View>
 
-        <View accessibilityLabel={t("Display agent steps")} style={styles.profile}>
+        <View accessibilityLabel={t("Debug mode")} style={styles.profile}>
           <SettingSwitch
-            label={t("Display agent steps")}
-            detail={t("Show the tools a bot used, with their input and output.")}
-            value={agentSteps}
+            label={t("Debug mode")}
+            detail={t("Show agent steps, and every run in a bot's activity.")}
+            value={debug}
             disabled={false}
-            onChange={(next) => void setDisplayAgentSteps(next)}
+            onChange={(next) => void setDebugMode(next)}
           />
         </View>
 

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { runTrial } from "./evals/runner.js";
+import { computerOnVolumes, localWorkerApp } from "./local-worker-provider.js";
 import { startModelEmulator } from "./model-emulator.js";
 
 const databaseAvailable = process.env.VERIFY_DATABASE === "1" && Boolean(process.env.DATABASE_URL);
@@ -24,7 +25,7 @@ describe.skipIf(!databaseAvailable)("eval history accounting", () => {
             response: {
               type: "tool" as const,
               id: `${turn}-write`,
-              name: "write_file",
+              name: "write",
               arguments: { path: `results/${turn}.txt`, content: turn },
             },
           },
@@ -32,11 +33,11 @@ describe.skipIf(!databaseAvailable)("eval history accounting", () => {
             expect(request) {
               const tool = request.messages.findLast((message) => message.role === "tool");
               expect(tool?.tool_call_id).toBe(`${turn}-write`);
-              expect(JSON.parse(String(tool?.content))).toMatchObject({ ok: true });
+              expect(String(tool?.content)).toContain("Successfully wrote");
             },
             response: { type: "text" as const, text: `Saved ${turn} turn.` },
           },
-          // That text never reached the person, so the runtime reminds the model once.
+          // That text never reached the person, so the harness reminds the model once.
           { expect() {}, response: { type: "text" as const, text: `Saved ${turn} turn.` } },
         ]),
       });
@@ -68,20 +69,25 @@ describe.skipIf(!databaseAvailable)("eval history accounting", () => {
             },
             timeoutMs: 20_000,
             maxToolCalls,
-            createApp: (composio) =>
-              createApp({
+            createApp: async (composio) => {
+              const handles = await createApp({
+                ...localWorkerApp(path.join(dataDir, "workers"), "memory"),
                 databaseUrl: process.env.DATABASE_URL!,
                 realtimeDatabaseUrl: process.env.DATABASE_URL!,
                 authUrl: "http://127.0.0.1:5173",
                 webOrigin: "http://127.0.0.1:5173",
                 dataDir,
                 sandboxProvider: "fake",
-                agentRuntime: "pi",
                 wakeupDriver: "memory",
                 signupsEnabled: "true",
                 composio,
                 encryptionKey: "offline-eval-history-encryption-key",
-              }),
+              });
+              return {
+                ...handles,
+                prepareBot: (botId) => computerOnVolumes(handles.prisma, botId),
+              };
+            },
           },
         );
         expect(result.cleanupFailed).toBe(false);
@@ -90,8 +96,8 @@ describe.skipIf(!databaseAvailable)("eval history accounting", () => {
           model.assertComplete();
           expect(result).toMatchObject({ status: "passed", category: null, reason: null });
           expect(result.trace).toEqual([
-            { step: 1, status: "completed", tools: ["write_file"] },
-            { step: 3, status: "completed", tools: ["write_file"] },
+            { step: 1, status: "completed", tools: ["write"] },
+            { step: 3, status: "completed", tools: ["write"] },
           ]);
         } else {
           // Cleanup may abort the last model response as soon as the second tool

@@ -7,12 +7,10 @@ model can demonstrate that it chooses a useful action for a natural request.
 | Layer | Real components | Stand-ins | Command |
 | --- | --- | --- | --- |
 | Existing fast tests | Product functions and contracts | Scripted agent, services, sandbox | `pnpm test` |
-| Pi protocol regressions | Pi agent loop, HTTP/SSE parsing, tool dispatch | Loopback model endpoint, tool effects | `pnpm test:pi` |
-| Pi product journey | API, saved model connection, Postgres, executor, Pi | Model endpoint, sandbox, connectors | `pnpm test:integration` |
-| Computer replay | Pi, browser tool handlers, page state | Model endpoint, browser and sandbox | `pnpm test` |
-| Docker computer replay | Pi, supervisor, Chromium, page helper, downloads and files | Model endpoint, local fixture website | `pnpm test:computer-replay` |
-| Agent quality | Product API, Postgres, executor, Pi, real model | Sandbox and connected services | `pnpm test:evals --live ...` |
-| Vision acceptance | Product API, Pi, real vision model, E2B desktop | Fixture website | `pnpm test:computer` |
+| Pi SDK regressions | Pi sessions, transcripts, HTTP/SSE parsing | Loopback model endpoint | `pnpm test:pi` |
+| Worker runs | Executor, controller, Pi native guest, volumes | Model endpoint, local workers | `pnpm test` |
+| Product journeys | API, saved model connection, Postgres, executor, worker | Model endpoint, sandbox, connectors | `pnpm test:integration` |
+| Agent quality | Product API, Postgres, executor, Pi in a local worker, real model | Computer and connected services | `pnpm test:evals --live ...` |
 
 Default and PR tests never require paid inference. Nightly runs only the web
 tests with emulated providers. Docker topology and browser replay have a manual
@@ -29,85 +27,13 @@ Each step validates the actual request before streaming a response, and tests
 must assert that all expected steps were consumed without unexpected requests.
 The next request must contain the tool result from real execution.
 
-Coverage includes fragmented tool arguments, tool failures, rejected model
-requests, interrupted streams, cancellation of a quiet stream, and concurrent
-connections. The Postgres journey also verifies the persisted run, message and
-file through the product boundary.
+The worker suites (`packages/testkit/src/runtime-worker-*.test.ts`) run the Pi native guest
+against the real controller: tool failures, rejected model requests, interrupted streams,
+cancellation, pauses, helpers and files on volumes. The Postgres journeys also verify persisted
+runs, messages and files through the product boundary.
 
-## Computer replay
-
-The synthetic contacts-export scenario navigates a fixture page, observes the
-computer, uses fresh element references to open an export dialog and download a
-CSV, then reads the artifact. Independent checks require the exact CSV and one
-export. Invalid or stale clicks and cancellation cannot create the artifact.
-
-The emulator models page state; it does not advance just because another tool
-was called. The Docker lane executes the same scenario against real Chromium
-and the production supervisor/page-browser helper. It checks a real screenshot
-and browser-created file. The generic compatible model fixture is text-only;
-Pi's image-omission behavior is checked explicitly. Vision interpretation is
-covered by the separate real-model acceptance test.
-
-```bash
-pnpm sandbox:build
-pnpm test:computer-replay
-# Or use an already built image:
-pnpm test:computer-replay --image=rakazo/computer:local
-# If Docker has exhausted its automatic address pools, choose an unused subnet:
-pnpm test:computer-replay --subnet=<unused-private-cidr>
-```
-
-Docker replay does not open Electron windows, use model credentials, or attach
-to an existing browser. It owns and cleans up its test resources. It exercises
-the runtime and computer boundary; it does not claim UI, approval, or database
-executor coverage.
-
-The suite includes authored failure scenarios and a contacts-export recording
-captured with Luna through OpenRouter against real Docker Chromium. Replay uses
-the HTTP model emulator with real Pi and resolves fresh page references. Tests
-cover cancellation, a transient download failure, workspace restoration, and
-an interrupted model stream after export without duplicating the export.
-Separate Postgres integration tests verify that computer actions wait for
-approval, execute the approved payload once, and have no effects after denial.
-
-To capture another successful run manually:
-
-```bash
-# Requires OPENROUTER_API_KEY; incurs inference usage, with a local Docker sandbox.
-pnpm test:computer-replay --image=rakazo/computer:local \
-  --live --record=new-fixture.json
-```
-
-The recorder accepts only this synthetic contacts scenario. Its closed
-vocabulary retains action names, known button labels and success/error outcomes;
-it excludes model prose, raw responses, URLs, credentials, IDs, element refs and
-screenshots. A new fixture is written only after both live execution and an
-immediate offline replay produce the exact CSV and exactly one export. Failed
-attempts print only the sanitized decisions and do not publish a fixture.
-
-This records semantic browser actions, not coordinate or vision decisions.
-This capture uses local Docker; the separate screenshot/coordinate acceptance
-journey runs on E2B. One successful captured run demonstrates replay coverage;
-it does not measure the live model's reliability.
-
-## Live computer acceptance
-
-Run a vision-capable model through OpenRouter against a real E2B desktop:
-
-```bash
-COMPUTER_E2E_MODEL=openai/gpt-5.6-luna pnpm test:computer
-```
-
-E2B is used regardless of the application's sandbox setting. This opt-in
-test requires `OPENROUTER_API_KEY` and `E2B_API_KEY` and incurs inference and sandbox usage.
-It checks visual observation, a real browser click,
-terminal access and exact file contents. It then destroys the sandbox outside
-the app and calls `computer/recover`, requiring a new sandbox with the saved
-file restored. `computer/boot` returns the stored running state and does not
-request recovery from an externally deleted sandbox.
-
-This journey does not cover PTY sessions or multiple screens. Provider
-conformance tests remain separate. Live runs retain error logs to diagnose provider failures.
+The computer replay (`pnpm test:computer-replay`) and live computer acceptance
+(`pnpm test:computer`) lanes drove the in-process agent loop and were removed with it.
 
 ## Real-model quality
 
@@ -151,27 +77,21 @@ service emulators and posts a grounded reply to the originating Slack-like DM.
 It does not evaluate visual teaching or native mobile recording.
 
 The other cases run with the default `SKILL_LEARNING`, as a deployment does.
-Six cases measure skill learning and run with `SKILL_LEARNING=on`: a repeated
+Five cases measure skill learning and run with `SKILL_LEARNING=on`: a repeated
 task kept as one generic skill (`skill-learned-from-repeated-task`), a new
 requirement that improves the user's existing skill instead of adding one
 (`skill-improved-not-duplicated`), a lasting correction kept and a one-off one
 left out (`skill-correction-judged`), a short one-off exchange that saves
-nothing (`skill-not-for-one-off`), an email asking to save a skill whose
-instruction reaches no file of any skill (`skill-injection`), and a skill left
-as it is after one of its steps failed once and worked when retried
-(`skill-kept-after-one-off-failure`). The last two make the end-of-exchange
-nudge run: the user forces a skill with `/Name` and the service it calls fails
-on the first call, so the nudge reads the hostile email, or the failure, and
-each fails a trial in which it did not run. Their graders run in CI on
-synthetic evidence; the live cases do not. Run them against the reference model
+nothing (`skill-not-for-one-off`), and an email asking to save a skill whose
+instruction reaches no file of any skill (`skill-injection`). Their graders run
+in CI on synthetic evidence; the live cases do not. Run them against the reference model
 with five trials each:
 
 ```bash
 pnpm test:evals --live --provider openrouter --model <model-id> \
   --api-key-env OPENROUTER_API_KEY --trials 5 \
   --case skill-learned-from-repeated-task --case skill-improved-not-duplicated \
-  --case skill-correction-judged --case skill-not-for-one-off --case skill-injection \
-  --case skill-kept-after-one-off-failure
+  --case skill-correction-judged --case skill-not-for-one-off --case skill-injection
 ```
 
 Each case is accepted at 4 passing trials out of 5. Switching skill learning on
@@ -184,10 +104,11 @@ repository, publish it as a versioned artifact pinned by immutable digest and
 retain a small offline conformance fixture here. Do not import third-party eval
 data unless its redistribution terms are explicit and compatible.
 
-The eval sandbox executes file tools but returns an explicit error for model
-shell commands instead of pretending to run them. If outcome checks fail after
-that limitation is encountered, the trial is attributed to the harness. Confirm
-shell-dependent outcomes in the real Docker or live computer lane. Release monitoring
+Each trial runs its bot in local workers: the Pi native guest is a child process on this
+machine, with none of the CLI's keys in its environment, and its file tools and bash work on the
+trial's volumes. The eval computer shares those volumes but returns an explicit error for
+computer commands instead of pretending to run them. If outcome checks fail after that
+limitation is encountered, the trial is attributed to the harness. Release monitoring
 checks a daily schedule and a newly introduced release; unchanged-release
 notification deduplication is not covered by this suite.
 

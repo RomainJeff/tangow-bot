@@ -11,7 +11,6 @@ import {
 import { expect, test } from "./test";
 
 const LOCAL_MODEL_ID = "rakazo-e2e-local";
-const LOCAL_MODEL_REPLY = "OpenAI-compatible endpoint verified end to end.";
 
 test("custom connections persist reasoning support and bot thinking", async ({
   page,
@@ -114,46 +113,11 @@ test("custom connections persist reasoning support and bot thinking", async ({
   await expect(thinking).toHaveValue("low");
 });
 
-test("connects, lists, and uses an OpenAI-compatible endpoint", async ({ page }, testInfo) => {
+test("connects to and lists an OpenAI-compatible endpoint", async ({ page }, testInfo) => {
   const server = createServer((request, response) => {
     if (request.method === "GET" && request.url === "/v1/models") {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify({ object: "list", data: [{ id: LOCAL_MODEL_ID }] }));
-      return;
-    }
-    if (request.method === "POST" && request.url === "/v1/chat/completions") {
-      response.writeHead(200, {
-        "cache-control": "no-cache",
-        connection: "keep-alive",
-        "content-type": "text/event-stream",
-      });
-      const created = Math.floor(Date.now() / 1_000);
-      response.write(
-        `data: ${JSON.stringify({
-          id: "chatcmpl-rakazo-e2e",
-          object: "chat.completion.chunk",
-          created,
-          model: LOCAL_MODEL_ID,
-          choices: [
-            {
-              index: 0,
-              delta: { role: "assistant", content: LOCAL_MODEL_REPLY },
-              finish_reason: null,
-            },
-          ],
-        })}\n\n`,
-      );
-      response.write(
-        `data: ${JSON.stringify({
-          id: "chatcmpl-rakazo-e2e",
-          object: "chat.completion.chunk",
-          created,
-          model: LOCAL_MODEL_ID,
-          choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-          usage: { prompt_tokens: 4, completion_tokens: 6, total_tokens: 10 },
-        })}\n\n`,
-      );
-      response.end("data: [DONE]\n\n");
       return;
     }
     response.writeHead(404);
@@ -215,17 +179,6 @@ test("connects, lists, and uses an OpenAI-compatible endpoint", async ({ page },
     await expect(page.getByRole("button", { name: "Save" })).toBeDisabled();
     await page.getByLabel("OpenAI-compatible server URL").fill(baseUrl);
     await expect(page.getByRole("button", { name: "Save" })).toBeEnabled();
-
-    if (process.env.AGENT_RUNTIME === "pi") {
-      await page.getByRole("button", { name: "Close model settings" }).click();
-      const composer = page.getByPlaceholder(/Message/);
-      await composer.fill("Reply with the endpoint verification message.");
-      await page.keyboard.press("Enter");
-      await expect(page.getByTestId("transcript").getByText(LOCAL_MODEL_REPLY)).toBeVisible({
-        timeout: 30_000,
-      });
-      await captureScreenshot(page, testInfo, "openai-compatible-response");
-    }
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }

@@ -32,7 +32,7 @@ function setup() {
 describe("consent grants", () => {
   it("includes reachable helper models for a targeted send", async () => {
     const { deps, actor } = setup();
-    deps.env.agentRuntime = "pi";
+    deps.env.agentRuntime = "worker";
     vi.mocked(deps.prisma.spaceModelPreference.findMany).mockResolvedValue([
       {
         modelId: "helper-model",

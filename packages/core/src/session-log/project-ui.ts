@@ -100,7 +100,11 @@ export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread 
     return itemId === undefined ? undefined : itemById.get(itemId);
   };
 
-  for (const segment of foldRuns(visible, { answers, splitAtHelpers: true })) {
+  for (const segment of foldRuns(visible, {
+    answers,
+    splitAtHelpers: true,
+    splitAtPersonMessages: true,
+  })) {
     switch (segment.type) {
       case "run.message": {
         const { id, ts, botId, runId, blocks, originSessionId } = segment;

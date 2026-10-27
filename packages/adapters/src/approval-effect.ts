@@ -352,6 +352,12 @@ export function isToolPauseResult(result: unknown): result is ApprovalPausedTool
   );
 }
 
+export function isFailedToolResult(value: unknown): value is { error: unknown } {
+  if (!value || typeof value !== "object" || !("error" in value)) return false;
+  const error = (value as { error?: unknown }).error;
+  return error !== undefined && error !== null;
+}
+
 export function isApprovalPausedResult(result: unknown): result is ApprovalPausedToolResult {
   return isToolPauseResult(result);
 }

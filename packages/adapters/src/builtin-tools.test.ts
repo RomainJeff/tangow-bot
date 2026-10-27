@@ -3,6 +3,7 @@ import { SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH, SPAWN_BOT_PROMPT_MAX_LENGTH } from "
 import { BOT_SKILL_DESCRIPTION_MAX_LENGTH } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import { builtinAgentTools } from "./builtin-tools.js";
+import { parseConnectorToolArgs } from "./lazy-tool-catalog.js";
 
 describe("spawn_bot tool description", () => {
   const description = builtinAgentTools.find((tool) => tool.name === "spawn_bot")?.description;
@@ -27,5 +28,45 @@ describe("skill description limit", () => {
       "utf8",
     );
     expect(guide).toContain(`(${limit})`);
+  });
+});
+
+describe("request_secret parameters", () => {
+  const schema = builtinAgentTools.find((tool) => tool.name === "request_secret")!.inputSchema;
+  const credential = {
+    name: "github_pat",
+    origin: "https://api.github.com",
+    auth: { type: "bearer" },
+  };
+
+  it("takes exactly one destination, credential or connectionId, as the executor does", () => {
+    expect(() =>
+      parseConnectorToolArgs(schema, {
+        label: "GitHub PAT",
+        purpose: "api_key",
+        credential,
+        connectionId: "conn_1",
+      }),
+    ).toThrow();
+    expect(() =>
+      parseConnectorToolArgs(schema, { label: "GitHub PAT", purpose: "api_key" }),
+    ).toThrow();
+    expect(
+      parseConnectorToolArgs(schema, { label: "GitHub PAT", purpose: "api_key", credential }),
+    ).toMatchObject({ credential });
+    expect(
+      parseConnectorToolArgs(schema, { label: "c", purpose: "otp", connectionId: "abc" }),
+    ).toMatchObject({ connectionId: "abc" });
+  });
+
+  it("rejects connectionId with replace, which belongs only on the credential branch", () => {
+    expect(() =>
+      parseConnectorToolArgs(schema, {
+        label: "c",
+        purpose: "otp",
+        connectionId: "abc",
+        replace: true,
+      }),
+    ).toThrow();
   });
 });

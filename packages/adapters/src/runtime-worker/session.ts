@@ -17,7 +17,7 @@ import {
 } from "@rakazo/adapter-kit";
 import { redactSecrets, secretRedactor } from "@rakazo/core";
 import { getLogger } from "@rakazo/logging";
-import { isToolPauseResult } from "../approval-effect.js";
+import { isFailedToolResult, isToolPauseResult } from "../approval-effect.js";
 import {
   HELPER_STOPPED_FOR_PAUSE,
   helperCallOf,
@@ -26,6 +26,7 @@ import {
   isHelperTool,
 } from "../builtin-tools.js";
 import { redactPayloadWith } from "../connector-safety.js";
+import type { RunTraceRecorder } from "../pi-run-trace.js";
 import type { CapabilityKey } from "./capability.js";
 import { mintCapability, verifyCapability } from "./capability.js";
 import { relayPiAiCall } from "./dialects/pi-ai.js";
@@ -132,8 +133,15 @@ function redactTranscript(value: unknown, redact: (text: string) => string): unk
  */
 export function createSession(
   request: AgentRunRequest,
-  deps: { key: CapabilityKey; launcher: WorkerLauncher; stops: StopJournal; clock: WorkerClock },
+  deps: {
+    key: CapabilityKey;
+    launcher: WorkerLauncher;
+    stops: StopJournal;
+    clock: WorkerClock;
+    recorder?: RunTraceRecorder;
+  },
 ) {
+  const { recorder } = deps;
   if (!request.attempt) throw new Error("A worker run needs its attempt");
   const worker: WorkerIdentity = {
     runId: request.runId,
@@ -391,24 +399,32 @@ export function createSession(
     if (paused) return pausedToolCall(paused);
     if (helper && !isHelperTool(name)) return refuse("unknown_tool");
     if (name === "run_subagent" && runsOwnLoop()) {
+      recorder?.toolStart(callId, name, args);
       const run = runHelper(body, part);
       open.set(callId, run);
       try {
-        return await run;
+        const reply = await run;
+        const answered = reply.type === "tool.result";
+        recorder?.toolEnd(callId, answered ? reply.output : reply, !answered);
+        return reply;
       } finally {
         open.delete(callId);
       }
     }
     const execute = helper ? helper.log.executeTool : request.executeTool;
     if (!execute) return { type: "error", message: `${name} is unavailable here` };
-    const call = execute(name, args, callId, tools.get(name)?.route);
+    recorder?.toolStart(callId, name, args);
+    const call = execute(name, args, callId, tools.get(name)?.route, recorder?.toolTrace(callId));
     open.set(callId, call);
     try {
       const output = await call;
       if (isToolPauseResult(output)) pause();
+      recorder?.toolEnd(callId, output, isFailedToolResult(output));
       return { type: "tool.result", output };
     } catch (error) {
-      return { type: "error", message: clean(messageOf(error)) };
+      const message = clean(messageOf(error));
+      recorder?.toolEnd(callId, message, true);
+      return { type: "error", message };
     } finally {
       open.delete(callId);
     }
@@ -442,7 +458,9 @@ export function createSession(
     const abort = new AbortController();
     relays.set(seq, abort);
     let usage: RelayUsage | undefined;
+    let failure: unknown;
     let prefix: ReturnType<typeof measureRelayPrefix> = null;
+    const generation = recorder?.modelRequest(body.agent);
     try {
       // The guest's own tool output reaches its transcript unredacted: mask it before the provider.
       const call = redactTranscript(body.call, secretRedactor([...(request.secrets ?? [])]));
@@ -462,6 +480,7 @@ export function createSession(
         (event) => part({ type: "model.event", event } as ReplyPart),
         {
           signal: abort.signal,
+          trace: generation,
           conversation: {
             threadId: request.threadId,
             botId: request.botId,
@@ -481,7 +500,11 @@ export function createSession(
           helper.usage.outputTokens += usage.outputTokens;
         }
       }
+    } catch (error) {
+      failure = error;
+      throw error;
     } finally {
+      generation?.end(usage, failure);
       reservedModelTokens -= reservation;
       relays.delete(seq);
       getLogger().info("agent.worker.model_request", {
@@ -719,6 +742,11 @@ export function createSession(
         if ((agent !== "root" && !helper) || helper?.closed) return refuse("invalid");
         const ingested = transcript.ingest(agent, body, launched!.expectedHarness.name);
         if (typeof ingested === "string") return refuse(ingested);
+        // The harness's own calls are timed by when it reports them.
+        for (const step of ingested.entries) {
+          if (step.kind === "call") recorder?.toolStart(step.callId, step.name, step.args);
+          if (step.kind === "result") recorder?.toolEnd(step.callId, step.output, step.isError);
+        }
         if (!helper) {
           rootTranscriptAccepted = true;
           await events.push(ingested);

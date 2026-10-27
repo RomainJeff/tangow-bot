@@ -651,7 +651,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Could not update agent access": "Не удалось обновить доступ агента",
   "Could not update your photo": "Не удалось обновить ваше фото",
   Disabled: "Отключено",
-  "Display agent steps": "Показывать шаги агента",
+  "Debug mode": "Режим отладки",
   "Enter the service token this server’s Access policy allows.":
     "Введите сервисный токен, разрешенный политикой Access этого сервера.",
   Featured: "Рекомендуемые",
@@ -672,8 +672,8 @@ export const RU_MESSAGES: Record<string, string> = {
   Output: "Вывод",
   "Profile photo": "Фото профиля",
   "Search skills": "Поиск навыков",
-  "Show the tools a bot used, with their input and output.":
-    "Показывать инструменты, которые использовал бот, с их вводом и выводом.",
+  "Show agent steps, and every run in a bot's activity.":
+    "Показывать шаги агента и все запуски в активности бота.",
   "Skill content": "Содержимое навыка",
   Skills: "Навыки",
   Skipped: "Пропущено",

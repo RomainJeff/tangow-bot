@@ -56,6 +56,7 @@ function Harness() {
     navigate,
     panelCoversThread,
     closePanel,
+    viewRun: vi.fn(),
     activityEpoch: 0,
     refreshSkills: vi.fn(),
   });

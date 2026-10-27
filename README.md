@@ -1,5 +1,7 @@
 # Tangow
 
+![tangow](docs/assets/readme-header.png)
+
 Rakazo is an open-source platform for running persistent AI teammates. It is available on the web,
 as an Electron desktop app, and through an Expo mobile app. Bring your own model and computer
 provider, or run the complete stack locally.
@@ -17,14 +19,41 @@ provider, or run the complete stack locally.
 - Docker and E2B
 - Composio, Pipedream Connect, MCP, and OpenAPI integrations
 
-## Quick start (source checkout)
+For an existing source deployment, use [Tangow](./docs/tangow.md) on the server to update Rakazo,
+inspect services, rebuild workers and computers, or migrate Docker homes to E2B.
+
+## Getting started
+
+You need Git, Docker with Compose, and Node.js 22.22.2 or newer in the 22.x line,
+Node.js 24.x, or Node.js 26+. Node.js 23.x and 25.x are not supported.
+
+```bash
+git clone https://github.com/RomainJeff/tangow-bot.git
+cd tangow-bot
+./tangow setup
+```
+
+The wizard creates a private `.env`, generates deployment secrets, builds the current checkout,
+starts the services, and verifies readiness. Open the URL it prints, create your first owner
+account, connect a model, and create a bot. Use `./tangow setup --sudo` if Docker requires
+passwordless sudo.
+
+Docker is the default computer provider. Selecting E2B continues through the existing provider
+setup after Docker starts; it needs pnpm 9, an existing E2B service, and a registry you can push to.
+For a public HTTPS origin, prepare a reverse proxy to `127.0.0.1:5173` and have SMTP credentials
+and a signup allowlist ready. Setup does not configure DNS or TLS. See [Tangow setup](./docs/tangow.md#first-deployment)
+for prerequisites and retries, and [self-hosting](./docs/self-host.md) for server configuration.
+
+Rerun `./tangow setup` to retry with saved credentials. Use `./tangow update` for future upgrades.
+
+## Development (source checkout)
 
 You need Node.js 22.22.2 or newer in the 22.x line, Node.js 24.x, or Node.js 26+;
 pnpm 9; and Docker. Node.js 23.x and 25.x are not supported.
 
 ```bash
-git clone https://github.com/elie222/rakazo.git
-cd rakazo
+git clone https://github.com/RomainJeff/tangow-bot.git
+cd tangow-bot
 cp .env.example .env
 ```
 
@@ -52,7 +81,7 @@ docker compose --env-file .env \
 pnpm install
 pnpm db:generate
 pnpm db:migrate
-pnpm sandbox:build
+pnpm sandbox:build   # builds the computer and worker images
 pnpm dev
 ```
 
@@ -68,7 +97,7 @@ disposable); `docker compose down -v` deletes all Postgres state.
 Open [http://127.0.0.1:5173](http://127.0.0.1:5173), create an account, connect a model, and create
 your first bot.
 
-For an agent-assisted install, use [SETUP_PROMPT.md](./SETUP_PROMPT.md).
+For an agent-assisted install, use the [Tangow operator guide](./docs/tangow.md).
 
 ## Run on a server
 

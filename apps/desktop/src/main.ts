@@ -20,6 +20,7 @@ import {
 } from "./auto-update.js";
 import { openBrowserAuth } from "./browser-auth.js";
 import { oauthCallbackFrom } from "./oauth-callback.js";
+import { createPageFetch, createPageHeadReader } from "./page-head.js";
 import {
   bundledRendererCandidates,
   contentType,
@@ -48,6 +49,7 @@ import {
   browserWindowOptions,
   developmentIconFile,
   setupWindowOptions,
+  WINDOW_BACKGROUND,
   warmWindowTtlMs,
 } from "./window-options.js";
 
@@ -576,7 +578,7 @@ function oauthPopupWindowOptions() {
     frame: true,
     titleBarStyle: "default" as const,
     autoHideMenuBar: true,
-    backgroundColor: "#0B0C0E",
+    backgroundColor: WINDOW_BACKGROUND,
     webPreferences: {
       preload: "",
       nodeIntegration: false,
@@ -640,7 +642,7 @@ function restoreAppWindowAfterSetup() {
 
 function installApplicationMenu() {
   const changeServer: Electron.MenuItemConstructorOptions = {
-    id: "change-rakazo-server",
+    id: "change-server",
     label: "Change Rakazo Server…",
     accelerator: "CmdOrCtrl+Shift+K",
     click: () => showSetupWindow(),
@@ -975,6 +977,36 @@ app.whenReady().then(async () => {
     )
       return;
     browserAuthAttempts.get(url)?.abort();
+  });
+  // Link previews for sites that refuse the server: this computer reads the start of the page,
+  // in a partition of its own (in memory, no cookies in or out), and the renderer sends it on.
+  const pageHeadSession = session.fromPartition("rakazo-link-preview");
+  const pageHead = createPageHeadReader(
+    createPageFetch(
+      (url) =>
+        net.request({
+          url,
+          session: pageHeadSession,
+          method: "GET",
+          credentials: "omit",
+          redirect: "manual",
+          useSessionCookies: false,
+        }),
+      async (hostname) =>
+        (await pageHeadSession.resolveHost(hostname)).endpoints.map((endpoint) => endpoint.address),
+    ),
+  );
+  ipcMain.handle("desktop.pageHead.read", (event, url: unknown, id: unknown) => {
+    if (!fromMainWindow(event) || event.senderFrame !== event.sender.mainFrame) {
+      throw new Error("Invalid page request.");
+    }
+    return pageHead.read(url, id);
+  });
+  ipcMain.handle("desktop.pageHead.cancel", (event, id: unknown) => {
+    if (!fromMainWindow(event) || event.senderFrame !== event.sender.mainFrame) {
+      throw new Error("Invalid page request.");
+    }
+    pageHead.cancel(id);
   });
   ipcMain.handle("desktop.platform", () => process.platform);
   ipcMain.handle("desktop.window.close", (event) => {

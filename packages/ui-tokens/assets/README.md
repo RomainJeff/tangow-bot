@@ -1,16 +1,18 @@
 # App icon source
 
-`Rakazo.icon` is the shared editable source for macOS and iOS. Open it in Apple's
-Icon Composer with Xcode 26 or newer. The orange foreground keeps its original
-lighting, sits 90 points below center, and uses the system dark background.
+`Rakazo.icon` is the shared editable source for macOS and iOS: the black clay bot
+from the tangow site on a linen gradient, kept in both light and dark appearances.
+Open it in Apple's Icon Composer with Xcode 26 or newer. `clay-bot.svg` is the
+editable drawing behind its `Assets/clay-bot.png` layer.
 
 macOS packaging compiles the source into a Tahoe asset catalog and generates the
 legacy ICNS fallback. Expo copies the same source into the iOS project.
 
 The platform exports are:
 
-- `apps/desktop/assets/icon-macos.png`: Icon Composer's default appearance,
-  1024-pixel macOS pre-Tahoe export, including Dock margins for development launches.
+- `apps/desktop/assets/icon-macos.png`: 1024-pixel macOS pre-Tahoe export,
+  including Dock margins for development launches.
+- `apps/desktop/assets/icon.png` and `icon.ico`: Linux and Windows squares.
 - `apps/mobile/assets/icon.png`: opaque 1024-pixel square for the generic/legacy icon,
   with no rounded mask or Dock margins.
 - `apps/mobile/assets/adaptive-icon.png`: transparent 1024-pixel Android foreground;
@@ -20,6 +22,8 @@ The platform exports are:
   shared dark background token.
 - `apps/mobile/assets/monochrome-icon.png`: matching Android alpha silhouette with
   transparent eyes for themed launchers.
+
+Android exports (`apps/mobile/assets`) still show the orange bot.
 
 Refresh platform exports after changing the source. Android supplies its own mask;
 never bake Mac corners, a rim, or an outer shadow into adaptive layers.

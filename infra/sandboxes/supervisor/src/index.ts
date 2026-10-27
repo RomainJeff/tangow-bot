@@ -3,6 +3,8 @@ import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
+import type { Duplex } from "node:stream";
+import { Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import {
@@ -12,7 +14,7 @@ import {
   SANDBOX_SKILL_MOUNTS,
 } from "@rakazo/core";
 import { loadRootEnv } from "@rakazo/core/node/load-root-env";
-import { SERVICE_NAMES } from "@rakazo/logging";
+import { getLogger, SERVICE_NAMES } from "@rakazo/logging";
 import { createRootLogger } from "@rakazo/logging/axiom";
 import { requestLogging } from "@rakazo/logging/hono";
 import Docker from "dockerode";
@@ -30,6 +32,8 @@ import {
   computerNetworkNameFor,
   computerNetworkNamesForCleanup,
   computerResourceLimits,
+  computerVolumeHome,
+  computerWorkspace,
   containerCreateOptions,
   containerNameFor,
   controlPortPublicationMatches,
@@ -46,6 +50,11 @@ import {
   screenPorts,
   screenUrlFor,
   screenUrlWithToken,
+  volumeHomeMatches,
+  WORKER_GUEST_ENTRY,
+  WORKER_NETWORK,
+  workerCreateOptions,
+  workerMounts,
   xdotoolCommand,
 } from "./computer-spec.js";
 import { assertComputerHomeWritable } from "./home-ownership.js";
@@ -57,6 +66,7 @@ import {
   browserProfilePathForScreen,
   ComputerControlUnavailableError,
   clearComputerScreenRegistry,
+  commandWorkingDir,
   computerActionSchema,
   computerControlTimeoutMs,
   containerActionSteps,
@@ -155,6 +165,11 @@ app.use("/computers/*", limitSupervisorRequestBody);
 
 const PathSegment = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
 
+/** Computers and workers write the same volumes, so both run as this user. */
+function sandboxUser(supervisorContainer: unknown): string {
+  return supervisorContainer ? COMPUTER_USER : hostComputerUser();
+}
+
 /** Skills mounts are derived from ids + dataDir, never from client paths (design Q10). */
 export function skillsBindsFor(
   dataDir: string,
@@ -175,6 +190,15 @@ app.post("/computers", async (c) => {
       homePath: z.string().min(1),
       spaceId: PathSegment,
       userId: PathSegment,
+      volumeHome: z
+        .object({
+          root: z.string(),
+          mounts: z
+            .array(z.object({ volume: z.string(), path: z.string() }))
+            .min(1)
+            .max(64),
+        })
+        .optional(),
     })
     .parse(await c.req.json());
   try {
@@ -195,10 +219,14 @@ app.post("/computers", async (c) => {
       // user-controlled paths at runtime; Compose data-init handles legacy data.
       if (hostUid !== 0) await mkdir(serviceHomePath, { recursive: true });
       const storage = computerHomeStorage(serviceHomePath, dataDir, runtimeInfo);
+      // The volume directories are the provider's: the supervisor never creates or deletes them.
+      const volumeHome = body.volumeHome
+        ? computerVolumeHome(body.volumeHome, dataDir, runtimeInfo)
+        : undefined;
       if (storage.homeVolume) {
         assertVolumeSubpathSupport((await docker.version()).ApiVersion);
       }
-      const computerUser = runtimeInfo ? COMPUTER_USER : hostComputerUser(hostUid, hostGid);
+      const computerUser = sandboxUser(runtimeInfo);
       // Bind sources are created by the worker before provision; a root supervisor never mkdirs them.
       const skillsBinds = skillsBindsFor(dataDir, body.spaceId, body.userId, (p) =>
         hostHomePath(p, runtimeInfo),
@@ -217,7 +245,8 @@ app.post("/computers", async (c) => {
           info.Config.User === computerUser &&
           skillsBinds.every((bind) => info.HostConfig.Binds?.includes(bind)) &&
           controlPublishOk &&
-          (!storage.homeVolume || homeVolumeMatches(info.HostConfig.Mounts, storage.homeVolume))
+          (!storage.homeVolume || homeVolumeMatches(info.HostConfig.Mounts, storage.homeVolume)) &&
+          volumeHomeMatches(info.Config.Labels, volumeHome)
         ) {
           if (!info.State.Running) await existing.start();
           return c.json({
@@ -272,6 +301,7 @@ app.post("/computers", async (c) => {
               botId: body.botId,
               spaceId: body.spaceId,
               ...storage,
+              volumeHome,
               user: computerUser,
               networkMode,
               controlToken: randomUUID(),
@@ -335,7 +365,7 @@ app.post("/computers/:id/exec", async (c) => {
     })
     .parse(await c.req.json());
   try {
-    const { container } = await managedContainer(
+    const { container, info } = await managedContainer(
       id,
       c.req.header("x-rakazo-bot-id"),
       c.req.header("x-rakazo-space-id"),
@@ -347,7 +377,7 @@ app.post("/computers/:id/exec", async (c) => {
       container,
       body.argv.length ? body.argv : ["/bin/echo", "ready"],
       {
-        workingDir: body.cwd ?? "/home/rakazo",
+        workingDir: commandWorkingDir(body.cwd, computerWorkspace(info.Config.Labels)),
         env: [
           `DISPLAY=${layout.display}`,
           "HOME=/home/rakazo",
@@ -491,6 +521,7 @@ app.post("/computers/:id/actions", async (c) => {
       c.req.header("x-rakazo-screen-lease-id"),
     );
     const control = computerControlEndpoint(info);
+    const workspace = computerWorkspace(info.Config.Labels);
     const attempt = await attemptComputerControl(
       control
         ? () =>
@@ -501,13 +532,20 @@ app.post("/computers/:id/actions", async (c) => {
               browserProfile,
               body.observe !== false,
               body.settleMs ?? 0,
+              workspace,
             )
         : undefined,
     );
     if (attempt.status === "failed") throw attempt.error;
     const controlResult = attempt.status === "ok" ? attempt.value : undefined;
     if (shouldReplayComputerActions(attempt) && body.actions.length)
-      await applyContainerActions(container, body.actions, layout.display, browserProfile);
+      await applyContainerActions(
+        container,
+        body.actions,
+        layout.display,
+        browserProfile,
+        workspace,
+      );
     if (shouldReplayComputerActions(attempt) && body.settleMs)
       await new Promise((resolve) => setTimeout(resolve, body.settleMs));
     return c.json({
@@ -527,13 +565,13 @@ app.post("/computers/:id/actions", async (c) => {
 
 app.get("/computers/:id/files", async (c) => {
   try {
-    const { container } = await managedContainer(
+    const { container, info } = await managedContainer(
       c.req.param("id"),
       c.req.header("x-rakazo-bot-id"),
       c.req.header("x-rakazo-space-id"),
     );
     const relative = normalizeWorkspaceRelative(c.req.query("path") ?? "");
-    const target = workspaceTarget(relative);
+    const target = workspaceTarget(relative, computerWorkspace(info.Config.Labels));
     if (c.req.query("mode") === "read") {
       const maxBytesRaw = c.req.query("maxBytes");
       const maxBytes = maxBytesRaw === undefined ? undefined : Number(maxBytesRaw);
@@ -596,12 +634,15 @@ app.post("/computers/:id/files", async (c) => {
     })
     .parse(await c.req.json());
   try {
-    const { container } = await managedContainer(
+    const { container, info } = await managedContainer(
       c.req.param("id"),
       c.req.header("x-rakazo-bot-id"),
       c.req.header("x-rakazo-space-id"),
     );
-    const target = workspaceTarget(normalizeWorkspaceRelative(body.path));
+    const target = workspaceTarget(
+      normalizeWorkspaceRelative(body.path),
+      computerWorkspace(info.Config.Labels),
+    );
     await writeContainerFile(
       container,
       target,
@@ -815,6 +856,206 @@ app.delete("/computers/:id", async (c) => {
   }
 });
 
+app.use("/workers", async (c, next) => {
+  if (!hasValidBearerToken(c.req.header("authorization"), supervisorToken)) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+  await next();
+});
+app.use("/workers", limitSupervisorRequestBody);
+
+const attemptWorkers = (attemptId: string) =>
+  docker.listContainers({
+    all: true,
+    filters: { label: ["rakazo.worker=true", `rakazo.attempt=${attemptId}`] },
+  });
+
+let workersNetwork: Promise<unknown> | undefined;
+/** Workers share one bridge, off the Compose network, where they cannot reach each other. */
+function ensureWorkersNetwork() {
+  workersNetwork ??= docker
+    .createNetwork({
+      Name: WORKER_NETWORK,
+      Driver: "bridge",
+      CheckDuplicate: true,
+      Labels: { "rakazo.managed": "true" },
+      Options: { "com.docker.network.bridge.enable_icc": "false" },
+    })
+    .catch((error) => {
+      if (!/already exists/i.test(String(error))) {
+        workersNetwork = undefined;
+        throw error;
+      }
+    });
+  return workersNetwork;
+}
+
+app.post("/workers", async (c) => {
+  try {
+    const body = z
+      .object({
+        attemptId: PathSegment,
+        ttlSeconds: z.number().int().min(1).max(86_400),
+        mounts: z.array(z.object({ volume: z.string(), path: z.string(), readOnly: z.boolean() })),
+      })
+      .parse(await c.req.json());
+    const runtimeInfo = await inspectSupervisorContainer();
+    const mounts = workerMounts(body.mounts, dataDir, runtimeInfo);
+    const [existing] = await attemptWorkers(body.attemptId);
+    if (existing) return c.json({ id: existing.Id });
+    await ensureWorkersNetwork();
+    const container = await docker.createContainer(
+      workerCreateOptions({
+        attemptId: body.attemptId,
+        ttlSeconds: body.ttlSeconds,
+        mounts,
+        user: sandboxUser(runtimeInfo),
+      }),
+    );
+    await container.start();
+    return c.json({ id: container.id });
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : String(error) }, 500);
+  }
+});
+
+app.delete("/workers", async (c) => {
+  const attemptId = PathSegment.safeParse(c.req.query("attempt"));
+  if (!attemptId.success) return c.json({ error: "invalid attempt" }, 400);
+  try {
+    const found = await attemptWorkers(attemptId.data);
+    await Promise.all(
+      found.map((info) =>
+        docker
+          .getContainer(info.Id)
+          .remove({ force: true })
+          .catch((error: unknown) => {
+            if ((error as { statusCode?: number }).statusCode !== 404) throw error;
+          }),
+      ),
+    );
+    // The controller frees the volumes' writer leases on this answer: confirm nothing is left.
+    if ((await attemptWorkers(attemptId.data)).length > 0) {
+      return c.json({ error: "worker still present" }, 500);
+    }
+    return c.json({ destroyed: found.length > 0 });
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : String(error) }, 500);
+  }
+});
+
+/** How much of a guest's stderr is kept for the log, as `e2b-worker.ts` does. */
+const GUEST_STDERR_TAIL_CHARS = 2048;
+
+/**
+ * `GET /workers/:id/guest` as an HTTP upgrade: the guest runs by `docker exec` with the attempt's
+ * capability, and the socket carries its stdin and stdout, raw. The Node `upgrade` event bypasses
+ * Hono, so the token is checked here.
+ */
+export async function upgradeWorkerGuest(
+  request: http.IncomingMessage,
+  socket: Duplex,
+  head: Buffer = Buffer.alloc(0),
+) {
+  // Node drops its own error listener on upgrade: an unhandled reset would kill the supervisor.
+  socket.on("error", () => socket.destroy());
+  const refuse = (status: string) => {
+    socket.end(`HTTP/1.1 ${status}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
+  };
+  if (!hasValidBearerToken(request.headers.authorization, supervisorToken)) {
+    return refuse("401 Unauthorized");
+  }
+  const match = /^\/workers\/([A-Za-z0-9]{1,64})\/guest$/.exec(request.url ?? "");
+  if (!match) return refuse("404 Not Found");
+  const capability = request.headers["x-rakazo-worker-capability"];
+  if (typeof capability !== "string" || capability.length === 0) return refuse("400 Bad Request");
+  try {
+    const container = docker.getContainer(match[1]!);
+    const info = await container.inspect();
+    if (info.Config.Labels?.["rakazo.worker"] !== "true") return refuse("404 Not Found");
+    const exec = await container.exec({
+      Cmd: ["node", WORKER_GUEST_ENTRY],
+      AttachStdin: true,
+      AttachStdout: true,
+      AttachStderr: true,
+      Tty: false,
+      User: info.Config.User || COMPUTER_USER,
+      WorkingDir: "/workspace",
+      Env: [`RAKAZO_WORKER_CAPABILITY=${capability}`],
+    });
+    const stream = await exec.start({ hijack: true, stdin: true });
+    // The client left while the exec was starting: closing stdin ends the guest.
+    if (socket.destroyed) return stream.end();
+    socket.write(
+      "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: rakazo-guest\r\n\r\n",
+    );
+    if (head.length > 0) stream.write(head);
+    relayWorkerGuest({
+      socket,
+      stream,
+      attemptId: info.Config.Labels?.["rakazo.attempt"],
+      exitCode: () => guestExitCode(exec),
+    });
+  } catch {
+    refuse("404 Not Found");
+  }
+}
+
+/**
+ * Pipes the socket into the exec's stdin and its demuxed stdout back. Stderr is kept as a tail and
+ * logged with the exit code when the guest fails.
+ */
+export function relayWorkerGuest(input: {
+  socket: Duplex;
+  stream: Duplex;
+  attemptId: string | undefined;
+  exitCode: () => Promise<number | null>;
+}) {
+  const { socket, stream } = input;
+  let stderr = "";
+  const stderrTail = new Writable({
+    write: (chunk: Buffer, _encoding, done) => {
+      stderr = (stderr + chunk.toString("utf8")).slice(-GUEST_STDERR_TAIL_CHARS);
+      done();
+    },
+  });
+  docker.modem.demuxStream(stream, socket, stderrTail);
+  socket.pipe(stream);
+  stream.on("end", () => {
+    socket.end();
+    input.exitCode().then(
+      (exitCode) => {
+        if (exitCode === 0) return;
+        getLogger().info("docker worker guest exited with an error", {
+          attemptId: input.attemptId,
+          exitCode,
+          stderrTail: stderr,
+        });
+      },
+      (error: unknown) => {
+        getLogger().info("docker worker guest exit code unavailable", {
+          attemptId: input.attemptId,
+          errorText: error instanceof Error ? error.message : String(error),
+          stderrTail: stderr,
+        });
+      },
+    );
+  });
+  stream.on("error", () => socket.destroy());
+  socket.on("error", () => stream.destroy());
+  socket.on("close", () => stream.end());
+}
+
+/** The exec's stream can end a moment before Docker records the exit. */
+async function guestExitCode(exec: Docker.Exec): Promise<number | null> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const state = await exec.inspect();
+    if (!state.Running) return state.ExitCode;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return null;
+}
+
 async function startSupervisor() {
   const logger = createRootLogger(SERVICE_NAMES.supervisor);
   // Repo skills are published to DATA_DIR so computers see them via the /managed-skills bind.
@@ -829,6 +1070,7 @@ async function startSupervisor() {
   const server = serve({ fetch: app.fetch, hostname, port }, () => {
     logger.info("supervisor listening", { "http.host": hostname, "http.port": port });
   });
+  server.on("upgrade", (request, socket, head) => void upgradeWorkerGuest(request, socket, head));
   let stopping = false;
   const shutdown = async () => {
     if (stopping) return;
@@ -1081,6 +1323,7 @@ export async function controlDesktop(
   browserProfile: string,
   observe: boolean,
   settleMs: number,
+  workspace?: string,
 ) {
   const signal = AbortSignal.timeout(computerControlTimeoutMs(actions, settleMs));
   let response: Response;
@@ -1095,7 +1338,7 @@ export async function controlDesktop(
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        steps: containerActionSteps(actions, display, browserProfile),
+        steps: containerActionSteps(actions, display, browserProfile, workspace),
         display,
         observe,
         settleMs,
@@ -1403,6 +1646,7 @@ async function applyContainerActions(
   actions: Array<z.infer<typeof computerActionSchema>>,
   display = ":1",
   browserProfile?: string,
+  workspace?: string,
 ) {
   const script = [
     "import json, subprocess, sys, time",
@@ -1416,7 +1660,7 @@ async function applyContainerActions(
     "python3",
     "-c",
     script,
-    JSON.stringify(containerActionSteps(actions, display, browserProfile)),
+    JSON.stringify(containerActionSteps(actions, display, browserProfile, workspace)),
   ]);
   if (result.code !== 0) throw new Error(result.stderr || "computer action failed");
 }

@@ -18,6 +18,8 @@ import {
   computerHomeStorage,
   computerNetworkNameFor,
   computerNetworkNamesForCleanup,
+  computerVolumeHome,
+  computerWorkspace,
   containerCreateOptions,
   containerNameFor,
   controlPortPublicationMatches,
@@ -34,6 +36,10 @@ import {
   screenPorts,
   screenUrlFor,
   screenUrlWithToken,
+  volumeHomeMatches,
+  WORKER_NETWORK,
+  workerCreateOptions,
+  workerMounts,
   xdotoolCommand,
 } from "./computer-spec.js";
 
@@ -866,5 +872,164 @@ describe("computer home storage", () => {
       expect(() => assertVolumeSubpathSupport(version)).toThrow(/Docker Engine 26/);
     for (const version of ["1.45", "1.46", "2.0"])
       expect(() => assertVolumeSubpathSupport(version)).not.toThrow();
+  });
+});
+
+describe("docker worker spec", () => {
+  const appdata = {
+    Mounts: [{ Type: "volume", Name: "example_appdata", Destination: "/data" }],
+  } as Docker.ContainerInspectInfo;
+
+  it("runs a hardened, self-removing container labelled with its attempt, as its computer's user", () => {
+    const options = workerCreateOptions({
+      attemptId: "attempt-1",
+      ttlSeconds: 600,
+      mounts: [],
+      user: "1001:1001",
+    });
+    expect(options).toMatchObject({
+      Image: "rakazo/worker:local",
+      User: "1001:1001",
+      Cmd: ["sleep", "600"],
+      Labels: { "rakazo.worker": "true", "rakazo.attempt": "attempt-1" },
+      HostConfig: {
+        Init: true,
+        AutoRemove: true,
+        CapDrop: ["ALL"],
+        SecurityOpt: ["no-new-privileges:true"],
+        NetworkMode: WORKER_NETWORK,
+        Memory: 1024 ** 3,
+        NanoCpus: 1e9,
+        PidsLimit: 2048,
+      },
+    });
+    expect(options.HostConfig?.ReadonlyRootfs).toBeUndefined();
+    expect(options.HostConfig?.Binds).toBeUndefined();
+    // The capability travels with the guest's exec, never in the container's environment.
+    expect(options.Env).toEqual(["HOME=/home/user"]);
+  });
+
+  it("derives mounts from volume names, as binds or as subpaths of the data volume", () => {
+    const requested = [
+      { volume: "rakazo-private", path: "/workspace/bot", readOnly: false },
+      { volume: "rakazo-shared", path: "/workspace/space", readOnly: true },
+    ];
+    const bound = workerMounts(requested, "/data", undefined);
+    expect(bound.map((mount) => mount.source)).toEqual([
+      { bind: "/data/volumes/rakazo-private" },
+      { bind: "/data/volumes/rakazo-shared" },
+    ]);
+    const options = workerCreateOptions({
+      attemptId: "attempt-1",
+      ttlSeconds: 60,
+      mounts: workerMounts(requested, "/data", appdata),
+      user: "1000:1000",
+    });
+    expect(options.HostConfig?.Mounts).toEqual([
+      {
+        Type: "volume",
+        Source: "example_appdata",
+        Target: "/workspace/bot",
+        ReadOnly: false,
+        VolumeOptions: { NoCopy: true, Subpath: "volumes/rakazo-private" },
+      },
+      {
+        Type: "volume",
+        Source: "example_appdata",
+        Target: "/workspace/space",
+        ReadOnly: true,
+        VolumeOptions: { NoCopy: true, Subpath: "volumes/rakazo-shared" },
+      },
+    ]);
+  });
+
+  it("rejects volume names and targets that could escape their roots", () => {
+    for (const volume of ["../homes/bot", "rakazo-a/../../b", "rakazo-", "homes", "rakazo-a b"])
+      expect(() =>
+        workerMounts([{ volume, path: "/workspace/a", readOnly: false }], "/data", undefined),
+      ).toThrow(/volume name/);
+    for (const target of [
+      "/workspace",
+      "/workspace/../etc",
+      "/home/user",
+      "workspace/a",
+      "/workspace/a/./b",
+    ])
+      expect(() =>
+        workerMounts([{ volume: "rakazo-a", path: target, readOnly: false }], "/data", undefined),
+      ).toThrow(/under \/workspace/);
+  });
+});
+
+describe("computer on volumes", () => {
+  const team = {
+    root: "/workspace",
+    mounts: [
+      { volume: "rakazo-ada", path: "/workspace/bots/ada" },
+      { volume: "rakazo-space", path: "/workspace/shared" },
+    ],
+  };
+
+  it("keeps its home on the home bind and mounts its volumes at the workers' paths", () => {
+    const volumeHome = computerVolumeHome(team, "/data", undefined);
+    const options = containerCreateOptions({
+      name: "bot",
+      image: "computer",
+      botId: "ada",
+      spaceId: "space",
+      homePath: "/data/homes/team",
+      volumeHome,
+    });
+    expect(options.HostConfig.Binds).toEqual(["/data/homes/team:/home/rakazo"]);
+    expect(options.HostConfig.Mounts).toEqual([
+      {
+        Type: "bind",
+        Source: "/data/volumes/rakazo-ada",
+        Target: "/workspace/bots/ada",
+        ReadOnly: false,
+      },
+      {
+        Type: "bind",
+        Source: "/data/volumes/rakazo-space",
+        Target: "/workspace/shared",
+        ReadOnly: false,
+      },
+    ]);
+    expect(options.WorkingDir).toBe("/workspace");
+    expect(options.Labels).toMatchObject({
+      "rakazo.home": "volumes",
+      "rakazo.mounts": volumeHome.digest,
+      "rakazo.workspace": "/workspace",
+    });
+    expect(computerWorkspace(options.Labels)).toBe("/workspace");
+    expect(volumeHomeMatches(options.Labels, volumeHome)).toBe(true);
+  });
+
+  it("is replaced once its mounts change, or when it was created before its home moved", () => {
+    const volumeHome = computerVolumeHome(team, "/data", undefined);
+    const added = computerVolumeHome(
+      { ...team, mounts: [...team.mounts, { volume: "rakazo-bob", path: "/workspace/bots/bob" }] },
+      "/data",
+      undefined,
+    );
+    const labels = { "rakazo.mounts": volumeHome.digest };
+    expect(volumeHomeMatches(labels, added)).toBe(false);
+    expect(volumeHomeMatches({}, volumeHome)).toBe(false);
+    expect(volumeHomeMatches(labels, undefined)).toBe(false);
+    expect(volumeHomeMatches({}, undefined)).toBe(true);
+    expect(computerWorkspace({})).toBe("/home/rakazo");
+  });
+
+  it("refuses a workspace outside its volumes and volume names that could escape", () => {
+    expect(() =>
+      computerVolumeHome({ ...team, root: "/workspace/bots/bob" }, "/data", undefined),
+    ).toThrow(/workspace/);
+    expect(() =>
+      computerVolumeHome(
+        { root: "/workspace", mounts: [{ volume: "../homes/x", path: "/workspace/shared" }] },
+        "/data",
+        undefined,
+      ),
+    ).toThrow(/volume name/);
   });
 });

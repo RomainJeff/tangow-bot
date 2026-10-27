@@ -4,7 +4,7 @@ Thanks for helping improve Rakazo. Keep changes focused and testable.
 
 ## Run locally
 
-Follow the [source checkout setup](README.md#local-development-source-checkout) for prerequisites,
+Follow the [source checkout setup](README.md#development-source-checkout) for prerequisites,
 required secrets, and startup commands.
 
 ## Checks before you open a PR
@@ -18,10 +18,8 @@ required secrets, and startup commands.
 | `pnpm test:e2e:impact-map` | Full serial e2e run that rerecords `apps/web/e2e/impact-map.json` for the selector. Needs Docker. |
 | `pnpm test:topology` | Local product-path smoke: Docker computer + Graphile worker recovery. Needs Docker. Not PR CI. |
 | `pnpm test:canary` | Live provider canaries. Needs keys. Not PR CI. |
-| `pnpm test:pi` | Real Pi against a local HTTP model fixture: streaming, tool round trips, failures and cancellation. No keys. |
-| `pnpm test:computer-replay` | Real Pi and Docker Chromium against a local model fixture. Needs the computer image; no keys or Electron windows. |
+| `pnpm test:pi` | Pi SDK sessions against a local HTTP model fixture: streaming, transcripts, failures and cancellation. No keys. |
 | `pnpm test:evals --list` | List agent-quality cases. Add `--live` and a model connection to measure repeated real-model task success. |
-| `pnpm test:computer` | Real vision model + E2B desktop. Needs keys; see [computer verification](docs/computer-runtime.md#verification). Not PR CI. |
 | `pnpm check` | TypeScript (`tsc`) across the monorepo. |
 | `pnpm lint` | Biome lint and format check. |
 
@@ -64,7 +62,7 @@ For the separate real-model desktop acceptance test, see
 - **Never** paste API keys, tokens, or passwords in issues or PRs.
 - Use placeholders in examples (`your-openrouter-key`, etc.).
 
-The product path is **Pi + Docker + Graphile**. Emulator settings (`AGENT_RUNTIME=scripted`, `SANDBOX_PROVIDER=fake`, `WAKEUP_DRIVER=memory`) are for tests only.
+The product path is **Pi in Docker workers + Graphile**. Emulator settings (`AGENT_RUNTIME=scripted`, the in-process scripted runtime, `SANDBOX_PROVIDER=fake`, `WAKEUP_DRIVER=memory`) are for tests only.
 
 **Integrations** can use [Composio](https://composio.dev/) or Pipedream Connect as optional managed
 app catalogs. Users can also install HTTPS MCP servers (including Treg) and bounded OpenAPI tool

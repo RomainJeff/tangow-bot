@@ -112,30 +112,6 @@ export function botMessageOutcomeFromMidTurn(
   return { text: midTurn.join("\n\n"), intent: "status" };
 }
 
-const BUDGET_NOTICE_HEAD = "I stopped after reaching the limit of ";
-const BUDGET_NOTICE_TAIL = " tool calls in this turn. Send another message to continue.";
-
-/** The notice a runtime ends a run with when the tool-call limit stops it. */
-export function toolCallBudgetNotice(limit: number): string {
-  return `${BUDGET_NOTICE_HEAD}${limit}${BUDGET_NOTICE_TAIL}`;
-}
-
 /** What a runtime says when a model stops after a tool step without answering. */
 export const TOOL_FINAL_RESPONSE_FALLBACK =
   "I completed the tool step but could not produce a final response. Please ask me to continue.";
-
-function trailingToolCallBudgetNotice(text: string): string | undefined {
-  const trimmed = text.trimEnd();
-  if (!trimmed.endsWith(BUDGET_NOTICE_TAIL)) return undefined;
-  const before = trimmed.slice(0, -BUDGET_NOTICE_TAIL.length);
-  const head = before.lastIndexOf(BUDGET_NOTICE_HEAD);
-  if (head === -1 || !/^\d+$/.test(before.slice(head + BUDGET_NOTICE_HEAD.length))) {
-    return undefined;
-  }
-  return trimmed.slice(head);
-}
-
-/** Whether a run's text ends on `toolCallBudgetNotice`, whatever the limit. */
-export function endsWithToolCallBudgetNotice(text: string): boolean {
-  return trailingToolCallBudgetNotice(text) !== undefined;
-}

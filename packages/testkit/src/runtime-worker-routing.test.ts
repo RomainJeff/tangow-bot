@@ -291,9 +291,8 @@ describe("where a product run executes", () => {
     expect(await attemptsOf(run, runId)).toEqual([{ workerState: "released" }]);
   });
 
-  it("keeps a bot whose home is still a snapshot in process, with the computer shell", async () => {
-    const seen: string[][] = [];
-    const run = await fixture(offeredShellTools(seen));
+  it("fails a run that needs files while its computer's home has yet to move", async () => {
+    const run = await fixture([]);
     await run.prisma.computer.update({
       where: { id: run.bot.computerId! },
       data: { homeStorage: "snapshot" },
@@ -301,12 +300,12 @@ describe("where a product run executes", () => {
     const runId = await run.send("Hello.");
     await run.continueRun(runId);
 
-    expect(seen).toEqual([["read_file", "write_file", "shell"]]);
-    expect(await attemptsOf(run, runId)).toEqual([{ workerState: null }]);
+    run.model.assertComplete();
+    expect(await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).toMatchObject({
+      status: "failed",
+      error: "This computer's home move is pending, so file work can't run yet",
+    });
     expect(run.provider.launches).toEqual([]);
-    expect(
-      (await run.prisma.computer.findUniqueOrThrow({ where: { id: run.bot.computerId! } })).state,
-    ).toBe("running");
   });
 
   it("creates the volume of a bot attached after its computer moved, on its first run", async () => {

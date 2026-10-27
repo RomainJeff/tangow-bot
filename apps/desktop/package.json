@@ -1,6 +1,6 @@
 {
-  "name": "@rakazo/desktop",
-  "productName": "Rakazo",
+  "name": "@rakazo/desktop-new",
+  "productName": "Tangow",
   "version": "0.1.6",
   "license": "Apache-2.0",
   "type": "module",
@@ -11,7 +11,7 @@
     "pack": "pnpm --filter @rakazo/web build && pnpm build && electron-builder --mac --win --linux",
     "pack:dir": "pnpm --filter @rakazo/web build && pnpm build && electron-builder --dir",
     "check": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run --root ../.. apps/desktop/src",
+    "test": "vitest run --root ../.. apps/desktop-new/src",
     "test:e2e": "pnpm build && playwright test --config e2e/playwright.config.ts",
     "release": "pnpm --filter @rakazo/web build && pnpm build && electron-builder --publish never"
   },
@@ -28,7 +28,7 @@
     "vitest": "4.1.11"
   },
   "build": {
-    "appId": "dev.rakazo.desktop",
+    "appId": "dev.tangow.desktop",
     "directories": {
       "output": "out",
       "buildResources": "assets"
@@ -63,7 +63,7 @@
       "verifyUpdateCodeSignature": true
     },
     "linux": {
-      "executableName": "rakazo",
+      "executableName": "tangow",
       "icon": "assets/icon.png",
       "target": [
         "AppImage"
@@ -72,8 +72,8 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "elie222",
-        "repo": "rakazo"
+        "owner": "RomainJeff",
+        "repo": "rakazo-bot"
       }
     ]
   }

@@ -3,14 +3,14 @@
 Rakazo keeps the agent runtime and the computer runtime separate:
 
 ```text
-chat/API -> one Pi agent session -> Rakazo computer tools -> SandboxProvider -> E2B
-                                                   |-> Docker
-                                                   |-> desktop/fake
+chat/API -> worker (Pi native) -> Rakazo computer tools -> SandboxProvider -> E2B
+                                                     |-> Docker
+                                                     |-> fake
 
 SandboxProvider workspace <-> AgentHomeStore <-> Rakazo-owned DATA_DIR
 ```
 
-Pi runs in the Rakazo API/worker process. On E2B, a bot whose home is on volumes instead runs Pi in a temporary worker VM for each run; Rakazo tools and model keys stay in the Rakazo process (see [E2B workers](self-host-e2b-workers.md)). The built-in tools are ordinary Pi tools, not Claude- or MCP-specific tools, so any model exposed through Pi can call them. Screen operation still requires a model that can accept image tool results and reason about screenshots.
+Every run starts Pi in a short-lived worker of its own: an E2B sandbox or a Docker container, with the bot's and the space's files on volumes. Rakazo tools and model keys stay in the Rakazo process (see [E2B workers](self-host-e2b-workers.md)). The built-in tools are ordinary Pi tools, not Claude- or MCP-specific tools, so any model exposed through Pi can call them. Screen operation still requires a model that can accept image tool results and reason about screenshots.
 
 ## Computer contract
 
@@ -65,7 +65,7 @@ To let a bot use GitHub, store a token as the `GH_TOKEN` agent secret. It reache
 
 The portable computer workspace is the durable boundary. E2B uses `/home/user/rakazo-home`; Docker and local providers expose the equivalent home. Browser profiles are rooted under `.browser-profiles` in that workspace on E2B. Rakazo checkpoints transferred workspaces into `AgentHomeStore` at run completion or failure, before explicit stop, and before idle suspension. Docker mounts the Rakazo-owned home directly and only advances its revision marker at those boundaries. New or replacement machines import the latest stored workspace before use.
 
-An E2B computer whose home is on volumes skips this checkpoint. Its bots' folders live on each bot's private E2B volume and the shared folder on the space's volume, and the computer and the run workers mount the same volumes. New E2B spaces start on volumes; existing homes move once, as [E2B workers](self-host-e2b-workers.md) describes.
+A computer whose home is on volumes skips this checkpoint. Its bots' folders live on each bot's private volume and the shared folder on the space's volume, and the computer and the run workers mount the same volumes at `/workspace/bots/<botId>` and `/workspace/shared`. New spaces start on volumes. Existing E2B homes move once, as [E2B workers](self-host-e2b-workers.md) describes; existing Docker homes move by themselves, as [homes on volumes](self-host-sandbox-providers.md#homes-on-volumes) describes. A Docker computer keeps `/home/rakazo`, with its dotfiles and browser profiles, on its home directory.
 
 `LocalAgentHomeStore` currently keeps the latest workspace under `DATA_DIR/homes/<computer-home-key>` and checkpoint metadata separately under `DATA_DIR/home-revisions`. Replacements are staged before the current copy is swapped, and checkpoints are serialized per computer. This implementation is latest-only rather than an immutable revision archive. Production deployments must put `DATA_DIR` on a Rakazo-owned persistent volume, encrypt that volume at rest, and include it in off-host backups. The storage interface is deliberately independent of E2B so an object-store-backed implementation can replace the local volume without changing agent tools or sandbox providers.
 
@@ -75,20 +75,9 @@ The disposable OS image is not a portable disk snapshot. System packages install
 
 ## Verification
 
-The [agent verification guide](agent-verification.md) also describes a deterministic
-contacts-export replay through real Pi, with either a stateful fake computer or
-real Docker Chromium. It requires no inference and complements the vision
-acceptance test below.
-
 Offline tests cover tool-result images, action parsing, provider conformance (including the page-browser adapter and computer_act fallback), workspace checkpoint/restore, provider SDK translation, lifecycle integration, and the multi-screen E2B emulator. They never call a model or live sandbox.
 
-The explicit acceptance test requires Docker (for temporary Postgres), `E2B_API_KEY`, `OPENROUTER_API_KEY`, and a vision-capable OpenRouter model id:
-
-```bash
-COMPUTER_E2E_MODEL=<vision-capable-openrouter-model-id> pnpm test:computer
-```
-
-It starts the full API, provisions a real E2B desktop, serves a deterministic page inside the sandbox, and asks a real model to observe and click a button. The button creates a server-side marker; the test then requires the model to use terminal and file tools and verifies both the marker and recorded tool calls. Finally, it destroys the provider machine, boots a replacement through the stale provider reference, and verifies that the external checkpoint restored the model-created file. The command is opt-in and is not run by `pnpm test` or CI unless invoked explicitly.
+The live vision acceptance test (`pnpm test:computer`) drove the in-process agent loop and was removed with it.
 
 ### Docker desktop lifecycle regression
 

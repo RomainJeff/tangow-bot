@@ -71,13 +71,13 @@ describe("development icon", () => {
 });
 
 describe("window background", () => {
-  it("keeps the legacy dark background so startup chrome does not flash", () => {
-    // The legacy shell is frozen on the pre-Quiet palette; apps/desktop-new is the
-    // one that tracks darkTokens.background from @rakazo/ui-tokens.
-    const LEGACY_BACKGROUND = "#0B0C0E";
+  it("matches the shared dark background token so startup chrome does not flash", async () => {
+    const { darkTokens } = await import("@rakazo/ui-tokens");
+    const { WINDOW_BACKGROUND } = await import("./window-options");
+    expect(WINDOW_BACKGROUND).toBe(darkTokens.background);
     for (const platform of ["darwin", "win32", "linux"] as const) {
-      expect(browserWindowOptions(platform).backgroundColor).toBe(LEGACY_BACKGROUND);
-      expect(setupWindowOptions(platform).backgroundColor).toBe(LEGACY_BACKGROUND);
+      expect(browserWindowOptions(platform).backgroundColor).toBe(darkTokens.background);
+      expect(setupWindowOptions(platform).backgroundColor).toBe(darkTokens.background);
     }
   });
 });

@@ -35,10 +35,11 @@ export interface AppEnv {
   sandboxSupervisorToken: string | undefined;
   screenProxySecret: string;
   sandboxProvider: string;
-  agentRuntime: string;
+  /** AGENT_RUNTIME=scripted is the in-process test runtime; every other value runs bots in workers. */
+  agentRuntime: "worker" | "scripted";
   deploymentModelKey: string | undefined;
   e2bApiKey: string | undefined;
-  /** E2B workers on an E2B deployment; null keeps every run in process. */
+  /** The workers of the computer provider; null only for the test providers. */
   workerProvider: WorkerProviderConfig | null;
   composioApiKey: string | undefined;
   /** Optional integrations.sh-compatible catalog base URL. */
@@ -115,7 +116,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
       sandboxProvider === "docker" ? resolveSupervisorToken(source) : undefined,
     screenProxySecret: resolveScreenProxySecret(source),
     sandboxProvider,
-    agentRuntime: source.AGENT_RUNTIME ?? "pi",
+    agentRuntime: source.AGENT_RUNTIME === "scripted" ? "scripted" : "worker",
     // Provider, model and key resolve together: see resolveDeploymentModel.
     deploymentModelKey: deploymentModel.key,
     e2bApiKey: source.E2B_API_KEY,

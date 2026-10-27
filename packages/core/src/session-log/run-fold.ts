@@ -48,13 +48,15 @@ type RunMessage = {
  * since it is a message of its own; a `subagent` entry and the card-state entries pass through.
  * With `splitAtHelpers`, a `run_subagent` call also closes its run's stretch, so a helper's card
  * can sit between what the run said before the call and after it.
+ * With `splitAtPersonMessages`, each published message keeps its own bubble in the thread.
  */
 export function foldRuns(
   entries: readonly ThreadEntry[],
   {
     answers = toolAnswers(entries),
     splitAtHelpers = false,
-  }: { answers?: ToolAnswers; splitAtHelpers?: boolean } = {},
+    splitAtPersonMessages = false,
+  }: { answers?: ToolAnswers; splitAtHelpers?: boolean; splitAtPersonMessages?: boolean } = {},
 ): (RunMessage | Exclude<ThreadEntry, FoldedEntry>)[] {
   const segments: (RunMessage | Exclude<ThreadEntry, FoldedEntry>)[] = [];
   const open = new Map<string, RunMessage>();
@@ -84,9 +86,13 @@ export function foldRuns(
   for (const entry of entries) {
     if (!STRETCH_TYPES.has(entry.type)) open.clear();
     switch (entry.type) {
-      case "assistant.text":
+      case "assistant.text": {
+        const separate = splitAtPersonMessages && entry.payload.toPerson;
+        if (separate) open.delete(entry.runId);
         stretchOf(entry).blocks.push(...entry.payload.blocks);
+        if (separate) open.delete(entry.runId);
         break;
+      }
       case "assistant.reasoning":
         stretchOf(entry).blocks.push({ kind: "reasoning", text: entry.payload.text });
         break;
