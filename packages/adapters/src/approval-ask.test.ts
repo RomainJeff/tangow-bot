@@ -1,3 +1,4 @@
+import type { AskDraft } from "@rakazo/contracts";
 import {
   BOT_NAME_MAX_LENGTH,
   BOT_TITLE_MAX_LENGTH,
@@ -5,7 +6,7 @@ import {
   SPAWN_BOT_PROMPT_MAX_LENGTH,
 } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
-import { buildApprovalAskBlock } from "./approval-ask.js";
+import { approvalPushBody, buildApprovalAskBlock } from "./approval-ask.js";
 
 describe("buildApprovalAskBlock", () => {
   it("shows a proposed routine on the routine card, a forged line kept inside the prompt", () => {
@@ -390,5 +391,84 @@ describe("buildApprovalAskBlock", () => {
     expect(block).toMatchObject({
       detail: `to: a@example.test\nbcc: ["hidden@example.test"]\nsubject: Hi\nbody: ${"x".repeat(1_000)}…\nnotes: ${"y".repeat(1_000)}…`,
     });
+  });
+});
+
+describe("approvalPushBody", () => {
+  const mail: AskDraft = {
+    app: { name: "Gmail", logo: null },
+    recipients: [{ role: "to", address: "someone@example.com" }],
+    subject: "Test A",
+    body: "Hello",
+  };
+  const push = (draft?: AskDraft, secrets: string[] = []) =>
+    approvalPushBody(
+      buildApprovalAskBlock(
+        "effect-1",
+        "mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL",
+        { tools: [] },
+        secrets,
+        { draft },
+      ),
+    );
+
+  it("names a mail's app, subject and recipient", () => {
+    expect(push(mail)).toBe("Gmail: Test A to someone@example.com");
+  });
+
+  it("names a chat message's person, and a channel with its #", () => {
+    const chat: AskDraft = {
+      app: { name: "Slack", logo: null },
+      recipients: [{ role: "to", address: "D0MARIE" }],
+      body: "Thursday instead?",
+    };
+    expect(
+      push({ ...chat, conversation: { kind: "person", name: "Marie Dupont", handle: "marie" } }),
+    ).toBe("Slack: Thursday instead? to Marie Dupont");
+    expect(push({ ...chat, conversation: { kind: "channel", name: "general" } })).toBe(
+      "Slack: Thursday instead? to #general",
+    );
+  });
+
+  it("falls back to the first line of the text when there is no subject", () => {
+    expect(push({ ...mail, subject: undefined, body: "\n Hi Marie,\nSee you." })).toBe(
+      "Gmail: Hi Marie, to someone@example.com",
+    );
+  });
+
+  it("leaves out the line when the draft has none", () => {
+    expect(push({ ...mail, subject: undefined, body: "" })).toBe("Gmail: to someone@example.com");
+  });
+
+  it("keeps a secret in the subject masked", () => {
+    expect(push({ ...mail, subject: "Key sk-secret-1234" }, ["sk-secret-1234"])).toBe(
+      "Gmail: Key [redacted] to someone@example.com",
+    );
+  });
+
+  it("uses the summary of what a batch runs, never the wrapper's name", () => {
+    const block = buildApprovalAskBlock(
+      "effect-1",
+      "mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL",
+      { tools: [] },
+      [],
+      {
+        actions: [{ toolName: "STRIPE_CREATE_CHARGE", args: { amount: 10 } }],
+      },
+    );
+    expect(approvalPushBody(block)).toBe("Review before STRIPE_CREATE_CHARGE → 10");
+    expect(approvalPushBody(block)).not.toContain("mcp__");
+  });
+
+  it("uses the card's own text for a direct tool", () => {
+    const block = buildApprovalAskBlock(
+      "effect-1",
+      "gmail_send_email",
+      {
+        to: "person@example.test",
+      },
+      [],
+    );
+    expect(approvalPushBody(block)).toBe(block.text);
   });
 });

@@ -218,6 +218,8 @@ function fixture({
     run: {
       findUnique: vi.fn(async () => run),
       findUniqueOrThrow: vi.fn(async () => run),
+      // The notification source of a push: a bot that notifies.
+      findFirst: vi.fn(async () => ({ bot: { notifyOnFinish: true }, thread: { groupId: null } })),
       updateMany: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
         // One worker leases a run: a second claim finds it taken.
         if (data.status === "leased" && !["queued", "waiting_input"].includes(run.status)) {
@@ -237,6 +239,7 @@ function fixture({
         computer: { id: "computer-1", scope: "dedicated" },
       })),
       findMany: vi.fn(async () => []),
+      findFirst: vi.fn(async () => null),
     },
     attempt: {
       count: vi.fn(async () => 0),
@@ -246,6 +249,8 @@ function fixture({
     },
     thread: {
       findUniqueOrThrow: vi.fn(async () => ({ id: run.threadId, groupId: null, nextEventSeq: 2 })),
+      findFirst: vi.fn(async () => ({ groupId: null })),
+      count: vi.fn(async () => 0),
     },
     task: { findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: "Read the item" })) },
     connection: { findMany: vi.fn(async () => []) },
@@ -281,6 +286,7 @@ function fixture({
     externalEffect,
   };
   const finalizeRun = vi.fn(async () => ({ continuationRunId: null }));
+  const send = vi.fn(async () => undefined);
   const execute = vi.fn(async function* (call: ConnectorCall, context: AdapterContext) {
     if (connectorFailure) {
       yield connectorFailure;
@@ -337,6 +343,7 @@ function fixture({
     memory: { read: async () => ({ documents: [] }) },
     memoryProviders: { resolve: async () => null },
     events,
+    notifications: { send },
     jobs: { enqueue: vi.fn(async () => undefined) },
     secrets,
   } as unknown as Parameters<typeof createRunExecutor>[0]);
@@ -344,6 +351,7 @@ function fixture({
     effects,
     results,
     execute,
+    send,
     pauseRunForInput,
     runtimeRun,
     prisma,
@@ -690,6 +698,34 @@ describe("connector read-only metadata and approval enforcement", () => {
       );
     });
 
+    it("pushes what a batch's charge does, never the wrapper's name", async () => {
+      const f = fixture({ name, catalog: true, inputSchema, rules: [purchaseRule] });
+      f.setCalls([{ args: batch(charge), executionId: "c1" }]);
+      await f.run();
+      expect(f.send).toHaveBeenCalledOnce();
+      expect(f.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Assistant needs approval",
+          body: "Review before STRIPE_CREATE_CHARGE → 10",
+        }),
+        expect.anything(),
+      );
+    });
+
+    it("pushes a mail draft inside a batch with its app, subject and recipient", async () => {
+      const f = fixture({ name, catalog: true, inputSchema });
+      f.setCalls([{ args: batch(mail), executionId: "c1" }]);
+      await f.run();
+      expect(f.send).toHaveBeenCalledOnce();
+      expect(f.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Assistant needs approval",
+          body: "Gmail: Hi to someone@example.com",
+        }),
+        expect.anything(),
+      );
+    });
+
     it("lets a charge inside a batch ask over an always-allow on the wrapper", async () => {
       const f = fixture({
         name,
@@ -824,6 +860,16 @@ describe("connector read-only metadata and approval enforcement", () => {
         expect(card(f).draft?.fields).toBeUndefined();
       },
     );
+
+    it("pushes a Slack draft with its person, never the id", async () => {
+      const f = slackSend(new ComposioEmulator());
+      await f.run();
+      expect(f.send).toHaveBeenCalledOnce();
+      expect(f.send).toHaveBeenCalledWith(
+        expect.objectContaining({ body: "Slack: Thursday instead? to Marie Dupont" }),
+        expect.anything(),
+      );
+    });
 
     it.each([
       ["refuses", { kind: "fail", error: "missing_scope" } as const],

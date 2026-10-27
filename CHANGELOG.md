@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-28
+
+#### Fixed
+
+- Approval notifications now name what the bot wants to do (an email's app, subject and recipient, or the action) instead of a tool name.
+
 ### 2026-10-26
 
 #### Changed
