@@ -461,6 +461,51 @@ const startOf = (guest: Guest) =>
   guest.received.find((message) => message.kind === "worker.start")!.run;
 
 describe("a helper the call names by profile", () => {
+  it.each<{
+    executionMode?: "async" | "sync" | "auto";
+    background?: boolean;
+    runsAsync: boolean;
+  }>([
+    { executionMode: "async", runsAsync: true },
+    { executionMode: "async", background: false, runsAsync: true },
+    { executionMode: "async", background: true, runsAsync: true },
+    { executionMode: "sync", runsAsync: false },
+    { executionMode: "sync", background: false, runsAsync: false },
+    { executionMode: "sync", background: true, runsAsync: false },
+    { executionMode: "auto", runsAsync: false },
+    { executionMode: "auto", background: false, runsAsync: false },
+    { executionMode: "auto", background: true, runsAsync: true },
+    { runsAsync: false },
+    { background: false, runsAsync: false },
+    { background: true, runsAsync: true },
+  ])(
+    "resolves profile mode $executionMode and background $background to async $runsAsync",
+    async ({ executionMode, background, runsAsync }) => {
+      const run = helperRun("run_profile_mode", {
+        helperProfiles: [{ ...RESEARCHER, executionMode }],
+      });
+      const guest = await run.guest();
+      const args = { helper: "researcher", ...(background === undefined ? {} : { background }) };
+      callHelper(guest, 1, "h1", args);
+      const [reply] = await guest.replies(2, 1);
+
+      if (runsAsync) {
+        expect(reply).toEqual({ type: "tool.result", output: { helperId: "run_background" } });
+      } else {
+        expect(reply).toMatchObject({ type: "subagent.start", agent: "helper:1" });
+        guest.send(3, finish("helper:1", "Found the notes."));
+        await guest.replies(3);
+        expect((await guest.replies(2)).at(-1)).toEqual({
+          type: "tool.result",
+          output: "Found the notes.",
+        });
+      }
+      expect(run.opened).toMatchObject([
+        { args: { background: runsAsync }, profile: { name: "researcher" } },
+      ]);
+    },
+  );
+
   it("runs with its profile's tools, instructions and model, and nothing else", async () => {
     const run = helperRun("run_profiled", {
       tools: ["bash", "read", "remember", "forget", "run_subagent", "message_user"].map(tool),

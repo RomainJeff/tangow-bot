@@ -99,7 +99,10 @@ function agentTools(tools: readonly ConnectorTool[], harness: HarnessDeclaration
 const availableHelpers = (profiles: readonly HelperProfile[]) =>
   [
     "<available_helpers>",
-    ...profiles.map(({ name, description }) => `- ${name}: ${description}`),
+    ...profiles.map(
+      ({ name, description, executionMode }) =>
+        `- ${name}: ${description}${executionMode && executionMode !== "auto" ? ` Execution mode: always ${executionMode}.` : ""}`,
+    ),
     "</available_helpers>",
   ].join("\n");
 

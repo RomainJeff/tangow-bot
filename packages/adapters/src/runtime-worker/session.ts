@@ -348,16 +348,20 @@ export function createSession(
       try {
         if (!request.startSubagent) throw new Error("Helpers are unavailable in this run");
         const profile = helperProfileOf(request.helperProfiles, call);
+        const background =
+          profile?.executionMode === "async" ||
+          (profile?.executionMode !== "sync" && call.background);
+        const args = { ...body.args, background };
         const model = await helperModel(request, call, profile);
         if (!live()) return { type: "error", message: "The worker stopped" };
         if (paused) return pausedToolCall(paused);
-        if (call.background) {
+        if (background) {
           if (!request.startHelper) throw new Error("Background helpers are unavailable here");
           const started = await request.startHelper({
             callId: body.callId,
             name: call.name,
             task: call.task,
-            args: body.args,
+            args,
             model: { provider: model.provider, id: model.id },
             profile,
           });
@@ -373,7 +377,7 @@ export function createSession(
           callId: body.callId,
           name: call.name,
           task: call.task,
-          args: body.args,
+          args,
           model: { provider: model.provider, id: model.id },
           profile,
         });

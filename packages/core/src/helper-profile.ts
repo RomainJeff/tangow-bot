@@ -10,6 +10,8 @@ export interface HelperProfile {
   /** Tools removed after `allow`, the harness's own included. */
   block?: readonly string[];
   exclusive?: HelperResource;
+  /** Overrides the call's background flag; auto or omitted leaves the choice to the bot. */
+  executionMode?: "async" | "sync" | "auto";
   model?: { provider: string; id: string };
   instructions: string;
 }
