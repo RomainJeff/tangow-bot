@@ -1,5 +1,6 @@
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import type { MessageBlock } from "@rakazo/contracts";
+import { stepCallTitle } from "@rakazo/core";
 import {
   Dialog,
   DialogContent,
@@ -16,7 +17,7 @@ type StepCall = NonNullable<StepsBlock["steps"][number]["calls"]>[number];
 function callsOf(block: StepsBlock): StepCall[] {
   return block.steps.flatMap((step) =>
     step.calls?.length
-      ? step.calls
+      ? step.calls.map((call) => ({ ...call, name: stepCallTitle(call) }))
       : Array.from({ length: step.count }, () => ({ name: step.label, input: "", output: "" })),
   );
 }

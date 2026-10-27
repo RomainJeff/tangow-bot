@@ -1,4 +1,5 @@
 import type { MessageBlock, SessionId } from "@rakazo/contracts";
+import { stepCallTitle } from "@rakazo/core";
 import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -17,7 +18,7 @@ type StepCall = NonNullable<StepsBlock["steps"][number]["calls"]>[number];
 export function stepCalls(block: StepsBlock): StepCall[] {
   return block.steps.flatMap((step) =>
     step.calls?.length
-      ? step.calls
+      ? step.calls.map((call) => ({ ...call, name: stepCallTitle(call) }))
       : Array.from({ length: step.count }, () => ({ name: step.label, input: "", output: "" })),
   );
 }

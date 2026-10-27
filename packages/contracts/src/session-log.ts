@@ -133,8 +133,11 @@ const UserMessagePayload = z.object({
   blocks: z.array(MessageBlock),
   replyTo: z.object({ entryId: EntryId, quote: z.string().optional() }).optional(),
   clientNonce: z.string().optional(),
-  /** `card`: the reply an answer given inside a card records, which the card shows in its place. */
-  source: z.enum(["app", "steering", "channel", "routine", "card"]),
+  /**
+   * `card`: the reply an answer given inside a card records, which the card shows in its place.
+   * `parent`: what a bot sent the background helper it started, kept in the helper's session.
+   */
+  source: z.enum(["app", "steering", "channel", "routine", "card", "parent"]),
 });
 
 const SubagentPayload = z.object({
@@ -250,7 +253,17 @@ const EntryShapes = z.discriminatedUnion("type", [
       profile: z.string().nullable(),
       status: z.enum(["completed", "failed"]),
       report: z.string(),
+      /** What its parent sent it that it ended before reading. */
+      unreadMessages: z.array(z.string()).optional(),
     }),
+  }),
+  /** In the thread's main session, the question the paused background helper `helperId` asks. */
+  z.object({
+    ...envelope,
+    botId: Id,
+    runId: z.never().optional(),
+    type: z.literal("helper.question"),
+    payload: z.object({ helperId: Id, question: z.string() }),
   }),
   /** In the thread's main session, when a routine run opens its own session `sessionId`. */
   runEntry(
@@ -482,6 +495,7 @@ export const ENTRY_AUDIENCE = {
   "tool.result": { inference: "yes", ui: true },
   subagent: { inference: "yes", ui: true },
   "helper.report": { inference: "yes", ui: false },
+  "helper.question": { inference: "yes", ui: false },
   "routine.started": { inference: "context", ui: true },
   "routine.finished": { inference: "yes", ui: true },
   "bot.text": { inference: "yes", ui: true },
@@ -603,12 +617,14 @@ type EntryBody = {
 
 /**
  * Whether a child session keeps the entry: one of its run's trace types, except an
- * `assistant.text` holding a block that needs the person, which goes to the person whole.
+ * `assistant.text` holding a block that needs the person, which goes to the person whole, and a
+ * `user.message` a helper's parent sent it.
  */
 export function isRunTrace(entry: EntryBody): boolean {
   if (entry.type === "assistant.text") {
     return !entry.payload.toPerson && !needsThePerson(entry.payload.blocks);
   }
+  if (entry.type === "user.message") return entry.payload.source === "parent";
   return RUN_TRACE_TYPES.has(entry.type);
 }
 

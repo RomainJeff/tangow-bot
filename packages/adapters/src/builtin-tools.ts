@@ -13,6 +13,9 @@ import { z } from "zod";
 
 export const DELEGATION_TOOL_NAMES = new Set([
   "run_subagent",
+  "helper_status",
+  "helper_message",
+  "helper_stop",
   "spawn_bot",
   "archive_bot",
   "delete_bot",
@@ -889,6 +892,48 @@ that merely narrate internal operations.`,
         },
       },
       required: ["name", "task"],
+    },
+  },
+  {
+    name: "helper_status",
+    description:
+      "List your background helpers still at work in this conversation: each one's helperId, profile, brief, status and start time, and the question of one waiting on you. Finished helpers already reported back.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: "helper_message",
+    description:
+      "Send one of your background helpers a message. A helper waiting on its question takes it as the answer and resumes; a working one reads it before its next step.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        helperId: { type: "string" },
+        message: { type: "string", minLength: 1 },
+      },
+      required: ["helperId", "message"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "helper_stop",
+    description:
+      "Stop one of your background helpers in this conversation, or all of them with helperId all. A stopped helper sends no report.",
+    inputSchema: {
+      type: "object",
+      properties: { helperId: { type: "string", description: "A helperId, or all." } },
+      required: ["helperId"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "ask_parent",
+    description:
+      "Ask the bot that started you a question when you are blocked or unsure, instead of guessing. You pause until it answers; its answer is this call's result.",
+    inputSchema: {
+      type: "object",
+      properties: { question: { type: "string", minLength: 1 } },
+      required: ["question"],
+      additionalProperties: false,
     },
   },
   {

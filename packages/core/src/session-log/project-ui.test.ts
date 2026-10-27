@@ -1007,7 +1007,7 @@ describe("projectThreadItems", () => {
     ]);
   });
 
-  it("shows a background helper only as its call's step, which opens its session, and its report not at all", () => {
+  it("shows a background helper only as its call's step, which opens its session, and its question and report not at all", () => {
     const run = { botId: "bot_ada", runId: "run_1" };
     const chain = linkEntries("background", [
       {
@@ -1025,6 +1025,11 @@ describe("projectThreadItems", () => {
           artifactIds: [],
           sessionId: "ses_helper",
         },
+      },
+      {
+        botId: "bot_ada",
+        type: "helper.question",
+        payload: { helperId: "run_helper", question: "Which dates?" },
       },
       {
         botId: "bot_ada",
@@ -1061,6 +1066,26 @@ describe("projectThreadItems", () => {
           },
           ...text("Started it."),
         ],
+      },
+    ]);
+  });
+
+  it("shows what a helper's parent sent it as the bot's words in the helper's session", () => {
+    const chain = linkEntries("helper", [
+      {
+        botId: "bot_ada",
+        type: "user.message",
+        payload: { blocks: text("Also check trains."), source: "parent" },
+      },
+    ]);
+    expect(projectThreadItems(chain)).toEqual([
+      {
+        kind: "message",
+        role: "bot",
+        id: "helper-0",
+        ts: at(0),
+        botId: "bot_ada",
+        blocks: text("Also check trains."),
       },
     ]);
   });

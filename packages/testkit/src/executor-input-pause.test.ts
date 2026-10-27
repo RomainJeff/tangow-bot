@@ -82,6 +82,20 @@ it.each([
   expect(cards[0]!.payload).toMatchObject({ block: { text: "Which city?" } });
 });
 
+it("refuses ask_parent from a run no bot started, and the run goes on", async () => {
+  const replies: unknown[] = [];
+  const run = await controllerRun(async (request) => {
+    replies.push(await request.executeTool!("ask_parent", { question: "Which dates?" }, "ask"));
+  });
+  const runId = await run.send("Plan my trip.");
+  await run.continueRun(runId);
+
+  expect(replies).toEqual([{ error: "Only a background helper has a parent to ask." }]);
+  expect(await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).toMatchObject({
+    status: "completed",
+  });
+});
+
 it("retries a takeover after its first pause loses the computer lease", async () => {
   const replies: unknown[] = [];
   const run = await controllerRun(async (request, prisma) => {

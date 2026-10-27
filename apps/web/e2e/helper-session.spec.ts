@@ -42,8 +42,8 @@ test("a helper stays out of the thread, and debug mode opens its session", async
   const session = page.getByTestId("session-view");
   await session.getByTestId("agent-steps-toggle").first().click();
   await captureScreenshot(page, testInfo, "helper-run-debug");
-  await session.getByRole("button", { name: "run_subagent", exact: true }).click();
-  await expect(session.getByRole("heading")).toHaveText("run_subagent");
+  await session.getByRole("button", { name: "helper", exact: true }).click();
+  await expect(session.getByRole("heading")).toHaveText("helper");
   await expect(session.getByTestId("run-details")).toContainText("scripted/scripted");
   await expect(session.getByTestId("run-details")).toContainText("subagent");
   await expect(session.getByText(result)).toBeVisible();

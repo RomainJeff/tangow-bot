@@ -13,8 +13,10 @@ import {
   blocksToAgentHistoryText,
   DISMISSABLE_EFFECT_KINDS,
   DISMISSED_EFFECT_RESULT,
+  fromParent,
   isApprovalAskBlock,
   isSecretAskBlock,
+  isWorkingStatus,
   messagingChannelId,
   normalizeSpawnBotArgs,
   runStartedByUser,
@@ -73,6 +75,7 @@ export interface ThreadEvents {
   finalizeRun(input: FinalizeRunInput): Promise<FinalizeRunResult | false>;
   notify(threadId: string, seq: number): Promise<void>;
   pauseRunForInput(input: PauseRunForInput): Promise<boolean>;
+  pauseRunForParent(input: PauseRunForParent): Promise<{ wokenRunId: string | null } | null>;
   pauseRunForTakeover(input: PauseRunForTakeover): Promise<boolean>;
   sendUserMessage(input: SendUserMessageInput): Promise<SendUserMessageResult>;
   startInboundRoutineRuns(
@@ -229,6 +232,17 @@ function resumeChoiceLabel(
   }
 }
 
+export interface PauseRunForParent {
+  spaceId: string;
+  threadId: string;
+  botId: string;
+  runId: string;
+  attemptId: string;
+  leaseOwner: string;
+  leaseFence: number;
+  question: string;
+}
+
 export interface PauseRunForTakeover {
   spaceId: string;
   threadId: string;
@@ -337,6 +351,7 @@ export function createThreadEvents(
     finalizeRun: (input) => finalizeRun(prisma, input, realtime),
     notify: (threadId, seq) => notifyRealtime(realtime, threadId, seq),
     pauseRunForInput: (input) => pauseRunForInput(prisma, input, realtime),
+    pauseRunForParent: (input) => pauseRunForParent(prisma, input),
     pauseRunForTakeover: (input) => pauseRunForTakeover(prisma, input, realtime),
     sendUserMessage: (input) => sendUserMessage(prisma, input, realtime),
     startInboundRoutineRuns: (input) => startInboundRoutineRuns(prisma, input, realtime),
@@ -758,13 +773,15 @@ export async function claimSteering(
         botId: input.botId,
         status: "running",
         // A helper is no turn of the conversation: what the person sends goes to its parent.
-        parentRunId: null,
+        OR: [{ parentRunId: null }, { trigger: "helper" }],
         leaseOwner: input.leaseOwner,
         leaseFence: input.leaseFence,
       },
       select: {
         id: true,
         trigger: true,
+        sessionId: true,
+        historyThroughSeq: true,
         sourceMessage: { select: { payload: true } },
         thread: { select: { sessionId: true } },
       },
@@ -776,19 +793,28 @@ export async function claimSteering(
       where: {
         botId: input.botId,
         id: input.seenIds.length ? { notIn: input.seenIds } : undefined,
-        OR: [{ runId: null }, { runId: input.runId }],
-        message: {
-          sessionId: run.thread.sessionId,
-          // Private follow-ups remain unclaimed for the existing private continuation.
-          ...(channelId
-            ? {
-                payload: {
-                  path: ["blocks"],
-                  array_contains: [{ kind: "channel_message", channelId }],
-                },
-              }
-            : {}),
-        },
+        ...(run.trigger === "helper"
+          ? // A background helper reads only what its parent sent it, in its own session, after
+            // the history this attempt read, which holds every earlier message already.
+            {
+              runId: input.runId,
+              message: { sessionId: run.sessionId, seq: { gte: run.historyThroughSeq ?? 0 } },
+            }
+          : {
+              OR: [{ runId: null }, { runId: input.runId }],
+              message: {
+                sessionId: run.thread.sessionId,
+                // Private follow-ups remain unclaimed for the existing private continuation.
+                ...(channelId
+                  ? {
+                      payload: {
+                        path: ["blocks"],
+                        array_contains: [{ kind: "channel_message", channelId }],
+                      },
+                    }
+                  : {}),
+              },
+            }),
       },
       include: { message: { select: { payload: true } } },
       orderBy: [{ message: { seq: "asc" } }, { id: "asc" }],
@@ -800,10 +826,11 @@ export async function claimSteering(
     });
     return steering.map((item) => {
       const blocks = blocksOf(item.message);
+      const text = blocksToAgentHistoryText(blocks);
       return {
         id: item.id,
         messageId: item.messageId,
-        text: blocksToAgentHistoryText(blocks),
+        text: run.trigger === "helper" ? fromParent(text) : text,
         blocks,
         untrusted: item.untrusted,
       };
@@ -1524,6 +1551,123 @@ export async function pauseRunForInput(
   return true;
 }
 
+/**
+ * A background helper waits on a question to the bot that started it, with its attempt parked and
+ * its resources still held. The question wakes the bot once no turn of it runs; no card and no
+ * notification reach the person. Null when the attempt no longer holds the run, else the run the
+ * question woke.
+ */
+export async function pauseRunForParent(
+  prisma: PrismaClient,
+  input: PauseRunForParent,
+): Promise<{ wokenRunId: string | null } | null> {
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await tx.$queryRaw`SELECT id FROM threads WHERE id = ${input.threadId} FOR UPDATE`;
+    const paused = await tx.run.updateMany({
+      where: {
+        id: input.runId,
+        spaceId: input.spaceId,
+        threadId: input.threadId,
+        botId: input.botId,
+        trigger: "helper",
+        status: "running",
+        leaseOwner: input.leaseOwner,
+        leaseFence: input.leaseFence,
+      },
+      data: { status: "waiting_input", leaseOwner: null, leaseExpiresAt: null },
+    });
+    if (paused.count !== 1) return null;
+    const attempt = await tx.attempt.updateMany({
+      where: {
+        id: input.attemptId,
+        runId: input.runId,
+        fence: input.leaseFence,
+        status: "running",
+      },
+      data: { status: "waiting_input", finishedAt: new Date() },
+    });
+    if (attempt.count !== 1) throw new Error("Active run attempt was not available to pause");
+    const { sessionId } = await tx.thread.findUniqueOrThrow({
+      where: { id: input.threadId },
+      select: { sessionId: true },
+    });
+    await appendSessionEntryInTransaction(tx, {
+      type: "helper.question",
+      sessionId: sessionId as SessionId,
+      botId: input.botId,
+      payload: { helperId: input.runId, question: input.question },
+    });
+    return { wokenRunId: await createSteeringContinuation(tx, input) };
+  });
+}
+
+/**
+ * What a bot sends one of its background helpers in the thread. A helper waiting on its question
+ * takes it as the answer, the result of its `ask_parent` call, and queues to resume; a working one
+ * reads it as steering in its own session.
+ */
+export async function messageHelper(
+  prisma: PrismaClient,
+  input: { threadId: string; botId: string; helperId: string; text: string },
+): Promise<"answered" | "steered" | "ended" | "unknown"> {
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await tx.$queryRaw`SELECT id FROM threads WHERE id = ${input.threadId} FOR UPDATE`;
+    const helper = await tx.run.findFirst({
+      where: {
+        id: input.helperId,
+        threadId: input.threadId,
+        botId: input.botId,
+        trigger: "helper",
+      },
+      select: { status: true, sessionId: true, userId: true },
+    });
+    if (!helper) return "unknown";
+    const sessionId = helper.sessionId as SessionId;
+    if (helper.status === "waiting_input") {
+      const asked = await tx.sessionEntry.findFirstOrThrow({
+        where: {
+          sessionId,
+          runId: input.helperId,
+          type: "tool.call",
+          payload: { path: ["name"], equals: "ask_parent" },
+        },
+        orderBy: { seq: "desc" },
+        select: { payload: true },
+      });
+      await appendSessionEntryInTransaction(tx, {
+        type: "tool.result",
+        sessionId,
+        botId: input.botId,
+        runId: input.helperId,
+        payload: {
+          callId: (asked.payload as { callId: string }).callId,
+          output: input.text,
+          isError: false,
+          artifactIds: [],
+        },
+      });
+      await tx.run.update({ where: { id: input.helperId }, data: { status: "queued" } });
+      return "answered";
+    }
+    if (!isWorkingStatus(helper.status)) return "ended";
+    const message = await appendSessionEntryInTransaction(tx, {
+      type: "user.message",
+      sessionId,
+      botId: input.botId,
+      payload: { blocks: [{ kind: "text", text: input.text }], source: "parent" },
+    });
+    await tx.steeringMessage.create({
+      data: {
+        messageId: message.id,
+        botId: input.botId,
+        userId: helper.userId,
+        runId: input.helperId,
+      },
+    });
+    return "steered";
+  });
+}
+
 export async function pauseRunForTakeover(
   prisma: PrismaClient,
   input: PauseRunForTakeover,
@@ -1797,7 +1941,7 @@ async function finalizeRunOnce(
     if (terminal.count !== 1) return null;
     const ended = await tx.run.findUniqueOrThrow({
       where: { id: input.runId },
-      select: { trigger: true, helper: true },
+      select: { trigger: true, helper: true, historyThroughSeq: true },
     });
     // A background helper's end is news for its parent only, never for the person.
     const background = ended.trigger === "helper";
@@ -1874,6 +2018,16 @@ async function finalizeRunOnce(
         select: { sessionId: true },
       });
       const report = input.outcome === "completed" ? (input.result ?? "") : input.error;
+      // What the parent sent after the helper's last read of its history and that it never claimed.
+      const unread = await tx.steeringMessage.findMany({
+        where: {
+          runId: input.runId,
+          claimedAt: null,
+          message: { seq: { gte: ended.historyThroughSeq ?? 0 } },
+        },
+        select: { message: { select: { payload: true } } },
+        orderBy: { message: { seq: "asc" } },
+      });
       await appendSessionEntryInTransaction(tx, {
         type: "helper.report",
         sessionId: sessionId as SessionId,
@@ -1886,6 +2040,13 @@ async function finalizeRunOnce(
             report.length > HELPER_REPORT_MAX_CHARS
               ? `${report.slice(0, HELPER_REPORT_MAX_CHARS)}… truncated`
               : report,
+          ...(unread.length
+            ? {
+                unreadMessages: unread.map((item) =>
+                  blocksToAgentHistoryText(blocksOf(item.message)),
+                ),
+              }
+            : {}),
         },
       });
     }
@@ -1932,9 +2093,11 @@ async function finalizeRunOnce(
   });
 }
 
+type WakeScope = Pick<FinalizeRunBase, "spaceId" | "threadId" | "botId">;
+
 async function createSteeringContinuation(
   tx: Prisma.TransactionClient,
-  input: FinalizeRunBase,
+  input: WakeScope,
 ): Promise<string | null> {
   const active = await tx.run.findFirst({
     where: {
@@ -1980,13 +2143,13 @@ async function createSteeringContinuation(
     });
   };
   if (pending.length === 0) {
-    // As the source message, the report would stand in for the prompt and never reach the model.
-    if (!(await hasUnreadHelperReport(tx, input))) return null;
+    // As the source message, the entry would stand in for the prompt and never reach the model.
+    if (!(await hasUnreadHelperEntry(tx, input))) return null;
     const { userId } = await tx.thread.findUniqueOrThrow({
       where: { id: input.threadId },
       select: { userId: true },
     });
-    const woken = await followUp(userId, "A helper you started reported back.", null);
+    const woken = await followUp(userId, "A helper you started wrote back.", null);
     return woken.id;
   }
   const last = pending.at(-1)!;
@@ -2003,14 +2166,14 @@ async function createSteeringContinuation(
 }
 
 /**
- * Whether the bot's newest helper report in the thread came after every history its turns read,
- * so no turn has seen it yet. Session seqs order the two without any clock.
+ * Whether the bot's newest helper report or question in the thread came after every history its
+ * turns read, so no turn has seen it yet. Session seqs order the two without any clock.
  */
-async function hasUnreadHelperReport(tx: Prisma.TransactionClient, input: FinalizeRunBase) {
+async function hasUnreadHelperEntry(tx: Prisma.TransactionClient, input: WakeScope) {
   const report = await tx.sessionEntry.findFirst({
     where: {
       botId: input.botId,
-      type: "helper.report",
+      type: { in: ["helper.report", "helper.question"] },
       session: { threadId: input.threadId, kind: "thread" },
     },
     orderBy: { seq: "desc" },

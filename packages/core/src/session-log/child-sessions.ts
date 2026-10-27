@@ -27,3 +27,14 @@ export function sessionOriginOf(item: ThreadItem): SessionOrigin | null {
   if (!origin || "entryId" in origin || !origin.name || item.kind === "botMessage") return null;
   return { sessionId: origin.sessionId, name: origin.name };
 }
+
+/** What a step shows: the name a `run_subagent` call gave its helper, else the tool's name. */
+export function stepCallTitle(call: { name: string; input: string }): string {
+  if (call.name !== "run_subagent") return call.name;
+  try {
+    const { name } = JSON.parse(call.input) as { name?: unknown };
+    return typeof name === "string" && name.trim() ? name.trim() : call.name;
+  } catch {
+    return call.name;
+  }
+}
