@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-27
+
+#### Fixed
+
+- Long tool calls such as browser actions or helpers no longer lose their result after a minute for bots running on Pi, so the bot now sees what they returned.
+
 ### 2026-10-26
 
 #### Changed
