@@ -1,12 +1,13 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { E2BSandboxProvider, PiAgentRuntime } from "@rakazo/adapters";
+import { E2BSandboxProvider, ModelCallRuntime } from "@rakazo/adapters";
 import type { RunStatus } from "@rakazo/contracts";
 import { isTerminal } from "@rakazo/core";
 import { loadRootEnv } from "@rakazo/core/node/load-root-env";
 import { afterAll, describe, expect, it } from "vitest";
 import { sessionCookieHeader } from "./index.js";
+import { computerOnVolumes, localWorkerApp } from "./local-worker-provider.js";
 
 if (process.env.VERIFY_PROVIDERS) loadRootEnv();
 
@@ -46,9 +47,9 @@ describeE2b("live E2B canary", () => {
   }, 120_000);
 });
 
-describePi("live OpenRouter / Pi canary", () => {
+describePi("live OpenRouter canary", () => {
   it("streams a reply from deepseek/deepseek-v4-flash-0731", async () => {
-    const runtime = new PiAgentRuntime();
+    const runtime = new ModelCallRuntime();
     let text = "";
     for await (const event of runtime.run(
       {
@@ -56,7 +57,7 @@ describePi("live OpenRouter / Pi canary", () => {
         threadId: "canary",
         runId: `pi-${Date.now()}`,
         prompt: "Reply with exactly the word pong and nothing else.",
-        instructions: "You are a concise test bot. Do not call tools.",
+        instructions: "You are a concise test bot.",
         history: [],
         tools: [],
         model: {
@@ -73,8 +74,7 @@ describePi("live OpenRouter / Pi canary", () => {
         signal: new AbortController().signal,
       },
     )) {
-      if (event.type === "text") text += event.text;
-      if (event.type === "done" && event.text && !text) text = event.text;
+      if (event.type === "done" && event.text) text = event.text;
     }
     expect(text.trim().toLowerCase()).toBe("pong");
     expect(text).not.toMatch(/sk-or-|OPENROUTER_API_KEY/i);
@@ -93,16 +93,23 @@ describePiApp("live OpenRouter product journey", () => {
     }
   });
 
-  it("completes a bot turn through the API with the live model", async () => {
+  it("completes a bot turn in a worker with the live model", async () => {
     const { createApp } = await import("../../../apps/api/src/app.ts");
-    dataDir = mkdtempSync(path.join(tmpdir(), "rakazo-pi-"));
+    dataDir = mkdtempSync(path.join(tmpdir(), "rakazo-canary-"));
+    const local = localWorkerApp(path.join(dataDir, "workers"));
     const handles = await createApp({
       databaseUrl: process.env.DATABASE_URL!,
       dataDir,
       sandboxProvider: "fake",
-      agentRuntime: "pi",
+      ...local,
     });
-    stop = handles.stop;
+    stop = async () => {
+      try {
+        await handles.stop();
+      } finally {
+        await local.workers.dispose();
+      }
+    };
     const stamp = Date.now();
     const email = `pi-${stamp}@rakazo.test`;
     const signup = await handles.app.request("/api/auth/sign-up/email", {
@@ -116,12 +123,13 @@ describePiApp("live OpenRouter product journey", () => {
       name: "Chief",
       title: "Chief of staff",
       description: "Canary",
-      instructions: "Reply briefly. Prefer the write_file tool when asked to write a file.",
+      instructions: "Reply briefly.",
       notifyOnFinish: true,
     });
+    await computerOnVolumes(handles.prisma, botRes.id);
     const sent = await rpc<{ runId: string }>(handles.app, cookie, "threads/send", {
       botId: botRes.id,
-      text: "Use write_file to save notes/result.txt containing exactly openrouter-ok",
+      text: "Use the write tool to save notes/result.txt containing exactly openrouter-ok",
     });
     const run = await waitForRun(
       () =>

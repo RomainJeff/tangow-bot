@@ -1,3 +1,9 @@
+// The Electron main bundle is plain `tsc` output (no bundler), and the tokens
+// package ships raw TypeScript, which Node cannot import at runtime inside the
+// packaged asar. Hold the dark window background as a literal here; the test
+// pins it to the shared token so it cannot drift.
+export const WINDOW_BACKGROUND = "#161618";
+
 export const DEFAULT_WARM_WINDOW_TTL_MS = 15 * 60_000;
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
@@ -12,15 +18,14 @@ export function warmWindowTtlMs(value: string | undefined) {
 function windowChrome(platform: NodeJS.Platform) {
   const mac = platform === "darwin";
   return {
-    // Keep in sync with darkTokens.background from @rakazo/ui-tokens (asserted in tests).
-    // Do not import that package here: desktop packs compiled JS only and ui-tokens is a
-    // TypeScript source / devDependency.
-    backgroundColor: "#0B0C0E",
+    backgroundColor: WINDOW_BACKGROUND,
     show: true,
     autoHideMenuBar: true,
     frame: mac,
     titleBarStyle: mac ? ("hiddenInset" as const) : undefined,
-    // On the floating sidebar's header line, as in desktop-new.
+    // Inside the floating sidebar's header (8 from the window's edges): the
+    // 14 px lights are centred on y 31, the line of the header title and the
+    // sidebar controls beside them.
     trafficLightPosition: mac ? { x: 26, y: 24 } : undefined,
   };
 }

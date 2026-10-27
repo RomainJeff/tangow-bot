@@ -177,6 +177,33 @@ const summary = (...blocks: object[]) => ({
 });
 
 describe("projectThreadView on a streamed reply", () => {
+  it("keeps each message to the person in its own row as the run adds its final answer", () => {
+    const chain = linkEntries("posted", [
+      {
+        ...ada,
+        type: "assistant.text",
+        payload: { blocks: text("Checking the report."), toPerson: true, midTurn: true },
+      },
+      {
+        ...ada,
+        type: "assistant.text",
+        payload: { blocks: text("The report is ready."), toPerson: true, midTurn: true },
+      },
+    ]);
+    const messages = (entries: readonly ThreadEntry[]) =>
+      projectThreadView(entries).rows.flatMap(({ item }) =>
+        item.kind === "message" ? [{ id: item.id, blocks: item.blocks }] : [],
+      );
+
+    expect(messages(chain.slice(0, 1))).toEqual([
+      { id: "posted-0", blocks: text("Checking the report.") },
+    ]);
+    expect(messages(chain)).toEqual([
+      { id: "posted-0", blocks: text("Checking the report.") },
+      { id: "posted-1", blocks: text("The report is ready.") },
+    ]);
+  });
+
   it("shows the open run's steps, its helper at work and the streamed text mid-run", () => {
     const view = projectThreadView(upTo(4), {
       progress: streamedProgress("run_str_1", "Looking at ", "the results"),

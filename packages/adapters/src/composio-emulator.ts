@@ -295,6 +295,16 @@ const DOCUMENTED_INPUT_SCHEMAS: Record<string, Record<string, unknown>> = {
   },
 };
 
+const TOOLKIT_TOOLS: Record<string, ConnectorTool[]> = {
+  GMAIL: GMAIL_TOOLS,
+  OUTLOOK: OUTLOOK_TOOLS,
+  SLACK: SLACK_TOOLS,
+};
+
+/**
+ * Composio's batch as its MCP server offers it. The native connector calls each tool on its own
+ * route; the batch stays here so the path a batched send takes is exercised offline.
+ */
 const BATCH_TOOL: ConnectorTool = {
   name: "COMPOSIO_MULTI_EXECUTE_TOOL",
   description: "Run several connected-app actions in one call",
@@ -626,25 +636,25 @@ export class ComposioEmulator implements ComposioProvider {
       [];
     const tools: ConnectorTool[] = [];
     for (const slug of new Set(connected)) {
-      if (slug === "GMAIL") {
-        this.ensureMailbox(composioEntityId(context));
-        tools.push(...GMAIL_TOOLS);
-        continue;
-      }
-      if (slug === "GITHUB") {
-        tools.push(...githubReleaseTools());
-        continue;
-      }
-      if (slug === "OUTLOOK") {
-        this.ensureMailbox(composioEntityId(context));
-        tools.push(...OUTLOOK_TOOLS);
-        continue;
-      }
-      if (slug === "SLACK") {
-        tools.push(...SLACK_TOOLS);
-        continue;
-      }
-      tools.push(thinEmulatedTool(slug));
+      if (slug === "GMAIL" || slug === "OUTLOOK") this.ensureMailbox(composioEntityId(context));
+      const toolkitTools =
+        slug === "GITHUB"
+          ? githubReleaseTools()
+          : (TOOLKIT_TOOLS[slug] ?? [thinEmulatedTool(slug)]);
+      tools.push(
+        ...toolkitTools.map((tool) => ({
+          ...tool,
+          appName: DEFAULT_CATALOG.find((item) => item.slug === slug)?.name ?? slug,
+          readOnly: tool.readOnly || /_(FETCH|GET|LIST)_/.test(tool.name) || undefined,
+          route: {
+            connectorId: "composio",
+            resourceId: slug,
+            resourceRevision: "emulated",
+            toolName: tool.name,
+            catalogGroup: slug.toLowerCase(),
+          },
+        })),
+      );
     }
     if (tools.length > 0) tools.push(BATCH_TOOL);
     return tools;

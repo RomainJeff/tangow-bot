@@ -41,7 +41,8 @@ function before(entry: { createdAt: Date; id: string }, cursor: RunsCursor | und
  * and its own creation, newest first by creation time. Active runs lead the first page and are
  * never paged; everything else is paged by `(createdAt, id)` across every kind of entry. The bot
  * is the caller's own (`repos.getBot`), and every read is narrowed to the caller's space and user
- * as well, so no id can reach past them. With `routineId`, only that routine's runs.
+ * as well, so no id can reach past them. With `routineId`, only that routine's runs; with
+ * `allRuns`, every run of the bot but helper runs, which show inside their parent.
  */
 export async function listBotActivity(
   prisma: PrismaClient,
@@ -53,12 +54,14 @@ export async function listBotActivity(
   const owner = { spaceId: actor.spaceId, userId: actor.userId, botId: bot.id };
   const runScope: Prisma.RunWhereInput = input.routineId
     ? { ...owner, routineId: input.routineId }
-    : {
-        ...owner,
-        // Only routine wakes use the "routine" trigger, so a deleted routine's scheduled runs stay.
-        // A webhook wake whose routine is gone cannot be told from a plain webhook message: it goes.
-        OR: [{ routineId: { not: null } }, { trigger: "routine" }],
-      };
+    : input.allRuns
+      ? { ...owner, parentRunId: null }
+      : {
+          ...owner,
+          // Only routine wakes use the "routine" trigger, so a deleted routine's scheduled runs stay.
+          // A webhook wake whose routine is gone cannot be told from a plain webhook message: it goes.
+          OR: [{ routineId: { not: null } }, { trigger: "routine" }],
+        };
   const keyset = input.cursor ? afterCursor(input.cursor) : {};
   const [active, finished, routines] = await Promise.all([
     input.cursor

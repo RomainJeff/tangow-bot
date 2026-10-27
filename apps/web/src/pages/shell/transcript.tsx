@@ -9,8 +9,8 @@ import type { RefObject } from "react";
 import { Fragment, memo, useEffect, useMemo, useRef, useState } from "react";
 import type { CardEdits } from "../../components/AskCard";
 import { ActiveBotGlyph } from "../../components/ai/CollaborationMarker";
-import { useDisplayAgentSteps } from "../../lib/agent-steps-pref";
 import type { ArtifactTarget } from "../../lib/artifact-open";
+import { useDebugMode } from "../../lib/debug-mode";
 import { messageTimeLabel } from "../../lib/message-time";
 import type { CardAnswerTarget, MessageItem, SessionViewTarget } from "../../lib/thread-items";
 import { isLiveItem } from "../../lib/thread-items";
@@ -115,7 +115,7 @@ export const Transcript = memo(function Transcript({
   onSpeak: (message: MessageItem) => void;
 }) {
   const { t } = useLingui();
-  const showSteps = useDisplayAgentSteps();
+  const showSteps = useDebugMode();
   const [sessionTarget, setSessionTarget] = useState<SessionViewTarget | null>(null);
   const { rows, waiting, rowOf } = view;
   const { atEnd, jumpToMessage, jumpToLatest, loadOlder, scrollerHandlers } = useTranscriptFollow({

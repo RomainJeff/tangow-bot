@@ -37,4 +37,53 @@ describe("RunTraceRecorder", () => {
     );
     expect(second!.attributes["langfuse.observation.completion_start_time"]).toBeUndefined();
   });
+
+  it("keeps complete worker transcripts and tool links while omitting image bytes", () => {
+    const recorder = new RunTraceRecorder({
+      runId: "run-1",
+      threadId: "thread-1",
+      botId: "bot-1",
+      provider: "test",
+      model: "agent-model",
+      systemPrompt: "",
+      history: [],
+      prompt: "hello",
+    });
+    const generation = recorder.modelRequest("helper-1");
+    const instructions = "x".repeat(21_000);
+    generation.input([
+      { role: "system", content: instructions, timestamp: 0 },
+      {
+        role: "toolResult",
+        toolCallId: "call-1",
+        toolName: "read",
+        content: [
+          { type: "text", text: "Screenshot" },
+          { type: "image", data: "fake-image-bytes", mimeType: "image/png" },
+        ],
+        isError: false,
+        timestamp: 0,
+      },
+      { role: "user", content: "What is shown?", timestamp: 0 },
+    ]);
+    generation.end();
+    recorder.finish("done");
+
+    const span = recorder.trace.getSpans().find((span) => span.name === "generation 1")!;
+    expect(JSON.parse(String(span.attributes["langfuse.observation.input"]))).toEqual([
+      { role: "system", content: instructions, timestamp: 0 },
+      {
+        role: "toolResult",
+        toolCallId: "call-1",
+        toolName: "read",
+        content: [
+          { type: "text", text: "Screenshot" },
+          { type: "image", mimeType: "image/png" },
+        ],
+        isError: false,
+        timestamp: 0,
+      },
+      { role: "user", content: "What is shown?", timestamp: 0 },
+    ]);
+  });
 });

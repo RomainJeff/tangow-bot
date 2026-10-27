@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  createAgentTextPolicy,
   describeToolActivity,
   stripFakeToolCalls,
   stripModelControlTokens,
@@ -113,5 +114,33 @@ describe("stripFakeToolCalls", () => {
     expect(stripFakeToolCalls("[tools: search ×2] and [link](x)")).toBe(
       "[tools: search ×2] and [link](x)",
     );
+  });
+});
+
+describe("createAgentTextPolicy private-text reminder", () => {
+  const turn = (messageText: string, toolCallNames: string[] = []) => ({
+    messageText,
+    toolCallNames,
+    hasToolResults: toolCallNames.length > 0,
+    paused: false,
+  });
+  const reminders = (turns: ReturnType<typeof turn>[]) => {
+    const policy = createAgentTextPolicy({ freeTextIsPrivate: true });
+    return turns.map((input) => policy.turn(input).followUp.length);
+  };
+
+  it.each([
+    [
+      "reminds once, then accepts a deliberate silence",
+      [turn("Nothing new."), turn("Nothing new.")],
+      [1, 0],
+    ],
+    [
+      "reminds again when an update is followed by more tool work",
+      [turn("", ["message_user"]), turn("", ["write_file"]), turn("Saved.")],
+      [0, 0, 1],
+    ],
+  ])("%s", (_name, turns, expected) => {
+    expect(reminders(turns)).toEqual(expected);
   });
 });

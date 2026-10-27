@@ -32,7 +32,7 @@ msgid "{0, plural, one {# routine} other {# routines}}"
 msgstr "{0, plural, one {# 个例行任务} other {# 个例行任务}}"
 
 #. placeholder {0}: runs.length
-#: src/pages/bot-page/BotActivity.tsx:537
+#: src/pages/bot-page/BotActivity.tsx:577
 msgid "{0, plural, one {# run} other {# runs}}"
 msgstr ""
 
@@ -93,6 +93,12 @@ msgstr ""
 msgid "{0} runs · {1} tokens"
 msgstr "{0} 次运行 · {1} tokens"
 
+#. placeholder {0}: run.usage.inputTokens.toLocaleString()
+#. placeholder {1}: run.usage.outputTokens.toLocaleString()
+#: src/pages/shell/session-view.tsx:215
+msgid "{0} tokens in · {1} out"
+msgstr "输入 {0} 个令牌 · 输出 {1}"
+
 #. placeholder {0}: bot.name
 #: src/pages/ExternalConversationSettings.tsx:232
 msgid "{0} will still respond to direct mentions."
@@ -144,7 +150,7 @@ msgstr "{hours} 小时前"
 msgid "{minutes}m ago"
 msgstr "{minutes} 分钟前"
 
-#: src/pages/bot-page/BotActivity.tsx:290
+#: src/pages/bot-page/BotActivity.tsx:324
 msgid "{name} created"
 msgstr "{name} 已创建"
 
@@ -247,7 +253,7 @@ msgstr "操作确认"
 #. placeholder {0}: bot.name
 #. placeholder {0}: group.spaceName
 #. placeholder {0}: sectionMenu.section.name
-#: src/pages/bot-page/BotPage.tsx:343
+#: src/pages/bot-page/BotPage.tsx:346
 #: src/pages/BotContextMenu.tsx:86
 #: src/pages/shell/shell-overlays.tsx:350
 #: src/pages/shell/sidebar-roster.tsx:149
@@ -282,7 +288,7 @@ msgstr "启用：{0}"
 msgid "Activity"
 msgstr "动态"
 
-#: src/pages/bot-page/BotPage.tsx:268
+#: src/pages/bot-page/BotPage.tsx:271
 msgid "Activity, last run failed"
 msgstr "动态，上次运行失败"
 
@@ -544,7 +550,7 @@ msgstr "请在聊天中批准，或说“不”以取消。"
 msgid "Approve this server to let your agent use its tools."
 msgstr "批准此服务器后，Agent 才能使用它的工具。"
 
-#: src/pages/bot-page/BotPage.tsx:372
+#: src/pages/bot-page/BotPage.tsx:375
 #: src/pages/BotContextMenu.tsx:146
 msgid "Archive"
 msgstr "归档"
@@ -807,7 +813,7 @@ msgstr "取消回复"
 #: src/components/AskCard.tsx:49
 #: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:162
-#: src/pages/bot-page/BotActivity.tsx:314
+#: src/pages/bot-page/BotActivity.tsx:348
 msgid "Cancelled"
 msgstr "已取消"
 
@@ -892,7 +898,7 @@ msgstr "清空"
 msgid "Clear {0}’s conversation?"
 msgstr "清空与 {0} 的对话？"
 
-#: src/pages/bot-page/BotPage.tsx:368
+#: src/pages/bot-page/BotPage.tsx:371
 #: src/pages/BotContextMenu.tsx:142
 msgid "Clear conversation"
 msgstr "清空对话"
@@ -922,7 +928,7 @@ msgstr ""
 #: src/pages/MessagingSettingsOverlay.tsx:362
 #: src/pages/PeerMessagesOverlay.tsx:133
 #: src/pages/PeerMessagesOverlay.tsx:136
-#: src/pages/shell/session-view.tsx:95
+#: src/pages/shell/session-view.tsx:107
 #: src/pages/WindowChrome.tsx:21
 msgid "Close"
 msgstr "关闭"
@@ -1188,6 +1194,10 @@ msgstr "复制"
 msgid "Copy {label}"
 msgstr ""
 
+#: src/pages/shell/session-view.tsx:245
+msgid "Copy diagnostic"
+msgstr "复制诊断信息"
+
 #: src/pages/ScratchpadSection.tsx:56
 msgid "Could not add"
 msgstr "无法添加"
@@ -1356,7 +1366,7 @@ msgstr "无法安装连接器"
 msgid "Could not load"
 msgstr "无法加载"
 
-#: src/pages/bot-page/BotActivity.tsx:249
+#: src/pages/bot-page/BotActivity.tsx:283
 msgid "Could not load · Retry"
 msgstr "无法加载 · 重试"
 
@@ -1400,7 +1410,7 @@ msgid "Could not load skills"
 msgstr "无法加载技能"
 
 #: src/pages/PeerMessagesOverlay.tsx:147
-#: src/pages/shell/session-view.tsx:101
+#: src/pages/shell/session-view.tsx:120
 msgid "Could not load this chat."
 msgstr "无法加载此对话。"
 
@@ -1624,7 +1634,7 @@ msgid "Create group"
 msgstr "创建群组"
 
 #: src/pages/shell/bot-picker.tsx:74
-#: src/pages/shell/shell-main.tsx:174
+#: src/pages/shell/shell-main.tsx:175
 msgid "Create new Bot"
 msgstr "新建 Bot"
 
@@ -1712,6 +1722,11 @@ msgstr "天"
 msgid "days"
 msgstr "天"
 
+#: src/pages/AccountSettingsOverlay.tsx:125
+#: src/pages/AccountSettingsOverlay.tsx:133
+msgid "Debug mode"
+msgstr "调试模式"
+
 #: src/pages/SettingsOverlay.tsx:97
 msgid "Decision Model"
 msgstr ""
@@ -1735,7 +1750,7 @@ msgstr ""
 msgid "Default scope"
 msgstr "默认范围"
 
-#: src/pages/bot-page/BotPage.tsx:378
+#: src/pages/bot-page/BotPage.tsx:381
 #: src/pages/BotContextMenu.tsx:150
 #: src/pages/KnowledgeSection.tsx:687
 #: src/pages/McpServersOverlay.tsx:509
@@ -1768,7 +1783,7 @@ msgstr "删除群组"
 msgid "Delete memories too"
 msgstr "同时删除记忆"
 
-#: src/pages/bot-page/RoutineDetail.tsx:224
+#: src/pages/bot-page/RoutineDetail.tsx:225
 msgid "Delete routine"
 msgstr "删除例行任务"
 
@@ -1867,11 +1882,6 @@ msgstr "关闭错误"
 msgid "Dismissed. Reconnect anytime from MCP settings."
 msgstr "已关闭，可随时在 MCP 设置中重新连接。"
 
-#: src/pages/AccountSettingsOverlay.tsx:125
-#: src/pages/AccountSettingsOverlay.tsx:133
-msgid "Display agent steps"
-msgstr "显示智能体步骤"
-
 #: src/pages/plugins/advanced-integrations.tsx:253
 msgid "Display name"
 msgstr "显示名称"
@@ -1887,7 +1897,7 @@ msgstr "还没有账户？"
 
 #: src/components/ComputerUpdateProgress.tsx:206
 #: src/pages/ActivityList.tsx:158
-#: src/pages/bot-page/BotActivity.tsx:312
+#: src/pages/bot-page/BotActivity.tsx:346
 #: src/pages/bot-page/RoutineTriggers.tsx:304
 msgid "Done"
 msgstr "完成"
@@ -1923,7 +1933,7 @@ msgstr ""
 msgid "Draft skill"
 msgstr "技能草稿"
 
-#: src/pages/bot-page/BotPage.tsx:359
+#: src/pages/bot-page/BotPage.tsx:362
 #: src/pages/BotContextMenu.tsx:137
 msgid "Duplicate"
 msgstr "复制"
@@ -2047,7 +2057,7 @@ msgstr "展开"
 msgid "Expand {0}"
 msgstr "展开 {0}"
 
-#: src/pages/bot-page/BotPage.tsx:363
+#: src/pages/bot-page/BotPage.tsx:366
 msgid "Export"
 msgstr "导出"
 
@@ -2068,7 +2078,7 @@ msgstr "极高"
 
 #: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:160
-#: src/pages/bot-page/BotActivity.tsx:313
+#: src/pages/bot-page/BotActivity.tsx:347
 #: src/pages/bot-page/routine-copy.ts:63
 #: src/pages/shell/routine-run-line.tsx:48
 msgid "Failed"
@@ -2474,7 +2484,7 @@ msgstr "正在加载语音提供方…"
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
-#: src/pages/shell/session-view.tsx:108
+#: src/pages/shell/session-view.tsx:127
 #: src/pages/shell/transcript.tsx:248
 msgid "Loading…"
 msgstr "加载中…"
@@ -2583,6 +2593,7 @@ msgstr "提及"
 msgid "Mentions only"
 msgstr ""
 
+#: src/pages/bot-page/BotActivity.tsx:358
 #: src/pages/shell/composer.tsx:293
 #: src/pages/shell/message-view.tsx:90
 msgid "Message"
@@ -2806,7 +2817,7 @@ msgstr "新建工作区"
 msgid "Next"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:205
+#: src/pages/bot-page/BotActivity.tsx:239
 msgid "No activity yet"
 msgstr "暂无动态"
 
@@ -2900,7 +2911,7 @@ msgstr "未找到提供方。"
 msgid "No remote MCP servers found"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:439
+#: src/pages/bot-page/BotActivity.tsx:479
 msgid "No report"
 msgstr "无报告"
 
@@ -3036,7 +3047,7 @@ msgstr "打开"
 msgid "Open {0}"
 msgstr "打开 {0}"
 
-#: src/pages/bot-page/BotActivity.tsx:443
+#: src/pages/bot-page/BotActivity.tsx:483
 msgid "Open in chat"
 msgstr "在聊天中打开"
 
@@ -3485,7 +3496,7 @@ msgstr "正在重置…"
 msgid "Restart to update"
 msgstr ""
 
-#: src/pages/bot-page/BotPage.tsx:353
+#: src/pages/bot-page/BotPage.tsx:356
 #: src/pages/shell/sidebar-footer.tsx:88
 #: src/pages/shell/sidebar-footer.tsx:119
 msgid "Restore"
@@ -3515,7 +3526,7 @@ msgstr "重试"
 
 #: src/App.tsx:173
 #: src/pages/PeerMessagesOverlay.tsx:153
-#: src/pages/shell/session-view.tsx:103
+#: src/pages/shell/session-view.tsx:122
 msgid "Retry now"
 msgstr "立即重试"
 
@@ -3556,17 +3567,17 @@ msgstr "轮换密钥"
 msgid "Rotate key?"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:320
+#: src/pages/bot-page/BotActivity.tsx:358
 #: src/pages/bot-page/RoutineCreateForm.tsx:44
 msgid "Routine"
 msgstr "例行任务"
 
 #: src/components/AskCard.tsx:78
-#: src/pages/bot-page/BotActivity.tsx:281
+#: src/pages/bot-page/BotActivity.tsx:315
 msgid "Routine created"
 msgstr "例行任务已创建"
 
-#: src/pages/bot-page/BotActivity.tsx:281
+#: src/pages/bot-page/BotActivity.tsx:315
 msgid "Routine created by {by}"
 msgstr "{by} 创建的例行任务"
 
@@ -3588,7 +3599,7 @@ msgstr "运行时间必须是将来的时间。"
 
 #: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:152
-#: src/pages/bot-page/BotActivity.tsx:315
+#: src/pages/bot-page/BotActivity.tsx:349
 msgid "Running"
 msgstr "运行中"
 
@@ -3786,13 +3797,17 @@ msgstr ""
 msgid "Shared documents"
 msgstr "共享文档"
 
+#: src/pages/AccountSettingsOverlay.tsx:128
+msgid "Show agent steps, and every run in a bot's activity."
+msgstr "显示智能体步骤，以及机器人动态中的每次运行。"
+
 #: src/pages/shell/sidebar.tsx:133
 #: src/pages/shell/thread-header.tsx:84
 #: src/pages/shell/thread-header.tsx:85
 msgid "Show bots"
 msgstr "显示机器人"
 
-#: src/pages/bot-page/BotActivity.tsx:249
+#: src/pages/bot-page/BotActivity.tsx:283
 msgid "Show earlier"
 msgstr "显示更早的"
 
@@ -3805,7 +3820,7 @@ msgstr ""
 msgid "Show less"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:471
+#: src/pages/bot-page/BotActivity.tsx:511
 #: src/pages/KnowledgeSection.tsx:893
 #: src/pages/PluginsOverlay.tsx:309
 #: src/pages/shell/block-views.tsx:54
@@ -3815,10 +3830,6 @@ msgstr "显示更多"
 #: src/pages/Auth.tsx:184
 msgid "Show password"
 msgstr "显示密码"
-
-#: src/pages/AccountSettingsOverlay.tsx:128
-msgid "Show the tools a bot used, with their input and output."
-msgstr "显示机器人使用的工具及其输入和输出。"
 
 #: src/lib/localized-provider-hint.ts:7
 #: src/pages/Auth.tsx:233
@@ -4008,7 +4019,7 @@ msgstr "系统"
 msgid "Teach a task"
 msgstr "示范任务"
 
-#: src/pages/shell/shell-main.tsx:218
+#: src/pages/shell/shell-main.tsx:240
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "正在示范，发送新消息前请先停止示范。"
 
@@ -4125,7 +4136,7 @@ msgstr ""
 msgid "To:"
 msgstr "至:"
 
-#: src/pages/bot-page/BotActivity.tsx:222
+#: src/pages/bot-page/BotActivity.tsx:256
 #: src/pages/PeerMessagesOverlay.tsx:180
 #: src/pages/shell/thread-row.tsx:108
 msgid "Today"
@@ -4297,7 +4308,7 @@ msgstr "语音"
 msgid "Voice and replies"
 msgstr "语音与回复"
 
-#: src/pages/bot-page/BotActivity.tsx:316
+#: src/pages/bot-page/BotActivity.tsx:350
 msgid "Waiting"
 msgstr "等待中"
 
@@ -4387,7 +4398,7 @@ msgstr "处理中…"
 msgid "Workspace root"
 msgstr "工作区根目录"
 
-#: src/pages/bot-page/BotActivity.tsx:298
+#: src/pages/bot-page/BotActivity.tsx:332
 msgid "Write its first instructions"
 msgstr "编写它的第一份指令"
 
@@ -4395,7 +4406,7 @@ msgstr "编写它的第一份指令"
 msgid "Yearly on {date} at {time}"
 msgstr "每年{date} {time}"
 
-#: src/pages/bot-page/BotActivity.tsx:223
+#: src/pages/bot-page/BotActivity.tsx:257
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/thread-row.tsx:109
 msgid "Yesterday"

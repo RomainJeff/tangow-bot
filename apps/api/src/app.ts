@@ -22,6 +22,7 @@ import {
   applyMessagingOutboundStatus,
   ChatSdkMessagingSurface,
   ComposioConnector,
+  composeInProcessRuntime,
   composeWorkers,
   createBackgroundJobHandlers,
   createConnectorStack,
@@ -54,7 +55,6 @@ import {
   McpConnector,
   McpOAuthBroker,
   messagingPlatformsFromEnv,
-  PiAgentRuntime,
   PiOAuthLogins,
   PipedreamConnector,
   PostgresRealtimeFanout,
@@ -63,7 +63,6 @@ import {
   pushTokenPath,
   reconcileComputerUpdates,
   removeUserSkillDirs,
-  ScriptedAgentRuntime,
   SmtpEmailProvider,
   SpaceDecisionProviderResolver,
   SpaceMemoryProviderResolver,
@@ -239,10 +238,17 @@ export async function createApp(
   const oauthLogins = new PiOAuthLogins();
   const home = new LocalAgentHomeStore(env.dataDir);
   const artifacts = new LocalArtifactStore(env.dataDir);
+  // Optional trace export of worker runs and the controller's model calls. Without configuration
+  // this resolves to nothing, so no span is recorded and no vendor endpoint is ever contacted.
+  const traceExport = createTraceExporterFromEnv(process.env);
+  if (traceExport.warning) logger.warn(traceExport.warning);
+  const trace = { exporter: traceExport.exporter, serviceName: SERVICE_NAMES.api };
   const workers = composeWorkers(
     prisma,
     workersOverride ?? createWorkerProvider(env.workerProvider),
+    trace,
   );
+  const runtime = composeInProcessRuntime(env.agentRuntime, workers, trace);
   const memory = new MarkdownMemoryStore(prisma);
   const mcp = new McpConnector(
     prisma,
@@ -306,18 +312,6 @@ export async function createApp(
   const connector = stack.destination;
   await connector.start();
   integrationSettings.warmDirectories();
-  // Optional agent trace export. Without configuration this resolves to nothing,
-  // so the runtime records no spans and no vendor endpoint is ever contacted.
-  const traceExport = createTraceExporterFromEnv(process.env);
-  if (traceExport.warning) logger.warn(traceExport.warning);
-  const runtime =
-    env.agentRuntime === "scripted"
-      ? new ScriptedAgentRuntime()
-      : new PiAgentRuntime({
-          ...(traceExport.exporter
-            ? { traceExporter: traceExport.exporter, serviceName: SERVICE_NAMES.api }
-            : {}),
-        });
   const notifications = new ExpoPushProvider(env.dataDir);
   const auth = createAuth(prisma, {
     secret: env.authSecret,
@@ -448,6 +442,10 @@ export async function createApp(
     deploymentModelKey: env.deploymentModelKey,
     messaging,
     artifacts,
+    homeMove:
+      env.sandboxProvider === "docker"
+        ? { prisma, workers: workers.lifecycle, dataDir: env.dataDir }
+        : undefined,
   });
   if (inMemoryJobs) {
     await inMemoryJobs.start(jobHandlers);

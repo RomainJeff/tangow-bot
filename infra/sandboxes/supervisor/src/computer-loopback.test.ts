@@ -795,3 +795,33 @@ describe("space computer limit enforcement", () => {
     });
   });
 });
+
+describe("worker removal", () => {
+  const removeWorker = async () => {
+    const { supervisorApp } = await import("./index.js");
+    const response = await supervisorApp.request("/workers?attempt=attempt-1", {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${resolveSupervisorToken(process.env)}` },
+    });
+    return { status: response.status, body: await response.json() };
+  };
+  const failingRemove = (statusCode: number) => ({
+    remove: vi.fn().mockRejectedValue(Object.assign(new Error("remove failed"), { statusCode })),
+  });
+
+  it("never answers that a worker is gone when its removal failed", async () => {
+    mocks.docker.listContainers.mockResolvedValue([{ Id: "worker-1" }]);
+    mocks.docker.getContainer.mockReturnValue(failingRemove(500));
+    expect(await removeWorker()).toEqual({ status: 500, body: { error: "remove failed" } });
+  });
+
+  it("answers that a worker is gone only once nothing is listed for the attempt", async () => {
+    mocks.docker.listContainers.mockResolvedValueOnce([{ Id: "worker-1" }]).mockResolvedValue([]);
+    mocks.docker.getContainer.mockReturnValue(failingRemove(404));
+    expect(await removeWorker()).toEqual({ status: 200, body: { destroyed: true } });
+
+    mocks.docker.listContainers.mockResolvedValue([{ Id: "worker-1" }]);
+    mocks.docker.getContainer.mockReturnValue({ remove: vi.fn().mockResolvedValue(undefined) });
+    expect(await removeWorker()).toEqual({ status: 500, body: { error: "worker still present" } });
+  });
+});

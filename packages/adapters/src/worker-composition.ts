@@ -1,28 +1,45 @@
-import type { WorkerProvider } from "@rakazo/adapter-kit";
+import type { AgentRuntime, WorkerProvider } from "@rakazo/adapter-kit";
+import { resolveSupervisorToken } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
+import { DockerWorkerProvider } from "./docker-worker.js";
 import { E2BWorkerProvider } from "./e2b-worker.js";
+import { ModelCallRuntime } from "./model-call-runtime.js";
 import type { GuestConnector } from "./runtime-worker/launcher.js";
+import type { WorkerTrace } from "./runtime-worker/runtime.js";
 import { createRunWorkers } from "./runtime-worker/runtime.js";
 import { resolveSandboxProvider } from "./sandbox-provider-env.js";
+import { ScriptedAgentRuntime } from "./scripted-runtime.js";
 import { createWorkerLifecycle } from "./worker-lifecycle.js";
 
-export type WorkerProviderConfig = { kind: "e2b"; apiKey: string; template: string };
+export type WorkerProviderConfig =
+  | { kind: "e2b"; apiKey: string; template: string }
+  | { kind: "docker"; supervisorUrl: string; supervisorToken: string; dataDir: string };
 
 /** The template `apps/agent-run-worker/template` builds for the default harness. */
 const DEFAULT_WORKER_TEMPLATE = "rakazo-worker-pi-native";
 const RECONCILE_BATCH = 10;
 
 /**
- * An E2B deployment runs its bots in E2B workers; `WORKER_TEMPLATE` only renames their guest
- * image. E2B reads its self-hosted endpoint from its own `E2B_DOMAIN` or `E2B_API_URL`. Every
- * other computer provider keeps runs in process.
+ * Workers run on the computer provider. An E2B deployment runs them in E2B sandboxes;
+ * `WORKER_TEMPLATE` only renames their guest image, and E2B reads its self-hosted endpoint from its
+ * own `E2B_DOMAIN` or `E2B_API_URL`. A Docker deployment runs them as containers of the same
+ * supervisor its computers use, with volumes under `DATA_DIR`.
  */
 export function resolveWorkerProvider(
   source: NodeJS.ProcessEnv = process.env,
 ): WorkerProviderConfig | null {
+  const provider = resolveSandboxProvider(source);
+  if (provider === "docker") {
+    return {
+      kind: "docker",
+      supervisorUrl: source.SANDBOX_SUPERVISOR_URL ?? "http://127.0.0.1:7091",
+      supervisorToken: resolveSupervisorToken(source),
+      dataDir: source.DATA_DIR ?? "./data",
+    };
+  }
   const apiKey = source.E2B_API_KEY?.trim();
-  if (resolveSandboxProvider(source) !== "e2b" || !apiKey) return null;
+  if (provider !== "e2b" || !apiKey) return null;
   return {
     kind: "e2b",
     apiKey,
@@ -33,9 +50,15 @@ export function resolveWorkerProvider(
 export function createWorkerProvider(
   config: WorkerProviderConfig | null,
 ): (WorkerProvider & GuestConnector) | null {
-  return config
-    ? new E2BWorkerProvider({ apiKey: config.apiKey, template: config.template })
-    : null;
+  if (!config) return null;
+  if (config.kind === "docker") {
+    return new DockerWorkerProvider({
+      supervisorUrl: config.supervisorUrl,
+      supervisorToken: config.supervisorToken,
+      dataDir: config.dataDir,
+    });
+  }
+  return new E2BWorkerProvider({ apiKey: config.apiKey, template: config.template });
 }
 
 /**
@@ -45,12 +68,13 @@ export function createWorkerProvider(
 export function composeWorkers(
   prisma: PrismaClient,
   provider: (WorkerProvider & GuestConnector) | null,
+  trace?: WorkerTrace,
 ) {
   const lifecycle = createWorkerLifecycle({ prisma, provider });
   return {
     lifecycle,
     runWorkers: provider
-      ? createRunWorkers({ prisma, lifecycle, connector: provider, screensByPath: true })
+      ? createRunWorkers({ prisma, lifecycle, connector: provider, screensByPath: true, trace })
       : undefined,
     async reconcileWorkers(signal: AbortSignal) {
       const context = {
@@ -66,4 +90,22 @@ export function composeWorkers(
       if (swept.failed > 0) getLogger().error("volume sweep", swept);
     },
   };
+}
+
+/**
+ * The in-process runtime beside the workers: the scripted test runtime (`AGENT_RUNTIME=scripted`),
+ * or the model-call runtime the controller's own model calls use. Bot runs need workers.
+ */
+export function composeInProcessRuntime(
+  agentRuntime: string,
+  workers: Pick<ReturnType<typeof composeWorkers>, "runWorkers">,
+  trace: ConstructorParameters<typeof ModelCallRuntime>[0] = {},
+): AgentRuntime {
+  if (agentRuntime === "scripted") return new ScriptedAgentRuntime();
+  if (!workers.runWorkers) {
+    throw new Error(
+      "Bot runs need workers: set SANDBOX_PROVIDER to docker, or provide E2B_API_KEY for e2b.",
+    );
+  }
+  return new ModelCallRuntime(trace);
 }

@@ -6,23 +6,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### 2026-10-25
+### 2026-10-26
+
+#### Changed
+
+- On web, desktop and iOS, the "Display agent steps" setting is now "Debug mode": besides agent steps, it lists every run of a bot in its Activity tab, titled by the message that started it, and on web and desktop a run opens its whole log with its model, tokens, duration, trigger and id, and a button to copy a diagnostic of it.
+- The desktop app on macOS, Windows and Linux and the iOS app have a new icon: the black clay bot from the tangow site on a linen background, replacing the orange bot.
 
 #### Added
 
 - **A message a bot writes in your name now waits as a draft you send yourself, on web, desktop and iPhone.** An email through Gmail, Outlook or another mail app, or a Slack message, shows as it will leave, with every recipient (a Slack person or channel as Slack names them) and its text; you can change the text, and an email's recipients and subject, then Send, or discard it, with Undo for a moment. This replaces sends that went out with no card, or behind a card that only asked to allow the tool call.
+- **Tangow guides your first source deployment from configuration to verified startup.** Run `./tangow setup` to generate private secrets, deploy the current checkout, and open Rakazo for account and model setup. Retries preserve saved credentials, and E2B can continue through the existing provider setup ([getting started](README.md#getting-started)).
 
 #### Changed
 
-- Bots on web, desktop and iPhone find tools in connected apps with large catalogs more reliably, including loading the exact tool they ask for by name.
+- The desktop app on macOS, Windows and Linux is now called Tangow instead of Dax, in its window, menus, setup screen and installer.
 
+#### Fixed
+
+- A decision card's soft shadow is no longer cut off at its sides and below it in the thread on web and desktop.
+- Langfuse generations for bot runs now include the full model transcript and response, with secrets masked and image bytes omitted.
+- Source deployments using Docker or E2B computers restart their server services automatically after a host reboot unless explicitly stopped.
+
+### 2026-10-25
+
+#### Added
+
+- **Self-hosted deployments can move E2B bot and shared files to Docker.** Tangow copies and verifies volumes, keeps their bot and space associations, and resumes interrupted migrations while retaining E2B source volumes and private backups ([migration guide](docs/tangow.md#switch-e2b-to-docker)).
+- **Tangow manages an existing source deployment from the server command line.** Update Rakazo and automatically rebuild matching Docker worker images or E2B templates, verify startup migrations and report deferred computer homes, inspect services and logs, clean unused Docker builds, or migrate Docker computer homes to E2B with the existing backup and recovery flow ([usage](docs/tangow.md)).
+- **Docker installs now run each bot run in its own short-lived, isolated container, with the same agent as E2B.** Bot and space files live on volumes the bot's computer shares, and existing homes move onto them automatically when you upgrade; a computer still running at upgrade time can't do file work until it next goes to sleep ([self-hosting guide](docs/self-host.md#choosing-a-computer-provider)).
+
+#### Changed
+
+- A self-hosted E2B server now refuses to start while any E2B computer's home is still on snapshots, and names the script that moves it onto volumes ([move existing homes](docs/self-host-e2b-workers.md#move-existing-homes-onto-volumes)).
+- Bots on web, desktop and iPhone call the actions of apps connected through Composio directly, and activity and approvals name the real action; saved "always allow" rules on the old Composio batch tool no longer apply, so those actions may ask for approval again.
+- Bots on web, desktop and iPhone find tools in connected apps with large catalogs more reliably, including loading the exact tool they ask for by name.
 - Bots on web, desktop and iPhone now prefer suitable connected tools and direct page reads before browser interaction, and distinguish connector failures before choosing another method.
 - On web, desktop and iPhone, global Settings now lists each computer with its bots and visible maintenance actions, and can update all available computers at once, reporting busy computers for a later retry without opening their screens or taking control.
 - A self-hosted server with a missing or incomplete computer provider (an empty or `none` `SANDBOX_PROVIDER`, E2B without `E2B_API_KEY`, or Docker in production without `SANDBOX_SUPERVISOR_TOKEN`) now refuses to start with a message naming the setting to fix, instead of starting with computers turned off ([provider setup](docs/self-host-sandbox-providers.md)).
 
 #### Fixed
 
-- A decision card's soft shadow is no longer cut off at its sides and below it in the thread on web and desktop.
+- Self-hosted servers with trace export configured (`LANGFUSE_*`) show bot runs in their traces again, on E2B and Docker workers, with each model request and tool call ([agent traces](docs/self-host.md#agent-traces)).
+- On web, desktop and iPhone, each message a bot sends during a run keeps its own bubble when the final answer arrives, instead of being merged into it.
+- Idle E2B computers now pause after the configured inactivity delay instead of staying awake or waking again when the inactivity check runs, across web, desktop and iPhone.
 - Bots running in isolated workers can follow browser and connected-app instructions with the correct tools, while retaining the reason a connector failed.
 - While a bot works on web, desktop and iPhone, activity messages describe the tool being used even when it has a Rakazo MCP prefix, instead of showing raw tool names and arguments or a generic status.
 
@@ -36,6 +63,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Reverted
 
+- With `SKILL_LEARNING=on`, a bot no longer gets a private follow-up after a long task or a failed step to keep or fix a skill; `on` now behaves like the default `shadow`.
 - This Mac is gone: bots no longer run commands directly on the desktop app's Mac, and a bot that used it boots a Docker computer again from its saved workspace.
 - Installing a self-hosted server from published images with `install-images.sh` is gone; build the server from a checkout instead, as the [self-hosting guide](docs/self-host.md) describes.
 - The desktop app no longer installs and runs its own local server on this computer, and its Local Server Settings and Stop Local Stack menu items are gone; setup now only asks for the address of a server you run from a checkout ([self-hosting guide](docs/self-host.md)).

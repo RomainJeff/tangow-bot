@@ -60,6 +60,23 @@ describe("canonical history and a native Pi session", () => {
     });
   });
 
+  it("drops the run's source from history, since the prompt already carries it", () => {
+    const projected = projectPiAi(
+      [
+        { id: "m0", role: "user", content: "What changed?" },
+        { id: "m1", role: "assistant", content: "Two files." },
+        { id: "m2", role: "user", content: "Summarize them." },
+      ],
+      "Current date and time: Sunday.\n\nSummarize them.",
+      MODEL,
+      "m2",
+    );
+
+    expect(
+      projected.flatMap((message) => (message.role === "user" ? [message.content] : [])),
+    ).toEqual(["What changed?"]);
+  });
+
   it("ingests a session as it reports it, never taking a controller result from it", () => {
     const answered = new Map<string, number>();
     const ingest = ingestPiAi({ ...tools, answered, clean: (text) => text.toUpperCase() });

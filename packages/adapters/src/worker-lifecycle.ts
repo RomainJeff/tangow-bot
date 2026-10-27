@@ -22,7 +22,6 @@ import {
   LIVE_WORKER_STATES,
   lostSetupMove,
   planLaunch,
-  supportsWorkers,
   takesWriterLease,
   WORKER_TTL_SECONDS,
   WORKSPACE_ROOT,
@@ -61,11 +60,7 @@ export class VolumeBusyError extends Error {
 export type StartedWorker = { providerRef: string; start: Omit<WorkerStartV1, "run"> };
 
 /** Why a home cannot move onto volumes now. */
-export type HomeMoveBlocker =
-  | "computer_kind_unsupported"
-  | "computer_active"
-  | "volume_busy"
-  | "space_worker_live";
+export type HomeMoveBlocker = "computer_active" | "volume_busy" | "space_worker_live";
 
 /**
  * What a home move saw when it started. Adoption refuses once the home has a new revision, or once
@@ -119,23 +114,48 @@ type HomeComputer = {
   homeRevision: string;
   state: string;
   controlHolder: string;
+  updatedAt: Date;
+  maintenanceId: string | null;
 };
 type Db = Pick<PrismaClient, "$queryRaw" | "computerExecutionLease" | "bot">;
+
+/**
+ * How long a Docker computer may sit in a transition before its move counts it idle. A lease-less
+ * first boot that pulls the image can legitimately stay in `booting` for many minutes.
+ */
+const STUCK_TRANSITION_MS: Record<string, number> = {
+  booting: 30 * 60_000,
+  suspending: 5 * 60_000,
+};
+
+/**
+ * Whether the computer is at rest for a home move. A Docker home still to move also counts a
+ * computer an upgrade caught mid-operation, so it is not refused forever: one left in `error`, or
+ * stuck in `booting` or `suspending`. Its own move reservation, which blocks boots, refreshes
+ * `updatedAt`, so a held reservation counts too.
+ */
+function atRest(computer: HomeComputer): boolean {
+  if (["stopped", "suspended"].includes(computer.state)) return true;
+  if (computer.kind !== "docker" || computer.homeStorage === "volumes") return false;
+  if (computer.state === "error") return true;
+  const stuckAfter = STUCK_TRANSITION_MS[computer.state];
+  if (stuckAfter === undefined) return false;
+  return (
+    Boolean(computer.maintenanceId?.startsWith("home-move:")) ||
+    Date.now() - computer.updatedAt.getTime() >= stuckAfter
+  );
+}
 
 /** A run writing to the computer's disk after the copy would lose those writes. */
 async function computerBlocker(
   db: Db,
   computerId: string,
   computer: HomeComputer,
-): Promise<"computer_kind_unsupported" | "computer_active" | null> {
-  if (!supportsWorkers(computer.kind)) return "computer_kind_unsupported";
+): Promise<"computer_active" | null> {
   const executing = await db.computerExecutionLease.count({
     where: { computerId, expiresAt: { gt: new Date() } },
   });
-  const idle =
-    ["stopped", "suspended"].includes(computer.state) &&
-    computer.controlHolder === "none" &&
-    executing === 0;
+  const idle = atRest(computer) && computer.controlHolder === "none" && executing === 0;
   return idle ? null : "computer_active";
 }
 
@@ -171,7 +191,8 @@ async function homeVolumes(db: Db, computerId: string, computer: HomeComputer, l
 
 async function readHomeComputer(db: Db, computerId: string, lock: boolean) {
   const [computer] = await db.$queryRaw<HomeComputer[]>`
-    SELECT kind, scope, "spaceId", "homeStorage", "homeRevision", state, "controlHolder"
+    SELECT kind, scope, "spaceId", "homeStorage", "homeRevision", state, "controlHolder",
+      "maintenanceId", "updatedAt"
     FROM computers
     WHERE id = ${computerId} ${lock ? Prisma.sql`FOR UPDATE` : Prisma.empty}`;
   if (!computer) throw new Error("Computer not found");
@@ -181,11 +202,9 @@ async function readHomeComputer(db: Db, computerId: string, lock: boolean) {
 /** Shared by inspection and reservation so a dry run checks the same admission rules. */
 async function inspectHomeMove(db: Db, computerId: string, lock: boolean) {
   const source = await readHomeComputer(db, computerId, false);
-  const computers = await db.$queryRaw<
-    Array<HomeComputer & { id: string; maintenanceId: string | null }>
-  >`
+  const computers = await db.$queryRaw<Array<HomeComputer & { id: string }>>`
     SELECT id, kind, scope, "spaceId", "homeStorage", "homeRevision", state,
-      "controlHolder", "maintenanceId" FROM computers
+      "controlHolder", "maintenanceId", "updatedAt" FROM computers
     WHERE "spaceId" = ${source.spaceId} ORDER BY id ${lock ? Prisma.sql`FOR UPDATE` : Prisma.empty}`;
   const computer = computers.find((row) => row.id === computerId);
   if (!computer) throw new Error("Computer not found");
@@ -350,9 +369,8 @@ export function createWorkerLifecycle(deps: {
   }
 
   return {
-    /** Without a provider, answers in process with no query; with one, a single indexed read. */
+    /** One indexed read. */
     async plan(input: { attemptId: string; needs: RunNeeds }): Promise<LaunchPlan> {
-      if (!deps.provider) return { mode: "in_process", reason: "no_worker_provider" };
       const [row] = await prisma.$queryRaw<PlanRow[]>`
         SELECT r.id AS "runId", r."botId", r."spaceId", a.fence, r."leaseFence", r.status,
           c.id AS "computerId", c."homeStorage",

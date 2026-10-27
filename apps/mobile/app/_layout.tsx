@@ -15,9 +15,9 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { AvatarStyleProvider } from "../components/avatar-style";
 import { ComputerUpdateProgress } from "../components/computer-update-progress";
 import { LaunchSplash } from "../components/launch-splash";
-import { loadDisplayAgentSteps } from "../lib/agent-steps-pref";
 import { currentApiBase, loadApiBase, loadSessionToken, selectedSpaceId } from "../lib/api";
 import { loadAppearancePreference, mobileTokens } from "../lib/appearance";
+import { loadDebugMode } from "../lib/debug-mode";
 import { bootstrapI18n, useI18n } from "../lib/i18n";
 import {
   configureForegroundNotifications,
@@ -72,7 +72,7 @@ export default function Layout() {
         )
         .catch(() => undefined),
       bootstrapI18n(),
-      loadDisplayAgentSteps(),
+      loadDebugMode(),
     ]).finally(() => setReady(true));
   }, []);
 

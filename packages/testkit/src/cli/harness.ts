@@ -18,11 +18,9 @@ const record = process.argv.includes("--record") || Boolean(process.env.CI);
 const sandboxArg = process.argv.find((arg) => arg.startsWith("--sandbox="));
 const specArg = process.argv.find((arg) => arg.startsWith("--spec="));
 const grepArg = process.argv.find((arg) => arg.startsWith("--grep="));
-const runtimeArg = process.argv.find((arg) => arg.startsWith("--runtime="));
 const sandboxProvider = sandboxArg?.slice("--sandbox=".length) ?? "fake";
 const e2eSpecs = specArg?.slice("--spec=".length).split(",").filter(Boolean) ?? [];
 const e2eGrep = grepArg?.slice("--grep=".length);
-const agentRuntime = runtimeArg?.slice("--runtime=".length) ?? "scripted";
 
 if (Number(integration) + Number(e2e) !== 1) {
   throw new Error("Pass exactly one of --integration or --e2e");
@@ -30,22 +28,14 @@ if (Number(integration) + Number(e2e) !== 1) {
 if (impact && (!e2e || e2eSpecs.length > 0 || e2eGrep)) {
   throw new Error("--impact records the whole e2e suite; pass it with --e2e only");
 }
-if (
-  ui &&
-  (!e2e || impact || process.env.CI || sandboxProvider !== "fake" || agentRuntime !== "scripted")
-) {
-  throw new Error(
-    "--ui requires local e2e with the fake sandbox and scripted runtime, without --impact",
-  );
+if (ui && (!e2e || impact || process.env.CI || sandboxProvider !== "fake")) {
+  throw new Error("--ui requires local e2e with the fake sandbox, without --impact");
 }
 if (!["fake", "e2b"].includes(sandboxProvider)) {
   throw new Error('Sandbox must be "fake" or "e2b"');
 }
 if (integration && sandboxProvider !== "fake") {
   throw new Error("Integration tests only support the fake sandbox");
-}
-if (agentRuntime !== "pi" && agentRuntime !== "scripted") {
-  throw new Error('Runtime must be "pi" or "scripted"');
 }
 if (sandboxProvider === "e2b" && !process.env.E2B_API_KEY) {
   throw new Error("E2B_API_KEY is required when --sandbox=e2b");
@@ -67,7 +57,7 @@ async function main() {
     process.env.VERIFY_DATABASE = "1";
     process.env.WAKEUP_DRIVER = "memory";
     process.env.SANDBOX_PROVIDER = sandboxProvider;
-    process.env.AGENT_RUNTIME = agentRuntime;
+    process.env.AGENT_RUNTIME = "scripted";
     process.env.COMPOSIO_API_KEY = "";
     process.env.BETTER_AUTH_SECRET = "test-secret-test-secret-32chars!";
     process.env.ENCRYPTION_KEY = "test-encryption-key-test-encryption-key";
@@ -94,11 +84,9 @@ async function main() {
 
     if (integration) {
       const suites = [
-        "packages/testkit/src/pi-offline.postgres.test.ts",
+        "packages/testkit/src/executor-worker-helper.test.ts",
         "packages/testkit/src/worker-skills.test.ts",
-        "packages/testkit/src/computer-approval.postgres.test.ts",
         "packages/testkit/src/eval-history.postgres.test.ts",
-        "packages/testkit/src/eval-customer-support.postgres.test.ts",
         "packages/testkit/src/journeys.test.ts",
         "packages/testkit/src/authorization.test.ts",
         "packages/testkit/src/attachments.test.ts",
@@ -106,6 +94,7 @@ async function main() {
         "packages/testkit/src/search.test.ts",
         "packages/testkit/src/executor-lifecycle.test.ts",
         "packages/testkit/src/connections.test.ts",
+        "packages/testkit/src/tangow-setup.postgres.test.ts",
         "packages/testkit/src/bot-secrets.test.ts",
         "packages/db/src/space-membership.postgres.test.ts",
         "packages/db/src/sessions.postgres.test.ts",
@@ -159,7 +148,6 @@ async function main() {
         ok: true,
         mode,
         sandbox: process.env.SANDBOX_PROVIDER,
-        runtime: process.env.AGENT_RUNTIME,
       });
       return;
     }
@@ -269,7 +257,6 @@ async function main() {
         ok: true,
         mode,
         sandbox: process.env.SANDBOX_PROVIDER,
-        runtime: process.env.AGENT_RUNTIME,
         apiPort,
         webPort,
       });

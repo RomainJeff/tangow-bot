@@ -7,17 +7,20 @@ import type {
   BotActivityItem,
   Routine,
   RunActivityRow,
+  SessionEntry,
 } from "@rakazo/contracts";
 import { SaveStoreProvider } from "@rakazo/ui-web";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { setDebugMode } from "../../src/lib/debug-mode";
 import { saveStore as store } from "../../src/lib/save-store";
 import { applyResolvedAppearance } from "../../src/lib/ui-appearance";
 import { BotPage } from "../../src/pages/bot-page/BotPage";
-import type { BotCommands, UpdateBotPatch } from "../../src/pages/shell/bot-commands";
+import type { BotCommands, RunView, UpdateBotPatch } from "../../src/pages/shell/bot-commands";
 import type { BotDetail, BotPageView, BotTab } from "../../src/pages/shell/layout";
 import { panelSizeFor } from "../../src/pages/shell/layout";
 import { usePanelEscape } from "../../src/pages/shell/panel-escape";
+import { SessionView } from "../../src/pages/shell/session-view";
 import "../../src/styles.css";
 
 /*
@@ -28,6 +31,7 @@ import "../../src/styles.css";
  *   activity=empty|error (what reading the activity answers; by default 39 routine runs
  *   and 3 creations, 30 a page; a routine's page reads only its runs)
  *   fail=1 (every save fails)   refuse=1 (the server refuses a computer change)   theme=dark
+ *   debug=1 (debug mode: Activity also lists the runs started from chat, and a run opens its log)
  *   read=loading|error (the page's read of the bot and its routines never answers, or fails
  *   until "Fail reads" is unchecked; the routines stay unknown until a read answers)
  * Writes go through in-memory commands that answer after 400 ms; reads are
@@ -43,6 +47,7 @@ const READ = params.get("read");
 const SAVE_DELAY = 400;
 
 applyResolvedAppearance(params.get("theme") === "dark" ? "dark" : "light");
+setDebugMode(params.get("debug") === "1");
 
 // The app activates the global catalog; module-level `t` calls read it too.
 i18n.loadAndActivate({ locale: "en", messages: {} });
@@ -172,6 +177,28 @@ const RUNS: RunActivityRow[] = NEW
       ),
     ];
 
+/** Runs started from chat, which only debug mode lists. */
+const chat = { trigger: "user" } as const;
+const CHAT_RUNS: RunActivityRow[] = NEW
+  ? []
+  : [
+      run(50, 0.5, {
+        ...chat,
+        promptSnippet: "Compare flights from Paris to Copenhagen on Nov 14",
+      }),
+      run(51, 1.5, {
+        ...chat,
+        promptSnippet: "Draft a reply to the supplier about the late invoice",
+      }),
+      run(52, 3, {
+        ...chat,
+        promptSnippet: "Prepare the agenda for Thursday's committee",
+        status: "failed",
+        failureKind: "missing_model",
+      }),
+      run(53, 25.5, { ...chat, promptSnippet: "Find a slot with Lea next week" }),
+    ];
+
 /** What each run left in its thread; run-07 said nothing. */
 const RECAPS: Record<string, string | null> = {
   "run-01":
@@ -194,6 +221,60 @@ const RECAPS: Record<string, string | null> = {
   ].join("\n"),
   "run-07": null,
 };
+
+/** A chat run's log, for the run dialog: its start, its words, one tool call and its end. */
+function runLog(row: RunActivityRow): SessionEntry[] {
+  const finishedAt = row.completedAt ?? row.updatedAt;
+  const base = (seq: number, ts: string) => ({
+    id: `${row.runId}-entry-${seq}`,
+    sessionId: "session-1",
+    seq,
+    parentId: seq === 0 ? null : `${row.runId}-entry-${seq - 1}`,
+    ts,
+    botId: BOT.id,
+    runId: row.runId,
+  });
+  const started = row.startedAt ?? row.createdAt;
+  const step = (seq: number) => new Date(Date.parse(started) + seq * 4_000).toISOString();
+  return [
+    {
+      ...base(0, started),
+      type: "run.started",
+      payload: {
+        trigger: { kind: "message", entryId: `message-${row.runId}` },
+        model: { provider: "anthropic", id: "claude-sonnet" },
+        effort: "medium",
+      },
+    },
+    {
+      ...base(1, step(1)),
+      type: "tool.call",
+      payload: { callId: "call-1", name: "web_search", input: '{"query":"flights"}' },
+    },
+    {
+      ...base(2, step(2)),
+      type: "tool.result",
+      payload: { callId: "call-1", output: "3 results", isError: false, artifactIds: [] },
+    },
+    {
+      ...base(3, step(3)),
+      type: "assistant.text",
+      payload: { blocks: [{ kind: "text", text: `Done: ${row.promptSnippet}.` }] },
+    },
+    {
+      ...base(4, finishedAt),
+      type: "run.finished",
+      payload:
+        row.status === "failed"
+          ? {
+              status: "failed",
+              usage: { inputTokens: 1_840, outputTokens: 96 },
+              error: "Connect a model in Settings before running bots.",
+            }
+          : { status: "completed", usage: { inputTokens: 12_480, outputTokens: 612 } },
+    },
+  ] as SessionEntry[];
+}
 
 type Entry = { at: string; id: string; item: BotActivityItem };
 
@@ -234,7 +315,9 @@ const CREATIONS: Entry[] = [
 const ACTIVE = new Set(["queued", "leased", "running", "waiting_input", "waiting_takeover"]);
 
 function listActivity(input: BotActivityInput) {
-  const runs = RUNS.filter((row) => !input.routineId || row.routineId === input.routineId);
+  const runs = (input.allRuns && !input.routineId ? [...RUNS, ...CHAT_RUNS] : RUNS).filter(
+    (row) => !input.routineId || row.routineId === input.routineId,
+  );
   const entries: Entry[] = [
     ...runs
       .filter((row) => !ACTIVE.has(row.status))
@@ -372,6 +455,10 @@ window.fetch = async (input, init) => {
           : listActivity(query as BotActivityInput),
     });
   }
+  if (procedure === "runs/entries") {
+    const row = [...RUNS, ...CHAT_RUNS].find((candidate) => candidate.runId === query.runId);
+    return Response.json({ json: { entries: row ? runLog(row) : [] } });
+  }
   if (procedure === "runs/recap") {
     const runId = String(query.runId);
     const text = runId in RECAPS ? RECAPS[runId] : `Done: ${runId}.`;
@@ -428,6 +515,7 @@ function Fixture() {
   const failReadsRef = useRef(failReads);
   failReadsRef.current = failReads;
   const webhookKeyRef = useRef("whsec_fixture_0000");
+  const [runView, setRunView] = useState<RunView | null>(null);
   const tab = params.get("tab");
   const [view, setView] = useState<BotPageView>({
     tab: isTab(tab) ? tab : "settings",
@@ -500,6 +588,7 @@ function Fixture() {
       refreshRoutines: async () => undefined,
       activityEpoch: 0,
       openRun: (row) => console.info(`open run from ${row.sourceMessageId ?? "the end"}`),
+      viewRun: setRunView,
       skillsChanged: () => undefined,
     };
   }, []);
@@ -552,6 +641,22 @@ function Fixture() {
           messagingProviders={["slack"]}
         />
       </aside>
+      {runView ? (
+        <SessionView
+          target={{ kind: "run", runId: runView.runId, title: runView.title }}
+          context={{
+            artifactTarget: { botId: runView.botId },
+            inGroup: false,
+            peerBot: () => ({ color: BOT.color, name: BOT.name }),
+            onOpenBot: () => undefined,
+            onOpenPeerMessages: () => undefined,
+            onRefresh: async () => undefined,
+            onBotChanged: async () => undefined,
+            onAddRoutine: () => undefined,
+          }}
+          onClose={() => setRunView(null)}
+        />
+      ) : null}
     </div>
   );
 }

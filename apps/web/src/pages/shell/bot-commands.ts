@@ -12,6 +12,9 @@ export type RoutinePatch = Omit<Parameters<typeof rpc.routines.update>[0], "rout
 
 export type BotAction = "duplicate" | "export" | "clear" | "archive" | "restore" | "delete";
 
+/** A run to show whole, with what its dialog needs to open its artifacts. */
+export type RunView = Pick<RunActivityRow, "runId" | "botId" | "groupId"> & { title: string };
+
 /** Everything the bot page may ask of the shell. The shell stays the one owner of `bots` and `routines`. */
 export interface BotCommands {
   /** Writes the patch, then merges the returned bot into the roster by id. */
@@ -38,6 +41,8 @@ export interface BotCommands {
   readonly activityEpoch: number;
   /** Opens the run's thread on the message that started it, closing the panel if it hides that thread. */
   openRun(row: Pick<RunActivityRow, "botId" | "groupId" | "sourceMessageId">): void;
+  /** Opens the run's whole log in a dialog over the shell. */
+  viewRun(run: RunView): void;
   /** Re-reads the composer's skill catalog after a skill write the server has confirmed. */
   skillsChanged(): void;
 }
@@ -58,6 +63,7 @@ export interface BotCommandDeps {
   /** True while the panel lies over the thread (narrow windows, or the wide panel below `xl`). */
   panelCoversThread: RefObject<boolean>;
   closePanel: () => void;
+  viewRun: BotCommands["viewRun"];
   activityEpoch: number;
   refreshSkills: () => void;
 }
@@ -192,6 +198,7 @@ export function useBotCommands(deps: BotCommandDeps): BotCommands {
           }),
         );
       },
+      viewRun: (run) => depsRef.current.viewRun(run),
       skillsChanged: () => depsRef.current.refreshSkills(),
     };
   }, [order, activityEpoch]);

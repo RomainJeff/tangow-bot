@@ -32,7 +32,7 @@ msgid "{0, plural, one {# routine} other {# routines}}"
 msgstr "{0, plural, one {# rutin} other {# rutin}}"
 
 #. placeholder {0}: runs.length
-#: src/pages/bot-page/BotActivity.tsx:537
+#: src/pages/bot-page/BotActivity.tsx:577
 msgid "{0, plural, one {# run} other {# runs}}"
 msgstr ""
 
@@ -93,6 +93,12 @@ msgstr ""
 msgid "{0} runs · {1} tokens"
 msgstr "{0} çalıştırma · {1} token"
 
+#. placeholder {0}: run.usage.inputTokens.toLocaleString()
+#. placeholder {1}: run.usage.outputTokens.toLocaleString()
+#: src/pages/shell/session-view.tsx:215
+msgid "{0} tokens in · {1} out"
+msgstr "{0} giriş tokenı · {1} çıkış"
+
 #. placeholder {0}: bot.name
 #: src/pages/ExternalConversationSettings.tsx:232
 msgid "{0} will still respond to direct mentions."
@@ -144,7 +150,7 @@ msgstr "{hours} sa önce"
 msgid "{minutes}m ago"
 msgstr "{minutes} dk önce"
 
-#: src/pages/bot-page/BotActivity.tsx:290
+#: src/pages/bot-page/BotActivity.tsx:324
 msgid "{name} created"
 msgstr "{name} oluşturuldu"
 
@@ -247,7 +253,7 @@ msgstr "İşlem onayları"
 #. placeholder {0}: bot.name
 #. placeholder {0}: group.spaceName
 #. placeholder {0}: sectionMenu.section.name
-#: src/pages/bot-page/BotPage.tsx:343
+#: src/pages/bot-page/BotPage.tsx:346
 #: src/pages/BotContextMenu.tsx:86
 #: src/pages/shell/shell-overlays.tsx:350
 #: src/pages/shell/sidebar-roster.tsx:149
@@ -282,7 +288,7 @@ msgstr "Etkin: {0}"
 msgid "Activity"
 msgstr "Etkinlik"
 
-#: src/pages/bot-page/BotPage.tsx:268
+#: src/pages/bot-page/BotPage.tsx:271
 msgid "Activity, last run failed"
 msgstr "Etkinlik, son çalışma başarısız oldu"
 
@@ -544,7 +550,7 @@ msgstr "Sohbette onayla ya da iptal etmek için hayır de."
 msgid "Approve this server to let your agent use its tools."
 msgstr "Agent'ının bu sunucunun araçlarını kullanabilmesi için sunucuyu onayla."
 
-#: src/pages/bot-page/BotPage.tsx:372
+#: src/pages/bot-page/BotPage.tsx:375
 #: src/pages/BotContextMenu.tsx:146
 msgid "Archive"
 msgstr "Arşivle"
@@ -807,7 +813,7 @@ msgstr "Yanıtı iptal et"
 #: src/components/AskCard.tsx:49
 #: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:162
-#: src/pages/bot-page/BotActivity.tsx:314
+#: src/pages/bot-page/BotActivity.tsx:348
 msgid "Cancelled"
 msgstr "İptal edildi"
 
@@ -892,7 +898,7 @@ msgstr "Temizle"
 msgid "Clear {0}’s conversation?"
 msgstr "{0} sohbeti temizlensin mi?"
 
-#: src/pages/bot-page/BotPage.tsx:368
+#: src/pages/bot-page/BotPage.tsx:371
 #: src/pages/BotContextMenu.tsx:142
 msgid "Clear conversation"
 msgstr "Sohbeti temizle"
@@ -922,7 +928,7 @@ msgstr ""
 #: src/pages/MessagingSettingsOverlay.tsx:362
 #: src/pages/PeerMessagesOverlay.tsx:133
 #: src/pages/PeerMessagesOverlay.tsx:136
-#: src/pages/shell/session-view.tsx:95
+#: src/pages/shell/session-view.tsx:107
 #: src/pages/WindowChrome.tsx:21
 msgid "Close"
 msgstr "Kapat"
@@ -1188,6 +1194,10 @@ msgstr "Kopyala"
 msgid "Copy {label}"
 msgstr ""
 
+#: src/pages/shell/session-view.tsx:245
+msgid "Copy diagnostic"
+msgstr "Tanılamayı kopyala"
+
 #: src/pages/ScratchpadSection.tsx:56
 msgid "Could not add"
 msgstr "Eklenemedi"
@@ -1356,7 +1366,7 @@ msgstr "Bağlayıcı kurulamadı"
 msgid "Could not load"
 msgstr "Yüklenemedi"
 
-#: src/pages/bot-page/BotActivity.tsx:249
+#: src/pages/bot-page/BotActivity.tsx:283
 msgid "Could not load · Retry"
 msgstr "Yüklenemedi · Tekrar dene"
 
@@ -1400,7 +1410,7 @@ msgid "Could not load skills"
 msgstr "Yetenekler yüklenemedi"
 
 #: src/pages/PeerMessagesOverlay.tsx:147
-#: src/pages/shell/session-view.tsx:101
+#: src/pages/shell/session-view.tsx:120
 msgid "Could not load this chat."
 msgstr "Bu sohbet yüklenemedi."
 
@@ -1624,7 +1634,7 @@ msgid "Create group"
 msgstr "Grup oluştur"
 
 #: src/pages/shell/bot-picker.tsx:74
-#: src/pages/shell/shell-main.tsx:174
+#: src/pages/shell/shell-main.tsx:175
 msgid "Create new Bot"
 msgstr "Yeni bot oluştur"
 
@@ -1712,6 +1722,11 @@ msgstr "gün"
 msgid "days"
 msgstr "gün"
 
+#: src/pages/AccountSettingsOverlay.tsx:125
+#: src/pages/AccountSettingsOverlay.tsx:133
+msgid "Debug mode"
+msgstr "Hata ayıklama modu"
+
 #: src/pages/SettingsOverlay.tsx:97
 msgid "Decision Model"
 msgstr ""
@@ -1735,7 +1750,7 @@ msgstr ""
 msgid "Default scope"
 msgstr "Varsayılan kapsam"
 
-#: src/pages/bot-page/BotPage.tsx:378
+#: src/pages/bot-page/BotPage.tsx:381
 #: src/pages/BotContextMenu.tsx:150
 #: src/pages/KnowledgeSection.tsx:687
 #: src/pages/McpServersOverlay.tsx:509
@@ -1768,7 +1783,7 @@ msgstr "Grubu sil"
 msgid "Delete memories too"
 msgstr "Hafızayı da sil"
 
-#: src/pages/bot-page/RoutineDetail.tsx:224
+#: src/pages/bot-page/RoutineDetail.tsx:225
 msgid "Delete routine"
 msgstr "Rutini sil"
 
@@ -1867,11 +1882,6 @@ msgstr "Hatayı kapat"
 msgid "Dismissed. Reconnect anytime from MCP settings."
 msgstr "Kapatıldı. MCP ayarlarından istediğin zaman yeniden bağlanabilirsin."
 
-#: src/pages/AccountSettingsOverlay.tsx:125
-#: src/pages/AccountSettingsOverlay.tsx:133
-msgid "Display agent steps"
-msgstr "Ajan adımlarını göster"
-
 #: src/pages/plugins/advanced-integrations.tsx:253
 msgid "Display name"
 msgstr "Görünen ad"
@@ -1887,7 +1897,7 @@ msgstr "Hesabın yok mu?"
 
 #: src/components/ComputerUpdateProgress.tsx:206
 #: src/pages/ActivityList.tsx:158
-#: src/pages/bot-page/BotActivity.tsx:312
+#: src/pages/bot-page/BotActivity.tsx:346
 #: src/pages/bot-page/RoutineTriggers.tsx:304
 msgid "Done"
 msgstr "Bitti"
@@ -1923,7 +1933,7 @@ msgstr ""
 msgid "Draft skill"
 msgstr "Taslak beceri"
 
-#: src/pages/bot-page/BotPage.tsx:359
+#: src/pages/bot-page/BotPage.tsx:362
 #: src/pages/BotContextMenu.tsx:137
 msgid "Duplicate"
 msgstr "Çoğalt"
@@ -2047,7 +2057,7 @@ msgstr "Genişlet"
 msgid "Expand {0}"
 msgstr "{0} ögesini genişlet"
 
-#: src/pages/bot-page/BotPage.tsx:363
+#: src/pages/bot-page/BotPage.tsx:366
 msgid "Export"
 msgstr "Dışa aktar"
 
@@ -2068,7 +2078,7 @@ msgstr "Çok yüksek"
 
 #: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:160
-#: src/pages/bot-page/BotActivity.tsx:313
+#: src/pages/bot-page/BotActivity.tsx:347
 #: src/pages/bot-page/routine-copy.ts:63
 #: src/pages/shell/routine-run-line.tsx:48
 msgid "Failed"
@@ -2474,7 +2484,7 @@ msgstr "Ses sağlayıcıları yükleniyor…"
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
-#: src/pages/shell/session-view.tsx:108
+#: src/pages/shell/session-view.tsx:127
 #: src/pages/shell/transcript.tsx:248
 msgid "Loading…"
 msgstr "Yükleniyor…"
@@ -2583,6 +2593,7 @@ msgstr "Bahsetmeler"
 msgid "Mentions only"
 msgstr ""
 
+#: src/pages/bot-page/BotActivity.tsx:358
 #: src/pages/shell/composer.tsx:293
 #: src/pages/shell/message-view.tsx:90
 msgid "Message"
@@ -2806,7 +2817,7 @@ msgstr "Yeni alan"
 msgid "Next"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:205
+#: src/pages/bot-page/BotActivity.tsx:239
 msgid "No activity yet"
 msgstr "Henüz etkinlik yok"
 
@@ -2900,7 +2911,7 @@ msgstr "Sağlayıcı bulunamadı."
 msgid "No remote MCP servers found"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:439
+#: src/pages/bot-page/BotActivity.tsx:479
 msgid "No report"
 msgstr "Rapor yok"
 
@@ -3036,7 +3047,7 @@ msgstr "Aç"
 msgid "Open {0}"
 msgstr "{0} aç"
 
-#: src/pages/bot-page/BotActivity.tsx:443
+#: src/pages/bot-page/BotActivity.tsx:483
 msgid "Open in chat"
 msgstr "Sohbette aç"
 
@@ -3485,7 +3496,7 @@ msgstr "Sıfırlanıyor…"
 msgid "Restart to update"
 msgstr ""
 
-#: src/pages/bot-page/BotPage.tsx:353
+#: src/pages/bot-page/BotPage.tsx:356
 #: src/pages/shell/sidebar-footer.tsx:88
 #: src/pages/shell/sidebar-footer.tsx:119
 msgid "Restore"
@@ -3515,7 +3526,7 @@ msgstr "Tekrar dene"
 
 #: src/App.tsx:173
 #: src/pages/PeerMessagesOverlay.tsx:153
-#: src/pages/shell/session-view.tsx:103
+#: src/pages/shell/session-view.tsx:122
 msgid "Retry now"
 msgstr "Şimdi tekrar dene"
 
@@ -3556,17 +3567,17 @@ msgstr "Anahtarı döndür"
 msgid "Rotate key?"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:320
+#: src/pages/bot-page/BotActivity.tsx:358
 #: src/pages/bot-page/RoutineCreateForm.tsx:44
 msgid "Routine"
 msgstr "Rutin"
 
 #: src/components/AskCard.tsx:78
-#: src/pages/bot-page/BotActivity.tsx:281
+#: src/pages/bot-page/BotActivity.tsx:315
 msgid "Routine created"
 msgstr "Rutin oluşturuldu"
 
-#: src/pages/bot-page/BotActivity.tsx:281
+#: src/pages/bot-page/BotActivity.tsx:315
 msgid "Routine created by {by}"
 msgstr "Rutini {by} oluşturdu"
 
@@ -3588,7 +3599,7 @@ msgstr "Çalışma zamanı gelecekte olmalı."
 
 #: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:152
-#: src/pages/bot-page/BotActivity.tsx:315
+#: src/pages/bot-page/BotActivity.tsx:349
 msgid "Running"
 msgstr "Çalışıyor"
 
@@ -3786,13 +3797,17 @@ msgstr ""
 msgid "Shared documents"
 msgstr "Paylaşılan belgeler"
 
+#: src/pages/AccountSettingsOverlay.tsx:128
+msgid "Show agent steps, and every run in a bot's activity."
+msgstr "Ajan adımlarını ve bir botun etkinliğindeki her çalıştırmayı gösterir."
+
 #: src/pages/shell/sidebar.tsx:133
 #: src/pages/shell/thread-header.tsx:84
 #: src/pages/shell/thread-header.tsx:85
 msgid "Show bots"
 msgstr "Botları göster"
 
-#: src/pages/bot-page/BotActivity.tsx:249
+#: src/pages/bot-page/BotActivity.tsx:283
 msgid "Show earlier"
 msgstr "Öncekileri göster"
 
@@ -3805,7 +3820,7 @@ msgstr ""
 msgid "Show less"
 msgstr ""
 
-#: src/pages/bot-page/BotActivity.tsx:471
+#: src/pages/bot-page/BotActivity.tsx:511
 #: src/pages/KnowledgeSection.tsx:893
 #: src/pages/PluginsOverlay.tsx:309
 #: src/pages/shell/block-views.tsx:54
@@ -3815,10 +3830,6 @@ msgstr "Daha fazla göster"
 #: src/pages/Auth.tsx:184
 msgid "Show password"
 msgstr "Parolayı göster"
-
-#: src/pages/AccountSettingsOverlay.tsx:128
-msgid "Show the tools a bot used, with their input and output."
-msgstr "Bir botun kullandığı araçları girdi ve çıktılarıyla gösterir."
 
 #: src/lib/localized-provider-hint.ts:7
 #: src/pages/Auth.tsx:233
@@ -4008,7 +4019,7 @@ msgstr "Sistem"
 msgid "Teach a task"
 msgstr "Görev öğret"
 
-#: src/pages/shell/shell-main.tsx:218
+#: src/pages/shell/shell-main.tsx:240
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "Öğretme sürüyor. Yeni mesaj göndermeden önce öğretmeyi durdur."
 
@@ -4125,7 +4136,7 @@ msgstr ""
 msgid "To:"
 msgstr "Kime:"
 
-#: src/pages/bot-page/BotActivity.tsx:222
+#: src/pages/bot-page/BotActivity.tsx:256
 #: src/pages/PeerMessagesOverlay.tsx:180
 #: src/pages/shell/thread-row.tsx:108
 msgid "Today"
@@ -4297,7 +4308,7 @@ msgstr "Ses"
 msgid "Voice and replies"
 msgstr "Ses ve yanıtlar"
 
-#: src/pages/bot-page/BotActivity.tsx:316
+#: src/pages/bot-page/BotActivity.tsx:350
 msgid "Waiting"
 msgstr "Bekliyor"
 
@@ -4387,7 +4398,7 @@ msgstr "Çalışıyor…"
 msgid "Workspace root"
 msgstr "Çalışma alanı kökü"
 
-#: src/pages/bot-page/BotActivity.tsx:298
+#: src/pages/bot-page/BotActivity.tsx:332
 msgid "Write its first instructions"
 msgstr "İlk yönergelerini yaz"
 
@@ -4395,7 +4406,7 @@ msgstr "İlk yönergelerini yaz"
 msgid "Yearly on {date} at {time}"
 msgstr "Her yıl {date} {time}"
 
-#: src/pages/bot-page/BotActivity.tsx:223
+#: src/pages/bot-page/BotActivity.tsx:257
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/thread-row.tsx:109
 msgid "Yesterday"

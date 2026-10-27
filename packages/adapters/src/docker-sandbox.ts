@@ -22,6 +22,7 @@ import {
   boundedComputerActions,
   clampRounded,
   computerObservation,
+  linkWorkspaceCommand,
   normalizeWorkspacePath,
 } from "./computer-support.js";
 import { readBodyCapped, withAbort } from "./web-ssrf.js";
@@ -133,10 +134,17 @@ export class DockerSandboxProvider implements SandboxProvider {
     };
   }
 
+  /**
+   * A home on volumes keeps `/home/rakazo` on its home directory for dotfiles and browser profiles,
+   * and mounts its volumes at the paths workers use. The supervisor replaces a computer created
+   * with another set of mounts; nothing it held is lost, since the home directory and the volumes
+   * both outlive it.
+   */
   async provision(
-    request: { botId: string; homePath: string },
+    request: Parameters<SandboxProvider["provision"]>[0],
     context: AdapterContext,
   ): Promise<ComputerRef> {
+    const volumeHome = request.volumeHome;
     const res = await fetch(this.url("/computers"), {
       method: "POST",
       headers: { ...this.headers(context, request.botId), "content-type": "application/json" },
@@ -145,6 +153,15 @@ export class DockerSandboxProvider implements SandboxProvider {
         homePath: request.homePath,
         spaceId: context.spaceId,
         userId: context.userId,
+        ...(volumeHome && {
+          volumeHome: {
+            root: volumeHome.root,
+            mounts: volumeHome.mounts.map((mount) => ({
+              volume: mount.volumeRef,
+              path: mount.path,
+            })),
+          },
+        }),
       }),
       signal: context.signal,
     });
@@ -158,13 +175,30 @@ export class DockerSandboxProvider implements SandboxProvider {
       throw new Error(`sandbox provision failed: ${res.status} ${detail}`.trim());
     }
     const body = await readSandboxJson<{ id: string; resumed?: boolean }>(res, context.signal);
-    return {
+    const computer: ComputerRef = {
       id: body.id,
       botId: request.botId,
       kind: "docker",
       providerRef: body.id,
       fresh: body.resumed !== true,
     };
+    if (volumeHome) {
+      // `~/workspace` leads to the same files a worker sees, at their absolute paths.
+      let stderr = "";
+      let code: number | undefined;
+      for await (const event of this.execute(
+        computer,
+        { argv: ["bash", "-c", linkWorkspaceCommand(volumeHome.root, "/home/rakazo/workspace")] },
+        context,
+      )) {
+        if (event.type === "stderr") stderr += event.data;
+        if (event.type === "exit") code = event.code;
+      }
+      if (code !== 0) {
+        throw new Error(stderr.trim() || "could not link the computer workspace to its volumes");
+      }
+    }
+    return computer;
   }
 
   async prepare(_computer: ComputerRef, _context: AdapterContext): Promise<void> {}
@@ -503,7 +537,11 @@ function requestDeadline(timeoutMs: number, message: string) {
   };
 }
 
+/** A directory under the home, or under `/workspace`; the supervisor maps it onto the workspace. */
 function dockerCwd(cwd: string | undefined) {
+  if (cwd === "/workspace" || cwd?.startsWith("/workspace/")) {
+    return path.posix.join("/workspace", normalizeWorkspacePath(cwd.slice("/workspace".length)));
+  }
   if (!cwd || cwd === "." || cwd === "/" || cwd === "/home/rakazo") return "/home/rakazo";
   const relative = cwd.startsWith("/home/rakazo/")
     ? cwd.slice("/home/rakazo/".length)

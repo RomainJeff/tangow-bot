@@ -1,5 +1,5 @@
 import type { AgentRunRequest } from "@rakazo/adapter-kit";
-import { PiAgentRuntime, ScriptedAgentRuntime } from "@rakazo/adapters";
+import { ScriptedAgentRuntime } from "@rakazo/adapters";
 import type { PrismaClient } from "@rakazo/db";
 import { afterEach, expect, it } from "vitest";
 import { startWorkerRun } from "./worker-run-fixture.js";
@@ -18,7 +18,9 @@ async function controllerRun(
     protocol: "anthropic",
     runtime: (prisma) => ({
       describe: () => ({
-        ...new PiAgentRuntime().describe(),
+        id: "fixture",
+        contractVersion: "1",
+        adapterVersion: "0",
         capabilities: { scripted: false, streaming: false },
       }),
       abort: async () => {},
@@ -122,7 +124,9 @@ it("logs the final transcript of an attempt whose run now waits on the user", as
     protocol: "anthropic",
     runtime: () => ({
       describe: () => ({
-        ...new PiAgentRuntime().describe(),
+        id: "fixture",
+        contractVersion: "1",
+        adapterVersion: "0",
         capabilities: { scripted: false, streaming: false },
       }),
       abort: async () => {},

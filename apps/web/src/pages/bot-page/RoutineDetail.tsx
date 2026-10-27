@@ -210,6 +210,7 @@ export function RoutineDetail({
           commands={{
             activityEpoch: commands.activityEpoch + testRuns,
             openRun: commands.openRun,
+            viewRun: commands.viewRun,
           }}
         />
       </section>

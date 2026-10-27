@@ -1,7 +1,22 @@
 import { randomUUID } from "node:crypto";
 import type { AdapterContext, PortableFile, VolumeEntry, VolumeFiles } from "@rakazo/adapter-kit";
 import { fileMode, isPortablePath } from "@rakazo/adapter-kit";
-import { type ConnectionOpts, Sandbox, SandboxNotFoundError, TimeoutError } from "e2b";
+import type { ConnectionOpts } from "e2b";
+import { Sandbox, SandboxNotFoundError, TimeoutError } from "e2b";
+import type { VolumeManifest } from "./docker-volume-import.js";
+import { MAX_IMPORT_FILE_BYTES, volumeManifest } from "./docker-volume-import.js";
+
+const STAGED_PREFIX = ".rakazo-";
+const STAGED_NAME =
+  /(?:^|\/)\.rakazo-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * Whether `path` has the name `write` stages a file under. A killed process, or a sandbox that
+ * died mid-write, leaves that file behind.
+ */
+export function isStagedWrite(path: string): boolean {
+  return STAGED_NAME.test(path);
+}
 
 /** Where a volume-files sandbox mounts the volume it serves. */
 export const VOLUME_FILES_MOUNT = "/mnt/rakazo-volume";
@@ -114,6 +129,26 @@ const LIST_ENTRIES = [
   "process.stdout.write(JSON.stringify(entries));",
 ].join("\n");
 
+const INSPECT_VOLUME = `
+const fs = require('fs'), crypto = require('crypto');
+const root = process.argv[1], maximum = Number(process.argv[2]), entries = [];
+async function walk(dir) {
+  for (const name of fs.readdirSync(root + '/' + dir)) {
+    const path = dir ? dir + '/' + name : name, absolute = root + '/' + path;
+    const info = fs.lstatSync(absolute), mode = info.mode & 0o777;
+    if (info.isDirectory()) { entries.push({kind:'dir',path,mode}); await walk(path); }
+    else if (info.isFile()) {
+      if (info.size > maximum) throw Error('Volume file exceeds 256 MiB');
+      const hash = crypto.createHash('sha256');
+      for await (const chunk of fs.createReadStream(absolute)) hash.update(chunk);
+      entries.push({kind:'file',path,mode,size:info.size,sha256:hash.digest('hex')});
+    } else throw Error('Volume contains a symbolic link or special file');
+  }
+}
+walk('').then(() => process.stdout.write(JSON.stringify({mode:fs.statSync(root).mode & 0o777,entries})))
+  .catch(error => { console.error(error.message); process.exitCode = 1; });
+`;
+
 /** Gives a written temporary file its mode, then renames it over its target, never into a directory. */
 const PLACE_FILE = [
   'const fs = require("fs"), [temporary, target, mode] = process.argv.slice(1);',
@@ -147,6 +182,18 @@ export class E2BVolumeFiles implements VolumeFiles {
     return JSON.parse(listing) as VolumeEntry[];
   }
 
+  /** Full file inventory for operator export, including hashes and empty directories. */
+  async inspect(volumeRef: string, context: AdapterContext): Promise<VolumeManifest> {
+    const value = await this.withSandbox(volumeRef, (sandbox) =>
+      sandbox.run(
+        `node -e ${quoted(INSPECT_VOLUME)} ${VOLUME_FILES_MOUNT} ${MAX_IMPORT_FILE_BYTES}`,
+        context.signal,
+        "root",
+      ),
+    );
+    return volumeManifest(JSON.parse(value));
+  }
+
   /**
    * Stages the file beside its target, created 0600 before any byte lands, then sets its mode and
    * renames it over the target. The target never holds part of the file or a wider mode, and a link
@@ -165,7 +212,7 @@ export class E2BVolumeFiles implements VolumeFiles {
           .catch(() => undefined);
       // Left by an attempt on a sandbox that died.
       for (const path of staged.splice(0)) await remove(path);
-      const temporary = `${directory}.rakazo-${randomUUID()}`;
+      const temporary = `${directory}${STAGED_PREFIX}${randomUUID()}`;
       staged.push(temporary);
       try {
         await sandbox.run(
@@ -193,6 +240,14 @@ export class E2BVolumeFiles implements VolumeFiles {
   async read(volumeRef: string, path: string, context: AdapterContext): Promise<Uint8Array> {
     const target = volumePath(path);
     return this.withSandbox(volumeRef, (sandbox) => sandbox.read(target, context.signal));
+  }
+
+  /** Removes a file, or a link without following it; nothing when the path is absent. */
+  async remove(volumeRef: string, path: string, context: AdapterContext): Promise<void> {
+    const target = volumePath(path);
+    await this.withSandbox(volumeRef, (sandbox) =>
+      sandbox.run(`rm -f ${quoted(target)}`, context.signal, "root"),
+    );
   }
 
   /** Destroys every sandbox opened, and reports the first failure once all were tried. */

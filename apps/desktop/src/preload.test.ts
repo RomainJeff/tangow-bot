@@ -31,7 +31,13 @@ describe("desktop preload bridge", () => {
     const [globalName, bridge] = exposeInMainWorld.mock.calls[0] as [string, RakazoDesktop];
     expect(globalName).toBe("rakazoDesktop");
     expect(bridge.platform).toBe("linux");
-    expect(Object.keys(bridge).sort()).toEqual(["oauth", "platform", "update", "window"]);
+    expect(Object.keys(bridge).sort()).toEqual([
+      "oauth",
+      "pageHead",
+      "platform",
+      "update",
+      "window",
+    ]);
     expect(Object.keys(bridge.window).sort()).toEqual([
       "close",
       "minimize",
@@ -39,9 +45,12 @@ describe("desktop preload bridge", () => {
       "toggleMaximize",
     ]);
     expect(Object.keys(bridge.update).sort()).toEqual(["check", "download", "install", "state"]);
+    expect(Object.keys(bridge.pageHead ?? {}).sort()).toEqual(["cancel", "read"]);
 
     await bridge.oauth.open?.("https://provider.example.com/authorize");
     await bridge.oauth.cancel?.("https://provider.example.com/authorize");
+    await bridge.pageHead?.read("https://news.example.com/a", "page-head-1");
+    await bridge.pageHead?.cancel?.("page-head-1");
     await bridge.window.close();
     await bridge.window.minimize();
     await bridge.window.toggleMaximize();
@@ -53,6 +62,8 @@ describe("desktop preload bridge", () => {
     expect(invoke.mock.calls.map(([channel]) => channel)).toEqual([
       "desktop.oauth.open",
       "desktop.oauth.cancel",
+      "desktop.pageHead.read",
+      "desktop.pageHead.cancel",
       "desktop.window.close",
       "desktop.window.minimize",
       "desktop.window.toggleMaximize",
@@ -62,12 +73,24 @@ describe("desktop preload bridge", () => {
       "desktop.update.download",
       "desktop.update.install",
     ]);
+    expect(invoke).toHaveBeenCalledWith(
+      "desktop.pageHead.read",
+      "https://news.example.com/a",
+      "page-head-1",
+    );
+    expect(invoke).toHaveBeenCalledWith("desktop.pageHead.cancel", "page-head-1");
   });
 
   it("keeps setup off the app bridge so a connected server cannot re-point the app", () => {
     const { exposeInMainWorld } = runPreload("preload.cjs");
     const [, bridge] = exposeInMainWorld.mock.calls[0] as [string, Record<string, unknown>];
-    expect(Object.keys(bridge).sort()).toEqual(["oauth", "platform", "update", "window"]);
+    expect(Object.keys(bridge).sort()).toEqual([
+      "oauth",
+      "pageHead",
+      "platform",
+      "update",
+      "window",
+    ]);
   });
 
   it("forwards captured codes without leaking the IPC event to the renderer", () => {
@@ -97,7 +120,7 @@ describe("setup preload bridge", () => {
 
     expect(exposeInMainWorld).toHaveBeenCalledTimes(1);
     const [globalName, bridge] = exposeInMainWorld.mock.calls[0] as [string, RakazoSetup];
-    expect(globalName).toBe("rakazoSetup");
+    expect(globalName).toBe("tangowSetup");
     expect(bridge.platform).toBe("linux");
     expect(Object.keys(bridge).sort()).toEqual(["platform", "quit", "save", "state", "test"]);
 

@@ -183,6 +183,7 @@ export function ShellPage() {
     navigate,
     panelCoversThread: panels.panelCoversThread,
     closePanel: () => setPanel(null),
+    viewRun: overlays.setRunView,
     activityEpoch: sync.activityEpoch,
     refreshSkills: refreshAgentSkills,
   });

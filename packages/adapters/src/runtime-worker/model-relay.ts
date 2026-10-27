@@ -1,5 +1,7 @@
 import type { AgentRunModel, AgentRuntimeEvent, GuestModel } from "@rakazo/adapter-kit";
 
+import type { RunTraceRecorder } from "../pi-run-trace.js";
+
 export type RelayUsage = Extract<AgentRuntimeEvent, { type: "usage" }>;
 
 /** Whose call this is, by the controller's ids: a helper is named by the ref the controller gave it. */
@@ -15,7 +17,11 @@ export type ModelRelay<Call, Event> = (
   model: AgentRunModel,
   call: Call,
   send: (event: Event) => void,
-  options: { signal: AbortSignal; conversation: RelayConversation },
+  options: {
+    signal: AbortSignal;
+    conversation: RelayConversation;
+    trace?: Pick<ReturnType<RunTraceRecorder["modelRequest"]>, "input" | "output">;
+  },
 ) => Promise<RelayUsage | undefined>;
 
 /** What the guest may know of a model, field by field: never a key, endpoint or credential. */
