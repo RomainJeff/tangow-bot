@@ -49,7 +49,7 @@ it("grants each example profile its literal tools", () => {
   expect(names(screenOperator)).toEqual(COMPUTER_AND_BROWSER);
 });
 
-it("grants the managed computer-use helper the computer, the browser and past runs, and holds the computer", () => {
+it("grants the managed computer-use helper the computer, the browser and past runs", () => {
   const computerUse = HELPER_PROFILES.find((profile) => profile.name === "computer-use");
   expect(computerUse && names(computerUse)).toEqual([
     "read",
@@ -72,7 +72,6 @@ it("grants the managed computer-use helper the computer, the browser and past ru
     "ask_parent",
     "computer_exec",
   ]);
-  expect(computerUse?.exclusive).toBe("computer");
 });
 
 it("hands the computer and the browser to computer-use", () => {

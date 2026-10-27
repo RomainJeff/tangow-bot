@@ -27,7 +27,8 @@ interface HelperProfile {
 ```
 
 - `name` is what `run_subagent` passes as `helper`. The bot reads `name` and `description` in its
-  `<available_helpers>` list.
+  `<available_helpers>` list, which names a profile only when it allows one of the bot's tools
+  other than `search_runs` and `ask_parent`.
 - A helper gets every tool its harness runs itself, plus the Rakazo tools `allow` names, minus
   what `block` names. A name ending in `*` is a prefix.
 - `exclusive` holds a resource for the helper's whole run. A second helper of the same bot that
@@ -58,11 +59,15 @@ The two examples:
 
 ## Try it
 
-1. In a dev checkout, put both profiles in the registry:
+1. In a dev checkout, add both profiles after `computer-use` in the registry:
 
    ```ts
    // packages/core/src/helper-profile.ts
-   export const HELPER_PROFILES: readonly HelperProfile[] = [researcher, screenOperator];
+   export const HELPER_PROFILES: readonly HelperProfile[] = [
+     { name: "computer-use" /* ... */ },
+     researcher,
+     screenOperator,
+   ];
    ```
 
    Paste the two objects from `packages/testkit/src/helper-profiles.fixture.ts` above the
@@ -75,6 +80,6 @@ The two examples:
 5. While it works, ask "where are you at?", then "also check if breakfast is included". The bot
    answers from `helper_status` and passes the new constraint on with `helper_message`.
 6. Ask it to open a website. The bot has no computer tool of its own, so it hands the task to
-   `screen-operator`. Ask for a second website at once: the second helper is refused while the
+   `computer-use` or `screen-operator`. Ask for a second website at once: the second helper is refused while the
    first holds the computer, and the bot says so or tries again once it is free.
 7. Say "stop everything". Every helper ends, and no report follows.

@@ -681,13 +681,42 @@ describe("a tool rule", () => {
     ]);
   });
 
-  it("names no helpers to a bot that cannot start one", async () => {
-    const run = helperRun("run_no_helpers", {
-      capabilities: ["native-loop"],
-      helperProfiles: [RESEARCHER],
+  it("names a helper only to a bot that can start it and has work for it", async () => {
+    const offer = async (runId: string, options: Parameters<typeof helperRun>[1]) => {
+      const start = startOf(await helperRun(runId, options).guest());
+      return {
+        instructions: start.instructions,
+        tools: start.tools.map((offered) => offered.name),
+        helper: start.tools.find((offered) => offered.name === "run_subagent")?.inputSchema
+          .properties?.helper,
+      };
+    };
+    const computerless = ["bash", "search_runs", "run_subagent", "message_user"];
+
+    expect(
+      await offer("run_no_helpers", {
+        capabilities: ["native-loop"],
+        helperProfiles: [RESEARCHER],
+      }),
+    ).toMatchObject({ instructions: "Be brief." });
+    expect(
+      await offer("run_no_computer", {
+        tools: computerless.map(tool),
+        blockedTools: [...MAIN_BOT_BLOCKED_TOOLS],
+        helperProfiles: [...HELPER_PROFILES],
+      }),
+    ).toEqual({ instructions: "Be brief.", tools: computerless, helper: undefined });
+    expect(
+      await offer("run_computer", {
+        tools: [...computerless, "computer_exec"].map(tool),
+        blockedTools: [...MAIN_BOT_BLOCKED_TOOLS],
+        helperProfiles: [...HELPER_PROFILES],
+      }),
+    ).toMatchObject({
+      instructions: expect.stringContaining("<available_helpers>\n- computer-use: "),
+      tools: computerless,
+      helper: { enum: ["computer-use"] },
     });
-    const guest = await run.guest();
-    expect(startOf(guest).instructions).toBe("Be brief.");
   });
 
   it("refuses run_subagent to a harness without the subagents capability", async () => {

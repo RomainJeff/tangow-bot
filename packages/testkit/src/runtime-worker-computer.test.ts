@@ -755,4 +755,7 @@ it("hands the computer to computer-use: the bot that can start it has none of it
   const system = JSON.stringify((bot.run.model.rawRequests[0] as { system: unknown }).system);
   expect(system).toContain(`- computer-use: ${HELPER_PROFILES[0]!.description}`);
   expect(system).not.toMatch(/computer_observe|computer_exec|browser_navigate|open_path/);
+  expect(system).toContain(
+    "Your file tools and bash run in your worker, a separate machine from the computer. Anything on the computer goes through the computer-use helper.",
+  );
 });

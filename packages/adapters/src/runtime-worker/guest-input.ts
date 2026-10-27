@@ -9,7 +9,7 @@ import type {
   WorkerStartV1,
 } from "@rakazo/adapter-kit";
 import type { HelperProfile } from "@rakazo/core";
-import { delegatedTools, selectTools } from "@rakazo/core";
+import { delegatedTools, selectTools, startableHelpers } from "@rakazo/core";
 import { isBackgroundHelperTool, isHelperTool } from "../builtin-tools.js";
 import { catalogIndexText, isLazyCatalogControlRoute } from "../lazy-tool-catalog.js";
 import { encodeMessage } from "./framing.js";
@@ -48,6 +48,17 @@ const TOOL_CAPABILITY: Readonly<Record<string, HarnessCapability>> = {
 
 export type ToolRule = Pick<HelperProfile, "allow" | "block">;
 
+/** Every tool of the request, its lazy catalogs' entries included. */
+const catalogOf = (request: AgentRunRequest) =>
+  request.tools.flatMap((tool) => [tool, ...(tool.catalog ?? []).map((entry) => entry.tool)]);
+
+/** The helpers the bot can start: its harness runs subagents and the profile has work here. */
+const startable = (request: AgentRunRequest, harness: HarnessDeclaration) =>
+  harness.capabilities.includes("subagents") &&
+  request.tools.some((tool) => tool.name === "run_subagent")
+    ? startableHelpers(catalogOf(request), request.helperProfiles ?? [])
+    : [];
+
 /**
  * The main bot's rule: every tool but those it hands to a helper it can start. A helper without
  * a profile gets the same rule, so it cannot bypass the profile that holds the tools.
@@ -55,12 +66,9 @@ export type ToolRule = Pick<HelperProfile, "allow" | "block">;
 export const mainBotRule = (request: AgentRunRequest, harness: HarnessDeclaration): ToolRule => ({
   allow: ["*"],
   block: delegatedTools(
-    request.tools.flatMap((tool) => [tool, ...(tool.catalog ?? []).map((entry) => entry.tool)]),
+    catalogOf(request),
     request.blockedTools ?? [],
-    harness.capabilities.includes("subagents") &&
-      request.tools.some((tool) => tool.name === "run_subagent")
-      ? (request.helperProfiles ?? [])
-      : [],
+    startable(request, harness),
   ),
 });
 
@@ -159,10 +167,7 @@ export function workerStart(
   harness: HarnessDeclaration,
 ): WorkerStartV1 {
   const offered = agentTools(request.tools, harness, mainBotRule(request, harness));
-  // Helpers are named only to an agent that can start one.
-  const profiles = offered.some((tool) => tool.name === "run_subagent")
-    ? (request.helperProfiles ?? [])
-    : [];
+  const profiles = startable(request, harness);
   // A harness with its own loop keeps its own prompt: Rakazo's part is appended to it.
   const instructions = harness.capabilities.includes("native-loop")
     ? (request.harnessAddendum ?? request.instructions)

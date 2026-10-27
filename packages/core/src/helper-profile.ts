@@ -18,7 +18,7 @@ export const HELPER_PROFILES: readonly HelperProfile[] = [
   {
     name: "computer-use",
     description:
-      "Use for work that needs a web page or the computer's screen: browsing sites, reading pages that need a browser, filling forms, clicking through flows, opening files or apps on the computer. Not for what the conversation, memory, your files, a web search or a plain page fetch already answers, and only one at a time, since it holds the computer.",
+      "Use for anything on the computer: browsing sites, filling forms, its screen, and the commands, files or apps that exist only there. Not for what the conversation, memory, your files and shell, a web search or a page fetch already answer, and one at a time, since it holds the computer.",
     allow: ["computer_*", "browser_*", "open_path", "launch_app", "search_runs", "ask_parent"],
     exclusive: "computer",
     instructions: [
@@ -75,19 +75,39 @@ export function selectTools<T extends { name: string; where?: "guest" | "control
   );
 }
 
+/** Tools any helper may use beside its work; allowing one does not make a profile startable. */
+const SUPPORT_TOOLS = ["search_runs", "ask_parent"];
+
+/** The `helpers` a bot can start: those allowing at least one of the work tools in `catalog`. */
+export function startableHelpers(
+  catalog: readonly { name: string }[],
+  helpers: readonly HelperProfile[],
+): HelperProfile[] {
+  return helpers.filter((helper) =>
+    catalog.some(
+      (tool) =>
+        !SUPPORT_TOOLS.includes(tool.name) &&
+        matches(helper.allow, tool.name) &&
+        !matches(helper.block, tool.name),
+    ),
+  );
+}
+
 /**
- * The tools of `catalog` that `blocked` names and one of `helpers`, those the bot can start,
- * allows. The bot keeps every other tool, so it never loses work no helper can take.
+ * The tools of `catalog` that `blocked` names and one of `helpers` the bot can start allows.
+ * The bot keeps every other tool, so it never loses work no helper can take.
  */
 export function delegatedTools<T extends { name: string; where?: "guest" | "controller" }>(
   catalog: readonly T[],
   blocked: readonly string[],
   helpers: readonly HelperProfile[],
 ): string[] {
+  const startable = startableHelpers(catalog, helpers);
   return catalog
     .filter(
       (tool) =>
-        matches(blocked, tool.name) && helpers.some((helper) => selectTools([tool], helper).length),
+        matches(blocked, tool.name) &&
+        startable.some((helper) => selectTools([tool], helper).length),
     )
     .map((tool) => tool.name);
 }
