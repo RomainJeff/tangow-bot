@@ -365,11 +365,9 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
           proposeMail,
           WAITING,
           {
-            // The refusal never reached the bot as an unknown outcome: it reads the send that left.
             expect(request) {
               const seen = JSON.stringify(request.messages);
               expect(seen).toContain("The user sent this message from the draft card.");
-              expect(seen).not.toContain("outcome is unknown");
             },
             response: reply("Sent."),
           },

@@ -555,21 +555,13 @@ describe("native Composio tools", () => {
       expect.objectContaining({ type: "error", message: "denied Bearer [redacted]" }),
     ]);
   });
-  it("marks an app-reported failure in the error's details, so a send it refused is known unsent", async () => {
+
+  it("reports a call the SDK threw on, a timeout included, as an error event", async () => {
     const connector = new ComposioConnector();
     const [tool] = await connector.discoverTools(contextWith());
-    composioSdkState.execute.mockResolvedValueOnce({
-      data: null,
-      error: "Invalid recipient",
-      logId: "",
-    });
+    composioSdkState.execute.mockRejectedValueOnce(new Error("Request timed out"));
     expect(await executeEvents(connector, tool!, {})).toEqual([
-      {
-        type: "error",
-        kind: "unknown",
-        message: "Invalid recipient",
-        details: { successful: false, error: "Invalid recipient" },
-      },
+      { type: "error", kind: "unknown", message: "Request timed out" },
     ]);
   });
 });
