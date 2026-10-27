@@ -5,7 +5,6 @@ import {
   completionNotificationBody,
   notifiesUserOnRunEnd,
   showsRoutineRunCard,
-  subagentMarksUnread,
 } from "./executor.js";
 
 describe("completionMessageSegments", () => {
@@ -165,13 +164,5 @@ describe("completionMarksUnread", () => {
     expect(text).toBe("");
     expect(completionMarksUnread("routine", text)).toBe(false);
     expect(completionMarksUnread("user", text)).toBe(true);
-  });
-});
-
-describe("subagentMarksUnread", () => {
-  it("ignores completed routine activity but preserves failures and manual activity", () => {
-    expect(subagentMarksUnread("routine", "completed")).toBe(false);
-    expect(subagentMarksUnread("routine", "failed")).toBe(true);
-    expect(subagentMarksUnread("user", "completed")).toBe(true);
   });
 });

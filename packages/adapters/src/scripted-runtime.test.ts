@@ -178,3 +178,65 @@ describe("a run resumed from its question card", () => {
     }).toEqual({ resumed: { early: false, late: true }, fresh: { early: true, late: true } });
   });
 });
+
+describe("a scripted helper turn", () => {
+  it("runs the helper through startSubagent and replies with its result", async () => {
+    const writes: unknown[] = [];
+    const runtime = new ScriptedAgentRuntime();
+    const events: AgentRuntimeEvent[] = [];
+    for await (const event of runtime.run({
+      botId: "bot-1",
+      threadId: "thread-1",
+      runId: "run-helper",
+      prompt: "delegate to a helper",
+      instructions: "",
+      history: [],
+      tools: [{ name: "message_user", description: "", inputSchema: {} }],
+      model: { provider: "scripted", id: "scripted" },
+      startSubagent: async (call) => {
+        writes.push({ start: call });
+        return {
+          executeTool: async () => undefined,
+          text: async (text) => void writes.push({ text }),
+          finish: async (outcome) => void writes.push({ finish: outcome }),
+          abandon: async () => undefined,
+        };
+      },
+    })) {
+      events.push(event);
+    }
+    expect(writes).toEqual([
+      {
+        start: {
+          callId: "run-helper:run_subagent:0",
+          name: "helper",
+          task: "delegate to a helper",
+          args: { name: "helper", task: "delegate to a helper" },
+          model: { provider: "scripted", id: "scripted" },
+        },
+      },
+      { text: "it found: delegate to a helper" },
+      {
+        finish: {
+          status: "completed",
+          result: "it found: delegate to a helper",
+          usage: { inputTokens: 0, outputTokens: 0 },
+        },
+      },
+    ]);
+    expect(events.filter((event) => event.type === "tool")).toEqual([
+      {
+        type: "tool",
+        name: "run_subagent",
+        args: { name: "helper", task: "delegate to a helper" },
+        executionId: "run-helper:run_subagent:0",
+      },
+      {
+        type: "tool",
+        name: "message_user",
+        args: { message: "the helper is done. it found: delegate to a helper" },
+        executionId: "run-helper:message_user:1",
+      },
+    ]);
+  });
+});

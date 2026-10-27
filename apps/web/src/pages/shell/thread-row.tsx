@@ -25,7 +25,6 @@ import type { ReactNode } from "react";
 import type { SpawnBotCardEdits } from "../../components/AskCard";
 import { AskCard } from "../../components/AskCard";
 import { CollaborationMarker } from "../../components/ai/CollaborationMarker";
-import { TaskCard } from "../../components/TaskCard";
 import type { ArtifactTarget } from "../../lib/artifact-open";
 import { isHiddenActivityBlock } from "../../lib/message-blocks";
 import type {
@@ -161,12 +160,6 @@ function itemBody(
   switch (item.kind) {
     case "message":
       return <MessageRowView item={item} context={context} {...frame} />;
-    case "subagent":
-      return (
-        <BotSide inGroup={context.inGroup}>
-          <SubagentCard item={item} onOpenSession={context.onOpenSession} />
-        </BotSide>
-      );
     case "routine":
       if (row.routine?.kind === "message")
         return <RoutineMessage item={item} text={row.routine.text} context={context} />;
@@ -243,6 +236,7 @@ function MessageRowView({
       onBotChanged={context.onBotChanged}
       onAddRoutine={context.onAddRoutine}
       onOpenSkill={context.onOpenSkill}
+      onOpenSession={context.onOpenSession}
       arrivesLive={arrivesLive}
     />
   );
@@ -259,30 +253,6 @@ function BotSide({ inGroup, children }: { inGroup: boolean; children: ReactNode 
     >
       {children}
     </MessageRow>
-  );
-}
-
-function SubagentCard({
-  item,
-  onOpenSession,
-}: {
-  item: ItemOf<"subagent">;
-  onOpenSession: (target: SessionViewTarget) => void;
-}) {
-  const { t } = useLingui();
-  const title = item.name || t`subagent`;
-  if (item.status === "running") {
-    return <TaskCard title={title} state="running" meta={item.task} streaming />;
-  }
-  const { sessionId } = item;
-  return (
-    <TaskCard
-      title={title}
-      state={item.status === "failed" ? "failed" : "done"}
-      meta={[item.model.id, item.task].filter(Boolean).join(" · ")}
-      body={item.result}
-      onOpen={sessionId ? () => onOpenSession({ kind: "session", sessionId, title }) : undefined}
-    />
   );
 }
 

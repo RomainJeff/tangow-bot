@@ -35,7 +35,7 @@ describe("quoteDraftForSelection", () => {
     ).toBeNull();
   });
 
-  it("rejects rows that don't opt into quoting (live progress, subagent cards)", () => {
+  it("rejects rows that don't opt into quoting (live progress)", () => {
     const r = unquotableRow("progress:run-1");
     expect(
       quoteDraftForSelection({ startRow: r, endRow: r, text: "span" }, messageById),
