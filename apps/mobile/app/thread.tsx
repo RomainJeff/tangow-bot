@@ -2924,7 +2924,7 @@ function Thread() {
                         />
                       </ComposerButton>
                     ) : null}
-                    {stoppable ? (
+                    {stoppable && !canSend ? (
                       <ComposerButton
                         label={t("Stop")}
                         haptic="commit"
