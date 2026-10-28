@@ -20,7 +20,7 @@ Copy this example route. Title: `Two days near Nyhavn`. Its photo comes from the
   <figure class="media">
     <img src="https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8a/Nyhavn_Copenhagen_2.jpg/960px-Nyhavn_Copenhagen_2.jpg"
       alt="Boats along the canal beside Nyhavn's colorful waterfront buildings">
-    <figcaption><a class="button secondary" href="https://commons.wikimedia.org/wiki/File:Nyhavn_Copenhagen_2.jpg">Photo: kallerna, CC BY-SA 4.0</a></figcaption>
+    <figcaption>Photo: <a href="https://commons.wikimedia.org/wiki/File:Nyhavn_Copenhagen_2.jpg">kallerna, CC BY-SA 4.0</a></figcaption>
   </figure>
   <div class="stack"><div class="row"><span class="badge">2 days</span><span class="badge">On foot</span></div>
   <div class="tabs" role="tablist" aria-label="Itinerary days">
@@ -90,10 +90,10 @@ Suggested tool title: `Views along Nyhavn`.
   <div class="grid">
     <figure class="media"><img loading="lazy" src="https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8a/Nyhavn_Copenhagen_2.jpg/960px-Nyhavn_Copenhagen_2.jpg"
       alt="Boats and colorful buildings beside Nyhavn canal">
-      <figcaption><a class="button secondary" href="https://commons.wikimedia.org/wiki/File:Nyhavn_Copenhagen_2.jpg">Canal · kallerna · CC BY-SA 4.0</a></figcaption></figure>
+      <figcaption>Canal · <a href="https://commons.wikimedia.org/wiki/File:Nyhavn_Copenhagen_2.jpg">kallerna · CC BY-SA 4.0</a></figcaption></figure>
     <figure class="media"><img loading="lazy" src="https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c0/Nyhavn_Copenhagen_3.jpg/960px-Nyhavn_Copenhagen_3.jpg"
       alt="A closer view of Nyhavn's waterfront house fronts">
-      <figcaption><a class="button secondary" href="https://commons.wikimedia.org/wiki/File:Nyhavn_Copenhagen_3.jpg">Houses · kallerna · CC BY-SA 4.0</a></figcaption></figure>
+      <figcaption>Houses · <a href="https://commons.wikimedia.org/wiki/File:Nyhavn_Copenhagen_3.jpg">kallerna · CC BY-SA 4.0</a></figcaption></figure>
   </div>
 </main>
 ```

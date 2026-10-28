@@ -22,6 +22,11 @@ small { font-size: 13px; }
 hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
 img, video { display: block; max-width: 100%; height: auto; border-radius: calc(var(--radius) - 4px); }
 audio { max-width: 100%; }
+figure { margin: 0; }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0 0 12px; }
+dl:last-child { margin-bottom: 0; }
+dt { color: var(--muted-foreground); }
+dd { margin: 0; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
 th, td { padding: 8px 12px; text-align: start; border-bottom: 1px solid var(--border); }
 th { color: var(--muted-foreground); font-size: 13px; font-weight: 500; }
@@ -60,9 +65,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .stat { display: flex; flex-direction: column; gap: 2px; }
 .stat .value { font-size: 28px; line-height: 1.15; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .stat .label { color: var(--muted-foreground); font-size: 13px; }
-.media { margin: 0; }
 .media img, .media video { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: var(--muted); }
 .media figcaption { margin-top: 8px; color: var(--muted-foreground); font-size: 13px; }
+figcaption a, .muted a { color: inherit; }
 [hidden] { display: none !important; }
 @media (max-width: 480px) { body { padding: 12px; } .grid { grid-template-columns: 1fr; } }
 `;

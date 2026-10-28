@@ -11,6 +11,7 @@ tokens for a property the kit does not cover, or SVG sizing such as `width:100%`
 - Headings, paragraphs, lists, links, `small`, and `hr` have default typography and spacing.
 - Images and videos are fluid and rounded. Audio has native playback controls.
 - Tables, column headings, and cells have default borders and spacing.
+- `figure` has no margin. A `dl` lays out as a two-column list: muted `dt` terms, `dd` values. Use it for key/value facts.
 - Buttons have default styling. Use `.button` for a 44px tap target.
 - `[hidden]` hides any element, including a `.grid` or `.stack` panel.
 - Inherit the app font. Do not set a font family or load fonts.
