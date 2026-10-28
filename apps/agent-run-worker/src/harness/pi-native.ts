@@ -199,6 +199,8 @@ export const piNativeHarness: GuestHarness = {
                     scope: "extension",
                     config: {
                       command: "rakazo-in-process",
+                      // The controller bounds every call (budgets, stop, cancel); pi's 60 s default would drop the result of a long one.
+                      timeout: 0,
                       exposure: "direct",
                       toolExposure: Object.fromEntries(
                         listed.map((tool) => [tool.name, tool.exposure]),

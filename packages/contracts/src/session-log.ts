@@ -133,8 +133,11 @@ const UserMessagePayload = z.object({
   blocks: z.array(MessageBlock),
   replyTo: z.object({ entryId: EntryId, quote: z.string().optional() }).optional(),
   clientNonce: z.string().optional(),
-  /** `card`: the reply an answer given inside a card records, which the card shows in its place. */
-  source: z.enum(["app", "steering", "channel", "routine", "card"]),
+  /**
+   * `card`: the reply an answer given inside a card records, which the card shows in its place.
+   * `parent`: what a bot sent the background helper it started, kept in the helper's session.
+   */
+  source: z.enum(["app", "steering", "channel", "routine", "card", "parent"]),
 });
 
 const SubagentPayload = z.object({
@@ -220,6 +223,8 @@ const EntryShapes = z.discriminatedUnion("type", [
        * a card. The result is the call's answer from then on, whatever the call id.
        */
       replaces: EntryId.optional(),
+      /** The session of the background helper the call started. */
+      sessionId: SessionId.optional(),
     }),
   ),
   runEntry(
@@ -242,6 +247,29 @@ const EntryShapes = z.discriminatedUnion("type", [
     }),
   ),
   runEntry("subagent", SubagentPayload),
+  /** In the thread's main session, how the background helper `helperId` ended. */
+  z.object({
+    ...envelope,
+    botId: Id,
+    runId: z.never().optional(),
+    type: z.literal("helper.report"),
+    payload: z.object({
+      helperId: Id,
+      profile: z.string().nullable(),
+      status: z.enum(["completed", "failed"]),
+      report: z.string(),
+      /** What its parent sent it that it ended before reading. */
+      unreadMessages: z.array(z.string()).optional(),
+    }),
+  }),
+  /** In the thread's main session, the question the paused background helper `helperId` asks. */
+  z.object({
+    ...envelope,
+    botId: Id,
+    runId: z.never().optional(),
+    type: z.literal("helper.question"),
+    payload: z.object({ helperId: Id, question: z.string() }),
+  }),
   /** In the thread's main session, when a routine run opens its own session `sessionId`. */
   runEntry(
     "routine.started",
@@ -494,6 +522,8 @@ export const ENTRY_AUDIENCE = {
   "tool.call": { inference: "yes", ui: true },
   "tool.result": { inference: "yes", ui: true },
   subagent: { inference: "yes", ui: true },
+  "helper.report": { inference: "yes", ui: false },
+  "helper.question": { inference: "yes", ui: false },
   "routine.started": { inference: "context", ui: true },
   "routine.finished": { inference: "yes", ui: true },
   "bot.text": { inference: "yes", ui: true },
@@ -615,12 +645,14 @@ type EntryBody = {
 
 /**
  * Whether a child session keeps the entry: one of its run's trace types, except an
- * `assistant.text` holding a block that needs the person, which goes to the person whole.
+ * `assistant.text` holding a block that needs the person, which goes to the person whole, and a
+ * `user.message` a helper's parent sent it.
  */
 export function isRunTrace(entry: EntryBody): boolean {
   if (entry.type === "assistant.text") {
     return !entry.payload.toPerson && !needsThePerson(entry.payload.blocks);
   }
+  if (entry.type === "user.message") return entry.payload.source === "parent";
   return RUN_TRACE_TYPES.has(entry.type);
 }
 
@@ -651,15 +683,12 @@ export type AgentHistoryTurnPart =
     };
 
 const itemBase = { id: EntryId, ts: IsoDate };
-/**
- * The child session an item's entry rose from, named when the same page holds the routine's start
- * or the helper's entry.
- */
+/** The child session an item's entry rose from, named when the same page holds the routine's start. */
 const itemOrigin = {
   origin: z
     .object({
       sessionId: SessionId,
-      kind: z.enum(["routine", "subagent"]).optional(),
+      kind: z.literal("routine").optional(),
       name: z.string().optional(),
     })
     .optional(),
@@ -702,19 +731,6 @@ export const ThreadItemSchema = z.discriminatedUnion("kind", [
       .object({ outcome: RunOutcome, durationMs: z.number().int().nonnegative() })
       .nullable(),
   }),
-  z.discriminatedUnion("status", [
-    z.object({ kind: z.literal("subagent"), ...itemBase, runId: Id, ...SubagentPayload.shape }),
-    /** A helper still at work: its `run_subagent` call has no answer yet. */
-    z.object({
-      kind: z.literal("subagent"),
-      status: z.literal("running"),
-      ...itemBase,
-      runId: Id,
-      callId: z.string().min(1),
-      name: z.string(),
-      task: z.string(),
-    }),
-  ]),
   z.object({
     kind: z.literal("routine"),
     ...itemBase,

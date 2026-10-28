@@ -28,6 +28,7 @@ const helperStopped = (callId: string, answer = APPROVAL_WAITING_TEXT) => ({
   type: "subagent",
   payload: {
     callId,
+    sessionId: "ses_mailer",
     name: "mailer",
     task: "Mail Anna.",
     model: { provider: "openai-compatible", id: "offline" },
@@ -121,12 +122,27 @@ describe("a helper's draft in the thread", () => {
       helperStopped("sub"),
       ...(outcome ? [result("sub", "Sent.", "t-2")] : []),
     ]);
-  const kinds = (entries: ReturnType<typeof linkEntries>) =>
-    projectThreadItems(entries).map((item) => item.kind);
+  const helperStep = (entries: ReturnType<typeof linkEntries>) =>
+    projectThreadItems(entries)
+      .flatMap((item) => (item.kind === "message" ? item.blocks : []))
+      .flatMap((block) => (block.kind === "steps" ? block.steps : []))
+      .flatMap((step) => step.calls ?? [])
+      .find((detail) => detail.name === "run_subagent");
 
-  it("still shows the helper once its outcome replaced its answer", () => {
-    expect(kinds(helperChain(false))).toEqual(["message", "subagent", "effect"]);
-    expect(kinds(helperChain(true))).toEqual(["message", "subagent", "effect"]);
+  it("shows the draft card, and no helper card, before and after the outcome", () => {
+    const kinds = (entries: ReturnType<typeof linkEntries>) =>
+      projectThreadItems(entries).map((item) => item.kind);
+    expect(kinds(helperChain(false))).toEqual(["message", "effect"]);
+    expect(kinds(helperChain(true))).toEqual(["message", "effect"]);
+  });
+
+  it("keeps the helper's session on its step once the outcome replaced its answer", () => {
+    expect(helperStep(helperChain(false))).toMatchObject({ sessionId: "ses_mailer" });
+    expect(helperStep(helperChain(true))).toMatchObject({
+      output: "Sent.",
+      outcome: true,
+      sessionId: "ses_mailer",
+    });
   });
 });
 

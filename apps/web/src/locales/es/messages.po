@@ -17,7 +17,7 @@ msgstr ""
 msgid " (unread)"
 msgstr " (sin leer)"
 
-#: src/components/AgentSteps.tsx:99
+#: src/components/AgentSteps.tsx:117
 msgid "(empty)"
 msgstr "(vacío)"
 
@@ -137,8 +137,8 @@ msgstr "hace {days} d"
 msgid "{failures, plural, one {# failure since {since}} other {# failures since {since}}}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:336
-#: src/pages/shell/thread-row.tsx:373
+#: src/pages/shell/message-view.tsx:340
+#: src/pages/shell/thread-row.tsx:343
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -182,12 +182,8 @@ msgstr "{schedules} · próxima {next}"
 msgid "{size} B"
 msgstr "{size} B"
 
-#: src/components/AgentSteps.tsx:42
+#: src/components/AgentSteps.tsx:55
 msgid "{stepCount, plural, one {# step} other {# steps}}"
-msgstr ""
-
-#: src/components/TaskCard.tsx:76
-msgid "{title} · Opens in full"
 msgstr ""
 
 #: src/pages/ActivityList.tsx:97
@@ -705,16 +701,16 @@ msgstr "Iniciando escritorio en vivo…"
 msgid "Booting up {0}’s computer"
 msgstr "Iniciando la computadora de {0}"
 
-#: src/pages/shell/message-view.tsx:324
-#: src/pages/shell/message-view.tsx:325
-#: src/pages/shell/thread-row.tsx:364
-#: src/pages/shell/thread-row.tsx:365
+#: src/pages/shell/message-view.tsx:328
+#: src/pages/shell/message-view.tsx:329
+#: src/pages/shell/thread-row.tsx:334
+#: src/pages/shell/thread-row.tsx:335
 msgid "bot"
 msgstr "bot"
 
 #: src/pages/IntegrationSetup.tsx:51
-#: src/pages/shell/message-view.tsx:223
-#: src/pages/shell/thread-row.tsx:332
+#: src/pages/shell/message-view.tsx:226
+#: src/pages/shell/thread-row.tsx:302
 #: src/pages/shell/use-composer-draft.ts:53
 msgid "Bot"
 msgstr "Bot"
@@ -811,7 +807,6 @@ msgid "Cancel reply"
 msgstr "Cancelar respuesta"
 
 #: src/components/AskCard.tsx:49
-#: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:162
 #: src/pages/bot-page/BotActivity.tsx:348
 msgid "Cancelled"
@@ -1179,7 +1174,7 @@ msgstr ""
 msgid "Continue with email"
 msgstr "Continuar con el correo"
 
-#: src/pages/shell/thread-row.tsx:450
+#: src/pages/shell/thread-row.tsx:420
 msgid "Conversation cleared"
 msgstr ""
 
@@ -1938,11 +1933,11 @@ msgstr "Habilidad en borrador"
 msgid "Duplicate"
 msgstr "Duplicar"
 
-#: src/pages/shell/message-view.tsx:198
+#: src/pages/shell/message-view.tsx:201
 msgid "Earlier message"
 msgstr "Mensaje anterior"
 
-#: src/pages/shell/thread-row.tsx:447
+#: src/pages/shell/thread-row.tsx:417
 msgid "Earlier messages summarized"
 msgstr ""
 
@@ -2076,7 +2071,6 @@ msgstr ""
 msgid "Extra high"
 msgstr "Extra alto"
 
-#: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:160
 #: src/pages/bot-page/BotActivity.tsx:347
 #: src/pages/bot-page/routine-copy.ts:63
@@ -2165,7 +2159,7 @@ msgstr ""
 msgid "Fullscreen"
 msgstr "Pantalla completa"
 
-#: src/pages/shell/thread-row.tsx:399
+#: src/pages/shell/thread-row.tsx:369
 msgid "FYI"
 msgstr ""
 
@@ -2311,7 +2305,7 @@ msgstr "Importar JSON de OpenAPI"
 msgid "Inherit default"
 msgstr "Heredar predeterminado"
 
-#: src/components/AgentSteps.tsx:78
+#: src/components/AgentSteps.tsx:96
 msgid "Input"
 msgstr "Entrada"
 
@@ -2381,7 +2375,7 @@ msgstr "Su conversación, archivos y rutinas se eliminarán de forma permanente.
 msgid "Jump to latest"
 msgstr "Ir al más reciente"
 
-#: src/pages/shell/message-view.tsx:193
+#: src/pages/shell/message-view.tsx:196
 msgid "Jump to replied message"
 msgstr "Ir al mensaje respondido"
 
@@ -2616,7 +2610,7 @@ msgstr ""
 msgid "Message composer"
 msgstr "Redactor de mensajes"
 
-#: src/pages/shell/thread-row.tsx:449
+#: src/pages/shell/thread-row.tsx:419
 msgid "Message edited"
 msgstr ""
 
@@ -2624,8 +2618,8 @@ msgstr ""
 msgid "Message event"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:401
-#: src/pages/shell/thread-row.tsx:440
+#: src/pages/shell/thread-row.tsx:371
+#: src/pages/shell/thread-row.tsx:410
 msgid "Message from {peer}"
 msgstr "Mensaje de {peer}"
 
@@ -2633,8 +2627,8 @@ msgstr "Mensaje de {peer}"
 msgid "Message…"
 msgstr "Mensaje…"
 
-#: src/pages/shell/thread-row.tsx:401
-#: src/pages/shell/thread-row.tsx:440
+#: src/pages/shell/thread-row.tsx:371
+#: src/pages/shell/thread-row.tsx:410
 msgid "Messaged {peer}"
 msgstr "Mensaje enviado a {peer}"
 
@@ -3124,7 +3118,7 @@ msgstr "Otro modelo…"
 msgid "Other…"
 msgstr ""
 
-#: src/components/AgentSteps.tsx:79
+#: src/components/AgentSteps.tsx:97
 msgid "Output"
 msgstr "Salida"
 
@@ -3223,7 +3217,7 @@ msgstr "Proveedor"
 msgid "Providers"
 msgstr "Proveedores"
 
-#: src/pages/shell/thread-row.tsx:397
+#: src/pages/shell/thread-row.tsx:367
 msgid "Question"
 msgstr ""
 
@@ -3462,7 +3456,7 @@ msgstr "Responder en varios mensajes cortos"
 msgid "Replying to {replyName}"
 msgstr "Respondiendo a {replyName}"
 
-#: src/pages/shell/thread-row.tsx:395
+#: src/pages/shell/thread-row.tsx:365
 msgid "Request"
 msgstr ""
 
@@ -3514,7 +3508,7 @@ msgstr "Restaurar el texto sin guardar"
 msgid "Restoring your workspace"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:396
+#: src/pages/shell/thread-row.tsx:366
 msgid "Result"
 msgstr ""
 
@@ -3597,7 +3591,6 @@ msgstr "Ejecutar a las"
 msgid "Run time must be in the future."
 msgstr "La hora de ejecución debe ser en el futuro."
 
-#: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:152
 #: src/pages/bot-page/BotActivity.tsx:349
 msgid "Running"
@@ -3940,7 +3933,7 @@ msgstr "Iniciando"
 msgid "Starting…"
 msgstr "Iniciando…"
 
-#: src/pages/shell/thread-row.tsx:398
+#: src/pages/shell/thread-row.tsx:368
 msgid "Status"
 msgstr ""
 
@@ -3976,10 +3969,6 @@ msgstr "Almacenado cifrado"
 #: src/pages/model-settings/model-detail.tsx:255
 msgid "Stored securely. Never shown here."
 msgstr "Almacenado de forma segura. Nunca se muestra aquí."
-
-#: src/pages/shell/thread-row.tsx:283
-msgid "subagent"
-msgstr "subagente"
 
 #: src/components/DraftCard.tsx:380
 #: src/components/DraftCard.tsx:387
@@ -4070,7 +4059,7 @@ msgstr "El proveedor de memoria seleccionado no está disponible en esta build."
 msgid "Thinking"
 msgstr "Pensando"
 
-#: src/components/AgentSteps.tsx:83
+#: src/components/AgentSteps.tsx:101
 msgid "This call ran before step details were recorded."
 msgstr "Esta llamada se ejecutó antes de que se registraran los detalles de los pasos."
 
@@ -4111,7 +4100,7 @@ msgstr "Este servidor ya está conectado. Desconéctalo primero para autorizarlo
 msgid "This subscription sign-in is not available in Rakazo yet. Use a deployment credential or choose another provider."
 msgstr "Este inicio de sesión por suscripción aún no está disponible en Rakazo. Usa una credencial de despliegue o elige otro proveedor."
 
-#: src/components/AgentSteps.tsx:44
+#: src/components/AgentSteps.tsx:57
 msgid "Thought for {duration} · {stepCount, plural, one {# step} other {# steps}}"
 msgstr ""
 
@@ -4138,7 +4127,7 @@ msgstr "Para:"
 
 #: src/pages/bot-page/BotActivity.tsx:256
 #: src/pages/PeerMessagesOverlay.tsx:180
-#: src/pages/shell/thread-row.tsx:108
+#: src/pages/shell/thread-row.tsx:107
 msgid "Today"
 msgstr "Hoy"
 
@@ -4408,7 +4397,7 @@ msgstr "Cada año el {date} a las {time}"
 
 #: src/pages/bot-page/BotActivity.tsx:257
 #: src/pages/PeerMessagesOverlay.tsx:181
-#: src/pages/shell/thread-row.tsx:109
+#: src/pages/shell/thread-row.tsx:108
 msgid "Yesterday"
 msgstr "Ayer"
 

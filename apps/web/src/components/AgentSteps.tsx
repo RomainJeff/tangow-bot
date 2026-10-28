@@ -1,5 +1,6 @@
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import type { MessageBlock } from "@rakazo/contracts";
+import { stepCallTitle } from "@rakazo/core";
 import {
   Dialog,
   DialogContent,
@@ -8,20 +9,32 @@ import {
   ReasoningDisclosure,
 } from "@rakazo/ui-web";
 import { useState } from "react";
+import type { SessionViewTarget } from "../lib/thread-items";
 
 type StepsBlock = Extract<MessageBlock, { kind: "steps" }>;
-type StepCall = { name: string; input: string; output: string };
+type StepCall = NonNullable<StepsBlock["steps"][number]["calls"]>[number];
 
 function callsOf(block: StepsBlock): StepCall[] {
   return block.steps.flatMap((step) =>
     step.calls?.length
-      ? step.calls
+      ? step.calls.map((call) => ({ ...call, name: stepCallTitle(call) }))
       : Array.from({ length: step.count }, () => ({ name: step.label, input: "", output: "" })),
   );
 }
 
-/** How long the bot thought and what it did, folded away; each step opens its detail popin. */
-export function AgentSteps({ block, live = false }: { block: StepsBlock; live?: boolean }) {
+/**
+ * How long the bot thought and what it did, folded away; each step opens its detail popin, and a
+ * helper's step opens the helper's own session.
+ */
+export function AgentSteps({
+  block,
+  live = false,
+  onOpenSession,
+}: {
+  block: StepsBlock;
+  live?: boolean;
+  onOpenSession?: (target: SessionViewTarget) => void;
+}) {
   const { t } = useLingui();
   const [expanded, setExpanded] = useState(false);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
@@ -51,7 +64,12 @@ export function AgentSteps({ block, live = false }: { block: StepsBlock; live?: 
           <button
             key={i}
             type="button"
-            onClick={() => setOpenIndex(i)}
+            onClick={() => {
+              const { sessionId, name } = call;
+              if (sessionId && onOpenSession)
+                onOpenSession({ kind: "session", sessionId, title: name });
+              else setOpenIndex(i);
+            }}
             className="self-start text-start duration-(--duration-hover) ease-quiet hover:text-foreground"
             dir="auto"
           >

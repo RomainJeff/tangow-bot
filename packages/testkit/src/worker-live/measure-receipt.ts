@@ -251,7 +251,9 @@ export function measureReceipt(
     threads,
   });
   for (const [id, label] of Object.entries(labels)) text = text.replaceAll(id, label);
-  return JSON.parse(text.replace(E2B_ID, "<e2b-id>"));
+  return JSON.parse(
+    text.replace(/"(?:[^"\\]|\\.)*"/g, (value) => value.replace(E2B_ID, "<e2b-id>")),
+  );
 }
 
 /** How every figure of the receipt is derived from its `threads`, so it can be recomputed. */
