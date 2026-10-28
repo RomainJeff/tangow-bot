@@ -41,7 +41,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .muted { color: var(--muted-foreground); }
 .badge {
-  display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border: 1px solid var(--border);
+  display: inline-flex; align-items: center; width: fit-content; height: 22px; padding: 0 8px; border: 1px solid var(--border);
   border-radius: calc(var(--radius) - 6px); color: var(--foreground); font-size: 12px; font-weight: 500;
 }
 .button {
