@@ -2728,8 +2728,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
             finish: (outcome) =>
               inOrder(async () => {
                 const result = redactSecrets(outcome.result, runSecrets);
+                let stop: SessionEntry | undefined;
                 try {
-                  await deps.prisma.$transaction(async (tx) => {
+                  stop = await deps.prisma.$transaction(async (tx) => {
                     // The parent's thread, then the helper's run and session, the order stop takes.
                     await tx.$queryRaw`SELECT id FROM threads WHERE id = ${thread.id} FOR UPDATE`;
                     const closed = await tx.run.updateMany({
@@ -2751,7 +2752,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                         { usage: outcome.usage },
                       );
                     }
-                    await deps.sessionLog.append(tx, {
+                    return deps.sessionLog.append(tx, {
                       ...runLog,
                       type: "subagent",
                       payload: {
@@ -2766,13 +2767,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
                       },
                     });
                   });
-                  // The user can answer the card that stopped the helper before this lands: the
-                  // card's outcome then replaces it here, since the resumed attempt found no pause.
-                  if (isHelperPauseResult(result)) {
-                    await logDraftOutcomes(deps, { runId, threadId: thread.id }, runSecrets);
-                  }
                 } catch (error) {
                   if (!(error instanceof RunHistoryWriteError)) throw error;
+                }
+                // The user can answer the card that stopped the helper before this stop lands:
+                // the card's outcome then replaces it here, since the resumed attempt found no
+                // pause. Best effort: the helper itself closed either way.
+                if (stop && isHelperPauseResult(result)) {
+                  await logDraftOutcomes(deps, { runId, threadId: thread.id }, runSecrets, {
+                    replacing: stop.id,
+                  }).catch((error: unknown) => getLogger().error("helper draft outcome", error));
                 }
               }),
             transcript: (event) =>
@@ -5548,10 +5552,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
           takeoverResume?.promptNote,
           approvalContinuation,
           settledEffects.length > 0 ? SETTLED_APPROVAL_NOTE : undefined,
-          // Only once the outcome is in the history it reads: a helper's stop, which the outcome
-          // replaces, can be logged after this attempt started.
-          draftOutcomes.length > 0 ||
-          answeredDrafts.some((effect) => hasDraftOutcome(historyEntries, effect.id))
+          // Only for an outcome the model reads, which is one whose pause is in its history: a
+          // helper's stop, which the outcome replaces, can be logged after this attempt read it.
+          draftOutcomes.some(
+            (outcome) =>
+              outcome.type === "tool.result" &&
+              historyEntries.some((entry) => entry.id === outcome.payload.replaces),
+          ) || answeredDrafts.some((effect) => hasDraftOutcome(historyEntries, effect.id))
             ? DRAFT_RESUME_NOTE
             : undefined,
         ];
@@ -7979,6 +7986,8 @@ export async function logDraftOutcomes(
   secrets: string[],
   options: {
     only?: readonly string[];
+    /** Only the outcome that replaces this pause. */
+    replacing?: EntryId;
     holdsRun?: (tx: Prisma.TransactionClient) => Promise<boolean>;
   } = {},
 ): Promise<SessionEntry[]> {
@@ -8002,7 +8011,10 @@ export async function logDraftOutcomes(
     if (options.holdsRun && !(await options.holdsRun(tx))) {
       throw new Error("This attempt no longer holds the run.");
     }
-    const outcomes = endedDraftOutcomes(effects, await deps.sessionLog.readRun(target.runId));
+    const outcomes = endedDraftOutcomes(
+      effects,
+      await deps.sessionLog.readRun(target.runId),
+    ).filter(({ pauseId }) => !options.replacing || pauseId === options.replacing);
     const logged: SessionEntry[] = [];
     for (const { callId, pauseId, result } of outcomes) {
       const shown = redactConnectorPayload(result, secrets);
