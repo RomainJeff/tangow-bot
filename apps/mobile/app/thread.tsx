@@ -139,6 +139,7 @@ import { Surface } from "../components/surface";
 import { TablePreview } from "../components/table-preview";
 import { TypingBubble } from "../components/typing-bubble";
 import { UserBubble } from "../components/user-bubble";
+import { WidgetCard } from "../components/widget-card";
 import {
   applyMobileThreadEvent,
   blockText,
@@ -3616,6 +3617,17 @@ const MessageBubble = memo(function MessageBubble({
             accessibilityActions={actionProps.accessibilityActions}
             onAccessibilityAction={actionProps.onAccessibilityAction}
           />
+        ))}
+        {metaLines.length > 0 ? <BubbleMeta lines={metaLines} standalone /> : null}
+      </View>
+    );
+  }
+  const widgets = message.blocks.filter((block) => block.kind === "widget");
+  if (widgets.length > 0) {
+    return (
+      <View style={{ gap: 8, width: "100%" }}>
+        {widgets.map((block, index) => (
+          <WidgetCard key={index} block={block} artifactTarget={artifactTarget} />
         ))}
         {metaLines.length > 0 ? <BubbleMeta lines={metaLines} standalone /> : null}
       </View>

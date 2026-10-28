@@ -805,10 +805,6 @@ msgstr "Changing…"
 msgid "Channels"
 msgstr "Channels"
 
-#: src/pages/shell/message-cards.tsx:266
-msgid "Chart failed to render: {error}"
-msgstr "Chart failed to render: {error}"
-
 #: src/pages/MessagingSettingsOverlay.tsx:112
 msgid "Chat apps"
 msgstr "Chat apps"
@@ -900,10 +896,6 @@ msgstr "Client secret"
 #: src/pages/WindowChrome.tsx:21
 msgid "Close"
 msgstr "Close"
-
-#: src/pages/shell/message-cards.tsx:440
-msgid "Close chart"
-msgstr "Close chart"
 
 #: src/pages/shell/side-panel.tsx:461
 msgid "Close computer"
@@ -1435,10 +1427,6 @@ msgstr "Could not rename connection"
 #: src/pages/shell/dialogs.tsx:239
 msgid "Could not rename section"
 msgstr "Could not rename section"
-
-#: src/pages/shell/message-cards.tsx:256
-msgid "Could not render chart"
-msgstr "Could not render chart"
 
 #: src/pages/Auth.tsx:271
 msgid "Could not reset password"
@@ -1986,10 +1974,6 @@ msgstr "Every week"
 #: src/pages/PluginsOverlay.tsx:1135
 msgid "Executor token"
 msgstr "Executor token"
-
-#: src/pages/shell/message-cards.tsx:427
-msgid "Expand"
-msgstr "Expand"
 
 #. placeholder {0}: group.title
 #: src/pages/shell/sidebar.tsx:382
@@ -4364,3 +4348,7 @@ msgstr "Computer recovered"
 #: src/components/ComputerUpdateProgress.tsx:66
 msgid "Computer updated"
 msgstr "Computer updated"
+
+#: src/pages/shell/widget-block.tsx
+msgid "Open in full screen"
+msgstr "Open in full screen"

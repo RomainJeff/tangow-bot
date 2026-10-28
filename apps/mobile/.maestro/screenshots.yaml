@@ -198,6 +198,9 @@ tags:
 - assertVisible: "Reply"
 - assertVisible: "Select text"
 - back
+- tapOn: "Open in full screen"
+- takeScreenshot: "19b-widget-full-screen"
+- tapOn: "Close preview"
 
 - openLink: "rakazo:///group-settings?groupId=${RAKAZO_SCREENSHOT_GROUP_ID}"
 - extendedWaitUntil:

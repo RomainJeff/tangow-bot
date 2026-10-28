@@ -4,6 +4,7 @@ import { extractLinksFromText, matchesSearchQuery, snippetAroundMatch } from "@r
 import type { SessionEntryRow } from "@rakazo/db";
 import { ENTRY_ON_CHAIN, Prisma, type PrismaClient, sessionEntryFromRow } from "@rakazo/db";
 import { withoutHiddenPeerRuns } from "./thread-message-pages.js";
+import { userFileArtifact } from "./user-file-artifact.js";
 
 const SEARCH_LIMIT = 25;
 /** Cap name matches so content hits (messages/files/links/routines) keep most of the budget. */
@@ -177,7 +178,7 @@ export async function querySpaceSearch(
       userId: actor.userId,
       groupId: null,
       botId: { not: null },
-      isLinkPreview: false,
+      ...userFileArtifact,
       name: { contains: query, mode: "insensitive" },
       bot: { archivedAt: null },
     },
@@ -217,7 +218,7 @@ export async function querySpaceSearch(
       spaceId: actor.spaceId,
       userId: actor.userId,
       groupId: { not: null },
-      isLinkPreview: false,
+      ...userFileArtifact,
       name: { contains: query, mode: "insensitive" },
     },
     include: { group: { select: { name: true } } },

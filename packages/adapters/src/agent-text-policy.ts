@@ -251,7 +251,7 @@ const TOOL_ACTIVITY = new Map<string, string>([
   ["computer_act", "Taking the mouse"],
   ["run_subagent", "Briefing a helper"],
   ["remember", "Tucking it into memory"],
-  ["render_plot", "Plotting a chart"],
+  ["show_widget", "Building a view"],
   ["skill_read", "Pulling up a skill"],
   ["skill_search", "Looking up a skill"],
   ["skill_create", "Learning a new trick"],

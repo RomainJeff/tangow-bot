@@ -40,7 +40,11 @@ export async function readMobileArtifactText(
   artifactId: string,
   mimeType: string,
 ): Promise<string> {
-  const file = await cacheMobileArtifact(target, artifactId, mimeType);
+  const cached = new File(Paths.cache, artifactCacheFileName(artifactId, mimeType));
+  const file =
+    cached.exists && cached.size > 0
+      ? cached
+      : await cacheMobileArtifact(target, artifactId, mimeType);
   return file.text();
 }
 

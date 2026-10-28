@@ -26,6 +26,7 @@ import {
 import { BookOpen, Clock } from "lucide-react";
 import type { ReactNode } from "react";
 import { memo, useMemo, useRef } from "react";
+import { WidgetBlockView } from "./widget-block";
 import "../../components/ai/beautiful-ui.css";
 import { AgentSteps } from "../../components/AgentSteps";
 import { ArtifactFileCard } from "../../components/ArtifactFileCard";
@@ -50,7 +51,6 @@ import { messageLinkPreview } from "./message-actions";
 import {
   AppConnectCard,
   ArtifactImage,
-  ChartBlockView,
   ChoiceCard,
   LinkMentionIcon,
   McpApprovalCard,
@@ -405,10 +405,10 @@ export const MessageView = memo(function MessageView({
           </div>
         );
       }
-      if (block.kind === "chart") {
+      if (block.kind === "widget") {
         return (
           <div key={i} className="flex justify-start">
-            <ChartBlockView name={block.name} spec={block.spec} data={block.data} />
+            <WidgetBlockView block={block} artifactTarget={artifactTarget} />
           </div>
         );
       }

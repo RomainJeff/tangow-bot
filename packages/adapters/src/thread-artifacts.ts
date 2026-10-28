@@ -50,35 +50,7 @@ export async function attachWorkspaceFileToThread(
     throw new Error("file exceeds the 10 MiB attachment limit");
   }
 
-  const context = {
-    operationId: input.operationId,
-    traceId: input.operationId,
-    spaceId: input.spaceId,
-    userId: input.userId,
-    botId: input.botId,
-    signal: new AbortController().signal,
-  };
-  const stored = await deps.artifacts.put({ name, mimeType, bytes: input.bytes }, context);
-  const hash = createHash("sha256").update(input.bytes).digest("hex");
-  const row = await deps.prisma.artifact
-    .create({
-      data: {
-        spaceId: input.spaceId,
-        userId: input.userId,
-        botId: input.botId,
-        groupId: input.groupId,
-        runId: input.runId,
-        name,
-        mimeType,
-        size: input.bytes.byteLength,
-        hash,
-        storageKey: stored.id,
-      },
-    })
-    .catch(async (error) => {
-      await deps.artifacts.remove(stored.id, context).catch(() => undefined);
-      throw error;
-    });
+  const row = await storeThreadArtifact(deps, { ...input, name, mimeType });
   return {
     artifactId: row.id,
     block: messageBlockForArtifact({
@@ -88,6 +60,78 @@ export async function attachWorkspaceFileToThread(
       size: row.size,
     }),
   };
+}
+
+export const MAX_WIDGET_BYTES = 2 * 1024 * 1024;
+
+type ThreadArtifactInput = {
+  spaceId: string;
+  userId: string;
+  botId: string;
+  groupId?: string;
+  runId: string;
+  bytes: Uint8Array;
+  operationId: string;
+};
+
+async function storeThreadArtifact(
+  deps: { prisma: PrismaClient; artifacts: ArtifactStore },
+  input: ThreadArtifactInput & { name: string; mimeType: string; isWidget?: boolean },
+) {
+  const context = {
+    operationId: input.operationId,
+    traceId: input.operationId,
+    spaceId: input.spaceId,
+    userId: input.userId,
+    botId: input.botId,
+    signal: new AbortController().signal,
+  };
+  const stored = await deps.artifacts.put(
+    { name: input.name, mimeType: input.mimeType, bytes: input.bytes },
+    context,
+  );
+  const hash = createHash("sha256").update(input.bytes).digest("hex");
+  const row = await deps.prisma.artifact
+    .create({
+      data: {
+        spaceId: input.spaceId,
+        userId: input.userId,
+        botId: input.botId,
+        groupId: input.groupId,
+        runId: input.runId,
+        name: input.name,
+        mimeType: input.mimeType,
+        isWidget: input.isWidget ?? false,
+        size: input.bytes.byteLength,
+        hash,
+        storageKey: stored.id,
+      },
+    })
+    .catch(async (error) => {
+      await deps.artifacts.remove(stored.id, context).catch(() => undefined);
+      throw error;
+    });
+  return row;
+}
+
+export async function storeWidgetArtifact(
+  deps: { prisma: PrismaClient; artifacts: ArtifactStore },
+  input: ThreadArtifactInput & { title: string },
+): Promise<string> {
+  if (input.bytes.byteLength > MAX_WIDGET_BYTES) throw new Error("Widget exceeds the 2 MiB limit");
+  const slug =
+    input.title
+      .normalize("NFKD")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "widget";
+  const row = await storeThreadArtifact(deps, {
+    ...input,
+    name: `${slug}.html`,
+    mimeType: "text/html",
+    isWidget: true,
+  });
+  return row.id;
 }
 
 export async function materializeCurrentTurnFiles(

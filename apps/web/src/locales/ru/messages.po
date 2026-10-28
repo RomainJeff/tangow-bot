@@ -805,10 +805,6 @@ msgstr "Изменение…"
 msgid "Channels"
 msgstr "Каналы"
 
-#: src/pages/shell/message-cards.tsx:266
-msgid "Chart failed to render: {error}"
-msgstr "Не удалось отобразить диаграмму: {error}."
-
 #: src/pages/MessagingSettingsOverlay.tsx:112
 msgid "Chat apps"
 msgstr "Приложения для чата"
@@ -900,10 +896,6 @@ msgstr "Секрет клиента"
 #: src/pages/WindowChrome.tsx:21
 msgid "Close"
 msgstr "Закрыть"
-
-#: src/pages/shell/message-cards.tsx:440
-msgid "Close chart"
-msgstr "Закрыть график"
 
 #: src/pages/shell/side-panel.tsx:461
 msgid "Close computer"
@@ -1435,10 +1427,6 @@ msgstr "Не удалось переименовать соединение"
 #: src/pages/shell/dialogs.tsx:239
 msgid "Could not rename section"
 msgstr ""
-
-#: src/pages/shell/message-cards.tsx:256
-msgid "Could not render chart"
-msgstr "Не удалось отобразить диаграмму"
 
 #: src/pages/Auth.tsx:271
 msgid "Could not reset password"
@@ -1986,10 +1974,6 @@ msgstr "Каждую неделю"
 #: src/pages/PluginsOverlay.tsx:1135
 msgid "Executor token"
 msgstr "Токен Executor"
-
-#: src/pages/shell/message-cards.tsx:427
-msgid "Expand"
-msgstr "Развернуть"
 
 #. placeholder {0}: group.title
 #: src/pages/shell/sidebar.tsx:382
@@ -4313,3 +4297,7 @@ msgstr "Ваше имя"
 #: src/pages/Welcome.tsx:21
 msgid "Your team of always-on agents<0/>that you can give real work to."
 msgstr "Ваша команда постоянно работающих агентов<0/>, которым вы можете дать настоящую работу."
+
+#: src/pages/shell/widget-block.tsx
+msgid "Open in full screen"
+msgstr "Открыть на весь экран"

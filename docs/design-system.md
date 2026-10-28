@@ -35,6 +35,8 @@ arrangement belongs in a primitive.
 
 ## Parts
 
+Bot widgets use the shared [widget kit](../packages/core/src/widget/kit.ts) and the [widgets skill](../skills/agent/widgets).
+
 - [Tokens](design-system/tokens.md): colour, typography, space, radii, elevation, motion, sizes and geometry.
 - [Material and layout](design-system/materials.md): glass, the ambient light, the scroll edge, and where the sidebar, header, composer, panel and overlays sit.
 - [Primitives](design-system/primitives.md): buttons, the framed block, option tiles, surfaces, link previews and link mentions.

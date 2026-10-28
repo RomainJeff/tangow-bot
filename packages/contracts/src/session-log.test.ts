@@ -101,3 +101,30 @@ describe("SessionEntrySchema", () => {
     expect(issues(entry)).toEqual(expected);
   });
 });
+
+it.each(["user.message", "assistant.text"])(
+  "reads %s with retired charts while preserving other blocks",
+  (type) => {
+    const blocks = [
+      { kind: "text", text: "Kept" },
+      { kind: "chart", name: "Retired", spec: {}, data: [] },
+    ];
+    const parsed = SessionEntrySchema.parse({
+      ...envelope,
+      botId: "bot-1",
+      runId: "run-1",
+      type,
+      payload: { blocks, ...(type === "user.message" ? { source: "app" } : {}) },
+    });
+    expect(parsed.payload).toMatchObject({ blocks: [{ kind: "text", text: "Kept" }] });
+    expect(
+      SessionEntrySchema.safeParse({
+        ...envelope,
+        botId: "bot-1",
+        runId: "run-1",
+        type,
+        payload: { blocks: [{ kind: "unknown" }], source: "app" },
+      }).success,
+    ).toBe(false);
+  },
+);

@@ -1784,7 +1784,6 @@ describe("buildSystemInstructions", () => {
       "search_runs",
       "ask_user",
       "archive_bot",
-      "render_plot",
       "add_mcp_server",
       "schedule_create",
       "schedule_list",

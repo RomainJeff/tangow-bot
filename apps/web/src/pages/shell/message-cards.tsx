@@ -16,7 +16,6 @@ import { ImageIcon, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { SuccessPop } from "../../components/ai/primitives";
 import type { ArtifactTarget } from "../../lib/artifact-open";
-import { chartViewport } from "../../lib/chart-viewport";
 import { connectMcpOauth } from "../../lib/mcp-connect";
 import { rpc } from "../../lib/rpc";
 import { useArtifactImageSrc } from "./use-artifact-image-src";
@@ -210,90 +209,6 @@ export function AppConnectCard({
   );
 }
 
-function ChartCanvas({
-  spec,
-  data,
-  width,
-  height,
-}: {
-  spec: Record<string, unknown>;
-  data: unknown[];
-  width: number;
-  height?: number;
-}) {
-  const { t } = useLingui();
-  const ref = useRef<HTMLDivElement>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [meta, setMeta] = useState<{
-    title?: string;
-    swatches: { label: string; color: string }[];
-  }>({ swatches: [] });
-  useEffect(() => {
-    let cancelled = false;
-    // Plot loads lazily so threads without charts never pay for the library.
-    void (async () => {
-      try {
-        const { buildPlotParts } = await import("@rakazo/core/plot");
-        if (cancelled || !ref.current) return;
-        // Hover inspection by default: give the first mark a tooltip unless
-        // the spec already asks for one somewhere.
-        const marks = Array.isArray((spec as { marks?: unknown[] }).marks)
-          ? ((spec as { marks: { options?: Record<string, unknown> }[] }).marks ?? [])
-          : [];
-        const hasTip = marks.some((mark) => mark.options && "tip" in mark.options);
-        const liveSpec = hasTip
-          ? spec
-          : {
-              ...spec,
-              marks: marks.map((mark, index) =>
-                index === 0 ? { ...mark, options: { ...(mark.options ?? {}), tip: true } } : mark,
-              ),
-            };
-        const parts = buildPlotParts(liveSpec as never, data, document, { width, height });
-        setMeta({ title: parts.title, swatches: parts.swatches });
-        setError(null);
-        ref.current.replaceChildren(parts.plotted);
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : t`Could not render chart`);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [spec, data, width, height, t]);
-  if (error)
-    return (
-      <div className="text-meta text-destructive">
-        <Trans>Chart failed to render: {error}</Trans>
-      </div>
-    );
-  return (
-    <div className="text-foreground/75">
-      {meta.title ? (
-        <div className="mb-1 text-row-name font-semibold text-foreground">{meta.title}</div>
-      ) : null}
-      {meta.swatches.length > 0 ? (
-        <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1">
-          {meta.swatches.map((swatch) => (
-            <span
-              key={swatch.label}
-              className="flex items-center gap-1.5 text-time text-muted-foreground"
-            >
-              {/* Series colours are data-driven and intentionally distinct. */}
-              <span
-                className="h-[10px] w-[10px] rounded-[3px]"
-                style={{ background: swatch.color }}
-              />
-              {swatch.label}
-            </span>
-          ))}
-        </div>
-      ) : null}
-      <div ref={ref} className="[&_svg]:max-w-full" />
-    </div>
-  );
-}
-
 type McpApprovalState = "pending" | "connecting" | "connected" | "dismissed";
 
 /** Approval card for an agent-created MCP server: the user completes browser
@@ -389,70 +304,6 @@ export function McpApprovalCard({
         </p>
       ) : null}
     </Surface>
-  );
-}
-
-export function ChartBlockView({
-  name,
-  spec,
-  data,
-}: {
-  name: string;
-  spec: Record<string, unknown>;
-  data: unknown[];
-}) {
-  const { t } = useLingui();
-  const [expanded, setExpanded] = useState(false);
-  const [viewport, setViewport] = useState(() => ({
-    width: window.innerWidth,
-    height: window.innerHeight,
-  }));
-  useEffect(() => {
-    if (!expanded) return;
-    setViewport({ width: window.innerWidth, height: window.innerHeight });
-    const onResize = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [expanded]);
-  const expandedViewport = chartViewport(viewport.width, viewport.height);
-  return (
-    <>
-      <Surface className="group relative max-w-[74%] p-4">
-        <ChartCanvas spec={spec} data={data} width={520} />
-        <Button
-          variant="outline"
-          size="xs"
-          onClick={() => setExpanded(true)}
-          className="absolute end-3 top-3 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-        >
-          <Trans>Expand</Trans>
-        </Button>
-      </Surface>
-      <Dialog open={expanded} onOpenChange={setExpanded}>
-        <DialogContent
-          showCloseButton={false}
-          className="max-h-[92vh] w-[min(1320px,94vw)] max-w-none overflow-auto p-8 sm:max-w-none"
-        >
-          <div className="flex items-center justify-between">
-            <DialogTitle className="text-meta font-normal text-muted-foreground">
-              {name}
-            </DialogTitle>
-            <DialogClose
-              aria-label={t`Close chart`}
-              render={<Button variant="ghost" size="icon-sm" />}
-            >
-              <X />
-            </DialogClose>
-          </div>
-          <ChartCanvas
-            spec={spec}
-            data={data}
-            width={expandedViewport.width}
-            height={expandedViewport.height}
-          />
-        </DialogContent>
-      </Dialog>
-    </>
   );
 }
 

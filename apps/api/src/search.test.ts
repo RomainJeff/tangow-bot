@@ -94,12 +94,12 @@ describe("artifact search batching", () => {
 });
 
 describe("link previews in search (CA 44, CA 46)", () => {
-  it("leaves card images out of both file lookups", async () => {
+  it("leaves card images and widgets out of both file lookups", async () => {
     const { prisma } = fixture(0);
     await querySpaceSearch(prisma as unknown as PrismaClient, actor, "report");
     const [direct, group] = prisma.artifact.findMany.mock.calls.map(([args]) => args.where);
-    expect(direct).toMatchObject({ isLinkPreview: false, groupId: null });
-    expect(group).toMatchObject({ isLinkPreview: false });
+    expect(direct).toMatchObject({ isLinkPreview: false, isWidget: false, groupId: null });
+    expect(group).toMatchObject({ isLinkPreview: false, isWidget: false });
   });
 
   it("cuts every link block kind out of the JSON the SQL pre-filter matches, so a title takes no result slot", async () => {

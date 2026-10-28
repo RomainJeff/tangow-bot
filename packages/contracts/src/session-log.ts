@@ -129,8 +129,14 @@ function runEntry<const T extends string, P extends z.ZodType>(type: T, payload:
   return z.object({ ...envelope, botId: Id, runId: Id, type: z.literal(type), payload });
 }
 
+function dropRetiredBlocks(value: unknown): unknown {
+  return Array.isArray(value)
+    ? value.filter((block) => !(block && typeof block === "object" && block.kind === "chart"))
+    : value;
+}
+
 const UserMessagePayload = z.object({
-  blocks: z.array(MessageBlock),
+  blocks: z.preprocess(dropRetiredBlocks, z.array(MessageBlock)),
   replyTo: z.object({ entryId: EntryId, quote: z.string().optional() }).optional(),
   clientNonce: z.string().optional(),
   /**
@@ -168,7 +174,10 @@ const SkillLearntEntry = entry(
 const AttachmentAddedEntry = entry("attachment.added", z.object({ artifactId: Id }));
 const SessionTitleEntry = entry("session.title", z.object({ title: z.string() }));
 const SystemNoteEntry = entry("system.note", z.object({ text: z.string() }));
-const BlocksPayload = z.object({ ...risen, blocks: z.array(MessageBlock) });
+const BlocksPayload = z.object({
+  ...risen,
+  blocks: z.preprocess(dropRetiredBlocks, z.array(MessageBlock)),
+});
 /**
  * The entry a card's later state is about. `parentId` stays the chain link and names the head, so a
  * state change points at its card here, the way `replyTo` and a trigger's `entryId` do.

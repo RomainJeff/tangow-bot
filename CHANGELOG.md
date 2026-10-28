@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-10-28
 
+#### Added
+
+- **Bots can show visual, interactive views in the thread on web, desktop and mobile.** Step-by-step explanations, figures to explore, trips with photos and videos, and comparisons follow the app theme and open in full screen. They replace charts, which were unavailable on mobile; previously sent charts are no longer displayed.
+
 #### Fixed
 
 - On web, desktop and mobile, bots can identify their active helpers when you ask for an update, even after the helper's launch has left the conversation history.

@@ -163,6 +163,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Clear conversation": "Очистить диалог",
   "Clear conversation?": "Очистить диалог?",
   "Close computer": "Закрыть компьютер",
+  "Open in full screen": "Открыть на весь экран",
   "Close preview": "Закрыть предварительный просмотр",
   Code: "Код",
   "Color {number}": "Цвет {number}",

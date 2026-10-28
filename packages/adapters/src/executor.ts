@@ -347,15 +347,6 @@ import {
   serializeModelSecret,
 } from "./pi-oauth.js";
 import { clipToolResultText, resolveCompletionMaxTokens } from "./pi-runtime-limits.js";
-import type { PlotSpec } from "./plot-tool.js";
-import {
-  assertPlotDataWithinLimits,
-  PLOT_TOOL_GUIDE,
-  parsePlotData,
-  plotSvgToPng,
-  renderPlotSpecToSvg,
-  searchChartCatalog,
-} from "./plot-tool.js";
 import type { RemoteTransportDependencies } from "./remote-mcp.js";
 import { loadReplyContext } from "./reply-context.js";
 import { createRunComputer } from "./run-computer.js";
@@ -420,7 +411,9 @@ import { getActiveTeachingSession, parsePlaybook } from "./teaching-session.js";
 import {
   attachWorkspaceFileToThread,
   currentTurnFilesInstruction,
+  MAX_WIDGET_BYTES,
   materializeCurrentTurnFiles,
+  storeWidgetArtifact,
 } from "./thread-artifacts.js";
 import { advanceToolCallLoopGuard } from "./tool-loop.js";
 import {
@@ -1180,7 +1173,6 @@ export function buildSystemInstructions(parts: SystemInstructionParts): string {
     parts.catalogIndex,
     parts.agentSkillsLine,
     parts.taughtSkillsLine,
-    `For charts and data visualization, use the ${tool("render_plot")} tool: it renders bar, line, scatter, histogram, heatmap, faceted and many more chart types from a JSON spec and attaches the PNG to the chat. Call ${tool("render_plot")} with {"help": true} before your first chart to read the full guide.`,
     `When the user asks you to add or connect an MCP server (and gives you its details), use ${tool("add_mcp_server")}. If it uses browser sign-in, an approval card appears in the chat — tell the user to click Authorize on it.`,
     "Never print API keys, access tokens, or secret values. Prefer tools over claiming you already did the work.",
     chatVoiceInstructions(
@@ -3848,99 +3840,56 @@ export function createRunExecutor(deps: ExecutorDeps) {
             );
             return result.ok === true ? finish(result) : result;
           }
-          if (name === "render_plot") {
-            if (args.charts !== undefined) {
-              const query = typeof args.charts === "string" ? args.charts : undefined;
+          if (name === "show_widget") {
+            if (typeof args.title !== "string" || !args.title.trim()) {
+              return { error: "title is required" };
+            }
+            const hasHtml = args.html !== undefined;
+            const hasPath = args.path !== undefined;
+            if (hasHtml === hasPath) return { error: "Provide exactly one of html or path" };
+            if (!deps.artifacts) return { error: "Artifact storage is unavailable" };
+            let bytes: Uint8Array;
+            if (hasHtml) {
+              if (typeof args.html !== "string") return { error: "html must be a string" };
+              bytes = new TextEncoder().encode(args.html);
+            } else {
+              if (typeof args.path !== "string" || !args.path)
+                return { error: "path must be a nonempty string" };
+              const computer = requireComputer();
+              const filePath = resolveHomePath(args.path);
+              try {
+                bytes = await deps.sandbox.readFile(computer, filePath, context, {
+                  maxBytes: MAX_WIDGET_BYTES,
+                });
+              } catch (error) {
+                return { error: error instanceof Error ? error.message : "Could not read widget" };
+              }
+            }
+            if (bytes.byteLength > MAX_WIDGET_BYTES) {
+              return { error: "Widget exceeds the 2 MiB limit" };
+            }
+            if (/\b\d*\.?\d+(d|s|l)?vh\b/i.test(new TextDecoder().decode(bytes))) {
               return {
-                charts: searchChartCatalog(query),
-                note: "Each spec is a complete runnable example: substitute your rows and column names, then call render_plot with it.",
+                error: "Viewport height units are not supported. Use fixed pixel heights instead.",
               };
             }
-            if (args.help === true || !args.spec || typeof args.spec !== "object") {
-              return { guide: PLOT_TOOL_GUIDE };
-            }
-            try {
-              let rows = Array.isArray(args.data) ? (args.data as unknown[]) : undefined;
-              const dataPath =
-                typeof args.data_path === "string" && args.data_path ? args.data_path : undefined;
-              if (!rows && dataPath) {
-                const bytes = await deps.sandbox.readFile(
-                  requireComputer(),
-                  resolveHomePath(dataPath),
-                  context,
-                  { maxBytes: ATTACHMENT_MAX_BYTES },
-                );
-                rows = parsePlotData(dataPath, new TextDecoder().decode(bytes));
-              }
-              assertPlotDataWithinLimits(args.spec as PlotSpec, rows);
-              // jsdom and sharp load lazily so chart-free runs never pay for them.
-              const { JSDOM } = await import("jsdom");
-              const svg = renderPlotSpecToSvg(
-                args.spec as PlotSpec,
-                rows,
-                new JSDOM("").window.document,
-              );
-              const png = await plotSvgToPng(svg);
-              const outPath =
-                typeof args.path === "string" && args.path
-                  ? args.path
-                  : `charts/plot-${Date.now()}.png`;
-              workspaceCheckpoint.markDirty();
-              await deps.sandbox.writeFile(
-                requireComputer(),
-                { path: resolveHomePath(outPath), content: png },
-                context,
-              );
-              let attached = false;
-              const chartName = outPath.split("/").pop() ?? "chart";
-              const chartRows = rows ?? (args.spec as { data?: unknown[] }).data ?? [];
-              const chartSpec = { ...(args.spec as Record<string, unknown>) };
-              delete chartSpec.data;
-              const chartFits =
-                Array.isArray(chartRows) &&
-                JSON.stringify({ spec: chartSpec, data: chartRows }).length <= 200_000;
-              if (args.attach !== false && chartFits) {
-                // Live inline chart: the client re-renders the validated spec
-                // and the PNG stays on disk as the exportable copy.
-                await publishMessage(
-                  deps,
-                  run,
-                  [
-                    {
-                      kind: "chart",
-                      name: chartName,
-                      spec: chartSpec,
-                      data: chartRows,
-                    },
-                  ],
-                  { toPerson: true },
-                );
-                attached = true;
-              } else if (args.attach !== false && deps.artifacts) {
-                const result = await attachWorkspaceFileToThread(
-                  { prisma: deps.prisma, artifacts: deps.artifacts },
-                  {
-                    spaceId: run.spaceId,
-                    userId: run.userId,
-                    botId: bot.id,
-                    runId: run.id,
-                    filePath: outPath,
-                    bytes: png,
-                    operationId: executionId,
-                  },
-                );
-                await publishMessage(deps, run, [result.block], { toPerson: true });
-                attached = true;
-              }
-              return finish({ ok: true, path: outPath, attached });
-            } catch (error) {
-              const message = error instanceof Error ? error.message : String(error);
-              getLogger().error(`render_plot failed for bot ${bot.id}: ${message}`);
-              return finish({
-                error: message,
-                hint: 'Call render_plot with {"charts": true} for runnable example specs, or {"help": true} for the full guide.',
-              });
-            }
+            const artifactId = await storeWidgetArtifact(
+              { prisma: deps.prisma, artifacts: deps.artifacts },
+              {
+                spaceId: run.spaceId,
+                userId: run.userId,
+                botId: bot.id,
+                groupId: thread.groupId ?? undefined,
+                runId: run.id,
+                title: args.title,
+                bytes,
+                operationId: executionId,
+              },
+            );
+            await publishMessage(deps, run, [{ kind: "widget", title: args.title, artifactId }], {
+              toPerson: true,
+            });
+            return finish({ ok: true });
           }
           if (name === "attach_file") {
             const filePath = String(args.path ?? "");
@@ -6384,7 +6333,7 @@ const REMOTE_COMPUTER_TOOLS = new Set([
   ...IMAGE_RETURNING_COMPUTER_TOOLS,
   ...PAGE_BROWSER_TOOL_NAMES,
   "attach_file",
-  "render_plot",
+  "show_widget",
   "request_takeover",
   computerExecTool.name,
 ]);

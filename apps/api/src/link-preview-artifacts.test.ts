@@ -23,6 +23,7 @@ const row = {
   size: 3,
   createdAt: new Date("2026-10-05T10:00:00.000Z"),
   isLinkPreview: true,
+  isWidget: false,
 };
 
 /** A table that answers only for the rows the where clause really matches. */
@@ -96,6 +97,14 @@ describe("card images are not files (CA 44)", () => {
   it("is left out of the file list", async () => {
     const artifact = artifactTable([
       ...stored,
+      {
+        ...stored[0]!,
+        id: "widget-1",
+        isLinkPreview: false,
+        isWidget: true,
+        mimeType: "text/html",
+        name: "report.html",
+      },
       { ...stored[0]!, id: "file-1", isLinkPreview: false, name: "report.txt" },
     ]);
     const prisma = {
