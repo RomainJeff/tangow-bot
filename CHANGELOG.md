@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-28
+
+#### Fixed
+
+- On web, desktop and mobile, bots can reply while their helpers work with the same persistent files, without waiting for another run's worker to finish.
+
 ### 2026-10-27
 
 #### Added
