@@ -59,9 +59,36 @@ Copy its template, replace the content, and keep its structure. Read `kit.md` on
 | Comparison | Choosing between options | [data.md, Comparison](references/data.md#comparison) |
 | Place & trip | Destination, itinerary, days | [travel.md](references/travel.md) |
 | Media | Gallery, video, before/after | [travel.md, Media](references/travel.md#media) |
-| Other | No case fits | [kit.md](references/kit.md), then the closest case |
+| Other | No case fits | The general guidance below, then [kit.md](references/kit.md) |
 
-## 4. Publish and refine
+## 4. General guidance for any widget
+
+Use this when no case fits (a timeline, a checklist, a diagram, a calculator, a
+schedule…) and as the baseline for every template.
+
+- **Know the canvas.** The frame is the reply column: about 800px on desktop and
+  360px on phones, on the thread surface. The app draws the frame and 16px body
+  padding; the `title` you pass names the widget in full screen and for screen
+  readers. You draw only the content inside.
+- **Answer first.** Open with the one line, number or picture that answers the
+  question; detail follows. One heading (`h2`) at most, then `h3` for sections.
+- **Build from primitives.** `.stack` for vertical flow, `.row` for inline items,
+  `.grid` for repeated items, `.card` only to group related content. Never nest
+  cards. One primary `.button` at most; other actions are `.secondary` or links.
+- **Keep a rhythm.** Spacing steps 4/8/12/16/24px, consistently: tight inside a
+  group, wider between groups. Left-align text; align numbers in columns.
+- **Type and color carry hierarchy, not decoration.** Use the type tokens and
+  `.muted` for secondary text. Color only for meaning (status) or photos.
+- **Diagrams.** Inline SVG with a `viewBox` and a fixed pixel height: boxes as
+  `rect` with the card corner, lines and arrows in `currentColor`, labels as
+  `text` at the label size. Lay out top-to-bottom so it reads on a phone.
+- **Interactions.** Local and obvious: tabs, steps, toggles, sort, filters, a
+  slider for a single number. Every control works by tap and keyboard; every
+  state is visible without hover. Few inputs, no persistence.
+- **Restraint.** If a part does not help the answer, remove it. No decorative
+  icons, emojis as bullets, intros or captions that repeat the title.
+
+## 5. Publish and refine
 
 Call `show_widget` with `title` and exactly one of `html` or `path`.
 Pass short body content as `html`, or write one HTML file on the bot computer and pass its absolute `path`.
@@ -71,7 +98,7 @@ State only what the widget does not show. It may reload at any time, including
 when scrolled away, when the theme changes, or in full screen. Local state is not
 kept. Do not build input-heavy forms or promise persistence.
 
-## 5. Read the code before calling
+## 6. Read the code before calling
 
 - At 360px: one column, short labels, 44px controls, compact tabs or steps, fixed
   pixel chart heights, no viewport units or outer 100% height, and no hover or drag.
