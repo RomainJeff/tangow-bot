@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { GuestRunInput } from "@rakazo/adapter-kit";
+import { builtinAgentTools } from "@rakazo/adapters";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { HarnessHost } from "../harness.js";
 import { piNativeHarness } from "./pi-native.js";
@@ -171,6 +172,74 @@ it("loads original connector names through pi's real MCP registration and wrappe
       }),
     ]),
   );
+});
+
+it.each([
+  { title: "Offline widget view", html: "<p>View</p>" },
+  { title: "Offline widget view", path: "/tmp/view.html" },
+])("passes widget content through real MCP argument validation: %j", async (args) => {
+  const tool = builtinAgentTools.find((candidate) => candidate.name === "show_widget");
+  if (!tool) throw new Error("show_widget is missing");
+  const { host } = recordingHost(new AbortController().signal);
+  host.decide = (async (_body, expected) =>
+    expected === "steering"
+      ? { type: "steering", messages: [] }
+      : { type: "recorded" }) as HarnessHost["decide"];
+  host.callTool = vi.fn(async () => ({ ok: true }));
+  let calls = 0;
+  host.model = async (_body, onPart) => {
+    const call = calls++ === 0;
+    onPart({
+      type: "model.event",
+      event: {
+        type: "done",
+        reason: call ? "toolUse" : "stop",
+        message: {
+          role: "assistant",
+          content: call
+            ? [
+                {
+                  type: "toolCall",
+                  id: "widget-1",
+                  name: "mcp__rakazo__show_widget",
+                  arguments: args,
+                },
+              ]
+            : [{ type: "text", text: "Done." }],
+          api: "openai-completions",
+          provider: "openai-compatible",
+          model: "offline-fixture",
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: call ? "toolUse" : "stop",
+          timestamp: 0,
+        },
+      },
+    });
+    return { type: "model.end" };
+  };
+
+  await runPi(host, {
+    run: {
+      ...run,
+      tools: [
+        {
+          name: tool.name,
+          description: tool.description,
+          inputSchema: tool.inputSchema,
+          where: "controller",
+        },
+      ],
+    },
+  });
+
+  expect(host.callTool).toHaveBeenCalledWith("root", "show_widget", args, expect.any(String));
 });
 
 it("returns a controller tool result that arrives after pi's 60 s request default", async () => {
