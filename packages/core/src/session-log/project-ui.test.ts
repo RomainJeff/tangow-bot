@@ -1,6 +1,7 @@
+import type { ThreadEntry } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import { fixtureChain, linkEntries } from "./fixtures/read-fixture.js";
-import { projectThreadItems } from "./project-ui.js";
+import { projectThread, projectThreadItems } from "./project-ui.js";
 
 const model = { provider: "emulator", id: "emulator-1" };
 const at = (second: number) => `2026-10-10T09:00:${String(second).padStart(2, "0")}.000Z`;
@@ -1318,5 +1319,18 @@ describe("projectThreadItems", () => {
         ],
       },
     ]);
+  });
+});
+
+describe("projectThread with an entry type it does not know", () => {
+  it("skips the entry and projects the rest", async () => {
+    const chain = await fixtureChain("linear");
+    const unknown = {
+      ...chain[0],
+      id: "from-a-later-version",
+      type: "from_a_later_version",
+      payload: {},
+    } as unknown as ThreadEntry;
+    expect(projectThread([chain[0]!, unknown, ...chain.slice(1)])).toEqual(projectThread(chain));
   });
 });

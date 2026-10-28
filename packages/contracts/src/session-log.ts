@@ -628,14 +628,20 @@ export function isRunTrace(entry: EntryBody): boolean {
   return RUN_TRACE_TYPES.has(entry.type);
 }
 
+/** A client built earlier than the server can read an entry type it does not know: no audience. */
+function audienceOf(type: string): EntryAudience | undefined {
+  return (ENTRY_AUDIENCE as Record<string, EntryAudience | undefined>)[type];
+}
+
 export function isInferenceEntry<E extends ThreadEntry>(
   entry: E,
 ): entry is Extract<E, InferenceEntry> {
-  return ENTRY_AUDIENCE[entry.type].inference !== "no";
+  const audience = audienceOf(entry.type);
+  return audience !== undefined && audience.inference !== "no";
 }
 
 export function isUiEntry<E extends ThreadEntry>(entry: E): entry is Extract<E, UiEntry> {
-  return ENTRY_AUDIENCE[entry.type].ui;
+  return audienceOf(entry.type)?.ui === true;
 }
 
 /** A turn of the history the runtime replays, in the shape `AgentRunRequest.history` takes. */

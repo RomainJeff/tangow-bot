@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Fixed
 
 - On web, desktop and mobile, bots can reply while their helpers work with the same persistent files, without waiting for another run's worker to finish.
+- The web, desktop and iPhone apps no longer crash when opening a conversation that holds a kind of entry they do not know yet, such as a helper's report from a newer server.
 
 ### 2026-10-27
 

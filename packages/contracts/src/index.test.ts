@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { ThreadEntry } from "./index.js";
 import {
   ASK_DISMISSED_ANSWER,
   appContract,
@@ -9,6 +10,8 @@ import {
   CreateGroupInput,
   CreateRoutineInput,
   canReactToThreadMessage,
+  isInferenceEntry,
+  isUiEntry,
   McpServerConfigInput,
   MessageBlock,
   ModelConnectInputSchema,
@@ -456,6 +459,23 @@ describe("unknown message blocks", () => {
 
   it("rejects blocks that are not a list", () => {
     expect(ThreadMessageSchema.safeParse({ ...message([]), blocks: "text" }).success).toBe(false);
+  });
+});
+
+describe("unknown entry types", () => {
+  // A server newer than the client can write an entry type the client has never heard of.
+  const fromALaterVersion = {
+    id: "entry-1",
+    seq: 0,
+    ts: "2026-01-01T00:00:00.000Z",
+    parentId: null,
+    type: "from_a_later_version",
+    payload: {},
+  } as unknown as ThreadEntry;
+
+  it("is neither a UI entry nor an inference entry", () => {
+    expect(isUiEntry(fromALaterVersion)).toBe(false);
+    expect(isInferenceEntry(fromALaterVersion)).toBe(false);
   });
 });
 
