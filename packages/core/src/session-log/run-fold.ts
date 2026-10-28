@@ -165,15 +165,30 @@ export function toolAnswers(entries: readonly ThreadEntry[]): ToolAnswers {
 
 /**
  * The pause that answered the call a draft card raised, while it still does, or undefined once a
- * result replaced it. A card's pause is written in the transaction that first shows it, so it is
- * the first one after the card: the call's own `paused` result, or, when a helper raised the card,
- * the helper's answer to the `run_subagent` call that started it, which reads that it waits on a
- * card. Two helpers stopped by one pause cannot be told apart, so the first one has it.
+ * result replaced it. The pause is the first one after the card: the call's own `paused` result,
+ * written in the transaction that first shows the card, or, when a helper raised the card, the
+ * helper's answer to the `run_subagent` call that started it, which reads that it waits on a card.
+ * That answer is written once the helper closes, which can be after the user answered the card:
+ * the close then logs the outcome itself.
+ * Two helpers stopped by one pause cannot be told apart, so the first one has it.
  */
 export function pendingPauseOfEffect(
   entries: readonly ThreadEntry[],
   effectId: string,
 ): { callId: string; pauseId: EntryId } | undefined {
+  const found = pauseOfEffect(entries, effectId);
+  return found && found.answer?.id === found.pause.id
+    ? { callId: found.pause.payload.callId, pauseId: found.pause.id }
+    : undefined;
+}
+
+/** Whether a result replaced the pause a draft card raised: the card's outcome is in `entries`. */
+export function hasDraftOutcome(entries: readonly ThreadEntry[], effectId: string): boolean {
+  const found = pauseOfEffect(entries, effectId);
+  return found?.answer?.type === "tool.result" && found.answer.payload.replaces === found.pause.id;
+}
+
+function pauseOfEffect(entries: readonly ThreadEntry[], effectId: string) {
   const start = entries.findIndex(
     (entry) => entry.type === "effect.requested" && entry.payload.effectId === effectId,
   );
@@ -186,10 +201,7 @@ export function pendingPauseOfEffect(
       (entry.type === "subagent" && isHelperPauseResult(entry.payload.result));
     if (!pause || (entry.type !== "tool.result" && entry.type !== "subagent")) continue;
     const call = callOf.get(entry.id);
-    const answer = call === undefined ? undefined : answerOf.get(call);
-    return answer?.id === entry.id
-      ? { callId: entry.payload.callId, pauseId: entry.id }
-      : undefined;
+    return { pause: entry, answer: call === undefined ? undefined : answerOf.get(call) };
   }
   return undefined;
 }
