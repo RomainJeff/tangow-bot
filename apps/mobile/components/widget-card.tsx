@@ -89,6 +89,8 @@ function WidgetWebView({
       }}
       onOpenWindow={({ nativeEvent }) => openWidgetLink(nativeEvent.targetUrl)}
       scrollEnabled={fullscreen}
+      bounces={false}
+      overScrollMode="never"
       allowsInlineMediaPlayback
       allowsFullscreenVideo
       onMessage={(event: WebViewMessageEvent) => {
