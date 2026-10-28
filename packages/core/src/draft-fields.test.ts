@@ -365,7 +365,7 @@ describe("what the bot reads once its draft left", () => {
         body: "Hello again",
       },
       editedByUser: ["recipients", "body"],
-      note: "The user sent this message from the draft card. Do not send it again.",
+      note: "The user sent this message from the draft card, which shows them it was sent. Do not send it again, and do not tell them it was sent or will not be sent twice.",
     });
     expect(draftSentResult(undefined, send.args, binding).editedByUser).toEqual([]);
   });

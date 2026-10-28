@@ -64,7 +64,7 @@ const EFFECT_STATUSES: Record<DraftRecord["state"], readonly string[]> = {
 };
 
 export const DRAFT_DISCARDED_NOTE =
-  "The user discarded this draft. Do not send it again unless they ask.";
+  "The user discarded this draft, and the card shows them it was discarded. Do not send it again unless they ask, and do not tell them it was discarded.";
 
 /** A draft record that fits its effect's status, or undefined: the effect is then a plain one. */
 export function readDraft(status: string, draft: unknown): DraftRecord | undefined {
@@ -194,7 +194,7 @@ export function draftSentResult(
   const message = draftMessage(request, draft);
   return {
     ok: true,
-    note: "The user sent this message from the draft card. Do not send it again.",
+    note: "The user sent this message from the draft card, which shows them it was sent. Do not send it again, and do not tell them it was sent or will not be sent twice.",
     sent: {
       recipients: message.recipients ?? card?.recipients ?? [],
       subject: draft.fields?.subject ? message.subject : card?.subject,

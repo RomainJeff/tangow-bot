@@ -12,8 +12,8 @@ import { DONE, journey, reply, rpc, WAITING } from "./pi-journey.test-support.js
 
 const databaseAvailable = process.env.VERIFY_DATABASE === "1" && Boolean(process.env.DATABASE_URL);
 
-const SENT_NOTE = "The user sent this message from the draft card.";
-const DISCARDED_NOTE = "The user discarded this draft.";
+const SENT_NOTE = "The user sent this message from the draft card,";
+const DISCARDED_NOTE = "The user discarded this draft,";
 const PAUSED = "paused: awaiting approval";
 
 const mailTo = (address: string, id: string, extra: Record<string, unknown> = {}) =>
