@@ -123,6 +123,7 @@ function fixture(
     database?: PrismaClient;
     secrets?: string[];
     parentBotId?: string;
+    helperBrief?: string;
     runtime?: (request: AgentRunRequest) => AsyncGenerator<AgentRuntimeEvent>;
   } = {},
 ) {
@@ -158,6 +159,19 @@ function fixture(
     $queryRaw: log.queryRaw,
     $transaction: async (work: (tx: unknown) => unknown) => work(prisma),
     run: {
+      findMany: vi.fn(async () =>
+        options.helperBrief
+          ? [
+              {
+                id: "active-helper",
+                helper: null,
+                status: "running",
+                startedAt: null,
+                task: { prompt: options.helperBrief },
+              },
+            ]
+          : [],
+      ),
       findUnique: vi.fn(async () => run),
       findUniqueOrThrow: vi.fn(async () => run),
       updateMany: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
@@ -348,6 +362,8 @@ describe("the history a run reads from its session log", () => {
       const prompt = "x".repeat(245_000);
       const own = { botId: BOT, runId: RUN };
       const tail = chain(0, [
+        said("older ".repeat(22_000)),
+        replied("Earlier answer"),
         said(prompt),
         ...(resumed
           ? [
@@ -374,14 +390,17 @@ describe("the history a run reads from its session log", () => {
       const { runtimeRun, finalized } = await fixture({
         prompt,
         tail,
-        run: { sourceMessageId: "e-0" },
+        helperBrief: "helper work ".repeat(4_000),
+        run: { sourceMessageId: "e-2" },
         model: { provider: "openai", id: "gpt-4o" },
       }).execute();
       expect(finalized).toMatchObject({ outcome: "completed" });
       expect(runtimeRun.mock.calls).toHaveLength(1);
       const request = runtimeRun.mock.calls[0]![0];
       expect(request.prompt).toContain(prompt);
-      expect(request.history.some((turn) => turn.id === "e-0")).toBe(false);
+      expect(request.prompt).toContain("helper work ".repeat(4_000));
+      expect(request.prompt.endsWith("</active_helpers>")).toBe(true);
+      expect(request.history.some((turn) => turn.id === "e-2")).toBe(false);
       expect(
         estimateTextTokens(request.prompt) +
           estimateTextTokens(request.instructions) +
@@ -475,35 +494,39 @@ describe("the history a run reads from its session log", () => {
     for (const history of histories.slice(1)) expect(history).toEqual(histories[0]);
   });
 
-  it("rejects oversized active tool state instead of silently forgetting its effects", async () => {
-    const own = { botId: BOT, runId: RUN };
-    const tail = chain(0, [
-      { ...started, ...own },
-      {
-        ...own,
-        type: "tool.call",
-        payload: {
-          callId: "effect",
-          name: "write_file",
-          input: JSON.stringify({ content: "x".repeat(700_000) }),
+  it.each(["tool", "helper"] as const)(
+    "rejects oversized active %s state before calling the model",
+    async (kind) => {
+      const own = { botId: BOT, runId: RUN };
+      const tail = chain(0, [
+        { ...started, ...own },
+        {
+          ...own,
+          type: "tool.call",
+          payload: {
+            callId: "effect",
+            name: "write_file",
+            input: JSON.stringify({ content: "x".repeat(700_000) }),
+          },
         },
-      },
-      {
-        ...own,
-        type: "tool.result",
-        payload: { callId: "effect", output: "written once", isError: false, artifactIds: [] },
-      },
-    ]);
-    const { runtimeRun, finalized } = await fixture({
-      tail,
-      model: { provider: "openai", id: "gpt-4o" },
-    }).execute();
-    expect(runtimeRun.mock.calls).toEqual([]);
-    expect(finalized).toMatchObject({
-      outcome: "failed",
-      error: "Model context cannot fit the fixed prompt, active run, and reply reserve",
-    });
-  });
+        {
+          ...own,
+          type: "tool.result",
+          payload: { callId: "effect", output: "written once", isError: false, artifactIds: [] },
+        },
+      ]);
+      const { runtimeRun, finalized } = await fixture({
+        tail: kind === "tool" ? tail : [],
+        helperBrief: kind === "helper" ? "x".repeat(700_000) : undefined,
+        model: { provider: "openai", id: "gpt-4o" },
+      }).execute();
+      expect(runtimeRun.mock.calls).toEqual([]);
+      expect(finalized).toMatchObject({
+        outcome: "failed",
+        error: "Model context cannot fit the fixed prompt, active run, and reply reserve",
+      });
+    },
+  );
 
   it("drops an oversized finished legacy tool trace without rejecting a fresh request", async () => {
     const tail = chain(0, [

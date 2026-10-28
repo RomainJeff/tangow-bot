@@ -96,6 +96,7 @@ async function runWithDecisionProvider(
     $queryRaw: log.queryRaw,
     $transaction: async (work: (tx: unknown) => unknown) => work(prisma),
     run: {
+      findMany: vi.fn(async () => []),
       findUnique: vi.fn(async () => run),
       findUniqueOrThrow: vi.fn(async () => run),
       updateMany: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {

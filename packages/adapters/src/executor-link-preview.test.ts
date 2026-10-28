@@ -162,6 +162,7 @@ function fixture({
     sessionEntry: log.sessionEntry,
     $queryRaw: log.queryRaw,
     run: {
+      findMany: vi.fn(async () => []),
       findUnique: vi.fn(async () => run),
       findUniqueOrThrow: vi.fn(async () => run),
       findFirst: vi.fn(async () => ({
