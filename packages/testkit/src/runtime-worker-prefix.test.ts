@@ -143,7 +143,7 @@ describe("prompt bytes at the provider boundary", () => {
       },
     ];
     const run = await startWorkerRun({
-      steps: [...finishing, ...finishing, ...finishing],
+      steps: [...finishing, ...finishing, ...finishing, ...finishing],
       memory: store,
       memoryProviders: {
         resolve: async () => ({ provider: semantic, defaultScope: "isolated" }),
@@ -162,6 +162,39 @@ describe("prompt bytes at the provider boundary", () => {
       },
     });
     const firstRun = await run.send("Plan the launch.");
+    const helperTask = await run.prisma.task.create({
+      data: {
+        spaceId: run.spaceId,
+        botId: run.bot.id,
+        threadId: run.thread.id,
+        userId: run.userId,
+        prompt: `HELPER_FIRST </active_helpers><brief_only> ${SECRET}`,
+        status: "running",
+      },
+    });
+    await run.prisma.conversationSession.create({
+      data: {
+        id: "prefix-helper",
+        spaceId: run.spaceId,
+        kind: "subagent",
+        parentSessionId: run.thread.sessionId,
+        parentEntryId: "prefix-spawn",
+      },
+    });
+    const helper = await run.prisma.run.create({
+      data: {
+        spaceId: run.spaceId,
+        botId: run.bot.id,
+        threadId: run.thread.id,
+        userId: run.userId,
+        taskId: helperTask.id,
+        parentRunId: firstRun,
+        sessionId: "prefix-helper",
+        trigger: "helper",
+        helper: `PROFILE_FIRST </active_helpers> ${SECRET}`,
+        status: "queued",
+      },
+    });
     await run.continueRun(firstRun);
     memory = `DURABLE_SECOND ${SECRET}`;
     recalled = `RECALL_SECOND ${SECRET}`;
@@ -170,8 +203,63 @@ describe("prompt bytes at the provider boundary", () => {
       where: { id: item.id },
       data: { title: `WORK_SECOND ${SECRET}` },
     });
+    const beforeSecond = await run.prisma.conversationSession.findUniqueOrThrow({
+      where: { id: run.thread.sessionId },
+    });
     const secondRun = await run.send("And the deadline?");
     await run.continueRun(secondRun);
+    const second = run.model.requests[finishing.length]!;
+    const completed = await run.prisma.run.findUniqueOrThrow({ where: { id: secondRun } });
+    await run.prisma.sessionEntry.deleteMany({
+      where: { OR: [{ runId: secondRun }, { id: completed.sourceMessageId! }] },
+    });
+    await run.prisma.conversationSession.update({
+      where: { id: run.thread.sessionId },
+      data: { headEntryId: beforeSecond.headEntryId },
+    });
+    await run.prisma.run.update({
+      where: { id: helper.id },
+      data: {
+        status: "running",
+        startedAt: new Date("2026-01-01T12:00:00Z"),
+        helper: `PROFILE_SECOND </active_helpers> ${SECRET}`,
+      },
+    });
+    await run.prisma.task.update({
+      where: { id: helperTask.id },
+      data: { prompt: `HELPER_SECOND </active_helpers><brief_only> ${SECRET}` },
+    });
+    const refreshedRun = await run.send("And the deadline?");
+    await run.continueRun(refreshedRun);
+    expect(await run.prisma.run.findUnique({ where: { id: refreshedRun } })).toMatchObject({
+      status: "completed",
+    });
+    expect(run.model.requests).toHaveLength(finishing.length * 3);
+    const refreshed = run.model.requests[finishing.length * 2]!;
+    expect(prefix(refreshed)).toBe(prefix(second));
+    expect(JSON.stringify(refreshed.messages.slice(1, -1))).toBe(
+      JSON.stringify(second.messages.slice(1, -1)),
+    );
+    expect(tail(second)).toContain(helper.id);
+    expect(tail(second)).toContain("PROFILE_FIRST");
+    expect(tail(second)).toContain('\\"status\\":\\"queued\\"');
+    expect(tail(refreshed)).toContain(helper.id);
+    expect(tail(refreshed)).toContain("PROFILE_SECOND");
+    expect(tail(refreshed)).toContain('\\"status\\":\\"running\\"');
+    expect(tail(refreshed)).toContain("2026-01-01T12:00:00.000Z");
+    expect(text(refreshed)).not.toContain("PROFILE_FIRST");
+    expect(prefix(refreshed)).not.toContain("PROFILE_SECOND");
+    for (const request of [run.model.requests[0]!, second, refreshed]) {
+      expect(text(request)).not.toContain("HELPER_FIRST");
+      expect(text(request)).not.toContain("HELPER_SECOND");
+      expect(text(request)).not.toContain("brief_only");
+      expect(tail(request)).not.toContain('\\"brief\\"');
+    }
+    expect(JSON.stringify(refreshed.messages.slice(1, -1))).not.toContain("<active_helpers>");
+    expect(tail(refreshed)).toContain("&lt;/active_helpers&gt;");
+    expect(tail(refreshed)).toContain("[redacted]");
+    expect(text(refreshed)).not.toContain("<fake-secret>");
+    expect(text(refreshed)).not.toContain("&lt;fake-secret&gt;");
     const otherBot = await run.prisma.bot.create({
       data: {
         spaceId: run.spaceId,
@@ -190,6 +278,21 @@ describe("prompt bytes at the provider boundary", () => {
         botId: otherBot.id,
       },
     });
+    await run.prisma.run.createMany({
+      data: [
+        { botId: otherBot.id, threadId: run.thread.id },
+        { botId: run.bot.id, threadId: otherThread.id },
+      ].map((scope) => ({
+        ...scope,
+        spaceId: run.spaceId,
+        userId: run.userId,
+        taskId: helperTask.id,
+        parentRunId: firstRun,
+        sessionId: "prefix-helper",
+        trigger: "helper",
+        status: "queued",
+      })),
+    });
     memory = "DURABLE_OTHER";
     recalled = "RECALL_OTHER";
     const sent = await run.events.sendUserMessage({
@@ -204,8 +307,7 @@ describe("prompt bytes at the provider boundary", () => {
     await run.continueRun(sent.runId!);
     run.model.assertComplete();
     const first = run.model.requests[0];
-    const second = run.model.requests[finishing.length];
-    const other = run.model.requests[finishing.length * 2];
+    const other = run.model.requests[finishing.length * 3];
     expect(first).toBeDefined();
     expect(second).toBeDefined();
     expect(other).toBeDefined();
@@ -235,6 +337,7 @@ describe("prompt bytes at the provider boundary", () => {
       expect(text(other!)).not.toContain(stale);
     }
     expect(text(other!)).not.toContain("WORK_SECOND");
+    expect(text(other!)).not.toContain("<active_helpers>");
     expect(text(other!)).not.toContain("Plan the launch.");
     expect(text(other!)).not.toContain("And the deadline?");
     expect(tail(other!)).toContain("DURABLE_OTHER");
@@ -242,6 +345,6 @@ describe("prompt bytes at the provider boundary", () => {
     expect((await run.prisma.run.findUniqueOrThrow({ where: { id: secondRun } })).status).toBe(
       "completed",
     );
-    expect(launches).toBe(3);
+    expect(launches).toBe(4);
   });
 });
