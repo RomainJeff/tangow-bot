@@ -306,7 +306,9 @@ export const Transcript = memo(function Transcript({
                         : undefined
                     }
                   >
-                    {acts && message.role !== "user" ? (
+                    {acts &&
+                    message.role !== "user" &&
+                    !message.blocks.some((block) => block.kind === "widget") ? (
                       <MessageHoverActions
                         message={message}
                         previewMessageId={row.previewMessageId}
