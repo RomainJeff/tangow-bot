@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { linkEntries } from "./fixtures/read-fixture.js";
 import { projectInferenceTurns } from "./project-inference.js";
 import { projectThreadItems } from "./project-ui.js";
-import { pendingPauseOfEffect } from "./run-fold.js";
+import { hasDraftOutcome, pendingPauseOfEffect } from "./run-fold.js";
 
 const run = { botId: "bot_ada", runId: "run_1" };
 const PAUSED = "paused: awaiting approval";
@@ -195,5 +195,15 @@ describe("pendingPauseOfEffect", () => {
       undefined,
     );
     expect(pendingPauseOfEffect(pending, "effect_other")).toBeUndefined();
+  });
+});
+
+describe("hasDraftOutcome", () => {
+  it("reads an outcome only once a result replaced the card's pause", () => {
+    const pending = paused("call_0", "effect_a", "anna@example.test");
+    expect(hasDraftOutcome(linkEntries("n", [requested("effect_a")]), "effect_a")).toBe(false);
+    expect(hasDraftOutcome(linkEntries("p", pending), "effect_a")).toBe(false);
+    const ended = linkEntries("e", [...pending, result("call_0", "Sent.", "e-2")]);
+    expect(hasDraftOutcome(ended, "effect_a")).toBe(true);
   });
 });

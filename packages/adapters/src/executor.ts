@@ -59,6 +59,7 @@ import {
   EntryId,
   FactualRunRecapFactsSchema,
   isAttachmentImageMimeType,
+  isHelperPauseResult,
   OPENAI_COMPATIBLE_PROVIDER_ID,
   parseRunRecap,
   pausedOutput,
@@ -107,6 +108,7 @@ import {
   formatSkillRunPrompt,
   formatSkillsCatalogInstruction,
   HELPER_PROFILES,
+  hasDraftOutcome,
   hasHiddenText,
   humanizeToolName,
   inferAttachmentMimeType,
@@ -2764,6 +2766,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
                       },
                     });
                   });
+                  // The user can answer the card that stopped the helper before this lands: the
+                  // card's outcome then replaces it here, since the resumed attempt found no pause.
+                  if (isHelperPauseResult(result)) {
+                    await logDraftOutcomes(deps, { runId, threadId: thread.id }, runSecrets);
+                  }
                 } catch (error) {
                   if (!(error instanceof RunHistoryWriteError)) throw error;
                 }
@@ -5541,7 +5548,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
           takeoverResume?.promptNote,
           approvalContinuation,
           settledEffects.length > 0 ? SETTLED_APPROVAL_NOTE : undefined,
-          answeredDrafts.length > 0 || draftOutcomes.length > 0 ? DRAFT_RESUME_NOTE : undefined,
+          // Only once the outcome is in the history it reads: a helper's stop, which the outcome
+          // replaces, can be logged after this attempt started.
+          draftOutcomes.length > 0 ||
+          answeredDrafts.some((effect) => hasDraftOutcome(historyEntries, effect.id))
+            ? DRAFT_RESUME_NOTE
+            : undefined,
         ];
         const turnPrompt = (recall: string | undefined) =>
           [clock, ...turnHead, recall, ...turnTail].filter(Boolean).join("\n\n");
@@ -7956,7 +7968,8 @@ async function failStrandedRoutineCards(
 /**
  * Gives each call a draft card paused the outcome of its card, as the result the model reads from
  * then on, in every later attempt of the run: sent, discarded, replaced, or, for a send the run
- * ended on, unknown. A shown-again Not sent draft is still pending and has none yet. Written under
+ * ended on, unknown. A shown-again Not sent draft is still pending and has none yet. A helper's
+ * stop that lands after its card was answered gets its outcome as it is logged. Written under
  * the thread lock, and only for a call still answered by its pause, so a retry or a crash writes it
  * once or late, never twice.
  */
