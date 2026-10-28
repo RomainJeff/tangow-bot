@@ -511,7 +511,7 @@ const RUN_BLOCK_ENTRY: {
   connect: asText,
   computer: asText,
   meta: asText,
-  chart: asText,
+  widget: asText,
   child_bot: asText,
   skill_draft: asText,
   mcp_approval: asText,

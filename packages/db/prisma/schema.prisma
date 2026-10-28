@@ -1069,6 +1069,7 @@ model Artifact {
   /// attachments. Removed with the entry it previews (`previewMessageId` goes null, a sweep
   /// deletes it), or when the person removes the preview.
   isLinkPreview    Boolean  @default(false)
+  isWidget         Boolean  @default(false)
   previewMessageId String?
   previewMessage   SessionEntry? @relation("LinkPreviewArtifact", fields: [previewMessageId], references: [id], onDelete: SetNull)
 

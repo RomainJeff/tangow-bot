@@ -8,6 +8,7 @@ import type { SessionEntryDraft } from "@rakazo/adapter-kit";
 import {
   ComposioEmulator,
   EmailEmulator,
+  LocalArtifactStore,
   PipedreamConnector,
   ThirdPartyConnectorEmulator,
 } from "@rakazo/adapters";
@@ -253,12 +254,19 @@ async function seedFixture(app: App, prisma: PrismaClient) {
     botId: writer.id,
     question: "Coordinate the fixture launch plan.",
     reply: "The fixture launch plan is ready.",
+    widget: true,
   });
 
   return { botId: researcher.id, groupId: group.id, routineId: routine.id };
 }
 
-type FixtureThread = { id: string; spaceId: string; userId: string; sessionId: string };
+type FixtureThread = {
+  id: string;
+  spaceId: string;
+  userId: string;
+  sessionId: string;
+  groupId: string | null;
+};
 
 async function seedExchange(
   prisma: PrismaClient,
@@ -268,6 +276,7 @@ async function seedExchange(
     question: string;
     ask?: { text: string; answer: string };
     reply: string;
+    widget?: boolean;
   },
 ) {
   const question = await createThreadMessage(prisma, {
@@ -338,6 +347,39 @@ async function seedExchange(
       replyToMessageId: askId,
       replyQuote: exchange.ask.text,
     });
+  }
+  if (exchange.widget) {
+    const bytes = new TextEncoder().encode(
+      `<div class="stack"><h1>Launch checklist</h1><div class="grid"><div class="card stat"><div class="value">3</div><div class="label">Ready to launch</div></div><div class="card"><span class="badge">On track</span><p>Research, writing and support are ready.</p></div></div><button class="button" onclick="this.textContent='Reviewed'">Review checklist</button></div>`,
+    );
+    const store = new LocalArtifactStore(DATA_DIR);
+    const stored = await store.put(
+      { name: "launch-checklist.html", mimeType: "text/html", bytes },
+      {
+        operationId: run.id,
+        traceId: run.id,
+        spaceId: thread.spaceId,
+        userId: thread.userId,
+        botId: exchange.botId,
+        signal: new AbortController().signal,
+      },
+    );
+    const artifact = await prisma.artifact.create({
+      data: {
+        spaceId: thread.spaceId,
+        userId: thread.userId,
+        botId: exchange.botId,
+        groupId: thread.groupId,
+        runId: run.id,
+        name: "launch-checklist.html",
+        mimeType: "text/html",
+        size: bytes.byteLength,
+        hash: stored.hash,
+        storageKey: stored.id,
+        isWidget: true,
+      },
+    });
+    await publish([{ kind: "widget", title: "Launch checklist", artifactId: artifact.id }]);
   }
   await publish([{ kind: "text", text: exchange.reply }]);
   await append({

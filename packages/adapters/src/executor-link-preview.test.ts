@@ -1,4 +1,4 @@
-import type { AgentRunRequest, AgentRuntimeEvent } from "@rakazo/adapter-kit";
+import type { AgentRunRequest, AgentRuntimeEvent, ArtifactPut } from "@rakazo/adapter-kit";
 import type { MessageBlock } from "@rakazo/contracts";
 import { describe, expect, it, vi } from "vitest";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
@@ -158,7 +158,20 @@ function fixture({
 
   const log = recordingSessionLog();
 
+  const widgetArtifacts: Array<{ id: string; [key: string]: unknown }> = [];
+  const widgetBytes = new Map<string, Uint8Array>();
+  const readFile = vi.fn(async (_computer: unknown, file: string) => {
+    if (!file.endsWith("view.html")) throw new Error("file not found");
+    return new TextEncoder().encode("<p>From the computer</p>");
+  });
   const prisma = {
+    artifact: {
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        const row = { ...data, id: `artifact-${widgetArtifacts.length + 1}` };
+        widgetArtifacts.push(row);
+        return row;
+      }),
+    },
     sessionEntry: log.sessionEntry,
     $queryRaw: log.queryRaw,
     run: {
@@ -257,7 +270,17 @@ function fixture({
     sessionLog: log.sessionLog,
     prisma,
     runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
-    sandbox: { describe: () => ({ capabilities: { graphical: false } }) },
+    sandbox: { describe: () => ({ capabilities: { graphical: false } }), readFile },
+    artifacts: {
+      put: async ({ bytes }: ArtifactPut) => {
+        const id = `stored-${widgetBytes.size + 1}`;
+        widgetBytes.set(id, bytes);
+        return { id, hash: "hash" };
+      },
+      remove: async (id: string) => {
+        widgetBytes.delete(id);
+      },
+    },
     memory: { read: async () => ({ documents: [] }) },
     memoryProviders: { resolve: async () => null },
     events: {
@@ -275,6 +298,9 @@ function fixture({
   } as unknown as Parameters<typeof createRunExecutor>[0]);
 
   return {
+    widgetArtifacts,
+    widgetBytes,
+    readFile,
     runRow: run,
     enqueue,
     /** Events appended to the thread (progress, tool calls, ...). */
@@ -528,5 +554,108 @@ describe("what a routine run pushes (CA11, CA11b)", () => {
     const options = { routineNotify: false, notifyOnFinish: false };
     expect(await pushes(options, speaks)).toEqual([]);
     expect(await pushes(options, fails)).toEqual([]);
+  });
+});
+
+describe("show_widget", () => {
+  it.each([null, "group-1"])(
+    "stores inline and computer HTML with the thread ownership (%s)",
+    async (groupId) => {
+      const results: unknown[] = [];
+      const f = fixture({
+        groupId,
+        requireToolApproval: false,
+        async *runtimeRun(request) {
+          for (const [index, input] of [
+            { title: "Inline view", html: "<p>Inline café</p>" },
+            { title: "Computer view", path: "view.html" },
+          ].entries()) {
+            const executionId = `widget-${index}`;
+            yield { type: "tool", name: "show_widget", args: input, executionId };
+            results.push(await request.executeTool!("show_widget", input, executionId));
+          }
+          yield { type: "done" };
+        },
+      });
+      await f.run();
+      expect(results).toEqual([{ ok: true }, { ok: true }]);
+      expect(f.widgetArtifacts).toEqual([
+        expect.objectContaining({
+          id: "artifact-1",
+          name: "inline-view.html",
+          mimeType: "text/html",
+          isWidget: true,
+          spaceId: "space-1",
+          userId: "user-1",
+          botId: "bot-1",
+          groupId: groupId ?? undefined,
+          size: 19,
+        }),
+        expect.objectContaining({
+          id: "artifact-2",
+          name: "computer-view.html",
+          mimeType: "text/html",
+          isWidget: true,
+          groupId: groupId ?? undefined,
+        }),
+      ]);
+      expect([...f.widgetBytes.values()].map((bytes) => new TextDecoder().decode(bytes))).toEqual([
+        "<p>Inline café</p>",
+        "<p>From the computer</p>",
+      ]);
+      expect(
+        f.drafts.filter((draft) => draft.type === "assistant.text").map((draft) => draft.payload),
+      ).toEqual([
+        {
+          blocks: [{ kind: "widget", title: "Inline view", artifactId: "artifact-1" }],
+          toPerson: true,
+        },
+        {
+          blocks: [{ kind: "widget", title: "Computer view", artifactId: "artifact-2" }],
+          toPerson: true,
+        },
+      ]);
+    },
+  );
+
+  it("refuses malformed, unreadable and oversized input without publishing or storing it", async () => {
+    const results: unknown[] = [];
+    const f = fixture({
+      requireToolApproval: false,
+      async *runtimeRun(request) {
+        for (const [index, input] of [
+          { html: "<p>No title</p>" },
+          { title: " ", html: "<p>Empty title</p>" },
+          { title: "Both", html: "", path: "view.html" },
+          { title: "Neither" },
+          { title: "Too big", html: "é".repeat(1024 * 1024 + 1) },
+          { title: "Missing", path: "missing.html" },
+          ...["100vh", "10dvh", "3.5svh", ".5lvh"].map((unit) => ({
+            title: "Viewport",
+            html: `<div style="height: ${unit}"></div>`,
+          })),
+        ].entries()) {
+          const executionId = `widget-${index}`;
+          yield { type: "tool", name: "show_widget", args: input, executionId };
+          results.push(await request.executeTool!("show_widget", input, executionId));
+        }
+        yield { type: "done" };
+      },
+    });
+    await f.run();
+    expect(results).toEqual([
+      { error: "title is required" },
+      { error: "title is required" },
+      { error: "Provide exactly one of html or path" },
+      { error: "Provide exactly one of html or path" },
+      { error: "Widget exceeds the 2 MiB limit" },
+      { error: "file not found" },
+      ...Array.from({ length: 4 }, () => ({
+        error: "Viewport height units are not supported. Use fixed pixel heights instead.",
+      })),
+    ]);
+    expect(f.widgetArtifacts).toEqual([]);
+    expect(f.widgetBytes.size).toBe(0);
+    expect(f.drafts.filter((draft) => draft.type === "assistant.text")).toEqual([]);
   });
 });

@@ -805,10 +805,6 @@ msgstr "Cambiando…"
 msgid "Channels"
 msgstr "Canales"
 
-#: src/pages/shell/message-cards.tsx:266
-msgid "Chart failed to render: {error}"
-msgstr "No se pudo renderizar el gráfico: {error}"
-
 #: src/pages/MessagingSettingsOverlay.tsx:112
 msgid "Chat apps"
 msgstr "Apps de chat"
@@ -900,10 +896,6 @@ msgstr ""
 #: src/pages/WindowChrome.tsx:21
 msgid "Close"
 msgstr "Cerrar"
-
-#: src/pages/shell/message-cards.tsx:440
-msgid "Close chart"
-msgstr "Cerrar gráfico"
 
 #: src/pages/shell/side-panel.tsx:461
 msgid "Close computer"
@@ -1435,10 +1427,6 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx:239
 msgid "Could not rename section"
 msgstr ""
-
-#: src/pages/shell/message-cards.tsx:256
-msgid "Could not render chart"
-msgstr "No se pudo renderizar el gráfico"
 
 #: src/pages/Auth.tsx:271
 msgid "Could not reset password"
@@ -1986,10 +1974,6 @@ msgstr "Cada semana"
 #: src/pages/PluginsOverlay.tsx:1135
 msgid "Executor token"
 msgstr "Token de Executor"
-
-#: src/pages/shell/message-cards.tsx:427
-msgid "Expand"
-msgstr "Expandir"
 
 #. placeholder {0}: group.title
 #: src/pages/shell/sidebar.tsx:382
@@ -4313,3 +4297,7 @@ msgstr "Tu nombre"
 #: src/pages/Welcome.tsx:21
 msgid "Your team of always-on agents<0/>that you can give real work to."
 msgstr "Tu equipo de agentes siempre activos<0/>a los que puedes dar trabajo real."
+
+#: src/pages/shell/widget-block.tsx
+msgid "Open in full screen"
+msgstr "Abrir en pantalla completa"

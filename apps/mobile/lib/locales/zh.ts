@@ -159,6 +159,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Client secret (saved)": "客户端密钥（已保存）",
   "Cloudflare Access protected": "受 Cloudflare Access 保护",
   "Close computer": "关闭电脑",
+  "Open in full screen": "全屏打开",
   "Close preview": "关闭预览",
   Code: "验证码",
   "Color {number}": "颜色 {number}",

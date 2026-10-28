@@ -56,37 +56,11 @@ export const MessageRole = z.enum(["user", "bot", "system"]);
 export const BotMessageIntent = z.enum(["request", "result", "question", "status", "fyi"]);
 export type BotMessageIntent = z.infer<typeof BotMessageIntent>;
 
-export const MAX_CHART_DATA_ROWS = 5_000;
-
-const ChartSpec = z.record(z.string(), z.any());
-
-function embeddedChartRowCount(spec: Record<string, unknown>): number {
-  const specData = Array.isArray(spec.data) ? spec.data.length : 0;
-  const markData = Array.isArray(spec.marks)
-    ? spec.marks.reduce((total, mark) => {
-        if (!mark || typeof mark !== "object" || !Array.isArray(mark.data)) return total;
-        return total + mark.data.length;
-      }, 0)
-    : 0;
-  return specData + markData;
-}
-
-const ChartBlock = z
-  .object({
-    kind: z.literal("chart"),
-    name: z.string(),
-    /** Declarative Observable Plot spec, validated by render_plot before publish.
-        z.any keeps the inferred type JSON-assignable for persistence. */
-    spec: ChartSpec,
-    data: z.array(z.any()).max(MAX_CHART_DATA_ROWS),
-  })
-  .superRefine((block, ctx) => {
-    if (block.data.length + embeddedChartRowCount(block.spec) <= MAX_CHART_DATA_ROWS) return;
-    ctx.addIssue({
-      code: "custom",
-      message: `Chart data exceeds the ${MAX_CHART_DATA_ROWS.toLocaleString("en-US")}-row limit`,
-    });
-  });
+const WidgetBlock = z.object({
+  kind: z.literal("widget"),
+  title: z.string().min(1),
+  artifactId: Id,
+});
 
 export const SecretAskPurpose = z.enum(["otp", "password", "api_key"]);
 export type SecretAskPurpose = z.infer<typeof SecretAskPurpose>;
@@ -299,7 +273,7 @@ export const MessageBlock = z.discriminatedUnion("kind", [
     status: z.enum(["created", "archived", "deleted"]),
   }),
   SkillDraftBlock,
-  ChartBlock,
+  WidgetBlock,
   z.object({
     /** Approval card for an agent-created MCP server. The user completes the
         OAuth popup (or confirms no authorization is needed) in the UI. */

@@ -364,36 +364,20 @@ describe("contracts", () => {
     ).toBe(true);
   });
 
-  it("rejects oversized chart data wherever it is embedded", () => {
-    const rows = Array.from({ length: 5_001 }, (_, index) => index);
-
-    expect(
-      MessageBlock.safeParse({ kind: "chart", name: "outer", spec: {}, data: rows }).success,
-    ).toBe(false);
-    expect(
-      MessageBlock.safeParse({
-        kind: "chart",
-        name: "spec",
-        spec: { data: rows },
-        data: [],
-      }).success,
-    ).toBe(false);
-    expect(
-      MessageBlock.safeParse({
-        kind: "chart",
-        name: "marks",
-        spec: { marks: [{ data: rows }] },
-        data: [],
-      }).success,
-    ).toBe(false);
-    expect(
-      MessageBlock.safeParse({
-        kind: "chart",
-        name: "combined",
-        spec: { marks: [{ data: rows.slice(0, 2_500) }] },
-        data: rows.slice(0, 2_501),
-      }).success,
-    ).toBe(false);
+  it("requires an artifact and a nonempty title for widgets", () => {
+    expect(MessageBlock.parse({ kind: "widget", title: "Trip", artifactId: "artifact-1" })).toEqual(
+      {
+        kind: "widget",
+        title: "Trip",
+        artifactId: "artifact-1",
+      },
+    );
+    for (const block of [
+      { kind: "widget", title: "Trip" },
+      { kind: "widget", title: "", artifactId: "artifact-1" },
+      { kind: "chart", name: "Retired", spec: {}, data: [] },
+    ])
+      expect(MessageBlock.safeParse(block).success).toBe(false);
   });
 });
 

@@ -10,6 +10,7 @@ import {
   validateAttachmentMimeType,
 } from "@rakazo/core";
 import { IsolationError, type PrismaClient } from "@rakazo/db";
+import { userFileArtifact } from "./user-file-artifact.js";
 
 function adapterContext(actor: Actor, botId: string, operationId: string) {
   return {
@@ -196,7 +197,7 @@ export async function resolveSendAttachments(
       spaceId: actor.spaceId,
       userId: actor.userId,
       // A card image is not a file the person can attach.
-      isLinkPreview: false,
+      ...userFileArtifact,
     },
   });
   return toAttachmentResolution(ids, rows);
@@ -217,7 +218,7 @@ export async function resolveGroupSendAttachments(
       id: { in: ids },
       spaceId: actor.spaceId,
       userId: actor.userId,
-      isLinkPreview: false,
+      ...userFileArtifact,
       OR: [
         { groupId },
         // Accept artifacts uploaded by a current member before group ownership

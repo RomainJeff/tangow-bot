@@ -805,10 +805,6 @@ msgstr "Wird geändert…"
 msgid "Channels"
 msgstr "Kanäle"
 
-#: src/pages/shell/message-cards.tsx:266
-msgid "Chart failed to render: {error}"
-msgstr "Diagramm konnte nicht angezeigt werden: {error}"
-
 #: src/pages/MessagingSettingsOverlay.tsx:112
 msgid "Chat apps"
 msgstr "Chat-Apps"
@@ -900,10 +896,6 @@ msgstr ""
 #: src/pages/WindowChrome.tsx:21
 msgid "Close"
 msgstr "Schließen"
-
-#: src/pages/shell/message-cards.tsx:440
-msgid "Close chart"
-msgstr "Diagramm schließen"
 
 #: src/pages/shell/side-panel.tsx:461
 msgid "Close computer"
@@ -1435,10 +1427,6 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx:239
 msgid "Could not rename section"
 msgstr ""
-
-#: src/pages/shell/message-cards.tsx:256
-msgid "Could not render chart"
-msgstr "Diagramm konnte nicht angezeigt werden"
 
 #: src/pages/Auth.tsx:271
 msgid "Could not reset password"
@@ -1986,10 +1974,6 @@ msgstr "Jede Woche"
 #: src/pages/PluginsOverlay.tsx:1135
 msgid "Executor token"
 msgstr "Executor-Token"
-
-#: src/pages/shell/message-cards.tsx:427
-msgid "Expand"
-msgstr "Erweitern"
 
 #. placeholder {0}: group.title
 #: src/pages/shell/sidebar.tsx:382
@@ -4313,3 +4297,7 @@ msgstr "Dein Name"
 #: src/pages/Welcome.tsx:21
 msgid "Your team of always-on agents<0/>that you can give real work to."
 msgstr "Dein Team aus jederzeit verfügbaren Agents<0/>für echte Aufgaben."
+
+#: src/pages/shell/widget-block.tsx
+msgid "Open in full screen"
+msgstr "Im Vollbild öffnen"

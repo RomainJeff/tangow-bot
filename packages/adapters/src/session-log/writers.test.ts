@@ -635,7 +635,7 @@ describe("session log writers", () => {
     ]);
   });
 
-  it("raises a routine's MCP approval card to the thread's session whole and keeps its chart", async () => {
+  it("raises a routine's MCP approval card to the thread's session whole and keeps its widget", async () => {
     const { prisma } = database;
     const franklin = await seedBot(prisma, "Franklin");
     const { run, routineSessionId, write } = await routineRun(prisma, franklin, "Veille presse");
@@ -647,13 +647,13 @@ describe("session log writers", () => {
       endpoint: "https://mcp.example.test",
       needsOAuth: true,
     } as const;
-    const chart: MessageBlock = { kind: "chart", name: "Mentions", spec: {}, data: [] };
+    const widget: MessageBlock = { kind: "widget", title: "Mentions", artifactId: "artifact-1" };
 
     await prisma.$transaction((tx) =>
       appendRunBlocksInTransaction(
         tx,
         { id: EntryId.parse(randomUUID()), runId: run.id, botId: franklin.bot.id },
-        [approval, chart],
+        [approval, widget],
       ),
     );
     const asked = [{ kind: "text", text: "Connect the press server?" }, approval];
@@ -666,7 +666,7 @@ describe("session log writers", () => {
       }));
     expect(await blocksOf(routineSessionId)).toEqual([
       { type: "run.started", blocks: undefined },
-      { type: "assistant.text", blocks: [chart] },
+      { type: "assistant.text", blocks: [widget] },
     ]);
     expect(await blocksOf(franklin.sessionId)).toEqual([
       { type: "routine.started", blocks: undefined },

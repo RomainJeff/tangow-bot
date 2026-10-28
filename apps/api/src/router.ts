@@ -229,6 +229,7 @@ import {
   threadHead,
   threadSnapshot,
 } from "./thread-target.js";
+import { userFileArtifact } from "./user-file-artifact.js";
 import {
   disconnectVoiceCredential,
   listVoiceCatalog,
@@ -4571,7 +4572,7 @@ export function createRouter(deps: RouterDeps) {
             spaceId: context.actor.spaceId,
             userId: context.actor.userId,
             // Card images of link previews are not files the person owns.
-            isLinkPreview: false,
+            ...userFileArtifact,
           },
         });
         return rows.map((row) => ({

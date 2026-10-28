@@ -152,7 +152,7 @@ export function blocksToAgentHistoryText(
       if (LINK_BLOCK_KINDS.has(block.kind)) return "";
       // Without this the next turn cannot tell which tools it already ran, and repeats them.
       if (block.kind === "steps") return toolStepsToHistoryText(block.steps);
-      if (block.kind === "chart") return `[chart: ${block.name}]`;
+      if (block.kind === "widget") return `[widget: ${block.title}]`;
       if (block.kind === "image") return `[image: ${block.name}]`;
       if (block.kind === "file") {
         return `[file: ${block.name} (${block.mimeType}, ${block.size} bytes)]`;
