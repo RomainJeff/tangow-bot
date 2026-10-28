@@ -53,14 +53,14 @@
 
 **Interface :** conserver les méthodes publiques de `WorkerLifecycle`. Remplacer `HomeMoveStart.spaceWorkers` par `HomeMoveStart.workerCount`. Supprimer le code `volume_busy` et réutiliser `space_worker_live` et `space_worker_ran` pour les deux scopes afin de limiter le changement de contrat. Le compteur suit tous les workers historiques du périmètre, pas seulement les workers actuellement actifs.
 
-- [ ] Étendre les tests existants de réservation et d'adoption : sur un home dédié, deux workers de runs différents, puis un worker `releasing`, empêchent la copie/adoption jusqu'à leur libération. Un worker ayant démarré et fini depuis l'inspection invalide aussi l'adoption.
-- [ ] Vérifier l'échec attendu des nouveaux cas sur le code initial ; les assertions portent sur l'admission de la maintenance et l'intégrité de la copie, pas sur un champ de bail.
-- [ ] Généraliser le comptage interne `spaceWorkers` aux workers des bots du computer pour un home dédié et de tout l'espace pour un home d'équipe. Inclure `requested`, `created`, `ready` et `releasing` dans le compte vivant. Le total compte chaque tentative ayant eu un worker, sans filtre de statut du run ni de fence courant.
-- [ ] Utiliser ce comptage dans `inspectHomeMove` et `adoptVolumeHome` pour tous les scopes. Garder le marqueur, son échéance en horloge base, les verrous de lignes existants et le contrôle de `homeRevision`.
-- [ ] Étendre aux homes dédiés le test PostgreSQL existant `serializes a home move reservation against a worker already planned in the space`. Conserver ses deux résultats possibles : démarrage admis implique maintenance refusée ; réservation admise implique démarrage refusé avant tout appel provider.
-- [ ] Dans la transaction de bascule de chacune des deux migrations, verrouiller d'abord les lignes `computers` des marqueurs attendus, triées par id, avec `SELECT ... FOR UPDATE` et `homeMoveExpiresAt > now()` en horloge base. Exiger qu'au moins une réservation valide corresponde à chaque marqueur attendu et que les ordinateurs de la bascule soient couverts. Refuser avant toute modification de volume si une réservation manque ou a expiré. Une réservation d'équipe peut couvrir plusieurs lignes.
-- [ ] Conserver les contrôles d'identité du volume/provider et de contenu copié. Ne pas ajouter un compteur historique à ces deux bascules : la réservation valide et verrouillée empêche les démarrages pendant la bascule. Le contrôle `workerCount` reste dans `adoptVolumeHome`, qui peut adopter après une copie sans réservation continue.
-- [ ] Garder la protection existante de `packages/db/src/volumes.ts` fondée sur les tentatives ; adapter ses tests de fixtures sans inventer un second inventaire.
+- [x] Étendre les tests existants de réservation et d'adoption : sur un home dédié, deux workers de runs différents, puis un worker `releasing`, empêchent la copie/adoption jusqu'à leur libération. Un worker ayant démarré et fini depuis l'inspection invalide aussi l'adoption.
+- [x] Vérifier l'échec attendu des nouveaux cas sur le code initial ; les assertions portent sur l'admission de la maintenance et l'intégrité de la copie, pas sur un champ de bail.
+- [x] Généraliser le comptage interne `spaceWorkers` aux workers des bots du computer pour un home dédié et de tout l'espace pour un home d'équipe. Inclure `requested`, `created`, `ready` et `releasing` dans le compte vivant. Le total compte chaque tentative ayant eu un worker, sans filtre de statut du run ni de fence courant.
+- [x] Utiliser ce comptage dans `inspectHomeMove` et `adoptVolumeHome` pour tous les scopes. Garder le marqueur, son échéance en horloge base, les verrous de lignes existants et le contrôle de `homeRevision`.
+- [x] Étendre aux homes dédiés le test PostgreSQL existant `serializes a home move reservation against a worker already planned in the space`. Conserver ses deux résultats possibles : démarrage admis implique maintenance refusée ; réservation admise implique démarrage refusé avant tout appel provider.
+- [x] Dans la transaction de bascule de chacune des deux migrations, verrouiller d'abord les lignes `computers` des marqueurs attendus, triées par id, avec `SELECT ... FOR UPDATE` et `homeMoveExpiresAt > now()` en horloge base. Exiger qu'au moins une réservation valide corresponde à chaque marqueur attendu et que les ordinateurs de la bascule soient couverts. Refuser avant toute modification de volume si une réservation manque ou a expiré. Une réservation d'équipe peut couvrir plusieurs lignes.
+- [x] Conserver les contrôles d'identité du volume/provider et de contenu copié. Ne pas ajouter un compteur historique à ces deux bascules : la réservation valide et verrouillée empêche les démarrages pendant la bascule. Le contrôle `workerCount` reste dans `adoptVolumeHome`, qui peut adopter après une copie sans réservation continue.
+- [x] Garder la protection existante de `packages/db/src/volumes.ts` fondée sur les tentatives ; adapter ses tests de fixtures sans inventer un second inventaire.
 
 Vérification ciblée :
 
@@ -74,12 +74,12 @@ Résultat attendu : maintenance refusée pendant toute présence possible d'un w
 
 **Interfaces :** conserver `WorkerLifecycle.start(launch: WorkerLaunch, context: AdapterContext): Promise<StartedWorker>` et le garde du launcher. Conserver ses erreurs actuelles : `AgentRuntimeBusyError` pendant l'attente et `AgentRuntimeUnavailableError` lorsque l'échéance provider existante est dépassée. Ne pas introduire une nouvelle famille d'erreurs.
 
-- [ ] Inverser les tests existants qui attendent `VolumeBusyError` entre deux runs du même bot, dont le cas PostgreSQL correspondant : les deux workers démarrent et leurs montages privés et partagés restent inchangés.
-- [ ] Vérifier l'échec attendu de cette nouvelle assertion sur le code initial. Réutiliser les tests existants du fence, du double démarrage d'une tentative, d'`ensure` perdu et de destruction impossible ; n'ajouter un cas que s'il manque une preuve du remplacement après retrait du verrou.
-- [ ] Conserver le contrôle des anciennes tentatives dans le launcher et la validation du fence dans la transaction de `start`. Supprimer le `updateMany` de `start` qui passe les anciennes tentatives vivantes en `releasing` : le garde empêche leur remplacement et le reconciler traite déjà les fences périmés. Garder l'index unique partiel comme filet, sans lui attribuer la protection contre `releasing`.
-- [ ] Retirer la prise et la libération de `writerAttemptId`, `VolumeBusyError`, ses traductions dans le launcher, `takesWriterLease` et `writersBlocking`. Garder les verrous et la validation des volumes nécessaires à l'autorisation et à la maintenance.
-- [ ] Conserver `release`, `reconcile`, la récupération d'un `ensure` tardif et le nettoyage d'un propriétaire, chacun fondé sur l'attempt. Adapter les tests qui inspectaient seulement le bail pour vérifier l'état du worker et sa destruction effective.
-- [ ] Adapter les fixtures, la suite Docker et les lanes live : remplacer les comptages de baux par les preuves de présence, libération et reprise des workers qu'ils étaient censés représenter. Les lanes nécessitant un service externe ne sont pas lancées par défaut.
+- [x] Inverser les tests existants qui attendent `VolumeBusyError` entre deux runs du même bot, dont le cas PostgreSQL correspondant : les deux workers démarrent et leurs montages privés et partagés restent inchangés.
+- [x] Vérifier l'échec attendu de cette nouvelle assertion sur le code initial. Réutiliser les tests existants du fence, du double démarrage d'une tentative, d'`ensure` perdu et de destruction impossible ; n'ajouter un cas que s'il manque une preuve du remplacement après retrait du verrou.
+- [x] Conserver le contrôle des anciennes tentatives dans le launcher et la validation du fence dans la transaction de `start`. Supprimer le `updateMany` de `start` qui passe les anciennes tentatives vivantes en `releasing` : le garde empêche leur remplacement et le reconciler traite déjà les fences périmés. Garder l'index unique partiel comme filet, sans lui attribuer la protection contre `releasing`.
+- [x] Retirer la prise et la libération de `writerAttemptId`, `VolumeBusyError`, ses traductions dans le launcher, `takesWriterLease` et `writersBlocking`. Garder les verrous et la validation des volumes nécessaires à l'autorisation et à la maintenance.
+- [x] Conserver `release`, `reconcile`, la récupération d'un `ensure` tardif et le nettoyage d'un propriétaire, chacun fondé sur l'attempt. Adapter les tests qui inspectaient seulement le bail pour vérifier l'état du worker et sa destruction effective.
+- [x] Adapter les fixtures, la suite Docker et les lanes live : remplacer les comptages de baux par les preuves de présence, libération et reprise des workers qu'ils étaient censés représenter. Les lanes nécessitant un service externe ne sont pas lancées par défaut.
 
 Vérification ciblée :
 
@@ -93,10 +93,10 @@ Pour les courses PostgreSQL : `pnpm test:integration`. Le harness démarre Postg
 
 **Propriétaire :** `packages/testkit/src/executor-background-helper.test.ts`, au niveau du vrai executor et du lifecycle, avec ordinateur sur volumes et modèle émulé.
 
-- [ ] Étendre le test existant `starts a user turn for a message sent during the helper, which the helper never reads` avec un computer sur volumes et le vrai lifecycle. Aujourd'hui, ce test relâche le helper avant d'exécuter le second run : inverser cet ordre et vérifier la réponse persistée avant de relâcher le helper, puis le rapport et sa livraison. Garder la synchronisation par promesses.
-- [ ] Étendre le scénario d'annulation existant : destruction du helper momentanément impossible, un autre run du bot complète néanmoins sa réponse ; le nettoyage peut ensuite aboutir. Le test de l'étape 2 reste l'unique propriétaire de la protection de son remplacement.
-- [ ] Ne pas modifier les instructions de profil ni `screensByPath` : les montages sont conservés. Réutiliser les tests existants de captures et d'outils ordinateur pour la non-régression.
-- [ ] Conserver le test web existant de rapport spontané. Ajouter un E2E seulement si un comportement UI nouveau ne peut pas être prouvé par le test d'intégration ; le runtime web scripté ne prouve pas la concurrence de deux vrais workers.
+- [x] Étendre le test existant `starts a user turn for a message sent during the helper, which the helper never reads` avec un computer sur volumes et le vrai lifecycle. Aujourd'hui, ce test relâche le helper avant d'exécuter le second run : inverser cet ordre et vérifier la réponse persistée avant de relâcher le helper, puis le rapport et sa livraison. Garder la synchronisation par promesses.
+- [x] Étendre le scénario d'annulation existant : destruction du helper momentanément impossible, un autre run du bot complète néanmoins sa réponse ; le nettoyage peut ensuite aboutir. Le test de l'étape 2 reste l'unique propriétaire de la protection de son remplacement.
+- [x] Ne pas modifier les instructions de profil ni `screensByPath` : les montages sont conservés. Réutiliser les tests existants de captures et d'outils ordinateur pour la non-régression.
+- [x] Conserver le test web existant de rapport spontané. Ajouter un E2E seulement si un comportement UI nouveau ne peut pas être prouvé par le test d'intégration ; le runtime web scripté ne prouve pas la concurrence de deux vrais workers.
 
 Vérification ciblée :
 
@@ -108,13 +108,13 @@ Résultat attendu : réponse avant résolution du helper, fichiers persistants p
 
 ## Étape 4 : supprimer le schéma obsolète et valider la livraison
 
-- [ ] Créer une nouvelle migration supprimant la FK, l'index et la colonne `volumes.writerAttemptId`, puis retirer les deux relations Prisma. Ne pas modifier les migrations historiques.
-- [ ] Régénérer Prisma. Vérifier par recherche qu'aucun code actif ne référence `writerAttemptId`, `writtenVolumes`, `VolumeBusyError`, `takesWriterLease` ou `writersBlocking`. Les migrations historiques restent présentes.
-- [ ] Tester la migration sur une base de test issue du schéma initial, puis sur une base vierge. Vérifier que les volumes et tentatives sont conservés.
-- [ ] Ajouter une entrée Fixed au changelog pour la réponse pendant le travail d'un helper, sur web, desktop et mobile, datée du jour de livraison.
-- [ ] Exécuter le skill `test-audit`, les suites ciblées, les vérifications TypeScript des packages modifiés, Biome et `git diff --check`.
-- [ ] Exécuter `pnpm test:e2e:affected` avant le push ; laisser le sélecteur lancer toute la suite s'il le demande. Joindre les captures existantes desktop et 390×844 à titre d'illustration, conformément à AGENTS.md ; elles ne prouvent pas la concurrence des workers. Aucun code natif iOS n'est changé ; le test d'intégration prouve le comportement backend commun.
-- [ ] Relire le diff et les résultats de tests avant de déclarer terminé. Distinguer une défaillance d'infrastructure de test d'une régression démontrée, sans la masquer par des relances.
+- [x] Créer une nouvelle migration supprimant la FK, l'index et la colonne `volumes.writerAttemptId`, puis retirer les deux relations Prisma. Ne pas modifier les migrations historiques.
+- [x] Régénérer Prisma. Vérifier par recherche qu'aucun code actif ne référence `writerAttemptId`, `writtenVolumes`, `VolumeBusyError`, `takesWriterLease` ou `writersBlocking`. Les migrations historiques restent présentes.
+- [x] Tester la migration sur une base de test issue du schéma initial, puis sur une base vierge. Vérifier que les volumes et tentatives sont conservés.
+- [x] Ajouter une entrée Fixed au changelog pour la réponse pendant le travail d'un helper, sur web, desktop et mobile, datée du jour de livraison.
+- [x] Exécuter le skill `test-audit`, les suites ciblées, les vérifications TypeScript des packages modifiés, Biome et `git diff --check`.
+- [x] Exécuter `pnpm test:e2e:affected` avant le push ; laisser le sélecteur lancer toute la suite s'il le demande. Joindre les captures existantes desktop et 390×844 à titre d'illustration, conformément à AGENTS.md ; elles ne prouvent pas la concurrence des workers. Aucun code natif iOS n'est changé ; le test d'intégration prouve le comportement backend commun.
+- [x] Relire le diff et les résultats de tests avant de déclarer terminé. Distinguer une défaillance d'infrastructure de test d'une régression démontrée, sans la masquer par des relances.
 
 **Déploiement :** appliquer la migration au redémarrage, une fois les anciens processus qui lisent la colonne arrêtés. Pas de rolling mixte. Les VM restent suivies par leurs tentatives ; il n'est pas nécessaire d'attendre leur destruction pour supprimer la colonne. Aucun déploiement n'est autorisé par ce plan seul.
 
@@ -130,4 +130,15 @@ Relecture réalisée par **Claude Opus 5.5**, selon les instructions du rôle `f
 - **Accepté : commande PostgreSQL explicite.** Utiliser `pnpm test:integration`.
 - **Partiellement accepté : captures UI.** Elles ne prouvent pas la correction du lifecycle. Elles restent jointes comme illustrations parce que les instructions du dépôt les demandent pour un résultat observable ; aucun nouveau test UI n'est ajouté pour une couverture artificielle.
 
-Aucune objection de conception laissée ouverte. L'implémentation et la validation restent à effectuer après la revue humaine du plan.
+Aucune objection de conception laissée ouverte. L'implémentation est autorisée et les quatre étapes ont passé leur revue indépendante Codex xhigh. La revue globale Codex xhigh est favorable, sans constat matériel.
+
+## Résultats de validation
+
+- Suite unitaire complète : 7 900 tests réussis, 204 ignorés selon les conditions existantes.
+- Harness PostgreSQL complet : 23 suites, 162 tests réussis.
+- TypeScript : 24 projets réussis. Lint réussi, avec les avertissements existants.
+- Web : 222 tests sur 223 réussis dans la suite complète ; échec du test de masquage des actions au survol, dans du code inchangé. Les cinq tests du groupe survol/helpers réussissent ensuite en relance ciblée, sans modifier les assertions.
+- Les captures [desktop](../../assets/worker-concurrency/desktop.png) et [téléphone](../../assets/worker-concurrency/phone.png) illustrent le parcours web existant avec des données de test. Le test d'intégration des workers, et non ces captures du runtime scripté, prouve la concurrence.
+- Aucun E2E Electron, test Docker nécessitant son activation ni test de provider externe n'a été lancé. Aucun code natif iOS ne change.
+
+La migration exige l'arrêt explicite des anciens contrôleurs avant le changement de schéma. Les procédures ordinaires de mise à jour ou de retour arrière ne garantissent pas cette compatibilité ; aucun déploiement n'a été effectué.
