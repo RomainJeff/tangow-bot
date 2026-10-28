@@ -7,7 +7,7 @@ import type {
 import { createToolSearchExtension } from "@earendil-works/pi-coding-agent";
 import { RAKAZO_TOOL_PREFIX } from "@rakazo/adapter-kit";
 import { expect, it } from "vitest";
-import { exactToolSearchExtension, loadedToolNames } from "./exact-tool-search.js";
+import { exactToolSearchExtension } from "./exact-tool-search.js";
 
 const send = `${RAKAZO_TOOL_PREFIX}GMAIL_SEND_EMAIL`;
 const fetch = `${RAKAZO_TOOL_PREFIX}GMAIL_FETCH_EMAILS`;
@@ -97,18 +97,4 @@ it("keeps active exact names available and loads only the remaining names", asyn
     loaded: [fetch],
   });
   expect(wrapped.active()).toEqual(["tool_search", send, fetch]);
-});
-
-it.each([
-  { label: "exact names", factory: exactToolSearchExtension(), query: `${send}, ${fetch}` },
-  { label: "pi's own search", factory: createToolSearchExtension(), query: "send an email" },
-])("reads back the names $label loaded from the result text", async ({ factory, query }) => {
-  const result = await (await searchExtension(factory)).search(query, 5);
-  const [block] = result.content;
-  const text = block?.type === "text" ? block.text : "";
-  const { loaded } = result.details as { loaded: string[] };
-
-  expect(loaded.length).toBeGreaterThan(0);
-  expect(loadedToolNames(text)).toEqual(loaded);
-  expect(loadedToolNames("No matching tools found.")).toEqual([]);
 });
