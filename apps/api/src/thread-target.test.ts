@@ -353,6 +353,7 @@ describe("threadSnapshot", () => {
           botId: "bot-1",
           threadId: "thread-1",
           status: { in: ["waiting_input", "waiting_takeover"] },
+          parentRunId: null,
         },
       }),
     );

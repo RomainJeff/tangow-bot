@@ -36,7 +36,7 @@ import type { ArtifactTarget } from "../../lib/artifact-open";
 import { useDebugMode } from "../../lib/debug-mode";
 import { hasRenderableBlock, isHiddenActivityBlock } from "../../lib/message-blocks";
 import { messageProviderLabel } from "../../lib/messaging";
-import type { MessageItem } from "../../lib/thread-items";
+import type { MessageItem, SessionViewTarget } from "../../lib/thread-items";
 import { botIdOf } from "../../lib/thread-items";
 import {
   ChildBotCard,
@@ -130,6 +130,7 @@ export const MessageView = memo(function MessageView({
   onBotChanged,
   onAddRoutine,
   onOpenSkill,
+  onOpenSession,
   arrivesLive = false,
 }: {
   artifactTarget: ArtifactTarget;
@@ -167,6 +168,8 @@ export const MessageView = memo(function MessageView({
   onAddRoutine: (name: string, prompt: string) => void;
   /** Opens a skill from the line a bot's message carries; absent in a group, which has no bot page. */
   onOpenSkill?: (skill: SkillSourceBlock) => void;
+  /** Opens the helper session a step ran. */
+  onOpenSession?: (target: SessionViewTarget) => void;
   /** This message is new activity, not history: its skill line arrives with a beat. */
   arrivesLive?: boolean;
 }) {
@@ -279,7 +282,7 @@ export const MessageView = memo(function MessageView({
         {messageContext}
         {parts.map((part, i) =>
           part.kind === "steps" ? (
-            <AgentSteps key={i} block={part.block} live={isLive} />
+            <AgentSteps key={i} block={part.block} live={isLive} onOpenSession={onOpenSession} />
           ) : (
             <MessageBubble
               key={i}
@@ -319,7 +322,8 @@ export const MessageView = memo(function MessageView({
       if (isHiddenActivityBlock(block, showSteps)) return null;
       if (block.kind === "link_preview") return block === previewCard ? previewView(i) : null;
       if (linkOnly && block.kind === "text") return null;
-      if (block.kind === "steps") return <AgentSteps key={i} block={block} live={isLive} />;
+      if (block.kind === "steps")
+        return <AgentSteps key={i} block={block} live={isLive} onOpenSession={onOpenSession} />;
       if (block.kind === "handoff") {
         const from = memberName?.(block.fromBotId) ?? t`bot`;
         const to = memberName?.(block.toBotId) ?? t`bot`;

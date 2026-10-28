@@ -17,7 +17,7 @@ msgstr ""
 msgid " (unread)"
 msgstr " (okunmadı)"
 
-#: src/components/AgentSteps.tsx:99
+#: src/components/AgentSteps.tsx:117
 msgid "(empty)"
 msgstr "(boş)"
 
@@ -137,8 +137,8 @@ msgstr "{days} g önce"
 msgid "{failures, plural, one {# failure since {since}} other {# failures since {since}}}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:336
-#: src/pages/shell/thread-row.tsx:373
+#: src/pages/shell/message-view.tsx:340
+#: src/pages/shell/thread-row.tsx:343
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -182,12 +182,8 @@ msgstr "{schedules} · sonraki {next}"
 msgid "{size} B"
 msgstr "{size} B"
 
-#: src/components/AgentSteps.tsx:42
+#: src/components/AgentSteps.tsx:55
 msgid "{stepCount, plural, one {# step} other {# steps}}"
-msgstr ""
-
-#: src/components/TaskCard.tsx:76
-msgid "{title} · Opens in full"
 msgstr ""
 
 #: src/pages/ActivityList.tsx:97
@@ -705,16 +701,16 @@ msgstr "Canlı masaüstü başlatılıyor…"
 msgid "Booting up {0}’s computer"
 msgstr "{0} adlı botun bilgisayarı başlatılıyor"
 
-#: src/pages/shell/message-view.tsx:324
-#: src/pages/shell/message-view.tsx:325
-#: src/pages/shell/thread-row.tsx:364
-#: src/pages/shell/thread-row.tsx:365
+#: src/pages/shell/message-view.tsx:328
+#: src/pages/shell/message-view.tsx:329
+#: src/pages/shell/thread-row.tsx:334
+#: src/pages/shell/thread-row.tsx:335
 msgid "bot"
 msgstr "bot"
 
 #: src/pages/IntegrationSetup.tsx:51
-#: src/pages/shell/message-view.tsx:223
-#: src/pages/shell/thread-row.tsx:332
+#: src/pages/shell/message-view.tsx:226
+#: src/pages/shell/thread-row.tsx:302
 #: src/pages/shell/use-composer-draft.ts:53
 msgid "Bot"
 msgstr "Bot"
@@ -811,7 +807,6 @@ msgid "Cancel reply"
 msgstr "Yanıtı iptal et"
 
 #: src/components/AskCard.tsx:49
-#: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:162
 #: src/pages/bot-page/BotActivity.tsx:348
 msgid "Cancelled"
@@ -1179,7 +1174,7 @@ msgstr ""
 msgid "Continue with email"
 msgstr "E-posta ile devam et"
 
-#: src/pages/shell/thread-row.tsx:450
+#: src/pages/shell/thread-row.tsx:420
 msgid "Conversation cleared"
 msgstr ""
 
@@ -1938,11 +1933,11 @@ msgstr "Taslak beceri"
 msgid "Duplicate"
 msgstr "Çoğalt"
 
-#: src/pages/shell/message-view.tsx:198
+#: src/pages/shell/message-view.tsx:201
 msgid "Earlier message"
 msgstr "Önceki mesaj"
 
-#: src/pages/shell/thread-row.tsx:447
+#: src/pages/shell/thread-row.tsx:417
 msgid "Earlier messages summarized"
 msgstr ""
 
@@ -2076,7 +2071,6 @@ msgstr ""
 msgid "Extra high"
 msgstr "Çok yüksek"
 
-#: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:160
 #: src/pages/bot-page/BotActivity.tsx:347
 #: src/pages/bot-page/routine-copy.ts:63
@@ -2165,7 +2159,7 @@ msgstr ""
 msgid "Fullscreen"
 msgstr "Tam ekran"
 
-#: src/pages/shell/thread-row.tsx:399
+#: src/pages/shell/thread-row.tsx:369
 msgid "FYI"
 msgstr ""
 
@@ -2311,7 +2305,7 @@ msgstr "OpenAPI JSON içe aktar"
 msgid "Inherit default"
 msgstr "Varsayılanı devral"
 
-#: src/components/AgentSteps.tsx:78
+#: src/components/AgentSteps.tsx:96
 msgid "Input"
 msgstr "Girdi"
 
@@ -2381,7 +2375,7 @@ msgstr "Sohbeti, dosyaları ve rutinleri kalıcı olarak silinecek. Oluşturduğ
 msgid "Jump to latest"
 msgstr "En son mesaja git"
 
-#: src/pages/shell/message-view.tsx:193
+#: src/pages/shell/message-view.tsx:196
 msgid "Jump to replied message"
 msgstr "Yanıtlanan mesaja git"
 
@@ -2616,7 +2610,7 @@ msgstr ""
 msgid "Message composer"
 msgstr "Mesaj düzenleyici"
 
-#: src/pages/shell/thread-row.tsx:449
+#: src/pages/shell/thread-row.tsx:419
 msgid "Message edited"
 msgstr ""
 
@@ -2624,8 +2618,8 @@ msgstr ""
 msgid "Message event"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:401
-#: src/pages/shell/thread-row.tsx:440
+#: src/pages/shell/thread-row.tsx:371
+#: src/pages/shell/thread-row.tsx:410
 msgid "Message from {peer}"
 msgstr "{peer} botundan mesaj"
 
@@ -2633,8 +2627,8 @@ msgstr "{peer} botundan mesaj"
 msgid "Message…"
 msgstr "Mesaj…"
 
-#: src/pages/shell/thread-row.tsx:401
-#: src/pages/shell/thread-row.tsx:440
+#: src/pages/shell/thread-row.tsx:371
+#: src/pages/shell/thread-row.tsx:410
 msgid "Messaged {peer}"
 msgstr "{peer} botuna mesaj gönderildi"
 
@@ -3124,7 +3118,7 @@ msgstr "Başka model…"
 msgid "Other…"
 msgstr ""
 
-#: src/components/AgentSteps.tsx:79
+#: src/components/AgentSteps.tsx:97
 msgid "Output"
 msgstr "Çıktı"
 
@@ -3223,7 +3217,7 @@ msgstr "Sağlayıcı"
 msgid "Providers"
 msgstr "Sağlayıcılar"
 
-#: src/pages/shell/thread-row.tsx:397
+#: src/pages/shell/thread-row.tsx:367
 msgid "Question"
 msgstr ""
 
@@ -3462,7 +3456,7 @@ msgstr "Birkaç kısa mesajla yanıtla"
 msgid "Replying to {replyName}"
 msgstr "{replyName} yanıtlanıyor"
 
-#: src/pages/shell/thread-row.tsx:395
+#: src/pages/shell/thread-row.tsx:365
 msgid "Request"
 msgstr ""
 
@@ -3514,7 +3508,7 @@ msgstr "Kaydedilmemiş metni geri yükle"
 msgid "Restoring your workspace"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:396
+#: src/pages/shell/thread-row.tsx:366
 msgid "Result"
 msgstr ""
 
@@ -3597,7 +3591,6 @@ msgstr "Çalışma zamanı"
 msgid "Run time must be in the future."
 msgstr "Çalışma zamanı gelecekte olmalı."
 
-#: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:152
 #: src/pages/bot-page/BotActivity.tsx:349
 msgid "Running"
@@ -3940,7 +3933,7 @@ msgstr "Başlıyor"
 msgid "Starting…"
 msgstr "Başlatılıyor…"
 
-#: src/pages/shell/thread-row.tsx:398
+#: src/pages/shell/thread-row.tsx:368
 msgid "Status"
 msgstr ""
 
@@ -3976,10 +3969,6 @@ msgstr "Şifreli saklanıyor"
 #: src/pages/model-settings/model-detail.tsx:255
 msgid "Stored securely. Never shown here."
 msgstr "Güvenle saklanır. Burada gösterilmez."
-
-#: src/pages/shell/thread-row.tsx:283
-msgid "subagent"
-msgstr "alt ajan"
 
 #: src/components/DraftCard.tsx:380
 #: src/components/DraftCard.tsx:387
@@ -4070,7 +4059,7 @@ msgstr "Seçilen hafıza sağlayıcısı bu sürümde kullanılamıyor."
 msgid "Thinking"
 msgstr "Düşünüyor"
 
-#: src/components/AgentSteps.tsx:83
+#: src/components/AgentSteps.tsx:101
 msgid "This call ran before step details were recorded."
 msgstr "Bu çağrı, adım ayrıntıları kaydedilmeden önce çalıştı."
 
@@ -4111,7 +4100,7 @@ msgstr "Bu sunucu zaten bağlı. Yeniden yetkilendirmek için önce bağlantıs�
 msgid "This subscription sign-in is not available in Rakazo yet. Use a deployment credential or choose another provider."
 msgstr "Bu abonelik girişi Rakazo'da henüz kullanılamıyor. Bir dağıtım kimlik bilgisi kullan veya başka bir sağlayıcı seç."
 
-#: src/components/AgentSteps.tsx:44
+#: src/components/AgentSteps.tsx:57
 msgid "Thought for {duration} · {stepCount, plural, one {# step} other {# steps}}"
 msgstr ""
 
@@ -4138,7 +4127,7 @@ msgstr "Kime:"
 
 #: src/pages/bot-page/BotActivity.tsx:256
 #: src/pages/PeerMessagesOverlay.tsx:180
-#: src/pages/shell/thread-row.tsx:108
+#: src/pages/shell/thread-row.tsx:107
 msgid "Today"
 msgstr "Bugün"
 
@@ -4408,7 +4397,7 @@ msgstr "Her yıl {date} {time}"
 
 #: src/pages/bot-page/BotActivity.tsx:257
 #: src/pages/PeerMessagesOverlay.tsx:181
-#: src/pages/shell/thread-row.tsx:109
+#: src/pages/shell/thread-row.tsx:108
 msgid "Yesterday"
 msgstr "Dün"
 

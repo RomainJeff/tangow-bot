@@ -1,4 +1,4 @@
-import type { MessageBlock } from "@rakazo/contracts";
+import type { MessageBlock, SessionId } from "@rakazo/contracts";
 
 export function progressMessageId(runId: string): string {
   return `progress:${runId}`;
@@ -62,6 +62,7 @@ export type ToolCallDetail = {
   output: string;
   id?: string;
   outcome?: true;
+  sessionId?: SessionId;
 };
 export type ToolStep = { label: string; count: number; calls?: ToolCallDetail[] };
 

@@ -220,6 +220,7 @@ function fixture({
       findUniqueOrThrow: vi.fn(async () => run),
       // The notification source of a push: a bot that notifies.
       findFirst: vi.fn(async () => ({ bot: { notifyOnFinish: true }, thread: { groupId: null } })),
+      findMany: vi.fn(async () => []),
       updateMany: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
         // One worker leases a run: a second claim finds it taken.
         if (data.status === "leased" && !["queued", "waiting_input"].includes(run.status)) {

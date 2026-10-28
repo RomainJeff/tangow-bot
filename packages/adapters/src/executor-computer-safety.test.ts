@@ -57,24 +57,12 @@ describe("computer lifecycle command guard", () => {
     expect(isProtectedComputerLifecycleCommand(command)).toBe(false);
   });
 
-  // Exact command templates from skills/agent/delegate-to-opencode/ with placeholders filled.
-  it.each([
-    "pwd",
-    "bash /managed-skills/agent/delegate-to-opencode/scripts/oc doctor",
-    "bash /managed-skills/agent/delegate-to-opencode/scripts/oc login openai",
-    "bash /managed-skills/agent/delegate-to-opencode/scripts/oc start --repo /home/rakazo/repo --brief /home/rakazo/brief-pdf.md --effort high",
-    "bash /managed-skills/agent/delegate-to-opencode/scripts/oc status 1004-154433",
-    "bash /managed-skills/agent/delegate-to-opencode/scripts/oc status 1004-154433 --detail",
-    "bash /managed-skills/agent/delegate-to-opencode/scripts/oc result 1004-154433-review",
-    "bash /managed-skills/agent/delegate-to-opencode/scripts/oc send 1004-154433 /home/rakazo/followup.md --push",
-    "bash /managed-skills/agent/delegate-to-opencode/scripts/oc review 1004-154433",
-    "bash /managed-skills/agent/delegate-to-opencode/scripts/oc stop 1004-154433",
-    "bash /managed-skills/agent/delegate-to-opencode/scripts/oc clean 1004-154433",
-    "cat /managed-skills/agent/delegate-to-opencode/references/brief.md",
-    "git clone https://github.com/acme/site /home/rakazo/site",
-  ])("allows the delegate-to-opencode skill commands: %s", (command) => {
-    expect(isProtectedComputerLifecycleCommand(command)).toBe(false);
-  });
+  it.each(["pwd", "git clone https://github.com/acme/site /home/rakazo/site"])(
+    "allows ordinary repository commands: %s",
+    (command) => {
+      expect(isProtectedComputerLifecycleCommand(command)).toBe(false);
+    },
+  );
 
   it.each([
     ". /tmp/script.sh",

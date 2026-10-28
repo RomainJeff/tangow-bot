@@ -364,16 +364,19 @@ describe("destroyBot", () => {
     const expireExecutionLeases = vi.fn().mockResolvedValue({ count: 1 });
     const clearExecution = vi.fn().mockResolvedValue({ count: 1 });
     const queryRaw = vi.fn().mockResolvedValue([{ id: "group-1" }, { id: "group-2" }]);
-    const findRuns = vi.fn().mockResolvedValue([
-      {
-        id: "group-run",
-        taskId: "group-task",
-        botId: "bot-2",
-        bot: {
-          computer: { homeKey: "team-home", kind: "fake", providerRef: "screen-1" },
+    const findRuns = vi
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          id: "group-run",
+          taskId: "group-task",
+          botId: "bot-2",
+          bot: {
+            computer: { homeKey: "team-home", kind: "fake", providerRef: "screen-1" },
+          },
         },
-      },
-    ]);
+      ])
+      .mockResolvedValue([]);
     const transaction = vi.fn(async (callback: (tx: unknown) => Promise<void>) =>
       callback({
         $queryRaw: queryRaw,

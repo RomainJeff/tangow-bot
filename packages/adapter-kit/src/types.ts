@@ -4,6 +4,7 @@ import type {
   ConnectionCatalogItem,
   SandboxKind,
 } from "@rakazo/contracts";
+import type { HelperProfile } from "@rakazo/core";
 import type { SkillCollision, WorkerSkill } from "./worker-protocol.js";
 
 export interface AdapterContext {
@@ -424,6 +425,10 @@ export interface AgentRunRequest {
   history: AgentHistoryTurn[];
   currentTurnImages?: AgentInputImage[];
   tools: ConnectorTool[];
+  /** Tools of `tools` the run's own agent is never offered. A helper's profile can allow them. */
+  blockedTools?: readonly string[];
+  /** The profiles `run_subagent` can name as its `helper`. */
+  helperProfiles?: readonly HelperProfile[];
   /**
    * Values the run must never disclose. Live list: it grows while the run
    * resolves credentials, and anything exported is redacted against it.
@@ -469,6 +474,13 @@ export interface AgentRunRequest {
   claimSteering?: (seenIds: string[]) => Promise<AgentSteeringMessage[]>;
   /** Open the log of one `run_subagent` call: the helper runs in a session of its own. */
   startSubagent?: (call: SubagentCall) => Promise<SubagentLog>;
+  /** Queue one background `run_subagent` call as a run of its own, which reports when it ends. */
+  startHelper?: (call: SubagentCall) => Promise<{ helperId: string }>;
+  /**
+   * This run is a background helper: its call's brief and instructions and the profile it names
+   * among `helperProfiles` replace the bot's.
+   */
+  helper?: { name: string; task: string; instructions: string; profile: string | null };
 }
 
 /** A runtime could not start or was lost. The executor retries within its setup budget. */
@@ -493,6 +505,8 @@ export interface SubagentCall {
   task: string;
   args: Record<string, unknown>;
   model: { provider: string; id: string };
+  /** The profile the helper runs; its `exclusive` resource is held for the helper's run. */
+  profile?: Pick<HelperProfile, "name" | "exclusive">;
 }
 
 /** Where a helper writes what it does. Writes land in the order they are made. */
@@ -602,15 +616,6 @@ export type AgentRuntimeEvent =
       entries: HarnessTranscriptEntry[];
       /** Results it claims for calls of controller tools that the controller never answered. */
       unverifiedCalls: number;
-    }
-  | {
-      type: "subagent";
-      agentId: string;
-      name: string;
-      task: string;
-      status: "running" | "completed" | "failed";
-      progress?: string;
-      result?: string;
     }
   | {
       type: "done";

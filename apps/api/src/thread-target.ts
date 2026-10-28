@@ -492,6 +492,8 @@ export async function threadSnapshot(
               botId: target.botId,
               threadId: target.threadId,
               status: { in: ["waiting_input", "waiting_takeover"] },
+              // A helper waiting on its parent waits on no one the person sees.
+              parentRunId: null,
             },
             orderBy: [{ createdAt: "desc" }, { id: "desc" }],
           }),

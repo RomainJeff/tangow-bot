@@ -21,14 +21,28 @@ export async function logCancelledRunsInTransaction(
   }
 }
 
-/** The caller selects authorized runs and owns the surrounding transaction and cleanup. */
+/**
+ * The caller selects authorized runs and owns the surrounding transaction and cleanup. Their sync
+ * helpers run inside their attempts, so they are cancelled with them.
+ */
 export async function cancelRunsInTransaction(
   tx: Prisma.TransactionClient,
-  runs: ReadonlyArray<{ id: string; taskId: string }>,
+  parents: ReadonlyArray<{ id: string; taskId: string }>,
   cancelledAt: Date,
   by?: string,
 ): Promise<void> {
-  if (runs.length === 0) return;
+  if (parents.length === 0) return;
+  const parentIds = parents.map((run) => run.id);
+  const helpers = await tx.run.findMany({
+    where: {
+      parentRunId: { in: parentIds },
+      id: { notIn: parentIds },
+      trigger: "subagent",
+      status: { in: [...ACTIVE_RUN_STATUSES] },
+    },
+    select: { id: true, taskId: true },
+  });
+  const runs = [...parents, ...helpers];
   const runIds = runs.map((run) => run.id);
   await logCancelledRunsInTransaction(tx, runIds, by);
   await tx.run.updateMany({

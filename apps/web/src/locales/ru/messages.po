@@ -17,7 +17,7 @@ msgstr ""
 msgid " (unread)"
 msgstr " (непрочитано)"
 
-#: src/components/AgentSteps.tsx:99
+#: src/components/AgentSteps.tsx:117
 msgid "(empty)"
 msgstr ""
 
@@ -137,8 +137,8 @@ msgstr "{days} дн. назад"
 msgid "{failures, plural, one {# failure since {since}} other {# failures since {since}}}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:336
-#: src/pages/shell/thread-row.tsx:373
+#: src/pages/shell/message-view.tsx:340
+#: src/pages/shell/thread-row.tsx:343
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -182,12 +182,8 @@ msgstr "{schedules} · следующая {next}"
 msgid "{size} B"
 msgstr "{size} Б"
 
-#: src/components/AgentSteps.tsx:42
+#: src/components/AgentSteps.tsx:55
 msgid "{stepCount, plural, one {# step} other {# steps}}"
-msgstr ""
-
-#: src/components/TaskCard.tsx:76
-msgid "{title} · Opens in full"
 msgstr ""
 
 #: src/pages/ActivityList.tsx:97
@@ -705,16 +701,16 @@ msgstr "Загрузка рабочего стола…"
 msgid "Booting up {0}’s computer"
 msgstr "Загрузка компьютера {0}"
 
-#: src/pages/shell/message-view.tsx:324
-#: src/pages/shell/message-view.tsx:325
-#: src/pages/shell/thread-row.tsx:364
-#: src/pages/shell/thread-row.tsx:365
+#: src/pages/shell/message-view.tsx:328
+#: src/pages/shell/message-view.tsx:329
+#: src/pages/shell/thread-row.tsx:334
+#: src/pages/shell/thread-row.tsx:335
 msgid "bot"
 msgstr "бот"
 
 #: src/pages/IntegrationSetup.tsx:51
-#: src/pages/shell/message-view.tsx:223
-#: src/pages/shell/thread-row.tsx:332
+#: src/pages/shell/message-view.tsx:226
+#: src/pages/shell/thread-row.tsx:302
 #: src/pages/shell/use-composer-draft.ts:53
 msgid "Bot"
 msgstr "Бот"
@@ -811,7 +807,6 @@ msgid "Cancel reply"
 msgstr "Отменить ответ"
 
 #: src/components/AskCard.tsx:49
-#: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:162
 #: src/pages/bot-page/BotActivity.tsx:348
 msgid "Cancelled"
@@ -1179,7 +1174,7 @@ msgstr "Продолжить в фоне"
 msgid "Continue with email"
 msgstr "Продолжить по электронной почте"
 
-#: src/pages/shell/thread-row.tsx:450
+#: src/pages/shell/thread-row.tsx:420
 msgid "Conversation cleared"
 msgstr ""
 
@@ -1938,11 +1933,11 @@ msgstr "Черновик навыка"
 msgid "Duplicate"
 msgstr "Дублировать"
 
-#: src/pages/shell/message-view.tsx:198
+#: src/pages/shell/message-view.tsx:201
 msgid "Earlier message"
 msgstr "Предыдущее сообщение"
 
-#: src/pages/shell/thread-row.tsx:447
+#: src/pages/shell/thread-row.tsx:417
 msgid "Earlier messages summarized"
 msgstr ""
 
@@ -2076,7 +2071,6 @@ msgstr "Внешний диалог"
 msgid "Extra high"
 msgstr "Очень высокий"
 
-#: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:160
 #: src/pages/bot-page/BotActivity.tsx:347
 #: src/pages/bot-page/routine-copy.ts:63
@@ -2165,7 +2159,7 @@ msgstr ""
 msgid "Fullscreen"
 msgstr "Полноэкранный"
 
-#: src/pages/shell/thread-row.tsx:399
+#: src/pages/shell/thread-row.tsx:369
 msgid "FYI"
 msgstr "К сведению"
 
@@ -2311,7 +2305,7 @@ msgstr "Импортировать OpenAPI JSON"
 msgid "Inherit default"
 msgstr "Наследовать значение по умолчанию"
 
-#: src/components/AgentSteps.tsx:78
+#: src/components/AgentSteps.tsx:96
 msgid "Input"
 msgstr ""
 
@@ -2381,7 +2375,7 @@ msgstr "Его диалог, файлы и задачи будут безвоз�
 msgid "Jump to latest"
 msgstr "Перейти к последнему"
 
-#: src/pages/shell/message-view.tsx:193
+#: src/pages/shell/message-view.tsx:196
 msgid "Jump to replied message"
 msgstr "Перейти к ответному сообщению"
 
@@ -2616,7 +2610,7 @@ msgstr ""
 msgid "Message composer"
 msgstr "Поле сообщения"
 
-#: src/pages/shell/thread-row.tsx:449
+#: src/pages/shell/thread-row.tsx:419
 msgid "Message edited"
 msgstr ""
 
@@ -2624,8 +2618,8 @@ msgstr ""
 msgid "Message event"
 msgstr "Событие сообщения"
 
-#: src/pages/shell/thread-row.tsx:401
-#: src/pages/shell/thread-row.tsx:440
+#: src/pages/shell/thread-row.tsx:371
+#: src/pages/shell/thread-row.tsx:410
 msgid "Message from {peer}"
 msgstr "Сообщение от {peer}"
 
@@ -2633,8 +2627,8 @@ msgstr "Сообщение от {peer}"
 msgid "Message…"
 msgstr "Сообщение…"
 
-#: src/pages/shell/thread-row.tsx:401
-#: src/pages/shell/thread-row.tsx:440
+#: src/pages/shell/thread-row.tsx:371
+#: src/pages/shell/thread-row.tsx:410
 msgid "Messaged {peer}"
 msgstr "Отправлено сообщение {peer}"
 
@@ -3124,7 +3118,7 @@ msgstr "Другая модель…"
 msgid "Other…"
 msgstr ""
 
-#: src/components/AgentSteps.tsx:79
+#: src/components/AgentSteps.tsx:97
 msgid "Output"
 msgstr ""
 
@@ -3223,7 +3217,7 @@ msgstr "Поставщик"
 msgid "Providers"
 msgstr "Провайдеры"
 
-#: src/pages/shell/thread-row.tsx:397
+#: src/pages/shell/thread-row.tsx:367
 msgid "Question"
 msgstr "Вопрос"
 
@@ -3462,7 +3456,7 @@ msgstr ""
 msgid "Replying to {replyName}"
 msgstr "Ответ на {replyName}"
 
-#: src/pages/shell/thread-row.tsx:395
+#: src/pages/shell/thread-row.tsx:365
 msgid "Request"
 msgstr "Запрос"
 
@@ -3514,7 +3508,7 @@ msgstr "Восстановить несохранённый текст"
 msgid "Restoring your workspace"
 msgstr "Восстановление вашего рабочего пространства"
 
-#: src/pages/shell/thread-row.tsx:396
+#: src/pages/shell/thread-row.tsx:366
 msgid "Result"
 msgstr "Результат"
 
@@ -3597,7 +3591,6 @@ msgstr "Запустить в"
 msgid "Run time must be in the future."
 msgstr "Время выполнения должно быть в будущем."
 
-#: src/components/TaskCard.tsx:107
 #: src/pages/ActivityList.tsx:152
 #: src/pages/bot-page/BotActivity.tsx:349
 msgid "Running"
@@ -3940,7 +3933,7 @@ msgstr "Запуск"
 msgid "Starting…"
 msgstr "Запуск…"
 
-#: src/pages/shell/thread-row.tsx:398
+#: src/pages/shell/thread-row.tsx:368
 msgid "Status"
 msgstr "Статус"
 
@@ -3976,10 +3969,6 @@ msgstr "Хранится в зашифрованном виде"
 #: src/pages/model-settings/model-detail.tsx:255
 msgid "Stored securely. Never shown here."
 msgstr "Хранится безопасно. Здесь не отображается."
-
-#: src/pages/shell/thread-row.tsx:283
-msgid "subagent"
-msgstr "субагент"
 
 #: src/components/DraftCard.tsx:380
 #: src/components/DraftCard.tsx:387
@@ -4070,7 +4059,7 @@ msgstr "Выбранный поставщик памяти недоступен 
 msgid "Thinking"
 msgstr "рассуждение"
 
-#: src/components/AgentSteps.tsx:83
+#: src/components/AgentSteps.tsx:101
 msgid "This call ran before step details were recorded."
 msgstr ""
 
@@ -4111,7 +4100,7 @@ msgstr "Этот сервер уже подключен. Сначала откл
 msgid "This subscription sign-in is not available in Rakazo yet. Use a deployment credential or choose another provider."
 msgstr "Вход по этой подписке пока недоступен в Rakazo. Используйте учетные данные развертывания или выберите другого поставщика."
 
-#: src/components/AgentSteps.tsx:44
+#: src/components/AgentSteps.tsx:57
 msgid "Thought for {duration} · {stepCount, plural, one {# step} other {# steps}}"
 msgstr ""
 
@@ -4138,7 +4127,7 @@ msgstr "К:"
 
 #: src/pages/bot-page/BotActivity.tsx:256
 #: src/pages/PeerMessagesOverlay.tsx:180
-#: src/pages/shell/thread-row.tsx:108
+#: src/pages/shell/thread-row.tsx:107
 msgid "Today"
 msgstr ""
 
@@ -4408,7 +4397,7 @@ msgstr "Ежегодно {date} в {time}"
 
 #: src/pages/bot-page/BotActivity.tsx:257
 #: src/pages/PeerMessagesOverlay.tsx:181
-#: src/pages/shell/thread-row.tsx:109
+#: src/pages/shell/thread-row.tsx:108
 msgid "Yesterday"
 msgstr ""
 

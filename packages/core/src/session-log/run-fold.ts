@@ -46,17 +46,14 @@ type RunMessage = {
  * position of the stretch's first entry. Each run has its own open stretch, so runs that
  * interleave keep one message each. Any other entry closes every open stretch, a `bot.text` too
  * since it is a message of its own; a `subagent` entry and the card-state entries pass through.
- * With `splitAtHelpers`, a `run_subagent` call also closes its run's stretch, so a helper's card
- * can sit between what the run said before the call and after it.
  * With `splitAtPersonMessages`, each published message keeps its own bubble in the thread.
  */
 export function foldRuns(
   entries: readonly ThreadEntry[],
   {
     answers = toolAnswers(entries),
-    splitAtHelpers = false,
     splitAtPersonMessages = false,
-  }: { answers?: ToolAnswers; splitAtHelpers?: boolean; splitAtPersonMessages?: boolean } = {},
+  }: { answers?: ToolAnswers; splitAtPersonMessages?: boolean } = {},
 ): (RunMessage | Exclude<ThreadEntry, FoldedEntry>)[] {
   const segments: (RunMessage | Exclude<ThreadEntry, FoldedEntry>)[] = [];
   const open = new Map<string, RunMessage>();
@@ -107,15 +104,17 @@ export function foldRuns(
         const message = stretchOf(entry);
         const { callId, name, input } = entry.payload;
         const answer = answers.answerOf.get(entry.id);
+        // A draft's outcome may have replaced a helper's answer: the step still opens its session.
+        const helperSession = (answers.replacedOf.get(entry.id) ?? answer)?.payload.sessionId;
         message.blocks = appendToolCallSegment(message.blocks, name, {
           name,
           input,
           output: answer ? outputOf(answer) : "",
           id: callId,
           ...(answer?.type === "tool.result" && answer.payload.replaces ? { outcome: true } : {}),
+          ...(helperSession ? { sessionId: helperSession } : {}),
         });
         holderOf.set(entry.id, message);
-        if (splitAtHelpers && name === "run_subagent") open.delete(entry.runId);
         break;
       }
       case "tool.result": {

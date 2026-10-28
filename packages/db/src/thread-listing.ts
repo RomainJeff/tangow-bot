@@ -7,8 +7,9 @@ import { sessionEntryFromRow } from "./sessions.js";
 
 export const activeRunStatuses = [...ACTIVE_RUN_STATUSES];
 
+/** The run a bot shows as its status: a helper works out of sight, behind its parent's turn. */
 export const activeRunSelection = {
-  where: { status: { in: activeRunStatuses } },
+  where: { status: { in: activeRunStatuses }, parentRunId: null },
   orderBy: { createdAt: "desc" as const },
   take: 1,
   select: { status: true },
