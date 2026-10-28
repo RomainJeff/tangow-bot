@@ -195,9 +195,6 @@ describe.skipIf(!dockerWorkersEnabled)("Docker workers", () => {
         const attempts = await run.prisma.attempt.findMany({ where: { runId } });
         // The faulted attempt, then the one that completed the run.
         expect(attempts.map((attempt) => attempt.workerState)).toEqual(["released", "released"]);
-        expect(await run.prisma.volume.count({ where: { writerAttemptId: { not: null } } })).toBe(
-          0,
-        );
         expect(containersOf(attempts)).toBe("");
       } finally {
         await run.close();

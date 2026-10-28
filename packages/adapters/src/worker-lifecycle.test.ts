@@ -13,7 +13,6 @@ import {
 import {
   createWorkerLifecycle,
   StaleAttemptError,
-  VolumeBusyError,
   VolumeRefusedError,
 } from "./worker-lifecycle.js";
 
@@ -98,10 +97,9 @@ describe("worker plan", () => {
 });
 
 describe("worker start", () => {
-  it("gives an MCP-only run a worker without a computer, mount or lease", async () => {
+  it("gives an MCP-only run a worker without a computer or mount", async () => {
     const computer = await fixture.seedComputer(spaceA);
     const bot = await fixture.seedBot(spaceA, computer.id);
-    const privateVolume = await fixture.seedVolume("bot_private", spaceA, bot.id);
     const run = await fixture.seedRun(bot);
     const attempt = await fixture.seedAttempt(run.id);
 
@@ -127,7 +125,6 @@ describe("worker start", () => {
     expect(await prisma.computerExecutionLease.count({ where: { computerId: computer.id } })).toBe(
       0,
     );
-    expect(await fixture.writerOf(privateVolume.id)).toBeNull();
     expect(await fixture.workerStateOf(attempt.id)).toBe("ready");
   });
 
@@ -165,10 +162,6 @@ describe("worker start", () => {
         { path: "/workspace/shared", scope: "shared", access: "rw" },
       ],
     });
-    expect([
-      await fixture.writerOf(privateVolume.id),
-      await fixture.writerOf(sharedVolume.id),
-    ]).toEqual([attempt.id, null]);
   });
 
   it("refuses an attempt that no longer holds the run's fence before the provider", async () => {
@@ -208,31 +201,46 @@ describe("worker start", () => {
     await expect(refused).rejects.toMatchObject({ refusal: { code, volumeId: foreign.id } });
     expect(fake.calls).toEqual([]);
     expect(await fixture.workerStateOf(attempt.id)).toBeNull();
-    expect(await fixture.writerOf(foreign.id)).toBeNull();
   });
 
-  it("requeues a second file run of the bot until the first worker is gone", async () => {
-    const { bot, privateVolume } = await fixture.migratedBot();
+  it("starts two file runs of the same bot on the same persistent mounts", async () => {
+    const { bot, privateVolume, sharedVolume } = await fixture.migratedBot();
     const first = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
     const second = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
-    await workers.start(await fixture.launchFor(workers, first.id, allFiles), fixture.context);
-    const secondLaunch = await fixture.launchFor(workers, second.id, allFiles);
+    const firstStarted = await workers.start(
+      await fixture.launchFor(workers, first.id, allFiles),
+      fixture.context,
+    );
+    const secondStarted = await workers.start(
+      await fixture.launchFor(workers, second.id, allFiles),
+      fixture.context,
+    );
 
-    const busy = workers.start(secondLaunch, fixture.context);
-
-    await expect(busy).rejects.toThrow(VolumeBusyError);
-    await expect(busy).rejects.toMatchObject({ volumeIds: [privateVolume.id] });
-    expect(fake.calls.filter((call) => call.op === "ensure")).toHaveLength(1);
-    expect(await fixture.workerStateOf(second.id)).toBeNull();
+    const mounts = [
+      { volumeRef: privateVolume.providerRef, path: `/workspace/bots/${bot.id}`, access: "rw" },
+      { volumeRef: sharedVolume.providerRef, path: "/workspace/shared", access: "rw" },
+    ];
+    expect([...fake.live.values()].map((spec) => spec.mounts)).toEqual([mounts, mounts]);
+    for (const started of [firstStarted, secondStarted]) {
+      expect(started.start.workspace).toEqual({
+        cwd: `/workspace/bots/${bot.id}`,
+        mounts: [
+          { path: `/workspace/bots/${bot.id}`, scope: "private", access: "rw" },
+          { path: "/workspace/shared", scope: "shared", access: "rw" },
+        ],
+      });
+    }
+    expect([await fixture.workerStateOf(first.id), await fixture.workerStateOf(second.id)]).toEqual(
+      ["ready", "ready"],
+    );
 
     await workers.release(first.id, fixture.context);
-    await expect(workers.start(secondLaunch, fixture.context)).resolves.toMatchObject({
-      providerRef: `fake-worker-${second.id}`,
-    });
+    expect([...fake.live.keys()]).toEqual([secondStarted.providerRef]);
+    expect(await fixture.workerStateOf(second.id)).toBe("ready");
   });
 
   it("lets two bots of one space write the shared volume at once", async () => {
-    const { computer, bot, sharedVolume } = await fixture.migratedBot();
+    const { computer, bot } = await fixture.migratedBot();
     const teammate = await fixture.teammateOf(computer);
     const first = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
     const second = await fixture.seedAttempt((await fixture.seedRun(teammate.bot)).id);
@@ -250,14 +258,11 @@ describe("worker start", () => {
       [first.id, [`/workspace/bots/${bot.id}`, "/workspace/shared"]],
       [second.id, [`/workspace/bots/${teammate.bot.id}`, "/workspace/shared"]],
     ]);
-    expect([
-      await fixture.writerOf(sharedVolume.id),
-      await fixture.writerOf(teammate.privateVolume.id),
-    ]).toEqual([null, second.id]);
+    expect(fake.live.size).toBe(2);
   });
 
-  it("releases the worker and its volumes when setup fails", async () => {
-    const { bot, privateVolume } = await fixture.migratedBot();
+  it("destroys the worker when setup fails", async () => {
+    const { bot } = await fixture.migratedBot();
     const attempt = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
     fake = new FakeWorkerProvider({ failPrepare: new Error("runner unreachable") });
     workers = createWorkerLifecycle({ prisma, provider: fake });
@@ -272,7 +277,7 @@ describe("worker start", () => {
       result: "destroyed",
     });
     expect(await fixture.workerStateOf(attempt.id)).toBe("released");
-    expect(await fixture.writerOf(privateVolume.id)).toBeNull();
+    expect(fake.live.size).toBe(0);
   });
 });
 
@@ -299,14 +304,14 @@ describe("worker ownership while start is in flight", () => {
     expect(await fixture.workerStateOf(attempt.id)).toBe("ready");
   });
 
-  it("holds the leases of a run cancelled mid-ensure until its late VM is destroyed", async () => {
+  it("tracks a run cancelled mid-ensure until its late VM is destroyed", async () => {
     const ensure = fake.ensure.bind(fake);
     const atEnsureReturn: unknown[] = [];
     fake.ensure = async (spec, context) => {
       const created = await ensure(spec, context);
       atEnsureReturn.push({
         live: [...fake.live.keys()],
-        leases: await prisma.volume.count({ where: { writerAttemptId: spec.attemptId } }),
+        state: await fixture.workerStateOf(spec.attemptId),
       });
       return created;
     };
@@ -321,7 +326,7 @@ describe("worker ownership while start is in flight", () => {
     letEnsureFinish();
 
     expect(await started).toBeInstanceOf(StaleAttemptError);
-    expect(atEnsureReturn).toEqual([{ live: [`fake-worker-${attempt.id}`], leases: 1 }]);
+    expect(atEnsureReturn).toEqual([{ live: [`fake-worker-${attempt.id}`], state: "releasing" }]);
     expect(fake.calls.filter((call) => call.op === "destroy")).toEqual([
       {
         op: "destroy",
@@ -364,8 +369,8 @@ describe("worker ownership while start is in flight", () => {
     expect(await fixture.workerStateOf(attempt.id)).toBe("released");
   });
 
-  it("keeps the lease of a worker the provider cannot confirm destroyed", async () => {
-    const { bot, privateVolume } = await fixture.migratedBot();
+  it("tracks a worker the provider cannot confirm destroyed without blocking other runs", async () => {
+    const { bot } = await fixture.migratedBot();
     const attempt = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
     await workers.start(await fixture.launchFor(workers, attempt.id, allFiles), fixture.context);
     fake.failDestroy = new Error("provider unreachable");
@@ -374,7 +379,9 @@ describe("worker ownership while start is in flight", () => {
       "provider unreachable",
     );
     expect(await fixture.workerStateOf(attempt.id)).toBe("releasing");
-    expect(await fixture.writerOf(privateVolume.id)).toBe(attempt.id);
+    expect([...fake.live.keys()]).toEqual([`fake-worker-${attempt.id}`]);
+    const peer = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
+    await workers.start(await fixture.launchFor(workers, peer.id, allFiles), fixture.context);
 
     fake.failDestroy = null;
     await expect(workers.reconcile({ limit: 10 }, fixture.context)).resolves.toEqual({
@@ -382,8 +389,8 @@ describe("worker ownership while start is in flight", () => {
       awaitingEnsure: 0,
       failed: 0,
     });
-    expect(fake.live.size).toBe(0);
-    expect(await fixture.writerOf(privateVolume.id)).toBeNull();
+    expect([...fake.live.keys()]).toEqual([`fake-worker-${peer.id}`]);
+    expect(await fixture.workerStateOf(peer.id)).toBe("ready");
     expect(await fixture.workerStateOf(attempt.id)).toBe("released");
   });
 });
@@ -469,7 +476,7 @@ describe("worker release", () => {
   });
 
   it("reconciles workers whose run lease expired, by ref or by attempt tag", async () => {
-    const { bot, privateVolume } = await fixture.migratedBot();
+    const { bot } = await fixture.migratedBot();
     const expired = { leaseExpiresAt: new Date(Date.now() - 60_000) };
     const created = await fixture.seedAttempt((await fixture.seedRun(bot, expired)).id, 1, {
       workerState: "created",
@@ -483,10 +490,6 @@ describe("worker release", () => {
       workerProviderKind: "fake-worker",
       workerStateAt: pastEnsureTimeout(),
       workerEnsureAt: pastEnsureTimeout(),
-    });
-    await prisma.volume.update({
-      where: { id: privateVolume.id },
-      data: { writerAttemptId: created.id },
     });
     const spec = {
       runId: "run",
@@ -515,7 +518,10 @@ describe("worker release", () => {
         result: "destroyed",
       },
     ]);
-    expect(await fixture.writerOf(privateVolume.id)).toBeNull();
+    expect([
+      await fixture.workerStateOf(created.id),
+      await fixture.workerStateOf(requested.id),
+    ]).toEqual(["released", "released"]);
     expect(await fixture.workerStateOf(active.id)).toBe("ready");
   });
 

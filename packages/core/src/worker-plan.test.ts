@@ -11,7 +11,6 @@ const privateA: VolumeRow = {
   botId: "bot_a",
   providerKind: "e2b",
   providerRef: "rakazo-volume-vol_private_a",
-  writerAttemptId: null,
 };
 const sharedA: VolumeRow = {
   id: "vol_shared_a",
@@ -20,7 +19,6 @@ const sharedA: VolumeRow = {
   botId: null,
   providerKind: "e2b",
   providerRef: "rakazo-volume-vol_shared_a",
-  writerAttemptId: null,
 };
 
 describe("authorizeMounts", () => {

@@ -49,7 +49,7 @@ describe("the reconciler of a deployment with workers", () => {
   });
   afterAll(() => database.close());
 
-  it("releases a worker whose destruction was not confirmed, and frees its volume", async () => {
+  it("destroys a worker whose prior release was not confirmed", async () => {
     const fixture = workerFixture(prisma);
     await fixture.seedOwner();
     const provider = Object.assign(new FakeWorkerProvider(), {
@@ -58,7 +58,7 @@ describe("the reconciler of a deployment with workers", () => {
       },
     });
     const workers = composeWorkers(prisma, provider);
-    const { bot, privateVolume } = await fixture.migratedBot();
+    const { bot } = await fixture.migratedBot();
     const run = await fixture.seedRun(bot);
     const attempt = await fixture.seedAttempt(run.id);
     await workers.lifecycle.start(
@@ -81,6 +81,6 @@ describe("the reconciler of a deployment with workers", () => {
     }).reconcileOnce();
 
     expect(await fixture.workerStateOf(attempt.id)).toBe("released");
-    expect(await fixture.writerOf(privateVolume.id)).toBeNull();
+    expect(provider.live.size).toBe(0);
   });
 });

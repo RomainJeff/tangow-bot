@@ -4,6 +4,7 @@ import { HARNESSES } from "@rakazo/agent-run-worker";
 import { createRepos } from "@rakazo/db";
 import { afterEach, expect, it, vi } from "vitest";
 import { stopThreadRuns, threadSnapshot } from "../../../apps/api/src/thread-target.js";
+import { toolResult } from "./file-task.js";
 import { latestCard } from "./index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
@@ -65,10 +66,14 @@ const publish: ModelEmulatorStep = {
   response: { type: "tool", id: "publish", name: "publish_note", arguments: { title: "Plan" } },
 };
 
-async function fixture(steps: ModelEmulatorStep[], tools?: ConnectorProvider) {
+async function fixture(
+  steps: ModelEmulatorStep[],
+  tools?: ConnectorProvider,
+  computerScope: "none" | "dedicated" = "none",
+) {
   const run = await startWorkerRun({
     harness: HARNESSES["pi-native"],
-    computerScope: "none",
+    computerScope,
     steps,
     ...(tools ? { tools } : {}),
   });
@@ -360,78 +365,275 @@ it("wakes the bot for each of two reports, never losing or doubling one", async 
 it("starts a user turn for a message sent during the helper, which the helper never reads", async () => {
   const childAsked = Promise.withResolvers<void>();
   const releaseChild = Promise.withResolvers<void>();
-  const { run, runs, childOf } = await fixture([
-    ...startedTurn,
-    {
-      async expect() {
-        childAsked.resolve();
-        await releaseChild.promise;
+  const { run, runs, reports, childOf } = await fixture(
+    [
+      ...startedTurn,
+      {
+        expect() {},
+        response: {
+          type: "tool",
+          id: "helper-write",
+          name: "write",
+          arguments: { path: "helper-note.txt", content: "Private hotel note." },
+        },
       },
-      response: { type: "tool", id: "look", name: "search_runs", arguments: { query: "hotel" } },
-    },
-    {
-      expect(request) {
-        expect(text(request)).not.toContain("Also check trains.");
+      {
+        expect(request) {
+          expect(toolResult(request)).toContain("Successfully wrote");
+        },
+        response: {
+          type: "tool",
+          id: "helper-write-shared",
+          name: "write",
+          arguments: { path: "../../shared/helper-note.txt", content: "Shared hotel note." },
+        },
       },
-      response: { type: "text", text: REPORT },
-    },
-    {
-      expect(request) {
-        expect(text(request)).toContain("Also check trains.");
-        expect(text(request)).toContain(REPORT);
+      {
+        async expect(request) {
+          expect(toolResult(request)).toContain("Successfully wrote");
+          expect(userTurns(request)).toEqual([[{ type: "text", text: BRIEF }]]);
+          childAsked.resolve();
+          await releaseChild.promise;
+        },
+        response: { type: "tool", id: "look", name: "search_runs", arguments: { query: "hotel" } },
       },
-      response: say("Trains run every hour."),
-    },
-    { expect() {}, response: { type: "text", text: recap } },
-  ]);
+      {
+        expect(request) {
+          expect(text(request)).toContain("Also check trains.");
+          expect(text(request)).not.toContain(REPORT);
+        },
+        response: {
+          type: "tool",
+          id: "user-read",
+          name: "read",
+          arguments: { path: "helper-note.txt" },
+        },
+      },
+      {
+        expect(request) {
+          expect(toolResult(request)).toContain("Private hotel note.");
+        },
+        response: {
+          type: "tool",
+          id: "user-read-shared",
+          name: "read",
+          arguments: { path: "../../shared/helper-note.txt" },
+        },
+      },
+      {
+        expect(request) {
+          expect(toolResult(request)).toContain("Shared hotel note.");
+        },
+        response: {
+          type: "tool",
+          id: "user-write",
+          name: "write",
+          arguments: { path: "user-note.txt", content: "Private train note." },
+        },
+      },
+      {
+        expect(request) {
+          expect(toolResult(request)).toContain("Successfully wrote");
+        },
+        response: {
+          type: "tool",
+          id: "user-write-shared",
+          name: "write",
+          arguments: { path: "../../shared/user-note.txt", content: "Shared train note." },
+        },
+      },
+      {
+        expect(request) {
+          expect(toolResult(request)).toContain("Successfully wrote");
+        },
+        response: say("Trains run every hour."),
+      },
+      { expect() {}, response: { type: "text", text: recap } },
+      {
+        expect(request) {
+          expect(text(request)).not.toContain("Also check trains.");
+        },
+        response: {
+          type: "tool",
+          id: "helper-read",
+          name: "read",
+          arguments: { path: "user-note.txt" },
+        },
+      },
+      {
+        expect(request) {
+          expect(text(request)).not.toContain("Also check trains.");
+          expect(toolResult(request)).toContain("Private train note.");
+        },
+        response: {
+          type: "tool",
+          id: "helper-read-shared",
+          name: "read",
+          arguments: { path: "../../shared/user-note.txt" },
+        },
+      },
+      {
+        expect(request) {
+          expect(text(request)).not.toContain("Also check trains.");
+          expect(toolResult(request)).toContain("Shared train note.");
+        },
+        response: { type: "text", text: REPORT },
+      },
+      {
+        expect(request) {
+          expect(text(request)).toContain("<helper_report>");
+          expect(text(request)).toContain(REPORT);
+        },
+        response: say(`Found it: ${REPORT}`),
+      },
+      { expect() {}, response: { type: "text", text: recap } },
+    ],
+    undefined,
+    "dedicated",
+  );
   const parentId = await run.send("Book me a hotel in Lisbon.");
   await run.continueRun(parentId);
   const child = await childOf(parentId);
   const childDone = run.continueRun(child.id);
-  await childAsked.promise;
-  const userRunId = await run.send("Also check trains.");
-  expect(await run.prisma.steeringMessage.count()).toBe(0);
-  releaseChild.resolve();
-  await childDone;
-  await run.continueRun(userRunId);
+  let userRunId: string;
+  try {
+    await childAsked.promise;
+    userRunId = await run.send("Also check trains.");
+    expect(await run.prisma.steeringMessage.count()).toBe(0);
+    await run.continueRun(userRunId);
+    expect(await runs()).toMatchObject([
+      { id: parentId, status: "completed" },
+      { id: child.id, status: "running" },
+      { id: userRunId, status: "completed" },
+    ]);
+    expect(await run.runEntries(userRunId)).toContainEqual(
+      expect.objectContaining({
+        type: "assistant.text",
+        payload: expect.objectContaining({
+          toPerson: true,
+          blocks: [{ kind: "text", text: "Trains run every hour." }],
+        }),
+      }),
+    );
+    expect(await reports()).toEqual([]);
+  } finally {
+    releaseChild.resolve();
+    await childDone;
+  }
+  expect(await reports()).toEqual([
+    { helperId: child.id, profile: null, status: "completed", report: REPORT },
+  ]);
+  const woken = await run.prisma.run.findFirstOrThrow({ where: { trigger: "follow_up" } });
+  await run.continueRun(woken.id);
   run.model.assertComplete();
+  expect(
+    (await run.runEntries(woken.id))
+      .filter((entry) => entry.type === "assistant.text" && entry.payload.toPerson)
+      .map((entry) => entry.payload.blocks),
+  ).toEqual([[{ kind: "text", text: `Found it: ${REPORT}` }]]);
 
   expect((await runs()).map(({ id, trigger, status }) => [id, trigger, status])).toEqual([
     [parentId, "user", "completed"],
     [child.id, "helper", "completed"],
     [userRunId, "user", "completed"],
+    [woken.id, "follow_up", "completed"],
   ]);
 });
 
-it("writes no report and wakes no one for a helper the user stopped", async () => {
+it("answers another user turn while a stopped helper cannot be destroyed, without delivering its report", async () => {
   const childAsked = Promise.withResolvers<void>();
   const releaseChild = Promise.withResolvers<void>();
-  const { run, runs, reports, childOf } = await fixture([
-    ...startedTurn,
-    {
-      async expect() {
-        childAsked.resolve();
-        await releaseChild.promise;
+  const { run, runs, reports, childOf } = await fixture(
+    [
+      ...startedTurn,
+      {
+        async expect() {
+          childAsked.resolve();
+          await releaseChild.promise;
+        },
+        response: { type: "text", text: REPORT },
       },
-      response: { type: "text", text: REPORT },
-    },
-  ]);
+      { expect() {}, response: say("Trains run every hour.") },
+      { expect() {}, response: { type: "text", text: recap } },
+    ],
+    undefined,
+    "dedicated",
+  );
   const parentId = await run.send("Book me a hotel in Lisbon.");
   await run.continueRun(parentId);
-  const childDone = run.continueRun((await childOf(parentId)).id);
+  const child = await childOf(parentId);
+  const childDone = run.continueRun(child.id);
   await childAsked.promise;
-  await stopThreadRuns(
-    run,
-    { spaceId: run.spaceId, userId: run.userId },
-    { kind: "bot", botId: run.bot.id, threadId: run.thread.id, bot: run.bot },
-  );
-  releaseChild.resolve();
-  await childDone;
+  const attempt = await run.prisma.attempt.findFirstOrThrow({ where: { runId: child.id } });
+  let destructionAvailable = false;
+  const destroy = run.provider.destroy.bind(run.provider);
+  const failedDestroy = vi.spyOn(run.provider, "destroy").mockImplementation((target, context) => {
+    if (target.attemptId === attempt.id && !destructionAvailable)
+      return Promise.reject(new Error("Helper destruction is unavailable"));
+    return destroy(target, context);
+  });
+  try {
+    await stopThreadRuns(
+      run,
+      { spaceId: run.spaceId, userId: run.userId },
+      { kind: "bot", botId: run.bot.id, threadId: run.thread.id, bot: run.bot },
+    );
+    releaseChild.resolve();
+    await childDone;
+    expect(await run.prisma.attempt.findUniqueOrThrow({ where: { id: attempt.id } })).toMatchObject(
+      {
+        workerState: "releasing",
+      },
+    );
+    const userRunId = await run.send("Also check trains.");
+    await run.continueRun(userRunId);
+    expect(await run.prisma.run.findUniqueOrThrow({ where: { id: userRunId } })).toMatchObject({
+      status: "completed",
+    });
+    expect(await run.runEntries(userRunId)).toContainEqual(
+      expect.objectContaining({
+        type: "assistant.text",
+        payload: expect.objectContaining({
+          toPerson: true,
+          blocks: [{ kind: "text", text: "Trains run every hour." }],
+        }),
+      }),
+    );
+    expect(await run.prisma.attempt.findUniqueOrThrow({ where: { id: attempt.id } })).toMatchObject(
+      {
+        workerState: "releasing",
+      },
+    );
+    destructionAvailable = true;
+    expect(
+      await run.lifecycle.reconcile(
+        { limit: 10 },
+        {
+          operationId: "helper-cleanup",
+          traceId: "helper-cleanup",
+          spaceId: run.spaceId,
+          userId: run.userId,
+          signal: new AbortController().signal,
+        },
+      ),
+    ).toEqual({ released: 1, awaitingEnsure: 0, failed: 0 });
+    expect(await run.prisma.attempt.findUniqueOrThrow({ where: { id: attempt.id } })).toMatchObject(
+      {
+        workerState: "released",
+      },
+    );
+    run.model.assertComplete();
+  } finally {
+    failedDestroy.mockRestore();
+    releaseChild.resolve();
+    await childDone;
+  }
 
   expect(await reports()).toEqual([]);
   expect((await runs()).map(({ trigger, status }) => [trigger, status])).toEqual([
     ["user", "completed"],
     ["helper", "cancelled"],
+    ["user", "completed"],
   ]);
 });
 
