@@ -1,22 +1,44 @@
 import { useLingui } from "@lingui/react/macro";
 import type { MessageBlock } from "@rakazo/contracts";
 import { buildWidgetDocument, parseWidgetHeightMessage } from "@rakazo/core/widget";
-import { Button, Dialog, DialogClose, DialogContent, DialogTitle, Surface } from "@rakazo/ui-web";
+import {
+  Button,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+  Skeleton,
+  Surface,
+} from "@rakazo/ui-web";
 import { Maximize2, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ArtifactTarget } from "../../lib/artifact-open";
 import { fetchArtifactBytes } from "../../lib/artifact-open";
+
+/** Stands in for a widget until its content has painted, at the frame's initial height. */
+function WidgetSkeleton({ className }: { className?: string }) {
+  return (
+    <div aria-hidden className={`flex h-48 flex-col gap-3 p-4 ${className ?? ""}`}>
+      <Skeleton className="h-5 w-2/5" />
+      <Skeleton className="h-14 w-full rounded-xl" />
+      <Skeleton className="h-14 w-full rounded-xl" />
+    </div>
+  );
+}
 
 function WidgetFrame({
   html,
   theme,
   title,
   fullscreen = false,
+  onReady,
 }: {
   html: string;
   theme: "light" | "dark";
   title: string;
   fullscreen?: boolean;
+  /** First height report: the widget's content has painted. */
+  onReady?: () => void;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const loads = useRef(0);
@@ -31,11 +53,13 @@ function WidgetFrame({
     const onMessage = (event: MessageEvent) => {
       if (event.source !== frame.current?.contentWindow) return;
       const measured = parseWidgetHeightMessage(event.data);
-      if (measured !== null) setHeight(Math.min(measured, 20_000));
+      if (measured === null) return;
+      setHeight(Math.min(measured, 20_000));
+      onReady?.();
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [fullscreen]);
+  }, [fullscreen, onReady]);
   return (
     <iframe
       ref={frame}
@@ -75,6 +99,8 @@ export function WidgetBlockView({
     { status: "loading" } | { status: "ready"; html: string } | { status: "error" }
   >({ status: "loading" });
   const [expanded, setExpanded] = useState(false);
+  const [painted, setPainted] = useState(false);
+  const markPainted = useCallback(() => setPainted(true), []);
   const [theme, setTheme] = useState<"light" | "dark">(() =>
     document.documentElement.dataset.theme === "light" ? "light" : "dark",
   );
@@ -106,7 +132,13 @@ export function WidgetBlockView({
     });
     return () => observer.disconnect();
   }, []);
-  if (state.status === "loading") return <Surface className="h-48 w-full" />;
+  if (state.status === "loading") {
+    return (
+      <Surface className="w-full overflow-hidden">
+        <WidgetSkeleton />
+      </Surface>
+    );
+  }
   if (state.status === "error") {
     return (
       <Surface className="p-4 text-meta text-destructive">{t`Could not load this file.`}</Surface>
@@ -115,7 +147,16 @@ export function WidgetBlockView({
   return (
     <>
       <Surface className="group relative w-full overflow-hidden">
-        <WidgetFrame key={block.artifactId} html={state.html} theme={theme} title={block.title} />
+        <div className={painted ? undefined : "opacity-0"}>
+          <WidgetFrame
+            key={block.artifactId}
+            html={state.html}
+            theme={theme}
+            title={block.title}
+            onReady={markPainted}
+          />
+        </div>
+        {painted ? null : <WidgetSkeleton className="absolute inset-x-0 top-0" />}
         <Button
           variant="secondary"
           size="icon-sm"

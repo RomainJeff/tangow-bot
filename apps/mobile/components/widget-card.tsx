@@ -1,8 +1,17 @@
 import type { MessageBlock } from "@rakazo/contracts";
 import { buildWidgetDocument, parseWidgetHeightMessage } from "@rakazo/core/widget";
 import { radii, sizes } from "@rakazo/ui-tokens";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Linking, Modal, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import Animated, {
+  cancelAnimation,
+  Easing,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
 import type { WebViewMessageEvent } from "react-native-webview";
 import WebView from "react-native-webview";
 import { mobileTokens } from "../lib/appearance";
@@ -18,7 +27,47 @@ function openWidgetLink(url: string) {
   if (url.startsWith("https:")) void Linking.openURL(url).catch(() => undefined);
 }
 
-function WidgetWebView({ html, fullscreen = false }: { html: string; fullscreen?: boolean }) {
+/** Stands in for a widget until its content has painted; pulses like the app's other loaders. */
+function WidgetSkeleton({ overlay = false }: { overlay?: boolean }) {
+  const tokens = mobileTokens();
+  const progress = useSharedValue(1);
+  const reducedMotion = useReducedMotion();
+  useEffect(() => {
+    cancelAnimation(progress);
+    if (reducedMotion) return;
+    progress.value = 0;
+    progress.value = withRepeat(
+      withTiming(1, { duration: 1400, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
+    );
+    return () => cancelAnimation(progress);
+  }, [progress, reducedMotion]);
+  const pulse = useAnimatedStyle(() => ({ opacity: 0.45 + progress.value * 0.55 }));
+  const block = { backgroundColor: tokens.muted, borderRadius: radii.card };
+  return (
+    <Animated.View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={[styles.skeleton, overlay ? styles.overlay : null, pulse]}
+    >
+      <View style={[block, { height: 20, width: "40%", borderRadius: radii.chip }]} />
+      <View style={[block, { height: 56 }]} />
+      <View style={[block, { height: 56 }]} />
+    </Animated.View>
+  );
+}
+
+function WidgetWebView({
+  html,
+  fullscreen = false,
+  onReady,
+}: {
+  html: string;
+  fullscreen?: boolean;
+  /** First height report: the widget's content has painted. */
+  onReady?: () => void;
+}) {
   const theme = useResolvedAppearance();
   const [height, setHeight] = useState(192);
   const frame = useRef<WebView>(null);
@@ -45,7 +94,9 @@ function WidgetWebView({ html, fullscreen = false }: { html: string; fullscreen?
       onMessage={(event: WebViewMessageEvent) => {
         if (fullscreen) return;
         const measured = parseWidgetHeightMessage(event.nativeEvent.data);
-        if (measured !== null) setHeight(Math.min(measured, 20_000));
+        if (measured === null) return;
+        setHeight(Math.min(measured, 20_000));
+        onReady?.();
       }}
       style={[styles.webview, fullscreen ? styles.fullscreen : { height, flex: 0 }]}
     />
@@ -62,6 +113,8 @@ export function WidgetCard({
   const { t } = useI18n();
   const tokens = mobileTokens();
   const [expanded, setExpanded] = useState(false);
+  const [painted, setPainted] = useState(false);
+  const markPainted = useCallback(() => setPainted(true), []);
   const [state, setState] = useState<
     { status: "loading" } | { status: "ready"; html: string } | { status: "error" }
   >({ status: "loading" });
@@ -83,7 +136,13 @@ export function WidgetCard({
       cancelled = true;
     };
   }, [botId, groupId, block.artifactId]);
-  if (state.status === "loading") return <Surface style={styles.loading} />;
+  if (state.status === "loading") {
+    return (
+      <Surface style={styles.card}>
+        <WidgetSkeleton />
+      </Surface>
+    );
+  }
   if (state.status === "error") {
     return (
       <Surface style={styles.error}>
@@ -96,7 +155,10 @@ export function WidgetCard({
   return (
     <>
       <Surface style={styles.card}>
-        <WidgetWebView key={block.artifactId} html={state.html} />
+        <View style={painted ? null : styles.hidden}>
+          <WidgetWebView key={block.artifactId} html={state.html} onReady={markPainted} />
+        </View>
+        {painted ? null : <WidgetSkeleton overlay />}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t("Open in full screen")}
@@ -144,7 +206,9 @@ export function WidgetCard({
 const styles = StyleSheet.create({
   webview: { backgroundColor: "transparent" },
   fullscreen: { flex: 1 },
-  loading: { height: 192, width: "100%" },
+  skeleton: { height: 192, gap: 12, padding: 16 },
+  overlay: { position: "absolute", top: 0, left: 0, right: 0 },
+  hidden: { opacity: 0 },
   error: { padding: 16 },
   card: { width: "100%", overflow: "hidden" },
   expand: {
