@@ -131,7 +131,7 @@ describe.skipIf(!databaseAvailable)("mail drafts in a worker run", () => {
       for (const address of ["anna@example.test", "ben@example.test"]) {
         const [call, ...rest] = sendsTo(third, address);
         expect(rest).toEqual([]);
-        expect(call).toContain("The user sent this message from the draft card.");
+        expect(call).toContain("The user sent this message from the draft card,");
       }
       expect(JSON.stringify(third?.messages)).not.toContain("paused: awaiting approval");
       expect(JSON.stringify(third?.messages)).not.toContain(
@@ -263,7 +263,7 @@ describe.skipIf(!databaseAvailable)("mail drafts in a worker run", () => {
             payload: {
               callId: "helper",
               replaces: stop!.id,
-              output: expect.stringContaining("The user sent this message from the draft card."),
+              output: expect.stringContaining("The user sent this message from the draft card,"),
             },
           },
         ]);

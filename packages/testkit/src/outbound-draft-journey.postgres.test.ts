@@ -85,7 +85,7 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
           {
             expect(request) {
               expect(JSON.stringify(request.messages)).toContain(
-                "The user sent this message from the draft card.",
+                "The user sent this message from the draft card,",
               );
               expect(JSON.stringify(request.messages)).toContain("Edited by me.");
               expect(JSON.stringify(request.messages)).not.toContain("paused: awaiting approval");
@@ -375,7 +375,7 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
           {
             expect(request) {
               const seen = JSON.stringify(request.messages);
-              expect(seen).toContain("The user sent this message from the draft card.");
+              expect(seen).toContain("The user sent this message from the draft card,");
             },
             response: reply("Sent."),
           },
