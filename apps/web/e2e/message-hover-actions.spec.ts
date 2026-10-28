@@ -1,6 +1,63 @@
 import { activeBotId, captureScreenshot, completeOnboarding, signup } from "./helpers";
 import { expect, type Locator, type Page, test } from "./test";
-import { finishedRuns, reshapeThreadPages, threadEntries } from "./thread-log";
+import {
+  at,
+  finishedRuns,
+  reshapeThreadPages,
+  runFinished,
+  runStarted,
+  showThread,
+  threadEntries,
+} from "./thread-log";
+
+test("widgets omit bubble hover actions", async ({ page }, testInfo) => {
+  await signup(page, `widget-hover-${Date.now()}@rakazo.test`, "password12", "Widget Hover");
+  await completeOnboarding(page);
+  const botId = activeBotId(page);
+  // Supply a widget artifact and transcript to exercise hover without an external model;
+  // HTTP caching does not affect toolbar visibility.
+  await page.route("**/rpc/artifacts/get", (route) =>
+    route.fulfill({
+      json: { json: { contentBase64: Buffer.from("<h1>Launch overview</h1>").toString("base64") } },
+    }),
+  );
+  await showThread(page, [
+    runStarted(botId, "widget-hover-text-run", 19, "widget-hover-trigger"),
+    {
+      id: "widget-hover-text",
+      ts: at(20),
+      type: "assistant.text",
+      botId,
+      runId: "widget-hover-text-run",
+      payload: { blocks: [{ kind: "text", text: "Here is the launch overview." }] },
+    },
+    runFinished(botId, "widget-hover-text-run", 20, "completed"),
+    runStarted(botId, "widget-hover-run", 21, "widget-hover-trigger"),
+    {
+      id: "widget-hover-card",
+      ts: at(21),
+      type: "assistant.text",
+      botId,
+      runId: "widget-hover-run",
+      payload: {
+        blocks: [{ kind: "widget", title: "Launch overview", artifactId: "widget-hover-artifact" }],
+      },
+    },
+    runFinished(botId, "widget-hover-run", 22, "completed"),
+  ]);
+  const textRow = page.locator('[data-message-id="widget-hover-text"]');
+  await revealHoverPill(textRow);
+  await expect(textRow.getByRole("button", { name: "Reply", exact: true })).toBeVisible();
+  const widgetRow = page.locator('[data-message-id="widget-hover-card"]');
+  await expect(
+    widgetRow.frameLocator("iframe").getByRole("heading", { name: "Launch overview" }),
+  ).toBeVisible();
+  await widgetRow.hover();
+  await expect(widgetRow.getByTestId("message-hover-rail")).toHaveCount(0);
+  await captureScreenshot(page, testInfo, "widget-without-hover-actions-desktop");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await captureScreenshot(page, testInfo, "widget-without-hover-actions-phone");
+});
 
 /** Submit from the Send control so an in-flight prior send cannot swallow Enter. */
 async function sendComposerMessage(page: Page, composer: Locator, text: string) {
