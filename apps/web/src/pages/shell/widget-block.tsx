@@ -19,9 +19,9 @@ import { fetchArtifactBytes } from "../../lib/artifact-open";
 function WidgetSkeleton({ className }: { className?: string }) {
   return (
     <div aria-hidden className={`flex h-48 flex-col gap-3 p-4 ${className ?? ""}`}>
-      <Skeleton className="h-5 w-2/5" />
-      <Skeleton className="h-14 w-full rounded-xl" />
-      <Skeleton className="h-14 w-full rounded-xl" />
+      <Skeleton className="h-5 w-2/5 bg-foreground/10" />
+      <Skeleton className="h-14 w-full rounded-xl bg-foreground/10" />
+      <Skeleton className="h-14 w-full rounded-xl bg-foreground/10" />
     </div>
   );
 }

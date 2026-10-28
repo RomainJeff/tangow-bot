@@ -44,7 +44,7 @@ function WidgetSkeleton({ overlay = false }: { overlay?: boolean }) {
     return () => cancelAnimation(progress);
   }, [progress, reducedMotion]);
   const pulse = useAnimatedStyle(() => ({ opacity: 0.45 + progress.value * 0.55 }));
-  const block = { backgroundColor: tokens.muted, borderRadius: radii.card };
+  const block = { backgroundColor: tokens.foreground, opacity: 0.1, borderRadius: radii.card };
   return (
     <Animated.View
       accessibilityElementsHidden

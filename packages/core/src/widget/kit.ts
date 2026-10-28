@@ -4,6 +4,8 @@
  * `--radius` as shadcn does; only generic semantic tokens are used.
  */
 export const WIDGET_KIT_CSS = `
+/* The widget sits on the message surface, where the app's hairline --border vanishes in dark. */
+:root { --border: var(--outline); }
 * { box-sizing: border-box; }
 body {
   display: flow-root; margin: 0; padding: 16px; background: transparent; color: var(--foreground);
