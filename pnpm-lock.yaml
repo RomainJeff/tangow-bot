@@ -50,6 +50,9 @@ importers:
       '@rakazo/adapters':
         specifier: workspace:*
         version: link:../../packages/adapters
+      zod:
+        specifier: 4.6.2
+        version: 4.6.2
     devDependencies:
       '@modelcontextprotocol/sdk':
         specifier: 1.30.0

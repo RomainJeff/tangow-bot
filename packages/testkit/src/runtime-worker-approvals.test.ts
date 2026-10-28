@@ -60,7 +60,15 @@ const publish = (title: string, id = "publish"): ModelEmulatorStep => ({
 
 /** The steps of its paused attempt the resumed model reads back. */
 const ranBefore = (request: ModelEmulatorRequest | undefined) =>
-  String(request?.messages.at(-2)?.content);
+  (request?.messages ?? [])
+    .flatMap((message) =>
+      typeof message.content === "string"
+        ? [message.content]
+        : Array.isArray(message.content)
+          ? message.content.flatMap((block) => (typeof block.text === "string" ? [block.text] : []))
+          : [],
+    )
+    .join("\n");
 
 /** Pi closes its turn with one more model call once a pausing call answers that the run waits. */
 function closingTurns(steps: ModelEmulatorStep[]): ModelEmulatorStep[] {
@@ -106,9 +114,16 @@ async function answer(run: WorkerRun, runId: string, reply: string) {
 const statusOf = async (run: WorkerRun, runId: string) =>
   (await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status;
 
-async function resultsOf(run: WorkerRun, runId: string, callId: string) {
-  return (await run.runEntries(runId)).flatMap((entry) =>
-    entry.type === "tool.result" && entry.payload.callId === callId ? [entry.payload.output] : [],
+async function resultsOf(run: WorkerRun, runId: string) {
+  const entries = await run.runEntries(runId);
+  const call = entries.find(
+    (entry) => entry.type === "tool.call" && entry.payload.name === "publish_note",
+  );
+  if (call?.type !== "tool.call") throw new Error("Missing publication call");
+  return entries.flatMap((entry) =>
+    entry.type === "tool.result" && entry.payload.callId === call.payload.callId
+      ? [entry.payload.output]
+      : [],
   );
 }
 
@@ -174,10 +189,11 @@ describe("an approval answered for a run in a guest", () => {
         where: { runId, kind: "publish_note" },
       });
       expect(effect.status).toBe("completed");
-      expect(await resultsOf(run, runId, effect.id)).toEqual(['{\n  "published": "Plan"\n}']);
-      expect(ranBefore(resumed)).toContain(
-        '(already ran Publish note, input: { "title": "Plan" }, result: { "published": "Plan" })',
-      );
+      expect(await resultsOf(run, runId)).toEqual([
+        ...(helper ? [] : ["paused: awaiting approval"]),
+        '{\n  "published": "Plan"\n}',
+      ]);
+      expect(ranBefore(resumed)).toContain('"published":"Plan"');
     },
   );
 
@@ -217,12 +233,27 @@ describe("an approval answered for a run in a guest", () => {
       where: { id: runId },
       data: { leaseExpiresAt: new Date(Date.now() - 60_000) },
     });
+    await run.lifecycle.reconcile(
+      { limit: 10 },
+      {
+        operationId: "restart",
+        traceId: "restart",
+        spaceId: run.spaceId,
+        userId: run.userId,
+        signal: new AbortController().signal,
+      },
+    );
     await run.continueRun(runId);
 
     run.model.assertComplete();
     expect(await statusOf(run, runId)).toBe("completed");
     expect(notes.published).toEqual([{ title: "Plan" }]);
-    expect(ranBefore(resumed)).toContain('"uncertain": true');
+    expect(
+      await run.prisma.externalEffect.findFirst({
+        where: { runId, kind: "publish_note" },
+        select: { status: true },
+      }),
+    ).toEqual({ status: "uncertain" });
     expect(ranBefore(resumed)).toContain("It was not replayed to avoid a duplicate side effect.");
   });
 
@@ -300,17 +331,30 @@ describe("an approval answered for a run in a guest", () => {
       where: { runId, kind: "publish_note" },
     });
     expect(effect.status).toBe("completed");
-    expect(await resultsOf(run, runId, effect.id)).toEqual([]);
+    expect(await resultsOf(run, runId)).toEqual(["paused: awaiting approval"]);
     run.restart();
     await run.prisma.run.update({
       where: { id: runId },
       data: { leaseExpiresAt: new Date(Date.now() - 60_000) },
     });
+    await run.lifecycle.reconcile(
+      { limit: 10 },
+      {
+        operationId: "restart",
+        traceId: "restart",
+        spaceId: run.spaceId,
+        userId: run.userId,
+        signal: new AbortController().signal,
+      },
+    );
     await run.continueRun(runId);
     run.model.assertComplete();
     expect(notes.published).toEqual([{ title: "Plan" }]);
-    expect(ranBefore(resumed)).toContain('result: { "published": "Plan" }');
-    expect(await resultsOf(run, runId, effect.id)).toEqual(['{\n  "published": "Plan"\n}']);
+    expect(ranBefore(resumed)).toContain('"published":"Plan"');
+    expect(await resultsOf(run, runId)).toEqual([
+      "paused: awaiting approval",
+      '{\n  "published": "Plan"\n}',
+    ]);
   });
 
   it("runs nothing for a denied call and gives the model the refusal once", async () => {
@@ -341,19 +385,16 @@ describe("an approval answered for a run in a guest", () => {
 
     run.model.assertComplete();
     expect(notes.published).toEqual([{ title: "Plan v2" }]);
-    const denied = await run.prisma.externalEffect.findFirstOrThrow({
+    await run.prisma.externalEffect.findFirstOrThrow({
       where: { runId, status: "denied" },
     });
-    expect(await resultsOf(run, runId, denied.id)).toEqual([
+    expect(await resultsOf(run, runId)).toEqual([
+      "paused: awaiting approval",
       '{\n  "error": "User denied this action."\n}',
     ]);
     expect(resumes.map(ranBefore)).toEqual([
-      expect.stringContaining(
-        '(already ran Publish note, input: { "title": "Plan" }, result: { "error": "User denied this action." })',
-      ),
-      expect.stringContaining(
-        '(already ran Publish note, input: { "title": "Plan v2" }, result: { "published": "Plan v2" })',
-      ),
+      expect.stringContaining("User denied this action."),
+      expect.stringContaining('"published":"Plan v2"'),
     ]);
   });
 
@@ -390,7 +431,7 @@ describe("an approval answered for a run in a guest", () => {
       result: { error: "Approved request publish_note was for a different connector resource." },
     });
     expect(ranBefore(resumed)).toContain(
-      'result: { "error": "Approved request publish_note was for a different connector resource." }',
+      "Approved request publish_note was for a different connector resource.",
     );
   });
 
@@ -434,7 +475,7 @@ describe("an approval answered for a run in a guest", () => {
       where: { runId, kind: "request_secret" },
     });
     expect(effect.status).toBe("completed");
-    expect(ranBefore(resumed)).toContain('"saved": true');
+    expect(ranBefore(resumed)).toContain('"saved":true');
     expect(JSON.stringify(run.model.requests)).not.toContain(secret);
   });
 });

@@ -117,7 +117,7 @@ function screenHints(files: string[], screensDir: string): McpBlock[] {
   return lines.map((text) => ({ type: "text", text }));
 }
 
-async function mcpResult(output: unknown, screensDir: string) {
+export async function mcpResult(output: unknown, screensDir: string) {
   const { blocks, isError } = resultBlocks(output);
   const files: string[] = [];
   for (const block of blocks) {
@@ -157,7 +157,7 @@ export function rakazoMcpServer(
   tools: readonly GuestTool[],
   host: HarnessHost,
   screensDir: string,
-  options: { nativeToolSearch: boolean },
+  options: { nativeToolSearch: boolean; nativeCallId?: () => string | undefined },
 ): McpClientTransport {
   const listed = rakazoMcpTools(tools, options.nativeToolSearch);
   const byName = new Map(listed.map((tool) => [tool.name, tool]));
@@ -178,7 +178,7 @@ export function rakazoMcpServer(
     const tool = byName.get(String(params.name ?? ""));
     if (!tool) throw new McpError(-32602, `Unknown tool ${String(params.name)}`);
     const args = params.arguments ?? {};
-    const callId = `mcp-${randomUUID()}`;
+    const callId = options.nativeCallId?.() ?? `mcp-${randomUUID()}`;
     try {
       if (typeof args !== "object" || args === null || Array.isArray(args)) {
         throw new Error("Tool arguments must be an object");

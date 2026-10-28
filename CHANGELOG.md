@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
+- On web, desktop and mobile, paused worker runs resume with their native session, loaded tools and complete tool results after a question, approval, takeover or restart, while keeping current permissions.
+
 - On mobile, interactive artifacts no longer bounce when dragged, in the thread or full screen.
 - On web, desktop and mobile, typing a message while a bot replies replaces Stop with Send, preventing accidental stops when sending a follow-up.
 - On web, desktop and mobile, bots can publish widgets without the tool rejecting their content before display.

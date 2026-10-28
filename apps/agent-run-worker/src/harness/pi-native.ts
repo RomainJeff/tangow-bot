@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -25,14 +27,21 @@ import {
 } from "@rakazo/adapters/runtime-worker/pi-ai";
 import { skillReadName } from "@rakazo/adapters/volume-skills";
 import type { DoneBody, GuestHarness, HarnessHost } from "../harness.js";
-import { rakazoMcpTools } from "../rakazo-mcp.js";
+import { mcpResult, rakazoMcpTools } from "../rakazo-mcp.js";
 import { durableBashTool } from "./durable-bash.js";
 import { exactToolSearchExtension } from "./exact-tool-search.js";
 import { relayModelRuntime } from "./pi-session.js";
+import { capturePiSnapshot, restorePiSnapshot } from "./pi-snapshot.js";
 import { rakazoMcpTransport } from "./rakazo-mcp.js";
 
 type SteeringMessage = Extract<ReplyFinal, { type: "steering" }>["messages"][number];
 type TranscriptMessage = Extract<GuestBody, { type: "transcript" }>["messages"][number];
+
+function callOccurrenceId(messageId: string, providerId: string) {
+  return createHash("sha256")
+    .update(JSON.stringify([messageId, providerId]))
+    .digest("hex");
+}
 
 function stopIfCancelled(signal: AbortSignal) {
   if (signal.aborted) throw new Error("The run was cancelled");
@@ -63,10 +72,10 @@ function rakazoExtension(
   cwd: string,
   agent: string,
   controllerNames: ReadonlyMap<string, string>,
+  seenIds: string[],
   steer: (message: SteeringMessage) => void,
   nudge: (text: string, mode: "steer" | "followUp") => void,
 ) {
-  const seenIds: string[] = [];
   // The same reminders as Rakazo's own loop, worded with the name this model knows.
   const textPolicy = createAgentTextPolicy({
     ...run,
@@ -133,10 +142,20 @@ export const piNativeHarness: GuestHarness = {
 
   async run({ run, cwd, skillsDir, outputRoot, agent = "root" }, host): Promise<DoneBody> {
     stopIfCancelled(host.signal);
+    const start = run.start;
+    const durable = agent === "root" && start !== undefined;
+    const restored = start?.mode === "resume" ? restorePiSnapshot(start.snapshot, cwd) : undefined;
+    const sessionManager = restored?.manager ?? SessionManager.inMemory(cwd);
+    const seenIds = restored?.steeringIds ?? [];
+    const deliveredEvents = start?.mode === "resume" ? [...start.snapshot.deliveredEvents] : [];
+    const nativeCall = new AsyncLocalStorage<string>();
     const model = guestRuntimeModel(relayedModel(run.model));
     const modelRuntime = await relayModelRuntime(
       model,
-      piAiProviderStream((body, onPart, signal) => host.model({ ...body, agent }, onPart, signal)),
+      piAiProviderStream(async (body, onPart, signal) => {
+        await save();
+        return host.model({ ...body, agent }, onPart, signal);
+      }),
     );
     // Pi's config home for this attempt only: nothing from the image or an earlier run loads.
     const agentDir = await mkdtemp(path.join(tmpdir(), "rakazo-pi-"));
@@ -144,12 +163,41 @@ export const piNativeHarness: GuestHarness = {
     const settingsManager = SettingsManager.inMemory(PI_SETTINGS, {
       projectTrusted: false,
     });
+    let revision = start?.mode === "resume" ? start.snapshot.revision : 0;
     let session: AgentSession | undefined;
+    let saveQueue = Promise.resolve();
+    let persistenceError: unknown;
+    const save = () => {
+      saveQueue = saveQueue.then(async () => {
+        if (persistenceError) throw persistenceError;
+        if (!durable || host.paused()) return;
+        try {
+          await host.decide(
+            {
+              type: "snapshot.save",
+              snapshot: capturePiSnapshot(
+                sessionManager,
+                session?.getActiveToolNames() ?? [],
+                ++revision,
+                seenIds,
+                run.resumeEvent ?? run.prompt,
+                deliveredEvents,
+              ),
+            },
+            "recorded",
+          );
+        } catch (error) {
+          persistenceError = error;
+          throw error;
+        }
+      });
+      return saveQueue;
+    };
     let reportFailed: { error: unknown } | undefined;
     let lastAssistant: { stopReason?: unknown; errorMessage?: unknown } | undefined;
     // Each message is the controller's before the loop acts on it, so a call is logged before it runs.
     const report = async (message: TranscriptMessage) => {
-      if (reportFailed || host.signal.aborted) return;
+      if (reportFailed || persistenceError || host.signal.aborted) return;
       try {
         await host.decide(
           { type: "transcript", agent, dialect: "pi-ai", messages: [message] },
@@ -166,7 +214,9 @@ export const piNativeHarness: GuestHarness = {
       const controllerNames = new Map<string, string>();
       const listed = rakazoMcpTools(controllerTools, true);
       const byLabel = new Map(listed.map((tool) => [`rakazo/${tool.name}`, tool]));
-      const projected = projectPiAi(run.history, run.prompt, model, run.sourceMessageId);
+      const projected = restored
+        ? []
+        : projectPiAi(run.history, run.prompt, model, run.sourceMessageId);
       const replayCalls = new Set(
         projected.flatMap((message) =>
           message.role === "assistant"
@@ -220,6 +270,7 @@ export const piNativeHarness: GuestHarness = {
                       host.callTool(agent, name, args, callId),
                   },
                   cwd,
+                  () => nativeCall.getStore(),
                 ),
             })({
               ...pi,
@@ -230,7 +281,23 @@ export const piNativeHarness: GuestHarness = {
                   assignedNames.set(tool.name, definition.name);
                   controllerNames.set(definition.name, tool.catalog?.via ?? tool.name);
                 }
-                pi.registerTool(definition);
+                pi.registerTool({
+                  ...definition,
+                  ...(restored?.activeTools.includes(definition.name)
+                    ? { exposure: "direct" as const }
+                    : {}),
+                  execute: (callId, ...args) => {
+                    const message = sessionManager
+                      .getBranch()
+                      .findLast(
+                        (entry) => entry.type === "message" && entry.message.role === "assistant",
+                      );
+                    if (!message) throw new Error("A controller call requires its native message");
+                    return nativeCall.run(callOccurrenceId(message.id, callId), () =>
+                      definition.execute(callId, ...args),
+                    );
+                  },
+                });
               },
             }),
           (pi) => {
@@ -268,6 +335,13 @@ export const piNativeHarness: GuestHarness = {
             });
           },
           (pi) => {
+            pi.on("tool_call", async () => {
+              try {
+                await save();
+              } catch {
+                return { block: true, reason: "Native state could not be persisted" };
+              }
+            });
             pi.on("message_end", async (event) => {
               const message = structuredClone(event.message);
               if (message.role === "assistant") {
@@ -295,6 +369,7 @@ export const piNativeHarness: GuestHarness = {
             cwd,
             agent,
             controllerNames,
+            seenIds,
             (message) =>
               session?.agent.steer({
                 role: "user",
@@ -314,7 +389,6 @@ export const piNativeHarness: GuestHarness = {
       // A bot's volume is not a trusted project: its `.pi/` never loads.
       await loader.reload({ resolveProjectTrust: async () => false });
 
-      const sessionManager = SessionManager.inMemory(cwd);
       for (const message of projected) {
         sessionManager.appendMessage(message);
       }
@@ -346,14 +420,179 @@ export const piNativeHarness: GuestHarness = {
           onError: (error) => console.warn("pi-native.extension_error", error.event, error.error),
         });
         stopIfCancelled(host.signal);
-        await active.prompt(run.prompt, {
-          expandPromptTemplates: false,
-          images: piImages(run.images),
-        });
+        if (restored) {
+          const allowedNative = new Set(
+            run.tools.filter((tool) => tool.where === "guest").map((tool) => tool.name),
+          );
+          const available = new Set(
+            active
+              .getAllTools()
+              .map((tool) => tool.name)
+              .filter(
+                (name) =>
+                  allowedNative.has(name) ||
+                  controllerNames.has(name) ||
+                  (name === "tool_search" &&
+                    controllerTools.some((tool) => typeof tool.catalog === "object")),
+              ),
+          );
+          active.setActiveToolsByName(restored.activeTools.filter((name) => available.has(name)));
+          const callIds = new Set(
+            sessionManager
+              .getBranch()
+              .flatMap((entry) =>
+                entry.type === "message" && entry.message.role === "assistant"
+                  ? entry.message.content.flatMap((block) =>
+                      block.type === "toolCall" ? [callOccurrenceId(entry.id, block.id)] : [],
+                    )
+                  : [],
+              ),
+          );
+          const pending = new Map<string, { id: string; name: string }>();
+          const openByProviderId = new Map<string, string>();
+          for (const entry of sessionManager.buildSessionProjection().entries) {
+            for (const message of entry.messages) {
+              if (message.role === "assistant") {
+                for (const block of message.content) {
+                  if (block.type !== "toolCall") continue;
+                  const id = callOccurrenceId(entry.sourceEntry.id, block.id);
+                  pending.set(id, block);
+                  openByProviderId.set(block.id, id);
+                }
+              } else if (message.role === "toolResult") {
+                const id = openByProviderId.get(message.toolCallId);
+                if (id) pending.delete(id);
+                openByProviderId.delete(message.toolCallId);
+              }
+            }
+          }
+          if (
+            start?.mode === "resume" &&
+            start.receipts.some(
+              (receipt) => receipt.outcome.kind === "paused" && !pending.has(receipt.callId),
+            )
+          )
+            throw new Error("Paused receipt is missing its native call");
+          const { receipts } = await host.decide({ type: "snapshot.resolve" }, "snapshot.receipts");
+          for (const [callId, block] of pending) {
+            const receipt = receipts.find((item) => item.callId === callId);
+            const result =
+              receipt?.outcome.kind === "result"
+                ? await mcpResult(receipt.outcome.output, cwd)
+                : {
+                    content: [
+                      {
+                        type: "text" as const,
+                        text:
+                          receipt || !block.name.startsWith(RAKAZO_TOOL_PREFIX)
+                            ? "The interrupted call has an unknown outcome. It was not replayed."
+                            : "This call was not started before interruption. It was not replayed.",
+                      },
+                    ],
+                    isError: true,
+                  };
+            sessionManager.appendMessage({
+              role: "toolResult",
+              toolCallId: block.id,
+              toolName: block.name,
+              content: result.content.flatMap<
+                { type: "text"; text: string } | { type: "image"; data: string; mimeType: string }
+              >((item) =>
+                item.type === "text" && typeof item.text === "string"
+                  ? [{ type: "text" as const, text: item.text }]
+                  : item.type === "image" &&
+                      typeof item.data === "string" &&
+                      typeof item.mimeType === "string"
+                    ? [{ type: "image" as const, data: item.data, mimeType: item.mimeType }]
+                    : [],
+              ),
+              isError:
+                result.isError || (receipt?.outcome.kind === "result" && receipt.outcome.isError),
+              timestamp: Date.now(),
+            });
+          }
+          active.agent.state.messages = sessionManager.buildSessionContext().messages;
+          for (const receipt of receipts) {
+            const alreadyDelivered = sessionManager
+              .getEntries()
+              .some(
+                (entry) =>
+                  entry.type === "custom_message" &&
+                  entry.customType === "rakazo.controller-result" &&
+                  entry.details &&
+                  typeof entry.details === "object" &&
+                  "callId" in entry.details &&
+                  entry.details.callId === receipt.callId,
+              );
+            if (
+              alreadyDelivered ||
+              callIds.has(receipt.callId) ||
+              receipt.outcome.kind !== "result"
+            )
+              continue;
+            await active.sendCustomMessage({
+              customType: "rakazo.controller-result",
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({ tool: receipt.name, outcome: receipt.outcome }),
+                },
+              ],
+              display: false,
+              details: { callId: receipt.callId },
+            });
+          }
+          for (const event of run.resumeEvents ?? []) {
+            if (deliveredEvents.includes(event.id)) continue;
+            await active.sendCustomMessage({
+              customType: "rakazo.event",
+              content: event.text,
+              display: false,
+              details: { eventId: event.id },
+            });
+            deliveredEvents.push(event.id);
+          }
+          const steering = await host.decide(
+            { type: "steering.claim", seenIds: [...seenIds] },
+            "steering",
+          );
+          for (const message of steering.messages) {
+            seenIds.push(message.id);
+            await active.sendCustomMessage({
+              customType: "rakazo.steering",
+              content: [{ type: "text", text: message.text }, ...piImages(message.images ?? [])],
+              display: false,
+              details: { steeringId: message.id },
+            });
+          }
+          await active.sendCustomMessage(
+            {
+              customType: "rakazo.resume",
+              content: [
+                {
+                  type: "text",
+                  text:
+                    run.resumeEvent && run.resumeEvent !== restored.input
+                      ? run.resumeEvent
+                      : "The same run resumed after interruption. Controller call outcomes have been reconciled.",
+                },
+              ],
+              display: false,
+              details: { resumed: true },
+            },
+            { triggerTurn: true },
+          );
+        } else {
+          await active.prompt(run.prompt, {
+            expandPromptTemplates: false,
+            images: piImages(run.images),
+          });
+        }
       } finally {
         host.signal.removeEventListener("abort", abort);
       }
       stopIfCancelled(host.signal);
+      if (persistenceError) throw persistenceError;
       if (reportFailed) throw reportFailed.error;
       if (lastAssistant?.stopReason === "error") {
         throw new Error(String(lastAssistant.errorMessage ?? "The model call failed"));

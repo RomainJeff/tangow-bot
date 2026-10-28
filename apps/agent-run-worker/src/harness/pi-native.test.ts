@@ -1,11 +1,13 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { GuestRunInput } from "@rakazo/adapter-kit";
 import { builtinAgentTools } from "@rakazo/adapters";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { HarnessHost } from "../harness.js";
 import { piNativeHarness } from "./pi-native.js";
+import { capturePiSnapshot } from "./pi-snapshot.js";
 
 let dir: string;
 beforeEach(async () => {
@@ -316,4 +318,72 @@ it("returns a controller tool result that arrives after pi's 60 s request defaul
   } finally {
     vi.useRealTimers();
   }
+});
+
+it("uses the compacted active native branch, fresh instructions and current native permissions on the first resumed request", async () => {
+  const manager = SessionManager.inMemory(dir);
+  manager.appendMessage({ role: "user", content: "Old material", timestamp: 1 });
+  const retained = manager.appendMessage({
+    role: "user",
+    content: "Retained material",
+    timestamp: 2,
+  });
+  manager.appendCompaction("Compacted native summary", retained, 10000);
+  const leaf = manager.appendMessage({ role: "user", content: "Active branch", timestamp: 3 });
+  manager.appendMessage({ role: "user", content: "Abandoned branch", timestamp: 4 });
+  manager.branch(leaf);
+  const { host, requests } = recordingHost(new AbortController().signal);
+  host.decide = (async (_body, expected) =>
+    expected === "snapshot.receipts"
+      ? { type: "snapshot.receipts", receipts: [] }
+      : expected === "steering"
+        ? { type: "steering", messages: [] }
+        : { type: "recorded" }) as HarnessHost["decide"];
+  host.model = async (body, onPart) => {
+    requests.push(body);
+    onPart({
+      type: "model.event",
+      event: {
+        type: "done",
+        reason: "stop",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "Done." }],
+          api: "openai-completions",
+          provider: "openai-compatible",
+          model: "offline-fixture",
+          stopReason: "stop",
+          timestamp: 0,
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+        },
+      },
+    });
+    return { type: "model.end" };
+  };
+  await runPi(host, {
+    run: {
+      ...run,
+      instructions: "Fresh loader instructions",
+      start: {
+        mode: "resume",
+        snapshot: capturePiSnapshot(manager, ["bash"], 1, [], "Original task"),
+        receipts: [],
+      },
+    },
+  });
+  expect(requests).toHaveLength(1);
+  const request = JSON.stringify(requests[0]);
+  expect(request).toContain("Compacted native summary");
+  expect(request).toContain("Active branch");
+  expect(request).toContain("Fresh loader instructions");
+  expect(request).not.toContain("Abandoned branch");
+  expect(request).not.toContain("Reply briefly.");
+  expect(request).not.toContain('"name":"bash"');
 });

@@ -2,7 +2,7 @@ import type { HarnessDeclaration } from "./worker-protocol.js";
 
 export const PI_NATIVE_HARNESS: HarnessDeclaration = {
   name: "pi-native",
-  capabilities: ["native-loop", "steering", "subagents"],
+  capabilities: ["native-loop", "steering", "subagents", "resume"],
 };
 
 /** What a worker harness calls a Rakazo tool: the controller's MCP server is named `rakazo`. */

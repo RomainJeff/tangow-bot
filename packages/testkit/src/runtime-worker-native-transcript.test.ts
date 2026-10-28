@@ -62,17 +62,6 @@ async function toolLog(run: WorkerRun, runId: string, outputs = false) {
     );
 }
 
-const interrupted = (tool: string) =>
-  `The ${tool} call was interrupted, so its outcome is unknown. It was not replayed; check the state before retrying.`;
-
-/** The lines of the run's earlier work a retried attempt reads back, before its prompt. */
-const earlierWork = (request: ModelEmulatorRequest | undefined) =>
-  (request?.messages ?? []).flatMap((message) => {
-    const text = typeof message.content === "string" ? message.content : "";
-    const work = /^<assistant_turn>\n([\s\S]*)\n<\/assistant_turn>$/.exec(text)?.[1];
-    return work ? work.split("\n") : [];
-  });
-
 it("reminds a model that ended on private text to send it, so the person reads the answer", async () => {
   const run = await fixture([
     { expect() {}, response: { type: "text", text: "Paris." } },
@@ -121,9 +110,15 @@ it("shows the next attempt a native call whose guest died during it as unknown, 
   run.model.assertComplete();
   expect(await probed.lines()).toEqual(["ran"]);
   expect(await toolLog(run, runId)).toEqual(["call bash slow", "result slow"]);
-  expect(earlierWork(retried)).toEqual([
-    `(already ran Bash, input: { "command": "${probed.command("; sleep 30")}" }, result: ${interrupted("bash")})`,
-  ]);
+  expect(retried?.messages).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        role: "tool",
+        tool_call_id: "slow",
+        content: expect.stringContaining("unknown outcome"),
+      }),
+    ]),
+  );
 });
 
 it("logs native and controller calls along the session in the order the harness made them", async () => {
@@ -147,13 +142,15 @@ it("logs native and controller calls along the session in the order the harness 
   await run.continueRun(runId);
 
   run.model.assertComplete();
-  expect(
-    (await toolLog(run, runId)).map((line) => line.replace(/ mcp-[\w-]+$/, " (controller)")),
-  ).toEqual([
+  const controllerCall = (await run.runEntries(runId)).find(
+    (entry) => entry.type === "tool.call" && entry.payload.name === "scratchpad_add",
+  );
+  if (controllerCall?.type !== "tool.call") throw new Error("Missing scratchpad call");
+  expect(await toolLog(run, runId)).toEqual([
     "call bash first",
     "result first",
-    "call scratchpad_add (controller)",
-    "result (controller)",
+    `call scratchpad_add ${controllerCall.payload.callId}`,
+    `result ${controllerCall.payload.callId}`,
     "call bash second",
     "result second",
   ]);
@@ -256,6 +253,7 @@ it("refuses a harness that reports its own call under a controller call's id", a
       let forged = false;
       return pi.run(start, {
         signal: host.signal,
+        paused: () => host.paused(),
         emit: (body) => host.emit(body),
         model: (body, onPart, signal) => host.model(body, onPart, signal),
         callTool: (agent, name, args, callId) => host.callTool(agent, name, args, callId),

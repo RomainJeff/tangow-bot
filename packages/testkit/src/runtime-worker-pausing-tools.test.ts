@@ -230,7 +230,7 @@ describe("pausing tools a worker harness leaves to the controller", () => {
       {
         kind: "agent_tool_result",
         content: [{ type: "text", text: "Waiting for protected input." }],
-        details: { secret: "paused" },
+        details: { secret: "paused", effectId: expect.any(String) },
         terminate: true,
       },
     ]);
