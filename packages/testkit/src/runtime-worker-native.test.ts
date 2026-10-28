@@ -632,6 +632,117 @@ describe("the pi-native harness through the controller", () => {
     },
   );
 
+  describe("a new attempt of a run that loaded deferred tools", () => {
+    const schema = { type: "object", properties: { title: { type: "string" } } };
+    const names = ["called_note", "searched_note", "untouched_note"];
+    const tools: AgentRunRequest["tools"] = [
+      {
+        name: "mcp_execute_tool",
+        description: "Execute a connector tool",
+        inputSchema: schema,
+        route: { connectorId: "notes", toolName: "__catalog_execute" },
+        catalog: [...names, ...Array.from({ length: 27 }, (_, i) => `lookup_${i}`)].map(
+          (name, i) => ({
+            id: `notes:${i}`,
+            tool: { name, description: name, inputSchema: schema },
+          }),
+        ),
+      },
+    ];
+    const declared = (request: ModelEmulatorRequest) =>
+      (request.tools ?? []).map((tool) => tool.function.name);
+    const earlier = (calls: { id: string; name: string; args: object; output: string }[]) => [
+      { role: "user" as const, content: "Work on my notes." },
+      {
+        role: "assistant" as const,
+        content: "",
+        parts: [{ type: "toolCalls" as const, calls }],
+      },
+    ];
+
+    it("declares the catalog tool its history called, from the first request", async () => {
+      const executeTool = vi.fn(async () => "published-on-controller");
+      await nativeRun(
+        [
+          {
+            expect(request) {
+              expect(declared(request)).toContain("mcp__rakazo__called_note");
+              expect(declared(request)).not.toContain("mcp__rakazo__untouched_note");
+              expect(declared(request)).not.toContain("mcp__rakazo__searched_note");
+            },
+            response: {
+              type: "tool",
+              id: "again",
+              name: "mcp__rakazo__called_note",
+              arguments: { title: "Plan" },
+            },
+          },
+          { expect() {}, response: { type: "text", text: "Done." } },
+        ],
+        {
+          tools,
+          executeTool,
+          history: earlier([
+            {
+              id: "prior",
+              name: "mcp_execute_tool",
+              args: { id: "notes:0", arguments: { title: "Earlier" } },
+              output: "previous-result",
+            },
+          ]),
+        },
+      );
+      expect(executeTool).toHaveBeenCalledTimes(1);
+      expect(executeTool.mock.calls[0]?.slice(0, 2)).toEqual([
+        "mcp_execute_tool",
+        { id: "notes:0", arguments: { title: "Plan" } },
+      ]);
+    });
+
+    it("declares a tool its history only loaded through tool_search", async () => {
+      let result = "";
+      await nativeRun(
+        [
+          {
+            expect() {},
+            response: {
+              type: "tool",
+              id: "search",
+              name: "tool_search",
+              arguments: { query: "searched_note", limit: 1 },
+            },
+          },
+          {
+            expect(request) {
+              result = String(request.messages.find((m) => m.tool_call_id === "search")?.content);
+            },
+            response: { type: "text", text: "Found it." },
+          },
+        ],
+        { tools },
+      );
+      expect(result).toContain("Loaded 1 tool");
+      await nativeRun(
+        [
+          {
+            expect(request) {
+              expect(declared(request)).toContain("mcp__rakazo__searched_note");
+              expect(declared(request)).not.toContain("mcp__rakazo__called_note");
+              expect(declared(request)).not.toContain("mcp__rakazo__untouched_note");
+            },
+            response: { type: "text", text: "Done." },
+          },
+        ],
+        {
+          tools,
+          history: earlier([
+            { id: "prior", name: "tool_search", args: { query: "searched_note" }, output: result },
+          ]),
+        },
+      );
+    });
+  });
+
   it.each(["completed", "unsaved", "paused"] as const)(
     "runs a real native helper in its own session and settles its parent: %s",
     async (outcome) => {

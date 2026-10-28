@@ -7,6 +7,18 @@ import type {
 import { createToolSearchExtension } from "@earendil-works/pi-coding-agent";
 import { RAKAZO_TOOL_PREFIX } from "@rakazo/adapter-kit";
 
+/**
+ * The tools a `tool_search` result reports loading. History keeps only the result's text, not its
+ * `details.loaded`, so this reads the bullet lines that `Loaded N tools` lists below.
+ */
+export function loadedToolNames(resultText: string): string[] {
+  if (!resultText.startsWith("Loaded ")) return [];
+  return resultText.split("\n").flatMap((line) => {
+    const end = line.indexOf(":");
+    return line.startsWith("- ") && end > 2 ? [line.slice(2, end)] : [];
+  });
+}
+
 export function exactToolSearchExtension(
   resolveName: (term: string) => string = (term) => term,
 ): ExtensionFactory {

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-28
+
+#### Fixed
+
+- A bot that resumes after you answer its card, a question or a takeover can again use the app tools it had loaded, instead of being unable to continue.
+
 ### 2026-10-27
 
 #### Added
