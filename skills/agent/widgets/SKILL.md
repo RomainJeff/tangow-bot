@@ -54,7 +54,7 @@ Copy its template, replace the content, and keep its structure. Read `kit.md` on
 
 | Case | Signal | Read |
 | --- | --- | --- |
-| Explanation | Concept, process, how it works, steps | [explain.md](references/explain.md) |
+| Explanation | Concept, process, how it works, steps, flow diagram | [explain.md](references/explain.md) |
 | Data | Numbers, series, an explorable table, KPIs | [data.md](references/data.md) |
 | Comparison | Choosing between options | [data.md, Comparison](references/data.md#comparison) |
 | Place & trip | Destination, itinerary, days | [travel.md](references/travel.md) |
@@ -63,7 +63,7 @@ Copy its template, replace the content, and keep its structure. Read `kit.md` on
 
 ## 4. General guidance for any widget
 
-Use this when no case fits (a timeline, a checklist, a diagram, a calculator, a
+Use this when no case fits (a timeline, a checklist, a calculator, a
 schedule…) and as the baseline for every template.
 
 - **Know the canvas.** The frame is the reply column: about 800px on desktop and
@@ -81,7 +81,8 @@ schedule…) and as the baseline for every template.
   `.muted` for secondary text. Color only for meaning (status) or photos.
 - **Diagrams.** Inline SVG with a `viewBox` and a fixed pixel height: boxes as
   `rect` with the card corner, lines and arrows in `currentColor`, labels as
-  `text` at the label size. Lay out top-to-bottom so it reads on a phone.
+  `text` at the label size. Lay out top-to-bottom so it reads on a phone; start
+  from the flow diagram template in `explain.md`.
 - **Interactions.** Local and obvious: tabs, steps, toggles, sort, filters, a
   slider for a single number. Every control works by tap and keyboard; every
   state is visible without hover. Few inputs, no persistence.
