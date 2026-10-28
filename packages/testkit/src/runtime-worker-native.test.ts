@@ -699,6 +699,50 @@ describe("the pi-native harness through the controller", () => {
       ]);
     });
 
+    it("restores the loadout when the history holds only the run's own partial turn", async () => {
+      await nativeRun(
+        [
+          {
+            expect(request) {
+              expect(declared(request)).toContain("mcp__rakazo__called_note");
+              expect(declared(request)).toContain("mcp__rakazo__searched_note");
+              expect(declared(request)).not.toContain("mcp__rakazo__untouched_note");
+            },
+            response: { type: "text", text: "Done." },
+          },
+        ],
+        {
+          tools,
+          history: [
+            {
+              role: "assistant",
+              content: "",
+              parts: [
+                {
+                  type: "toolCalls",
+                  calls: [
+                    {
+                      id: "search",
+                      name: "tool_search",
+                      args: { query: "searched_note" },
+                      output:
+                        "Loaded 1 tool. They are available from your next call:\n- mcp__rakazo__searched_note: searched_note",
+                    },
+                    {
+                      id: "prior",
+                      name: "mcp_execute_tool",
+                      args: { id: "notes:0", arguments: { title: "Earlier" } },
+                      output: "previous-result",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      );
+    });
+
     it("declares a tool its history only loaded through tool_search", async () => {
       let result = "";
       await nativeRun(

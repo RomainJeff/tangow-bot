@@ -174,24 +174,21 @@ export const piNativeHarness: GuestHarness = {
             : [],
         ),
       );
-      const catalogToolOf = (call: { name: string; arguments: Record<string, unknown> }) =>
-        listed.find(
-          (tool) => tool.catalog?.via === call.name && tool.catalog.id === call.arguments.id,
-        );
+      const catalogToolOf = (name: string, input: Record<string, unknown>) =>
+        listed.find((tool) => tool.catalog?.via === name && tool.catalog.id === input.id);
       // Pi keeps the loadout of a run only in its own transcript, which a new attempt does not have:
-      // the deferred tools the replayed history already called or loaded are declared again.
+      // the deferred tools the history already called or loaded are declared again. This reads the
+      // history's calls, not `projected`, whose oldest turn is rendered as prose without tool calls.
       const calledCatalogTools = new Set<string>();
       const searchLoaded = new Set<string>();
-      for (const message of projected) {
-        if (message.role === "assistant") {
-          for (const block of message.content) {
-            const catalog = block.type === "toolCall" ? catalogToolOf(block) : undefined;
+      for (const turn of run.history) {
+        for (const part of turn.parts ?? []) {
+          if (part.type !== "toolCalls") continue;
+          for (const call of part.calls) {
+            const catalog = catalogToolOf(call.name, call.args);
             if (catalog) calledCatalogTools.add(catalog.name);
-          }
-        } else if (message.role === "toolResult" && message.toolName === "tool_search") {
-          for (const block of message.content) {
-            if (block.type === "text") {
-              for (const name of loadedToolNames(block.text)) searchLoaded.add(name);
+            if (call.name === "tool_search") {
+              for (const name of loadedToolNames(call.output)) searchLoaded.add(name);
             }
           }
         }
@@ -256,7 +253,8 @@ export const piNativeHarness: GuestHarness = {
                 // Registration is when the tool can be activated: the server connects after session start,
                 // and the first prompt waits for it, so the first request already declares the tool.
                 if (
-                  tool?.exposure === "deferred" &&
+                  tool &&
+                  definition.exposure === "deferred" &&
                   (calledCatalogTools.has(tool.name) || searchLoaded.has(definition.name))
                 ) {
                   const active = pi.getActiveTools();
@@ -273,7 +271,7 @@ export const piNativeHarness: GuestHarness = {
                 if (message.role === "assistant") {
                   for (const block of message.content) {
                     if (block.type !== "toolCall" || !replayCalls.has(block.id)) continue;
-                    const catalog = catalogToolOf(block);
+                    const catalog = catalogToolOf(block.name, block.arguments);
                     const assigned = assignedNames.get(catalog?.name ?? block.name);
                     if (!assigned) continue;
                     block.name = assigned;
