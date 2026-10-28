@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
+- On mobile, interactive artifacts no longer bounce when dragged, in the thread or full screen.
 - On web, desktop and mobile, bots can publish widgets without the tool rejecting their content before display.
 - On web, desktop and mobile, bots can identify their active helpers when you ask for an update, even after the helper's launch has left the conversation history.
 - On web, desktop and mobile, bots can reply while their helpers work with the same persistent files, without waiting for another run's worker to finish.
