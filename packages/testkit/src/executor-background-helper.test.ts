@@ -121,6 +121,7 @@ it("answers at once, keeps the helper running past the turn, and wakes the bot w
   const parentWaits = Promise.withResolvers<void>();
   const childAsked = Promise.withResolvers<ModelEmulatorRequest>();
   const releaseChild = Promise.withResolvers<void>();
+  let followupRequest: ModelEmulatorRequest | undefined;
   const { run, runs, reports, childOf, botStatus } = await fixture([
     spawn,
     {
@@ -141,6 +142,14 @@ it("answers at once, keeps the helper running past the turn, and wakes the bot w
     { expect() {}, response: { type: "text", text: recap } },
     {
       expect(request) {
+        followupRequest = request;
+      },
+      response: say("The hotel search is still running."),
+    },
+    { expect() {}, response: { type: "text", text: recap } },
+    {
+      expect(request) {
+        expect(text(request)).not.toContain("<active_helpers>");
         expect(text(request)).toContain("<helper_report>");
         expect(text(request)).toContain(REPORT);
       },
@@ -167,12 +176,17 @@ it("answers at once, keeps the helper running past the turn, and wakes the bot w
   expect(childTools).not.toContain("mcp__rakazo__run_subagent");
   expect(childTools).not.toContain("mcp__rakazo__message_user");
 
+  const launchEntries = await run.runEntries(parentId);
+  await run.prisma.sessionEntry.deleteMany({
+    where: { runId: parentId, type: { in: ["tool.call", "tool.result"] } },
+  });
+  await run.continueRun(await run.send("Où est-ce que ça en est ?"));
   releaseChild.resolve();
   await childDone;
   expect(await reports()).toEqual([
     { helperId: child.id, profile: null, status: "completed", report: REPORT },
   ]);
-  const [, , woken] = await runs();
+  const [, , , woken] = await runs();
   expect(woken).toMatchObject({ trigger: "follow_up", status: "queued", sourceMessageId: null });
   await run.continueRun(woken!.id);
   run.model.assertComplete();
@@ -180,9 +194,17 @@ it("answers at once, keeps the helper running past the turn, and wakes the bot w
   expect((await runs()).map(({ trigger, status }) => [trigger, status])).toEqual([
     ["user", "completed"],
     ["helper", "completed"],
+    ["user", "completed"],
     ["follow_up", "completed"],
   ]);
-  const parentEntries = await run.runEntries(parentId);
+  expect(followupRequest).toBeDefined();
+  const followupText = text(followupRequest!);
+  expect(followupText).toContain("<active_helpers>");
+  expect(followupText).toContain(child.id);
+  expect(followupText).toContain(BRIEF);
+  expect(followupText).toContain("running");
+  expect(text(childRequest)).not.toContain("<active_helpers>");
+  const parentEntries = launchEntries;
   const call = parentEntries.find(
     (entry) => entry.type === "tool.call" && entry.payload.name === "run_subagent",
   );
@@ -215,6 +237,8 @@ it("answers at once, keeps the helper running past the turn, and wakes the bot w
   ).toEqual([
     [parentId, "run.started"],
     [parentId, "run.completed"],
+    [expect.any(String), "run.started"],
+    [expect.any(String), "run.completed"],
     [woken!.id, "run.started"],
     [woken!.id, "run.completed"],
   ]);
