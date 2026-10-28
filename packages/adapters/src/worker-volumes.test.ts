@@ -73,7 +73,7 @@ describe("volume provisioning and home adoption", () => {
       await fixture.seedBot(space, computer.id),
       await fixture.seedBot(space, computer.id),
     ];
-    const adaVolume = await fixture.seedVolume("bot_private", space, ada.id);
+    await fixture.seedVolume("bot_private", space, ada.id);
     const bobVolume = await fixture.seedVolume("bot_private", space, bob.id, null);
     const homeStorage = async () =>
       (await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } })).homeStorage;
@@ -82,12 +82,6 @@ describe("volume provisioning and home adoption", () => {
     await prisma.volume.update({ where: { id: bobVolume.id }, data: { providerRef: "bob" } });
     await expect(adopt(computer.id)).resolves.toBe("volume_missing");
     await fixture.seedVolume("space_shared", space, null);
-    const busy = await fixture.seedAttempt((await fixture.seedRun(ada)).id);
-    await prisma.volume.update({ where: { id: adaVolume.id }, data: { writerAttemptId: busy.id } });
-    await expect(adopt(computer.id)).resolves.toBe("volume_busy");
-    expect(await homeStorage()).toBe("snapshot");
-
-    await prisma.volume.update({ where: { id: adaVolume.id }, data: { writerAttemptId: null } });
     const dedicatedBot = await fixture.seedBot(space, null);
     const elsewhere = await fixture.seedAttempt((await fixture.seedRun(dedicatedBot)).id);
     await workers.start(await fixture.launchFor(workers, elsewhere.id, mcpOnly), fixture.context);
@@ -98,6 +92,58 @@ describe("volume provisioning and home adoption", () => {
     await expect(adopt(computer.id)).resolves.toBe("adopted");
     await expect(adopt(computer.id)).resolves.toBe("adopted");
     expect(await homeStorage()).toBe("volumes");
+  });
+
+  it("waits for every dedicated worker to be destroyed and rejects a copy made before they ran", async () => {
+    const space = await fixture.seedSpace();
+    const computer = await fixture.seedComputer(space, { scope: "dedicated" });
+    const bot = await fixture.seedBot(space, computer.id);
+    await fixture.seedVolume("bot_private", space, bot.id);
+    const unrelated = await fixture.seedBot(space, null);
+    const elsewhere = await fixture.seedAttempt((await fixture.seedRun(unrelated)).id);
+    await workers.start(await fixture.launchFor(workers, elsewhere.id, mcpOnly), fixture.context);
+    const { start } = await workers.inspectHomeMove(computer.id);
+    const runs = [await fixture.seedRun(bot), await fixture.seedRun(bot)];
+    const attempts = [];
+    for (const run of runs) {
+      const attempt = await fixture.seedAttempt(run.id);
+      await workers.start(await fixture.launchFor(workers, attempt.id, mcpOnly), fixture.context);
+      attempts.push(attempt);
+      await prisma.run.update({
+        where: { id: run.id },
+        data: {
+          status: attempts.length === 1 ? "completed" : "cancelled",
+          leaseFence: { increment: 1 },
+        },
+      });
+    }
+    await prisma.bot.update({ where: { id: bot.id }, data: { archivedAt: new Date() } });
+    const blocked = async () => {
+      expect(await workers.reserveHomeMove(computer.id)).toEqual({ blocker: "space_worker_live" });
+      expect(await workers.adoptVolumeHome(computer.id, start)).toBe("space_worker_live");
+      expect(
+        (await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } })).homeStorage,
+      ).toBe("snapshot");
+    };
+    await blocked();
+    const [first, second] = attempts;
+    if (!first || !second) throw new Error("Expected two workers");
+    fake.failDestroy = new Error("worker still alive");
+    await expect(workers.release(first.id, fixture.context)).rejects.toThrow("worker still alive");
+    fake.failDestroy = null;
+    await workers.release(second.id, fixture.context);
+    await blocked();
+    await workers.release(first.id, fixture.context);
+    expect(await workers.adoptVolumeHome(computer.id, start)).toBe("space_worker_ran");
+    const fresh = await workers.inspectHomeMove(computer.id);
+    expect(fresh.start.workerCount).toBe(2);
+    const reservation = await workers.reserveHomeMove(computer.id);
+    if (!("marker" in reservation)) throw new Error(reservation.blocker);
+    expect(await workers.adoptVolumeHome(computer.id, fresh.start, reservation.marker)).toBe(
+      "adopted",
+    );
+    await workers.releaseHomeMove(reservation.marker);
+    await workers.release(elsewhere.id, fixture.context);
   });
 
   it("adopts a home only once nothing runs on its computer", async () => {
@@ -364,22 +410,32 @@ describe("deleting the owner of a volume", () => {
       (deletion) => deletion.providerRef,
     );
 
-  it("destroys a bot's live worker, deletes its volume row with it, then its provider volume", async () => {
+  it("destroys every worker of a bot before deleting its volume row and provider volume", async () => {
     const spaceId = await fixture.seedSpace();
     const computer = await fixture.seedComputer(spaceId, { homeStorage: "volumes" });
     const bot = await fixture.seedBot(spaceId, computer.id);
     const privateVolume = await provisioned("bot_private", spaceId, bot.id);
     const sharedVolume = await provisioned("space_shared", spaceId, null);
-    const run = await fixture.seedRun(bot);
-    const attempt = await fixture.seedAttempt(run.id);
-    await workers.start(await fixture.launchFor(workers, attempt.id, allFiles), fixture.context);
+    const attempts = [];
+    for (let index = 0; index < 2; index++) {
+      const attempt = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
+      await workers.start(await fixture.launchFor(workers, attempt.id, allFiles), fixture.context);
+      attempts.push(attempt);
+    }
+    expect(fake.live.size).toBe(2);
     const deletions = rowsAtDeletion();
 
     await destroy(bot);
 
-    expect(await fixture.workerStateOf(attempt.id).catch(() => "deleted with the bot")).toBe(
-      "deleted with the bot",
-    );
+    expect(
+      await prisma.attempt.count({ where: { id: { in: attempts.map(({ id }) => id) } } }),
+    ).toBe(0);
+    expect(
+      fake.calls
+        .filter((call) => call.op === "destroy")
+        .map((call) => call.attemptId)
+        .sort(),
+    ).toEqual(attempts.map(({ id }) => id).sort());
     expect(fake.live.size).toBe(0);
     expect(deletions).toEqual([{ providerRef: privateVolume.providerRef, rowExisted: false }]);
     expect(await prisma.bot.count({ where: { id: bot.id } })).toBe(0);

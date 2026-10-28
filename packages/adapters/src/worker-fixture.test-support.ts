@@ -136,10 +136,6 @@ export function workerFixture(prisma: PrismaClient) {
       return plan;
     },
 
-    async writerOf(volumeId: string) {
-      return (await prisma.volume.findUniqueOrThrow({ where: { id: volumeId } })).writerAttemptId;
-    },
-
     async workerStateOf(attemptId: string) {
       return (await prisma.attempt.findUniqueOrThrow({ where: { id: attemptId } })).workerState;
     },

@@ -91,10 +91,6 @@ async function main() {
       warmupCycles.push(await timeCycle(attemptId));
     const cycleSamples = [];
     for (const attemptId of attempts.slice(warmup)) cycleSamples.push(await timeCycle(attemptId));
-    assert.deepEqual(
-      [await fixture.writerOf(privateVolume.id), await fixture.writerOf(sharedVolume.id)],
-      [null, null],
-    );
     assert.equal(fake.live.size, 0);
 
     const planQueryCounts = [...new Set(planSamples.map((sample) => sample.queries))];

@@ -712,7 +712,6 @@ model Attempt {
   // only once workerState is released.
   stopPhase          String?
   stopPhaseAt        DateTime?
-  writtenVolumes     Volume[]  @relation("VolumeWriter")
 
   @@unique([runId, fence])
   @@index([runId])
@@ -1003,25 +1002,21 @@ model Computer {
 }
 
 // A whole provider volume: one bot_private per bot, one space_shared per space (SQL partial unique
-// indexes, volumes_owner_shape_check). writerAttemptId is the single-writer lease, cleared only when
-// the holder's VM is confirmed gone. Owners restrict deletion so no provider volume is orphaned.
+// indexes, volumes_owner_shape_check). Owners restrict deletion so no provider volume is orphaned.
 model Volume {
-  id              String   @id @default(cuid())
-  kind            String
-  spaceId         String
-  space           Space    @relation(fields: [spaceId], references: [id], onDelete: Restrict)
-  botId           String?
-  bot             Bot?     @relation(fields: [botId], references: [id], onDelete: Restrict)
-  providerKind    String
-  providerRef     String?
-  ensureUntil     DateTime?
-  writerAttemptId String?
-  writerAttempt   Attempt? @relation("VolumeWriter", fields: [writerAttemptId], references: [id], onDelete: Restrict)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id           String   @id @default(cuid())
+  kind         String
+  spaceId      String
+  space        Space    @relation(fields: [spaceId], references: [id], onDelete: Restrict)
+  botId        String?
+  bot          Bot?     @relation(fields: [botId], references: [id], onDelete: Restrict)
+  providerKind String
+  providerRef  String?
+  ensureUntil  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([spaceId])
-  @@index([writerAttemptId])
   @@map("volumes")
 }
 

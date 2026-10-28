@@ -666,18 +666,28 @@ describe("moving a home from snapshots to volumes", () => {
     expect(await homeStorageOf(computer.id)).toBe("snapshot");
   });
 
-  it("refuses a team home while a worker of the space may still write the shared volume", async () => {
-    const { spaceId, computer } = await teamHome();
-    const otherBot = await fixture.seedBot(spaceId, null);
-    const attempt = await fixture.seedAttempt((await fixture.seedRun(otherBot)).id);
-    const workers = createWorkerLifecycle({ prisma, provider });
-    await workers.start(await fixture.launchFor(workers, attempt.id, mcpOnly), fixture.context);
+  it.each(["team", "dedicated"])(
+    "refuses a %s home while its workers may still write",
+    async (scope) => {
+      const { spaceId, computer, ada } = await teamHome();
+      const homeKey = scope === "dedicated" ? ada.id : computer.homeKey;
+      await prisma.computer.update({ where: { id: computer.id }, data: { scope, homeKey } });
+      if (scope === "dedicated") await seedHome(homeKey, { "notes.md": "ada notes" });
+      const otherBot = scope === "team" ? await fixture.seedBot(spaceId, null) : ada;
+      const attempt = await fixture.seedAttempt((await fixture.seedRun(otherBot)).id);
+      const workers = createWorkerLifecycle({ prisma, provider });
+      await workers.start(await fixture.launchFor(workers, attempt.id, mcpOnly), fixture.context);
 
-    const report = await move(computer.id);
+      const report = await move(computer.id);
 
-    expect(report).toEqual({ outcome: "refused", refusal: { code: "space_worker_live" } });
-    expect(await prisma.volume.count({ where: { spaceId } })).toBe(0);
-  });
+      expect(report).toEqual({ outcome: "refused", refusal: { code: "space_worker_live" } });
+      expect(await prisma.volume.count({ where: { spaceId } })).toBe(0);
+      expect(
+        (await homeFiles(homeKey))[scope === "team" ? `bots/${ada.id}/notes.md` : "notes.md"],
+      ).toBe("ada notes");
+      await workers.release(attempt.id, fixture.context);
+    },
+  );
 
   it("plans a dry run without creating, writing or adopting anything", async () => {
     const { spaceId, computer, ada } = await teamHome();

@@ -111,7 +111,6 @@ it("preserves private, archived and shared volume identities, contents, empty di
       botId: volume.botId,
       providerKind: "docker-worker",
       providerRef: `rakazo-${volume.id}`,
-      writerAttemptId: null,
     });
     expect(await readFile(path.join(target(volume.id), "note.txt"), "utf8")).toBe(
       volume.providerRef,
@@ -182,6 +181,50 @@ it.each(["link", "large", "missing", "conflict"])(
   },
 );
 
+it.each(["expired", "missing", "uncovered"])(
+  "refuses cutover with %s reservation before changing any supplier",
+  async (failure) => {
+    const { computer, spaceId, volumes } = await seed();
+    const sibling = await fixture.seedComputer(spaceId, {
+      kind: "e2b",
+      scope: "dedicated",
+      homeStorage: "volumes",
+    });
+    const read = source.read;
+    let changed = false;
+    source.read = async (ref, file, context) => {
+      const content = await read(ref, file, context);
+      if (!changed) {
+        changed = true;
+        if (failure === "expired") {
+          await prisma()
+            .$executeRaw`UPDATE computers SET "homeMoveExpiresAt" = (now() AT TIME ZONE 'UTC') - interval '1 second'
+          WHERE "spaceId" = ${spaceId}`;
+        } else {
+          await prisma().computer.updateMany({
+            where: failure === "uncovered" ? { id: sibling.id } : { spaceId },
+            data: { maintenanceId: null },
+          });
+        }
+      }
+      return content;
+    };
+    await expect(migrate()).rejects.toThrow("Migration reservation expired");
+    expect(await prisma().volume.count({ where: { providerKind: "docker-worker" } })).toBe(0);
+    expect((await prisma().computer.findUniqueOrThrow({ where: { id: computer.id } })).kind).toBe(
+      "e2b",
+    );
+    for (const volume of volumes) {
+      expect(await readFile(path.join(volume.directory, "note.txt"), "utf8")).toBe(
+        volume.providerRef,
+      );
+      expect(await readFile(path.join(target(volume.id), "note.txt"), "utf8")).toBe(
+        volume.providerRef,
+      );
+    }
+  },
+);
+
 it("reconciles an adoption committed before its journal update without re-reading E2B", async () => {
   const { volumes } = await seed();
   await migrate();
@@ -195,7 +238,7 @@ it("reconciles an adoption committed before its journal update without re-readin
   expect(await readFile(path.join(target(volumes[0]!.id), "note.txt"), "utf8")).toBe("private");
 });
 
-it("requires confirmed computer teardown and keeps writers held when worker destruction fails", async () => {
+it("requires confirmed computer and worker teardown before switching providers", async () => {
   const { volumes, bot } = await seed();
   await expect(
     migrate(async () => {
@@ -211,20 +254,25 @@ it("requires confirmed computer teardown and keeps writers held when worker dest
     workerEnsureAt: pastEnsureTimeout(),
     workerStateAt: new Date(),
   });
-  await prisma().volume.update({
-    where: { id: volumes[0]!.id },
-    data: { writerAttemptId: attempt.id },
+  workers.live.set("worker-ref", {
+    attemptId: attempt.id,
+    runId: run.id,
+    botId: bot.id,
+    mounts: [],
+    ttlSeconds: 3_600,
+    ensureDeadline: new Date(),
   });
   workers.failDestroy = new Error("worker still alive");
   await expect(migrate()).rejects.toThrow("worker still alive");
+  expect(await fixture.workerStateOf(attempt.id)).toBe("releasing");
+  expect(workers.live.has("worker-ref")).toBe(true);
   expect(
-    (await prisma().volume.findUniqueOrThrow({ where: { id: volumes[0]!.id } })).writerAttemptId,
-  ).toBe(attempt.id);
+    (await prisma().volume.findUniqueOrThrow({ where: { id: volumes[0]!.id } })).providerKind,
+  ).toBe("e2b-worker");
   workers.failDestroy = null;
   await expect(migrate()).resolves.toMatchObject({ outcome: "migrated" });
-  expect(
-    (await prisma().volume.findUniqueOrThrow({ where: { id: volumes[0]!.id } })).writerAttemptId,
-  ).toBeNull();
+  expect(await fixture.workerStateOf(attempt.id)).toBe("released");
+  expect(workers.live.size).toBe(0);
 });
 
 it("refuses active work and snapshot homes before destroying computers", async () => {

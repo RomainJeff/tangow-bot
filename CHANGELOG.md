@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
+- On web, desktop and mobile, bots can reply while their helpers work with the same persistent files, without waiting for another run's worker to finish.
 - Approval notifications now name what the bot wants to do (an email's app, subject and recipient, or the action) instead of a tool name.
 
 ### 2026-10-27
