@@ -56,7 +56,7 @@ describe("readFrameLines", () => {
 describe("readGuestFrame", () => {
   const big = "x".repeat(2 * 1024 * 1024);
 
-  it("lets only a model request use the larger frame", () => {
+  it("keeps ordinary frames bounded while allowing complete model requests", () => {
     const request = readGuestFrame(
       event({
         type: "model.request",
@@ -80,5 +80,23 @@ describe("readGuestFrame", () => {
     ],
   ])("refuses %s", (_name, frame, reason) => {
     expect(readGuestFrame(frame)).toEqual({ ok: false, reason });
+  });
+});
+
+it("transfers a complete native snapshot above the ordinary frame limit without truncation", () => {
+  const state = "x".repeat(2 * 1024 * 1024);
+  const body = {
+    type: "snapshot.save",
+    snapshot: {
+      version: 1,
+      harness: { name: "other-harness", format: "fixture" },
+      deliveredEvents: [],
+      revision: 1,
+      state,
+    },
+  };
+  expect(readGuestFrame(event(body))).toEqual({
+    ok: true,
+    message: { version: 2, kind: "worker.event", worker, payload: { seq: 1, body } },
   });
 });

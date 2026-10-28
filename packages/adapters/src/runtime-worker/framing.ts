@@ -103,7 +103,7 @@ function readJson<T>(frame: Uint8Array, parse: (json: unknown) => WireParse<T>):
   return { ok: false, reason: parsed.reason === "unsupported_version" ? "version" : "invalid" };
 }
 
-/** Size, then JSON, then schema. Only a model request may use the larger frame. */
+/** Size, then JSON, then schema. Model requests, transcripts and complete snapshots use the larger frame. */
 export function readGuestFrame(frame: Uint8Array): FrameRead<GuestMessageV1> {
   if (frame.byteLength > WORKER_LIMITS.modelRequestBytes) return { ok: false, reason: "too_large" };
   const read = readJson(frame, parseGuestMessage);
@@ -113,7 +113,8 @@ export function readGuestFrame(frame: Uint8Array): FrameRead<GuestMessageV1> {
     !(
       read.message.kind === "worker.event" &&
       (read.message.payload.body.type === "model.request" ||
-        read.message.payload.body.type === "transcript")
+        read.message.payload.body.type === "transcript" ||
+        read.message.payload.body.type === "snapshot.save")
     )
   ) {
     return { ok: false, reason: "too_large" };

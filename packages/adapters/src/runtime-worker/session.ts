@@ -10,6 +10,7 @@ import type {
   SubagentLog,
   WorkerIdentity,
   WorkerSkill,
+  WorkerStartV1,
 } from "@rakazo/adapter-kit";
 import {
   AgentRuntimeUnavailableError,
@@ -462,6 +463,12 @@ export function createSession(
     ) {
       return refuse("unknown_tool");
     }
+    const durable =
+      agent === "root" && launched!.expectedHarness.capabilities.includes("resume")
+        ? request.persistence
+        : undefined;
+    const receiptArgs = JSON.parse(JSON.stringify(args));
+    await durable?.receipt({ callId, name, args: receiptArgs, outcome: { kind: "started" } });
     if (name === "run_subagent" && runsOwnLoop()) {
       recorder?.toolStart(callId, name, args);
       const run = runHelper(body, part);
@@ -469,6 +476,16 @@ export function createSession(
       try {
         const reply = await run;
         const answered = reply.type === "tool.result";
+        await durable?.receipt({
+          callId,
+          name,
+          args: receiptArgs,
+          outcome: {
+            kind: "result",
+            output: answered ? reply.output : reply,
+            isError: !answered,
+          },
+        });
         recorder?.toolEnd(callId, answered ? reply.output : reply, !answered);
         return reply;
       } finally {
@@ -482,11 +499,43 @@ export function createSession(
     open.set(callId, call);
     try {
       const output = await call;
+      const details = isToolPauseResult(output) ? output.details : undefined;
+      const effectId =
+        details &&
+        typeof details === "object" &&
+        "effectId" in details &&
+        typeof details.effectId === "string"
+          ? details.effectId
+          : undefined;
+      await durable?.receipt({
+        callId,
+        name,
+        args: receiptArgs,
+        ...(effectId ? { effectId } : {}),
+        outcome: isToolPauseResult(output)
+          ? { kind: "paused", output: output }
+          : {
+              kind: "result",
+              output: output,
+              isError:
+                isFailedToolResult(output) ||
+                (typeof output === "object" &&
+                  output !== null &&
+                  "isError" in output &&
+                  output.isError === true),
+            },
+      });
       if (isToolPauseResult(output)) pause();
       recorder?.toolEnd(callId, output, isFailedToolResult(output));
       return { type: "tool.result", output };
     } catch (error) {
       const message = clean(messageOf(error));
+      await durable?.receipt({
+        callId,
+        name,
+        args: receiptArgs,
+        outcome: { kind: "result", output: { error: message }, isError: true },
+      });
       recorder?.toolEnd(callId, message, true);
       return { type: "error", message };
     } finally {
@@ -635,6 +684,30 @@ export function createSession(
   ): Promise<ReplyFinal> {
     if (!declared(body)) return refuse("undeclared");
     switch (body.type) {
+      case "snapshot.save":
+        if (!(await fenceOwned()) || !live()) return revoke();
+        if (
+          !request.persistence ||
+          paused ||
+          body.snapshot.harness.name !== launched!.expectedHarness.name
+        )
+          return refuse("invalid");
+        {
+          const permitted = new Set([
+            ...(request.resumeEvents?.map((event) => event.id) ?? []),
+            ...(request.persistence.start.mode === "resume"
+              ? request.persistence.start.snapshot.deliveredEvents
+              : []),
+          ]);
+          if (body.snapshot.deliveredEvents.some((id) => !permitted.has(id)))
+            return refuse("invalid");
+        }
+        await request.persistence.save(body.snapshot);
+        return { type: "recorded" };
+      case "snapshot.resolve":
+        if (!(await fenceHeld()) || !live()) return revoke();
+        if (!request.persistence) return refuse("invalid");
+        return { type: "snapshot.receipts", receipts: await request.persistence.resolve() };
       case "text":
         if (paused) return { type: "ack" };
         await events.push({ type: "text", text: clean(body.text) });
@@ -849,21 +922,27 @@ export function createSession(
           bound = channel;
           helloReceived = true;
           helloSettled.resolve();
-          const start = request.helper
-            ? {
-                ...launched!.start,
-                run: helperRunInput(launched!.start, request, expected, {
-                  task: request.helper.task,
-                  instructions: helperInstructions(
-                    request.helper.name,
-                    helperProfile?.instructions,
-                    request.helper.instructions,
-                  ),
-                  model: request.model,
-                  profile: helperProfile,
-                }),
-              }
-            : workerStart(launched!.start, request, expected);
+          let start: WorkerStartV1;
+          try {
+            start = request.helper
+              ? {
+                  ...launched!.start,
+                  run: helperRunInput(launched!.start, request, expected, {
+                    task: request.helper.task,
+                    instructions: helperInstructions(
+                      request.helper.name,
+                      helperProfile?.instructions,
+                      request.helper.instructions,
+                    ),
+                    model: request.model,
+                    profile: helperProfile,
+                  }),
+                }
+              : workerStart(launched!.start, request, expected);
+          } catch (error) {
+            fail(error instanceof Error ? error : new Error(String(error)));
+            return;
+          }
           rootTools = new Set(start.run.tools.map((tool) => tool.name));
           await channel.send(encodeMessage(start));
           inbox.attach((reply) => void channel.send(encodeMessage(reply)));

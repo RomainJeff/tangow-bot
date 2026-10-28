@@ -7,7 +7,7 @@ const MiB = 1024 * KiB;
 
 /** Published bounds of the worker channel. The guest is hostile: every one is enforced at the controller. */
 export const WORKER_LIMITS = {
-  /** Guest frame, any body but `model.request`. */
+  /** Guest frame, except model requests, transcripts and native snapshots. */
   guestFrameBytes: 1 * MiB,
   /** A `model.request` carries the whole transcript. Also the length-prefix cap of guest frames. */
   modelRequestBytes: 8 * MiB,

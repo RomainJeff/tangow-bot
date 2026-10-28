@@ -40,10 +40,31 @@ function catalog(name: string, count: number, size: number) {
   );
 }
 
-function start(prompt: string, tools: ConnectorTool[]) {
+function start(prompt: string, tools: ConnectorTool[], resume = false, harnessName = "pi-native") {
   const message = workerStart(
     ENVELOPE,
     {
+      runId: "run-1",
+      ...(resume
+        ? {
+            persistence: {
+              start: {
+                mode: "resume" as const,
+                snapshot: {
+                  version: 1 as const,
+                  harness: { name: "pi-native", format: "fixture" },
+                  revision: 1,
+                  state: "{}",
+                  deliveredEvents: [],
+                },
+                receipts: [],
+              },
+              save: async () => {},
+              receipt: async () => {},
+              resolve: async () => [],
+            },
+          }
+        : {}),
       botId: "bot-1",
       threadId: "thread-1",
       prompt,
@@ -51,8 +72,8 @@ function start(prompt: string, tools: ConnectorTool[]) {
       history: [],
       tools,
       model: { provider: "test", id: "model" },
-    } as unknown as AgentRunRequest,
-    { name: "pi-native", capabilities: [] },
+    },
+    { name: harnessName, capabilities: resume ? ["resume"] : [] },
   );
   const sent = (marked: unknown) =>
     message.run.tools.filter((tool) => tool.catalog === marked).map((tool) => tool.name);
@@ -128,4 +149,16 @@ it("gives helpers the connector name index while replacing the parent's instruct
   expect(run.instructions).toContain("mcp__tool_29");
   expect(run.instructions).toContain("mcp_load_tool");
   expect(run.tools.filter((tool) => typeof tool.catalog === "object")).toHaveLength(30);
+});
+
+it("rejects oversized resumptions instead of silently dropping current tool catalogs", () => {
+  const tools = catalog("large", 30, 300000);
+  expect(start("", tools).entries).toBe(0);
+  expect(() => start("", tools, true)).toThrow("Complete resume state and current tools exceed");
+});
+
+it("rejects a durable run selected for another harness before giving that harness a start input", () => {
+  expect(() => start("", [], true, "different-harness")).toThrow(
+    "cannot resume with the selected harness",
+  );
 });
