@@ -31,7 +31,7 @@ The diagram is optional; use visible text for every fact it conveys.
       <h1 id="add">1. Add a job</h1>
       <p>A request joins the back of the queue. Older jobs stay ahead of it.</p>
       <svg width="280" height="72" viewBox="0 0 280 72" role="img" aria-labelledby="queue-title"
-        style="max-width:100%;fill:currentColor;font-size:var(--type-body-size)">
+        style="max-width:100%;fill:currentColor;font-size:13px">
         <title id="queue-title">Job A is first, then B, then C</title>
         <rect x="4" y="8" width="72" height="56" fill="none" stroke="currentColor"/>
         <rect x="104" y="8" width="72" height="56" fill="none" stroke="currentColor"/>

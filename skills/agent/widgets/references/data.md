@@ -31,7 +31,7 @@ The SVG and table use the same values. Keep both in sync when replacing the data
     <h1 id="chart-heading">By region</h1>
     <p class="muted">Paired bars: March solid, February lighter. Values are units.</p>
     <svg width="320" height="244" viewBox="0 0 320 244" role="img" aria-labelledby="sales-title sales-desc"
-      style="max-width:100%;fill:currentColor;font-size:var(--type-body-size)">
+      style="max-width:100%;fill:currentColor;font-size:13px">
       <title id="sales-title">March and February sales by region</title>
       <desc id="sales-desc">North 320 and 280. South 240 and 220. West 180 and 200 units.</desc>
       <text x="0" y="20">North</text>

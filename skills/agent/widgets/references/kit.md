@@ -22,11 +22,11 @@ tokens for a property the kit does not cover, or SVG sizing such as `width:100%`
 | `.stack` | Column layout with 12px gaps. Use for the root and vertical card content. |
 | `.row` | Horizontal layout, wraps, centers items, 12px gaps. Use for controls and badges. |
 | `.grid` | Auto-fit columns of at least 200px; one column below 480px. Use for cards and galleries. |
-| `.card` | Inner content box with a border, 16px padding, and `--corner-card`. Never wrap the whole widget in it. |
+| `.card` | Inner content box: card background, border, 16px padding, `--radius` corners. Never wrap the whole widget in it. |
 | `.muted` | Secondary text. Keep important values in the normal foreground. |
-| `.badge` | Pill label. Use for a fact or status, never as an action. |
-| `.button` | 44px pill action on a real `<button>` or `<a>`. Give it visible text or an accessible name. |
-| `.button.secondary` | Secondary action. Write `class="button secondary"`, never `class="secondary"` alone. |
+| `.badge` | Small outlined label. Use for a fact or status, never as an action. |
+| `.button` | 44px action with rounded corners on a real `<button>` or `<a>`. Give it visible text or an accessible name. |
+| `.button.secondary` | Outlined secondary action. Write `class="button secondary"`, never `class="secondary"` alone. |
 | `.tabs` | Segmented control containing buttons with tab semantics. Selected tabs are highlighted. |
 | `.stat` | KPI container. Put the value and its label inside it. Combine with `.card` when grouping KPIs. |
 | `.value` | Value inside `.stat`. Include its unit when it is not clear from the label. |
@@ -69,8 +69,7 @@ Do not copy raw values from the app's stylesheet into widget code.
 | `--success` | Success status, with a text label. |
 | `--warning` | Warning status, with a text label. |
 | `--ring` | Visible keyboard focus outline. Never remove focus indication. |
-| `--surface` | Raised background when a case needs one. |
-| `--mention-chip`, `--mention-chip-foreground` | Mention background and text. |
+| `--background` | Page background; only for a selected tab or an inset that must contrast with `--muted`. |
 
 Photos may carry color. UI and charts stay monochrome. Never use status colors
 to distinguish series or options. No hex, rgb, named palette colors, gradients,
@@ -78,13 +77,13 @@ or shadows. `none` and `currentColor` are valid SVG paint values.
 
 ## Allowed shape, type, and motion tokens
 
+Type is set by the kit: body 15px, `h1` 22px, `h2` 17px, `h3` 15px, tables 14px,
+`small`, captions and `.label` 13px, `.badge` 12px, `.stat .value` 28px. Reuse
+these sizes; never invent a new one. The font is the system font the app uses.
+
 | Tokens | Use |
 | --- | --- |
-| `--corner-chip`, `--corner-row`, `--corner-card`, `--corner-pill` | Corner radius for the matching element. Prefer a kit class. |
-| `--type-body-size` | Body text size, including SVG labels. |
-| `--type-title-size` | Heading or key value size. |
-| `--type-meta-size` | Secondary metadata size. |
-| `--type-label-size` | Short label size. |
+| `--radius` | Card corner. Smaller elements use `calc(var(--radius) - 4px)` (buttons, images) or `calc(var(--radius) - 6px)` (badges, tabs). Prefer a kit class. |
 | `--duration-hover`, `--duration-press` | Optional control transition durations. Never require hover. |
 | `--motion-ease` | Timing function with a duration token. |
 
@@ -100,7 +99,7 @@ endless growth. Prefer no animation; respect reduced motion when it is necessary
    a fixed pixel height such as `height="244"`, and `style="max-width:100%"`.
    It fits phones without growing forever. Never use viewport or percentage heights.
 2. Use a compact viewBox around 320 units wide so labels remain readable at 360px.
-   Give labels `font-size:var(--type-body-size)` and inherit the font.
+   Give labels `font-size:13px` and inherit the font.
 3. Add `role="img"`, `<title id="…">`, and `aria-labelledby`. Add `<desc>` and
    `aria-describedby` or include its ID in `aria-labelledby` for a detailed chart.
 4. Use `fill="currentColor"`, `stroke="currentColor"`, and opacity for series.

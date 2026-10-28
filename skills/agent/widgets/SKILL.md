@@ -26,7 +26,7 @@ The model cannot see the render; copy a template and change its content.
    Use only 4/8/12/16/24px spacing. Never set a background on html/body or the
    outermost element. The app supplies the frame and title; add no outer card,
    border, or title banner. Inner content boxes use `.card` with 16px padding
-   and `--corner-card`. Read `references/kit.md` before adding styles.
+   and `--radius` corners. Read `references/kit.md` before adding styles.
 3. Make no network calls. No `fetch`, XHR, WebSocket, CDN, external script,
    stylesheet, font, nested iframe, or embed. Images, video, and audio may use
    HTTPS URLs. Turn YouTube/Vimeo into thumbnail links, never embedded players.
