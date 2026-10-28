@@ -17,7 +17,7 @@ export interface WorkerSpec {
   ttlSeconds: number;
   /**
    * `ensure` must not create the VM after this instant. Past it, a VM absent for this attempt's tag
-   * is taken as never created and its writer leases free.
+   * is taken as never created, so its attempt can be released.
    */
   ensureDeadline: Date;
 }

@@ -273,11 +273,12 @@ export async function carryDockerVolumesToE2B(
     }
     renewedAt = started;
   };
-  const owned = () => ({
-    id: computerId,
-    maintenanceId: reservation.marker,
-    homeMoveExpiresAt: { gt: new Date() },
-  });
+  const lockReservation = async (tx: Pick<PrismaClient, "$queryRaw">) => {
+    const owners = await tx.$queryRaw<{ id: string }[]>`
+      SELECT id FROM computers WHERE "maintenanceId" = ${reservation.marker}
+        AND "homeMoveExpiresAt" > (now() AT TIME ZONE 'UTC') ORDER BY id FOR UPDATE`;
+    return owners.some((owner) => owner.id === computerId);
+  };
   try {
     const plans = await planDockerVolumes(deps, computerId);
     const docker = deps.source.describe().id;
@@ -347,13 +348,12 @@ export async function carryDockerVolumesToE2B(
       }
       await keepReserved();
       const switched = await prisma.$transaction(async (tx) => {
-        if ((await tx.computer.count({ where: owned() })) !== 1) return false;
+        if (!(await lockReservation(tx))) return false;
         const row = await tx.volume.updateMany({
           where: {
             id: report.volumeId,
             providerKind: docker,
             providerRef: dockerRef,
-            writerAttemptId: null,
           },
           data: { providerKind: target.describe().id, providerRef, ensureUntil: null },
         });
@@ -361,11 +361,15 @@ export async function carryDockerVolumesToE2B(
       });
       if (!switched) return refuse({ code: "computer_active" });
     }
-    const moved = await prisma.computer.updateMany({
-      where: { ...owned(), kind: "docker", homeStorage: "volumes" },
-      data: STOPPED_ON_E2B,
+    const moved = await prisma.$transaction(async (tx) => {
+      if (!(await lockReservation(tx))) return false;
+      const row = await tx.computer.updateMany({
+        where: { id: computerId, kind: "docker", homeStorage: "volumes" },
+        data: STOPPED_ON_E2B,
+      });
+      return row.count === 1;
     });
-    if (moved.count !== 1) return refuse({ code: "computer_active" });
+    if (!moved) return refuse({ code: "computer_active" });
     return { outcome: "carried", volumes };
   } finally {
     await workers.releaseHomeMove(reservation.marker);

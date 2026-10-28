@@ -22,12 +22,10 @@ import {
   LIVE_WORKER_STATES,
   lostSetupMove,
   planLaunch,
-  takesWriterLease,
   WORKER_TTL_SECONDS,
   WORKSPACE_ROOT,
   workerEnsureDeadline,
   workerStatesInto,
-  writersBlocking,
 } from "@rakazo/core";
 import type { PrismaClient, VolumeOwnerRef } from "@rakazo/db";
 import { Prisma } from "@rakazo/db";
@@ -48,25 +46,17 @@ export class VolumeRefusedError extends Error {
   }
 }
 
-/** Another worker still writes these volumes. Nothing was held: requeue and retry. */
-export class VolumeBusyError extends Error {
-  constructor(readonly volumeIds: string[]) {
-    super("Volume busy");
-    this.name = "VolumeBusyError";
-  }
-}
-
 /** The run input is added by the runtime that launches the guest. */
 export type StartedWorker = { providerRef: string; start: Omit<WorkerStartV1, "run"> };
 
 /** Why a home cannot move onto volumes now. */
-export type HomeMoveBlocker = "computer_active" | "volume_busy" | "space_worker_live";
+export type HomeMoveBlocker = "computer_active" | "space_worker_live";
 
 /**
  * What a home move saw when it started. Adoption refuses once the home has a new revision, or once
- * a worker of the space has appeared, since that worker may have written the shared volume.
+ * a worker in its scope has appeared, since that worker may have written the volumes.
  */
-export type HomeMoveStart = { homeRevision: string; spaceWorkers: number };
+export type HomeMoveStart = { homeRevision: string; workerCount: number };
 
 export type HomeAdoption =
   | "adopted"
@@ -81,7 +71,7 @@ export type VolumeOwner =
 
 export type EnsuredVolume = { volumeId: string; providerRef: string };
 
-/** `awaiting_ensure`: moved to releasing, but its VM may still appear, so leases stay held. */
+/** `awaiting_ensure`: moved to releasing, but its VM may still appear, so its replacement must wait. */
 export type ReleaseOutcome = "released" | "awaiting_ensure" | "not_live";
 
 type PlanRow = {
@@ -159,18 +149,20 @@ async function computerBlocker(
   return idle ? null : "computer_active";
 }
 
-/**
- * Any worker of the space that may still run can write its shared volume, which takes no writer
- * lease, so a team home must not be copied or adopted under it. `total` counts every attempt of
- * the space that ever had a worker: workerState is never cleared, so it only grows, and comparing
- * it needs no clock.
- */
-async function spaceWorkers(db: Db, spaceId: string): Promise<{ live: number; total: number }> {
+/** All workers in the home's scope, including finished runs and superseded attempts. */
+async function homeWorkers(
+  db: Db,
+  computerId: string,
+  computer: HomeComputer,
+): Promise<{ live: number; total: number }> {
   const [counts] = await db.$queryRaw<{ live: number; total: number }[]>`
     SELECT count(*) FILTER (WHERE a."workerState" IN (${RELEASABLE}))::int AS live,
       count(a."workerState")::int AS total
     FROM attempts a JOIN runs r ON r.id = a."runId"
-    WHERE r."spaceId" = ${spaceId}`;
+    WHERE r."spaceId" = ${computer.spaceId}
+      AND (${computer.scope === "team"} OR r."botId" IN (
+        SELECT id FROM bots WHERE "computerId" = ${computerId}
+      ))`;
   return counts ?? { live: 0, total: 0 };
 }
 
@@ -181,7 +173,7 @@ async function homeVolumes(db: Db, computerId: string, computer: HomeComputer, l
   );
   const team = computer.scope === "team";
   const volumes = await db.$queryRaw<VolumeRow[]>`
-    SELECT id, kind, "spaceId", "botId", "providerKind", "providerRef", "writerAttemptId"
+    SELECT id, kind, "spaceId", "botId", "providerKind", "providerRef"
     FROM volumes
     WHERE (kind = 'bot_private' AND "botId" = ANY(${botIds}))
       OR (${team} AND kind = 'space_shared' AND "spaceId" = ${computer.spaceId})
@@ -208,8 +200,8 @@ async function inspectHomeMove(db: Db, computerId: string, lock: boolean) {
     WHERE "spaceId" = ${source.spaceId} ORDER BY id ${lock ? Prisma.sql`FOR UPDATE` : Prisma.empty}`;
   const computer = computers.find((row) => row.id === computerId);
   if (!computer) throw new Error("Computer not found");
-  const workers = await spaceWorkers(db, computer.spaceId);
-  const start = { homeRevision: computer.homeRevision, spaceWorkers: workers.total };
+  const workers = await homeWorkers(db, computerId, computer);
+  const start = { homeRevision: computer.homeRevision, workerCount: workers.total };
   let blocker: HomeMoveBlocker | null = computers.some(
     (row) =>
       Boolean(row.maintenanceId) &&
@@ -220,17 +212,13 @@ async function inspectHomeMove(db: Db, computerId: string, lock: boolean) {
     ? "computer_active"
     : await computerBlocker(db, computerId, computer);
   if (!blocker) {
-    const { team, volumes } = await homeVolumes(db, computerId, computer, lock);
-    if (volumes.some((volume) => volume.writerAttemptId)) blocker = "volume_busy";
-    else if (team && workers.live > 0) blocker = "space_worker_live";
+    await homeVolumes(db, computerId, computer, lock);
+    if (workers.live > 0) blocker = "space_worker_live";
   }
   return { blocker, start, computer };
 }
 
-/**
- * The only writer of attempts.worker* and volumes.writerAttemptId. A null provider keeps every
- * run in process.
- */
+/** The only writer of attempts.worker*. A null provider keeps every run in process. */
 export function createWorkerLifecycle(deps: {
   prisma: PrismaClient;
   provider: WorkerProvider | null;
@@ -264,7 +252,7 @@ export function createWorkerLifecycle(deps: {
     const recordRef = () => prisma.$executeRaw`
       UPDATE attempts SET "workerProviderRef" = ${providerRef}
       WHERE id = ${attemptId} AND "workerState" = 'releasing' AND "workerProviderRef" IS NULL`;
-    // The lease may already be free, so the row records the VM before a destroy can fail.
+    // Teardown may already be recorded, so record the late VM before a destroy can fail.
     const reopenOrphan = () => prisma.$executeRaw`
       UPDATE attempts SET "workerState" = 'releasing', "workerProviderRef" = ${providerRef},
         "workerStateAt" = ${new Date()}
@@ -289,19 +277,9 @@ export function createWorkerLifecycle(deps: {
     if (!target) return "not_live";
     if (ensureMayBeInFlight(target, now)) return "awaiting_ensure";
     await provider.destroy({ attemptId, providerRef: target.workerProviderRef }, context);
-    await prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`
-        UPDATE attempts SET "workerState" = 'released', "workerStateAt" = ${new Date()}
-        WHERE id = ${attemptId} AND "workerState" IN (${INTO_RELEASED})`;
-      const held = await tx.$queryRaw<{ id: string }[]>`
-        SELECT id FROM volumes WHERE "writerAttemptId" = ${attemptId} ORDER BY id FOR UPDATE`;
-      if (held.length > 0) {
-        await tx.volume.updateMany({
-          where: { id: { in: held.map((volume) => volume.id) } },
-          data: { writerAttemptId: null },
-        });
-      }
-    });
+    await prisma.$executeRaw`
+      UPDATE attempts SET "workerState" = 'released', "workerStateAt" = ${new Date()}
+      WHERE id = ${attemptId} AND "workerState" IN (${INTO_RELEASED})`;
     return "released";
   }
 
@@ -401,8 +379,8 @@ export function createWorkerLifecycle(deps: {
     },
 
     /**
-     * Records intent and takes every writer lease in one transaction before the provider is
-     * called, then records the VM's ref before any fallible setup. Runs once per attempt: a
+     * Authorizes mounts and records intent in one transaction before the provider is called,
+     * then records the VM's ref before any fallible setup. Runs once per attempt: a
      * controller that crashed mid-start loses its run lease, and the next claim is a new attempt.
      * A failure of its ensure or prepare releases the worker.
      */
@@ -431,18 +409,10 @@ export function createWorkerLifecycle(deps: {
         ) {
           throw new StaleAttemptError(launch.attemptId);
         }
-        await tx.attempt.updateMany({
-          where: {
-            runId: launch.runId,
-            id: { not: launch.attemptId },
-            workerState: { in: [...LIVE_WORKER_STATES] },
-          },
-          data: { workerState: "releasing", workerStateAt: new Date() },
-        });
         const volumeIds = launch.volumes.map((grant) => grant.volumeId);
         const rows = volumeIds.length
           ? await tx.$queryRaw<VolumeRow[]>`
-              SELECT id, kind, "spaceId", "botId", "providerKind", "providerRef", "writerAttemptId"
+              SELECT id, kind, "spaceId", "botId", "providerKind", "providerRef"
               FROM volumes WHERE id = ANY(${volumeIds}) ORDER BY id FOR UPDATE`
           : [];
         const authorized = authorizeMounts(launch, launch.volumes, rows, {
@@ -450,15 +420,6 @@ export function createWorkerLifecycle(deps: {
           readOnlyMounts: capabilities.readOnlyMounts,
         });
         if (!authorized.ok) throw new VolumeRefusedError(authorized.refusal);
-        const busy = writersBlocking(launch.attemptId, authorized.mounts, rows);
-        if (busy.length > 0) throw new VolumeBusyError(busy);
-        const leased = authorized.mounts.filter(takesWriterLease);
-        if (leased.length > 0) {
-          await tx.volume.updateMany({
-            where: { id: { in: leased.map((mount) => mount.volumeId) } },
-            data: { writerAttemptId: launch.attemptId },
-          });
-        }
         const now = new Date();
         await tx.attempt.update({
           where: { id: launch.attemptId },
@@ -513,9 +474,8 @@ export function createWorkerLifecycle(deps: {
     },
 
     /**
-     * Idempotent, and a no-op for an attempt without a worker. Writer leases free only in the
-     * transaction that records the provider's confirmed destruction, never while an ensure may
-     * still create the VM. Volumes are never touched.
+     * Idempotent, and a no-op for an attempt without a worker. Records release only after the
+     * provider confirms destruction and ensure can no longer create the VM. Volumes are untouched.
      */
     release,
 
@@ -572,7 +532,7 @@ export function createWorkerLifecycle(deps: {
           if (outcome === "released") counts.released += 1;
           if (outcome === "awaiting_ensure") counts.awaitingEnsure += 1;
         } catch {
-          // A provider that cannot confirm destruction keeps the lease until the next pass.
+          // A provider that cannot confirm destruction leaves the worker releasing for the next pass.
           counts.failed += 1;
         }
       }
@@ -728,8 +688,8 @@ export function createWorkerLifecycle(deps: {
     /**
      * The only change of computers.homeStorage: moves an existing home from snapshots to volumes
      * once every bot on the computer, and the space for a team computer, has a provisioned volume
-     * nobody writes, nothing runs on the computer, and for a team computer no worker of the space
-     * may still write the shared volume. Called after the files were copied, with the start taken
+     * nobody writes, nothing runs on the computer, and no worker in its scope may still write
+     * the volumes. Called after the files were copied, with the start taken
      * before the copy; stops automatic import and export for good.
      */
     async adoptVolumeHome(
@@ -756,13 +716,10 @@ export function createWorkerLifecycle(deps: {
           botIds.some((botId) => !provisioned.some((volume) => volume.botId === botId)) ||
           (team && !provisioned.some((volume) => volume.kind === "space_shared"));
         if (missing) return "volume_missing";
-        if (volumes.some((volume) => volume.writerAttemptId)) return "volume_busy";
-        // Read after the volume locks, so a start that locked the shared volume first is seen.
-        if (team) {
-          const workers = await spaceWorkers(tx, computer.spaceId);
-          if (workers.live > 0) return "space_worker_live";
-          if (workers.total !== start.spaceWorkers) return "space_worker_ran";
-        }
+        // Read after the volume locks, so a start that locked a volume first is seen.
+        const workers = await homeWorkers(tx, computerId, computer);
+        if (workers.live > 0) return "space_worker_live";
+        if (workers.total !== start.workerCount) return "space_worker_ran";
         await tx.computer.update({ where: { id: computerId }, data: { homeStorage: "volumes" } });
         return "adopted";
       });

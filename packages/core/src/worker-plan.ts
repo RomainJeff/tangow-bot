@@ -239,7 +239,6 @@ export type VolumeRow = {
   botId: string | null;
   providerKind: string;
   providerRef: string | null;
-  writerAttemptId: string | null;
 };
 
 export type AuthorizedMount = {
@@ -293,32 +292,6 @@ export function authorizeMounts(
     });
   }
   return { ok: true, mounts };
-}
-
-/**
- * Only a writable private mount takes the single-writer lease, which fences a run from its own
- * stale attempt. The shared volume has many legitimate writers, one per bot of the space.
- */
-export function takesWriterLease(mount: AuthorizedMount): boolean {
-  return mount.access === "rw" && mount.scope === "private";
-}
-
-/**
- * The leased volumes another attempt still writes. A lease frees only when its holder's VM is
- * confirmed gone, never on a clock.
- */
-export function writersBlocking(
-  attemptId: string,
-  mounts: readonly AuthorizedMount[],
-  rows: readonly VolumeRow[],
-): string[] {
-  return mounts
-    .filter(takesWriterLease)
-    .filter((mount) => {
-      const writer = rows.find((row) => row.id === mount.volumeId)?.writerAttemptId;
-      return writer != null && writer !== attemptId;
-    })
-    .map((mount) => mount.volumeId);
 }
 
 export type HomePersistence = "snapshot" | "mounted" | "volumes";

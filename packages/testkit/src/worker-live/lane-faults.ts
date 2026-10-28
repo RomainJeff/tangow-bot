@@ -1,7 +1,8 @@
 import { Sandbox } from "e2b";
 import { toolResult } from "../file-task.js";
 import { call, finish, liveRun } from "./run.js";
-import { context, forward, type Lane, type Live, type ProviderWrap } from "./session.js";
+import type { Lane, Live, ProviderWrap } from "./session.js";
+import { context, forward } from "./session.js";
 
 /** A provider whose ensure, or the step after it, fails the way `fault` says, once. */
 function faulty(
@@ -41,7 +42,7 @@ export const laneG: Lane = {
   scenario:
     "Three faults right after the VM exists: the VM is killed after ensure, ensure fails after the create landed, setup fails after the ref was recorded; then a controller that dies after start, cleaned up by reconcile",
   passWhen:
-    "A recorded ref is destroyed at once and its lease freed; a create whose answer was lost keeps its lease until reconcile destroys it by tag after the ensure deadline; every faulted run completes, a failed setup through a requeue under the run's setup budget; no sandbox is left",
+    "A recorded ref is destroyed at once and its attempt released; a create whose answer was lost stays releasing until reconcile destroys it by tag after the ensure deadline; every faulted run completes, a failed setup through a requeue under the run's setup budget; no sandbox is left",
   async run(live) {
     const cases: Record<string, unknown> = {};
     let pass = true;
@@ -59,12 +60,9 @@ export const laneG: Lane = {
         );
         const afterFault = await worker.attempts(runId);
         const statusAfterFault = await worker.status(runId);
-        const leases = await worker.run.prisma.volume.count({
-          where: { writerAttemptId: { not: null } },
-        });
         const aliveAfterFault = (await live.census()).sandboxes;
         // A create whose answer was lost may still land, so release leaves it to reconcile after
-        // the ensure deadline, and its writer lease holds the next attempt off until then. Move
+        // the ensure deadline, and the same-run guard holds the next attempt off until then. Move
         // that deadline into the past instead of waiting it out.
         let afterEnsureDeadline: Record<string, unknown> | undefined;
         if (fault === "throw_after_create") {
@@ -76,9 +74,6 @@ export const laneG: Lane = {
           afterEnsureDeadline = {
             reconciled,
             workerState: (await worker.attempts(runId))[0]?.workerState,
-            writerLeasesHeld: await worker.run.prisma.volume.count({
-              where: { writerAttemptId: { not: null } },
-            }),
             sandboxesAlive: (await live.census()).sandboxes,
           };
         }
@@ -98,7 +93,6 @@ export const laneG: Lane = {
             workerState: afterFault[0]?.workerState,
             providerRefRecorded: Boolean(afterFault[0]?.workerProviderRef),
           },
-          writerLeasesHeldAfterFault: leases,
           sandboxesAliveAfterFault: aliveAfterFault,
           ...(afterEnsureDeadline && { afterEnsureDeadline }),
           retries,
@@ -110,15 +104,14 @@ export const laneG: Lane = {
         // Every fault ends in a completed run: a lost guest retries within its attempt, and an
         // error from ensure or prepare requeues the run under its setup budget.
         const expected = {
-          kill_after_ensure: { state: "released", ref: true, leases: 0, alive: 0 },
-          throw_after_create: { state: "releasing", ref: false, leases: 1, alive: 1 },
-          prepare_fails: { state: "released", ref: true, leases: 0, alive: 0 },
+          kill_after_ensure: { state: "released", ref: true, alive: 0 },
+          throw_after_create: { state: "releasing", ref: false, alive: 1 },
+          prepare_fails: { state: "released", ref: true, alive: 0 },
         }[fault];
         pass &&=
           record.faultFired &&
           record.faultedAttempt.workerState === expected.state &&
           record.faultedAttempt.providerRefRecorded === expected.ref &&
-          leases === expected.leases &&
           aliveAfterFault === expected.alive &&
           record.finalStatus === "completed" &&
           record.sandboxesLeft === 0 &&
@@ -127,7 +120,6 @@ export const laneG: Lane = {
               JSON.stringify({
                 reconciled: { released: 1, awaitingEnsure: 0, failed: 0 },
                 workerState: "released",
-                writerLeasesHeld: 0,
                 sandboxesAlive: 0,
               }));
       } finally {
@@ -157,7 +149,6 @@ export const laneG: Lane = {
       if (plan.mode !== "worker") throw new Error(`No worker plan: ${plan.mode}`);
       await worker.lifecycle.start(plan, context("g-reconcile"));
       const aliveBefore = (await live.census()).sandboxes;
-      const leaseBefore = await prisma.volume.count({ where: { writerAttemptId: attempt.id } });
       const before = await prisma.attempt.findUniqueOrThrow({ where: { id: attempt.id } });
       await prisma.run.update({
         where: { id: runId },
@@ -172,10 +163,8 @@ export const laneG: Lane = {
           runLeaseExpired: true,
         },
         sandboxesAliveBeforeReconcile: aliveBefore,
-        writerLeaseBeforeReconcile: leaseBefore,
         reconciled,
         workerState: row.workerState,
-        writerLeasesAfter: await prisma.volume.count({ where: { writerAttemptId: { not: null } } }),
         sandboxesLeft: (await live.census()).sandboxes,
       };
       cases.controller_lost_after_start = record;
@@ -183,10 +172,8 @@ export const laneG: Lane = {
         before.workerState === "ready" &&
         Boolean(before.workerProviderRef) &&
         aliveBefore === 1 &&
-        leaseBefore === 1 &&
         reconciled.released === 1 &&
         row.workerState === "released" &&
-        record.writerLeasesAfter === 0 &&
         record.sandboxesLeft === 0;
     } finally {
       await worker.close();
@@ -202,7 +189,7 @@ export const laneGTimeout: Lane = {
   issue: "panne après provisioning (VM tuée au timeout)",
   scenario: `A provider whose deployment allows a ${SHORT_TIMEOUT_MS / 1000} s sandbox timeout, below the worker TTL; the guest sleeps in bash past it, so E2B kills the VM mid-call`,
   passWhen:
-    "E2B kills the VM, the attempt ends released with its writer lease free and its bash effect never rerun, and the run completes on a new attempt",
+    "E2B kills the VM, the attempt ends released with its bash effect never rerun, and the run completes on a new attempt",
   async run(live) {
     let retried = "";
     const worker = await liveRun(live, {
@@ -236,7 +223,6 @@ export const laneGTimeout: Lane = {
           workerState,
           stopPhase,
         })),
-        writerLeasesHeld: await prisma.volume.count({ where: { writerAttemptId: { not: null } } }),
         sandboxesAlive: (await live.census()).sandboxes,
         bashEffect: (await prisma.externalEffect.findFirst({ where: { runId, kind: "bash" } }))
           ?.status,
@@ -272,7 +258,6 @@ export const laneGTimeout: Lane = {
         afterKill.status === "queued" &&
         afterKill.attempts.length === 1 &&
         afterKill.attempts[0]?.workerState === "released" &&
-        afterKill.writerLeasesHeld === 0 &&
         afterKill.sandboxesAlive === 0 &&
         final.status === "completed" &&
         final.attempts.length === 2 &&

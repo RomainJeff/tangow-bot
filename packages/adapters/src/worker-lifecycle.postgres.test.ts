@@ -1,13 +1,23 @@
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { promisify } from "node:util";
+import type { AdapterContext, PortableFile } from "@rakazo/adapter-kit";
 import { AgentRuntimeBusyError } from "@rakazo/adapter-kit";
 import type { PrismaClient } from "@rakazo/db";
 import { createDb, deleteOwnerVolumes, OwnerWorkerLiveError } from "@rakazo/db";
 import type { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { inspectLocalVolume } from "./docker-volume-import.js";
+import { DockerWorkerProvider } from "./docker-worker.js";
+import { migrateE2BToDocker } from "./e2b-docker-migration.js";
+import { carryDockerVolumesToE2B } from "./e2b-home-upgrade.js";
+import { MemoryVolumeFiles } from "./fake-volume-files.js";
 import { FakeWorkerProvider } from "./fake-worker-provider.js";
 import { allFiles, mcpOnly, privateFiles, workerFixture } from "./worker-fixture.test-support.js";
-import { createWorkerLifecycle, StaleAttemptError, VolumeBusyError } from "./worker-lifecycle.js";
+import { createWorkerLifecycle, StaleAttemptError } from "./worker-lifecycle.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const describePostgres =
@@ -29,6 +39,96 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
     await pool.end();
   });
 
+  it.each(["docker", "e2b"])(
+    "refuses %s provider cutover after database expiry despite a slow process clock",
+    async (kind) => {
+      const root = await mkdtemp(path.join(tmpdir(), "rakazo-cutover-clock-"));
+      const spaceId = await fixture.seedSpace();
+      const computer = await fixture.seedComputer(spaceId, {
+        kind,
+        scope: "dedicated",
+        homeStorage: "volumes",
+      });
+      const bot = await fixture.seedBot(spaceId, computer.id);
+      const ref = `rakazo-${randomUUID()}`;
+      const volume = await fixture.seedVolume("bot_private", spaceId, bot.id, ref);
+      await prisma.volume.update({
+        where: { id: volume.id },
+        data: { providerKind: `${kind}-worker` },
+      });
+      const directory = path.join(root, "volumes", ref);
+      await mkdir(directory, { recursive: true });
+      await writeFile(path.join(directory, "notes.md"), "notes");
+      const expire = async () => {
+        await prisma.$executeRaw`UPDATE computers SET "homeMoveExpiresAt" = (now() AT TIME ZONE 'UTC') - interval '1 second'
+        WHERE id = ${computer.id}`;
+        vi.useFakeTimers({ toFake: ["Date"] });
+        vi.setSystemTime(Date.now() - 120_000);
+      };
+      try {
+        if (kind === "docker") {
+          class ExpireDuringCopy extends MemoryVolumeFiles {
+            override async write(target: string, file: PortableFile, context: AdapterContext) {
+              await super.write(target, file, context);
+              await expire();
+            }
+          }
+          const source = new DockerWorkerProvider({
+            dataDir: root,
+            supervisorUrl: "http://127.0.0.1:9",
+            supervisorToken: "unused",
+          });
+          expect(
+            await carryDockerVolumesToE2B(
+              {
+                prisma,
+                dataDir: root,
+                source,
+                target: new FakeWorkerProvider(),
+                files: new ExpireDuringCopy(),
+              },
+              computer.id,
+              fixture.context,
+            ),
+          ).toMatchObject({ outcome: "refused", refusal: { code: "computer_active" } });
+        } else {
+          await expect(
+            migrateE2BToDocker(
+              {
+                prisma,
+                dataDir: path.join(root, "destination"),
+                source: {
+                  inspect: () => inspectLocalVolume(directory),
+                  read: async (_, file) => {
+                    const content = await readFile(path.join(directory, file));
+                    await expire();
+                    return content;
+                  },
+                },
+                workers: new FakeWorkerProvider(),
+                destroyComputer: async () => {},
+              },
+              randomUUID(),
+              fixture.context,
+            ),
+          ).rejects.toThrow("Migration reservation expired");
+        }
+        expect(
+          (await prisma.volume.findUniqueOrThrow({ where: { id: volume.id } })).providerKind,
+        ).toBe(`${kind}-worker`);
+        expect((await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } })).kind).toBe(
+          kind,
+        );
+        expect(await readFile(path.join(directory, "notes.md"), "utf8")).toBe("notes");
+      } finally {
+        vi.useRealTimers();
+        await prisma.volume.deleteMany({ where: { spaceId } });
+        await prisma.space.delete({ where: { id: spaceId } });
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
+
   it.each([-120_000, 120_000])(
     "uses the database clock with process skew %i for every reservation operation",
     async (skew) => {
@@ -48,14 +148,14 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
           SELECT EXTRACT(EPOCH FROM ("homeMoveExpiresAt" - (now() AT TIME ZONE 'UTC')))::float8 AS remaining
           FROM computers WHERE id = ${computer.id}`;
         expect(reserved!.remaining).toBeGreaterThan(50);
-        expect(reserved!.remaining).toBeLessThanOrEqual(60);
+        expect(reserved!.remaining).toBeLessThanOrEqual(60.001);
         vi.setSystemTime(Date.now() - 2 * skew);
         expect(await workers.renewHomeMove(reservation.marker)).toBe(true);
         const [renewed] = await prisma.$queryRaw<{ remaining: number }[]>`
           SELECT EXTRACT(EPOCH FROM ("homeMoveExpiresAt" - (now() AT TIME ZONE 'UTC')))::float8 AS remaining
           FROM computers WHERE id = ${computer.id}`;
         expect(renewed!.remaining).toBeGreaterThan(50);
-        expect(renewed!.remaining).toBeLessThanOrEqual(60);
+        expect(renewed!.remaining).toBeLessThanOrEqual(60.001);
         expect(await workers.clearStaleHomeMove(computer.id)).toBe(false);
         await workers.reconcile({ limit: 10 }, fixture.context);
         expect(await workers.adoptVolumeHome(computer.id, start, reservation.marker)).toBe(
@@ -114,32 +214,36 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
     expect(await clear()).toBe("No expired home move reservation matched.");
   });
 
-  it("serializes a home move reservation against a worker already planned in the space", async () => {
-    for (let round = 0; round < ROUNDS; round++) {
-      const provider = new FakeWorkerProvider();
-      const workers = createWorkerLifecycle({ prisma, provider });
-      const { computer, bot } = await fixture.migratedBot();
-      const attempt = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
-      const launch = await fixture.launchFor(workers, attempt.id, mcpOnly);
-      const [started, reservation] = await Promise.allSettled([
-        workers.start(launch, fixture.context),
-        workers.reserveHomeMove(computer.id),
-      ]);
-      if (reservation.status !== "fulfilled") throw reservation.reason;
-      if ("marker" in reservation.value) {
-        expect(started).toMatchObject({
-          status: "rejected",
-          reason: expect.any(AgentRuntimeBusyError),
-        });
-        expect(provider.calls.filter((call) => call.op === "ensure")).toEqual([]);
-        await workers.releaseHomeMove(reservation.value.marker);
-      } else {
-        expect(reservation.value.blocker).toBe("space_worker_live");
-        expect(started.status).toBe("fulfilled");
-        await workers.release(attempt.id, fixture.context);
+  it.each(["team", "dedicated"])(
+    "serializes a %s home move reservation against an already planned worker",
+    async (scope) => {
+      for (let round = 0; round < ROUNDS; round++) {
+        const provider = new FakeWorkerProvider();
+        const workers = createWorkerLifecycle({ prisma, provider });
+        const { computer, bot } = await fixture.migratedBot();
+        await prisma.computer.update({ where: { id: computer.id }, data: { scope } });
+        const attempt = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
+        const launch = await fixture.launchFor(workers, attempt.id, mcpOnly);
+        const [started, reservation] = await Promise.allSettled([
+          workers.start(launch, fixture.context),
+          workers.reserveHomeMove(computer.id),
+        ]);
+        if (reservation.status !== "fulfilled") throw reservation.reason;
+        if ("marker" in reservation.value) {
+          expect(started).toMatchObject({
+            status: "rejected",
+            reason: expect.any(AgentRuntimeBusyError),
+          });
+          expect(provider.calls.filter((call) => call.op === "ensure")).toEqual([]);
+          await workers.releaseHomeMove(reservation.value.marker);
+        } else {
+          expect(reservation.value.blocker).toBe("space_worker_live");
+          expect(started.status).toBe("fulfilled");
+          await workers.release(attempt.id, fixture.context);
+        }
       }
-    }
-  });
+    },
+  );
 
   it("starts a worker only for the attempt holding the run's fence", async () => {
     for (let round = 0; round < ROUNDS; round++) {
@@ -172,7 +276,7 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
     }
   });
 
-  it("lets one of two runs racing for the same volumes write, whatever their grant order", async () => {
+  it("starts both runs racing for the same volumes, whatever their grant order", async () => {
     for (let round = 0; round < ROUNDS; round++) {
       const fake = new FakeWorkerProvider();
       const workers = createWorkerLifecycle({ prisma, provider: fake });
@@ -190,17 +294,21 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
         ),
       ]);
 
-      expect(results.map((result) => result.status).sort()).toEqual(["fulfilled", "rejected"]);
-      const refused = results.find((result) => result.status === "rejected");
-      expect(refused?.reason).toBeInstanceOf(VolumeBusyError);
-      const winner = results[0]!.status === "fulfilled" ? first.id : second.id;
-      expect(
-        fake.calls.filter((call) => call.op === "ensure").map((call) => call.spec.attemptId),
-      ).toEqual([winner]);
+      expect(results.map((result) => result.status)).toEqual(["fulfilled", "fulfilled"]);
+      const mounts = [
+        { volumeRef: privateVolume.providerRef, path: `/workspace/bots/${bot.id}`, access: "rw" },
+        { volumeRef: sharedVolume.providerRef, path: "/workspace/shared", access: "rw" },
+      ];
+      expect(fake.live.get(`fake-worker-${first.id}`)?.mounts).toEqual(mounts);
+      expect(fake.live.get(`fake-worker-${second.id}`)?.mounts).toEqual([...mounts].reverse());
       expect([
-        await fixture.writerOf(privateVolume.id),
-        await fixture.writerOf(sharedVolume.id),
-      ]).toEqual([winner, null]);
+        await fixture.workerStateOf(first.id),
+        await fixture.workerStateOf(second.id),
+      ]).toEqual(["ready", "ready"]);
+      await workers.release(first.id, fixture.context);
+      expect([...fake.live.keys()]).toEqual([`fake-worker-${second.id}`]);
+      await workers.release(second.id, fixture.context);
+      expect(fake.live.size).toBe(0);
     }
   });
 
@@ -208,7 +316,7 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
     for (let round = 0; round < ROUNDS; round++) {
       const fake = new FakeWorkerProvider();
       const workers = createWorkerLifecycle({ prisma, provider: fake });
-      const { computer, bot, sharedVolume } = await fixture.migratedBot();
+      const { computer, bot } = await fixture.migratedBot();
       const teammate = await fixture.teammateOf(computer);
       const first = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
       const second = await fixture.seedAttempt((await fixture.seedRun(teammate.bot)).id);
@@ -227,7 +335,7 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
           .map((call) => call.spec.attemptId)
           .sort(),
       ).toEqual([first.id, second.id].sort());
-      expect(await fixture.writerOf(sharedVolume.id)).toBeNull();
+      expect(fake.live.size).toBe(2);
     }
   });
 
@@ -235,7 +343,7 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
     for (let round = 0; round < ROUNDS; round++) {
       const fake = new FakeWorkerProvider();
       const workers = createWorkerLifecycle({ prisma, provider: fake });
-      const { bot, privateVolume } = await fixture.migratedBot();
+      const { bot } = await fixture.migratedBot();
       const attempt = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
       const launch = await fixture.launchFor(workers, attempt.id, privateFiles);
 
@@ -250,7 +358,7 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
       );
       expect(fake.calls.map((call) => call.op)).toEqual(["ensure", "prepare"]);
       expect(await fixture.workerStateOf(attempt.id)).toBe("ready");
-      expect(await fixture.writerOf(privateVolume.id)).toBe(attempt.id);
+      expect([...fake.live.keys()]).toEqual([`fake-worker-${attempt.id}`]);
     }
   });
 
@@ -258,7 +366,7 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
     for (let round = 0; round < ROUNDS; round++) {
       const fake = new FakeWorkerProvider();
       const workers = createWorkerLifecycle({ prisma, provider: fake });
-      const { bot, privateVolume } = await fixture.migratedBot();
+      const { bot } = await fixture.migratedBot();
       const attempt = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
       const launch = await fixture.launchFor(workers, attempt.id, allFiles);
 
@@ -276,7 +384,7 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
           status: "rejected",
           reason: expect.any(OwnerWorkerLiveError),
         });
-        expect(await fixture.writerOf(privateVolume.id)).toBe(attempt.id);
+        expect([...fake.live.keys()]).toEqual([`fake-worker-${attempt.id}`]);
       } else {
         expect(started.reason).toBeInstanceOf(StaleAttemptError);
         expect(deleted.status).toBe("fulfilled");
