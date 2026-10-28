@@ -209,7 +209,6 @@ it("answers at once, keeps the helper running past the turn, and wakes the bot w
             {
               helperId: child.id,
               profile: null,
-              brief: BRIEF,
               status: "running",
               startedAt: (await childOf(parentId)).startedAt?.toISOString(),
             },
@@ -218,6 +217,8 @@ it("answers at once, keeps the helper running past the turn, and wakes the bot w
       ),
     },
   ]);
+  expect(followupText).not.toContain(BRIEF);
+  expect(followupText).not.toContain('\\"brief\\"');
   expect(followupText).not.toContain('"tool_calls"');
   expect(text(childRequest)).not.toContain("<active_helpers>");
   const call = launchEntries.find(
@@ -917,7 +918,9 @@ it("does not wake the bot again for a report its resumed turn already read", asy
       {
         expect(request) {
           expect(text(request)).toContain("<active_helpers>");
-          expect(text(request)).toContain(BRIEF);
+          expect(request.messages.at(-1)?.content).toEqual([
+            { type: "text", text: expect.stringContaining('"status":"queued"') },
+          ]);
         },
         response: publish.response,
       },

@@ -357,7 +357,7 @@ function fixture(
 
 describe("the history a run reads from its session log", () => {
   it.each([false, true])(
-    "counts the source prompt once while preserving active effects and steering, resumed=%s",
+    "counts the source prompt once and omits oversized helper briefs while preserving active effects and steering, resumed=%s",
     async (resumed) => {
       const prompt = "x".repeat(245_000);
       const own = { botId: BOT, runId: RUN };
@@ -390,7 +390,7 @@ describe("the history a run reads from its session log", () => {
       const { runtimeRun, finalized } = await fixture({
         prompt,
         tail,
-        helperBrief: "helper work ".repeat(4_000),
+        helperBrief: "helper work ".repeat(70_000),
         run: { sourceMessageId: "e-2" },
         model: { provider: "openai", id: "gpt-4o" },
       }).execute();
@@ -398,7 +398,9 @@ describe("the history a run reads from its session log", () => {
       expect(runtimeRun.mock.calls).toHaveLength(1);
       const request = runtimeRun.mock.calls[0]![0];
       expect(request.prompt).toContain(prompt);
-      expect(request.prompt).toContain("helper work ".repeat(4_000));
+      expect(request.prompt).not.toContain("helper work");
+      expect(request.prompt).toContain('"helperId":"active-helper"');
+      expect(request.prompt).toContain('"status":"running"');
       expect(request.prompt.endsWith("</active_helpers>")).toBe(true);
       expect(request.history.some((turn) => turn.id === "e-2")).toBe(false);
       expect(
@@ -494,39 +496,35 @@ describe("the history a run reads from its session log", () => {
     for (const history of histories.slice(1)) expect(history).toEqual(histories[0]);
   });
 
-  it.each(["tool", "helper"] as const)(
-    "rejects oversized active %s state before calling the model",
-    async (kind) => {
-      const own = { botId: BOT, runId: RUN };
-      const tail = chain(0, [
-        { ...started, ...own },
-        {
-          ...own,
-          type: "tool.call",
-          payload: {
-            callId: "effect",
-            name: "write_file",
-            input: JSON.stringify({ content: "x".repeat(700_000) }),
-          },
+  it("rejects oversized active tool state before calling the model", async () => {
+    const own = { botId: BOT, runId: RUN };
+    const tail = chain(0, [
+      { ...started, ...own },
+      {
+        ...own,
+        type: "tool.call",
+        payload: {
+          callId: "effect",
+          name: "write_file",
+          input: JSON.stringify({ content: "x".repeat(700_000) }),
         },
-        {
-          ...own,
-          type: "tool.result",
-          payload: { callId: "effect", output: "written once", isError: false, artifactIds: [] },
-        },
-      ]);
-      const { runtimeRun, finalized } = await fixture({
-        tail: kind === "tool" ? tail : [],
-        helperBrief: kind === "helper" ? "x".repeat(700_000) : undefined,
-        model: { provider: "openai", id: "gpt-4o" },
-      }).execute();
-      expect(runtimeRun.mock.calls).toEqual([]);
-      expect(finalized).toMatchObject({
-        outcome: "failed",
-        error: "Model context cannot fit the fixed prompt, active run, and reply reserve",
-      });
-    },
-  );
+      },
+      {
+        ...own,
+        type: "tool.result",
+        payload: { callId: "effect", output: "written once", isError: false, artifactIds: [] },
+      },
+    ]);
+    const { runtimeRun, finalized } = await fixture({
+      tail,
+      model: { provider: "openai", id: "gpt-4o" },
+    }).execute();
+    expect(runtimeRun.mock.calls).toEqual([]);
+    expect(finalized).toMatchObject({
+      outcome: "failed",
+      error: "Model context cannot fit the fixed prompt, active run, and reply reserve",
+    });
+  });
 
   it("drops an oversized finished legacy tool trace without rejecting a fresh request", async () => {
     const tail = chain(0, [
