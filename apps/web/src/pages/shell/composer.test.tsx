@@ -472,6 +472,34 @@ describe("Composer dictation forced-cancel paths", () => {
   });
 });
 
+describe("Composer while a bot runs", () => {
+  it("replaces Stop with Send while drafting and sends without stopping the run", async () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    const onSend = vi.fn(async () => {});
+    const onStop = vi.fn(async () => {});
+    const { container, root } = mount({ running: true, onSend, onStop });
+    const field = draftTextarea(container);
+    expect(queryButton(container, "Stop")).toBeTruthy();
+    expect(queryButton(container, "Send")).toBeNull();
+
+    act(() => typeInto(field, "Try another approach"));
+    expect(queryButton(container, "Stop")).toBeNull();
+    expect(queryButton(container, "Send")).toBeTruthy();
+
+    act(() => typeInto(field, ""));
+    expect(queryButton(container, "Stop")).toBeTruthy();
+    expect(queryButton(container, "Send")).toBeNull();
+
+    act(() => typeInto(field, "Try another approach"));
+    await act(async () => button(container, "Send").click());
+    expect(onSend).toHaveBeenCalledWith("Try another approach", [], undefined);
+    expect(onStop).not.toHaveBeenCalled();
+    expect(field.value).toBe("");
+    expect(queryButton(container, "Stop")).toBeTruthy();
+    unmount(root, container);
+  });
+});
+
 describe("Composer while a question waits", () => {
   it("names the bot to answer in its placeholder and accessible name, and keeps Stop", () => {
     const { container, root } = mount({ answerName: "Maya", running: true });

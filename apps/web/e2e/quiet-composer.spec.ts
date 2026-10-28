@@ -145,7 +145,7 @@ test("composer capsule: empty, typing, and mention chip in light and dark", asyn
   await captureScreenshot(page, testInfo, "quiet-composer-mention-chip-dark");
 });
 
-test("composer while a bot works: mic sits right beside Stop, light and dark", async ({
+test("composer while a bot works: Send replaces Stop when drafting, light and dark", async ({
   page,
 }, testInfo) => {
   await signup(page, `quiet-composer-run-${Date.now()}@rakazo.test`, "password12", "Run");
@@ -172,6 +172,24 @@ test("composer while a bot works: mic sits right beside Stop, light and dark", a
   await setTheme(page, "dark");
   await expect(stop).toBeVisible();
   await captureScreenshot(page, testInfo, "quiet-composer-working-dark");
+
+  await composer.fill("Try another approach");
+  const send = bar.getByRole("button", { name: "Send", exact: true });
+  await expect(send).toBeVisible();
+  await expect(stop).toHaveCount(0);
+  await send.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+  const sendBox = await send.boundingBox();
+  expect(sendBox).toBeTruthy();
+  expect(Math.abs(sendBox!.x + sendBox!.width - (stopBox!.x + stopBox!.width))).toBeLessThanOrEqual(
+    1,
+  );
+  await captureScreenshot(page, testInfo, "quiet-composer-steering-desktop");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await captureScreenshot(page, testInfo, "quiet-composer-steering-phone");
+
+  await composer.fill("");
+  await expect(stop).toBeVisible();
+  await expect(send).toHaveCount(0);
 });
 
 /** Pastes a tiny fake PNG into the composer, the same way `composer-paste.spec.ts` does. */

@@ -416,7 +416,7 @@ export const Composer = memo(function Composer({
                   />
                 </Button>
               ) : null}
-              {stopButton}
+              {!canSend ? stopButton : null}
             </>
           )
         }
