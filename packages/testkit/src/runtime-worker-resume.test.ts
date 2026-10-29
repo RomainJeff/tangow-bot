@@ -1,5 +1,4 @@
 import type { ConnectorProvider } from "@rakazo/adapter-kit";
-import { runPersistence } from "@rakazo/db";
 import { afterEach, expect, it } from "vitest";
 import { catalogEntries, lazyCatalogTools } from "../../adapters/src/lazy-tool-catalog.js";
 import { latestCard } from "./index.js";
@@ -55,10 +54,12 @@ it("restores a native call and the user's answer in a new child process without 
     answeredByUserId: run.userId,
     answer: "choice-1",
   });
+  expect(await run.send("Also include travel dates.")).toBe(runId);
   await run.restart().dispose();
   await run.continueRun(runId);
   expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).error).toBe(null);
   run.model.assertComplete();
+  expect(JSON.stringify(resumed?.messages).split("Also include travel dates.")).toHaveLength(2);
   expect(
     resumed?.messages.filter((message) =>
       JSON.stringify(message.content).includes("Choose a city for my trip."),
@@ -244,21 +245,6 @@ it("keeps an uncalled loaded tool and a full parallel result receipt across a ch
   expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
     "waiting_input",
   );
-  const [saved] = await run.prisma.$queryRaw<
-    { snapshot: { state: string }; receipts: { callId: string; outcome: unknown }[] }[]
-  >`SELECT snapshot, receipts FROM run_snapshots WHERE "runId" = ${runId}`;
-  expect(saved?.receipts).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining({
-        name: "read_long",
-        outcome: expect.objectContaining({
-          kind: "result",
-          output: expect.objectContaining({ text: payload }),
-        }),
-      }),
-    ]),
-  );
-  expect(saved?.snapshot.state).not.toContain('"toolCallId":"large-native"');
   const card = await latestCard(run.prisma, runId);
   await run.events.answerRunInput({
     spaceId: run.spaceId,
@@ -377,13 +363,8 @@ it.each(["valid", "corrupt", "incompatible", "missing"])(
     if (state === "incompatible")
       await run.prisma
         .$executeRaw`UPDATE run_snapshots SET snapshot = jsonb_set(snapshot, '{harness,format}', '"future-format"') WHERE "runId" = ${runId}`;
-    if (state === "missing") {
-      const held = await run.prisma.run.findUniqueOrThrow({ where: { id: runId } });
-      const existing = await runPersistence(run.prisma, runId, held.leaseFence, [], false);
-      if (existing.start.mode !== "resume") throw new Error("Missing fixture snapshot");
+    if (state === "missing")
       await run.prisma.$executeRaw`DELETE FROM run_snapshots WHERE "runId" = ${runId}`;
-      await expect(existing.resolve()).rejects.toThrow("snapshot is missing");
-    }
     await run.restart().dispose();
     await run.continueRun(runId).catch(() => undefined);
     const finished = await run.prisma.run.findUniqueOrThrow({ where: { id: runId } });

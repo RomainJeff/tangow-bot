@@ -238,7 +238,7 @@ describe("a run whose bot runs in a guest", () => {
   it("starts no effect when the channel is cut before the tool call reaches the controller", async () => {
     const run = await fixture({
       faults: { cutBeforeGuestFrame: once((frame) => frame.type === "tool.call") },
-      steps: [note, note, ...finishing],
+      steps: [note],
     });
     const runId = await run.send("Save a note.");
 
@@ -254,11 +254,11 @@ describe("a run whose bot runs in a guest", () => {
 
     await run.continueRun(runId);
     run.model.assertComplete();
-    expect(await run.prisma.scratchpadItem.count()).toBe(1);
-    expect(await effects(run, runId)).toEqual([
-      { kind: "scratchpad_add", status: "completed" },
-      { kind: "message_user", status: "completed" },
-    ]);
+    expect(await run.prisma.scratchpadItem.count()).toBe(0);
+    expect(await effects(run, runId)).toEqual([]);
+    expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+      "failed",
+    );
   });
 
   it("refuses a controller tool asked under a fence another claim replaced, and starts no second guest", async () => {

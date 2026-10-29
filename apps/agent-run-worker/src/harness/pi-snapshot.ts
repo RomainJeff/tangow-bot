@@ -1,7 +1,14 @@
+import { createHash } from "node:crypto";
 import type { FileEntry } from "@earendil-works/pi-coding-agent";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
 import type { RunSnapshot } from "@rakazo/adapter-kit";
 import { z } from "zod";
+
+export function callOccurrenceId(messageId: string, providerId: string) {
+  return createHash("sha256")
+    .update(JSON.stringify([messageId, providerId]))
+    .digest("hex");
+}
 
 export const PI_SNAPSHOT_FORMAT = "pi-1.3.0/session-3";
 const Entry = z.looseObject({
@@ -171,15 +178,41 @@ export function capturePiSnapshot(
   steeringIds: string[],
   input: string,
   deliveredEvents: string[] = [],
+  leaf = manager.getLeafId(),
+  nativeTools: ReadonlySet<string> = new Set(),
 ): RunSnapshot {
+  const entries = manager.getEntries();
+  const records =
+    leaf === null ? [] : entries.slice(0, entries.findIndex((entry) => entry.id === leaf) + 1);
+  const pending = new Map<string, string>();
+  for (const entry of leaf === null ? [] : manager.getBranch(leaf)) {
+    if (entry.type !== "message") continue;
+    if (entry.message.role === "assistant") {
+      for (const block of entry.message.content) {
+        if (block.type === "toolCall") pending.set(block.id, callOccurrenceId(entry.id, block.id));
+      }
+    } else if (entry.message.role === "toolResult") pending.delete(entry.message.toolCallId);
+  }
+  for (const entry of entries.slice(records.length)) {
+    if (
+      entry.type !== "message" ||
+      entry.message.role !== "toolResult" ||
+      !nativeTools.has(entry.message.toolName)
+    )
+      continue;
+    records.push({ ...entry, parentId: leaf });
+    leaf = entry.id;
+    pending.delete(entry.message.toolCallId);
+  }
   return {
     version: 1,
     harness: { name: "pi-native", format: PI_SNAPSHOT_FORMAT },
     revision,
     deliveredEvents,
+    pendingCallIds: [...pending.values()],
     state: JSON.stringify({
-      records: [manager.getHeader(), ...manager.getEntries()],
-      leaf: manager.getLeafId(),
+      records: [manager.getHeader(), ...records],
+      leaf,
       activeTools,
       steeringIds,
       input,

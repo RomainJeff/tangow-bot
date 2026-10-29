@@ -34,6 +34,7 @@ import {
   historyCompactJob,
   linkPreviewJob,
   RAKAZO_TOOL_PREFIX,
+  RunResumeError,
   routineJobKey,
   routineWakeupJob,
   runContinueJob,
@@ -106,6 +107,7 @@ import {
   isOneShotRoutineCrons,
   isTerminal,
   isUserOpenedTrigger,
+  LIVE_WORKER_STATES,
   MAIN_BOT_BLOCKED_TOOLS,
   MISSING_MODEL_MESSAGE,
   MODEL_PROVIDER_NOT_CONNECTED_MESSAGE,
@@ -1502,6 +1504,19 @@ export function createRunExecutor(deps: ExecutorDeps) {
         ((approvalHold || run.resumeRequired) && run.status === "waiting_input")
       )
         return;
+      if (run.resumeRequired && (run.status === "queued" || run.status === "waiting_takeover")) {
+        const closingWorker = await deps.prisma.attempt.findFirst({
+          where: {
+            runId,
+            fence: run.leaseFence,
+            status: { in: ["waiting_input", "waiting_takeover"] },
+            workerState: { in: [...LIVE_WORKER_STATES, "releasing"] },
+          },
+          select: { id: true },
+        });
+        if (closingWorker)
+          throw new AgentRuntimeBusyError("The previous worker has not finished its pause");
+      }
       let { resumeCheckpoint, heldForTakeover, resumeHeldLease, takeoverResume } =
         takeoverContinuePlan(run);
 
@@ -3459,13 +3474,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   executionId,
                   consumedEffectIds,
                 );
-          if (applied && persistence) {
-            const receipt = (await persistence.resolve()).find(
-              (item) => item.callId === executionId,
-            );
-            if (receipt?.outcome.kind === "started")
-              await persistence.receipt({ ...receipt, effectId: applied.effect.id });
-          }
           if (name === "spawn_bot" && applied && !applied.duplicate) {
             const lost = await spawnBotRaceLoss(deps, run, applied.effect.id);
             if (lost) return lost;
@@ -5418,6 +5426,23 @@ export function createRunExecutor(deps: ExecutorDeps) {
             });
           }
           let nativeSteps: HarnessTranscriptEntry[] | undefined;
+          const resumeEvents =
+            persistence?.start.mode === "resume" && !backgroundHelper
+              ? historyEntries.flatMap((entry) =>
+                  (entry.type === "helper.report" || entry.type === "helper.question") &&
+                  entry.botId === bot.id &&
+                  entry.seq >= (run.historyThroughSeq ?? 0)
+                    ? [
+                        {
+                          id: entry.id,
+                          text: projectInferenceTurns([entry], { selfBotId: bot.id })
+                            .map((turn) => turn.content)
+                            .join("\n"),
+                        },
+                      ]
+                    : [],
+                )
+              : [];
           const runtimeEvents = runtime.run(
             {
               botId: bot.id,
@@ -5426,23 +5451,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               sourceMessageId: run.sourceMessageId,
               prompt: helperCall?.task ?? prompt,
               resumeEvent: takeoverResume?.promptNote ?? task.prompt,
-              resumeEvents:
-                persistence?.start.mode === "resume" && !backgroundHelper
-                  ? historyEntries.flatMap((entry) =>
-                      (entry.type === "helper.report" || entry.type === "helper.question") &&
-                      entry.botId === bot.id &&
-                      entry.seq >= (run.historyThroughSeq ?? 0)
-                        ? [
-                            {
-                              id: entry.id,
-                              text: projectInferenceTurns([entry], { selfBotId: bot.id })
-                                .map((turn) => turn.content)
-                                .join("\n"),
-                            },
-                          ]
-                        : [],
-                    )
-                  : [],
+              resumeEvents,
               instructions,
               ...(harnessAddendum ? { harnessAddendum } : {}),
               ...(helperCall ? { helper: helperCall } : {}),
@@ -5460,37 +5469,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
                       async resolve() {
                         const receipts = await persistence.resolve();
                         for (const receipt of receipts) {
-                          if (receipt.outcome.kind === "started" && receipt.effectId) {
-                            const output = await deps.prisma.$transaction(async (tx) => {
-                              if (!(await renewRunLease({ prisma: tx }, runId, workerId, fence)))
-                                throw new Error("This attempt no longer holds the run.");
-                              const effect = await tx.externalEffect.findUniqueOrThrow({
-                                where: { id: receipt.effectId },
-                              });
-                              if (effect.runId !== runId)
-                                throw new Error("Receipt effect belongs to another run");
-                              const gate = resolveDuplicateEffectGate(effect, receipt.name);
-                              if (gate.action === "return") return gate.result;
-                              if (gate.action === "uncertain")
-                                return settleUncertainEffect(tx, effect.id, receipt.name);
-                              return undefined;
-                            });
-                            if (output !== undefined)
-                              await persistence.receipt({
-                                ...receipt,
-                                outcome: {
-                                  kind: "result",
-                                  output,
-                                  isError:
-                                    isFailedToolResult(output) ||
-                                    (typeof output === "object" &&
-                                      output !== null &&
-                                      "isError" in output &&
-                                      output.isError === true),
-                                },
-                              });
-                            continue;
-                          }
                           if (receipt.outcome.kind !== "paused") continue;
                           const paused = receipt.outcome.output;
                           const details = isToolPauseResult(paused) ? paused.details : undefined;
@@ -5945,6 +5923,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
 
           if (approvalPausePending || !leaseValid) return;
+          if (resumeEvents.length) {
+            const delivered = new Set(resumeEvents.map((event) => event.id));
+            const through = historyEntries.reduce(
+              (next, entry) => (delivered.has(entry.id) ? Math.max(next, entry.seq + 1) : next),
+              0,
+            );
+            await deps.prisma
+              .$executeRaw`UPDATE runs SET "historyThroughSeq" = GREATEST(COALESCE("historyThroughSeq", 0), ${through})
+              WHERE id = ${runId} AND "leaseFence" = ${fence} AND status = 'running'`;
+          }
           approvedEffectReplays.assertDrained();
           for (const turn of script ?? []) {
             for (const file of turn.files ?? []) {
@@ -6216,10 +6204,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
         if (
           !retryForever &&
           (setupFailures + 1 >= MAX_SETUP_ATTEMPTS ||
-            setupError instanceof RunComputerRequiredError)
+            setupError instanceof RunComputerRequiredError ||
+            setupError instanceof RunResumeError)
         ) {
           const message = redactSecrets(
-            `${setupError instanceof RunComputerRequiredError ? "Run setup failed" : `Run setup failed after ${MAX_SETUP_ATTEMPTS} attempts`}: ${
+            `${setupError instanceof RunComputerRequiredError || setupError instanceof RunResumeError ? "Run setup failed" : `Run setup failed after ${MAX_SETUP_ATTEMPTS} attempts`}: ${
               setupError instanceof Error ? setupError.message : String(setupError)
             }`,
             runSecrets,

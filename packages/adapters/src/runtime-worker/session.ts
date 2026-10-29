@@ -245,7 +245,17 @@ export function createSession(
 
   const allowed = (name: string) => tools.has(name);
 
+  let pauseSaved = false;
   const endPaused = (): ReplyFinal => {
+    if (
+      request.persistence &&
+      launched?.expectedHarness.capabilities.includes("resume") &&
+      !pauseSaved
+    ) {
+      finished = true;
+      fail(new Error("The pause ended without a saved agent snapshot"));
+      return { type: "stop", reason: "cancelled" };
+    }
     if (!finished) {
       finished = true;
       events.end();
@@ -477,7 +487,6 @@ export function createSession(
         ? request.persistence
         : undefined;
     const receiptArgs = JSON.parse(JSON.stringify(args));
-    await durable?.receipt({ callId, name, args: receiptArgs, outcome: { kind: "started" } });
     if (name === "run_subagent" && runsOwnLoop()) {
       recorder?.toolStart(callId, name, args);
       const reply = await runHelper(body, part);
@@ -688,7 +697,8 @@ export function createSession(
         if (!(await fenceOwned()) || !live()) return revoke();
         if (
           !request.persistence ||
-          paused ||
+          !paused ||
+          pauseSaved ||
           body.snapshot.harness.name !== launched!.expectedHarness.name
         )
           return refuse("invalid");
@@ -702,7 +712,9 @@ export function createSession(
           if (body.snapshot.deliveredEvents.some((id) => !permitted.has(id)))
             return refuse("invalid");
         }
+        while (open.size > 0) await Promise.allSettled([...open.values()]);
         await request.persistence.save(body.snapshot);
+        pauseSaved = true;
         return { type: "recorded" };
       case "snapshot.resolve":
         if (!(await fenceHeld()) || !live()) return revoke();
@@ -866,7 +878,7 @@ export function createSession(
         await request.onSkillUsed?.(clean(body.name));
         return { type: "recorded" };
       case "failed":
-        if (paused) return endPaused();
+        if (paused && !request.persistence) return endPaused();
         fail(new Error(clean(body.message)));
         return { type: "stop", reason: "cancelled" };
       case "transcript": {
@@ -944,6 +956,12 @@ export function createSession(
             return;
           }
           rootTools = new Set(start.run.tools.map((tool) => tool.name));
+          try {
+            if (expected.capabilities.includes("resume")) await request.persistence?.begin();
+          } catch (error) {
+            fail(error instanceof Error ? error : new Error(String(error)));
+            return;
+          }
           await channel.send(encodeMessage(start));
           inbox.attach((reply) => void channel.send(encodeMessage(reply)));
           continue;

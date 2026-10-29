@@ -179,7 +179,9 @@ export function attemptOwnsFence(
   return (
     attemptHoldsFence(attempt, run) ||
     (attempt.fence === run.leaseFence &&
-      (run.status === "waiting_input" || run.status === "waiting_takeover"))
+      (run.status === "queued" ||
+        run.status === "waiting_input" ||
+        run.status === "waiting_takeover"))
   );
 }
 

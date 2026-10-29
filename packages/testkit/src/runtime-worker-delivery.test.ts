@@ -1,4 +1,4 @@
-import type { ConnectorProvider, ReplyBody } from "@rakazo/adapter-kit";
+import type { ReplyBody } from "@rakazo/adapter-kit";
 import { parseControllerMessage, parseGuestMessage } from "@rakazo/adapter-kit";
 import type { GuestConnector } from "@rakazo/adapters/runtime-worker";
 import { messageHelper } from "@rakazo/db";
@@ -12,80 +12,54 @@ afterEach(async () => {
   for (const close of cleanups.splice(0)) await close();
 });
 
-it("recovers the full result when a child dies after the controller commits its receipt but before the native session receives it", async () => {
-  const payload = `authoritative-${"r".repeat(6000)}`;
+it("does not reconstruct a child that crashed while working before any saved pause", async () => {
   let executed = 0;
   const crash = crashOnReply(
     (body, toolName) => body.type === "tool.result" && toolName === "read_long",
   );
-  let resumed: ModelEmulatorRequest | undefined;
-  const tools: ConnectorProvider = {
-    describe: () => ({
-      id: "read-fixture",
-      contractVersion: "1",
-      adapterVersion: "1",
-      capabilities: { discover: true, oauth: false, secretsBrokered: true },
-    }),
-    discoverTools: async () => [
-      {
-        name: "read_long",
-        description: "Read",
-        readOnly: true,
-        inputSchema: { type: "object", properties: {} },
-        route: { connectorId: "read-fixture", toolName: "read_long" },
-      },
-    ],
-    async *execute() {
-      executed++;
-      yield { type: "result", data: payload };
-    },
-  };
   const run = await startWorkerRun({
     mode: "child",
-    tools,
     connector: crash.connector,
+    tools: {
+      describe: () => ({
+        id: "read-fixture",
+        contractVersion: "1",
+        adapterVersion: "1",
+        capabilities: { discover: true, oauth: false, secretsBrokered: true },
+      }),
+      discoverTools: async () => [
+        {
+          name: "read_long",
+          description: "Read",
+          readOnly: true,
+          inputSchema: { type: "object" },
+          route: { connectorId: "read-fixture", toolName: "read_long" },
+        },
+      ],
+      async *execute() {
+        executed++;
+        yield { type: "result", data: "read result" };
+      },
+    },
     steps: [
       {
         expect() {},
         response: { type: "tool", id: "read-native", name: "read_long", arguments: {} },
       },
-      {
-        expect(request) {
-          resumed = request;
-        },
-        response: {
-          type: "tool",
-          id: "say",
-          name: "message_user",
-          arguments: { message: "Recovered." },
-        },
-      },
-      { expect() {}, response: { type: "text", text: "" } },
     ],
   });
   cleanups.push(() => run.close());
   const runId = await run.send("Read once.");
   await run.continueRun(runId).catch(() => undefined);
   expect(crash.crashed()).toBe(true);
-  const [row] = await run.prisma.$queryRaw<
-    { snapshot: { state: string }; receipts: unknown }[]
-  >`SELECT snapshot, receipts FROM run_snapshots WHERE "runId" = ${runId}`;
-  expect(row?.snapshot.state).not.toContain('"toolCallId":"read-native"');
-  expect(JSON.stringify(row?.receipts)).toContain(payload);
+  expect(await run.prisma.runSnapshot.count({ where: { runId } })).toBe(0);
   await run.restart().dispose();
-  await run.continueRun(runId);
-  expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).error).toBe(null);
-  run.model.assertComplete();
+  await run.continueRun(runId).catch(() => undefined);
+  const finished = await run.prisma.run.findUniqueOrThrow({ where: { id: runId } });
+  expect(finished.status).toBe("failed");
+  expect(finished.error).toContain("pause snapshot is missing");
   expect(executed).toBe(1);
-  expect(resumed?.messages).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining({
-        role: "tool",
-        tool_call_id: "read-native",
-        content: expect.stringContaining(payload),
-      }),
-    ]),
-  );
+  run.model.assertComplete();
 });
 
 it("resumes a background helper in its own native session with its parent's full answer", async () => {
@@ -223,50 +197,3 @@ function crashOnReply(matches: (body: ReplyBody, toolName: string | undefined) =
   });
   return { connector, crashed: () => crashed };
 }
-
-it("redelivers steering claimed just before a child crash exactly once", async () => {
-  const marker = "steering-marker-42";
-  const crash = crashOnReply((body) => body.type === "steering" && body.messages.length > 0);
-  let resumed: ModelEmulatorRequest | undefined;
-  const run = await startWorkerRun({
-    mode: "child",
-    connector: crash.connector,
-    steps: [
-      {
-        async expect() {
-          await run.send(marker);
-        },
-        response: {
-          type: "tool",
-          id: "note",
-          name: "scratchpad_add",
-          arguments: { text: "Prepare" },
-        },
-      },
-      {
-        expect(request) {
-          resumed = request;
-        },
-        response: {
-          type: "tool",
-          id: "say",
-          name: "message_user",
-          arguments: { message: "Received." },
-        },
-      },
-      { expect() {}, response: { type: "text", text: "" } },
-    ],
-  });
-  cleanups.push(() => run.close());
-  const runId = await run.send("Prepare the task.");
-  await run.continueRun(runId).catch(() => undefined);
-  expect(crash.crashed()).toBe(true);
-  expect(
-    await run.prisma.steeringMessage.findFirst({ where: { runId }, select: { claimedAt: true } }),
-  ).toEqual({ claimedAt: expect.any(Date) });
-  await run.restart().dispose();
-  await run.continueRun(runId);
-  expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).error).toBe(null);
-  run.model.assertComplete();
-  expect(JSON.stringify(resumed?.messages).split(marker)).toHaveLength(2);
-});

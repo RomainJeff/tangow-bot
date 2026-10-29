@@ -1,5 +1,4 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -31,17 +30,11 @@ import { mcpResult, rakazoMcpTools } from "../rakazo-mcp.js";
 import { durableBashTool } from "./durable-bash.js";
 import { exactToolSearchExtension } from "./exact-tool-search.js";
 import { relayModelRuntime } from "./pi-session.js";
-import { capturePiSnapshot, restorePiSnapshot } from "./pi-snapshot.js";
+import { callOccurrenceId, capturePiSnapshot, restorePiSnapshot } from "./pi-snapshot.js";
 import { rakazoMcpTransport } from "./rakazo-mcp.js";
 
 type SteeringMessage = Extract<ReplyFinal, { type: "steering" }>["messages"][number];
 type TranscriptMessage = Extract<GuestBody, { type: "transcript" }>["messages"][number];
-
-function callOccurrenceId(messageId: string, providerId: string) {
-  return createHash("sha256")
-    .update(JSON.stringify([messageId, providerId]))
-    .digest("hex");
-}
 
 function stopIfCancelled(signal: AbortSignal) {
   if (signal.aborted) throw new Error("The run was cancelled");
@@ -153,7 +146,6 @@ export const piNativeHarness: GuestHarness = {
     const modelRuntime = await relayModelRuntime(
       model,
       piAiProviderStream(async (body, onPart, signal) => {
-        await save();
         return host.model({ ...body, agent }, onPart, signal);
       }),
     );
@@ -165,39 +157,18 @@ export const piNativeHarness: GuestHarness = {
     });
     let revision = start?.mode === "resume" ? start.snapshot.revision : 0;
     let session: AgentSession | undefined;
-    let saveQueue = Promise.resolve();
-    let persistenceError: unknown;
-    const save = () => {
-      saveQueue = saveQueue.then(async () => {
-        if (persistenceError) throw persistenceError;
-        if (!durable || host.paused()) return;
-        try {
-          await host.decide(
-            {
-              type: "snapshot.save",
-              snapshot: capturePiSnapshot(
-                sessionManager,
-                session?.getActiveToolNames() ?? [],
-                ++revision,
-                seenIds,
-                run.resumeEvent ?? run.prompt,
-                deliveredEvents,
-              ),
-            },
-            "recorded",
-          );
-        } catch (error) {
-          persistenceError = error;
-          throw error;
+    let checkpoint:
+      | {
+          leaf: string | null;
+          steeringIds: string[];
+          deliveredEvents: string[];
         }
-      });
-      return saveQueue;
-    };
+      | undefined;
     let reportFailed: { error: unknown } | undefined;
     let lastAssistant: { stopReason?: unknown; errorMessage?: unknown } | undefined;
     // Each message is the controller's before the loop acts on it, so a call is logged before it runs.
     const report = async (message: TranscriptMessage) => {
-      if (reportFailed || persistenceError || host.signal.aborted) return;
+      if (reportFailed || host.signal.aborted) return;
       try {
         await host.decide(
           { type: "transcript", agent, dialect: "pi-ai", messages: [message] },
@@ -335,12 +306,13 @@ export const piNativeHarness: GuestHarness = {
             });
           },
           (pi) => {
-            pi.on("tool_call", async () => {
-              try {
-                await save();
-              } catch {
-                return { block: true, reason: "Native state could not be persisted" };
-              }
+            pi.on("tool_call", () => {
+              if (!durable || host.paused()) return;
+              checkpoint = {
+                leaf: sessionManager.getLeafId(),
+                steeringIds: [...seenIds],
+                deliveredEvents: [...deliveredEvents],
+              };
             });
             pi.on("message_end", async (event) => {
               const message = structuredClone(event.message);
@@ -592,7 +564,28 @@ export const piNativeHarness: GuestHarness = {
         host.signal.removeEventListener("abort", abort);
       }
       stopIfCancelled(host.signal);
-      if (persistenceError) throw persistenceError;
+      if (durable && host.paused()) {
+        if (!checkpoint) throw new Error("The paused agent has no resume point");
+        await host.decide(
+          {
+            type: "snapshot.save",
+            snapshot: capturePiSnapshot(
+              sessionManager,
+              active.getActiveToolNames(),
+              ++revision,
+              checkpoint.steeringIds,
+              run.resumeEvent ?? run.prompt,
+              checkpoint.deliveredEvents,
+              checkpoint.leaf,
+              new Set([
+                ...run.tools.filter((tool) => tool.where === "guest").map((tool) => tool.name),
+                "tool_search",
+              ]),
+            ),
+          },
+          "recorded",
+        );
+      }
       if (reportFailed) throw reportFailed.error;
       if (lastAssistant?.stopReason === "error") {
         throw new Error(String(lastAssistant.errorMessage ?? "The model call failed"));

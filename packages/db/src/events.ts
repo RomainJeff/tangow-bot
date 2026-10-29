@@ -1926,8 +1926,17 @@ async function finalizeRunOnce(
         threadId: input.threadId,
         botId: input.botId,
         taskId: input.taskId,
-        status: "running",
-        leaseOwner: input.leaseOwner,
+        OR: [
+          { status: "running", leaseOwner: input.leaseOwner },
+          ...(input.outcome === "failed"
+            ? [
+                {
+                  status: { in: ["waiting_input", "waiting_takeover"] },
+                  OR: [{ leaseOwner: input.leaseOwner }, { leaseOwner: null }],
+                },
+              ]
+            : []),
+        ],
         leaseFence: input.leaseFence,
       },
       data: {
@@ -1951,7 +1960,12 @@ async function finalizeRunOnce(
         id: input.attemptId,
         runId: input.runId,
         fence: input.leaseFence,
-        status: { in: ["setting_up", "running"] },
+        status: {
+          in:
+            input.outcome === "failed"
+              ? ["setting_up", "running", "waiting_input", "waiting_takeover"]
+              : ["setting_up", "running"],
+        },
       },
       data: {
         status: input.outcome,

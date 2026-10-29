@@ -91,6 +91,7 @@ it("transfers a complete native snapshot above the ordinary frame limit without 
       version: 1,
       harness: { name: "other-harness", format: "fixture" },
       deliveredEvents: [],
+      pendingCallIds: [],
       revision: 1,
       state,
     },

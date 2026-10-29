@@ -4,6 +4,7 @@ import {
   RUN_RECEIPTS_BYTES,
   RUN_SNAPSHOT_BYTES,
   RunReceiptSchema,
+  RunResumeError,
   RunSnapshotSchema,
 } from "@rakazo/adapter-kit";
 import { redactSecrets } from "@rakazo/core";
@@ -16,7 +17,7 @@ const Row = z.strictObject({
   receipts: z.array(RunReceiptSchema),
 });
 
-/** The run row lock serializes snapshots and receipts with lease changes and cancellation. */
+/** Only attempt initialization and pause saves access the database; receipts stay in memory. */
 export async function runPersistence(
   prisma: PrismaClient,
   runId: string,
@@ -25,120 +26,112 @@ export async function runPersistence(
   legacy: boolean,
 ): Promise<RunPersistence> {
   const mask = (value: unknown) => JSON.parse(redactSecrets(JSON.stringify(value), [...secrets]));
-  const read = async () => {
-    const rows = await prisma.$queryRaw<
+  const initial = await prisma.$transaction(async (tx) => {
+    const [held] = await tx.$queryRaw<
+      { sessionId: string; threadSessionId: string | null; resumeRequired: boolean }[]
+    >`SELECT r."sessionId", t."sessionId" AS "threadSessionId", r."resumeRequired"
+      FROM runs r JOIN threads t ON t.id = r."threadId"
+      WHERE r.id = ${runId} AND r."leaseFence" = ${fence}
+        AND r.status IN ('running', 'waiting_input', 'waiting_takeover') FOR UPDATE OF r`;
+    if (!held) throw new Error("Resume state fence was revoked");
+    const rows = await tx.$queryRaw<
       unknown[]
     >`SELECT "sessionId", snapshot, receipts FROM run_snapshots WHERE "runId" = ${runId}`;
-    return rows.length ? Row.parse(mask(rows[0])) : undefined;
-  };
-  const previous = await read();
-  const marker = await prisma.$queryRaw<
-    { resumeRequired: boolean }[]
-  >`SELECT "resumeRequired" FROM runs WHERE id = ${runId}`;
-  if (marker[0]?.resumeRequired && !previous)
-    throw new Error("Required resume snapshot is missing");
-  const run = await prisma.run.findUniqueOrThrow({
-    where: { id: runId },
-    select: { sessionId: true, thread: { select: { sessionId: true } } },
+    const previous = rows.length ? Row.parse(mask(rows[0])) : undefined;
+    if (held.resumeRequired && !previous)
+      throw new RunResumeError("Required pause snapshot is missing");
+    if (previous && previous.sessionId !== held.sessionId)
+      throw new Error("Resume state belongs to a different session");
+    return { ...held, previous };
   });
-  if (previous && previous.sessionId !== run.sessionId)
-    throw new Error("Resume state belongs to a different session");
-  const mutate = async (
-    update: (state: z.infer<typeof Row> | undefined) => z.infer<typeof Row>,
-  ) => {
-    await prisma.$transaction(async (tx) => {
-      const held = await tx.$queryRaw<
-        { sessionId: string; resumeRequired: boolean }[]
-      >`SELECT "sessionId", "resumeRequired" FROM runs WHERE id = ${runId} AND "leaseFence" = ${fence} AND status IN ('running', 'waiting_input', 'waiting_takeover') FOR UPDATE`;
-      if (held.length !== 1 || !held[0]) throw new Error("Resume state fence was revoked");
-      if (previous && held[0].sessionId !== run.sessionId)
-        throw new Error("Resume session was revoked");
-      run.sessionId = held[0].sessionId;
-      const rows = await tx.$queryRaw<
-        unknown[]
-      >`SELECT "sessionId", snapshot, receipts FROM run_snapshots WHERE "runId" = ${runId}`;
-      if (held[0].resumeRequired && rows.length === 0)
-        throw new Error("Required resume snapshot is missing");
-      const existing = rows.length ? Row.parse(mask(rows[0])) : undefined;
-      if (existing && existing.sessionId !== held[0].sessionId)
-        throw new Error("Resume session was revoked");
-      const state = update(existing);
-      const snapshot = JSON.stringify(mask(state.snapshot));
-      const receipts = JSON.stringify(mask(state.receipts));
-      if (
-        Buffer.byteLength(snapshot) > RUN_SNAPSHOT_BYTES ||
-        Buffer.byteLength(receipts) > RUN_RECEIPTS_BYTES
-      )
-        throw new Error("Durable resume state exceeds its transfer limit");
-      const delivered = await tx.sessionEntry.findMany({
-        where: {
-          id: { in: state.snapshot.deliveredEvents },
-          sessionId: run.thread.sessionId ?? run.sessionId,
-          type: { in: ["helper.report", "helper.question"] },
-        },
-        select: { seq: true },
-      });
-      const through = delivered.reduce((next, entry) => Math.max(next, entry.seq + 1), 0);
-      await tx.$executeRaw`UPDATE runs SET "resumeRequired" = TRUE, "historyThroughSeq" = GREATEST(COALESCE("historyThroughSeq", 0), ${through}) WHERE id = ${runId}`;
-      await tx.$executeRaw`INSERT INTO run_snapshots ("runId", "sessionId", snapshot, receipts) VALUES (${runId}, ${run.sessionId}, ${snapshot}::jsonb, ${receipts}::jsonb) ON CONFLICT ("runId") DO UPDATE SET snapshot = EXCLUDED.snapshot, receipts = EXCLUDED.receipts`;
-    });
-  };
+  let begun = false;
+  let revision = initial.previous?.snapshot.revision ?? -1;
+  const receipts = new Map(initial.previous?.receipts.map((receipt) => [receipt.callId, receipt]));
   return {
-    start: previous
-      ? { mode: "resume", snapshot: previous.snapshot, receipts: previous.receipts }
+    start: initial.previous
+      ? { mode: "resume", snapshot: initial.previous.snapshot, receipts: initial.previous.receipts }
       : { mode: legacy ? "legacy" : "fresh" },
-    async save(input: RunSnapshot) {
-      const snapshot = RunSnapshotSchema.parse(input);
-      await mutate((state) => {
-        if (
-          state &&
-          (snapshot.harness.name !== state.snapshot.harness.name ||
-            snapshot.harness.format !== state.snapshot.harness.format ||
-            snapshot.revision <= state.snapshot.revision)
-        )
-          throw new Error("Incompatible or stale resume snapshot");
-        return { sessionId: run.sessionId, snapshot, receipts: state?.receipts ?? [] };
+    async begin() {
+      if (begun) return;
+      await prisma.$transaction(async (tx) => {
+        const [held] = await tx.$queryRaw<{ sessionId: string }[]>`SELECT "sessionId" FROM runs
+          WHERE id = ${runId} AND "leaseFence" = ${fence} AND status = 'running' FOR UPDATE`;
+        if (!held) throw new Error("Resume state fence was revoked");
+        if (initial.previous && held.sessionId !== initial.sessionId)
+          throw new Error("Resume session was revoked");
+        initial.sessionId = held.sessionId;
+        if (initial.previous) {
+          const removed = await tx.$executeRaw`DELETE FROM run_snapshots WHERE "runId" = ${runId}
+            AND "sessionId" = ${held.sessionId} AND snapshot->>'revision' = ${String(initial.previous.snapshot.revision)}`;
+          if (removed !== 1) throw new RunResumeError("Required pause snapshot is missing");
+        }
+        if (!initial.resumeRequired)
+          await tx.$executeRaw`UPDATE runs SET "resumeRequired" = TRUE WHERE id = ${runId}`;
       });
+      begun = true;
+    },
+    async save(input: RunSnapshot) {
+      const snapshot = RunSnapshotSchema.parse(mask(input));
+      if (
+        snapshot.revision <= revision ||
+        (initial.previous &&
+          (snapshot.harness.name !== initial.previous.snapshot.harness.name ||
+            snapshot.harness.format !== initial.previous.snapshot.harness.format))
+      )
+        throw new Error("Incompatible or stale resume snapshot");
+      const pending = new Set(snapshot.pendingCallIds);
+      const retained = [...receipts.values()].filter((receipt) => pending.has(receipt.callId));
+      const encodedSnapshot = JSON.stringify(snapshot);
+      const encodedReceipts = JSON.stringify(mask(retained));
+      if (
+        Buffer.byteLength(encodedSnapshot) > RUN_SNAPSHOT_BYTES ||
+        Buffer.byteLength(encodedReceipts) > RUN_RECEIPTS_BYTES
+      )
+        throw new Error("Pause resume state exceeds its transfer limit");
+      await prisma.$transaction(async (tx) => {
+        const [held] = await tx.$queryRaw<{ sessionId: string }[]>`SELECT "sessionId" FROM runs
+          WHERE id = ${runId} AND "leaseFence" = ${fence}
+          AND status IN ('running', 'queued', 'waiting_input', 'waiting_takeover') FOR UPDATE`;
+        if (!held) throw new Error("Resume state fence was revoked");
+        if (initial.previous && held.sessionId !== initial.sessionId)
+          throw new Error("Resume session was revoked");
+        const delivered = snapshot.deliveredEvents.length
+          ? await tx.sessionEntry.findMany({
+              where: {
+                id: { in: snapshot.deliveredEvents },
+                sessionId: initial.threadSessionId ?? initial.sessionId,
+                type: { in: ["helper.report", "helper.question"] },
+              },
+              select: { seq: true },
+            })
+          : [];
+        const through = delivered.reduce((next, entry) => Math.max(next, entry.seq + 1), 0);
+        await tx.$executeRaw`UPDATE runs SET "historyThroughSeq" = GREATEST(COALESCE("historyThroughSeq", 0), ${through}) WHERE id = ${runId}`;
+        await tx.$executeRaw`INSERT INTO run_snapshots ("runId", "sessionId", snapshot, receipts)
+          VALUES (${runId}, ${held.sessionId}, ${encodedSnapshot}::jsonb, ${encodedReceipts}::jsonb)
+          ON CONFLICT ("runId") DO UPDATE SET snapshot = EXCLUDED.snapshot, receipts = EXCLUDED.receipts`;
+      });
+      revision = snapshot.revision;
     },
     async receipt(input: RunReceipt) {
-      await mutate((state) => {
-        const receipt = RunReceiptSchema.parse(mask(input));
-        if (!state) throw new Error("A durable call requires a native snapshot");
-        const prior = state.receipts.find((item) => item.callId === receipt.callId);
-        if (
-          prior &&
-          (prior.name !== receipt.name ||
-            !isDeepStrictEqual(prior.args, receipt.args) ||
-            (prior.effectId !== undefined &&
-              receipt.effectId !== undefined &&
-              prior.effectId !== receipt.effectId) ||
-            prior.outcome.kind === "result")
-        )
-          throw new Error("Conflicting durable call receipt");
-        return {
-          ...state,
-          receipts: [
-            ...state.receipts.filter((item) => item.callId !== receipt.callId),
-            {
-              ...receipt,
-              ...((receipt.effectId ?? prior?.effectId)
-                ? { effectId: receipt.effectId ?? prior?.effectId }
-                : {}),
-            },
-          ],
-        };
+      const receipt = RunReceiptSchema.parse(mask(input));
+      const prior = receipts.get(receipt.callId);
+      if (
+        prior &&
+        (prior.name !== receipt.name ||
+          !isDeepStrictEqual(prior.args, receipt.args) ||
+          prior.outcome.kind === "result")
+      )
+        throw new Error("Conflicting pause call receipt");
+      receipts.set(receipt.callId, {
+        ...receipt,
+        ...((receipt.effectId ?? prior?.effectId)
+          ? { effectId: receipt.effectId ?? prior?.effectId }
+          : {}),
       });
     },
     async resolve() {
-      const current = await read();
-      if (!current) {
-        const marker = await prisma.run.findUniqueOrThrow({
-          where: { id: runId },
-          select: { resumeRequired: true },
-        });
-        if (marker.resumeRequired) throw new Error("Required resume snapshot is missing");
-      }
-      return current?.receipts ?? [];
+      return [...receipts.values()].map((receipt) => RunReceiptSchema.parse(mask(receipt)));
     },
   };
 }

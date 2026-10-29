@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-29
+
+#### Fixed
+
+- On web, desktop and mobile, worker runs save their native session when pausing for a question, approval or takeover, then restore their context, loaded tools and complete tool results after a restart while keeping current permissions.
+
 ### 2026-10-28
 
 #### Added
@@ -14,7 +20,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
-- On web, desktop and mobile, paused worker runs resume with their native session, loaded tools and complete tool results after a question, approval, takeover or restart, while keeping current permissions.
 - On web and desktop, hovering a widget no longer shows the message reaction and reply toolbar.
 - On mobile, interactive artifacts no longer bounce when dragged, in the thread or full screen.
 - On web, desktop and mobile, typing a message while a bot replies replaces Stop with Send, preventing accidental stops when sending a follow-up.

@@ -208,20 +208,7 @@ describe("an approval answered for a run in a guest", () => {
       started();
       yield* await new Promise<never>(() => {});
     };
-    let resumed: ModelEmulatorRequest | undefined;
-    const run = await fixture(
-      [
-        publish("Plan"),
-        {
-          expect(request) {
-            resumed = request;
-          },
-          response: finishing[0]!.response,
-        },
-        finishing[1]!,
-      ],
-      notes.tools,
-    );
+    const run = await fixture([publish("Plan")], notes.tools);
     const runId = await run.send("Publish the plan.");
     await run.continueRun(runId);
     await answer(run, runId, "allow");
@@ -246,15 +233,8 @@ describe("an approval answered for a run in a guest", () => {
     await run.continueRun(runId);
 
     run.model.assertComplete();
-    expect(await statusOf(run, runId)).toBe("completed");
+    expect(await statusOf(run, runId)).toBe("failed");
     expect(notes.published).toEqual([{ title: "Plan" }]);
-    expect(
-      await run.prisma.externalEffect.findFirst({
-        where: { runId, kind: "publish_note" },
-        select: { status: true },
-      }),
-    ).toEqual({ status: "uncertain" });
-    expect(ranBefore(resumed)).toContain("It was not replayed to avoid a duplicate side effect.");
   });
 
   it.each(["cancelled", "superseded"])(
@@ -290,22 +270,9 @@ describe("an approval answered for a run in a guest", () => {
     },
   );
 
-  it("recovers a saved outcome when the controller stopped before writing the tool result", async () => {
+  it("keeps a completed effect without replaying a resume interrupted before its next pause", async () => {
     const notes = notesConnector();
-    let resumed: ModelEmulatorRequest | undefined;
-    const run = await fixture(
-      [
-        publish("Plan"),
-        {
-          expect(request) {
-            resumed = request;
-          },
-          response: finishing[0]!.response,
-        },
-        finishing[1]!,
-      ],
-      notes.tools,
-    );
+    const run = await fixture([publish("Plan")], notes.tools);
     const runId = await run.send("Publish the plan.");
     await run.continueRun(runId);
     await answer(run, runId, "allow");
@@ -350,11 +317,14 @@ describe("an approval answered for a run in a guest", () => {
     await run.continueRun(runId);
     run.model.assertComplete();
     expect(notes.published).toEqual([{ title: "Plan" }]);
-    expect(ranBefore(resumed)).toContain('"published":"Plan"');
-    expect(await resultsOf(run, runId)).toEqual([
-      "paused: awaiting approval",
-      '{\n  "published": "Plan"\n}',
-    ]);
+    expect(await statusOf(run, runId)).toBe("failed");
+    expect(
+      await run.prisma.externalEffect.findUnique({
+        where: { id: effect.id },
+        select: { status: true },
+      }),
+    ).toEqual({ status: "completed" });
+    expect(await resultsOf(run, runId)).toEqual(["paused: awaiting approval"]);
   });
 
   it("runs nothing for a denied call and gives the model the refusal once", async () => {

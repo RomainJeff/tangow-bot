@@ -256,7 +256,6 @@ describe("a hostile guest", () => {
         capabilities: [...HAND_WRITTEN.capabilities, ...(durable ? ["resume" as const] : [])],
       };
       const { runtime, launchedFor } = setup(stillClock, harness);
-      const admitted = Promise.withResolvers<void>();
       const persisted = Promise.withResolvers<void>();
       const resultReached = Promise.withResolvers<void>();
       const answered = Promise.withResolvers<string>();
@@ -270,14 +269,12 @@ describe("a hostile guest", () => {
               ? {
                   persistence: {
                     start: { mode: "fresh" as const },
+                    begin: async () => {},
                     save: async () => {},
                     resolve: async () => [],
-                    receipt: async (receipt) => {
-                      if (receipt.outcome.kind === "started") await admitted.promise;
-                      else {
-                        resultReached.resolve();
-                        await persisted.promise;
-                      }
+                    receipt: async () => {
+                      resultReached.resolve();
+                      await persisted.promise;
                     },
                   },
                 }
@@ -295,8 +292,6 @@ describe("a hostile guest", () => {
       expect(await guest.replies(3, 1)).toEqual([{ type: "end.refused", pending: ["c1"] }]);
       expect(run.seen.map((event) => event.type)).toEqual(["tool"]);
 
-      if (durable) expect(execute).not.toHaveBeenCalled();
-      admitted.resolve();
       await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce());
       answered.resolve("found");
       if (durable) {
