@@ -227,13 +227,13 @@ const EntryShapes = z.discriminatedUnion("type", [
       output: z.string(),
       isError: z.boolean(),
       artifactIds: z.array(Id),
-      /** The session of the background helper the call started. */
-      sessionId: SessionId.optional(),
       /**
        * The pause this result replaces: the entry that answered the call while its run waited on
        * a card. The result is the call's answer from then on, whatever the call id.
        */
       replaces: EntryId.optional(),
+      /** The session of the background helper the call started. */
+      sessionId: SessionId.optional(),
     }),
   ),
   runEntry(

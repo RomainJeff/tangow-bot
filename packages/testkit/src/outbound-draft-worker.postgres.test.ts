@@ -28,10 +28,17 @@ const mailTo = (address: string, body: string, id: string): ModelEmulatorStep[] 
 
 /** The send calls to `address` the resumed model reads back among its earlier steps. */
 const sendsTo = (request: ModelEmulatorRequest | undefined, address: string) =>
-  JSON.stringify(request?.messages ?? [])
-    .split("(already ran Gmail send email")
-    .slice(1)
-    .filter((step) => step.split(")")[0]!.includes(address));
+  (request?.messages ?? []).flatMap((message) =>
+    (message.tool_calls ?? [])
+      .filter(
+        (call) =>
+          call.function.name.endsWith("GMAIL_SEND_EMAIL") &&
+          call.function.arguments.includes(address),
+      )
+      .map((call) =>
+        String(request?.messages.findLast((result) => result.tool_call_id === call.id)?.content),
+      ),
+  );
 
 const PI_NATIVE: HarnessDeclaration = {
   name: "pi-native",

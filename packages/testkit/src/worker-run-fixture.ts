@@ -57,7 +57,7 @@ export const afterPrivateText: ModelEmulatorStep = {
   response: { type: "text", text: "" },
 };
 
-function offeredToolNames(step: ModelEmulatorStep): ModelEmulatorStep {
+export function offeredToolNames(step: ModelEmulatorStep): ModelEmulatorStep {
   return {
     ...step,
     response(request) {

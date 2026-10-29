@@ -459,3 +459,164 @@ it("resumes a native takeover at its original call after the user releases the c
     ]),
   );
 });
+
+it.each(["allow", "deny", "corrupt", "retry", "helper"] as const)(
+  "resumes a message draft after %s without sending twice or losing its native result",
+  async (answer) => {
+    const sent: unknown[] = [];
+    let refused = false;
+    const tools: ConnectorProvider = {
+      describe: () => ({
+        id: "mail",
+        contractVersion: "1",
+        adapterVersion: "1",
+        capabilities: { discover: true, oauth: false, secretsBrokered: true },
+      }),
+      discoverTools: async () => [
+        {
+          name: "GMAIL_SEND_EMAIL",
+          description: "Send email",
+          inputSchema: {
+            type: "object",
+            properties: {
+              recipient_email: { type: "string" },
+              subject: { type: "string" },
+              body: { type: "string" },
+            },
+          },
+          route: { connectorId: "mail", toolName: "GMAIL_SEND_EMAIL" },
+        },
+      ],
+      async *execute(call) {
+        if (answer === "retry" && !refused) {
+          refused = true;
+          yield { type: "error", message: "App refused the send", details: { successful: false } };
+          return;
+        }
+        sent.push(call.args);
+        yield { type: "result", data: { sent: true } };
+      },
+    };
+    let resumed: ModelEmulatorRequest | undefined;
+    const run = await startWorkerRun({
+      mode: "child",
+      tools,
+      steps: [
+        ...(answer === "helper"
+          ? [
+              {
+                expect() {},
+                response: {
+                  type: "tool" as const,
+                  id: "helper-native",
+                  name: "run_subagent",
+                  arguments: { name: "mailer", task: "Prepare the email." },
+                },
+              },
+            ]
+          : []),
+        {
+          expect() {},
+          response: {
+            type: "tool",
+            id: "draft-native",
+            name: "GMAIL_SEND_EMAIL",
+            arguments: {
+              recipient_email: "anna@example.test",
+              subject: "Hello",
+              body: "Original.",
+            },
+          },
+        },
+        { expect() {}, response: { type: "text", text: "Waiting." } },
+        ...(answer === "corrupt"
+          ? []
+          : [
+              {
+                expect(request: ModelEmulatorRequest) {
+                  resumed = request;
+                },
+                response: {
+                  type: "tool" as const,
+                  id: "say",
+                  name: "message_user",
+                  arguments: { message: "Continuing." },
+                },
+              },
+              { expect() {}, response: { type: "text" as const, text: "" } },
+            ]),
+      ],
+    });
+    cleanups.push(() => run.close());
+    const runId = await run.send("Prepare an email to Anna.");
+    await run.continueRun(runId);
+    expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+      "waiting_input",
+    );
+    const card = await latestCard(run.prisma, runId);
+    expect(card.block.draft?.body).toBe("Original.");
+    await run.events.answerRunInput({
+      spaceId: run.spaceId,
+      threadId: run.thread.id,
+      runId,
+      messageId: card.id,
+      answeredByUserId: run.userId,
+      answer: answer === "deny" ? "deny" : "allow",
+      ...(answer === "deny" ? {} : { edits: { text: "Edited." } }),
+    });
+    if (answer === "corrupt")
+      await run.prisma
+        .$executeRaw`UPDATE run_snapshots SET snapshot = jsonb_set(snapshot, '{state}', '"broken"') WHERE "runId" = ${runId}`;
+    await run.restart().dispose();
+    await run.continueRun(runId).catch(() => undefined);
+    if (answer === "retry") {
+      expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+        "waiting_input",
+      );
+      const retryCard = await latestCard(run.prisma, runId);
+      await run.events.answerRunInput({
+        spaceId: run.spaceId,
+        threadId: run.thread.id,
+        runId,
+        messageId: retryCard.id,
+        answeredByUserId: run.userId,
+        answer: "allow",
+      });
+      await run.restart().dispose();
+      await run.continueRun(runId).catch(() => undefined);
+    }
+    const finished = await run.prisma.run.findUniqueOrThrow({ where: { id: runId } });
+    if (answer === "corrupt") {
+      expect(finished.error).not.toBe(null);
+      expect(sent).toEqual([]);
+    } else {
+      expect(finished.error).toBe(null);
+      expect(finished.status).toBe("completed");
+      expect(resumed?.messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            role: "tool",
+            tool_call_id: answer === "helper" ? "helper-native" : "draft-native",
+            content: expect.stringContaining(
+              answer !== "deny" ? "The user sent this message" : "The user discarded this draft",
+            ),
+          }),
+        ]),
+      );
+      if (answer !== "deny") {
+        expect(sent).toEqual([
+          {
+            recipient_email: "anna@example.test",
+            subject: "Hello",
+            body: "Edited.",
+            include_signature: false,
+          },
+        ]);
+        expect(JSON.stringify(resumed?.messages)).toContain("Edited.");
+      } else expect(sent).toEqual([]);
+      await run.continueRun(runId);
+      expect(sent).toHaveLength(answer !== "deny" ? 1 : 0);
+    }
+    run.model.assertComplete();
+  },
+);

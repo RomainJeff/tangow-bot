@@ -296,6 +296,16 @@ const DOCUMENTED_INPUT_SCHEMAS: Record<string, Record<string, unknown>> = {
   },
 };
 
+const TOOLKIT_TOOLS: Record<string, ConnectorTool[]> = {
+  GMAIL: GMAIL_TOOLS,
+  OUTLOOK: OUTLOOK_TOOLS,
+  SLACK: SLACK_TOOLS,
+};
+
+/**
+ * Composio's batch as its MCP server offers it. The native connector calls each tool on its own
+ * route; the batch stays here so the path a batched send takes is exercised offline.
+ */
 const BATCH_TOOL: ConnectorTool = {
   name: "COMPOSIO_MULTI_EXECUTE_TOOL",
   description: "Run several connected-app actions in one call",
@@ -629,20 +639,14 @@ export class ComposioEmulator implements ComposioProvider {
     for (const slug of new Set(connected)) {
       if (slug === "GMAIL" || slug === "OUTLOOK") this.ensureMailbox(composioEntityId(context));
       const toolkitTools =
-        slug === "GMAIL"
-          ? GMAIL_TOOLS
-          : slug === "OUTLOOK"
-            ? OUTLOOK_TOOLS
-            : slug === "SLACK"
-              ? SLACK_TOOLS
-              : slug === "GITHUB"
-            ? githubReleaseTools()
-            : [thinEmulatedTool(slug)];
+        slug === "GITHUB"
+          ? githubReleaseTools()
+          : (TOOLKIT_TOOLS[slug] ?? [thinEmulatedTool(slug)]);
       tools.push(
         ...toolkitTools.map((tool) => ({
           ...tool,
           appName: DEFAULT_CATALOG.find((item) => item.slug === slug)?.name ?? slug,
-          readOnly: /_(FETCH|GET|LIST)_/.test(tool.name) || undefined,
+          readOnly: tool.readOnly || /_(FETCH|GET|LIST)_/.test(tool.name) || undefined,
           route: {
             connectorId: "composio",
             resourceId: slug,

@@ -14,14 +14,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
+- Approval notifications now name what the bot wants to do (an email's app, subject and recipient, or the action) instead of a tool name.
 - On web, desktop and mobile, worker runs save their native session when pausing for a question, approval or takeover, then restore their context, loaded tools and complete tool results after a restart while keeping current permissions.
 - On mobile, interacting with a widget no longer scales or swipes its entire card or opens the message menu on a long press.
 
 ### 2026-10-28
-
-#### Fixed
-
-- Approval notifications now name what the bot wants to do (an email's app, subject and recipient, or the action) instead of a tool name.
 
 #### Added
 
@@ -96,7 +93,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - On web, desktop and iPhone, each message a bot sends during a run keeps its own bubble when the final answer arrives, instead of being merged into it.
 - Idle E2B computers now pause after the configured inactivity delay instead of staying awake or waking again when the inactivity check runs, across web, desktop and iPhone.
 - Bots running in isolated workers can follow browser and connected-app instructions with the correct tools, while retaining the reason a connector failed.
-- A decision card's soft shadow is no longer cut off at its sides and below it in the thread on web and desktop.
 - While a bot works on web, desktop and iPhone, activity messages describe the tool being used even when it has a Rakazo MCP prefix, instead of showing raw tool names and arguments or a generic status.
 
 - Opening a bot computer screen or taking control on web, desktop and iPhone no longer fails after the dock starts.

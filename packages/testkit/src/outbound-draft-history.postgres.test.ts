@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { latestCard } from "./index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import type { JourneyFixture } from "./pi-journey.test-support.js";
-import { DONE, journey, reply, rpc } from "./pi-journey.test-support.js";
+import { DONE, journey, reply, rpc, WAITING } from "./pi-journey.test-support.js";
 
 const databaseAvailable = process.env.VERIFY_DATABASE === "1" && Boolean(process.env.DATABASE_URL);
 
@@ -28,11 +28,24 @@ const mailTo = (address: string, id: string, extra: Record<string, unknown> = {}
   }) satisfies ModelEmulatorStep;
 
 /** The send calls the model reads back among its earlier steps, each with its recipient and result. */
-const sends = (request: ModelEmulatorRequest) =>
-  JSON.stringify(request.messages)
-    .split("(already ran Gmail send email")
-    .slice(1)
-    .map((step) => step.split(")\\n")[0]!);
+const sends = (request: ModelEmulatorRequest) => {
+  const native = request.messages.flatMap((message) =>
+    (message.tool_calls ?? [])
+      .filter((call) => call.function.name.endsWith("GMAIL_SEND_EMAIL"))
+      .map((call) =>
+        JSON.stringify({
+          input: call.function.arguments,
+          output: request.messages.findLast((result) => result.tool_call_id === call.id)?.content,
+        }),
+      ),
+  );
+  return native.length > 0
+    ? native
+    : JSON.stringify(request.messages)
+        .split("(already ran Gmail send email")
+        .slice(1)
+        .map((step) => step.split(")\\n")[0]!);
+};
 
 const count = (text: string, part: string) => text.split(part).length - 1;
 
@@ -81,6 +94,7 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
     await journey(
       [
         mailTo("anna@example.test", "mail-a"),
+        WAITING,
         {
           expect(request) {
             const [first, ...rest] = sends(request);
@@ -91,6 +105,7 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
           },
           response: mailTo("ben@example.test", "mail-b").response,
         },
+        WAITING,
         {
           expect(request) {
             const [first, second, ...rest] = sends(request);
@@ -132,6 +147,7 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
     await journey(
       [
         mailTo("anna@example.test", "mail-1", { thought: "Mail Anna." }),
+        WAITING,
         {
           expect(request) {
             const [only, ...rest] = sends(request);
@@ -144,6 +160,7 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
           },
           response: mailTo("anna@example.test", "mail-2", { thought: "Mail Anna again." }).response,
         },
+        WAITING,
         {
           expect(request) {
             answered = JSON.parse(
@@ -187,6 +204,7 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
           },
         },
         mailTo("anna@example.test", "mail-h"),
+        WAITING,
         {
           expect(request) {
             const history = JSON.stringify(request.messages);
@@ -215,6 +233,7 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
     await journey(
       [
         mailTo("anna@example.test", "mail-1"),
+        WAITING,
         {
           expect(request) {
             expect(JSON.stringify(request.messages)).toContain(edit);
@@ -249,7 +268,7 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
     it("is told to the bot as a result that says it may or may not have left", async () => {
       const composio = new ComposioEmulator();
       await journey(
-        [mailTo("anna@example.test", "mail-1")],
+        [mailTo("anna@example.test", "mail-1"), WAITING],
         async (fixture) => {
           const { mailed, runId, effect } = await stranded(fixture, composio);
           const { threadId } = await fixture.prisma.run.findUniqueOrThrow({ where: { id: runId } });
@@ -275,7 +294,8 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
           ).toMatchObject([
             {
               payload: {
-                callId: "mail-1",
+                // A worker logs the call under the id its guest gave it, not the model's.
+                callId: pause?.payload.callId,
                 replaces: pause?.id,
                 output: expect.stringContaining("outcome is unknown"),
               },
@@ -300,7 +320,7 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
     it("leaves a cancelled run's log as it is, without failing the stop", async () => {
       const composio = new ComposioEmulator();
       await journey(
-        [mailTo("anna@example.test", "mail-1")],
+        [mailTo("anna@example.test", "mail-1"), WAITING],
         async (fixture) => {
           const { runId, effect } = await stranded(fixture, composio);
           await fixture.prisma.externalEffect.update({

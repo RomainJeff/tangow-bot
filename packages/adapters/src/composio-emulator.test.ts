@@ -304,16 +304,19 @@ describe("ComposioEmulator", () => {
       },
     });
     expect(tools.find((tool) => tool.name === "GMAIL_SEND_EMAIL")?.readOnly).toBeUndefined();
-    expect(tools.find((tool) => tool.name === "SLACK_EMULATED_ACTION")).toMatchObject({
+    expect(tools.find((tool) => tool.name === "SLACK_SEND_MESSAGE")).toMatchObject({
       appName: "Slack",
       route: {
         connectorId: "composio",
         resourceId: "SLACK",
         resourceRevision: "emulated",
-        toolName: "SLACK_EMULATED_ACTION",
+        toolName: "SLACK_SEND_MESSAGE",
         catalogGroup: "slack",
       },
     });
+    expect(
+      tools.find((tool) => tool.name === "SLACK_RETRIEVE_CONVERSATION_INFORMATION")?.readOnly,
+    ).toBe(true);
     expect(tools.find((tool) => tool.name === "GMAIL_SEND_EMAIL")?.inputSchema).toMatchObject({
       type: "object",
       properties: expect.objectContaining({

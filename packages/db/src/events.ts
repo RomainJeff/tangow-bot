@@ -15,11 +15,11 @@ import {
   blocksToAgentHistoryText,
   DISMISSABLE_EFFECT_KINDS,
   DISMISSED_EFFECT_RESULT,
-  fromParent,
   DRAFT_GONE,
   draftMessage,
   draftWithState,
   editDraftRequest,
+  fromParent,
   isApprovalAskBlock,
   isSecretAskBlock,
   isWorkingStatus,
@@ -1661,7 +1661,9 @@ export async function pauseRunForInput(
         id: input.attemptId,
         runId: input.runId,
         fence: input.leaseFence,
-        status: "running",
+        // A run can park during setup, before its runtime starts: a draft the user approved that
+        // did not leave is asked about again before any turn.
+        status: { in: ["setting_up", "running"] },
       },
       data: { status: "waiting_input", finishedAt: new Date() },
     });

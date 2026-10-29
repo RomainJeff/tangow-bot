@@ -104,13 +104,15 @@ export function foldRuns(
         const message = stretchOf(entry);
         const { callId, name, input } = entry.payload;
         const answer = answers.answerOf.get(entry.id);
+        // A draft's outcome may have replaced a helper's answer: the step still opens its session.
+        const helperSession = (answers.replacedOf.get(entry.id) ?? answer)?.payload.sessionId;
         message.blocks = appendToolCallSegment(message.blocks, name, {
           name,
           input,
           output: answer ? outputOf(answer) : "",
           id: callId,
-          ...(answer?.payload.sessionId ? { sessionId: answer.payload.sessionId } : {}),
           ...(answer?.type === "tool.result" && answer.payload.replaces ? { outcome: true } : {}),
+          ...(helperSession ? { sessionId: helperSession } : {}),
         });
         holderOf.set(entry.id, message);
         break;

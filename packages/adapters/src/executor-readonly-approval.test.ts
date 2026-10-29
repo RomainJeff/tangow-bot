@@ -61,7 +61,6 @@ function fixture({
     required: ["id"],
   } as Record<string, unknown>,
   routeToolName = undefined as string | undefined,
-  connectorFailure = undefined as Extract<ConnectorEvent, { type: "error" }> | undefined,
   /** The connector the tool's route names, and the endpoint of its MCP server when it is one. */
   connectorId = "demo",
   mcpEndpoint = undefined as string | undefined,
@@ -72,6 +71,7 @@ function fixture({
   connector = undefined as
     | { execute(call: ConnectorCall, context: AdapterContext): AsyncIterable<ConnectorEvent> }
     | undefined,
+  connectorFailure = undefined as Extract<ConnectorEvent, { type: "error" }> | undefined,
 } = {}) {
   const tool: ConnectorTool = {
     name,
@@ -218,9 +218,9 @@ function fixture({
     run: {
       findUnique: vi.fn(async () => run),
       findUniqueOrThrow: vi.fn(async () => run),
-      findMany: vi.fn(async () => []),
       // The notification source of a push: a bot that notifies.
       findFirst: vi.fn(async () => ({ bot: { notifyOnFinish: true }, thread: { groupId: null } })),
+      findMany: vi.fn(async () => []),
       updateMany: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
         // One worker leases a run: a second claim finds it taken.
         if (data.status === "leased" && !["queued", "waiting_input"].includes(run.status)) {
