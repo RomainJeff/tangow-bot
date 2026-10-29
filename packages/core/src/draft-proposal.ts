@@ -32,7 +32,13 @@ export type DraftProposal =
       account?: Located;
       unshown: DraftPath[];
     }
-  | { card: "chat"; conversation: Located; body: Located; unshown: DraftPath[] };
+  | {
+      card: "chat";
+      conversation: Located;
+      conversationName?: string;
+      body: Located;
+      unshown: DraftPath[];
+    };
 
 const PATH = {
   type: "array",
@@ -105,6 +111,11 @@ export const DRAFT_CARDS = {
       type: "object",
       properties: {
         conversation: located("The exact id of the conversation the message goes to."),
+        conversationName: {
+          type: "string",
+          description:
+            "The display name for this exact conversation id, grounded in the recent tool context. For a group conversation, use its participants' names when known, otherwise 'Group chat' in the language of the user's request. For a named channel or person, copy its name. Otherwise omit this field. Never invent names.",
+        },
         body: located("The text of the message."),
         unshown: UNSHOWN,
       },
@@ -127,7 +138,19 @@ export function readDraftProposal(answer: {
   if (!body || !Array.isArray(unshown) || !unshown.every(isPath)) return undefined;
   if (answer.name === DRAFT_CARDS.chat.name) {
     const conversation = locatedIn(value.conversation);
-    return conversation ? { card: "chat", conversation, body, unshown } : undefined;
+    if (value.conversationName != null && typeof value.conversationName !== "string")
+      return undefined;
+    return conversation
+      ? {
+          card: "chat",
+          conversation,
+          ...(typeof value.conversationName === "string"
+            ? { conversationName: value.conversationName }
+            : {}),
+          body,
+          unshown,
+        }
+      : undefined;
   }
   if (answer.name !== DRAFT_CARDS.mail.name || !Array.isArray(value.recipients)) return undefined;
   const recipients = value.recipients.flatMap((slot) => {
@@ -185,11 +208,18 @@ export function acceptDraftProposal(
   if (!holds(args, body) || draftTextError(body.value)) return undefined;
   if (proposal.card === "chat") {
     const { conversation } = proposal;
+    const name = proposal.conversationName?.trim();
+    if (name && (name.length > ASK_DRAFT_ADDRESS_MAX_LENGTH || LINE_BREAKS.test(name)))
+      return undefined;
     if (!holds(args, conversation) || !conversation.value.trim()) return undefined;
     if (conversation.value.length > ASK_DRAFT_ADDRESS_MAX_LENGTH) return undefined;
     if (!accountsForEveryArgument(args, [body.path, conversation.path], proposal.unshown))
       return undefined;
-    return { path: body.path, proposed: body.value, chat: { path: conversation.path } };
+    return {
+      path: body.path,
+      proposed: body.value,
+      chat: { path: conversation.path, ...(name ? { name } : {}) },
+    };
   }
   const { subject, account } = proposal;
   if (subject && !holds(args, subject)) return undefined;

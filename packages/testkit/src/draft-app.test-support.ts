@@ -4,6 +4,16 @@ import type { PrismaClient } from "@rakazo/db";
 
 const TOOLS = [
   {
+    name: "acme_find_room",
+    description: "Find a room by name",
+    annotations: { readOnlyHint: true },
+    inputSchema: {
+      type: "object",
+      properties: { query: { type: "string" } },
+      required: ["query"],
+    },
+  },
+  {
     name: "acme_deliver_message",
     description: "Deliver a message",
     inputSchema: {
@@ -38,6 +48,11 @@ export function acmeApp() {
   let fault: AcmeFault | undefined;
   let installed: InstalledConnectorProvider | undefined;
   const call = async (tool: string, args: Record<string, unknown>) => {
+    if (tool === "acme_find_room") {
+      return {
+        content: [{ type: "text", text: JSON.stringify({ id: "R0TEAM", name: "#launch" }) }],
+      };
+    }
     const next = fault;
     fault = undefined;
     if (next?.kind === "refuse") {

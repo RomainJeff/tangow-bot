@@ -1,6 +1,6 @@
 import type { AskDraftEdits, ThreadEntry } from "@rakazo/contracts";
 import { askDraftState } from "@rakazo/contracts";
-import { projectThreadItems } from "@rakazo/core";
+import { projectThreadItems, projectThreadView } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import { acmeApp } from "./draft-app.test-support.js";
 import { latestCard } from "./index.js";
@@ -126,11 +126,22 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
       );
     }, 30_000);
 
-    it("posts once to the room's id, with only the text the user edited", async () => {
+    it("shows the room's researched name and posts once to its id, with only the edited text", async () => {
       const acme = acmeApp();
       const update = { room: "R0TEAM", text: "Draft from the bot." };
       await journey(
         [
+          {
+            expect(request) {
+              expect(offeredTools(request)).toContain("acme_find_room");
+            },
+            response: {
+              type: "tool",
+              id: "journey-room-search",
+              name: "acme_find_room",
+              arguments: { query: "launch" },
+            },
+          },
           {
             expect(request) {
               expect(offeredTools(request)).toContain("acme_post_update");
@@ -142,12 +153,26 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
               arguments: update,
             },
           },
-          prepares({
-            card: "chat",
-            conversation: { path: ["room"], value: update.room },
-            body: { path: ["text"], value: update.text },
-            unshown: [],
-          }),
+          {
+            ...prepares({
+              card: "chat",
+              conversation: { path: ["room"], value: update.room },
+              conversationName: "#launch",
+              body: { path: ["text"], value: update.text },
+              unshown: [],
+            }),
+            expect(request) {
+              const prompt = request.messages
+                .filter((message) => message.role === "user")
+                .map((message) => String(message.content))
+                .join("\n");
+              const recent = JSON.parse(
+                prompt.split("<recent_tool_context>\n")[1]!.split("\n</recent_tool_context>")[0]!,
+              );
+              expect(recent.join("\n")).toContain("R0TEAM");
+              expect(recent.join("\n")).toContain("#launch");
+            },
+          },
           WAITING,
           {
             expect(request) {
@@ -163,13 +188,16 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
           await sent.settled("waiting_input");
           const { draft } = (await latestCard(fixture.prisma, sent.runId)).block;
           expect(draft).toMatchObject({
-            recipients: [{ role: "to", address: "R0TEAM" }],
+            recipients: [{ role: "to", address: "#launch" }],
             chat: true,
             body: "Draft from the bot.",
           });
           expect(draft?.fields).toBeUndefined();
           await answerDraft(fixture, sent.runId, { text: "Edited by me." });
           await sent.settled("completed");
+          expect((await latestCard(fixture.prisma, sent.runId)).block.draft?.recipients).toEqual([
+            { role: "to", address: "#launch" },
+          ]);
           expect(acme.delivered).toEqual([
             { tool: "acme_post_update", args: { ...update, text: "Edited by me." } },
           ]);
@@ -299,6 +327,24 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
             item.kind === "effect" && item.card ? [askDraftState(item.card)] : [],
           );
           expect(cards).toEqual(["replaced"]);
+          const replacement = thread.entries.findLast((entry) => entry.type === "user.message")!;
+          await rpc(fixture.app, fixture.cookie, "threads/rewind", {
+            botId: fixture.bot.id,
+            messageId: replacement.id,
+          });
+          const rewound = await rpc<{ entries: ThreadEntry[] }>(
+            fixture.app,
+            fixture.cookie,
+            "threads/get",
+            { botId: fixture.bot.id },
+          );
+          const view = projectThreadView(rewound.entries);
+          expect(view.waiting).toBeNull();
+          expect(
+            view.rows.flatMap(({ item }) =>
+              item.kind === "effect" && item.card ? [askDraftState(item.card)] : [],
+            ),
+          ).toEqual(["replaced"]);
         },
         { remoteConnectors: acme.remote },
       );

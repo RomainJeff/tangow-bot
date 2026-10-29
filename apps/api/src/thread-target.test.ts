@@ -1352,6 +1352,7 @@ describe("sendThreadMessage", () => {
 
   it("never steers a message into a run that only reports through a routine card", async () => {
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
       run: {
         findMany: vi
@@ -1406,6 +1407,7 @@ describe("sendThreadMessage", () => {
   describe("link previews", () => {
     function sendHarness(enqueue = vi.fn(async () => undefined)) {
       const tx = {
+        $queryRaw: vi.fn().mockResolvedValue([]),
         thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
         run: {
           findMany: vi.fn().mockResolvedValue([]),
@@ -1895,6 +1897,7 @@ describe("sendThreadMessage", () => {
 
   it("steers a waiting-takeover run instead of refusing the message", async () => {
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
       run: {
         findMany: vi
@@ -1976,6 +1979,7 @@ describe("sendThreadMessage", () => {
 
   it("persists the quote excerpt alongside the reply target", async () => {
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
       sessionEntry: {
         findFirst: vi.fn().mockResolvedValue(
@@ -2029,6 +2033,7 @@ describe("sendThreadMessage", () => {
 
   it("drops a quote excerpt that doesn't match the parent's text", async () => {
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
       sessionEntry: {
         findFirst: vi.fn().mockResolvedValue(
@@ -2076,6 +2081,7 @@ describe("sendThreadMessage", () => {
 
   it("accepts a quote excerpt that matches formatted parent text", async () => {
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
       sessionEntry: {
         findFirst: vi.fn().mockResolvedValue(
@@ -2142,6 +2148,7 @@ describe("sendThreadMessage", () => {
     ],
   ])("accepts a quote excerpt spanning rendered %s", async (_name, parentText, replyQuote) => {
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
       sessionEntry: {
         findFirst: vi.fn().mockResolvedValue(
@@ -2188,6 +2195,7 @@ describe("sendThreadMessage", () => {
 
   it("drops a quote excerpt that only matches after stripping punctuation", async () => {
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
       sessionEntry: {
         findFirst: vi.fn().mockResolvedValue(

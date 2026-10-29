@@ -3693,6 +3693,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
             !approvedReplayConsumed &&
             !containsSecret(args, runSecrets)
           ) {
+            const recentEntries = callLog
+              ? await deps.sessionLog.readRun(callLog.runId, { limit: 24 })
+              : [];
             const prepared = await prepareDraft({
               runtime: deps.runtime,
               model: runtimeModel,
@@ -3703,6 +3706,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 app: messageApp,
               },
               args,
+              userRequest: task.prompt,
+              recentToolContext: recentEntries.flatMap((entry) =>
+                entry.type === "tool.call"
+                  ? [JSON.stringify({ call: entry.payload })]
+                  : entry.type === "tool.result"
+                    ? [JSON.stringify({ result: entry.payload })]
+                    : [],
+              ),
               run: {
                 id: runId,
                 botId: bot.id,

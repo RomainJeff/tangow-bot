@@ -709,42 +709,6 @@ function mapRun(run: {
   };
 }
 
-/**
- * Puts away the card a bot's sole waiting run shows when its owner types instead, and steers the
- * message into that run with what the bot reads beside it. Undefined: the usual rule applies.
- */
-async function putCardAwayWithMessage(
-  tx: Prisma.TransactionClient,
-  actor: Actor,
-  threadId: string,
-  botId: string,
-  run: { id: string },
-  input: {
-    messageId: string;
-    draft?: DraftLeft;
-    draftsOnly?: true;
-  },
-): Promise<{ status: string } | undefined> {
-  const dismissal = await dismissProposalWithTextInTransaction(tx, {
-    spaceId: actor.spaceId,
-    threadId,
-    runId: run.id,
-    userId: actor.userId,
-    draft: input.draft,
-    draftsOnly: input.draftsOnly,
-  });
-  if (dismissal.outcome === "keep") return undefined;
-  await tx.steeringMessage.create({
-    data: {
-      messageId: input.messageId,
-      botId,
-      userId: actor.userId,
-      runId: run.id,
-    },
-  });
-  return { status: dismissal.status };
-}
-
 export async function sendThreadMessage(
   deps: {
     prisma: PrismaClient;
@@ -802,14 +766,7 @@ export async function sendThreadMessage(
         const blocks = buildUserMessageBlocks(input.text, attachmentBlocks, {
           linkPreview: input.linkPreview,
         });
-        const message = await createThreadMessageInTransaction(tx, {
-          threadId: target.threadId,
-          role: "user",
-          blocks,
-          replyToMessageId: input.replyToMessageId,
-          replyQuote,
-          clientNonce: input.clientNonce,
-        });
+        await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
         const activeRuns = await tx.run.findMany({
           where: {
             threadId: target.threadId,
@@ -830,15 +787,35 @@ export async function sendThreadMessage(
         // when a tap answered it first, the reply steers the run that tap resumed.
         const putAway =
           waitingRun &&
-          (await putCardAwayWithMessage(tx, actor, target.threadId, target.botId, waitingRun, {
-            messageId: message.id,
+          (await dismissProposalWithTextInTransaction(tx, {
+            spaceId: actor.spaceId,
+            threadId: target.threadId,
+            runId: waitingRun.id,
+            userId: actor.userId,
             draft: input.draft,
           }));
+        const message = await createThreadMessageInTransaction(tx, {
+          threadId: target.threadId,
+          role: "user",
+          blocks,
+          replyToMessageId: input.replyToMessageId,
+          replyQuote,
+          clientNonce: input.clientNonce,
+        });
+
         // Refused only while a card still waits that the text cannot replace.
-        if (input.draft && waitingRun && !putAway) {
+        if (input.draft && waitingRun && (!putAway || putAway.outcome === "keep")) {
           throw new ORPCError("CONFLICT", { message: "This draft is no longer waiting." });
         }
-        if (waitingRun && putAway) {
+        if (waitingRun && putAway && putAway.outcome !== "keep") {
+          await tx.steeringMessage.create({
+            data: {
+              messageId: message.id,
+              botId: target.botId,
+              userId: actor.userId,
+              runId: waitingRun.id,
+            },
+          });
           return {
             message,
             runs: [{ id: waitingRun.id, taskId: waitingRun.taskId, status: putAway.status }],
@@ -946,16 +923,7 @@ export async function sendThreadMessage(
       // Each targeted bot gets a run in turn, so the first run is always the first target's.
       const eventBotId = targetBotIds[0];
       if (!eventBotId) throw new IsolationError("Group send did not resolve a target");
-      const message = await createThreadMessageInTransaction(tx, {
-        threadId: target.threadId,
-        role: "user",
-        blocks,
-        replyToMessageId: input.replyToMessageId,
-        replyQuote,
-        clientNonce: input.clientNonce,
-        feedBotId: eventBotId,
-        targets: targetBotIds,
-      });
+      await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
       const activeRuns = await tx.run.findMany({
         where: {
           threadId: target.threadId,
@@ -971,6 +939,31 @@ export async function sendThreadMessage(
         if (botRuns) botRuns.push(run);
         else activeRunsByBotId.set(run.botId, [run]);
       }
+      const putAwayStatuses = new Map<string, string>();
+      for (const botId of targetBotIds) {
+        const botRuns = activeRunsByBotId.get(botId) ?? [];
+        const soleActiveRun = botRuns.length === 1 ? botRuns[0] : undefined;
+        if (soleActiveRun?.status !== "waiting_input") continue;
+        const dismissal = await dismissProposalWithTextInTransaction(tx, {
+          spaceId: actor.spaceId,
+          threadId: target.threadId,
+          runId: soleActiveRun.id,
+          userId: actor.userId,
+          draft: input.draft,
+          draftsOnly: true,
+        });
+        if (dismissal.outcome !== "keep") putAwayStatuses.set(botId, dismissal.status);
+      }
+      const message = await createThreadMessageInTransaction(tx, {
+        threadId: target.threadId,
+        role: "user",
+        blocks,
+        replyToMessageId: input.replyToMessageId,
+        replyQuote,
+        clientNonce: input.clientNonce,
+        feedBotId: eventBotId,
+        targets: targetBotIds,
+      });
       // Dispatch per bot in this one transaction (spec ask-answer-via-composer, PR 1): each
       // targeted bot is resolved on its own state — an ask_user run resolves, a steerable run
       // gets steered, an idle bot gets a new run — so one bot's pending ask never blocks the
@@ -986,18 +979,13 @@ export async function sendThreadMessage(
         const active = botRuns.find((run) => conversationRunIds.has(run.id));
         const soleActiveRun = botRuns.length === 1 ? botRuns[0] : undefined;
         if (soleActiveRun?.status === "waiting_input") {
-          // In a group a reply puts away only a mail draft; other approval cards still wait.
-          const putAway = await putCardAwayWithMessage(
-            tx,
-            actor,
-            target.threadId,
-            botId,
-            soleActiveRun,
-            { messageId: message.id, draft: input.draft, draftsOnly: true },
-          );
-          if (putAway) {
+          const putAwayStatus = putAwayStatuses.get(botId);
+          if (putAwayStatus) {
+            await tx.steeringMessage.create({
+              data: { messageId: message.id, botId, userId: actor.userId, runId: soleActiveRun.id },
+            });
             draftPutAway = true;
-            runs.push({ ...soleActiveRun, status: putAway.status });
+            runs.push({ ...soleActiveRun, status: putAwayStatus });
             continue;
           }
           const resolution = await resumeAskWithComposerTextInTransaction(tx, {

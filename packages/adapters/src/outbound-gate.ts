@@ -112,7 +112,9 @@ export async function outboundAskDraft(
   const conversation = draft.chat && valueAt(request, draft.chat.path);
   const recipients =
     message.recipients ??
-    (typeof conversation === "string" ? [{ role: "to" as const, address: conversation }] : []);
+    (typeof conversation === "string"
+      ? [{ role: "to" as const, address: draft.chat?.name ?? conversation }]
+      : []);
   if (!recipients.length) return undefined;
   const connection = sources.connections.find(
     (row) => row.provider.toLowerCase() === connectorKind,

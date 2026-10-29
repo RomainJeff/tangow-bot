@@ -34,7 +34,7 @@ export type DraftBinding = {
   proposed: string;
   fields?: DraftFields;
   account?: string;
-  chat?: { path: DraftPath };
+  chat?: { path: DraftPath; name?: string };
 };
 
 export type DraftState =
@@ -90,7 +90,14 @@ export function readDraft(status: string, draft: unknown): DraftRecord | undefin
     ...rest,
     ...(parsed ? { fields: parsed } : {}),
     ...(typeof account === "string" ? { account } : {}),
-    ...(isRecord(chat) && isPath(chat.path) ? { chat: { path: chat.path } } : {}),
+    ...(isRecord(chat) && isPath(chat.path)
+      ? {
+          chat: {
+            path: chat.path,
+            ...(typeof chat.name === "string" ? { name: chat.name } : {}),
+          },
+        }
+      : {}),
   } as DraftRecord;
 }
 

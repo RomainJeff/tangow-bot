@@ -412,7 +412,7 @@ const CHAT = {
     name: "Acme Chat",
     logo: null,
   },
-  recipients: [{ role: "to", address: "room:launch" }],
+  recipients: [{ role: "to", address: "#launch" }],
   chat: true,
   subject: undefined,
 };
@@ -451,7 +451,7 @@ for (const width of [1440, 390]) {
     const header = draftCard.locator('[data-slot="framed-block-header"]');
 
     await expect(header).toHaveText("Acme Chat");
-    await expect(draftCard.getByText("room:launch", { exact: true })).toBeVisible();
+    await expect(draftCard.getByText("#launch", { exact: true })).toBeVisible();
     await expect(draftCard).not.toContainText("Subject");
     await expect(draftCard.getByRole("textbox")).toHaveCount(1);
     await expect(text).toHaveValue(CHAT_BODY);
@@ -461,7 +461,7 @@ for (const width of [1440, 390]) {
     await expect(header).toContainText("Editing");
     await text.fill(CHAT_EDITED);
     await shoot(page, testInfo, "chat-editing");
-    await draftCard.getByText("room:launch", { exact: true }).click();
+    await draftCard.getByText("#launch", { exact: true }).click();
     await expect(header).toContainText("Edited");
 
     onAnswer = () => drafts.push(...sentAfter(botId, "draft-card", CHAT_EDITED, CHAT));
@@ -469,7 +469,7 @@ for (const width of [1440, 390]) {
     await expect(draftCard).toHaveAttribute("data-answered", "true");
     expect(answered.body).toMatchObject({ messageId: "draft-card", answer: "allow" });
     expect(answered.body?.edits).toEqual({ text: CHAT_EDITED });
-    await expect(draftCard.getByText("to room:launch", { exact: true })).toBeVisible();
+    await expect(draftCard.getByText("to #launch", { exact: true })).toBeVisible();
     // The text's first line stands for the message: a chat message has no subject.
     await expect(draftCard).toContainText("Tell me if 8pm is OK.");
     await expectSuccessDiscFirst(draftCard);
