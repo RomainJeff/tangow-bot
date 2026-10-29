@@ -1,4 +1,5 @@
 import type { HarnessDeclaration } from "@rakazo/adapter-kit";
+import { PI_NATIVE_HARNESS } from "@rakazo/adapter-kit";
 import {
   capabilityWorker,
   createWorkerAgentRuntime,
@@ -23,6 +24,7 @@ it.each([
   { name: "pi-native", capabilities: ["native-loop"] },
   { name: "pi-native", capabilities: [] },
   { name: "pi-native", capabilities: ["native-loop", "steering", "subagents"] },
+  PI_NATIVE_HARNESS,
   { name: "hand-written", capabilities: ["steering"] },
 ] satisfies HarnessDeclaration[])(
   "selected native run with hello $name $capabilities",
@@ -77,9 +79,7 @@ it.each([
     onTestFinished(() => run.close());
     const runId = await run.send("Review this privately.");
     await run.continueRun(runId);
-    expect(nativeTranscriptSeen).toBe(
-      hello.name === "pi-native" && hello.capabilities.length === 3,
-    );
+    expect(nativeTranscriptSeen).toBe(hello.capabilities.includes("resume"));
     expect(run.model.requests).toHaveLength(nativeTranscriptSeen ? 1 : 0);
     const entries = await run.runEntries(runId);
     const messages = await run.prisma.sessionEntry.findMany({ where: { runId } });

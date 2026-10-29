@@ -153,22 +153,17 @@ describe("a run whose bot runs in a guest", () => {
         }),
       ).toEqual({ status: "completed", error: null });
       const entries = await run.runEntries(runId);
-      expect(
-        entries
-          .filter((entry) => entry.type === "tool.call" || entry.type === "tool.result")
-          .map((entry) =>
-            entry.type === "tool.call"
-              ? `call ${entry.payload.name}`
-              : `result ${entry.payload.callId} ${entry.payload.isError}`,
-          ),
-      ).toEqual([
-        "call bash",
-        "result sh false",
-        "call scratchpad_add",
-        expect.stringMatching(/^result mcp-[\w-]+ false$/),
-        "call message_user",
-        expect.stringMatching(/^result mcp-[\w-]+ false$/),
+      const calls = entries.filter((entry) => entry.type === "tool.call");
+      const results = entries.filter((entry) => entry.type === "tool.result");
+      expect(calls.map((entry) => entry.payload.name)).toEqual([
+        "bash",
+        "scratchpad_add",
+        "message_user",
       ]);
+      expect(results.map((entry) => entry.payload.callId)).toEqual(
+        calls.map((entry) => entry.payload.callId),
+      );
+      expect(results.map((entry) => entry.payload.isError)).toEqual([false, false, false]);
       expect(
         await run.prisma.attempt.findMany({
           where: { runId },
@@ -458,7 +453,7 @@ describe("a run whose bot runs in a guest", () => {
     const published: string[] = [];
     const publish = { id: "publish", name: "publish_note", arguments: { title: "Plan" } };
     const sibling = { id: "note", name: "scratchpad_add", arguments: { title: "Plan" } };
-    let resumed = "";
+    let resumed: ModelEmulatorRequest["messages"] = [];
     const run = await fixture({
       tools: {
         describe: () => ({
@@ -484,7 +479,7 @@ describe("a run whose bot runs in a guest", () => {
         closingTurn,
         {
           expect(request) {
-            resumed = JSON.stringify(request.messages);
+            resumed = request.messages;
           },
           response: finishing[0]!.response,
         },
@@ -524,7 +519,10 @@ describe("a run whose bot runs in a guest", () => {
     run.model.assertComplete();
     expect(published).toEqual(["publish_note"]);
     expect(await run.prisma.scratchpadItem.count()).toBe(1);
-    expect(resumed).toContain("already ran Scratchpad add");
+    expect(resumed.filter((message) => message.role === "tool")).toEqual([
+      { role: "tool", tool_call_id: "publish", content: '{"published":true}' },
+      { role: "tool", tool_call_id: "note", content: expect.stringContaining('"title":"Plan"') },
+    ]);
     expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
       "completed",
     );
