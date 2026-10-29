@@ -16,12 +16,12 @@ const tracedSend = {
 };
 
 function read(toolName: string, args: Record<string, unknown>): OutboundCall {
-  return readOutboundCall([{ toolName, args }]);
+  return readOutboundCall({ toolName, args });
 }
 
 describe("readOutboundCall", () => {
   it("drafts the traced send with every field it carries", () => {
-    expect(readOutboundCall([tracedSend])).toEqual({
+    expect(readOutboundCall(tracedSend)).toEqual({
       kind: "draft",
       draft: {
         connectorKind: "gmail",
@@ -425,15 +425,6 @@ describe("readOutboundCall", () => {
     expect(result.kind === "draft" && result.draft.textPath).toEqual(["email", "body"]);
   });
 
-  it("refuses a batch that sends among other actions, and leaves a batch of reads alone", () => {
-    const fetch = { toolName: "GMAIL_FETCH_EMAILS", args: {} };
-    expect(readOutboundCall([fetch, tracedSend])).toEqual({
-      kind: "refuse",
-      error: "Send this message on its own.",
-    });
-    expect(readOutboundCall([fetch, fetch])).toEqual({ kind: "none" });
-  });
-
   it("never drafts a mail with text the card does not show", () => {
     const keys = fc.constantFrom(
       "to",
@@ -494,7 +485,7 @@ describe("readOutboundCall", () => {
 describe("readOutboundCall on a chat app's send", () => {
   const chatApps = new Set(["slack"]);
   const chat = (toolName: string, args: Record<string, unknown>) =>
-    readOutboundCall([{ toolName, args }], [], chatApps);
+    readOutboundCall({ toolName, args }, [], chatApps);
   // Composio's Slack send as its docs give it (2026-10): a conversation id and Markdown text.
   const slackSend = { channel: "D0MARIE", markdown_text: "Thursday instead?" };
 
@@ -560,7 +551,7 @@ describe("readOutboundCall on a chat app's send", () => {
   });
 
   it("leaves a chat app without a recipient reader, and Slack's reads, as they were", () => {
-    expect(readOutboundCall([{ toolName: "SLACK_SEND_MESSAGE", args: slackSend }])).toEqual({
+    expect(readOutboundCall({ toolName: "SLACK_SEND_MESSAGE", args: slackSend })).toEqual({
       kind: "none",
     });
     expect(chat("TEAMS_SEND_MESSAGE", slackSend)).toEqual({ kind: "none" });
@@ -570,7 +561,7 @@ describe("readOutboundCall on a chat app's send", () => {
   });
 
   it("keeps reading a mail as a mail", () => {
-    expect(readOutboundCall([tracedSend], [], chatApps).kind).toBe("draft");
+    expect(readOutboundCall(tracedSend, [], chatApps).kind).toBe("draft");
     expect(read("GMAIL_SEND_EMAIL", { ...tracedSend.args, channel: "C0GENERAL" })).toEqual({
       kind: "classic",
     });

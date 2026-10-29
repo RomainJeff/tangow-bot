@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { outboundDraftIdentity, readOutboundCall } from "./outbound-message.js";
 
 const identityOf = (toolName: string, args: Record<string, unknown>) => {
-  const call = readOutboundCall([{ toolName, args }]);
+  const call = readOutboundCall({ toolName, args });
   if (call.kind !== "draft") throw new Error(`${toolName} did not read as a draft`);
   return outboundDraftIdentity(call.draft);
 };
@@ -55,7 +55,7 @@ describe("outboundDraftIdentity", () => {
     const base = tool === "GMAIL_SEND_EMAIL" || tool === "GMAIL_REPLY_TO_THREAD" ? mail : {};
     const read = (extra: Record<string, unknown>) => {
       const call = readOutboundCall(
-        [{ toolName: tool, args: { ...base, ...extra } }],
+        { toolName: tool, args: { ...base, ...extra } },
         [],
         new Set(["slack"]),
       );
@@ -64,14 +64,6 @@ describe("outboundDraftIdentity", () => {
       return outboundDraftIdentity(call.draft);
     };
     expect(read(first)).not.toEqual(read(second));
-  });
-
-  it("tells the same message sent by another tool of a batch apart", () => {
-    const call = readOutboundCall([{ toolName: "GMAIL_SEND_EMAIL", args: mail }]);
-    if (call.kind !== "draft") throw new Error("not a draft");
-    expect(outboundDraftIdentity(call.draft, "GMAIL_SEND_EMAIL")).not.toEqual(
-      outboundDraftIdentity(call.draft, "GMAIL_REPLY_TO_THREAD"),
-    );
   });
 
   it("is the same whatever order and case the recipients come in", () => {

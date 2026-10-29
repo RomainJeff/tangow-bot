@@ -15,7 +15,7 @@ import { appendSessionEntryInTransaction } from "./sessions.js";
 const SPACE = "space_drafts";
 const OWNER = "user_drafts";
 const MARKER = "__marker";
-const ARGS_PATH = [2, "arguments", "tools", 0, "arguments"];
+const ARGS_PATH = [2, "arguments"];
 const BODY_PATH = [...ARGS_PATH, "body"];
 /** Where a draft recorded with editable fields holds them, as for a Gmail send with its schema. */
 const FIELDS = {
@@ -50,15 +50,8 @@ const request = (
   MARKER,
   "mcp_execute_tool",
   {
-    id: "r1:COMPOSIO_MULTI_EXECUTE_TOOL",
-    arguments: {
-      tools: [
-        {
-          tool_slug: "GMAIL_SEND_EMAIL",
-          arguments: { ...recipients, subject, body, include_signature: false },
-        },
-      ],
-    },
+    id: "r1:GMAIL_SEND_EMAIL",
+    arguments: { ...recipients, subject, body, include_signature: false },
   },
 ];
 const draft = {
@@ -119,7 +112,7 @@ async function waiting(
       ? {
           spaceId: SPACE,
           runId: run.id,
-          kind: "COMPOSIO_MULTI_EXECUTE_TOOL",
+          kind: "GMAIL_SEND_EMAIL",
           idempotencyKey: `key-${seeded}`,
           status: "intended",
           request: request(body, subject),

@@ -65,14 +65,10 @@ const FREE_TEXT_NOTES = new Set(["thought"]);
  * What a draft would send, as the key of its effect: the tool, the app, the recipients, the
  * subject, the text, the sending account, and every argument that says where it lands (a thread,
  * a message or a reply it answers, a broadcast). Only the bot's own free-text notes are left out,
- * so the same mail issued again with other words there is the same effect, whatever the tool's
- * envelope, and the same text in another thread or by another tool is another. `toolName` is the
- * tool the call performs when it is not the one the effect is recorded under, as in a batch.
+ * so the same mail issued again with other words there is the same effect, and the same text
+ * in another thread remains a different message.
  */
-export function outboundDraftIdentity(
-  draft: OutboundDraft,
-  toolName?: string,
-): Record<string, unknown> {
+export function outboundDraftIdentity(draft: OutboundDraft): Record<string, unknown> {
   const addressing = Object.entries(draft.args)
     .filter(([key, value]) => {
       const role = FIELD_ROLES[fieldKey(key)];
@@ -85,7 +81,6 @@ export function outboundDraftIdentity(
     .sort(([left], [right]) => left.localeCompare(right));
   return {
     app: draft.connectorKind,
-    ...(toolName === undefined ? {} : { tool: toolName }),
     ...(addressing.length === 0 ? {} : { addressing: Object.fromEntries(addressing) }),
     recipients: draft.recipients
       .map((recipient) => `${recipient.role} ${recipient.address.toLowerCase()}`)
@@ -194,25 +189,11 @@ type Reading = {
   buried: boolean;
 };
 
-/**
- * Reads a whole connector call: a batch that sends must send alone. A chat send is read only for
- * the `chatApps` whose recipients the card can name; any other keeps today's gate.
- */
+/** Reads an outgoing call; chat sends require an app whose recipients the adapter can name. */
 export function readOutboundCall(
-  actions: readonly OutboundAction[],
+  action: OutboundAction,
   connectorKinds: string[] = [],
   chatApps: ReadonlySet<string> = new Set(),
-): OutboundCall {
-  const reads = actions.map((action) => readOutbound(action, connectorKinds, chatApps));
-  if (reads.every((read) => read.kind === "none")) return { kind: "none" };
-  if (reads.length > 1) return { kind: "refuse", error: "Send this message on its own." };
-  return reads[0]!;
-}
-
-function readOutbound(
-  action: OutboundAction,
-  connectorKinds: string[],
-  chatApps: ReadonlySet<string>,
 ): OutboundCall {
   const words = toolWords(action.toolName);
   const connectorKind = connectorKindFromToolName(action.toolName, connectorKinds);
@@ -428,10 +409,10 @@ export function isRecipientField(key: string): boolean {
   return isRecipientRole(FIELD_ROLES[fieldKey(key)]);
 }
 
-/** Arguments a card shows whole: recipients, conversations, and a batch's unread items. */
+/** Arguments a card shows whole: recipients and conversations. */
 export function isWholeField(key: string): boolean {
   const field = fieldKey(key);
-  return isRecipientField(key) || FIELD_ROLES[field] === "conversation" || field === "tools";
+  return isRecipientField(key) || FIELD_ROLES[field] === "conversation";
 }
 
 /**

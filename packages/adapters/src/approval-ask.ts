@@ -11,7 +11,6 @@ import {
   routineCardBlock,
   spawnBotApprovalBlock,
 } from "@rakazo/core";
-import type { ConnectorAction } from "./connector-actions.js";
 
 const MAX_APPROVAL_SUMMARY_LENGTH = 500;
 const MAX_APPROVAL_DETAIL_LENGTH = 4_000;
@@ -42,8 +41,6 @@ export function buildApprovalAskBlock(
     runUserId?: string;
     /** The run owner's name, shown as the sender of a draft. */
     runUserName?: string;
-    /** What a batch call runs: the card shows these instead of the wrapper. */
-    actions?: ConnectorAction[];
     /** A mail to send: shown in full, sent or discarded, no "always". */
     draft?: AskDraft;
     /** A possible send the card cannot read field by field: every argument shows, no "always". */
@@ -54,10 +51,7 @@ export function buildApprovalAskBlock(
   // so the card shows exactly what will be created; a second pass would only inflate short secrets.
   if (toolName === "spawn_bot") return spawnBotApprovalBlock(effectId, args, options?.runUserId);
   if (options?.routineCard) return routineCardBlock(effectId, options.routineCard);
-  const actions = options?.actions;
-  const summary = actions
-    ? actions.map((action) => describeApprovalAction(action.toolName, action.args)).join(", ")
-    : describeApprovalAction(toolName, args);
+  const summary = describeApprovalAction(toolName, args);
   const owner = options?.runUserId
     ? {
         userId: options.runUserId,
@@ -68,13 +62,7 @@ export function buildApprovalAskBlock(
     ...redactDraft(options.draft, secrets),
     ...(owner ? { owner } : {}),
   };
-  const detail = formatApprovalDetail(
-    toolName,
-    args,
-    options?.reviewReason,
-    actions,
-    options?.unreadable,
-  );
+  const detail = formatApprovalDetail(toolName, args, options?.reviewReason, options?.unreadable);
   const safeDetail = detail ? redactSecrets(detail, secrets) : undefined;
   // An unreadable send shows every argument, so its size is bounded by the gate instead.
   const shownDetail =
@@ -105,10 +93,7 @@ export function buildApprovalAskBlock(
           ]
         : [
             { id: "allow", label: "Allow once" },
-            // "Always" would allow the batch wrapper, so every future batch, not the action shown.
-            ...(actions || options?.unreadable
-              ? []
-              : [{ id: "always", label: "Always allow this tool" }]),
+            ...(options?.unreadable ? [] : [{ id: "always", label: "Always allow this tool" }]),
             { id: "deny", label: "Deny" },
           ],
     ...(draft ? { draft } : {}),
@@ -145,7 +130,6 @@ function formatApprovalDetail(
   toolName: string,
   args: Record<string, unknown>,
   reviewReason?: string,
-  actions?: ConnectorAction[],
   everyArgument = false,
 ): string | undefined {
   const lines: string[] = [];
@@ -157,13 +141,7 @@ function formatApprovalDetail(
       "Bots, groups, chats, files, memory, and integrations in this space stay separate from other spaces.",
     );
   }
-  if (actions && actions.length > 1) {
-    for (const action of actions) {
-      lines.push(action.toolName, ...argLines(action.args).map((line) => `  ${line}`));
-    }
-  } else {
-    lines.push(...argLines(actions?.[0]?.args ?? args, everyArgument));
-  }
+  lines.push(...argLines(args, everyArgument));
   if (lines.length === 0) return undefined;
   return lines.join("\n");
 }

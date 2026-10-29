@@ -3,49 +3,31 @@ import type { AskDraft } from "@rakazo/contracts";
 import type { DraftBinding, DraftPath, OutboundCall, OutboundDraft } from "@rakazo/core";
 import {
   askDraftFields,
-  cardFitsArguments,
   FEATURED_CONNECTOR_LABELS,
   matchFeaturedConnectorId,
-  REFUSE_UNSHOWABLE,
   readOutboundCall,
   valueAt,
   withValueAt,
 } from "@rakazo/core";
 import { boundDirectApprovalDetails, catalogApprovalDetails } from "./approval-effect.js";
-import type { ConnectorCallActions } from "./connector-actions.js";
 import { CHAT_APPS } from "./slack-recipient.js";
 
 /** Composio's Gmail sends add the account's signature unless told not to. */
 const COMPOSIO_SIGNED_SENDS = new Set(["GMAIL_SEND_EMAIL", "GMAIL_REPLY_TO_THREAD"]);
 
 /**
- * How a connector call is gated when it may send a message. `schema` is the input schema of the
- * action that sends: the called tool's own, or for a batch of one, its item's when looked up.
+ * How a connector call is gated when it may send a message, using the called tool's input schema.
  */
 export function readConnectorOutbound(
   toolName: string,
   args: Record<string, unknown>,
-  contained: ConnectorCallActions | undefined,
   connectorKinds: string[],
   schema?: Record<string, unknown>,
 ): OutboundCall {
-  if (contained?.kind === "opaque") {
-    return cardFitsArguments(args) ? { kind: "classic" } : REFUSE_UNSHOWABLE;
-  }
-  const actions = contained
-    ? contained.actions.map((action) =>
-        contained.actions.length === 1 ? { ...action, schema } : action,
-      )
-    : [{ toolName, args, schema }];
-  const read = readOutboundCall(actions, connectorKinds, CHAT_APPS);
+  const read = readOutboundCall({ toolName, args, schema }, connectorKinds, CHAT_APPS);
   if (read.kind !== "draft" && read.kind !== "chat") return read;
-  // The draft's arguments are stored in place of the call's, and items sent as one JSON string
-  // have no place to put them back.
-  if (contained?.serialized) {
-    return cardFitsArguments(args) ? { kind: "classic" } : REFUSE_UNSHOWABLE;
-  }
   if (read.kind === "chat") return read;
-  const action = actions[0]!.toolName.replace(/^mcp__.+?__/, "").toUpperCase();
+  const action = toolName.replace(/^mcp__.+?__/, "").toUpperCase();
   if (COMPOSIO_SIGNED_SENDS.has(action) && !("include_signature" in read.draft.args)) {
     return {
       kind: "draft",
@@ -62,7 +44,6 @@ export function readConnectorOutbound(
 export function draftRequest(
   request: unknown,
   marker: string,
-  batched: boolean,
   draft: OutboundDraft,
 ): { request: unknown; binding: DraftBinding } | undefined {
   const envelope: DraftPath = boundDirectApprovalDetails(request, marker)
@@ -70,7 +51,7 @@ export function draftRequest(
     : catalogApprovalDetails(request, marker)
       ? [2, "arguments"]
       : [];
-  const at = batched ? [...envelope, "tools", 0, "arguments"] : envelope;
+  const at = envelope;
   const current = valueAt(request, at);
   if (!current || typeof current !== "object" || Array.isArray(current)) return undefined;
   const next = withValueAt(request, at, draft.args);
@@ -102,7 +83,7 @@ export type SendResult =
 
 /**
  * What became of a send, read from the connector's result. Only the app saying no counts as not
- * sent: a Composio action marked `successful: false`, inside a batch, a JSON text or the details
+ * sent: a Composio action marked `successful: false`, inside JSON text or the details
  * of the connector's error. Anything else is uncertain, a bare connector error and an MCP error
  * result included: a timeout after the send gives the first, and a server that throws after it
  * posted gives the second.
@@ -122,8 +103,6 @@ export function readSendResult(result: unknown): SendResult {
 function failureIn(value: unknown, depth: number): string | undefined {
   if (depth > 8) return undefined;
   if (Array.isArray(value)) {
-    // The first failing item is the send because a sending batch holds only one action, which
-    // readOutboundCall enforces.
     for (const item of value) {
       const reason = failureIn(item, depth + 1);
       if (reason !== undefined) return reason;
@@ -132,7 +111,7 @@ function failureIn(value: unknown, depth: number): string | undefined {
   }
   if (!value || typeof value !== "object") return undefined;
   const record = value as Record<string, unknown>;
-  for (const key of ["data", "response", "results", "structuredContent", "content"]) {
+  for (const key of ["data", "structuredContent", "content"]) {
     const reason = failureIn(record[key], depth + 1);
     if (reason !== undefined) return reason;
   }

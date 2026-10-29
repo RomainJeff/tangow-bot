@@ -89,7 +89,7 @@ const sends = {
 
 /** The draft a send makes and the record the server keeps of it, as at creation. */
 function drafted(action: OutboundAction) {
-  const read = readOutboundCall([action]);
+  const read = readOutboundCall(action);
   if (read.kind !== "draft") throw new Error(`not a draft: ${read.kind}`);
   const { draft } = read;
   const binding: DraftBinding = {
@@ -170,16 +170,14 @@ describe("the lines a draft offers", () => {
 
   it("gives a subject with a line break the classic card, and refuses one in an edit", () => {
     expect(
-      readOutboundCall([
-        {
-          toolName: "GMAIL_SEND_EMAIL",
-          args: {
-            recipient_email: "a@example.com",
-            subject: "Hi\nBcc: x@example.com",
-            body: "Hello",
-          },
+      readOutboundCall({
+        toolName: "GMAIL_SEND_EMAIL",
+        args: {
+          recipient_email: "a@example.com",
+          subject: "Hi\nBcc: x@example.com",
+          body: "Hello",
         },
-      ]).kind,
+      }).kind,
     ).toBe("classic");
     expect(edit(sends["Gmail called directly"], { subject: "Hi\r\nBcc: x@example.com" })).toEqual({
       error: "A subject fits on one line.",
@@ -329,9 +327,10 @@ describe("editDraftRequest", () => {
           ];
           const result = editDraftRequest(send.args, binding, { recipients: list, subject });
           if ("error" in result) throw new Error(result.error);
-          const reread = readOutboundCall([
-            { ...send, args: result.request as Record<string, unknown> },
-          ]);
+          const reread = readOutboundCall({
+            ...send,
+            args: result.request as Record<string, unknown>,
+          });
           if (reread.kind !== "draft") throw new Error(`edited send reads as ${reread.kind}`);
           expect(reread.draft.recipients).toEqual(list);
           expect(reread.draft.subject ?? "").toBe(subject.trim() ? subject : "");

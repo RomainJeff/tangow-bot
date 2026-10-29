@@ -271,63 +271,10 @@ const SLACK_TOOLS: ConnectorTool[] = [
   },
 ];
 
-const strings = { type: "array", items: { type: "string" } };
-
-/**
- * What `COMPOSIO_GET_TOOL_SCHEMAS` answers for a slug, in the shape Composio's docs give (2026-10):
- * the send's own fields only, without the emulator's convenience aliases.
- */
-const DOCUMENTED_INPUT_SCHEMAS: Record<string, Record<string, unknown>> = {
-  GMAIL_SEND_EMAIL: {
-    type: "object",
-    properties: {
-      recipient_email: { type: "string" },
-      extra_recipients: strings,
-      cc: strings,
-      bcc: strings,
-      subject: { type: "string" },
-      body: { type: "string" },
-      is_html: { type: "boolean" },
-      attachment: { type: "string" },
-      include_signature: { type: "boolean" },
-      user_id: { type: "string" },
-      from_email: { type: "string" },
-    },
-  },
-};
-
 const TOOLKIT_TOOLS: Record<string, ConnectorTool[]> = {
   GMAIL: GMAIL_TOOLS,
   OUTLOOK: OUTLOOK_TOOLS,
   SLACK: SLACK_TOOLS,
-};
-
-/**
- * Composio's batch as its MCP server offers it. The native connector calls each tool on its own
- * route; the batch stays here so the path a batched send takes is exercised offline.
- */
-const BATCH_TOOL: ConnectorTool = {
-  name: "COMPOSIO_MULTI_EXECUTE_TOOL",
-  description: "Run several connected-app actions in one call",
-  inputSchema: {
-    type: "object",
-    properties: {
-      tools: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            tool_slug: { type: "string" },
-            account: { type: "string" },
-            arguments: { type: "object" },
-          },
-          required: ["tool_slug"],
-        },
-      },
-      thought: { type: "string" },
-    },
-    required: ["tools"],
-  },
 };
 
 function asString(value: unknown, fallback = ""): string {
@@ -657,7 +604,6 @@ export class ComposioEmulator implements ComposioProvider {
         })),
       );
     }
-    if (tools.length > 0) tools.push(BATCH_TOOL);
     return tools;
   }
 
@@ -673,16 +619,9 @@ export class ComposioEmulator implements ComposioProvider {
     }
     let result: Record<string, unknown>;
     try {
-      result =
-        call.tool === BATCH_TOOL.name
-          ? this.executeBatch(args, context)
-          : call.tool === "COMPOSIO_GET_TOOL_SCHEMAS"
-            ? this.executeSchemaLookup(args)
-            : this.executeAction(call.tool, args, context);
+      result = this.executeAction(call.tool, args, context);
       this.executions.push({ userId: context.userId, tool: call.tool, args });
-      // A direct tool the app reported failed reaches the caller as an error, as ComposioConnector
-      // gives it, never as a result: a batch carries each action's failure inside its results.
-      if (call.tool !== BATCH_TOOL.name && result.successful === false && result.error) {
+      if (result.successful === false && result.error) {
         yield reportedFailure(result.error);
         return;
       }
@@ -739,48 +678,6 @@ export class ComposioEmulator implements ComposioProvider {
       return this.executeGithub(tool, args);
     }
     return { ok: true, tool, args };
-  }
-
-  /** Composio's schema lookup, answered from the documented schemas above. */
-  private executeSchemaLookup(args: Record<string, unknown>): Record<string, unknown> {
-    const fault = this.faults.get("COMPOSIO_GET_TOOL_SCHEMAS");
-    this.faults.delete("COMPOSIO_GET_TOOL_SCHEMAS");
-    if (fault?.kind === "fail") return { successful: false, error: fault.error, data: null };
-    const slugs = Array.isArray(args.tool_slugs) ? args.tool_slugs.map(String) : [];
-    const found = slugs.filter((slug) => slug in DOCUMENTED_INPUT_SCHEMAS);
-    return {
-      successful: true,
-      error: null,
-      data: {
-        success: found.length === slugs.length,
-        tool_schemas: Object.fromEntries(
-          found.map((slug) => [
-            slug,
-            { tool_slug: slug, toolkit: "gmail", input_schema: DOCUMENTED_INPUT_SCHEMAS[slug] },
-          ]),
-        ),
-        not_found: slugs.filter((slug) => !found.includes(slug)),
-      },
-    };
-  }
-
-  /** Composio's batch: one response per action, in order, under `data.results`. */
-  private executeBatch(
-    args: Record<string, unknown>,
-    context: AdapterContext,
-  ): Record<string, unknown> {
-    const items = Array.isArray(args.tools) ? (args.tools as Record<string, unknown>[]) : [];
-    const results = items.map((item, index) => {
-      const tool = asString(item.tool_slug);
-      const itemArgs = (item.arguments ?? {}) as Record<string, unknown>;
-      return { response: this.executeAction(tool, itemArgs, context), tool_slug: tool, index };
-    });
-    const errorCount = results.filter((result) => result.response.successful === false).length;
-    return {
-      successful: errorCount === 0,
-      data: { results, success_count: results.length - errorCount, error_count: errorCount },
-      error: null,
-    };
   }
 
   async begin(

@@ -254,8 +254,6 @@ import {
   resolveAutoReviewChecker,
   runAutoReviewJudge,
 } from "./auto-review.js";
-import type { BatchItemSchemaCache } from "./batch-item-schema.js";
-import { lookUpBatchItemSchema } from "./batch-item-schema.js";
 import { messageBot, resolveRunHop, returnBotMessageOutcome } from "./bot-messages.js";
 import {
   findBotSecret,
@@ -311,7 +309,6 @@ import {
 } from "./computer-support.js";
 import { observationToolResult, parseComputerActions, screenPath } from "./computer-tools.js";
 import { checkpointRunComputerWorkspace } from "./computer-workspace.js";
-import { connectorCallActions } from "./connector-actions.js";
 import { connectorError } from "./connector-errors.js";
 import { redactConnectorPayload, sanitizeConnectorError } from "./connector-safety.js";
 import { formatCurrentTimeInstruction } from "./current-time.js";
@@ -1258,7 +1255,6 @@ export function buildHarnessAddendum(parts: SystemInstructionParts): string {
 }
 
 export function createRunExecutor(deps: ExecutorDeps) {
-  const batchItemSchemas: BatchItemSchemaCache = new Map();
   const chatRecipients: ChatRecipientCache = new Map();
   const web = deps.web ?? createWebProvider();
   // Skills live under DATA_DIR/skills; same default as apps/api env + apps/worker.
@@ -3429,50 +3425,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
           );
           const pluginProviders = connectedPlugins.map((plugin) => plugin.provider);
           const connectorKind = connectorKindFromToolName(name, pluginProviders);
-          // A batch is judged by what it runs: any inner action a rule asks for asks, otherwise
-          // the wrapper's own rules apply, so an old "always allow" on the wrapper still holds.
-          // The route keeps the server's own tool name; `name` may carry a uniquifying prefix.
           const ownToolName = connectorCall.route?.toolName ?? name;
-          const contained = viaConnector ? connectorCallActions(ownToolName, args) : undefined;
-          const innerActions = contained?.kind === "actions" ? contained.actions : undefined;
-          // A mail always shows to its owner: no rule, review or trusted trigger lets it leave.
           let outbound: OutboundCall = viaConnector
             ? readConnectorOutbound(
                 ownToolName,
                 args,
-                contained,
                 pluginProviders,
-                // The called tool's schema describes a batch's envelope, never its item.
-                contained ? undefined : (resolvedToolSchema ?? connectorSchemas.get(name)),
+                resolvedToolSchema ?? connectorSchemas.get(name),
               )
             : { kind: "none" };
-          // A batch item carries no schema, so the lines its tool would take are asked of its server.
           const { connector } = deps;
-          if (
-            outbound.kind === "draft" &&
-            innerActions?.length === 1 &&
-            !approvedReplayConsumed &&
-            connector
-          ) {
-            const itemSchema = await lookUpBatchItemSchema(
-              connector,
-              { ...connectorCall, tool: name, args, executionId },
-              innerActions[0]!.toolName,
-              context,
-              batchItemSchemas,
-            );
-            context.signal.throwIfAborted();
-            if (itemSchema) {
-              const reread = readConnectorOutbound(
-                ownToolName,
-                args,
-                contained,
-                pluginProviders,
-                itemSchema,
-              );
-              if (reread.kind === "draft") outbound = reread;
-            }
-          }
           // A chat names its recipient as its app does, or its send shows the classic card. A
           // resumed send asks nothing: its effect already holds what it shows and what leaves.
           if (outbound.kind === "chat" && approvedReplayConsumed) outbound = { kind: "classic" };
@@ -3507,16 +3469,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (outbound.kind === "refuse") return { error: outbound.error };
           const drafted =
             outbound.kind === "draft"
-              ? draftRequest(
-                  effectRequest,
-                  CATALOG_APPROVAL_TOOL,
-                  contained?.kind === "actions",
-                  outbound.draft,
-                )
+              ? draftRequest(effectRequest, CATALOG_APPROVAL_TOOL, outbound.draft)
               : undefined;
           if (outbound.kind === "draft" && !drafted) outbound = { kind: "classic" };
-          // The card masks run secrets, so a draft holding one anywhere in its call, the sending
-          // account or a batch item's account included, would send what it does not show.
+          // The card masks run secrets, so a draft holding one would send what it does not show.
           if (
             outbound.kind === "draft" &&
             !approvedReplayConsumed &&
@@ -3534,16 +3490,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const approvalRules = requiresMandatoryApproval ? [] : await loadApprovalRules();
           const approvalResolved = requiresMandatoryApproval
             ? { decision: "ask" as const, source: "default" as const, matchingRules: [] }
-            : (innerActions
-                ?.map((action) =>
-                  resolveActionApprovalDetail({
-                    toolName: action.toolName,
-                    connectorKind: connectorKindFromToolName(action.toolName, pluginProviders),
-                    rules: approvalRules,
-                  }),
-                )
-                .find((resolved) => resolved.decision === "ask") ??
-              resolveActionApprovalDetail({ toolName: name, connectorKind, rules: approvalRules }));
+            : resolveActionApprovalDetail({ toolName: name, connectorKind, rules: approvalRules });
           const autoReviewPref = requiresMandatoryApproval
             ? false
             : await loadAutoReviewPreference();
@@ -3585,10 +3532,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             requiresApprovalByDefault;
           // A draft is one effect per message it would send: the bot's own words in the call's
           // other arguments, a `thought` or a step note, change on every retry.
-          const keyArgs =
-            outbound.kind === "draft"
-              ? outboundDraftIdentity(outbound.draft, innerActions?.[0]?.toolName)
-              : args;
+          const keyArgs = outbound.kind === "draft" ? outboundDraftIdentity(outbound.draft) : args;
           // Count before choosing a key so an approved replay (occurrence 0 / base
           // key) cannot collide with a later identical-args call in this attempt.
           // request_secret stays single-use: retries must reuse the same card.
@@ -3882,7 +3826,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 routineCard,
                 runUserId: run.userId,
                 ...(owner?.name ? { runUserName: owner.name } : {}),
-                actions: innerActions,
                 draft,
                 unreadable: outbound.kind === "classic",
               },

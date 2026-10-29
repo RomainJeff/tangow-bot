@@ -175,61 +175,6 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
       );
     }, 30_000);
 
-    it("offers a Cc on a batched Gmail send from its schema, and the Cc leaves in the batch", async () => {
-      const composio = new ComposioEmulator();
-      await journey(
-        [
-          {
-            expect(request) {
-              expect(offeredTools(request)).toContain("COMPOSIO_MULTI_EXECUTE_TOOL");
-            },
-            response: {
-              type: "tool",
-              id: "journey-batch",
-              name: "COMPOSIO_MULTI_EXECUTE_TOOL",
-              arguments: { tools: [{ tool_slug: "GMAIL_SEND_EMAIL", arguments: mail }] },
-            },
-          },
-          WAITING,
-          { expect() {}, response: reply("Sent.") },
-          DONE,
-        ],
-        async (fixture) => {
-          await connectGmail(composio, fixture);
-          const sent = await fixture.send("Mail them hello.");
-          await sent.settled("waiting_input");
-          expect((await latestCard(fixture.prisma, sent.runId)).block.draft?.fields).toEqual({
-            to: null,
-            cc: null,
-            bcc: null,
-            subject: true,
-          });
-          await answerDraft(fixture, sent.runId, {
-            recipients: [
-              { role: "to", address: mail.recipient_email },
-              { role: "cc", address: "cy@example.test" },
-            ],
-          });
-          await sent.settled("completed");
-          expect(composio.executions.map((call) => [call.tool, call.args])).toEqual([
-            ["COMPOSIO_GET_TOOL_SCHEMAS", { tool_slugs: ["GMAIL_SEND_EMAIL"] }],
-            [
-              "COMPOSIO_MULTI_EXECUTE_TOOL",
-              {
-                tools: [
-                  {
-                    tool_slug: "GMAIL_SEND_EMAIL",
-                    arguments: { ...mail, include_signature: false, cc: ["cy@example.test"] },
-                  },
-                ],
-              },
-            ],
-          ]);
-        },
-        { composio },
-      );
-    }, 30_000);
-
     it("leaves with the recipients and subject the user set, in Outlook's own fields", async () => {
       const composio = new ComposioEmulator();
       const outlook = { to: "someone@example.test", subject: "Hello", body: "Draft from the bot." };

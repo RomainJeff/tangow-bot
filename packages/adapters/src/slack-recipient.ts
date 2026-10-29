@@ -1,7 +1,6 @@
 import type { AdapterContext, ConnectorCall, ConnectorProvider } from "@rakazo/adapter-kit";
 import type { AskDraftConversation } from "@rakazo/contracts";
 import { LINE_BREAKS } from "@rakazo/core";
-import { isComposioBatch } from "./connector-actions.js";
 import { findInResult, isRecord, readConnector, remember } from "./connector-read.js";
 
 /** Chat apps whose recipients a draft card can name: a send of any other keeps today's gate. */
@@ -13,9 +12,9 @@ const TTL_MS = 10 * 60_000;
 const NAME_MAX_LENGTH = 200;
 const USER_ID = /^[UW][A-Z0-9]+$/;
 const CONVERSATION_ID = /^[CDG][A-Z0-9]+$/;
-// Composio passes Slack's answer on under `data`, inside a batch per action under `results`.
+// Native Composio and MCP responses wrap the Slack answer differently.
 const ANSWER_WALK = {
-  keys: ["data", "structuredContent", "content", "results", "response"],
+  keys: ["data", "structuredContent", "content"],
   depth: 8,
 };
 /** Slack's own MCP server, known by where it is reached, never by the name a user gave it. */
@@ -89,11 +88,10 @@ const SLACK_READS = {
 export type SlackServer = keyof typeof SLACK_READS;
 
 /**
- * Which Slack server a send goes through: Composio, natively or through its batch tool behind any
- * MCP server, or Slack's own MCP server by its endpoint. Undefined for any other.
+ * Which Slack server a send goes through: native Composio or Slack's own MCP server by its
+ * endpoint. Undefined for any other.
  */
 export function slackServer(call: ConnectorCall, mcpEndpoint?: string): SlackServer | undefined {
-  if (isComposioBatch(call.route?.toolName ?? call.tool)) return "composio";
   if (call.route?.connectorId === "composio") return "composio";
   if (call.route?.connectorId !== "mcp" || !mcpEndpoint) return undefined;
   try {
@@ -131,7 +129,6 @@ export async function lookUpChatRecipient(
     route?.resourceId,
     route?.resourceRevision,
     call.connectionId,
-    batchItem(call)?.account,
     id,
   ].join("\0");
   const cached = cache.get(key);
@@ -185,22 +182,10 @@ function clean(value: unknown): string {
 }
 
 /**
- * The read `tool` made the way the send is: through Composio's batch with the send's account, or
- * direct. It is built whole here: nothing else the bot wrote in its send travels with it.
+ * The recipient read uses the send's connection and route, without its message arguments.
  */
 function readCall(call: ConnectorCall, tool: string, args: Record<string, unknown>): ConnectorCall {
   const executionId = `${call.executionId}:recipient`;
-  const item = batchItem(call);
-  if (item) {
-    const account = typeof item.account === "string" ? { account: item.account } : {};
-    return {
-      tool: call.route?.toolName ?? call.tool,
-      args: { tools: [{ tool_slug: tool, ...account, arguments: args }] },
-      executionId,
-      ...(call.connectionId ? { connectionId: call.connectionId } : {}),
-      ...(call.route ? { route: call.route } : {}),
-    };
-  }
   return {
     tool,
     args,
@@ -208,10 +193,4 @@ function readCall(call: ConnectorCall, tool: string, args: Record<string, unknow
     ...(call.connectionId ? { connectionId: call.connectionId } : {}),
     ...(call.route ? { route: { ...call.route, toolName: tool } } : {}),
   };
-}
-
-function batchItem(call: ConnectorCall): Record<string, unknown> | undefined {
-  if (!isComposioBatch(call.route?.toolName ?? call.tool)) return undefined;
-  const [item] = Array.isArray(call.args.tools) ? call.args.tools : [];
-  return isRecord(item) ? item : undefined;
 }

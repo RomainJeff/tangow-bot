@@ -21,24 +21,6 @@ const direct = (channel: string): ConnectorCall => ({
   route: { connectorId: "composio", toolName: "SLACK_SEND_MESSAGE" },
 });
 
-const batched = (channel: string): ConnectorCall => ({
-  tool: "COMPOSIO_MULTI_EXECUTE_TOOL",
-  args: {
-    tools: [
-      {
-        tool_slug: "SLACK_SEND_MESSAGE",
-        account: "slack_acme",
-        memory: { note: "Marie prefers Thursdays" },
-        arguments: { channel, markdown_text: "Thursday instead?" },
-      },
-    ],
-    thought: "Tell Marie",
-    sync_response_to_workbench: true,
-  },
-  executionId: "call-1",
-  route: { connectorId: "mcp", resourceId: "server-1", toolName: "COMPOSIO_MULTI_EXECUTE_TOOL" },
-});
-
 /** A connector that answers every call with `data`. */
 function answering(data: unknown) {
   return {
@@ -88,34 +70,6 @@ describe("lookUpChatRecipient", () => {
         new Map(),
       ),
     ).toEqual(named);
-  });
-
-  it("asks through Composio's batch with the send's account and nothing else the bot wrote", async () => {
-    const slack = new ComposioEmulator();
-    expect(
-      await lookUpChatRecipient(
-        slack,
-        batched("C0GENERAL"),
-        "composio",
-        "C0GENERAL",
-        context(),
-        new Map(),
-      ),
-    ).toEqual({ kind: "channel", name: "general" });
-    expect(slack.executions.map((call) => [call.tool, call.args])).toEqual([
-      [
-        "COMPOSIO_MULTI_EXECUTE_TOOL",
-        {
-          tools: [
-            {
-              tool_slug: "SLACK_RETRIEVE_CONVERSATION_INFORMATION",
-              account: "slack_acme",
-              arguments: { channel: "C0GENERAL" },
-            },
-          ],
-        },
-      ],
-    ]);
   });
 
   it.each([
@@ -234,21 +188,12 @@ describe("lookUpChatRecipient", () => {
   it("reads Slack's answer inside an MCP result's JSON text", async () => {
     const text = JSON.stringify({
       successful: true,
-      data: {
-        results: [
-          {
-            response: {
-              successful: true,
-              data: { ok: true, channel: { id: "C0GENERAL", name: "general" } },
-            },
-          },
-        ],
-      },
+      data: { ok: true, channel: { id: "C0GENERAL", name: "general" } },
     });
     expect(
       await lookUpChatRecipient(
         answering({ content: [{ type: "text", text }] }),
-        batched("C0GENERAL"),
+        direct("C0GENERAL"),
         "composio",
         "C0GENERAL",
         context(),
@@ -313,10 +258,8 @@ describe("slackServer", () => {
     executionId: "call-1",
     route: { connectorId: "mcp", resourceId: "server-1", toolName },
   });
-
-  it("knows Composio natively and through its batch, and Slack's server by its endpoint only", () => {
+  it("knows Composio natively and Slack's server by its endpoint only", () => {
     expect(slackServer(direct("C0GENERAL"))).toBe("composio");
-    expect(slackServer(batched("C0GENERAL"))).toBe("composio");
     expect(slackServer(mcp("slack_send_message"), "https://mcp.slack.com/mcp")).toBe("slackMcp");
     expect(slackServer(mcp("slack_send_message"), "https://mcp.slack.com.evil.test/mcp")).toBe(
       undefined,

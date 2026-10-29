@@ -181,32 +181,6 @@ describe("buildApprovalAskBlock", () => {
     });
   });
 
-  it("shows each action of a batch and offers no always-allow for the wrapper", () => {
-    const block = buildApprovalAskBlock(
-      "effect-1",
-      "mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL",
-      { tools: [] },
-      [],
-      {
-        actions: [
-          { toolName: "GMAIL_FETCH_EMAILS", args: { query: "is:unread" } },
-          {
-            toolName: "GMAIL_SEND_EMAIL",
-            args: { recipient_email: "person@example.test", subject: "Hi" },
-          },
-        ],
-      },
-    );
-    expect(block).toMatchObject({
-      text: "Review before GMAIL_FETCH_EMAILS, GMAIL_SEND_EMAIL → person@example.test",
-      detail: "GMAIL_FETCH_EMAILS\nGMAIL_SEND_EMAIL\n  to: person@example.test\n  subject: Hi",
-      actions: [
-        { id: "allow", label: "Allow once" },
-        { id: "deny", label: "Deny" },
-      ],
-    });
-  });
-
   it("names the sending account on a draft, before the recipients", () => {
     const block = buildApprovalAskBlock(
       "effect-1",
@@ -403,13 +377,7 @@ describe("approvalPushBody", () => {
   };
   const push = (draft?: AskDraft, secrets: string[] = []) =>
     approvalPushBody(
-      buildApprovalAskBlock(
-        "effect-1",
-        "mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL",
-        { tools: [] },
-        secrets,
-        { draft },
-      ),
+      buildApprovalAskBlock("effect-1", "GMAIL_SEND_EMAIL", { tools: [] }, secrets, { draft }),
     );
 
   it("names a mail's app, subject and recipient", () => {
@@ -444,20 +412,6 @@ describe("approvalPushBody", () => {
     expect(push({ ...mail, subject: "Key sk-secret-1234" }, ["sk-secret-1234"])).toBe(
       "Gmail: Key [redacted] to someone@example.com",
     );
-  });
-
-  it("uses the summary of what a batch runs, never the wrapper's name", () => {
-    const block = buildApprovalAskBlock(
-      "effect-1",
-      "mcp__composio__COMPOSIO_MULTI_EXECUTE_TOOL",
-      { tools: [] },
-      [],
-      {
-        actions: [{ toolName: "STRIPE_CREATE_CHARGE", args: { amount: 10 } }],
-      },
-    );
-    expect(approvalPushBody(block)).toBe("Review before STRIPE_CREATE_CHARGE → 10");
-    expect(approvalPushBody(block)).not.toContain("mcp__");
   });
 
   it("uses the card's own text for a direct tool", () => {
