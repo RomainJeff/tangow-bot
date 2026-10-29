@@ -102,6 +102,7 @@ const FIELD_ROLES: Record<string, FieldRole> = {
 const INHERITED_ROLES = new Set<FieldRole | undefined>(["to", "cc", "bcc", "sender", "attachment"]);
 const SEND_VERBS = new Set(["send", "sendmail", "sendemail", "reply", "forward"]);
 const CHAT_VERBS = new Set(["send", "post"]);
+const CHAT_APPS: ReadonlySet<string> = new Set(["slack"]);
 
 export const REFUSE_UNSHOWABLE: OutboundCall = {
   kind: "refuse",
@@ -123,16 +124,15 @@ type Reading = {
   buried: boolean;
 };
 
-/** Reads an outgoing call; chat sends require an app whose recipients the adapter can name. */
+/** Reads an outgoing call: a mail send, or a send on one of the chat apps. */
 export function readOutboundCall(
   action: OutboundAction,
   connectorKinds: string[] = [],
-  chatApps: ReadonlySet<string> = new Set(),
 ): OutboundCall {
   const words = toolWords(action.toolName);
   const connectorKind = connectorKindFromToolName(action.toolName, connectorKinds);
   const sends = words.some((word) => SEND_VERBS.has(word));
-  const chats = chatApps.has(connectorKind) && words.some((word) => CHAT_VERBS.has(word));
+  const chats = CHAT_APPS.has(connectorKind) && words.some((word) => CHAT_VERBS.has(word));
   if (!sends && !chats) return { kind: "none" };
   const reading: Reading = {
     recipients: [],

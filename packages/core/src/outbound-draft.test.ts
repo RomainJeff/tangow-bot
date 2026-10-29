@@ -1,7 +1,7 @@
-import { AskBlock, askDraftState } from "@rakazo/contracts";
+import { askDraftState } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import { withValueAt } from "./draft-fields.js";
-import { askDraftDetail, readDraft } from "./outbound-draft.js";
+import { readDraft } from "./outbound-draft.js";
 
 const base = { path: [2, "arguments", "body"], proposed: "Hello" };
 
@@ -70,34 +70,5 @@ describe("askDraftState", () => {
     [{ status: "answered", answer: "allow" }, "sending"],
   ] as const)("reads %j as %s", (card, state) => {
     expect(askDraftState(card)).toBe(state);
-  });
-});
-
-describe("a chat draft on a client", () => {
-  const card = {
-    kind: "ask",
-    text: "Review before Slack",
-    draft: {
-      app: { name: "Slack", logo: null },
-      recipients: [{ role: "to", address: "D0MARIE" }],
-      conversation: { kind: "person", name: "Marie Dupont", handle: "marie" },
-      body: "Thursday instead?",
-    },
-  };
-
-  it("reads its recipient as the app named them, for a client that does not know drafts", () => {
-    const { draft } = AskBlock.parse(card);
-    expect(askDraftDetail(draft!)).toBe("to: Marie Dupont @marie\nbody:\n  Thursday instead?");
-    expect(askDraftDetail({ ...draft!, conversation: { kind: "channel", name: "general" } })).toBe(
-      "to: #general\nbody:\n  Thursday instead?",
-    );
-  });
-
-  it("keeps the draft when its recipient comes in a shape this client does not know", () => {
-    const parsed = AskBlock.parse({
-      ...card,
-      draft: { ...card.draft, conversation: { kind: "group", names: ["Marie", "Bob"] } },
-    });
-    expect(parsed.draft).toEqual({ ...card.draft, conversation: undefined });
   });
 });

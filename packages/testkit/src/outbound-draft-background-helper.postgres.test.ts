@@ -1,6 +1,6 @@
-import { ComposioEmulator, composioEntityId, createConnectorStack } from "@rakazo/adapters";
 import { HARNESSES } from "@rakazo/agent-run-worker";
 import { describe, expect, it } from "vitest";
+import { acmeApp } from "./draft-app.test-support.js";
 import { latestCard } from "./index.js";
 import type { ModelEmulatorStep } from "./model-emulator.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
@@ -13,15 +13,15 @@ const step = (response: ModelEmulatorStep["response"]): ModelEmulatorStep => ({
   response,
 });
 
-describe.skipIf(!databaseAvailable)("a mail draft from a background helper", () => {
+describe.skipIf(!databaseAvailable)("a draft from a background helper", () => {
   it("is refused before it leaves a card, and sends nothing", async () => {
-    const composio = new ComposioEmulator();
+    const acme = acmeApp();
     let refusal = "";
     const run = await startWorkerRun({
       databaseUrl: process.env.DATABASE_URL!,
       harness: HARNESSES["pi-native"],
       computerScope: "none",
-      tools: createConnectorStack(false, composio).connector,
+      tools: acme.connector,
       steps: [
         step({
           type: "tool",
@@ -39,8 +39,8 @@ describe.skipIf(!databaseAvailable)("a mail draft from a background helper", () 
         step({
           type: "tool",
           id: "mail",
-          name: "GMAIL_SEND_EMAIL",
-          arguments: { recipient_email: "anna@example.test", subject: "Hello", body: "Hi Anna." },
+          name: "acme_deliver_message",
+          arguments: { recipient: "anna@example.test", topic: "Hello", content: "Hi Anna." },
         }),
         {
           expect(request) {
@@ -51,25 +51,7 @@ describe.skipIf(!databaseAvailable)("a mail draft from a background helper", () 
       ],
     });
     try {
-      await composio.begin(
-        { provider: "GMAIL", redirectUrl: "http://127.0.0.1.invalid/callback" },
-        {
-          operationId: "helper-draft",
-          traceId: "helper-draft",
-          spaceId: run.spaceId,
-          userId: run.userId,
-          signal: new AbortController().signal,
-        },
-      );
-      await run.prisma.connection.create({
-        data: {
-          spaceId: run.spaceId,
-          userId: run.userId,
-          provider: "GMAIL",
-          displayName: "Gmail",
-          status: "connected",
-        },
-      });
+      await acme.install(run.prisma, run);
       const parentId = await run.send("Mail Anna in the background.");
       await run.continueRun(parentId);
       const child = await run.prisma.run.findFirstOrThrow({ where: { parentRunId: parentId } });
@@ -77,17 +59,12 @@ describe.skipIf(!databaseAvailable)("a mail draft from a background helper", () 
 
       // Its parent can send it itself, behind a draft card in the conversation.
       expect(refusal).toContain("which a background helper cannot ask for. Ask your parent");
-      expect(await run.prisma.externalEffect.count({ where: { kind: "GMAIL_SEND_EMAIL" } })).toBe(
-        0,
-      );
+      expect(
+        await run.prisma.externalEffect.count({ where: { kind: "acme_deliver_message" } }),
+      ).toBe(0);
       await expect(latestCard(run.prisma, child.id)).rejects.toThrow();
       await expect(latestCard(run.prisma, parentId)).rejects.toThrow();
-      const mailbox = composio.mailboxFor(
-        composioEntityId({ spaceId: run.spaceId, userId: run.userId }),
-      );
-      expect(
-        mailbox?.messages.filter((message) => message.to === "anna@example.test") ?? [],
-      ).toEqual([]);
+      expect(acme.delivered).toEqual([]);
       const reports = await run.prisma.sessionEntry.findMany({
         where: { type: "helper.report" },
         select: { payload: true },

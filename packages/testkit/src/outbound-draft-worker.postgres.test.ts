@@ -1,5 +1,4 @@
 import type { HarnessDeclaration } from "@rakazo/adapter-kit";
-import { ComposioEmulator, composioEntityId, createConnectorStack } from "@rakazo/adapters";
 import { createWorkerAgentRuntime } from "@rakazo/adapters/runtime-worker";
 import { HELPER_STOPPED_FOR_PAUSE } from "@rakazo/contracts";
 import { DRAFT_CARDS } from "@rakazo/core";
@@ -8,6 +7,7 @@ import {
   manualLauncher,
   rawGuest,
 } from "../../adapters/src/runtime-worker/raw-guest.test-support.js";
+import { acmeApp } from "./draft-app.test-support.js";
 import { latestCard } from "./index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import { prepares } from "./model-emulator.js";
@@ -15,11 +15,13 @@ import { startWorkerRun } from "./worker-run-fixture.js";
 
 const databaseAvailable = process.env.VERIFY_DATABASE === "1" && Boolean(process.env.DATABASE_URL);
 
+const TOOL = "acme_deliver_message";
+
 const mailProposal = (address: string, body: string) => ({
   card: "mail",
-  recipients: [{ role: "to", path: ["recipient_email"], shape: "one", addresses: [address] }],
-  subject: { path: ["subject"], value: "Hello" },
-  body: { path: ["body"], value: body },
+  recipients: [{ role: "to", path: ["recipient"], shape: "one", addresses: [address] }],
+  subject: { path: ["topic"], value: "Hello" },
+  body: { path: ["content"], value: body },
   unshown: [],
 });
 
@@ -29,8 +31,8 @@ const mailTo = (address: string, body: string, id: string): ModelEmulatorStep[] 
     response: {
       type: "tool",
       id,
-      name: "GMAIL_SEND_EMAIL",
-      arguments: { recipient_email: address, subject: "Hello", body },
+      name: TOOL,
+      arguments: { recipient: address, topic: "Hello", content: body },
     },
   },
   prepares(mailProposal(address, body)),
@@ -42,9 +44,7 @@ const sendsTo = (request: ModelEmulatorRequest | undefined, address: string) =>
   (request?.messages ?? []).flatMap((message) =>
     (message.tool_calls ?? [])
       .filter(
-        (call) =>
-          call.function.name.endsWith("GMAIL_SEND_EMAIL") &&
-          call.function.arguments.includes(address),
+        (call) => call.function.name.endsWith(TOOL) && call.function.arguments.includes(address),
       )
       .map((call) =>
         String(request?.messages.findLast((result) => result.tool_call_id === call.id)?.content),
@@ -56,39 +56,14 @@ const PI_NATIVE: HarnessDeclaration = {
   capabilities: ["native-loop", "subagents"],
 };
 
-async function connectGmail(
-  composio: ComposioEmulator,
-  run: Awaited<ReturnType<typeof startWorkerRun>>,
-) {
-  await composio.begin(
-    { provider: "GMAIL", redirectUrl: "http://127.0.0.1.invalid/callback" },
-    {
-      operationId: "draft-worker",
-      traceId: "draft-worker",
-      spaceId: run.spaceId,
-      userId: run.userId,
-      signal: new AbortController().signal,
-    },
-  );
-  await run.prisma.connection.create({
-    data: {
-      spaceId: run.spaceId,
-      userId: run.userId,
-      provider: "GMAIL",
-      displayName: "Gmail",
-      status: "connected",
-    },
-  });
-}
-
 describe.skipIf(!databaseAvailable)("mail drafts in a worker run", () => {
   it("tells the bot how each draft was sent, once, however many drafts follow it", async () => {
-    const composio = new ComposioEmulator();
+    const acme = acmeApp();
     let third: ModelEmulatorRequest | undefined;
     const run = await startWorkerRun({
       databaseUrl: process.env.DATABASE_URL!,
       computerScope: "none",
-      tools: createConnectorStack(false, composio).connector,
+      tools: acme.connector,
       steps: [
         ...mailTo("anna@example.test", "First draft.", "mail-a"),
         ...mailTo("ben@example.test", "Second draft.", "mail-b"),
@@ -113,10 +88,10 @@ describe.skipIf(!databaseAvailable)("mail drafts in a worker run", () => {
       ],
     });
     try {
-      await connectGmail(composio, run);
+      await acme.install(run.prisma, run);
       const sendAllowed = async (runId: string) => {
         const card = await latestCard(run.prisma, runId);
-        expect(card.block).toMatchObject({ draft: { app: { name: "Gmail" } } });
+        expect(card.block.draft).toBeDefined();
         expect(
           await run.events.answerRunInput({
             spaceId: run.spaceId,
@@ -136,13 +111,7 @@ describe.skipIf(!databaseAvailable)("mail drafts in a worker run", () => {
       await sendAllowed(runId);
 
       run.model.assertComplete();
-      const mailbox = composio.mailboxFor(
-        composioEntityId({ spaceId: run.spaceId, userId: run.userId }),
-      );
-      const sent = mailbox?.messages.filter((message) =>
-        ["anna@example.test", "ben@example.test"].includes(message.to),
-      );
-      expect(sent?.map((message) => [message.to, message.messageText])).toEqual([
+      expect(acme.delivered.map(({ args }) => [args.recipient, args.content])).toEqual([
         ["anna@example.test", "First draft."],
         ["ben@example.test", "Second draft."],
       ]);
@@ -174,16 +143,12 @@ describe.skipIf(!databaseAvailable)("mail drafts in a worker run", () => {
   ] as const)(
     "logs a helper's draft outcome once when its stop lands %s",
     async (_, order) => {
-      const composio = new ComposioEmulator();
+      const acme = acmeApp();
       const sending = Promise.withResolvers<void>();
       const sent = Promise.withResolvers<void>();
-      const execute = composio.execute.bind(composio);
-      composio.execute = async function* (call, context) {
-        if (call.tool === "GMAIL_SEND_EMAIL") {
-          sending.resolve();
-          await sent.promise;
-        }
-        yield* execute(call, context);
+      acme.beforeDeliver = async () => {
+        sending.resolve();
+        await sent.promise;
       };
       const launcher = manualLauncher(PI_NATIVE);
       const runtime = createWorkerAgentRuntime({
@@ -193,7 +158,7 @@ describe.skipIf(!databaseAvailable)("mail drafts in a worker run", () => {
       const run = await startWorkerRun({
         databaseUrl: process.env.DATABASE_URL!,
         computerScope: "none",
-        tools: createConnectorStack(false, composio).connector,
+        tools: acme.connector,
         steps: [],
         runtime: () => ({
           describe: () => runtime.describe(),
@@ -208,7 +173,7 @@ describe.skipIf(!databaseAvailable)("mail drafts in a worker run", () => {
         }),
       });
       try {
-        await connectGmail(composio, run);
+        await acme.install(run.prisma, run);
         const runId = await run.send("Have the helper mail Anna.");
         const paused = run.continueRun(runId);
         const first = await launcher.launchedFor(runId);
@@ -223,13 +188,13 @@ describe.skipIf(!databaseAvailable)("mail drafts in a worker run", () => {
           args: { name: "Mailer", task: "Mail Anna." },
         });
         expect((await guest.replies(2, 1))[0]).toMatchObject({ agent: "helper:1" });
-        guest.send(3, { type: "tool", name: "GMAIL_SEND_EMAIL", args: {}, executionId: "mail" });
+        guest.send(3, { type: "tool", name: TOOL, args: {}, executionId: "mail" });
         guest.send(4, {
           type: "tool.call",
           agent: "helper:1",
           callId: "mail",
-          name: "GMAIL_SEND_EMAIL",
-          args: { recipient_email: "anna@example.test", subject: "Hello", body: "Hi Anna." },
+          name: TOOL,
+          args: { recipient: "anna@example.test", topic: "Hello", content: "Hi Anna." },
         });
         await guest.replies(4);
         expect((await guest.replies(2)).at(-1)).toEqual({
@@ -295,12 +260,7 @@ describe.skipIf(!databaseAvailable)("mail drafts in a worker run", () => {
             },
           },
         ]);
-        expect(
-          composio
-            .mailboxFor(composioEntityId({ spaceId: run.spaceId, userId: run.userId }))
-            ?.messages.filter((message) => message.to === "anna@example.test")
-            .map((message) => message.messageText),
-        ).toEqual(["Hi Anna."]);
+        expect(acme.delivered.map(({ args }) => args.content)).toEqual(["Hi Anna."]);
         await runtime.abort(runId);
         await resumed;
       } finally {

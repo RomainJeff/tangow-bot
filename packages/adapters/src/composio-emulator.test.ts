@@ -117,35 +117,6 @@ describe("ComposioEmulator", () => {
     expect(emulator.mailboxFor(composioEntityId(context))).toBeUndefined();
   });
 
-  it("fails the next send as asked, or sends it and then times out", async () => {
-    const emulator = new ComposioEmulator();
-    await emulator.begin({ provider: "GMAIL", redirectUrl: "http://example.test" }, context);
-    const send = { recipient_email: "a@example.test", subject: "Hi", body: "Hello" };
-    const sentCount = () => emulator.mailboxFor(composioEntityId(context))?.messages.length;
-    const before = sentCount();
-
-    emulator.failNext("GMAIL_SEND_EMAIL", { kind: "fail", error: "Token expired" });
-    expect(await collectResults(emulator, "GMAIL_SEND_EMAIL", send)).toEqual([
-      {
-        type: "error",
-        kind: "unknown",
-        message: "Token expired",
-        details: { successful: false, error: "Token expired" },
-      },
-    ]);
-    expect(sentCount()).toBe(before);
-
-    emulator.failNext("GMAIL_SEND_EMAIL", { kind: "timeout" });
-    expect(await collectResults(emulator, "GMAIL_SEND_EMAIL", send)).toEqual([
-      { type: "error", message: "GMAIL_SEND_EMAIL timed out" },
-    ]);
-    expect(sentCount()).toBe(before! + 1);
-
-    expect(await collectResults(emulator, "GMAIL_SEND_EMAIL", send)).toMatchObject([
-      { data: { successful: true } },
-    ]);
-  });
-
   it("accepts BCC-only Gmail send recipients", async () => {
     const emulator = new ComposioEmulator();
     await emulator.begin({ provider: "GMAIL", redirectUrl: "http://example.test" }, context);
@@ -176,7 +147,7 @@ describe("ComposioEmulator", () => {
     });
   });
 
-  it("discovers realistic Gmail and Slack tools and keeps thin actions for other apps", async () => {
+  it("discovers realistic Gmail tools and keeps thin actions for other apps", async () => {
     const emulator = new ComposioEmulator();
     const tools = await emulator.discoverTools({
       ...context,
@@ -193,12 +164,6 @@ describe("ComposioEmulator", () => {
           externalId: "SLACK",
           displayName: "Slack",
         },
-        {
-          id: "connection-notion",
-          connectorId: "composio",
-          externalId: "NOTION",
-          displayName: "Notion",
-        },
       ],
     });
 
@@ -209,13 +174,7 @@ describe("ComposioEmulator", () => {
       "GMAIL_SEND_EMAIL",
       "GMAIL_CREATE_EMAIL_DRAFT",
       "GMAIL_LIST_LABELS",
-      "GMAIL_REPLY_TO_THREAD",
-      "GMAIL_SEND_DRAFT",
-      "GMAIL_FORWARD_MESSAGE",
-      "SLACK_SEND_MESSAGE",
-      "SLACK_RETRIEVE_CONVERSATION_INFORMATION",
-      "SLACK_RETRIEVE_DETAILED_USER_INFORMATION",
-      "NOTION_EMULATED_ACTION",
+      "SLACK_EMULATED_ACTION",
     ]);
     expect(tools.find((tool) => tool.name === "GMAIL_FETCH_EMAILS")).toMatchObject({
       appName: "Gmail",
@@ -229,19 +188,16 @@ describe("ComposioEmulator", () => {
       },
     });
     expect(tools.find((tool) => tool.name === "GMAIL_SEND_EMAIL")?.readOnly).toBeUndefined();
-    expect(tools.find((tool) => tool.name === "SLACK_SEND_MESSAGE")).toMatchObject({
+    expect(tools.find((tool) => tool.name === "SLACK_EMULATED_ACTION")).toMatchObject({
       appName: "Slack",
       route: {
         connectorId: "composio",
         resourceId: "SLACK",
         resourceRevision: "emulated",
-        toolName: "SLACK_SEND_MESSAGE",
+        toolName: "SLACK_EMULATED_ACTION",
         catalogGroup: "slack",
       },
     });
-    expect(
-      tools.find((tool) => tool.name === "SLACK_RETRIEVE_CONVERSATION_INFORMATION")?.readOnly,
-    ).toBe(true);
     expect(tools.find((tool) => tool.name === "GMAIL_SEND_EMAIL")?.inputSchema).toMatchObject({
       type: "object",
       properties: expect.objectContaining({

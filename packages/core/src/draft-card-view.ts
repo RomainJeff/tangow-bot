@@ -1,6 +1,6 @@
 import type { AskDraft, AskDraftEdits } from "@rakazo/contracts";
 import { askDraftState } from "@rakazo/contracts";
-import { conversationLabel, sameRecipients } from "./outbound-draft.js";
+import { sameRecipients } from "./outbound-draft.js";
 
 /** How long a discarded draft can still be brought back before the bot hears of it. */
 export const DRAFT_UNDO_MS = 5000;
@@ -96,9 +96,8 @@ export function draftAddresses(draft: AskDraft, role?: AskDraft["recipients"][nu
     .join(", ");
 }
 
-/** Who a sent draft's line names: a chat's person or channel, else the To, else everyone. */
+/** Who a sent draft's line names: the To, else everyone. */
 export function draftSentTo(draft: AskDraft): string {
-  if (draft.conversation) return conversationLabel(draft.conversation).name;
   return draftAddresses(draft, "to") || draftAddresses(draft);
 }
 

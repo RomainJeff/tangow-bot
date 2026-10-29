@@ -4,7 +4,6 @@ import type { RecipientRole } from "@rakazo/core";
 import {
   addressesOf,
   changeLine,
-  conversationLabel,
   draftAddresses,
   foldedRoles,
   RECIPIENT_ROLES,
@@ -97,7 +96,6 @@ export default function EditDraft() {
   const subject = edit.subject ?? draft.subject ?? "";
   const folded = foldedRoles(fields, recipients, typed, opened);
   const roleLabel = { to: t("To"), cc: t("Cc"), bcc: t("Bcc") };
-  const chat = draft.conversation && conversationLabel(draft.conversation);
 
   function keep(next: AskDraftEdits) {
     if (!card) return;
@@ -212,11 +210,9 @@ export default function EditDraft() {
           </DraftGroup>
         ) : (
           <View style={styles.to}>
-            <AppLogo app={draft.app} chat={Boolean(draft.conversation)} />
+            <AppLogo app={draft.app} chat={draft.chat === true} />
             <Text style={styles.toText}>
-              <Text style={styles.toLabel}>{t("To")}</Text>{" "}
-              {chat ? chat.name : draftAddresses(draft, "to")}
-              {chat?.handle ? <Text style={styles.toLabel}> @{chat.handle}</Text> : null}
+              <Text style={styles.toLabel}>{t("To")}</Text> {draftAddresses(draft, "to")}
             </Text>
           </View>
         )}

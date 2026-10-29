@@ -1,10 +1,7 @@
-import {
-  ComposioEmulator,
-  composioEntityId,
-  logDraftOutcomes,
-  settleCancelledRunCards,
-} from "@rakazo/adapters";
+import { logDraftOutcomes, settleCancelledRunCards } from "@rakazo/adapters";
+import { humanizeToolName } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
+import { acmeApp } from "./draft-app.test-support.js";
 import { latestCard } from "./index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import { prepares } from "./model-emulator.js";
@@ -17,23 +14,25 @@ const SENT_NOTE = "The user sent this message from the draft card,";
 const DISCARDED_NOTE = "The user discarded this draft,";
 const PAUSED = "paused: awaiting approval";
 
+const TOOL = "acme_deliver_message";
+
 const mailTo = (address: string, id: string, extra: Record<string, unknown> = {}) =>
   ({
     expect() {},
     response: {
       type: "tool",
       id,
-      name: "GMAIL_SEND_EMAIL",
-      arguments: { recipient_email: address, subject: "Hello", body: `Hi ${address}.`, ...extra },
+      name: TOOL,
+      arguments: { recipient: address, topic: "Hello", content: `Hi ${address}.`, ...extra },
     },
   }) satisfies ModelEmulatorStep;
 
 const prepareMail = (address: string, extra: Record<string, unknown> = {}) =>
   prepares({
     card: "mail",
-    recipients: [{ role: "to", path: ["recipient_email"], shape: "one", addresses: [address] }],
-    subject: { path: ["subject"], value: "Hello" },
-    body: { path: ["body"], value: `Hi ${address}.` },
+    recipients: [{ role: "to", path: ["recipient"], shape: "one", addresses: [address] }],
+    subject: { path: ["topic"], value: "Hello" },
+    body: { path: ["content"], value: `Hi ${address}.` },
     unshown: Object.keys(extra).map((key) => [key]),
   });
 
@@ -41,7 +40,7 @@ const prepareMail = (address: string, extra: Record<string, unknown> = {}) =>
 const sends = (request: ModelEmulatorRequest) => {
   const native = request.messages.flatMap((message) =>
     (message.tool_calls ?? [])
-      .filter((call) => call.function.name.endsWith("GMAIL_SEND_EMAIL"))
+      .filter((call) => call.function.name.endsWith(TOOL))
       .map((call) =>
         JSON.stringify({
           input: call.function.arguments,
@@ -52,42 +51,16 @@ const sends = (request: ModelEmulatorRequest) => {
   return native.length > 0
     ? native
     : JSON.stringify(request.messages)
-        .split("(already ran Gmail send email")
+        .split(`(already ran ${humanizeToolName(TOOL)}`)
         .slice(1)
         .map((step) => step.split(")\\n")[0]!);
 };
 
 const count = (text: string, part: string) => text.split(part).length - 1;
 
-async function connectGmail(composio: ComposioEmulator, { prisma, bot, userId }: JourneyFixture) {
-  const { spaceId } = await prisma.bot.findUniqueOrThrow({
-    where: { id: bot.id },
-    select: { spaceId: true },
-  });
-  await composio.begin(
-    { provider: "GMAIL", redirectUrl: "http://127.0.0.1.invalid/callback" },
-    {
-      operationId: "draft-history",
-      traceId: "draft-history",
-      spaceId,
-      userId,
-      signal: new AbortController().signal,
-    },
-  );
-  await prisma.connection.create({
-    data: { spaceId, userId, provider: "GMAIL", displayName: "Gmail", status: "pending" },
-  });
-  return () =>
-    composio
-      .mailboxFor(composioEntityId({ spaceId, userId }))
-      ?.messages.filter(
-        (message) =>
-          message.to.endsWith("@example.test") &&
-          message.to !== "me@example.test" &&
-          message.to !== "teammate@example.test",
-      )
-      .map((message) => [message.to, message.messageText]);
-}
+/** What left the app, each as its recipient and text. */
+const delivered = (acme: ReturnType<typeof acmeApp>) =>
+  acme.delivered.map(({ args }) => [args.recipient, args.content]);
 
 async function answerDraft(
   { prisma, app, cookie, bot }: JourneyFixture,
@@ -100,7 +73,7 @@ async function answerDraft(
 
 describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", () => {
   it("tells the bot how each of two drafts ended, once, whatever it does next", async () => {
-    const composio = new ComposioEmulator();
+    const acme = acmeApp();
     await journey(
       [
         mailTo("anna@example.test", "mail-a"),
@@ -132,7 +105,7 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
         DONE,
       ],
       async (fixture) => {
-        const mailed = await connectGmail(composio, fixture);
+        await acme.install(fixture.prisma, fixture);
         const sent = await fixture.send("Mail Anna, then Ben.");
         await sent.settled("waiting_input");
         await answerDraft(fixture, sent.runId, "allow");
@@ -144,17 +117,17 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
         await sent.settled("waiting_input");
         await answerDraft(fixture, sent.runId, "allow");
         await sent.settled("completed");
-        expect(mailed()).toEqual([
+        expect(delivered(acme)).toEqual([
           ["anna@example.test", "Hi anna@example.test."],
           ["ben@example.test", "Hi ben@example.test."],
         ]);
       },
-      { composio },
+      { remoteConnectors: acme.remote },
     );
   }, 60_000);
 
   it("tells the bot a draft was discarded, and the same mail issued again opens no new card", async () => {
-    const composio = new ComposioEmulator();
+    const acme = acmeApp();
     let answered: unknown;
     await journey(
       [
@@ -185,7 +158,7 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
         DONE,
       ],
       async (fixture) => {
-        const mailed = await connectGmail(composio, fixture);
+        await acme.install(fixture.prisma, fixture);
         const sent = await fixture.send("Mail Anna.");
         await sent.settled("waiting_input");
         await answerDraft(fixture, sent.runId, "deny");
@@ -193,18 +166,18 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
         expect(answered).toMatchObject({ ok: false, discarded: true });
         expect(
           await fixture.prisma.externalEffect.findMany({
-            where: { runId: sent.runId, kind: "GMAIL_SEND_EMAIL" },
+            where: { runId: sent.runId, kind: TOOL },
             select: { status: true, draft: true },
           }),
         ).toMatchObject([{ status: "denied", draft: { state: "discarded" } }]);
-        expect(mailed()).toEqual([]);
+        expect(acme.delivered).toEqual([]);
       },
-      { composio },
+      { remoteConnectors: acme.remote },
     );
   }, 60_000);
 
   it("tells the bot how a draft its helper raised ended, on the call that started the helper", async () => {
-    const composio = new ComposioEmulator();
+    const acme = acmeApp();
     await journey(
       [
         {
@@ -230,19 +203,19 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
         DONE,
       ],
       async (fixture) => {
-        const mailed = await connectGmail(composio, fixture);
+        await acme.install(fixture.prisma, fixture);
         const sent = await fixture.send("Have the helper mail Anna.");
         await sent.settled("waiting_input");
         await answerDraft(fixture, sent.runId, "allow");
         await sent.settled("completed");
-        expect(mailed()).toEqual([["anna@example.test", "Hi anna@example.test."]]);
+        expect(delivered(acme)).toEqual([["anna@example.test", "Hi anna@example.test."]]);
       },
-      { composio },
+      { remoteConnectors: acme.remote },
     );
   }, 60_000);
 
   it("gives a replaced draft's text to the bot whole, however long the user's edit", async () => {
-    const composio = new ComposioEmulator();
+    const acme = acmeApp();
     const edit = `${"A much longer text than the bot wrote. ".repeat(20)}Goodbye.`;
     await journey(
       [
@@ -258,34 +231,34 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
         DONE,
       ],
       async (fixture) => {
-        await connectGmail(composio, fixture);
+        await acme.install(fixture.prisma, fixture);
         const sent = await fixture.send("Mail Anna.");
         await sent.settled("waiting_input");
         const card = await latestCard(fixture.prisma, sent.runId);
         await fixture.send("Make it shorter.", { draft: { messageId: card.id, text: edit } });
         await sent.settled("completed");
       },
-      { composio },
+      { remoteConnectors: acme.remote },
     );
   }, 60_000);
 
   describe("a send the run ended on", () => {
-    const stranded = async (fixture: JourneyFixture, composio: ComposioEmulator) => {
-      const mailed = await connectGmail(composio, fixture);
+    const stranded = async (fixture: JourneyFixture, acme: ReturnType<typeof acmeApp>) => {
+      await acme.install(fixture.prisma, fixture);
       const sent = await fixture.send("Mail Anna.");
       await sent.settled("waiting_input");
       const effect = await fixture.prisma.externalEffect.findFirstOrThrow({
-        where: { runId: sent.runId, kind: "GMAIL_SEND_EMAIL" },
+        where: { runId: sent.runId, kind: TOOL },
       });
-      return { mailed, runId: sent.runId, effect };
+      return { runId: sent.runId, effect };
     };
 
     it("is told to the bot as a result that says it may or may not have left", async () => {
-      const composio = new ComposioEmulator();
+      const acme = acmeApp();
       await journey(
         [mailTo("anna@example.test", "mail-1"), prepareMail("anna@example.test"), WAITING],
         async (fixture) => {
-          const { mailed, runId, effect } = await stranded(fixture, composio);
+          const { runId, effect } = await stranded(fixture, acme);
           const { threadId } = await fixture.prisma.run.findUniqueOrThrow({ where: { id: runId } });
           await fixture.prisma.externalEffect.update({
             where: { id: effect.id },
@@ -326,18 +299,18 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
               (entry) => entry.type === "tool.result" && entry.payload.replaces,
             ),
           ).toHaveLength(1);
-          expect(mailed()).toEqual([]);
+          expect(acme.delivered).toEqual([]);
         },
-        { composio },
+        { remoteConnectors: acme.remote },
       );
     }, 60_000);
 
     it("leaves a cancelled run's log as it is, without failing the stop", async () => {
-      const composio = new ComposioEmulator();
+      const acme = acmeApp();
       await journey(
         [mailTo("anna@example.test", "mail-1"), prepareMail("anna@example.test"), WAITING],
         async (fixture) => {
-          const { runId, effect } = await stranded(fixture, composio);
+          const { runId, effect } = await stranded(fixture, acme);
           await fixture.prisma.externalEffect.update({
             where: { id: effect.id },
             data: { status: "approved", draft: { ...(effect.draft as object), state: "approved" } },
@@ -360,7 +333,7 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
             ),
           ).toEqual([]);
         },
-        { composio },
+        { remoteConnectors: acme.remote },
       );
     }, 60_000);
   });

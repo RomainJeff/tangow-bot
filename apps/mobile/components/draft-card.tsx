@@ -1,7 +1,6 @@
 import type { AskDraft, MessageBlock } from "@rakazo/contracts";
 import type { DraftLocal } from "@rakazo/core";
 import {
-  conversationLabel,
   DRAFT_UNDO_MS,
   draftAddresses,
   draftCardView,
@@ -272,7 +271,7 @@ export function DraftCard({
   const app = draft.app.name;
   const header = {
     who: app,
-    icon: <AppLogo app={draft.app} chat={Boolean(draft.conversation)} />,
+    icon: <AppLogo app={draft.app} chat={draft.chat === true} />,
   };
 
   if (view.kind === "sent") {
@@ -310,23 +309,18 @@ export function DraftCard({
     return (
       <FramedBlock
         answered={state}
-        answeredMark={<AppLogo app={draft.app} chat={Boolean(draft.conversation)} />}
+        answeredMark={<AppLogo app={draft.app} chat={draft.chat === true} />}
       />
     );
   }
 
   const roleLabel = { to: t("To"), cc: t("Cc"), bcc: t("Bcc") };
-  const chat = draft.conversation && conversationLabel(draft.conversation);
   const rows = ROLES.flatMap((role) => {
     const addresses = draftAddresses(shown, role);
     if (!addresses) return [];
-    const value = chat ? `${chat.name}${chat.handle ? ` @${chat.handle}` : ""}` : addresses;
     return [
-      <GridRow key={role} label={roleLabel[role]} spoken={value}>
-        <Text style={[styles.value, role === "to" ? styles.strong : undefined]}>
-          {chat ? chat.name : addresses}
-          {chat?.handle ? <Text style={styles.label}> @{chat.handle}</Text> : null}
-        </Text>
+      <GridRow key={role} label={roleLabel[role]} spoken={addresses}>
+        <Text style={[styles.value, role === "to" ? styles.strong : undefined]}>{addresses}</Text>
       </GridRow>,
     ];
   });

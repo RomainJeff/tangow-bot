@@ -50,7 +50,7 @@ export function DraftSent({ draft, time }: { draft: AskDraft; time: string }) {
         </View>
       </View>
       <View style={styles.message}>
-        <AppLogo app={draft.app} chat={Boolean(draft.conversation)} />
+        <AppLogo app={draft.app} chat={draft.chat === true} />
         <Text numberOfLines={1} style={styles.messageText}>
           {draftSentLine(draft)}
         </Text>

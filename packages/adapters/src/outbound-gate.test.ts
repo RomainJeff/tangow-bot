@@ -176,7 +176,7 @@ describe("outboundAskDraft", () => {
     ]);
   });
 
-  it("shows a chat message's conversation by its id when its app gave no name", async () => {
+  it("shows a chat message's conversation by its id", async () => {
     const card = await outboundAskDraft(
       "acmechat",
       { channel: "C0GENERAL", text: "Hi" },
@@ -185,8 +185,8 @@ describe("outboundAskDraft", () => {
     );
     expect(card).toMatchObject({
       recipients: [{ role: "to", address: "C0GENERAL" }],
+      chat: true,
       body: "Hi",
     });
-    expect(card?.conversation).toBe(undefined);
   });
 });

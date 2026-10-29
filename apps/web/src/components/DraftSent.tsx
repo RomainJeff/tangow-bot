@@ -27,7 +27,7 @@ export function DraftSent({ draft, time }: { draft: AskDraft; time: string }) {
         </Trans>
       </span>
       <span className="col-span-2 mt-3 flex min-w-0 items-center gap-2 text-row-name">
-        <AppLogo app={draft.app} chat={Boolean(draft.conversation)} />
+        <AppLogo app={draft.app} chat={draft.chat === true} />
         <span className="min-w-0 truncate">{draftSentLine(draft)}</span>
       </span>
     </div>

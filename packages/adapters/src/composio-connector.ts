@@ -789,7 +789,7 @@ export function isNoAuthToolkitError(error: unknown): boolean {
  * call that threw, a timeout after the send included, does not: only the app's word means the
  * message did not leave.
  */
-export function reportedFailure(error: unknown): Extract<ConnectorEvent, { type: "error" }> {
+function reportedFailure(error: unknown): Extract<ConnectorEvent, { type: "error" }> {
   const message = sanitizeComposioError(error);
   return { ...connectorError(error), message, details: { successful: false, error: message } };
 }

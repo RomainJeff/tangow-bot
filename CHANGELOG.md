@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
-- **Messages a bot proposes to send can now be reviewed as editable drafts on web, desktop and iPhone.** When a connected app or MCP tool requires approval, Rakazo uses AI to prefill the recipients, subject and message, including tools with unfamiliar field names. Edit the draft before Send or discard it; actions that cannot be represented keep the standard approval card.
+- **Messages a bot proposes to send can now be reviewed as editable drafts on web, desktop and iPhone.** When a connected app or MCP tool requires approval, Rakazo uses AI to prefill the recipients, subject and message, including tools with unfamiliar field names; chat drafts show the destination identifier supplied by the tool. Edit the draft before Send or discard it; actions that cannot be represented keep the standard approval card.
 
 #### Fixed
 

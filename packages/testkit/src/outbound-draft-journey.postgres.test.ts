@@ -1,8 +1,8 @@
-import { ComposioEmulator, composioEntityId } from "@rakazo/adapters";
 import type { AskDraftEdits, ThreadEntry } from "@rakazo/contracts";
 import { askDraftState } from "@rakazo/contracts";
 import { projectThreadItems } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
+import { acmeApp } from "./draft-app.test-support.js";
 import { latestCard } from "./index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import { prepares } from "./model-emulator.js";
@@ -18,73 +18,35 @@ const databaseAvailable = process.env.VERIFY_DATABASE === "1" && Boolean(process
 const RESUME_NOTE = "resuming this run after the user answered your draft card";
 
 describe.skipIf(!databaseAvailable)("offline product journey", () => {
-  describe("a mail draft", () => {
-    const mail = {
-      recipient_email: "someone@example.test",
-      subject: "Hello",
-      body: "Draft from the bot.",
-      include_signature: false,
+  describe("a draft of a tool the user's rule asks for", () => {
+    const message = {
+      recipient: "someone@example.test",
+      topic: "Hello",
+      content: "Draft from the bot.",
+      urgent: false,
     };
-    const array = (role: string, key: string) => ({
-      role,
-      path: [key],
-      shape: "array",
-      addresses: [],
-    });
-    const prepareMail = prepares({
+    const prepareMessage = prepares({
       card: "mail",
       recipients: [
-        { role: "to", path: ["recipient_email"], shape: "one", addresses: [mail.recipient_email] },
-        array("to", "extra_recipients"),
-        array("cc", "cc"),
-        array("bcc", "bcc"),
+        { role: "to", path: ["recipient"], shape: "one", addresses: [message.recipient] },
+        { role: "cc", path: ["copies"], shape: "array", addresses: [] },
       ],
-      subject: { path: ["subject"], value: mail.subject },
-      body: { path: ["body"], value: mail.body },
-      unshown: [["include_signature"]],
+      subject: { path: ["topic"], value: message.topic },
+      body: { path: ["content"], value: message.content },
+      unshown: [["urgent"]],
     });
-    const proposeMail: ModelEmulatorStep = {
+    const proposeMessage: ModelEmulatorStep = {
       expect(request) {
-        expect(offeredTools(request)).toContain("GMAIL_SEND_EMAIL");
+        expect(offeredTools(request)).toContain("acme_deliver_message");
         expect(JSON.stringify(request.messages)).not.toContain(RESUME_NOTE);
       },
-      response: { type: "tool", id: "journey-mail", name: "GMAIL_SEND_EMAIL", arguments: mail },
+      response: {
+        type: "tool",
+        id: "journey-message",
+        name: "acme_deliver_message",
+        arguments: message,
+      },
     };
-    /** Gmail connected through the Composio emulator for the fixture's user; its sent mail. */
-    async function connectGmail(
-      composio: ComposioEmulator,
-      fixture: JourneyFixture,
-      provider: "GMAIL" | "OUTLOOK" | "SLACK" = "GMAIL",
-    ) {
-      const { spaceId } = await fixture.prisma.bot.findUniqueOrThrow({
-        where: { id: fixture.bot.id },
-        select: { spaceId: true },
-      });
-      await composio.begin(
-        { provider, redirectUrl: "http://127.0.0.1.invalid/callback" },
-        {
-          operationId: "journey",
-          traceId: "journey",
-          spaceId,
-          userId: fixture.userId,
-          signal: new AbortController().signal,
-        },
-      );
-      await fixture.prisma.connection.create({
-        data: {
-          spaceId,
-          userId: fixture.userId,
-          provider,
-          displayName: { GMAIL: "Gmail", OUTLOOK: "Outlook", SLACK: "Slack" }[provider],
-          status: "pending",
-        },
-      });
-      return () =>
-        composio
-          .mailboxFor(composioEntityId({ spaceId, userId: fixture.userId }))
-          ?.messages.filter((message) => message.to === mail.recipient_email)
-          .map((message) => message.messageText);
-    }
     async function answerDraft(fixture: JourneyFixture, runId: string, edits?: AskDraftEdits) {
       const card = await latestCard(fixture.prisma, runId);
       await rpc(fixture.app, fixture.cookie, "threads/answer", {
@@ -96,195 +58,94 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
       });
     }
 
-    it("leaves once, with the user's edit, before the bot's next turn", async () => {
-      const composio = new ComposioEmulator();
+    it("leaves once, as the user edited it in the tool's own fields, before the bot's next turn", async () => {
+      const acme = acmeApp();
       await journey(
         [
-          proposeMail,
-          prepareMail,
-          WAITING,
-          {
-            expect(request) {
-              expect(JSON.stringify(request.messages)).toContain(
-                "The user sent this message from the draft card,",
-              );
-              expect(JSON.stringify(request.messages)).toContain("Edited by me.");
-              expect(JSON.stringify(request.messages)).not.toContain("paused: awaiting approval");
-              // The resume says so, and that another message may still be sent.
-              expect(JSON.stringify(request.messages)).toContain(RESUME_NOTE);
-              expect(JSON.stringify(request.messages)).toContain(
-                "to send another message call the send tool again",
-              );
-            },
-            response: reply("Sent."),
-          },
-          DONE,
-        ],
-        async (fixture) => {
-          const mailed = await connectGmail(composio, fixture);
-          const sent = await fixture.send("Mail them hello.");
-          await sent.settled("waiting_input");
-          await answerDraft(fixture, sent.runId, { text: "Edited by me." });
-          await sent.settled("completed");
-          expect(composio.executions.map((call) => [call.tool, call.args])).toEqual([
-            ["GMAIL_SEND_EMAIL", { ...mail, body: "Edited by me." }],
-          ]);
-          expect(mailed()).toEqual(["Edited by me."]);
-          // The run also records its message_user call, so the mail's row is read by its tool.
-          const effects = await fixture.prisma.externalEffect.findMany({
-            where: { runId: sent.runId, kind: "GMAIL_SEND_EMAIL" },
-          });
-          expect(effects).toMatchObject([
-            { status: "completed", draft: { state: "sent", proposed: "Draft from the bot." } },
-          ]);
-        },
-        { composio },
-      );
-    }, 30_000);
-
-    it("leaves with the recipients and subject the user set, in Gmail's own fields", async () => {
-      const composio = new ComposioEmulator();
-      await journey(
-        [
-          proposeMail,
-          prepareMail,
+          proposeMessage,
+          prepareMessage,
           WAITING,
           {
             expect(request) {
               const seen = JSON.stringify(request.messages);
+              expect(seen).toContain("The user sent this message from the draft card,");
+              expect(seen).toContain("Edited by me.");
               expect(seen).toContain("bo@example.test");
-              expect(seen).toContain("Thursday instead");
+              expect(seen).not.toContain("paused: awaiting approval");
+              // The resume says so, and that another message may still be sent.
+              expect(seen).toContain(RESUME_NOTE);
+              expect(seen).toContain("to send another message call the send tool again");
             },
             response: reply("Sent."),
           },
           DONE,
         ],
         async (fixture) => {
-          await connectGmail(composio, fixture);
-          const sent = await fixture.send("Mail them hello.");
+          await acme.install(fixture.prisma, fixture);
+          const sent = await fixture.send("Message them hello.");
           await sent.settled("waiting_input");
-          // Gmail's schema reaches the card, so every line is offered.
-          expect((await latestCard(fixture.prisma, sent.runId)).block.draft?.fields).toEqual({
-            to: null,
-            cc: null,
-            bcc: null,
-            subject: true,
+          expect(acme.delivered).toEqual([]);
+          // The schema's one recipient and its copies, as the analysis located them.
+          expect((await latestCard(fixture.prisma, sent.runId)).block.draft).toMatchObject({
+            recipients: [{ role: "to", address: message.recipient }],
+            subject: message.topic,
+            fields: { to: 1, cc: null, subject: true },
+            body: message.content,
           });
           await answerDraft(fixture, sent.runId, {
+            text: "Edited by me.",
             recipients: [
               { role: "to", address: "ana@example.test" },
-              { role: "to", address: "bo@example.test" },
+              { role: "cc", address: "bo@example.test" },
               { role: "cc", address: "cy@example.test" },
             ],
             subject: "Thursday instead",
           });
           await sent.settled("completed");
-          expect(composio.executions.map((call) => [call.tool, call.args])).toEqual([
-            [
-              "GMAIL_SEND_EMAIL",
-              {
-                recipient_email: "ana@example.test",
-                subject: "Thursday instead",
-                body: "Draft from the bot.",
-                include_signature: false,
-                extra_recipients: ["bo@example.test"],
-                cc: ["cy@example.test"],
+          expect(acme.delivered).toEqual([
+            {
+              tool: "acme_deliver_message",
+              args: {
+                recipient: "ana@example.test",
+                copies: ["bo@example.test", "cy@example.test"],
+                topic: "Thursday instead",
+                content: "Edited by me.",
+                urgent: false,
               },
-            ],
+            },
+          ]);
+          // The run also records its message_user call, so the message's row is read by its tool.
+          const effects = await fixture.prisma.externalEffect.findMany({
+            where: { runId: sent.runId, kind: "acme_deliver_message" },
+          });
+          expect(effects).toMatchObject([
+            { status: "completed", draft: { state: "sent", proposed: "Draft from the bot." } },
           ]);
         },
-        { composio },
+        { remoteConnectors: acme.remote },
       );
     }, 30_000);
 
-    it("leaves with the recipients and subject the user set, in Outlook's own fields", async () => {
-      const composio = new ComposioEmulator();
-      const outlook = { to: "someone@example.test", subject: "Hello", body: "Draft from the bot." };
+    it("posts once to the room's id, with only the text the user edited", async () => {
+      const acme = acmeApp();
+      const update = { room: "R0TEAM", text: "Draft from the bot." };
       await journey(
         [
           {
             expect(request) {
-              expect(offeredTools(request)).toContain("OUTLOOK_SEND_EMAIL");
+              expect(offeredTools(request)).toContain("acme_post_update");
             },
             response: {
               type: "tool",
-              id: "journey-outlook",
-              name: "OUTLOOK_SEND_EMAIL",
-              arguments: outlook,
-            },
-          },
-          prepares({
-            card: "mail",
-            recipients: [
-              { role: "to", path: ["to"], shape: "one", addresses: [outlook.to] },
-              array("cc", "cc_emails"),
-              array("bcc", "bcc_emails"),
-            ],
-            subject: { path: ["subject"], value: outlook.subject },
-            body: { path: ["body"], value: outlook.body },
-            unshown: [],
-          }),
-          WAITING,
-          { expect() {}, response: reply("Sent.") },
-          DONE,
-        ],
-        async (fixture) => {
-          await connectGmail(composio, fixture, "OUTLOOK");
-          const sent = await fixture.send("Mail them hello.");
-          await sent.settled("waiting_input");
-          // Outlook's To is one address; its copies take any number.
-          expect((await latestCard(fixture.prisma, sent.runId)).block.draft?.fields).toEqual({
-            to: 1,
-            cc: null,
-            bcc: null,
-            subject: true,
-          });
-          await answerDraft(fixture, sent.runId, {
-            recipients: [
-              { role: "to", address: "ana@example.test" },
-              { role: "cc", address: "bo@example.test" },
-              { role: "bcc", address: "cy@example.test" },
-            ],
-            subject: "Thursday instead",
-          });
-          await sent.settled("completed");
-          expect(composio.executions.map((call) => [call.tool, call.args])).toEqual([
-            [
-              "OUTLOOK_SEND_EMAIL",
-              {
-                to: "ana@example.test",
-                subject: "Thursday instead",
-                body: "Draft from the bot.",
-                cc_emails: ["bo@example.test"],
-                bcc_emails: ["cy@example.test"],
-              },
-            ],
-          ]);
-        },
-        { composio },
-      );
-    }, 30_000);
-
-    it("posts a Slack message once, to the person Slack named, with the user's edit", async () => {
-      const composio = new ComposioEmulator();
-      const message = { channel: "D0MARIE", markdown_text: "Draft from the bot." };
-      await journey(
-        [
-          {
-            expect(request) {
-              expect(offeredTools(request)).toContain("SLACK_SEND_MESSAGE");
-            },
-            response: {
-              type: "tool",
-              id: "journey-slack",
-              name: "SLACK_SEND_MESSAGE",
-              arguments: message,
+              id: "journey-update",
+              name: "acme_post_update",
+              arguments: update,
             },
           },
           prepares({
             card: "chat",
-            conversation: { path: ["channel"], value: message.channel },
-            body: { path: ["markdown_text"], value: message.markdown_text },
+            conversation: { path: ["room"], value: update.room },
+            body: { path: ["text"], value: update.text },
             unshown: [],
           }),
           WAITING,
@@ -297,41 +158,34 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
           DONE,
         ],
         async (fixture) => {
-          await connectGmail(composio, fixture, "SLACK");
-          const sent = await fixture.send("Tell Marie on Slack.");
+          await acme.install(fixture.prisma, fixture);
+          const sent = await fixture.send("Tell the team.");
           await sent.settled("waiting_input");
-          expect((await latestCard(fixture.prisma, sent.runId)).block.draft).toMatchObject({
-            app: { name: "Slack" },
-            recipients: [{ role: "to", address: "D0MARIE" }],
-            conversation: { kind: "person", name: "Marie Dupont", handle: "marie" },
+          const { draft } = (await latestCard(fixture.prisma, sent.runId)).block;
+          expect(draft).toMatchObject({
+            recipients: [{ role: "to", address: "R0TEAM" }],
+            chat: true,
             body: "Draft from the bot.",
           });
+          expect(draft?.fields).toBeUndefined();
           await answerDraft(fixture, sent.runId, { text: "Edited by me." });
           await sent.settled("completed");
-          expect(composio.executions.map((call) => [call.tool, call.args])).toEqual([
-            ["SLACK_RETRIEVE_CONVERSATION_INFORMATION", { channel: "D0MARIE" }],
-            ["SLACK_RETRIEVE_DETAILED_USER_INFORMATION", { user: "U0MARIE" }],
-            ["SLACK_SEND_MESSAGE", { ...message, markdown_text: "Edited by me." }],
-          ]);
-          const effects = await fixture.prisma.externalEffect.findMany({
-            where: { runId: sent.runId, kind: "SLACK_SEND_MESSAGE" },
-          });
-          expect(effects).toMatchObject([
-            { status: "completed", draft: { state: "sent", proposed: "Draft from the bot." } },
+          expect(acme.delivered).toEqual([
+            { tool: "acme_post_update", args: { ...update, text: "Edited by me." } },
           ]);
         },
-        { composio },
+        { remoteConnectors: acme.remote },
       );
     }, 30_000);
 
-    it("asks the user to check Gmail when the send timed out after it left, sending nothing more", async () => {
-      const composio = new ComposioEmulator();
-      composio.failNext("GMAIL_SEND_EMAIL", { kind: "timeout" });
+    it("asks the user to check the app when the answer was lost after it left, sending nothing more", async () => {
+      const acme = acmeApp();
       await journey(
-        [proposeMail, prepareMail, WAITING],
+        [proposeMessage, prepareMessage, WAITING],
         async (fixture) => {
-          const mailed = await connectGmail(composio, fixture);
-          const sent = await fixture.send("Mail them hello.");
+          await acme.install(fixture.prisma, fixture);
+          acme.failNext({ kind: "delivered_unanswered" });
+          const sent = await fixture.send("Message them hello.");
           await sent.settled("waiting_input");
           await answerDraft(fixture, sent.runId);
           await expect
@@ -340,22 +194,23 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
             })
             .toMatchObject({
               status: "pending",
-              draft: { failure: { reason: "Check Gmail before trying again." } },
+              draft: {
+                failure: { reason: expect.stringMatching(/^Check .+ before trying again\.$/) },
+              },
             });
           await sent.settled("waiting_input");
-          expect(mailed()).toEqual(["Draft from the bot."]);
+          expect(acme.delivered.map((call) => call.args.content)).toEqual(["Draft from the bot."]);
         },
-        { composio },
+        { remoteConnectors: acme.remote },
       );
     }, 30_000);
 
-    it("shows Not sent when Gmail refuses it, and Try again sends it once", async () => {
-      const composio = new ComposioEmulator();
-      composio.failNext("GMAIL_SEND_EMAIL", { kind: "fail", error: "Invalid recipient" });
+    it("shows Not sent when the app refuses it, and Try again sends it once", async () => {
+      const acme = acmeApp();
       await journey(
         [
-          proposeMail,
-          prepareMail,
+          proposeMessage,
+          prepareMessage,
           WAITING,
           {
             expect(request) {
@@ -367,8 +222,9 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
           DONE,
         ],
         async (fixture) => {
-          const mailed = await connectGmail(composio, fixture);
-          const sent = await fixture.send("Mail them hello.");
+          await acme.install(fixture.prisma, fixture);
+          acme.failNext({ kind: "refuse", error: "Invalid recipient" });
+          const sent = await fixture.send("Message them hello.");
           await sent.settled("waiting_input");
           await answerDraft(fixture, sent.runId);
           await expect
@@ -380,20 +236,21 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
               draft: { failure: { reason: "Invalid recipient" } },
             });
           await sent.settled("waiting_input");
+          expect(acme.delivered).toEqual([]);
           await answerDraft(fixture, sent.runId);
           await sent.settled("completed");
-          expect(mailed()).toEqual(["Draft from the bot."]);
+          expect(acme.delivered.map((call) => call.args.content)).toEqual(["Draft from the bot."]);
         },
-        { composio },
+        { remoteConnectors: acme.remote },
       );
     }, 30_000);
 
     it("is replaced by what the user writes, the bot reading their edit and nothing leaving", async () => {
-      const composio = new ComposioEmulator();
+      const acme = acmeApp();
       await journey(
         [
-          proposeMail,
-          prepareMail,
+          proposeMessage,
+          prepareMessage,
           WAITING,
           {
             expect(request) {
@@ -410,8 +267,8 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
           DONE,
         ],
         async (fixture) => {
-          await connectGmail(composio, fixture);
-          const sent = await fixture.send("Mail them hello.");
+          await acme.install(fixture.prisma, fixture);
+          const sent = await fixture.send("Message them hello.");
           await sent.settled("waiting_input");
           const card = await latestCard(fixture.prisma, sent.runId);
           await expect(
@@ -424,9 +281,9 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
           });
           await sent.settled("completed");
 
-          expect(composio.executions).toEqual([]);
+          expect(acme.delivered).toEqual([]);
           const effect = await fixture.prisma.externalEffect.findFirstOrThrow({
-            where: { runId: sent.runId, kind: "GMAIL_SEND_EMAIL" },
+            where: { runId: sent.runId, kind: "acme_deliver_message" },
           });
           expect(effect).toMatchObject({
             status: "denied",
@@ -443,12 +300,12 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
           );
           expect(cards).toEqual(["replaced"]);
         },
-        { composio },
+        { remoteConnectors: acme.remote },
       );
     }, 30_000);
 
     it("tells the bot about the replaced draft once, as its call's result, whatever it does next", async () => {
-      const composio = new ComposioEmulator();
+      const acme = acmeApp();
       // An answer to the bot's next card quotes the run's steps as they were, so only the history counts.
       const told = (request: ModelEmulatorRequest) =>
         JSON.stringify(request.messages)
@@ -456,8 +313,8 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
           .split("editedByUser").length - 1;
       await journey(
         [
-          proposeMail,
-          prepareMail,
+          proposeMessage,
+          prepareMessage,
           WAITING,
           {
             expect(request) {
@@ -480,8 +337,8 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
           DONE,
         ],
         async (fixture) => {
-          await connectGmail(composio, fixture);
-          const sent = await fixture.send("Mail them hello.");
+          await acme.install(fixture.prisma, fixture);
+          const sent = await fixture.send("Message them hello.");
           await sent.settled("waiting_input");
           const card = await latestCard(fixture.prisma, sent.runId);
           await fixture.send("Make it shorter.", {
@@ -501,9 +358,9 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
             answer: "choice-2",
           });
           await sent.settled("completed");
-          expect(composio.executions).toEqual([]);
+          expect(acme.delivered).toEqual([]);
         },
-        { composio },
+        { remoteConnectors: acme.remote },
       );
     }, 30_000);
   });

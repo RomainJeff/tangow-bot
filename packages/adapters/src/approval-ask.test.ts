@@ -384,20 +384,6 @@ describe("approvalPushBody", () => {
     expect(push(mail)).toBe("Gmail: Test A to someone@example.com");
   });
 
-  it("names a chat message's person, and a channel with its #", () => {
-    const chat: AskDraft = {
-      app: { name: "Slack", logo: null },
-      recipients: [{ role: "to", address: "D0MARIE" }],
-      body: "Thursday instead?",
-    };
-    expect(
-      push({ ...chat, conversation: { kind: "person", name: "Marie Dupont", handle: "marie" } }),
-    ).toBe("Slack: Thursday instead? to Marie Dupont");
-    expect(push({ ...chat, conversation: { kind: "channel", name: "general" } })).toBe(
-      "Slack: Thursday instead? to #general",
-    );
-  });
-
   it("falls back to the first line of the text when there is no subject", () => {
     expect(push({ ...mail, subject: undefined, body: "\n Hi Marie,\nSee you." })).toBe(
       "Gmail: Hi Marie, to someone@example.com",

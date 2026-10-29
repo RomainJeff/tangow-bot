@@ -10,14 +10,12 @@ import {
   type ConnectionScope,
   composioEntityId,
   filterCatalog,
-  reportedFailure,
 } from "./composio-connector.js";
 import {
   DEFAULT_RAKAZO_EMULATED_RELEASES,
   type EmulatedGithubRelease,
   RELEASE_WATCH_GITHUB_TOOL_NAMES,
 } from "./release-watch.js";
-import { EMULATED_SLACK_CONVERSATIONS, EMULATED_SLACK_USERS } from "./slack-mcp-emulator.js";
 
 const DEFAULT_CATALOG: ReadonlyArray<Omit<ComposioCatalogItem, "connected">> = [
   { slug: "GMAIL", name: "Gmail", logo: null, noAuth: false },
@@ -127,14 +125,9 @@ const GMAIL_TOOLS: ConnectorTool[] = [
         to: { type: "string", description: "Alias for recipient_email" },
         subject: { type: "string" },
         body: { type: "string" },
-        extra_recipients: { type: "array", items: { type: "string" } },
         cc: { type: "array", items: { type: "string" } },
         bcc: { type: "array", items: { type: "string" } },
         is_html: { type: "boolean" },
-        attachment: { type: "object" },
-        include_signature: { type: "boolean" },
-        from_email: { type: "string" },
-        user_id: { type: "string" },
       },
       required: ["subject"],
     },
@@ -166,116 +159,7 @@ const GMAIL_TOOLS: ConnectorTool[] = [
       },
     },
   },
-  {
-    name: "GMAIL_REPLY_TO_THREAD",
-    description: "Reply to a Gmail thread",
-    inputSchema: {
-      type: "object",
-      properties: {
-        thread_id: { type: "string" },
-        recipient_email: { type: "string" },
-        extra_recipients: { type: "array", items: { type: "string" } },
-        cc: { type: "array", items: { type: "string" } },
-        bcc: { type: "array", items: { type: "string" } },
-        message_body: { type: "string" },
-        is_html: { type: "boolean" },
-        attachment: { type: "object" },
-        user_id: { type: "string" },
-        include_signature: { type: "boolean" },
-      },
-      required: ["thread_id"],
-    },
-  },
-  {
-    name: "GMAIL_SEND_DRAFT",
-    description: "Send a saved Gmail draft",
-    inputSchema: {
-      type: "object",
-      properties: { draft_id: { type: "string" } },
-      required: ["draft_id"],
-    },
-  },
-  {
-    name: "GMAIL_FORWARD_MESSAGE",
-    description: "Forward a Gmail message",
-    inputSchema: {
-      type: "object",
-      properties: {
-        message_id: { type: "string" },
-        recipients: { type: "array", items: { type: "string" } },
-        cc: { type: "array", items: { type: "string" } },
-        bcc: { type: "array", items: { type: "string" } },
-        additional_text: { type: "string" },
-      },
-      required: ["message_id", "recipients"],
-    },
-  },
 ];
-
-// Field names from Composio's Outlook toolkit docs (2026-10).
-const OUTLOOK_TOOLS: ConnectorTool[] = [
-  {
-    name: "OUTLOOK_SEND_EMAIL",
-    description: "Send an email through the connected Outlook account",
-    inputSchema: {
-      type: "object",
-      properties: {
-        to: { type: "string" },
-        to_name: { type: "string" },
-        subject: { type: "string" },
-        body: { type: "string" },
-        is_html: { type: "boolean" },
-        cc_emails: { type: "array", items: { type: "string" } },
-        bcc_emails: { type: "array", items: { type: "string" } },
-        attachment: { type: "string" },
-        from_address: { type: "string" },
-        user_id: { type: "string" },
-        save_to_sent_items: { type: "boolean" },
-      },
-      required: ["to", "subject", "body"],
-    },
-  },
-];
-
-/** Composio's Slack send and the two reads that name its recipient (toolkit 2026-10). */
-const SLACK_TOOLS: ConnectorTool[] = [
-  {
-    name: "SLACK_SEND_MESSAGE",
-    description: "Post a message to a Slack channel or direct message",
-    inputSchema: {
-      type: "object",
-      properties: {
-        channel: { type: "string", description: "Channel or direct message id" },
-        markdown_text: { type: "string" },
-        blocks: { type: "array", items: { type: "object" } },
-        thread_ts: { type: "string" },
-        unfurl_links: { type: "boolean" },
-        unfurl_media: { type: "boolean" },
-        fallback_text: { type: "string" },
-        reply_broadcast: { type: "boolean" },
-      },
-      required: ["channel"],
-    },
-  },
-  {
-    name: "SLACK_RETRIEVE_CONVERSATION_INFORMATION",
-    description: "Read a Slack conversation's details",
-    readOnly: true,
-    inputSchema: { type: "object", properties: { channel: { type: "string" } } },
-  },
-  {
-    name: "SLACK_RETRIEVE_DETAILED_USER_INFORMATION",
-    description: "Read a Slack user's details",
-    readOnly: true,
-    inputSchema: { type: "object", properties: { user: { type: "string" } } },
-  },
-];
-
-const TOOLKIT_TOOLS: Record<string, ConnectorTool[]> = {
-  GMAIL: GMAIL_TOOLS,
-  OUTLOOK: OUTLOOK_TOOLS,
-  SLACK: SLACK_TOOLS,
-};
 
 function asString(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
@@ -445,92 +329,11 @@ function findAccountIndex(refs: readonly string[], connectionRef: string): numbe
   return refs.findIndex((ref) => ref === connectionRef || ref.startsWith(`${connectionRef}:`));
 }
 
-function nextIds(mailbox: Mailbox): { messageId: string; threadId: string } {
-  const seq = mailbox.nextMessageSeq++;
-  const hex = (0x18c5f5e0 + seq).toString(16);
-  return { messageId: hex, threadId: hex };
-}
-
-function sendMessage(
-  mailbox: Mailbox,
-  fields: { to: string; subject: string; body: string; threadId?: string },
-): MailMessage {
-  const ids = nextIds(mailbox);
-  const message: MailMessage = {
-    messageId: ids.messageId,
-    threadId: fields.threadId ?? ids.threadId,
-    subject: fields.subject || "(no subject)",
-    sender: "me@example.test",
-    to: fields.to,
-    snippet: fields.body.slice(0, 120),
-    messageText: fields.body,
-    labelIds: ["SENT"],
-    internalDate: String(Date.UTC(2024, 5, 1, 15, 0, 0) + mailbox.nextMessageSeq * 1000),
-  };
-  mailbox.messages.push(message);
-  return message;
-}
-
-function sentResult(message: MailMessage): Record<string, unknown> {
-  return {
-    successful: true,
-    data: {
-      messageId: message.messageId,
-      threadId: message.threadId,
-      labelIds: [...message.labelIds],
-    },
-  };
-}
-
-/** Slack's own answers, as Composio passes them on under `data`. */
-function executeSlack(tool: string, args: Record<string, unknown>): Record<string, unknown> {
-  const failed = (error: string) => ({ successful: false, error, data: { ok: false, error } });
-  switch (tool) {
-    case "SLACK_SEND_MESSAGE": {
-      const conversation = EMULATED_SLACK_CONVERSATIONS[asString(args.channel)];
-      if (!conversation) return failed("channel_not_found");
-      const text = asString(args.markdown_text);
-      if (!text.trim()) return failed("no_text");
-      return {
-        successful: true,
-        data: { ok: true, channel: conversation.id, ts: "1761400000.000100", message: { text } },
-      };
-    }
-    case "SLACK_RETRIEVE_CONVERSATION_INFORMATION": {
-      const conversation = EMULATED_SLACK_CONVERSATIONS[asString(args.channel)];
-      return conversation
-        ? { successful: true, data: { ok: true, channel: conversation } }
-        : failed("channel_not_found");
-    }
-    case "SLACK_RETRIEVE_DETAILED_USER_INFORMATION": {
-      const user = EMULATED_SLACK_USERS.find((each) => each.id === args.user);
-      return user
-        ? {
-            successful: true,
-            data: {
-              ok: true,
-              user: { ...user, profile: { real_name: user.real_name, display_name: user.name } },
-            },
-          }
-        : failed("user_not_found");
-    }
-    default:
-      return failed(`Unknown Slack tool: ${tool}`);
-  }
-}
-
-export type EmulatedFault =
-  | { kind: "fail"; error: string }
-  | { kind: "timeout" }
-  /** The call never answers until the caller gives up. */
-  | { kind: "hang" };
-
 /** Deterministic, offline Composio catalog and connection emulator for product tests. */
 export class ComposioEmulator implements ComposioProvider {
   private readonly connectedByEntity = new Map<string, string[]>();
   private readonly mailboxesByEntity = new Map<string, Mailbox>();
   private githubReleases: EmulatedGithubRelease[] = [...DEFAULT_RAKAZO_EMULATED_RELEASES];
-  private readonly faults = new Map<string, EmulatedFault>();
   private nextAccountSeq = 0;
   readonly executions: Array<{
     userId: string;
@@ -584,16 +387,18 @@ export class ComposioEmulator implements ComposioProvider {
       [];
     const tools: ConnectorTool[] = [];
     for (const slug of new Set(connected)) {
-      if (slug === "GMAIL" || slug === "OUTLOOK") this.ensureMailbox(composioEntityId(context));
+      if (slug === "GMAIL") this.ensureMailbox(composioEntityId(context));
       const toolkitTools =
-        slug === "GITHUB"
-          ? githubReleaseTools()
-          : (TOOLKIT_TOOLS[slug] ?? [thinEmulatedTool(slug)]);
+        slug === "GMAIL"
+          ? GMAIL_TOOLS
+          : slug === "GITHUB"
+            ? githubReleaseTools()
+            : [thinEmulatedTool(slug)];
       tools.push(
         ...toolkitTools.map((tool) => ({
           ...tool,
           appName: DEFAULT_CATALOG.find((item) => item.slug === slug)?.name ?? slug,
-          readOnly: tool.readOnly || /_(FETCH|GET|LIST)_/.test(tool.name) || undefined,
+          readOnly: /_(FETCH|GET|LIST)_/.test(tool.name) || undefined,
           route: {
             connectorId: "composio",
             resourceId: slug,
@@ -609,75 +414,14 @@ export class ComposioEmulator implements ComposioProvider {
 
   async *execute(call: ConnectorCall, context: AdapterContext): AsyncIterable<ConnectorEvent> {
     const args = call.args ?? {};
-    if (this.faults.get(call.tool)?.kind === "hang") {
-      this.faults.delete(call.tool);
-      if (!context.signal.aborted) {
-        await new Promise((resolve) => context.signal.addEventListener("abort", resolve));
-      }
-      yield { type: "error", message: `${call.tool} was cancelled` };
-      return;
-    }
-    let result: Record<string, unknown>;
-    try {
-      result = this.executeAction(call.tool, args, context);
-      this.executions.push({ userId: context.userId, tool: call.tool, args });
-      if (result.successful === false && result.error) {
-        yield reportedFailure(result.error);
-        return;
-      }
-    } catch (error) {
-      // ComposioConnector reports every thrown error, a timeout included, as an error event.
-      yield { type: "error", message: error instanceof Error ? error.message : String(error) };
-      return;
-    }
+    const result = call.tool.startsWith("GMAIL_")
+      ? this.executeGmail(call.tool, args, composioEntityId(context))
+      : (RELEASE_WATCH_GITHUB_TOOL_NAMES as readonly string[]).includes(call.tool) ||
+          call.tool === "GITHUB_EMULATED_ACTION"
+        ? this.executeGithub(call.tool, args)
+        : { ok: true, tool: call.tool, args };
+    this.executions.push({ userId: context.userId, tool: call.tool, args });
     yield { type: "result", data: result };
-  }
-
-  /**
-   * Test helper: the next call of `tool` fails the way Composio reports a failed action, or does
-   * its work and then times out, which the caller only sees as an error.
-   */
-  failNext(tool: string, fault: EmulatedFault): void {
-    this.faults.set(tool, fault);
-  }
-
-  private executeAction(
-    tool: string,
-    args: Record<string, unknown>,
-    context: AdapterContext,
-  ): Record<string, unknown> {
-    const fault = this.faults.get(tool);
-    this.faults.delete(tool);
-    if (fault?.kind === "fail") return { successful: false, error: fault.error, data: null };
-    const result = this.performAction(tool, args, context);
-    if (fault?.kind === "timeout") throw new Error(`${tool} timed out`);
-    return result;
-  }
-
-  private performAction(
-    tool: string,
-    args: Record<string, unknown>,
-    context: AdapterContext,
-  ): Record<string, unknown> {
-    const entityId = composioEntityId(context);
-    if (tool.startsWith("GMAIL_")) return this.executeGmail(tool, args, entityId);
-    if (tool.startsWith("SLACK_")) return executeSlack(tool, args);
-    if (tool === "OUTLOOK_SEND_EMAIL") {
-      sendMessage(this.ensureMailbox(entityId), {
-        to: asString(args.to),
-        subject: asString(args.subject),
-        body: asString(args.body),
-      });
-      // Microsoft Graph accepts a send without returning the message.
-      return { successful: true, data: {} };
-    }
-    if (
-      (RELEASE_WATCH_GITHUB_TOOL_NAMES as readonly string[]).includes(tool) ||
-      tool === "GITHUB_EMULATED_ACTION"
-    ) {
-      return this.executeGithub(tool, args);
-    }
-    return { ok: true, tool, args };
   }
 
   async begin(
@@ -778,6 +522,12 @@ export class ComposioEmulator implements ComposioProvider {
     const seeded = seedMailbox();
     this.mailboxesByEntity.set(entityId, seeded);
     return seeded;
+  }
+
+  private nextIds(mailbox: Mailbox): { messageId: string; threadId: string } {
+    const seq = mailbox.nextMessageSeq++;
+    const hex = (0x18c5f5e0 + seq).toString(16);
+    return { messageId: hex, threadId: hex };
   }
 
   private executeGmail(
@@ -888,56 +638,34 @@ export class ComposioEmulator implements ComposioProvider {
             data: null,
           };
         }
-        return sentResult(sendMessage(mailbox, { to: recipient, subject, body }));
-      }
-      case "GMAIL_REPLY_TO_THREAD": {
-        const threadId = asString(args.thread_id);
-        const original = mailbox.messages.find((message) => message.threadId === threadId);
-        if (!original) {
-          return { successful: false, error: `Thread not found: ${threadId}`, data: null };
-        }
-        return sentResult(
-          sendMessage(mailbox, {
-            to: asString(args.recipient_email) || original.sender,
-            subject: `Re: ${original.subject}`,
-            body: asString(args.message_body),
-            threadId,
-          }),
-        );
-      }
-      case "GMAIL_SEND_DRAFT": {
-        const draftId = asString(args.draft_id);
-        const draft = mailbox.drafts.find((item) => item.draftId === draftId);
-        const message = mailbox.messages.find((item) => item.messageId === draft?.messageId);
-        if (!draft || !message) {
-          return { successful: false, error: `Draft not found: ${draftId}`, data: null };
-        }
-        mailbox.drafts = mailbox.drafts.filter((item) => item !== draft);
-        message.labelIds = ["SENT"];
-        return sentResult(message);
-      }
-      case "GMAIL_FORWARD_MESSAGE": {
-        const messageId = asString(args.message_id);
-        const original = mailbox.messages.find((message) => message.messageId === messageId);
-        if (!original) {
-          return { successful: false, error: `Message not found: ${messageId}`, data: null };
-        }
-        return sentResult(
-          sendMessage(mailbox, {
-            to: asStringArray(args.recipients).join(", "),
-            subject: `Fwd: ${original.subject}`,
-            body: [asString(args.additional_text), original.messageText]
-              .filter(Boolean)
-              .join("\n\n"),
-          }),
-        );
+        const ids = this.nextIds(mailbox);
+        const message: MailMessage = {
+          messageId: ids.messageId,
+          threadId: ids.threadId,
+          subject: subject || "(no subject)",
+          sender: "me@example.test",
+          to: recipient,
+          snippet: body.slice(0, 120),
+          messageText: body,
+          labelIds: ["SENT"],
+          internalDate: String(Date.UTC(2024, 5, 1, 15, 0, 0) + mailbox.nextMessageSeq * 1000),
+        };
+        mailbox.messages.push(message);
+        return {
+          successful: true,
+          data: {
+            messageId: message.messageId,
+            threadId: message.threadId,
+            labelIds: [...message.labelIds],
+          },
+        };
       }
       case "GMAIL_CREATE_EMAIL_DRAFT": {
         const recipient = asString(args.recipient_email);
         const subject = asString(args.subject);
         const body = asString(args.body);
         const replyThreadId = asString(args.thread_id);
-        const ids = nextIds(mailbox);
+        const ids = this.nextIds(mailbox);
         const threadId =
           replyThreadId && mailbox.messages.some((message) => message.threadId === replyThreadId)
             ? replyThreadId

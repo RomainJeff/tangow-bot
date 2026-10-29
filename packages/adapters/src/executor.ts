@@ -420,8 +420,6 @@ import {
   skillUpdateFromTool,
   userSkillsOpenedIn,
 } from "./skill-tools.js";
-import type { ChatRecipientCache } from "./slack-recipient.js";
-import { CHAT_APPS, lookUpChatRecipient, slackServer } from "./slack-recipient.js";
 import type { TakeoverResumeCheckpoint } from "./takeover-resume.js";
 import {
   continueRunClaimFence,
@@ -1252,7 +1250,6 @@ export function buildHarnessAddendum(parts: SystemInstructionParts): string {
 }
 
 export function createRunExecutor(deps: ExecutorDeps) {
-  const chatRecipients: ChatRecipientCache = new Map();
   const web = deps.web ?? createWebProvider();
   // Skills live under DATA_DIR/skills; same default as apps/api env + apps/worker.
   const learning = deps.skillLearning ?? DEFAULT_SKILL_LEARNING;
@@ -3440,7 +3437,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const ownToolName = connectorCall.route?.toolName ?? name;
           const messageApp = connectorKindFromToolName(ownToolName, pluginProviders);
           const outbound: OutboundCall = viaConnector
-            ? readOutboundCall({ toolName: ownToolName, args }, pluginProviders, CHAT_APPS)
+            ? readOutboundCall({ toolName: ownToolName, args }, pluginProviders)
             : { kind: "none" };
           if (outbound.kind === "refuse") return { error: outbound.error };
           if (
@@ -3717,33 +3714,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             });
             context.signal.throwIfAborted();
             drafted = prepared && draftRequest(effectRequest, CATALOG_APPROVAL_TOOL, prepared);
-            const conversation = drafted?.chat && valueAt(args, prepared!.chat!.path);
-            if (drafted?.chat && typeof conversation === "string" && CHAT_APPS.has(messageApp)) {
-              const call = { ...connectorCall, tool: name, args, executionId };
-              const mcp =
-                call.route?.connectorId === "mcp" && call.route.resourceId
-                  ? await deps.prisma.mcpServer.findFirst({
-                      where: {
-                        id: call.route.resourceId,
-                        spaceId: run.spaceId,
-                        userId: run.userId,
-                      },
-                      select: { endpoint: true },
-                    })
-                  : null;
-              const named = deps.connector
-                ? await lookUpChatRecipient(
-                    deps.connector,
-                    call,
-                    slackServer(call, mcp?.endpoint ?? undefined),
-                    conversation,
-                    context,
-                    chatRecipients,
-                  )
-                : undefined;
-              context.signal.throwIfAborted();
-              if (named) drafted = { ...drafted, chat: { ...drafted.chat, name: named } };
-            }
             if (drafted) {
               const waiting = await deps.prisma.externalEffect.findMany({
                 where: {

@@ -134,7 +134,7 @@ export async function outboundAskDraft(
       account: draft.account,
     },
     recipients,
-    ...(draft.chat?.name ? { conversation: draft.chat.name } : {}),
+    ...(draft.chat ? { chat: true as const } : {}),
     subject: message.subject,
     ...(draft.fields ? { fields: askDraftFields(draft.fields) } : {}),
     body: message.body,

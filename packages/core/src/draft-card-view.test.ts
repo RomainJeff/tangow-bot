@@ -153,19 +153,6 @@ describe("draftSentTo", () => {
       }),
     ).toBe("ed@example.com, cy@example.com");
   });
-
-  it("names a chat message's person or channel as its app did, never its id", () => {
-    const chat = { ...draft, recipients: [{ role: "to" as const, address: "D0MARIE" }] };
-    expect(
-      draftSentTo({
-        ...chat,
-        conversation: { kind: "person", name: "Marie Dupont", handle: "marie" },
-      }),
-    ).toBe("Marie Dupont");
-    expect(draftSentTo({ ...chat, conversation: { kind: "channel", name: "general" } })).toBe(
-      "#general",
-    );
-  });
 });
 
 describe("draftSentLine", () => {

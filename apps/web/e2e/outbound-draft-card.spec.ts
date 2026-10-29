@@ -404,31 +404,28 @@ for (const width of [1440, 390]) {
   });
 }
 
-const SLACK_BODY =
+const CHAT_BODY =
   "Hey Marie, Wednesday won't work for me after all, sorry! Thursday instead? Same place, same time.";
-const SLACK_EDITED = `${SLACK_BODY} Tell me if 8pm is OK.`;
-/** A Slack message: one recipient, named as Slack named them, its id kept for the send. */
-const SLACK = {
+const CHAT_EDITED = `${CHAT_BODY} Tell me if 8pm is OK.`;
+const CHAT = {
   app: {
-    name: "Slack",
-    logo: `data:image/svg+xml,${encodeURIComponent(
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><rect width="20" height="20" rx="4" fill="#4a154b"/><path d="M7 4v12M13 4v12M4 7h12M4 13h12" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>',
-    )}`,
+    name: "Acme Chat",
+    logo: null,
   },
-  recipients: [{ role: "to", address: "D0MARIE" }],
-  conversation: { kind: "person", name: "Marie Dupont", handle: "marie" },
+  recipients: [{ role: "to", address: "room:launch" }],
+  chat: true,
   subject: undefined,
 };
 
 for (const width of [1440, 390]) {
-  test(`a Slack draft names its person or channel as Slack does, and only its text changes (${width})`, async ({
+  test(`a chat draft shows its conversation, and only its text changes (${width})`, async ({
     page,
   }, testInfo) => {
     test.setTimeout(90_000);
-    await page.setViewportSize({ width, height: 900 });
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
     await signup(
       page,
-      `outbound-slack-${width}-${Date.now()}@rakazo.test`,
+      `outbound-chat-${width}-${Date.now()}@rakazo.test`,
       "password12",
       "Ana Lima",
     );
@@ -437,9 +434,9 @@ for (const width of [1440, 390]) {
     const waiting = (draft: Record<string, unknown> = {}) =>
       waitingDraft(
         botId,
-        card({}, { ...SLACK, body: SLACK_BODY, ...draft }),
-        "Tell Marie on Slack I can't make Wednesday, Thursday instead?",
-        "Ready for Marie.",
+        card({}, { ...CHAT, body: CHAT_BODY, ...draft }),
+        "Tell the team in the chat I can't make Wednesday, Thursday instead?",
+        "Ready for the team.",
       );
     const drafts = waiting();
     let onAnswer: () => void = () => undefined;
@@ -453,57 +450,30 @@ for (const width of [1440, 390]) {
     const text = draftCard.getByRole("textbox", { name: "Edit message", exact: true });
     const header = draftCard.locator('[data-slot="framed-block-header"]');
 
-    // The person as Slack names them, no subject or copy line, and the text the only field.
-    await expect(header).toHaveText("Slack");
-    await expect(draftCard.getByText("Marie Dupont @marie", { exact: true })).toBeVisible();
-    await expect(draftCard).not.toContainText("D0MARIE");
+    await expect(header).toHaveText("Acme Chat");
+    await expect(draftCard.getByText("room:launch", { exact: true })).toBeVisible();
     await expect(draftCard).not.toContainText("Subject");
     await expect(draftCard.getByRole("textbox")).toHaveCount(1);
-    await expect(text).toHaveValue(SLACK_BODY);
-    await shoot(page, testInfo, "slack-rest");
+    await expect(text).toHaveValue(CHAT_BODY);
+    await shoot(page, testInfo, "chat-rest");
 
     await text.click();
     await expect(header).toContainText("Editing");
-    await text.fill(SLACK_EDITED);
-    await shoot(page, testInfo, "slack-editing");
-    await draftCard.getByText("Marie Dupont @marie").click();
+    await text.fill(CHAT_EDITED);
+    await shoot(page, testInfo, "chat-editing");
+    await draftCard.getByText("room:launch", { exact: true }).click();
     await expect(header).toContainText("Edited");
 
-    // Send carries only the edited text: the recipient is Slack's, never the card's to change.
-    onAnswer = () => drafts.push(...sentAfter(botId, "draft-card", SLACK_EDITED, SLACK));
+    onAnswer = () => drafts.push(...sentAfter(botId, "draft-card", CHAT_EDITED, CHAT));
     await draftCard.getByRole("button", { name: "Send", exact: true }).click();
     await expect(draftCard).toHaveAttribute("data-answered", "true");
     expect(answered.body).toMatchObject({ messageId: "draft-card", answer: "allow" });
-    expect(answered.body?.edits).toEqual({ text: SLACK_EDITED });
-    await expect(draftCard.getByText("to Marie Dupont", { exact: true })).toBeVisible();
+    expect(answered.body?.edits).toEqual({ text: CHAT_EDITED });
+    await expect(draftCard.getByText("to room:launch", { exact: true })).toBeVisible();
     // The text's first line stands for the message: a chat message has no subject.
     await expect(draftCard).toContainText("Tell me if 8pm is OK.");
     await expectSuccessDiscFirst(draftCard);
-    await shoot(page, testInfo, "slack-sent");
-
-    // A channel reads with its #, and so does the line once it is sent.
-    drafts.splice(
-      0,
-      drafts.length,
-      ...waiting({ conversation: { kind: "channel", name: "general" } }),
-    );
-    await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(draftCard.getByText("#general", { exact: true })).toBeVisible();
-    await shoot(page, testInfo, "slack-channel");
-    onAnswer = () =>
-      drafts.push(
-        ...sentAfter(botId, "draft-card", SLACK_BODY, {
-          ...SLACK,
-          conversation: { kind: "channel", name: "general" },
-        }),
-      );
-    answered.body = undefined;
-    await draftCard.getByRole("button", { name: "Send", exact: true }).click();
-    await expect
-      .poll(() => answered.body)
-      .toMatchObject({ messageId: "draft-card", answer: "allow" });
-    expect(answered.body?.edits).toBeUndefined();
-    await expect(draftCard.getByText("to #general", { exact: true })).toBeVisible();
+    await shoot(page, testInfo, "chat-sent");
   });
 }
 
@@ -520,11 +490,11 @@ test("an app without a catalog logo shows its bundled mark, or a neutral glyph, 
     .getByTestId("draft-card")
     .locator('[data-slot="framed-block-header"]')
     .locator("svg, img");
-  const shown = async (app: string, conversation?: Record<string, unknown>) => {
+  const shown = async (app: string, chat?: true) => {
     drafts.splice(
       0,
       drafts.length,
-      ...waitingDraft(botId, card({}, { app: { name: app, logo: null }, conversation })),
+      ...waitingDraft(botId, card({}, { app: { name: app, logo: null }, chat })),
     );
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(icon).toHaveCount(1);
@@ -534,11 +504,11 @@ test("an app without a catalog logo shows its bundled mark, or a neutral glyph, 
   await shoot(page, testInfo, "mark-gmail");
   await shown("Microsoft Outlook");
   await expect(icon).toHaveAttribute("viewBox", "0 0 32 32");
-  await shown("Slack", { kind: "channel", name: "general" });
+  await shown("Slack", true);
   await expect(icon).toHaveAttribute("viewBox", "0 0 127 127");
   await shown("Fastmail");
   await expect(icon).toHaveClass(/lucide-mail/);
-  await shown("Mattermost", { kind: "channel", name: "general" });
+  await shown("Mattermost", true);
   await expect(icon).toHaveClass(/lucide-message-square/);
   await expect(page.getByTestId("draft-card")).not.toContainText(/^M\b/);
 });

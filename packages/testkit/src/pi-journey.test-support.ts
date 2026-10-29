@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { ComposioEmulator, PostgresSessionLog } from "@rakazo/adapters";
+import { PostgresSessionLog } from "@rakazo/adapters";
 import type { AskDraftEdits } from "@rakazo/contracts";
 import { LIVE_WORKER_STATES } from "@rakazo/core";
 import { expect } from "vitest";
@@ -36,6 +36,7 @@ export type JourneyFixture = {
   app: App;
   cookie: string;
   bot: { id: string };
+  spaceId: string;
   userId: string;
   prisma: Handles["prisma"];
   log: PostgresSessionLog;
@@ -55,7 +56,7 @@ export type JourneyFixture = {
 export async function journey(
   steps: ModelEmulatorStep[],
   drive: (fixture: JourneyFixture) => Promise<void>,
-  app: Pick<NonNullable<Parameters<typeof createApp>[0]>, "composio"> = {},
+  app: Pick<NonNullable<Parameters<typeof createApp>[0]>, "remoteConnectors"> = {},
 ) {
   const model = await startModelEmulator({
     apiKey: fixtureKey,
@@ -75,7 +76,6 @@ export async function journey(
       sandboxProvider: "fake",
       wakeupDriver: "memory",
       signupsEnabled: "true",
-      composio: new ComposioEmulator(),
       encryptionKey: "offline-model-fixture-encryption-key",
       ...app,
     });
@@ -112,6 +112,7 @@ export async function journey(
       app: handles.app,
       cookie,
       bot,
+      spaceId: (await handles.prisma.bot.findUniqueOrThrow({ where: { id: bot.id } })).spaceId,
       userId: user.id,
       prisma: handles.prisma,
       log: new PostgresSessionLog(handles.prisma),

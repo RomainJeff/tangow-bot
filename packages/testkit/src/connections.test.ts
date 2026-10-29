@@ -292,9 +292,6 @@ describeWithDatabase("Composio catalog reconciliation", () => {
       "GMAIL_SEND_EMAIL",
       "GMAIL_CREATE_EMAIL_DRAFT",
       "GMAIL_LIST_LABELS",
-      "GMAIL_REPLY_TO_THREAD",
-      "GMAIL_SEND_DRAFT",
-      "GMAIL_FORWARD_MESSAGE",
     ]);
     const fetchTool = tools.find((tool) => tool.name === "GMAIL_FETCH_EMAILS");
     expect(fetchTool).toBeDefined();

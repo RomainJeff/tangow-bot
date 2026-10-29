@@ -5,7 +5,6 @@ import type { DraftCard as DraftCardBlock, DraftLocal, RecipientRole } from "@ra
 import {
   addressesOf,
   changeLine,
-  conversationLabel,
   DRAFT_UNDO_MS,
   draftCardView,
   draftChanges,
@@ -202,7 +201,7 @@ export function DraftCard({
   const app = draft.app.name;
   const header = {
     who: app,
-    icon: <AppLogo app={draft.app} chat={Boolean(draft.conversation)} />,
+    icon: <AppLogo app={draft.app} chat={draft.chat === true} />,
   };
   if (view.kind === "sent") {
     return (
@@ -245,7 +244,7 @@ export function DraftCard({
         data-testid="draft-card"
         answered={
           <span className="inline-flex items-center gap-2">
-            <AppLogo app={draft.app} chat={Boolean(draft.conversation)} />
+            <AppLogo app={draft.app} chat={draft.chat === true} />
             <span>{state}</span>
           </span>
         }
@@ -268,7 +267,6 @@ export function DraftCard({
   const subject = edit.subject ?? draft.subject ?? "";
   // An empty Cc or Bcc names nobody: it opens from the To line on demand.
   const hidden = foldedRoles(fields, recipients, typed, opened);
-  const chat = draft.conversation && conversationLabel(draft.conversation);
 
   return (
     <FramedBlock
@@ -368,10 +366,7 @@ export function DraftCard({
             if (!addresses.length) return null;
             return (
               <ReadRow key={role} label={roleLabel[role]} strong={role === "to"}>
-                {chat ? chat.name : addresses.join(", ")}
-                {chat?.handle ? (
-                  <span className="font-normal text-muted-foreground"> @{chat.handle}</span>
-                ) : null}
+                {addresses.join(", ")}
               </ReadRow>
             );
           })}

@@ -1,5 +1,4 @@
 import type {
-  AdapterContext,
   AgentRunRequest,
   ConnectorCall,
   ConnectorEvent,
@@ -14,12 +13,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isApprovalPausedResult } from "./approval-effect.js";
 import type * as AutoReviewModule from "./auto-review.js";
 import { runAutoReviewJudge } from "./auto-review.js";
-import { ComposioEmulator } from "./composio-emulator.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor, settleCancelledRunCards } from "./executor.js";
 import { catalogEntries, resolveCatalogCall } from "./lazy-tool-catalog.js";
 import { recordingSessionLog } from "./session-log/recording.test-support.js";
-import { SlackMcpEmulator } from "./slack-mcp-emulator.js";
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
@@ -70,16 +67,11 @@ function proposeDraft(args: Record<string, unknown>): Proposal | undefined {
         addresses: value,
       });
     } else if (key === "subject") fields.subject = { path: [key], value };
-    else if (["body", "markdown_text", "message"].includes(key))
-      fields.body = { path: [key], value };
-    else if (["channel", "channel_id"].includes(key)) fields.conversation = { path: [key], value };
-    else if (["is_html", "include_signature", "thread_id", "thread_ts", "thought"].includes(key)) {
-      unshown.push([key]);
-    } else return undefined;
+    else if (key === "body") fields.body = { path: [key], value };
+    else if (["is_html", "thread_id", "thought"].includes(key)) unshown.push([key]);
+    else return undefined;
   }
-  return fields.conversation
-    ? { card: "chat", ...fields, unshown }
-    : { card: "mail", recipients, ...fields, unshown };
+  return { card: "mail", recipients, ...fields, unshown };
 }
 
 function fixture({
@@ -95,18 +87,7 @@ function fixture({
     required: ["id"],
   } as Record<string, unknown>,
   routeToolName = undefined as string | undefined,
-  /** The connector the tool's route names, and the endpoint of its MCP server when it is one. */
-  connectorId = "demo",
-  mcpEndpoint = undefined as string | undefined,
-  /** Whose that MCP server is: the run's own unless a test says otherwise. */
-  mcpOwner = { spaceId: "space-1", userId: "user-1" },
   secrets = [] as string[],
-  /** The connector that answers every call, such as the Composio emulator; a stub by default. */
-  connector = undefined as
-    | {
-        execute(call: ConnectorCall, context: AdapterContext): AsyncIterable<ConnectorEvent>;
-      }
-    | undefined,
   connectorFailure = undefined as Extract<ConnectorEvent, { type: "error" }> | undefined,
   prepare = proposeDraft,
   readOnly = true,
@@ -114,10 +95,11 @@ function fixture({
   const tool: ConnectorTool = {
     name,
     description: "Read an item",
+    appName: "Acme",
     readOnly,
     inputSchema,
     route: {
-      connectorId,
+      connectorId: "demo",
       resourceId: "resource-1",
       toolName: routeToolName ?? name,
     },
@@ -312,17 +294,6 @@ function fixture({
       })),
     },
     connection: { findMany: vi.fn(async () => []) },
-    mcpServer: {
-      findFirst: vi.fn(
-        async ({ where }: { where: { id: string; spaceId?: string; userId?: string } }) =>
-          where.id === "resource-1" &&
-          where.spaceId === mcpOwner.spaceId &&
-          where.userId === mcpOwner.userId &&
-          mcpEndpoint
-            ? { endpoint: mcpEndpoint }
-            : null,
-      ),
-    },
     user: { findUnique: vi.fn(async () => ({ name: "Ana Lima" })) },
     spaceModelPreference: { findFirst: vi.fn(async () => null) },
     userModelCredential: { findFirst: vi.fn(async () => null) },
@@ -347,13 +318,12 @@ function fixture({
   };
   const finalizeRun = vi.fn(async () => ({ continuationRunId: null }));
   const send = vi.fn(async () => undefined);
-  const execute = vi.fn(async function* (call: ConnectorCall, context: AdapterContext) {
+  const execute = vi.fn(async function* (call: ConnectorCall) {
     if (connectorFailure) {
       yield connectorFailure;
       return;
     }
-    if (connector) yield* connector.execute(call, context);
-    else yield { type: "result" as const, data: { item: call.args.id } };
+    yield { type: "result" as const, data: { item: call.args.id } };
   });
   let calls: Array<{ args: Record<string, unknown>; executionId: string }> = [
     { args: { id: "item-1" }, executionId: "call-1" },
@@ -794,234 +764,66 @@ describe("connector read-only metadata and approval enforcement", () => {
     );
   });
 
-  describe("outbound chat", () => {
-    const inputSchema = {
-      type: "object",
-      properties: {
-        channel: { type: "string" },
-        markdown_text: { type: "string" },
-        blocks: { type: "array" },
-      },
-    };
-    const send = { channel: "D0MARIE", markdown_text: "Thursday instead?" };
-    const chatCard = {
-      kind: "ask",
-      actions: [
-        { id: "allow", label: "Send" },
-        { id: "deny", label: "Discard" },
-      ],
-      detail: "to: Marie Dupont @marie\nbody:\n  Thursday instead?",
-      draft: {
-        app: { name: "Slack", logo: null },
-        recipients: [{ role: "to", address: "D0MARIE" }],
-        conversation: { kind: "person", name: "Marie Dupont", handle: "marie" },
-        body: "Thursday instead?",
-        owner: { userId: "user-1", name: "Ana Lima" },
-      },
-    };
-    const card = (f: ReturnType<typeof fixture>) =>
-      f.pauseRunForInput.mock.calls.at(-1)![0].blocks[0] as Extract<MessageBlock, { kind: "ask" }>;
-    const sends = (slack: ComposioEmulator) =>
-      slack.executions.filter((call) => !call.tool.startsWith("SLACK_RETRIEVE_"));
-    function slackSend(slack: ComposioEmulator, options: Parameters<typeof fixture>[0] = {}) {
-      const f = fixture({
-        name: "SLACK_SEND_MESSAGE",
-        inputSchema,
-        connector: slack,
-        connectorId: "composio",
-        ...options,
-      });
-      f.setCalls([{ args: send, executionId: "c1" }]);
-      return f;
-    }
-
-    it.each([
-      ["no rule", {}],
-      [
-        "an always-allow rule on Slack",
-        {
-          rules: [
-            {
-              effect: "always_allow" as const,
-              matchKind: "connector" as const,
-              matchValue: "slack",
-            },
-          ],
+  describe("a chat draft", () => {
+    const post = { room: "R0TEAM", text: "Thursday instead?" };
+    const f = () => {
+      const posted = fixture({
+        name: "acme_post_update",
+        readOnly: false,
+        inputSchema: {
+          type: "object",
+          properties: { room: { type: "string" }, text: { type: "string" } },
         },
-      ],
-      ["Auto Review on", { autoReview: true }],
-    ])(
-      "pauses a Slack message on a draft naming its person as Slack does, under %s",
-      async (_, options) => {
-        const slack = new ComposioEmulator();
-        const f = slackSend(slack, options);
-        await f.run();
-        expect(sends(slack)).toEqual([]);
-        expect(runAutoReviewJudge).not.toHaveBeenCalled();
-        expect(card(f)).toMatchObject(chatCard);
-        expect(card(f).draft?.fields).toBeUndefined();
-      },
-    );
-
-    it("pushes a Slack draft with its person, never the id", async () => {
-      const f = slackSend(new ComposioEmulator());
-      await f.run();
-      expect(f.send).toHaveBeenCalledOnce();
-      expect(f.send).toHaveBeenCalledWith(
-        expect.objectContaining({
-          body: "Slack: Thursday instead? to Marie Dupont",
-        }),
-        expect.anything(),
-      );
-    });
-
-    it.each([
-      ["refuses", { kind: "fail", error: "missing_scope" } as const],
-      ["never answers", { kind: "hang" } as const],
-    ])(
-      "shows the draft to the conversation's id when Slack %s to name it, sending nothing",
-      async (_, fault) => {
-        const slack = new ComposioEmulator();
-        slack.failNext("SLACK_RETRIEVE_CONVERSATION_INFORMATION", fault);
-        const f = slackSend(slack);
-        await f.run();
-        expect(sends(slack)).toEqual([]);
-        expect(card(f).draft).toMatchObject({
-          recipients: [{ role: "to", address: "D0MARIE" }],
-          body: "Thursday instead?",
-        });
-        expect(card(f).draft?.conversation).toBeUndefined();
-      },
-    );
-
-    it("sends exactly the text the user edited, once, to the conversation the card named", async () => {
-      const slack = new ComposioEmulator();
-      const f = slackSend(slack);
-      await f.run();
-      expect(() =>
-        approve(f.effects[0]!, {
-          recipients: [{ role: "to", address: "a@b.co" }],
-        }),
-      ).toThrow("Only the message text can be edited on this draft.");
-      approve(f.effects[0]!, "Thursday at 10 instead?");
-      f.setCalls([]);
-      await f.run();
-      expect(sends(slack).map((call) => [call.tool, call.args])).toEqual([
-        ["SLACK_SEND_MESSAGE", { ...send, markdown_text: "Thursday at 10 instead?" }],
-      ]);
-      expect(f.effects[0]).toMatchObject({
-        status: "completed",
-        draft: { state: "sent" },
-      });
-    });
-
-    describe("through Slack's own MCP server", () => {
-      const mcpSchema = {
-        type: "object",
-        properties: {
-          channel_id: { type: "string" },
-          message: { type: "string" },
-          thread_ts: { type: "string" },
-          draft_id: { type: "string" },
-        },
-      };
-      const mcpSend = { channel_id: "U0MARIE", message: "Thursday instead?" };
-      function viaMcp(slack: SlackMcpEmulator, options: Parameters<typeof fixture>[0] = {}) {
-        const f = fixture({
-          name: "mcp__slack__slack_send_message",
-          routeToolName: "slack_send_message",
-          inputSchema: mcpSchema,
-          connector: slack,
-          connectorId: "mcp",
-          mcpEndpoint: "https://mcp.slack.com/mcp",
-          ...options,
-        });
-        f.setCalls([{ args: mcpSend, executionId: "c1" }]);
-        return f;
-      }
-      const mcpSends = (slack: SlackMcpEmulator) =>
-        slack.executions.filter((call) => call.tool === "slack_send_message");
-
-      it.each([
-        ["called directly", false],
-        ["called through the tool catalog", true],
-      ])(
-        "pauses on a draft naming the person as Slack's server does, then sends the edit once, %s",
-        async (_, catalog) => {
-          const slack = new SlackMcpEmulator();
-          const f = viaMcp(slack, { catalog });
-          await f.run();
-          expect(mcpSends(slack)).toEqual([]);
-          expect(card(f).draft).toMatchObject({
-            app: { name: "Slack" },
-            recipients: [{ role: "to", address: "U0MARIE" }],
-            conversation: {
-              kind: "person",
-              name: "Marie Dupont",
-              handle: "marie",
-            },
-            body: "Thursday instead?",
-          });
-          approve(f.effects[0]!, "Thursday at 10 instead?");
-          f.setCalls([]);
-          await f.run();
-          expect(slack.executions.map((call) => [call.tool, call.args])).toEqual([
-            ["slack_read_user_profile", { user_id: "U0MARIE", response_format: "detailed" }],
-            ["slack_send_message", { ...mcpSend, message: "Thursday at 10 instead?" }],
-          ]);
-          expect(f.effects[0]).toMatchObject({
-            status: "completed",
-            draft: { state: "sent" },
-          });
-        },
-      );
-
-      it.each([
-        ["a server reached elsewhere", { mcpEndpoint: "https://slack-tools.example.test/mcp" }],
-        ["a read the server refuses", {}, "user_not_found"],
-        [
-          "a server row of another user's, under the same id",
-          { mcpOwner: { spaceId: "space-1", userId: "user-2" } },
+        rules: [
+          {
+            effect: "require_approval" as const,
+            matchKind: "tool" as const,
+            matchValue: "acme_post_update",
+          },
         ],
-      ])(
-        "shows the draft to the conversation's id for %s, sending nothing",
-        async (_, options, refusal?: string) => {
-          const slack = new SlackMcpEmulator();
-          if (refusal)
-            slack.failNext("slack_read_user_profile", {
-              kind: "fail",
-              error: refusal,
-            });
-          const f = viaMcp(slack, options);
-          await f.run();
-          expect(mcpSends(slack)).toEqual([]);
-          expect(card(f).draft).toMatchObject({
-            recipients: [{ role: "to", address: "U0MARIE" }],
-          });
-          expect(card(f).draft?.conversation).toBeUndefined();
-        },
-      );
-    });
+        prepare: () => ({
+          card: "chat",
+          conversation: { path: ["room"], value: post.room },
+          body: { path: ["text"], value: post.text },
+          unshown: [],
+        }),
+      });
+      posted.setCalls([{ args: post, executionId: "c1" }]);
+      return posted;
+    };
 
-    it("shows the classic card for a Slack message the card cannot show whole", async () => {
-      const slack = new ComposioEmulator();
-      const f = fixture({
-        name: "SLACK_SEND_MESSAGE",
-        inputSchema,
-        connector: slack,
+    it("shows the conversation's id and sends only the text the user edited, once", async () => {
+      const posted = f();
+      await posted.run();
+      expect(posted.execute).not.toHaveBeenCalled();
+      const card = posted.pauseRunForInput.mock.calls.at(-1)![0].blocks[0] as Extract<
+        MessageBlock,
+        { kind: "ask" }
+      >;
+      expect(card).toMatchObject({
+        detail: "to: R0TEAM\nbody:\n  Thursday instead?",
+        draft: {
+          app: { name: "Acme" },
+          recipients: [{ role: "to", address: "R0TEAM" }],
+          chat: true,
+          body: "Thursday instead?",
+        },
       });
-      f.setCalls([{ args: { ...send, blocks: [{ type: "section" }] }, executionId: "c1" }]);
-      await f.run();
-      expect(slack.executions).toEqual([]);
-      expect(card(f).draft).toBeUndefined();
-      expect(card(f).actions?.[0]).toEqual({
-        id: "allow",
-        label: "Allow once",
-      });
+      expect(card.draft?.fields).toBeUndefined();
+      expect(() =>
+        approve(posted.effects[0]!, { recipients: [{ role: "to", address: "R0OTHER" }] }),
+      ).toThrow("Only the message text can be edited on this draft.");
+      approve(posted.effects[0]!, "Thursday at 10 instead?");
+      posted.setCalls([]);
+      await posted.run();
+      expect(posted.execute.mock.calls.map(([call]) => call.args)).toEqual([
+        { ...post, text: "Thursday at 10 instead?" },
+      ]);
+      expect(posted.effects[0]).toMatchObject({ status: "completed", draft: { state: "sent" } });
     });
   });
 
-  describe("outbound mail", () => {
+  describe("a mail draft", () => {
     const inputSchema = {
       type: "object",
       properties: {
@@ -1032,7 +834,6 @@ describe("connector read-only metadata and approval enforcement", () => {
         body: { type: "string" },
         notes: { type: "string" },
         is_html: { type: "boolean" },
-        include_signature: { type: "boolean" },
       },
     };
     const send = {
@@ -1041,7 +842,6 @@ describe("connector read-only metadata and approval enforcement", () => {
       subject: "Test Chief",
       body: "Hello from Chief.",
       is_html: false,
-      include_signature: false,
     };
     const draftCard = {
       kind: "ask",
@@ -1050,7 +850,7 @@ describe("connector read-only metadata and approval enforcement", () => {
         { id: "deny", label: "Discard" },
       ],
       draft: {
-        app: { name: "Gmail", logo: null },
+        app: { name: "Acme", logo: null },
         recipients: [
           { role: "to", address: "someone@example.com" },
           { role: "cc", address: "copy@example.com" },
@@ -1066,20 +866,28 @@ describe("connector read-only metadata and approval enforcement", () => {
       { id: "allow", label: "Allow once" },
       { id: "deny", label: "Deny" },
     ];
-    const always = (matchKind: "tool" | "connector" | "category", matchValue: string) => [
+    const always = (matchKind: "tool" | "connector", matchValue: string) => [
       { effect: "always_allow" as const, matchKind, matchValue },
     ];
+    const ALWAYS_ASKS = "acme_send_email";
+    const ASKS_BY_RULE = "acme_deliver_message";
+    const delivery = (options: Parameters<typeof fixture>[0] = {}) =>
+      fixture({
+        name: ASKS_BY_RULE,
+        inputSchema,
+        readOnly: false,
+        rules: [{ effect: "require_approval", matchKind: "tool", matchValue: ASKS_BY_RULE }],
+        ...options,
+      });
 
     it.each([
       ["no rule", {}],
-      ["an always-allow rule on the tool", { rules: always("tool", "GMAIL_SEND_EMAIL") }],
-      ["an always-allow rule on the connector", { rules: always("connector", "gmail") }],
-      ["an always-allow rule on email", { rules: always("category", "email") }],
+      ["an always-allow rule on the tool", { rules: always("tool", ALWAYS_ASKS) }],
+      ["an always-allow rule on the connector", { rules: always("connector", "acme") }],
       ["Auto Review on", { autoReview: true }],
       ["a webhook routine trusted to act", { trigger: "webhook", requireToolApproval: false }],
-      ["the catalog wrapper", { catalog: true }],
     ])("pauses a mail send on a draft under %s", async (_, options) => {
-      const f = fixture({ name: "GMAIL_SEND_EMAIL", inputSchema, ...options });
+      const f = fixture({ name: ALWAYS_ASKS, inputSchema, ...options });
       f.setCalls([{ args: send, executionId: "c1" }]);
       await f.run();
       expect(f.execute).not.toHaveBeenCalled();
@@ -1092,11 +900,7 @@ describe("connector read-only metadata and approval enforcement", () => {
     });
 
     it("shows a send it cannot read on the plain card, every argument shown, never always", async () => {
-      const f = fixture({
-        name: "GMAIL_SEND_EMAIL",
-        inputSchema,
-        rules: always("tool", "GMAIL_SEND_EMAIL"),
-      });
+      const f = fixture({ name: ALWAYS_ASKS, inputSchema, rules: always("tool", ALWAYS_ASKS) });
       f.setCalls([
         {
           args: { to: "a@example.com", body: "Hi", notes: "evil@example.com" },
@@ -1118,7 +922,7 @@ describe("connector read-only metadata and approval enforcement", () => {
     });
 
     it("refuses a send whose recipients are too many to show, before anything is recorded", async () => {
-      const f = fixture({ name: "GMAIL_SEND_EMAIL", inputSchema });
+      const f = fixture({ name: ALWAYS_ASKS, inputSchema });
       const bcc = Array.from({ length: 300 }, (_, index) => `p${index}@example.com`);
       f.setCalls([{ args: { ...send, bcc }, executionId: "c1" }]);
       await f.run();
@@ -1134,7 +938,7 @@ describe("connector read-only metadata and approval enforcement", () => {
 
     const waitingDraft = (run: Partial<NonNullable<Effect["run"]>> = {}): Effect => ({
       id: "waiting",
-      kind: "GMAIL_SEND_EMAIL",
+      kind: ASKS_BY_RULE,
       idempotencyKey: "waiting-key",
       status: "intended",
       request: { recipient_email: "first@example.com", body: "First" },
@@ -1149,7 +953,7 @@ describe("connector read-only metadata and approval enforcement", () => {
     });
 
     it("refuses a second draft while one from this bot waits in the thread", async () => {
-      const f = fixture({ name: "GMAIL_SEND_EMAIL", inputSchema });
+      const f = delivery();
       f.effects.push(waitingDraft());
       f.setCalls([{ args: send, executionId: "c1" }]);
       await f.run();
@@ -1168,7 +972,7 @@ describe("connector read-only metadata and approval enforcement", () => {
       ["another thread", { threadId: "thread-2" }],
       ["a run that is no longer waiting", { status: "completed" }],
     ])("still shows a card when the waiting draft belongs to %s", async (_, run) => {
-      const f = fixture({ name: "GMAIL_SEND_EMAIL", inputSchema });
+      const f = delivery();
       f.effects.push(waitingDraft(run));
       f.setCalls([{ args: send, executionId: "c1" }]);
       await f.run();
@@ -1181,7 +985,7 @@ describe("connector read-only metadata and approval enforcement", () => {
 
     it("leaves a send that is not mail to the usual gate", async () => {
       const f = fixture({
-        name: "TWILIO_SEND_SMS",
+        name: "acme_send_sms",
         inputSchema: { type: "object", properties: { to: {}, body: {} } },
       });
       f.setCalls([{ args: { to: "+15555550100", body: "Hi" }, executionId: "c1" }]);
@@ -1192,7 +996,7 @@ describe("connector read-only metadata and approval enforcement", () => {
 
     describe("once the user sends the draft", () => {
       async function drafted(args: Record<string, unknown> = send, secrets: string[] = []) {
-        const f = fixture({ name: "GMAIL_SEND_EMAIL", inputSchema, secrets });
+        const f = delivery({ secrets });
         f.setCalls([{ args, executionId: "c1" }]);
         await f.run();
         return f;
@@ -1352,7 +1156,9 @@ describe("connector read-only metadata and approval enforcement", () => {
       ])(
         "refuses a draft with a run secret in %s back to the bot, showing nothing",
         async (_, part) => {
-          const f = await drafted({ ...send, ...part }, ["sk-live-123"]);
+          const f = fixture({ name: ALWAYS_ASKS, inputSchema, secrets: ["sk-live-123"] });
+          f.setCalls([{ args: { ...send, ...part }, executionId: "c1" }]);
+          await f.run();
           expect(f.results).toEqual([
             {
               error: "This message contains a secret. Write it without the secret.",
@@ -1402,7 +1208,7 @@ describe("connector read-only metadata and approval enforcement", () => {
           draft: { state: "pending" },
         });
         expect(lastCard(f).draft?.failure).toEqual({
-          reason: "Check Gmail before trying again.",
+          reason: "Check Acme before trying again.",
         });
         await f.run();
         expect(f.execute).toHaveBeenCalledTimes(sends);
@@ -1417,7 +1223,7 @@ describe("connector read-only metadata and approval enforcement", () => {
         expect(lastCard(f)).toMatchObject({
           status: "pending",
           detail:
-            "Not sent. Check Gmail before trying again.\nto: someone@example.com\ncc: copy@example.com\nsubject: Test Chief\nbody:\n  Hello from Chief.",
+            "Not sent. Check Acme before trying again.\nto: someone@example.com\ncc: copy@example.com\nsubject: Test Chief\nbody:\n  Hello from Chief.",
           actions: draftCard.actions,
         });
         expect(f.execute).not.toHaveBeenCalled();
@@ -1435,7 +1241,7 @@ describe("connector read-only metadata and approval enforcement", () => {
         expect(f.execute).not.toHaveBeenCalled();
         expect(f.effects[0]!.status).toBe("intended");
         expect(lastCard(f).draft?.failure).toEqual({
-          reason: "Gmail is disconnected.",
+          reason: "Acme is disconnected.",
           disconnected: true,
         });
       });
@@ -1447,7 +1253,7 @@ describe("connector read-only metadata and approval enforcement", () => {
           "executing",
           {
             failed: true,
-            failure: { reason: "Check Gmail before trying again." },
+            failure: { reason: "Check Acme before trying again." },
           },
         ],
       ])("ends Not sent when the run stops %s, never sending it", async (_, status, settled) => {
