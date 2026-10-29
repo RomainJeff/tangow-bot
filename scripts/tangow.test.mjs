@@ -399,15 +399,17 @@ test("failed Docker startup resumes after configuration cutover without reimport
   );
 });
 
-test("sudo reads a root-private override without exposing credentials", {
-  skip:
-    process.getuid?.() === 0
-      ? "Root bypasses file permission checks; exercise this case as an unprivileged user."
-      : false,
-}, (t) => {
+test("sudo reads a root-private override without exposing credentials", (t) => {
   const f = fixture(t, { e2b: true });
   const filename = path.join(f.root, ".env.e2b.compose.json");
   chmodSync(filename, 0);
+  try {
+    readFileSync(filename);
+    t.skip("This process bypasses file permissions; exercise this case without that privilege.");
+    return;
+  } catch (error) {
+    assert.equal(error.code, "EACCES");
+  }
   assert.notEqual(f.invoke(["status"]).status, 0);
   const result = f.invoke(["status", "--sudo"]);
   assert.equal(result.status, 0, result.stderr);
