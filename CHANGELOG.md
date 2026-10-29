@@ -15,7 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Fixed
 
 - Approval notifications now name what the bot wants to do (an email's app, subject and recipient, or the action) instead of a tool name.
-- On web, desktop and mobile, worker runs save their native session when pausing for a question, approval or takeover, then restore their context, loaded tools and complete tool results after a restart while keeping current permissions, without reading the original request again as a new message.
+- On web, desktop and mobile, worker runs save their native session when pausing for a question, approval or takeover, then restore their context, loaded tools and complete tool results after a restart while keeping current permissions.
 - On mobile, interacting with a widget no longer scales or swipes its entire card or opens the message menu on a long press.
 
 ### 2026-10-28

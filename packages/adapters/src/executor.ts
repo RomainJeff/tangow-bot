@@ -110,6 +110,7 @@ import {
   formatSkillRunPrompt,
   formatSkillsCatalogInstruction,
   HELPER_PROFILES,
+  hasDraftOutcome,
   hasHiddenText,
   humanizeToolName,
   inferAttachmentMimeType,
@@ -1027,6 +1028,14 @@ export function buildApprovalContinuation(
 
 const SETTLED_APPROVAL_NOTE =
   "Rakazo is resuming after the user answered your approval request. Rakazo already ran what they approved, or recorded their refusal, and its result is in your history. Continue from it and do not call the tool again for the same action.";
+
+/**
+ * A resumed attempt gets the run's source message after the run's own steps, where it reads as the
+ * user asking again. A draft is never settled, so nothing else tells the model it is a resume, and
+ * that the send it just read back is not a reason to stop sending.
+ */
+const DRAFT_RESUME_NOTE =
+  "Rakazo is resuming this run after the user answered your draft card. Its outcome is that call's result in your history. The request above is the one this run started from, not a new message: carry on with what is left of it and of later messages, and to send another message call the send tool again.";
 
 /**
  * The call that replays an answered effect under the tools the run exposes now: a catalog or bound
@@ -1980,12 +1989,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
           ? await loadGroupContext(deps.prisma, thread.groupId, { id: bot.id, name: bot.name })
           : undefined;
         const projectStartedAt = performance.now();
-        const continueFromHistory =
-          archiveHistory &&
-          historyEntries.some(
-            (entry) => entry.id === run.sourceMessageId && entry.type === "user.message",
-          ) &&
-          historyEntries.some((entry) => entry.runId === run.id && entry.type === "run.started");
         const [first] = historyEntries;
         const compaction = first?.type === "compaction" ? first : undefined;
         const outside = await readEntriesOffChain(
@@ -2010,6 +2013,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const activeStart = !archiveHistory
             ? -1
             : uncompacted.findIndex((turn) => turn.id !== undefined && activeIds.has(turn.id));
+          // Pi removes the source user turn by ID because the prompt already carries it.
+          // Find the active boundary first so later steering stays protected on a resumed run.
           return {
             summaryTurn: compaction ? turns[0] : undefined,
             uncompactedHistory: uncompacted,
@@ -2018,12 +2023,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 ? []
                 : uncompacted
                     .slice(activeStart)
-                    .filter(
-                      (turn) =>
-                        continueFromHistory ||
-                        turn.role !== "user" ||
-                        turn.id !== run.sourceMessageId,
-                    ),
+                    .filter((turn) => turn.role !== "user" || turn.id !== run.sourceMessageId),
             finishedHistory: activeStart < 0 ? uncompacted : uncompacted.slice(0, activeStart),
           };
         };
@@ -5426,7 +5426,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           turnBlocks,
           currentTurnImages,
         );
-        const requestPrompt = expandSkillReferencesInPrompt(
+        const taskPrompt = expandSkillReferencesInPrompt(
           [task.prompt, attachedFilesPrompt, missingImagesInstruction].filter(Boolean).join("\n\n"),
           workerSkills ? [] : agentSkills,
           sandboxSkillDir,
@@ -5438,17 +5438,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
           await recordSkillUse(skill.name, via);
         }
         const invokedSkill = savedSkills.find((skill) =>
-          promptInvokesSkill(requestPrompt, skill.name || skill.goal),
+          promptInvokesSkill(taskPrompt, skill.name || skill.goal),
         );
-        const playbook = invokedSkill
-          ? formatSkillRunPrompt(
+        const basePrompt = invokedSkill
+          ? `${formatSkillRunPrompt(
               invokedSkill.name || invokedSkill.goal.slice(0, 80),
               parsePlaybook(invokedSkill.playbook),
-            )
-          : undefined;
-        const basePromptParts = continueFromHistory
-          ? [playbook, attachedFilesPrompt, missingImagesInstruction]
-          : [playbook, requestPrompt];
+            )}\n\n${taskPrompt}`
+          : taskPrompt;
         if (persistence?.start.mode !== "resume" && !(await sendApprovedDrafts())) return;
         const draftOutcomes = await logDraftOutcomes(
           deps,
@@ -5476,11 +5473,20 @@ export function createRunExecutor(deps: ExecutorDeps) {
             : formatActiveHelpers(await helperStatus(deps.prisma, run));
         const turnTail = [
           replyContext,
-          ...basePromptParts,
+          basePrompt,
           takeoverResume?.promptNote,
           approvalContinuation,
           settledEffects.length > 0 ? SETTLED_APPROVAL_NOTE : undefined,
           activeHelpers ? redactSecrets(activeHelpers, promptSecrets) : undefined,
+          // Only for an outcome the model reads, which is one whose pause is in its history: a
+          // helper's stop, which the outcome replaces, can be logged after this attempt read it.
+          draftOutcomes.some(
+            (outcome) =>
+              outcome.type === "tool.result" &&
+              historyEntries.some((entry) => entry.id === outcome.payload.replaces),
+          ) || answeredDrafts.some((effect) => hasDraftOutcome(historyEntries, effect.id))
+            ? DRAFT_RESUME_NOTE
+            : undefined,
         ];
         const turnPrompt = (recall: string | undefined) =>
           [clock, ...turnHead, recall, ...turnTail].filter(Boolean).join("\n\n");
@@ -5810,9 +5816,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
               botId: bot.id,
               threadId: thread.id,
               runId,
-              sourceMessageId: continueFromHistory ? null : run.sourceMessageId,
+              sourceMessageId: run.sourceMessageId,
               prompt: helperCall?.task ?? prompt,
-              resumeEvent: takeoverResume?.promptNote,
+              resumeEvent: [
+                takeoverResume?.promptNote ?? task.prompt,
+                persistence?.start.mode === "resume" && answeredDrafts.length > 0
+                  ? DRAFT_RESUME_NOTE
+                  : undefined,
+              ]
+                .filter(Boolean)
+                .join("\n\n"),
               resumeEvents,
               instructions,
               ...(harnessAddendum ? { harnessAddendum } : {}),

@@ -629,7 +629,6 @@ it.each(["allow", "deny", "corrupt", "retry", "helper"] as const)(
         ]);
         expect(JSON.stringify(resumed?.messages)).toContain("Edited.");
       } else expect(sent).toEqual([]);
-      expect(JSON.stringify(resumed?.messages).split("Prepare an email to Anna.")).toHaveLength(2);
       await run.continueRun(runId);
       expect(sent).toHaveLength(answer !== "deny" ? 1 : 0);
     }

@@ -13,7 +13,7 @@ import {
   SessionEntrySchema,
   SessionId as SessionIdSchema,
 } from "@rakazo/contracts";
-import { buildBotMessageWakePrompt, projectThreadItems } from "@rakazo/core";
+import { projectThreadItems } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import { appendSessionEntryInTransaction, createThreadEvents } from "@rakazo/db";
 import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
@@ -356,43 +356,6 @@ function fixture(
 }
 
 describe("the history a run reads from its session log", () => {
-  it("keeps the peer wake instructions when reconstructing a started run", async () => {
-    const from = { kind: "bot" as const, botId: "peer-1", name: "Researcher" };
-    const text = "Summarize the findings.";
-    const prompt = buildBotMessageWakePrompt({
-      from: { id: from.botId, name: from.name },
-      text,
-      intent: "request",
-    });
-    const tail = chain(0, [
-      {
-        type: "bot.message.received",
-        payload: { from, text, intent: "request", hop: 1, exchangeId: "exchange-1" },
-      },
-      { ...started, botId: BOT, runId: RUN },
-      {
-        botId: BOT,
-        runId: RUN,
-        type: "tool.call",
-        payload: { callId: "effect", name: "write_file", input: '{"path":"result.txt"}' },
-      },
-      {
-        botId: BOT,
-        runId: RUN,
-        type: "tool.result",
-        payload: { callId: "effect", output: "written", isError: false, artifactIds: [] },
-      },
-    ]);
-    const f = await fixture({
-      prompt,
-      tail,
-      run: { trigger: "bot_message", sourceMessageId: "e-0" },
-    });
-    const request = await f.request();
-    expect(request.prompt).toContain(prompt);
-    expect(request.sourceMessageId).toBe("e-0");
-  });
-
   it.each([false, true])(
     "counts the source prompt once and omits oversized helper briefs while preserving active effects and steering, resumed=%s",
     async (resumed) => {
@@ -434,10 +397,12 @@ describe("the history a run reads from its session log", () => {
       expect(finalized).toMatchObject({ outcome: "completed" });
       expect(runtimeRun.mock.calls).toHaveLength(1);
       const request = runtimeRun.mock.calls[0]![0];
+      expect(request.prompt).toContain(prompt);
       expect(request.prompt).not.toContain("helper work");
       expect(request.prompt).toContain('"helperId":"active-helper"');
       expect(request.prompt).toContain('"status":"running"');
       expect(request.prompt.endsWith("</active_helpers>")).toBe(true);
+      expect(request.history.some((turn) => turn.id === "e-2")).toBe(false);
       expect(
         estimateTextTokens(request.prompt) +
           estimateTextTokens(request.instructions) +
@@ -445,16 +410,7 @@ describe("the history a run reads from its session log", () => {
           estimateHistoryTokens(request.history) +
           16_384,
       ).toBeLessThan(128_000);
-      const sourceAt = request.history.findIndex((turn) => turn.id === "e-2");
-      if (!resumed) {
-        expect(request.prompt).toContain(prompt);
-        expect(sourceAt).toBe(-1);
-        expect(request.sourceMessageId).toBe("e-2");
-      } else {
-        expect(request.prompt).not.toContain(prompt);
-        expect(request.sourceMessageId).toBe(null);
-        expect(request.history.filter((turn) => turn.content.includes(prompt))).toHaveLength(1);
-        expect(sourceAt).toBeLessThan(request.history.findIndex((turn) => turn.parts?.length));
+      if (resumed) {
         expect(request.history.flatMap((turn) => turn.parts ?? [])).toContainEqual({
           type: "toolCalls",
           calls: [
