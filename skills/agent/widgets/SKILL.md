@@ -38,8 +38,9 @@ The model cannot see the render; copy a template and change its content.
 4. Produce one file, at most 2 MB in UTF-8 bytes. Write only body content,
    with inline styles/scripts if needed. Rakazo adds document, viewport, CSP,
    theme tokens, and kit. Omit doctype, html, head, and body tags.
-   Use HTTPS media URLs. Use `data:` images only for images produced on the
-   computer, compressed first. Do not inline audio or video.
+   Use HTTPS media URLs. For an image you made on the computer, compress it
+   to under 1 MB and write its absolute path (or `~/` path) in `<img src>`;
+   Rakazo embeds it at publish. Do not inline audio or video.
 5. Link to HTTPS pages outside the widget. Use real `<a href="https://…">` links;
    Rakazo opens them externally. Do not navigate the frame or submit forms.
 6. Give every image descriptive `alt`, every control a name, and every SVG an
