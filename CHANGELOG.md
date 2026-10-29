@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-10-29
+
+#### Fixed
+
+- On mobile, interacting with a widget no longer scales or swipes its entire card or opens the message menu on a long press.
+
 ### 2026-10-28
 
 #### Added

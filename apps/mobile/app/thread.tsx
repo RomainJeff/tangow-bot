@@ -251,6 +251,7 @@ const CARD_ONLY_BLOCK_KINDS = new Set<string>([
   "child_bot",
   "image",
   "file",
+  "widget",
 ]);
 
 /** Gaps from design contract § Grouping: 3 within a group, 14 between groups
@@ -2231,9 +2232,13 @@ function Thread() {
                 </AnimatedMessageBubble>
               ) : (
                 <MessageArrival isNew={isNew} enterDelayMs={arrivalStaggerMs.get(message.id) ?? 0}>
-                  <Pressable accessible={false} onLongPress={actionProps.onLongPress}>
-                    {bubble}
-                  </Pressable>
+                  {drawnBlocks.some((block) => block.kind === "widget") ? (
+                    bubble
+                  ) : (
+                    <Pressable accessible={false} onLongPress={actionProps.onLongPress}>
+                      {bubble}
+                    </Pressable>
+                  )}
                 </MessageArrival>
               ),
             )}
