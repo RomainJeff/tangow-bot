@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Product film</title>
+    <!-- The master composition (16:9). The film itself is assets/film.js; the engine is assets/engine.js. -->
+    <link rel="stylesheet" href="assets/screen-kit.css" />
+    <script src="node_modules/gsap/dist/gsap.min.js"></script>
+    <script src="node_modules/gsap/dist/CustomEase.min.js"></script>
+    <script src="assets/screen-kit.js"></script>
+    <script type="importmap">
+      { "imports": { "three": "./node_modules/three/build/three.module.js", "three/addons/": "./node_modules/three/examples/jsm/" } }
+    </script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: #000; }
+      #root { width: 100%; height: 100%; position: relative; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+      /* The HTML-in-canvas source: painted (so it can be captured) but hidden behind the opaque 3D canvas. Never opacity 0. */
+      .src { position: absolute; left: 0; top: 0; pointer-events: none; z-index: -1; }
+      .src-content { position: relative; overflow: hidden; }
+      .scr-host { position: absolute; left: 0; top: 0; width: 402px; height: 874px; transform: scale(3); transform-origin: 0 0; }
+      #gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+      /* Benefit lines: beside the phone, on the empty right of an object shot. */
+      .benefit { position: absolute; left: 58%; top: 50%; transform: translateY(-50%); font-size: 52px; font-weight: 600; letter-spacing: -0.005em; line-height: 1.12; color: #1d1d1f; opacity: 0; white-space: nowrap; }
+      #super { position: absolute; left: 4%; top: 50%; transform: translateY(-50%); font-size: 52px; font-weight: 600; letter-spacing: -0.005em; color: #f5f5f7; opacity: 0; white-space: nowrap; }
+      /* End card: one centred column, the group at 48% of the height, nudged left so it reads optically centred. */
+      #endcard { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 0 80px 43px 0; background: #ecebe9; }
+      #lockup { display: flex; align-items: center; gap: 64px; }
+      #mark { width: 184px; height: 184px; overflow: visible; flex: none; }
+      #lk-name { font-size: 105px; font-weight: 560; letter-spacing: -0.01em; line-height: 1; color: #1d1d1f; opacity: 0; }
+      #tag { margin-top: 40px; font-size: 58px; font-weight: 560; letter-spacing: -0.01em; line-height: 1.1; color: #1d1d1f; opacity: 0; white-space: nowrap; }
+      #avail { margin-top: 26px; font-size: 31px; line-height: 1.2; color: rgba(29, 29, 31, 0.55); opacity: 0; white-space: nowrap; }
+      /* A whisper of grain so the flat card never bands. */
+      #grain { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.035; mix-blend-mode: overlay; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="14.5" data-width="1920" data-height="1080">
+      <canvas id="src" class="src" layoutsubtree width="1206" height="2622"><div id="src-content" class="src-content" style="width:1206px;height:2622px"><div id="scr-host" class="scr-host"></div></div></canvas>
+      <canvas id="gl" class="clip" data-start="0" data-duration="14.5" data-track-index="0"></canvas>
+      <div id="endcard" class="clip" data-start="0" data-duration="14.5" data-track-index="1">
+        <!-- The brand mark: a 184 px SVG (ink on a light card, white on a dark one), then the name. -->
+        <div id="lockup"><svg id="mark" viewBox="0 0 184 184" xmlns="http://www.w3.org/2000/svg"><circle cx="92" cy="92" r="84" fill="#1d1d1f" /></svg><div id="lk-name">product</div></div>
+        <div id="tag">Your end line.</div>
+        <div id="avail">For iPhone and Mac.</div>
+        <svg id="grain" xmlns="http://www.w3.org/2000/svg"><filter id="gr"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 0 0.5  0 0 0 1 0"/></filter><rect width="100%" height="100%" filter="url(#gr)"/></svg>
+      </div>
+      <div id="b1" class="benefit clip" data-start="0" data-duration="14.5" data-track-index="3"><div>It does the work.</div><div class="b-2">You keep the say.</div></div>
+      <div id="b2" class="benefit clip" data-start="0" data-duration="14.5" data-track-index="4">Calm, even at night.</div>
+      <div id="super" class="clip" data-start="0" data-duration="14.5" data-track-index="2">The opening line.</div>
+      <!-- The licensed track, cut on its beats by scripts/music_edit.py (never commit the audio). -->
+      <!-- <audio id="score" src="assets/audio/film-music.wav" data-start="0" data-duration="14.5" data-track-index="5" data-volume="1"></audio> -->
+    </div>
+    <script type="module" src="assets/film.js"></script>
+  </body>
+</html>
