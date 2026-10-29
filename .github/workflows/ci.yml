@@ -49,9 +49,13 @@ jobs:
       - run: pnpm check --concurrency=1
 
   test:
-    name: Unit tests
+    name: Unit tests (${{ matrix.shard }}/4)
     runs-on: boat-small
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v5
         with:
@@ -65,9 +69,20 @@ jobs:
       - run: pnpm db:generate
         env:
           DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
-      - run: pnpm test:setup-e2b
-      - run: pnpm test:tangow
-      - run: pnpm test
+      - run: pnpm run test --shard=${{ matrix.shard }}/4
+
+  test-deployment:
+    name: Deployment scripts
+    runs-on: boat-small
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test infra/compose/setup-e2b.test.mjs scripts/tangow.test.mjs
 
   test-integration:
     name: Postgres journeys
