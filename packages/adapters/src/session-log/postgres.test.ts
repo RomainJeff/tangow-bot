@@ -367,16 +367,11 @@ describe("sessions migration", () => {
     const thread = await prisma.thread.create({
       data: { spaceId: "s1", userId: "u1", botId: bot.id },
     });
-    const run = await prisma.run.create({
-      data: {
-        spaceId: "s1",
-        botId: bot.id,
-        threadId: thread.id,
-        taskId: "k1",
-        userId: "u1",
-        status: "queued",
-        trigger: "user",
-      },
+    await prisma.$executeRaw`INSERT INTO runs
+      (id, "spaceId", "botId", "threadId", "taskId", "userId", status, trigger, "updatedAt")
+      VALUES ('r_new_thread', 's1', ${bot.id}, ${thread.id}, 'k1', 'u1', 'queued', 'user', now())`;
+    const run = await prisma.run.findUniqueOrThrow({
+      where: { id: "r_new_thread" },
       select: { sessionId: true },
     });
 
