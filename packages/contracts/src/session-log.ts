@@ -227,6 +227,11 @@ const EntryShapes = z.discriminatedUnion("type", [
       output: z.string(),
       isError: z.boolean(),
       artifactIds: z.array(Id),
+      /**
+       * The pause this result replaces: the entry that answered the call while its run waited on
+       * a card. The result is the call's answer from then on, whatever the call id.
+       */
+      replaces: EntryId.optional(),
       /** The session of the background helper the call started. */
       sessionId: SessionId.optional(),
     }),
@@ -353,6 +358,10 @@ const EntryShapes = z.discriminatedUnion("type", [
       routineId: Id.optional(),
       change: z.enum(["created", "updated"]).optional(),
       failed: z.literal(true).optional(),
+      /** A mail draft left: when, and whether the user changed its text. */
+      sent: z.object({ at: z.string(), edited: z.boolean() }).optional(),
+      /** Why a mail draft the run stopped while sending may not have left. */
+      failure: z.object({ reason: z.string() }).optional(),
     }),
   ),
   /**
@@ -490,6 +499,25 @@ export function toThreadEntry({ sessionId, ...entry }: SessionEntry): ThreadEntr
 export type SessionEntry = z.infer<typeof SessionEntrySchema>;
 export type SessionEntryType = SessionEntry["type"];
 export type SessionEntryOf<T extends SessionEntryType> = Extract<SessionEntry, { type: T }>;
+
+/** What a call's result reads while its run waits on the card, or the question, the call raised. */
+export function pausedOutput(awaiting: "approval" | "answer"): string {
+  return `paused: awaiting ${awaiting}`;
+}
+
+/** What a tool answers while its run waits on the card it raised. */
+export const APPROVAL_WAITING_TEXT = "Waiting for approval.";
+
+/** What a helper's `run_subagent` call reads when the helper stopped for a pause of the run. */
+export const HELPER_STOPPED_FOR_PAUSE = "Stopped: the run is waiting for the user.";
+
+/**
+ * Whether a helper's result is that of one stopped by a card: the one it raised, or a sibling's
+ * that the run's pause stopped with it.
+ */
+export function isHelperPauseResult(result: string): boolean {
+  return result === APPROVAL_WAITING_TEXT || result === HELPER_STOPPED_FOR_PAUSE;
+}
 
 export type EntryAudience = { inference: "yes" | "no" | "context"; ui: boolean };
 

@@ -393,7 +393,7 @@ export class ComposioConnector implements ComposioProvider {
         version: schema.version,
       });
       if (result.error) {
-        yield { ...connectorError(result.error), message: sanitizeComposioError(result.error) };
+        yield reportedFailure(result.error);
         return;
       }
       const logId = collectLogIds(result)[0] ?? "";
@@ -782,6 +782,16 @@ export function isNoAuthToolkitError(error: unknown): boolean {
   return (
     message.includes("ToolkitsIsNoAuth") || message.includes("does not require authentication")
   );
+}
+
+/**
+ * An action the app answered and reported failed, the SDK's `error`. Its details say so, which a
+ * call that threw, a timeout after the send included, does not: only the app's word means the
+ * message did not leave.
+ */
+function reportedFailure(error: unknown): Extract<ConnectorEvent, { type: "error" }> {
+  const message = sanitizeComposioError(error);
+  return { ...connectorError(error), message, details: { successful: false, error: message } };
 }
 
 export function sanitizeComposioError(error: unknown): string {

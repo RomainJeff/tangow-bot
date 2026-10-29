@@ -43,6 +43,7 @@ describe("model HTTP emulator contract", () => {
       steps: [{ expect() {}, response: { type: "text", text: "fixture" } }],
     });
     servers.push(server);
+    expect((await fetch(new URL("/", server.baseUrl))).status).toBe(404);
     expect(() => server.assertComplete()).toThrow(/Not all model fixture steps/);
     expect((await post(server)).status).toBe(200);
     server.assertComplete();

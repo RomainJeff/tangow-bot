@@ -544,11 +544,24 @@ describe("native Composio tools", () => {
       logId: "",
     });
     expect(await executeEvents(connector, tool!, {})).toEqual([
-      expect.objectContaining({ type: "error", message: "denied Bearer [redacted]" }),
+      expect.objectContaining({
+        type: "error",
+        message: "denied Bearer [redacted]",
+        details: { successful: false, error: "denied Bearer [redacted]" },
+      }),
     ]);
     composioSdkState.execute.mockRejectedValueOnce(new Error("denied Bearer test-token"));
     expect(await executeEvents(connector, tool!, {})).toEqual([
       expect.objectContaining({ type: "error", message: "denied Bearer [redacted]" }),
+    ]);
+  });
+
+  it("reports a call the SDK threw on, a timeout included, as an error event", async () => {
+    const connector = new ComposioConnector();
+    const [tool] = await connector.discoverTools(contextWith());
+    composioSdkState.execute.mockRejectedValueOnce(new Error("Request timed out"));
+    expect(await executeEvents(connector, tool!, {})).toEqual([
+      { type: "error", kind: "unknown", message: "Request timed out" },
     ]);
   });
 });

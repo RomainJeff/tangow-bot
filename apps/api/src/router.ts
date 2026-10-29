@@ -1534,7 +1534,13 @@ export function createRouter(deps: RouterDeps) {
         if (target.kind === "bot") {
           await assertTeachingSendAllowed(deps.prisma, context.actor.spaceId, target.botId);
         }
-        return sendThreadMessage(deps, context.actor, target, input);
+        return sendThreadMessage(deps, context.actor, target, input).catch((error: unknown) => {
+          // A replaced draft's recipients the server refused: the reply goes back to the composer.
+          if (error instanceof InvalidAnswerError) {
+            throw new ORPCError("BAD_REQUEST", { message: error.message });
+          }
+          throw error;
+        });
       }),
       react: authed.threads.react.handler(async ({ context, input }) => {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);

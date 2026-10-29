@@ -1,5 +1,11 @@
 import type { AgentToolExecutionResult } from "@rakazo/adapter-kit";
-import { refusedProposalResult } from "@rakazo/core";
+import { APPROVAL_WAITING_TEXT } from "@rakazo/contracts";
+import {
+  DRAFT_DISCARDED_NOTE,
+  readDraft,
+  refusedProposalResult,
+  replacedDraftResult,
+} from "@rakazo/core";
 
 export type ApprovalPausedToolResult = AgentToolExecutionResult & { terminate: true };
 
@@ -313,7 +319,7 @@ export function catalogApprovalInnerArgs(catalog: {
 export function approvalPausedToolResult(): ApprovalPausedToolResult {
   return {
     kind: "agent_tool_result",
-    content: [{ type: "text", text: "Waiting for approval." }],
+    content: [{ type: "text", text: APPROVAL_WAITING_TEXT }],
     details: { approval: "paused" },
     terminate: true,
   };
@@ -371,6 +377,12 @@ export type ExternalEffectStore = {
   };
 };
 
+export const DRAFT_DISCARDED_RESULT = {
+  ok: false,
+  discarded: true,
+  note: DRAFT_DISCARDED_NOTE,
+} as const;
+
 /** A cancelled card is a decision, not a failure: the bot is told once and must not retry. */
 export const SPAWN_BOT_CANCELLED_RESULT = {
   ok: false,
@@ -379,13 +391,23 @@ export const SPAWN_BOT_CANCELLED_RESULT = {
 } as const;
 
 export function resolveDuplicateEffectGate(
-  effect: { status: string; result?: unknown; kind?: string },
+  effect: { status: string; result?: unknown; kind?: string; draft?: unknown; request?: unknown },
   toolName: string,
 ): DuplicateEffectGate {
   if (effect.status === "completed") {
     return { action: "return", result: effect.result ?? { duplicate: true } };
   }
   if (effect.status === "denied") {
+    const drafted = readDraft(effect.status, effect.draft);
+    if (drafted?.state === "discarded") {
+      return { action: "return", result: { ...DRAFT_DISCARDED_RESULT } };
+    }
+    // A send the run ended on may or may not have left.
+    if (drafted?.state === "unsent") {
+      return { action: "return", result: uncertainEffectResult(toolName) };
+    }
+    const replaced = replacedDraftResult(effect);
+    if (replaced) return { action: "return", result: replaced };
     return {
       action: "return",
       result:

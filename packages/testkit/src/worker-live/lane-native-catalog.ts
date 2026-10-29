@@ -3,6 +3,7 @@ import type { ConnectorProvider } from "@rakazo/adapter-kit";
 import { EncryptedSecretStore, McpConnector } from "@rakazo/adapters";
 import { latestCard } from "../index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "../model-emulator.js";
+import { prepares } from "../model-emulator.js";
 import { finish, liveRun } from "./run.js";
 import type { Lane, Live } from "./session.js";
 
@@ -120,6 +121,7 @@ async function catalogRun(live: Live, deferred: boolean) {
           };
         },
       },
+      prepares(),
       { expect() {}, response: { type: "text", text: "Waiting for approval." } },
       {
         async expect(request) {

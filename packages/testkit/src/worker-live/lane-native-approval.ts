@@ -1,4 +1,5 @@
 import { latestCard } from "../index.js";
+import { prepares } from "../model-emulator.js";
 import { call, finish, liveRun } from "./run.js";
 import type { Lane } from "./session.js";
 import { forward } from "./session.js";
@@ -53,6 +54,7 @@ export const laneNativeApproval: Lane = {
           helperOwnContext =
             text.includes("Publish the synthetic plan.") && !text.includes("root-private-marker");
         }),
+        prepares(),
         { expect() {}, response: { type: "text", text: "Waiting." } },
         ...finish("Published the synthetic plan"),
       ],

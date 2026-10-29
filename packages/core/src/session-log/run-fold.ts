@@ -6,7 +6,7 @@ import type {
   ThreadEntry,
   ThreadEntryOf,
 } from "@rakazo/contracts";
-import { CARD_STATE_TYPES } from "@rakazo/contracts";
+import { CARD_STATE_TYPES, isHelperPauseResult, pausedOutput } from "@rakazo/contracts";
 import { appendToolCallSegment } from "../events.js";
 import { originSessionIdOf } from "./child-sessions.js";
 
@@ -23,6 +23,8 @@ export type ToolAnswer = ThreadEntryOf<"tool.result" | "subagent">;
 export type ToolAnswers = {
   answerOf: ReadonlyMap<EntryId, ToolAnswer>;
   callOf: ReadonlyMap<EntryId, EntryId>;
+  /** The answer a later result replaced, by the call's entry id: a pause, or a helper's stop. */
+  replacedOf: ReadonlyMap<EntryId, ToolAnswer>;
 };
 const STRETCH_TYPES = new Set<SessionEntryType>([...FOLDED_TYPES, ...CARD_STATE_TYPES, "subagent"]);
 
@@ -102,12 +104,15 @@ export function foldRuns(
         const message = stretchOf(entry);
         const { callId, name, input } = entry.payload;
         const answer = answers.answerOf.get(entry.id);
+        // A draft's outcome may have replaced a helper's answer: the step still opens its session.
+        const helperSession = (answers.replacedOf.get(entry.id) ?? answer)?.payload.sessionId;
         message.blocks = appendToolCallSegment(message.blocks, name, {
           name,
           input,
           output: answer ? outputOf(answer) : "",
           id: callId,
-          ...(answer?.payload.sessionId ? { sessionId: answer.payload.sessionId } : {}),
+          ...(answer?.type === "tool.result" && answer.payload.replaces ? { outcome: true } : {}),
+          ...(helperSession ? { sessionId: helperSession } : {}),
         });
         holderOf.set(entry.id, message);
         break;
@@ -130,12 +135,14 @@ export function foldRuns(
  * run to run and within a run once it resumes, so a `tool.result` or `subagent` entry answers the
  * latest earlier call of its run and call id that has no answer yet. A call a crash cut stays
  * unanswered under the replay that follows it, and a result whose call a compaction cut answers
- * nothing.
+ * nothing. A result that names the pause it replaces answers the call that pause answered, never
+ * another call of the same id; with that pause cut, it answers nothing.
  */
 export function toolAnswers(entries: readonly ThreadEntry[]): ToolAnswers {
   const unanswered = new Map<string, EntryId[]>();
   const answerOf = new Map<EntryId, ToolAnswer>();
   const callOf = new Map<EntryId, EntryId>();
+  const replacedOf = new Map<EntryId, ToolAnswer>();
   for (const entry of entries) {
     if (entry.type !== "tool.call" && entry.type !== "tool.result" && entry.type !== "subagent") {
       continue;
@@ -147,12 +154,58 @@ export function toolAnswers(entries: readonly ThreadEntry[]): ToolAnswers {
       calls.push(entry.id);
       continue;
     }
-    const call = calls.pop();
+    const replaced = entry.type === "tool.result" ? entry.payload.replaces : undefined;
+    const call = replaced === undefined ? calls.pop() : callOf.get(replaced);
     if (call === undefined) continue;
+    const replacedAnswer = replaced === undefined ? undefined : answerOf.get(call);
+    if (replacedAnswer) replacedOf.set(call, replacedAnswer);
     answerOf.set(call, entry);
     callOf.set(entry.id, call);
   }
-  return { answerOf, callOf };
+  return { answerOf, callOf, replacedOf };
+}
+
+/**
+ * The pause that answered the call a draft card raised, while it still does, or undefined once a
+ * result replaced it. The pause is the first one after the card: the call's own `paused` result,
+ * written in the transaction that first shows the card, or, when a helper raised the card, the
+ * helper's answer to the `run_subagent` call that started it, which reads that it waits on a card.
+ * That answer is written once the helper closes, which can be after the user answered the card:
+ * the close then logs the outcome itself.
+ * Two helpers stopped by one pause cannot be told apart, so the first one has it.
+ */
+export function pendingPauseOfEffect(
+  entries: readonly ThreadEntry[],
+  effectId: string,
+): { callId: string; pauseId: EntryId } | undefined {
+  const found = pauseOfEffect(entries, effectId);
+  return found && found.answer?.id === found.pause.id
+    ? { callId: found.pause.payload.callId, pauseId: found.pause.id }
+    : undefined;
+}
+
+/** Whether a result replaced the pause a draft card raised: the card's outcome is in `entries`. */
+export function hasDraftOutcome(entries: readonly ThreadEntry[], effectId: string): boolean {
+  const found = pauseOfEffect(entries, effectId);
+  return found?.answer?.type === "tool.result" && found.answer.payload.replaces === found.pause.id;
+}
+
+function pauseOfEffect(entries: readonly ThreadEntry[], effectId: string) {
+  const start = entries.findIndex(
+    (entry) => entry.type === "effect.requested" && entry.payload.effectId === effectId,
+  );
+  if (start < 0) return undefined;
+  const { answerOf, callOf } = toolAnswers(entries);
+  for (const entry of entries.slice(start + 1)) {
+    if (entry.type === "effect.requested") return undefined;
+    const pause =
+      (entry.type === "tool.result" && entry.payload.output === pausedOutput("approval")) ||
+      (entry.type === "subagent" && isHelperPauseResult(entry.payload.result));
+    if (!pause || (entry.type !== "tool.result" && entry.type !== "subagent")) continue;
+    const call = callOf.get(entry.id);
+    return { pause: entry, answer: call === undefined ? undefined : answerOf.get(call) };
+  }
+  return undefined;
 }
 
 function outputOf(answer: ToolAnswer): string {

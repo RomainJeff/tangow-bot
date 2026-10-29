@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { EncryptedSecretStore } from "@rakazo/adapters";
 import { latestCard } from "../index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "../model-emulator.js";
+import { prepares } from "../model-emulator.js";
 import { call, finish, liveRun } from "./run.js";
 import type { Lane } from "./session.js";
 
@@ -68,6 +69,7 @@ export const laneNativeCompaction: Lane = {
       },
       steps: [
         call("approval", "publish_note", { title: ANCHOR }),
+        prepares(),
         { expect() {}, response: { type: "text", text: "Waiting for approval." } },
         ...filling,
         {

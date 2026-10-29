@@ -34,6 +34,7 @@ import {
   type ComposerMention,
   canEditSpawnBotCard,
   drawsNothing,
+  editedWaitingDraft,
   failureSinceLabel,
   isApprovalAskBlock,
   isAsideOnlyMessage,
@@ -61,6 +62,7 @@ import {
   threadTimeMarkerLabel,
   truncateSlashDescription,
   unshownRunReport,
+  waitingAnswerTarget,
 } from "@rakazo/core";
 import { ambientFloor, botAccentOn, motion, radii, sizes } from "@rakazo/ui-tokens";
 import * as Clipboard from "expo-clipboard";
@@ -114,6 +116,7 @@ import { ComposerLinkPreview } from "../components/composer-link-preview";
 import { ComposerAttachBubble, ComposerShell } from "../components/composer-shell";
 import { ComputerCard } from "../components/computer-card";
 import { DictationPreview } from "../components/dictation-preview";
+import { DraftCard } from "../components/draft-card";
 import { FramedBlock } from "../components/framed-block";
 import { useReduceTransparency } from "../components/glass";
 import { GroupAvatar } from "../components/group-avatar";
@@ -178,6 +181,8 @@ import { botMessageCard } from "../lib/bot-message-card";
 import { noteBotRunEnded } from "../lib/bot-page-state";
 import { CHAT_MOTION } from "../lib/chat-motion";
 import { useDebugMode } from "../lib/debug-mode";
+import type { CardEdits } from "../lib/draft-edit";
+import { draftEdit, dropDraftEdit, syncDraftEdit } from "../lib/draft-edit";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
 import { commitHaptic, selectionHaptic, sendHaptic, successHaptic } from "../lib/haptics";
 import { dateLocaleForUi, t, useI18n } from "../lib/i18n";
@@ -214,7 +219,6 @@ import { reactionPopKey, useReactionPops } from "../lib/reaction-pop";
 import { threadRefreshDelayMs } from "../lib/refresh";
 import { isViewedRunLine, originSession } from "../lib/session-sheet";
 import { closeSheet, openSheet } from "../lib/sheet";
-import type { SpawnBotEdits } from "../lib/spawn-bot-edit";
 import { openSpawnBotEdit, syncSpawnBotEdit } from "../lib/spawn-bot-edit";
 import { hexWithAlpha } from "../lib/stop-contour-math";
 import { shadowsForAppearance } from "../lib/theme";
@@ -1502,6 +1506,7 @@ function Thread() {
         rewindApplied = true;
       }
       const clientNonce = newClientNonce();
+      const replaced = reroutedToGroup ? undefined : editedWaitingDraft(view, draftEdit);
       await rpc(
         "threads/send",
         groupTarget
@@ -1515,6 +1520,7 @@ function Thread() {
                 ? undefined
                 : composerSnapshot.replyTarget?.messageId,
               linkPreview: withoutLinkPreview ? (false as const) : undefined,
+              draft: replaced?.draft,
             }
           : {
               botId: botTarget!,
@@ -1524,9 +1530,11 @@ function Thread() {
               artifactIds: artifactIds.length ? artifactIds : undefined,
               replyToMessageId: composerSnapshot.replyTarget?.messageId,
               linkPreview: withoutLinkPreview ? (false as const) : undefined,
+              draft: replaced?.draft,
             },
       );
       delivered = true;
+      if (replaced) dropDraftEdit(replaced.itemId);
       dropDelayedSetup();
       void loadSessionToken()
         .then((token) => resumeLiveNotifications(currentApiBase(), token, selectedSpaceId() ?? ""))
@@ -1608,7 +1616,7 @@ function Thread() {
   }
 
   const answerCard = useCallback(
-    async (card: CardTarget, answer: string, edits?: SpawnBotEdits) => {
+    async (card: CardTarget, answer: string, edits?: CardEdits) => {
       const targetBotId = botId;
       const targetGroupId = groupId;
       if (!targetBotId && !targetGroupId) return;
@@ -1634,10 +1642,9 @@ function Thread() {
     [botId, groupId],
   );
   const answerMessage = useCallback(
-    async (message: MobileMessage, answer: string, edits?: SpawnBotEdits) => {
-      const card = waitingRef.current;
-      if (card?.itemId !== message.id) return;
-      await answerCard({ runId: card.runId, entryId: card.entryId }, answer, edits);
+    async (item: { id: string }, answer: string, edits?: CardEdits) => {
+      const target = waitingAnswerTarget(waitingRef.current, item.id);
+      if (target) await answerCard(target, answer, edits);
     },
     [answerCard],
   );
@@ -1723,7 +1730,10 @@ function Thread() {
 
   const answerableAskMessageId = waiting?.itemId ?? null;
   // The edit sheet lives only while its card can still be answered.
-  useEffect(() => syncSpawnBotEdit(answerableAskMessageId), [answerableAskMessageId]);
+  useEffect(() => {
+    syncSpawnBotEdit(answerableAskMessageId);
+    if (threadKey) syncDraftEdit(threadKey, answerableAskMessageId);
+  }, [threadKey, answerableAskMessageId]);
   // Only the run's owner may edit a Create bot card; until this loads, nobody gets Edit.
   const [viewerUserId, setViewerUserId] = useState<string>();
   useEffect(() => {
@@ -2096,7 +2106,7 @@ function Thread() {
               isNew={isNew}
               canAnswer={item.id === answerableAskMessageId}
               viewerUserId={viewerUserId}
-              onAnswer={answerCard}
+              onAnswer={answerMessage}
             />
           )}
         </View>
@@ -3435,7 +3445,7 @@ const MessageBubble = memo(function MessageBubble({
   /** This message is the computer card of a run still waiting for the user's screen. */
   takeoverLive?: boolean;
   viewerUserId?: string;
-  onAnswer: (message: MobileMessage, answer: string, edits?: SpawnBotEdits) => Promise<void>;
+  onAnswer: (message: MobileMessage, answer: string, edits?: CardEdits) => Promise<void>;
   onOpenBot: (botId: string, name: string) => void;
   onOpenComputer?: (botId: string) => void;
   onPreviewMarkdown: (target: MarkdownArtifactPreviewTarget) => void;
@@ -3646,6 +3656,7 @@ const MessageBubble = memo(function MessageBubble({
     return (
       <View style={{ gap: 8, width: "100%" }}>
         <ApprovalCard
+          threadKey={groupId ?? botId}
           block={askBlock}
           cardId={message.id}
           cardBotId={cardBotId}
@@ -3855,6 +3866,7 @@ const MessageBubble = memo(function MessageBubble({
 });
 
 function ApprovalCard({
+  threadKey,
   block,
   cardId,
   cardBotId,
@@ -3863,17 +3875,34 @@ function ApprovalCard({
   actionProps,
   onAnswer,
 }: {
+  /** The thread the card shows in: a draft's Edit message sheet belongs to it. */
+  threadKey: string;
   block: Extract<MessageBlock, { kind: "ask" }>;
   cardId: string;
   cardBotId: string;
   canAnswer: boolean;
   viewerUserId?: string;
   actionProps: MessageActionProps;
-  onAnswer: (answer: string, edits?: SpawnBotEdits) => Promise<void>;
+  onAnswer: (answer: string, edits?: CardEdits) => Promise<void>;
 }) {
   const tokens = mobileTokens();
   const { t } = useI18n();
   const router = useRouter();
+  if (block.draft) {
+    return (
+      <DraftCard
+        key={cardId}
+        threadKey={threadKey}
+        block={block}
+        draft={block.draft}
+        messageId={cardId}
+        canAnswer={canAnswer}
+        viewerUserId={viewerUserId}
+        onAnswer={onAnswer}
+        onReconnect={() => router.push("/integrations")}
+      />
+    );
+  }
   const approval = isApprovalAskBlock(block);
   const routineCard = approval ? block.routine : undefined;
   const header = approval && !routineCard ? { who: t("Needs your call") } : undefined;
@@ -3984,7 +4013,7 @@ const ItemRow = memo(function ItemRow({
   isNew: boolean;
   canAnswer: boolean;
   viewerUserId?: string;
-  onAnswer?: (card: CardTarget, answer: string, edits?: SpawnBotEdits) => Promise<void>;
+  onAnswer?: (item: { id: string }, answer: string, edits?: CardEdits) => Promise<void>;
   readOnly?: boolean;
 }) {
   const tokens = mobileTokens();
@@ -4111,18 +4140,19 @@ const ItemRow = memo(function ItemRow({
       case "divider":
         return <DividerRow reason={item.reason} />;
       case "effect": {
-        const { card, runId } = item;
+        const { card } = item;
         if (!card) return null;
         return (
           <ApprovalCard
+            threadKey={groupId ?? botId}
             block={card}
             cardId={item.id}
             cardBotId={item.botId ?? botId}
-            canAnswer={!readOnly && canAnswer && Boolean(runId)}
+            canAnswer={!readOnly && canAnswer}
             viewerUserId={viewerUserId}
             actionProps={NO_ACTIONS}
             onAnswer={async (answer, edits) => {
-              if (runId) await onAnswer?.({ runId, entryId: item.id }, answer, edits);
+              await onAnswer?.(item, answer, edits);
             }}
           />
         );

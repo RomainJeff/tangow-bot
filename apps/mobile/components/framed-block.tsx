@@ -22,13 +22,17 @@ export interface FramedBlockHeader {
   who: ReactNode;
   /** Ink dot in front of the header — the bot needs an answer. */
   dot?: boolean;
+  /** The logo of the app the decision acts in, in front of `who`. */
+  icon?: ReactNode;
+  /** A short state at the end of the header line, such as "Not sent". */
+  status?: ReactNode;
 }
 
 export interface FramedBlockProps extends Omit<ViewProps, "children"> {
   /** Omitted when the row above already names who is asking (a bot row's
    * author line) — the question then opens the card with no header line. */
   header?: FramedBlockHeader;
-  /** Above the question, on its left edge: a stack's answered questions. */
+  /** Above the question, on its left edge: a stack's answered questions, or a sent mail. */
   lead?: ReactNode;
   /** Omitted on a stack's recap, which is only its lead and its action. */
   question?: ReactNode;
@@ -43,6 +47,11 @@ export interface FramedBlockProps extends Omit<ViewProps, "children"> {
    * and the actions are gone and only this line remains.
    */
   answered?: ReactNode;
+  /**
+   * What leads the answered line in place of the check, such as the app a draft was for. `null`
+   * leaves nothing in front, for an answer that draws its own.
+   */
+  answeredMark?: ReactNode;
 }
 
 /**
@@ -67,6 +76,7 @@ export function FramedBlock({
   children,
   actions,
   answered,
+  answeredMark,
   style,
   ...props
 }: FramedBlockProps) {
@@ -107,9 +117,11 @@ export function FramedBlock({
       {header ? (
         <View style={styles.header}>
           {header.dot ? <View accessibilityElementsHidden style={styles.dot} /> : null}
+          {header.icon}
           <Text numberOfLines={1} style={styles.headerText}>
             {header.who}
           </Text>
+          {header.status ? <View style={styles.headerStatus}>{header.status}</View> : null}
         </View>
       ) : null}
       {lead ? <View>{lead}</View> : null}
@@ -130,7 +142,11 @@ export function FramedBlock({
           }
           style={styles.answered}
         >
-          <AnsweredCheck color={tokens.foreground} animate={didTransition && !reducedMotion} />
+          {answeredMark === undefined ? (
+            <AnsweredCheck color={tokens.foreground} animate={didTransition && !reducedMotion} />
+          ) : (
+            answeredMark
+          )}
           {typeof answered === "string" ? (
             <Text style={styles.answeredText}>{answered}</Text>
           ) : (
@@ -181,6 +197,7 @@ function createFramedBlockStyles() {
       borderRadius: 3,
       backgroundColor: tokens.foreground,
     },
+    headerStatus: { marginStart: "auto" },
     headerText: {
       flexShrink: 1,
       color: tokens.mutedForeground,

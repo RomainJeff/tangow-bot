@@ -392,6 +392,12 @@ describeJourneys("required product journeys", () => {
     expect(chiefFile.content).toContain("isolation-ok");
     const computer = await rpc<{ state: string }>(app, ada, "computer/status", { botId: chief.id });
     expect(computer.state).toBe("running");
+    await waitForDatabase(
+      async () =>
+        (await prisma.computerExecutionLease.count({
+          where: { botId: coder.id, expiresAt: { gt: new Date() } },
+        })) === 0,
+    );
     await rpc(app, ada, "computer/stop", { botId: chief.id });
     const persisted = await rpc<{ content: string }>(app, ada, "computer/readFile", {
       botId: chief.id,
@@ -587,20 +593,16 @@ describeJourneys("required product journeys", () => {
     ]);
     expect(writerSnap.run?.status).toBe("completed");
     expect(researcherSnap.run?.status).toBe("completed");
-    expect(
-      (
-        await rpc<{ busyBotName: string | null }>(app, cookie, "computer/status", {
-          botId: writer.id,
+    for (const bot of [writer, researcher]) {
+      await expect
+        .poll(async () => {
+          const status = await rpc<{ busyBotName: string | null }>(app, cookie, "computer/status", {
+            botId: bot.id,
+          });
+          return status.busyBotName;
         })
-      ).busyBotName,
-    ).toBeNull();
-    expect(
-      (
-        await rpc<{ busyBotName: string | null }>(app, cookie, "computer/status", {
-          botId: researcher.id,
-        })
-      ).busyBotName,
-    ).toBeNull();
+        .toBeNull();
+    }
     const writerScreen = await rpc<{ url: string | null }>(app, cookie, "computer/screenUrl", {
       botId: writer.id,
     });

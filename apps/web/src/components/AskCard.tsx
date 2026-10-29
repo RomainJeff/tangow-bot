@@ -1,7 +1,7 @@
 import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown } from "@rakazo/chat-ui/web";
-import type { ThreadMessage } from "@rakazo/contracts";
+import type { AskDraftEdits, ThreadMessage } from "@rakazo/contracts";
 import { BOT_NAME_MAX_LENGTH, SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH } from "@rakazo/contracts";
 import {
   askFormOf,
@@ -19,6 +19,7 @@ import { Fragment, useId, useState } from "react";
 import { Link } from "react-router-dom";
 import { approvalActionLabel } from "../lib/approval-labels";
 import { QuestionCard } from "./ask/QuestionCard";
+import { DraftCard } from "./DraftCard";
 
 const DETAIL_CLASS =
   "max-h-72 overflow-auto rounded-card bg-well px-4 py-3 font-mono text-mono whitespace-pre-wrap break-words text-muted-foreground";
@@ -26,7 +27,8 @@ const DETAIL_CLASS =
 const FIELD_CLASS = "rounded-card border-border bg-well px-3 dark:bg-well";
 
 export type AskBlock = Extract<ThreadMessage["blocks"][number], { kind: "ask" }>;
-export type SpawnBotCardEdits = NonNullable<ReturnType<typeof spawnBotEdits>>;
+/** What a card's owner changed before Send: a Create bot card's fields, or a mail draft's message. */
+export type CardEdits = NonNullable<ReturnType<typeof spawnBotEdits>> | AskDraftEdits;
 
 /** The field a server refusal is about, from its text; both when it cannot be told. */
 function invalidBotFields(error: string | null): { name: boolean; instructions: boolean } {
@@ -153,15 +155,18 @@ export function AskCard({
   onAnswer,
   messageId,
   botId,
+  onReconnect,
 }: {
   block: AskBlock;
   canAnswer: boolean;
   /** Only the run's owner may edit a Create bot card. */
   viewerUserId?: string;
-  onAnswer: (text: string, edits?: SpawnBotCardEdits) => Promise<void>;
+  onAnswer: (text: string, edits?: CardEdits) => Promise<void>;
   messageId: string;
   /** The bot that posted the card, whose page a routine card links to. */
   botId?: string;
+  /** Opens where a disconnected app is reconnected, for a mail draft that could not leave. */
+  onReconnect?: () => void;
 }) {
   const { t } = useLingui();
   const fieldId = useId();
@@ -180,7 +185,7 @@ export function AskCard({
   const secretInput = isSecretAskBlock(block);
   const secretLabel = secretFieldLabel(block.purpose);
 
-  async function submitAnswer(value: string, edits?: SpawnBotCardEdits) {
+  async function submitAnswer(value: string, edits?: CardEdits) {
     if (submitting) return;
     if (secretInput ? value.length === 0 : !value.trim()) return;
     const submitValue = secretInput ? value : value.trim();
@@ -196,6 +201,20 @@ export function AskCard({
     } finally {
       setPendingAction(null);
     }
+  }
+
+  if (block.draft) {
+    return (
+      <DraftCard
+        key={messageId}
+        block={{ ...block, draft: block.draft }}
+        canAnswer={canAnswer}
+        viewerUserId={viewerUserId}
+        onAnswer={onAnswer}
+        onReconnect={onReconnect}
+        messageId={messageId}
+      />
+    );
   }
 
   const form = askFormOf(block);

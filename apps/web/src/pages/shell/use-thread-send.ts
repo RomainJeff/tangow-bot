@@ -3,13 +3,15 @@ import type { MessageReaction } from "@rakazo/contracts";
 import type { ComposerMention, ComposerPageHead } from "@rakazo/core";
 import {
   attachmentsForThread,
+  editedWaitingDraft,
   inferAttachmentMimeType,
   resolveComposerSendPlan,
 } from "@rakazo/core";
 import { useCallback, useState } from "react";
 import type { NavigateFunction } from "react-router-dom";
-import type { SpawnBotCardEdits } from "../../components/AskCard";
+import type { CardEdits } from "../../components/AskCard";
 import { requestBrowserNotificationPermission } from "../../lib/browser-notifications";
+import { draftEdits } from "../../lib/draft-edits";
 import { revokePendingAttachmentPreviews } from "../../lib/pending-attachments";
 import { rpc } from "../../lib/rpc";
 import { applyThreadSendReceipt, clearActiveThreadRuns } from "../../lib/thread-events";
@@ -73,12 +75,12 @@ export function useThreadSend({
   const [sending, setSending] = useState(false);
 
   const answerCard = useCallback(
-    async (target: CardAnswerTarget, text: string, edits?: SpawnBotCardEdits) => {
-      const botId = activeBotId.current;
-      const groupId = activeGroupId.current;
-      if (!botId && !groupId) return;
+    async (target: CardAnswerTarget, text: string, edits?: CardEdits) => {
+      const { thread } = target;
+      const groupId = "groupId" in thread ? thread.groupId : undefined;
+      const botId = "botId" in thread ? thread.botId : undefined;
       await rpc.threads.answer({
-        ...(groupId ? { groupId } : { botId: botId! }),
+        ...thread,
         runId: target.runId,
         messageId: target.messageId,
         answer: text,
@@ -154,6 +156,7 @@ export function useThreadSend({
       setSendError(null);
       // Only after successful engagement so a failed upload/send keeps the setup card.
       const dropDelayedSetup = () => cancelFocusPromptFor(initialBotTarget);
+      let replaced: ReturnType<typeof editedWaitingDraft>;
       try {
         if (plan.shouldRunRoutines) {
           const sendNonce = newClientNonce();
@@ -208,6 +211,9 @@ export function useThreadSend({
           );
         }
         const clientNonce = newClientNonce();
+        replaced = reroutedToGroup
+          ? undefined
+          : editedWaitingDraft(viewRef.current, (itemId) => draftEdits.get(itemId));
         if (groupTarget) {
           await rpc.threads.send({
             groupId: groupTarget,
@@ -217,6 +223,7 @@ export function useThreadSend({
             artifactIds: artifactIds.length ? artifactIds : undefined,
             replyToMessageId: reroutedToGroup ? undefined : replyToMessageId,
             linkPreview: options.linkPreview,
+            draft: replaced?.draft,
           });
         } else if (botTarget) {
           const sent = await rpc.threads.send({
@@ -227,6 +234,7 @@ export function useThreadSend({
             artifactIds: artifactIds.length ? artifactIds : undefined,
             replyToMessageId,
             linkPreview: options.linkPreview,
+            draft: replaced?.draft,
           });
           if (activeBotId.current === botTarget) {
             updateSnapshot((current) =>
@@ -242,6 +250,9 @@ export function useThreadSend({
             );
           }
         }
+        if (replaced) draftEdits.delete(replaced.itemId);
+        // The server took the reply: a later failure, such as the refresh, has nothing to hand back.
+        replaced = undefined;
         dropDelayedSetup();
         setReplyTarget(null);
         cancelRewind();
@@ -264,8 +275,9 @@ export function useThreadSend({
         if (groupTarget) await refreshGroupThreadRef.current(groupTarget);
         else if (botTarget) await refreshThreadRef.current(botTarget);
       } catch (error) {
-        // The composer already dropped the text on send, so hand it back for another try.
-        if (rewindMessageId) {
+        // The composer already dropped the text on send, so hand it back for another try: after an
+        // edit, or a reply the server refused because no waiting draft took its text.
+        if (rewindMessageId || replaced) {
           // The person had taken the link preview off this message: the retry keeps it off.
           setRewindDraft({
             key: `retry:${newClientNonce()}`,

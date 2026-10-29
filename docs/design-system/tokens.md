@@ -68,6 +68,10 @@ Stop contour is drawn.
 
 Status starts in ink. A success check is grey
 (`mutedForeground`), since a green check next to a green bot reads as the bot.
+The one exception is a sent outbound draft: its confirmation is a 28 px
+(32 pt on iPhone) `success` disc with a `primaryForeground` check, the leading element of its
+settled card, because the message left the product and that is the one result
+the person must not miss.
 `destructive` marks a failure, and the controls that end or delete something
 (End call, a delete in a menu), and nothing else. "Needs you" carries the
 decision card's ink dot, never an amber pill.

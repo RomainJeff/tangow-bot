@@ -7,7 +7,7 @@ import type { GroupAvatarMember } from "@rakazo/ui-web";
 import { cn } from "@rakazo/ui-web";
 import type { RefObject } from "react";
 import { Fragment, memo, useEffect, useMemo, useRef, useState } from "react";
-import type { SpawnBotCardEdits } from "../../components/AskCard";
+import type { CardEdits } from "../../components/AskCard";
 import { ActiveBotGlyph } from "../../components/ai/CollaborationMarker";
 import type { ArtifactTarget } from "../../lib/artifact-open";
 import { useDebugMode } from "../../lib/debug-mode";
@@ -69,6 +69,7 @@ export const Transcript = memo(function Transcript({
   onBotChanged,
   onAddRoutine,
   onOpenSkill,
+  onOpenIntegrations,
   voiceReady,
   speakingMessageId,
   onSpeak,
@@ -94,7 +95,7 @@ export const Transcript = memo(function Transcript({
   workingStartedAt?: number;
   onLoadOlder: () => void | Promise<void>;
   onOpenBot: (botId: string, messageId?: string) => void;
-  onAnswer: (target: CardAnswerTarget, text: string, edits?: SpawnBotCardEdits) => Promise<void>;
+  onAnswer: (target: CardAnswerTarget, text: string, edits?: CardEdits) => Promise<void>;
   onReply: (message: MessageItem) => void;
   onEdit: (message: MessageItem) => void;
   rewindFromItemId: string | null;
@@ -107,6 +108,8 @@ export const Transcript = memo(function Transcript({
   onBotChanged: () => Promise<void>;
   onAddRoutine: (name: string, prompt: string) => void;
   onOpenSkill?: (skill: SkillSourceBlock) => void;
+  /** Opens the integrations screen, where a disconnected app is reconnected. */
+  onOpenIntegrations?: () => void;
   voiceReady: boolean;
   speakingMessageId: string | null;
   onSpeak: (message: MessageItem) => void;
@@ -172,6 +175,7 @@ export const Transcript = memo(function Transcript({
       onBotChanged,
       onAddRoutine,
       onOpenSkill,
+      onOpenIntegrations,
       messageOfEntry: (entryId) => {
         const itemId = rowOf.get(entryId);
         return itemId ? messageById.get(itemId) : undefined;
@@ -194,6 +198,7 @@ export const Transcript = memo(function Transcript({
     onBotChanged,
     onAddRoutine,
     onOpenSkill,
+    onOpenIntegrations,
     messages,
     rowOf,
   ]);
@@ -227,10 +232,11 @@ export const Transcript = memo(function Transcript({
         ref={scrollRef}
         data-testid="transcript"
         {...scrollerHandlers}
-        // px-3 keeps a card's soft drop shadow (shadow-card reaches ~14px sideways and
-        // ~26px down) from being clipped by this scroll container's overflow or hidden under
-        // the rk-scroll scrollbar on the right.
-        className="rk-scroll rk-thread-mask flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-3 pt-21"
+        // The scroller spans the column (-mx cancels its padding) and pads back in, so the cards
+        // keep their place while a card's shadow has room inside this overflow instead of being cut:
+        // 26px sideways, past the 20px shadow-card reaches in light and the 28px its blur radius
+        // names in dark, where the visible part ends well short of it.
+        className="rk-scroll rk-thread-mask flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto -mx-3.5 px-6.5 pt-21"
       >
         {olderCursor != null ? (
           <button

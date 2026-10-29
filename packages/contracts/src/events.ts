@@ -109,6 +109,89 @@ export const ASK_DISMISSED_ANSWER = "dismissed";
 export const ProposalKind = z.enum(["routine"]);
 export type ProposalKind = z.infer<typeof ProposalKind>;
 
+/** The longest message body a draft card sends. */
+export const ASK_DRAFT_TEXT_MAX_LENGTH = 20_000;
+export const ASK_DRAFT_SUBJECT_MAX_LENGTH = 1_000;
+/** No mail address is longer. */
+export const ASK_DRAFT_ADDRESS_MAX_LENGTH = 320;
+
+export const AskDraftRecipient = z.object({
+  role: z.enum(["to", "cc", "bcc"]),
+  address: z.string(),
+});
+export type AskDraftRecipient = z.infer<typeof AskDraftRecipient>;
+
+/** The most addresses a recipient line takes, or null when any number fits. */
+const AskDraftRoom = z.number().int().positive().nullable();
+
+/**
+ * What the user changed on a mail draft before it leaves: its text, its whole recipient list, its
+ * subject. The bounds refuse an enormous edit before any lock; the server applies the real limits.
+ */
+export const AskDraftEdits = z.object({
+  text: z.string().max(ASK_DRAFT_TEXT_MAX_LENGTH).optional(),
+  recipients: z
+    .array(
+      AskDraftRecipient.extend({ address: z.string().max(ASK_DRAFT_ADDRESS_MAX_LENGTH) }).strict(),
+    )
+    .max(1_000)
+    .optional(),
+  subject: z.string().max(ASK_DRAFT_SUBJECT_MAX_LENGTH).optional(),
+});
+export type AskDraftEdits = z.infer<typeof AskDraftEdits>;
+
+/** A message the bot proposes to send: the card shows it as it will leave. */
+export const AskDraft = z.object({
+  app: z.object({
+    name: z.string(),
+    logo: z.string().nullable(),
+    /** The sending account, when the send names it. */
+    account: z.string().optional(),
+  }),
+  recipients: z.array(AskDraftRecipient).min(1),
+  /** A chat message to one conversation, which its `recipients` hold. Absent on mail. */
+  chat: z.literal(true).optional().catch(undefined),
+  subject: z.string().optional(),
+  /**
+   * The lines the user may edit besides the text, each offered even when empty. Absent on a draft
+   * whose recipients and subject stay as the bot wrote them.
+   */
+  fields: z
+    .object({
+      to: AskDraftRoom,
+      cc: AskDraftRoom.optional(),
+      bcc: AskDraftRoom.optional(),
+      subject: z.literal(true).optional(),
+    })
+    .optional()
+    .catch(undefined),
+  body: z.string(),
+  /** Why the last Send did not go out; `disconnected` when the app needs reconnecting. */
+  failure: z.object({ reason: z.string(), disconnected: z.literal(true).optional() }).optional(),
+  /** When it left, and whether the user changed the bot's message first. */
+  sent: z.object({ at: z.string(), edited: z.boolean() }).optional(),
+  /** The run's owner, the only person the server lets send, edit or discard the draft. */
+  owner: z.object({ userId: z.string(), name: z.string().optional() }).optional().catch(undefined),
+});
+export type AskDraft = z.infer<typeof AskDraft>;
+export type AskDraftFields = NonNullable<AskDraft["fields"]>;
+
+export type AskDraftState = "pending" | "sending" | "sent" | "not_sent" | "discarded" | "replaced";
+
+/** Where a draft card stands, read from the card alone. */
+export function askDraftState(card: {
+  status?: "pending" | "answered";
+  answer?: string;
+  failed?: true;
+  draft?: Pick<AskDraft, "failure" | "sent">;
+}): AskDraftState {
+  if (card.status !== "answered") return card.draft?.failure ? "not_sent" : "pending";
+  if (card.answer === ASK_DISMISSED_ANSWER) return "replaced";
+  if (card.answer !== "allow") return "discarded";
+  if (card.draft?.sent) return "sent";
+  return card.failed ? "not_sent" : "sending";
+}
+
 export const AskBlock = z.object({
   kind: z.literal("ask"),
   text: z.string(),
@@ -159,6 +242,8 @@ export const AskBlock = z.object({
    * `answer`, so nothing the user typed in the app is in it.
    */
   confirms: z.enum(["created", "updated"]).optional(),
+  /** An outbound mail: a draft the user sends. A shape this client cannot read shows as the plain card. */
+  draft: AskDraft.optional().catch(undefined),
 });
 
 export const CHOICE_DISMISSED_ANSWER_ID = "_dismissed";
@@ -255,6 +340,9 @@ export const MessageBlock = z.discriminatedUnion("kind", [
               /** Provider tool-call id: lets a later turn replay the call as a real tool
                   turn. Absent on blocks recorded before it was stored. */
               id: z.string().optional(),
+              /** The result is the outcome of a card the call raised, which a short replay of
+                  past steps reads whole: it holds what the person decided or wrote. */
+              outcome: z.literal(true).optional(),
               /** The helper session a `run_subagent` call ran, once its answer landed. Branded
                   as `SessionId` here, since `session-log.ts` imports this module. */
               sessionId: Id.brand<"SessionId">().optional(),

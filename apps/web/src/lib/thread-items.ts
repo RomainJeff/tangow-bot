@@ -1,9 +1,11 @@
 import type { SessionId, ThreadItem } from "@rakazo/contracts";
+import type { ArtifactTarget } from "./artifact-open";
 
 export type ItemOf<K extends ThreadItem["kind"]> = Extract<ThreadItem, { kind: K }>;
 export type MessageItem = ItemOf<"message">;
 
-export type CardAnswerTarget = { runId: string; messageId: string };
+/** Where a card's answer goes, bound when the card shows: switching threads never redirects it. */
+export type CardAnswerTarget = { thread: ArtifactTarget; runId: string; messageId: string };
 
 export type SessionViewTarget =
   | { kind: "session"; sessionId: SessionId; title: string }

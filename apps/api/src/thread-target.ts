@@ -27,6 +27,7 @@ import {
   resolveGroupTargetBotIds,
   runFailureError,
 } from "@rakazo/core";
+import type { DraftLeft } from "@rakazo/db";
 import {
   blocksOf,
   browserApprovalCheckpointOf,
@@ -724,6 +725,7 @@ export async function sendThreadMessage(
     replyQuote?: string;
     clientNonce?: string;
     linkPreview?: false;
+    draft?: DraftLeft;
   },
 ) {
   const existing = await replayExistingSend(deps, target.threadId, input.clientNonce);
@@ -764,14 +766,7 @@ export async function sendThreadMessage(
         const blocks = buildUserMessageBlocks(input.text, attachmentBlocks, {
           linkPreview: input.linkPreview,
         });
-        const message = await createThreadMessageInTransaction(tx, {
-          threadId: target.threadId,
-          role: "user",
-          blocks,
-          replyToMessageId: input.replyToMessageId,
-          replyQuote,
-          clientNonce: input.clientNonce,
-        });
+        await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
         const activeRuns = await tx.run.findMany({
           where: {
             threadId: target.threadId,
@@ -790,15 +785,29 @@ export async function sendThreadMessage(
         const waitingRun = soleActiveRun?.status === "waiting_input" ? soleActiveRun : undefined;
         // A card the bot proposed on its own is put away by the reply, which then steers the run;
         // when a tap answered it first, the reply steers the run that tap resumed.
-        const dismissal =
+        const putAway =
           waitingRun &&
           (await dismissProposalWithTextInTransaction(tx, {
             spaceId: actor.spaceId,
             threadId: target.threadId,
             runId: waitingRun.id,
             userId: actor.userId,
+            draft: input.draft,
           }));
-        if (waitingRun && dismissal && dismissal.outcome !== "keep") {
+        const message = await createThreadMessageInTransaction(tx, {
+          threadId: target.threadId,
+          role: "user",
+          blocks,
+          replyToMessageId: input.replyToMessageId,
+          replyQuote,
+          clientNonce: input.clientNonce,
+        });
+
+        // Refused only while a card still waits that the text cannot replace.
+        if (input.draft && waitingRun && (!putAway || putAway.outcome === "keep")) {
+          throw new ORPCError("CONFLICT", { message: "This draft is no longer waiting." });
+        }
+        if (waitingRun && putAway && putAway.outcome !== "keep") {
           await tx.steeringMessage.create({
             data: {
               messageId: message.id,
@@ -809,7 +818,7 @@ export async function sendThreadMessage(
           });
           return {
             message,
-            runs: [{ id: waitingRun.id, taskId: waitingRun.taskId, status: dismissal.status }],
+            runs: [{ id: waitingRun.id, taskId: waitingRun.taskId, status: putAway.status }],
             eventSeq: await threadEventSeq(tx, target.threadId),
           };
         }
@@ -914,16 +923,7 @@ export async function sendThreadMessage(
       // Each targeted bot gets a run in turn, so the first run is always the first target's.
       const eventBotId = targetBotIds[0];
       if (!eventBotId) throw new IsolationError("Group send did not resolve a target");
-      const message = await createThreadMessageInTransaction(tx, {
-        threadId: target.threadId,
-        role: "user",
-        blocks,
-        replyToMessageId: input.replyToMessageId,
-        replyQuote,
-        clientNonce: input.clientNonce,
-        feedBotId: eventBotId,
-        targets: targetBotIds,
-      });
+      await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
       const activeRuns = await tx.run.findMany({
         where: {
           threadId: target.threadId,
@@ -939,6 +939,31 @@ export async function sendThreadMessage(
         if (botRuns) botRuns.push(run);
         else activeRunsByBotId.set(run.botId, [run]);
       }
+      const putAwayStatuses = new Map<string, string>();
+      for (const botId of targetBotIds) {
+        const botRuns = activeRunsByBotId.get(botId) ?? [];
+        const soleActiveRun = botRuns.length === 1 ? botRuns[0] : undefined;
+        if (soleActiveRun?.status !== "waiting_input") continue;
+        const dismissal = await dismissProposalWithTextInTransaction(tx, {
+          spaceId: actor.spaceId,
+          threadId: target.threadId,
+          runId: soleActiveRun.id,
+          userId: actor.userId,
+          draft: input.draft,
+          draftsOnly: true,
+        });
+        if (dismissal.outcome !== "keep") putAwayStatuses.set(botId, dismissal.status);
+      }
+      const message = await createThreadMessageInTransaction(tx, {
+        threadId: target.threadId,
+        role: "user",
+        blocks,
+        replyToMessageId: input.replyToMessageId,
+        replyQuote,
+        clientNonce: input.clientNonce,
+        feedBotId: eventBotId,
+        targets: targetBotIds,
+      });
       // Dispatch per bot in this one transaction (spec ask-answer-via-composer, PR 1): each
       // targeted bot is resolved on its own state — an ask_user run resolves, a steerable run
       // gets steered, an idle bot gets a new run — so one bot's pending ask never blocks the
@@ -948,11 +973,21 @@ export async function sendThreadMessage(
       const conversationRunIds = await findConversationRunIds(tx, activeRuns);
       const runs: Array<{ id: string; taskId: string; botId: string; status: string }> = [];
       const createdRuns: typeof runs = [];
+      let draftPutAway = false;
       for (const botId of targetBotIds) {
         const botRuns = activeRunsByBotId.get(botId) ?? [];
         const active = botRuns.find((run) => conversationRunIds.has(run.id));
         const soleActiveRun = botRuns.length === 1 ? botRuns[0] : undefined;
         if (soleActiveRun?.status === "waiting_input") {
+          const putAwayStatus = putAwayStatuses.get(botId);
+          if (putAwayStatus) {
+            await tx.steeringMessage.create({
+              data: { messageId: message.id, botId, userId: actor.userId, runId: soleActiveRun.id },
+            });
+            draftPutAway = true;
+            runs.push({ ...soleActiveRun, status: putAwayStatus });
+            continue;
+          }
           const resolution = await resumeAskWithComposerTextInTransaction(tx, {
             spaceId: actor.spaceId,
             threadId: target.threadId,
@@ -1009,6 +1044,10 @@ export async function sendThreadMessage(
         });
         runs.push(run);
         createdRuns.push(run);
+      }
+      // A draft's text the reply did not put away names a card that waits, or no longer does.
+      if (input.draft && !draftPutAway) {
+        throw new ORPCError("CONFLICT", { message: "This draft is no longer waiting." });
       }
       if (createdRuns.length) {
         await cancelSupersededQueuedRuns(tx, {

@@ -1,4 +1,5 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { TSchema } from "@earendil-works/pi-ai";
 import { normalizeContext } from "@earendil-works/pi-ai";
 import type {
   AdapterContext,
@@ -15,9 +16,11 @@ import { billedPromptTokens, providerCacheTokens } from "./pi-runtime-limits.js"
 import type { TraceExporter } from "./trace-export.js";
 
 /**
- * One model call from the controller, without tools: what compaction, the team-chat judge and
- * auto-review ask of a model. Agent runs go through a worker. Throws when the call fails. With an
- * exporter, each call is exported as a trace; without one, nothing is recorded.
+ * One model call from the controller, without tools: what compaction, the team-chat judge,
+ * auto-review and draft cards ask of a model. Agent runs go through a worker. A request's answer
+ * schemas are offered as tools the model may fill in, constrained to their schema where the
+ * provider supports it; a filled one comes back on `done`, never executed. Throws when the call
+ * fails. With an exporter, each call is exported as a trace; without one, nothing is recorded.
  */
 export class ModelCallRuntime implements AgentRuntime {
   constructor(private readonly trace: { exporter?: TraceExporter; serviceName?: string } = {}) {}
@@ -38,11 +41,18 @@ export class ModelCallRuntime implements AgentRuntime {
     context?: Partial<AdapterContext>,
   ): AsyncGenerator<AgentRuntimeEvent, void> {
     if (request.tools.length > 0) throw new Error("A model call takes no tools");
+    const answers = request.answer?.schemas ?? [];
     const { model, stream } = streamRunModel(
       request.model,
       normalizeContext({
         systemPrompt: request.instructions,
         messages: [{ role: "user", content: request.prompt, timestamp: Date.now() }],
+        tools: answers.map((answer) => ({
+          name: answer.name,
+          description: answer.description,
+          parameters: answer.schema as TSchema,
+          constrainedSampling: { type: "json_schema", strict: "prefer" },
+        })),
       }),
       { signal: context?.signal },
     );
@@ -85,7 +95,12 @@ export class ModelCallRuntime implements AgentRuntime {
       text = stripModelControlTokens(
         message.content.map((part) => (part.type === "text" ? part.text : "")).join(""),
       ).trim();
-      yield { type: "done", ...(text ? { text } : {}) };
+      const [call, ...others] = message.content.filter((part) => part.type === "toolCall");
+      const answer =
+        call && !others.length && answers.some((offered) => offered.name === call.name)
+          ? { name: call.name, value: call.arguments }
+          : undefined;
+      yield { type: "done", ...(text ? { text } : {}), ...(answer ? { answer } : {}) };
     } catch (error) {
       failure = error;
       throw error;

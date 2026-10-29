@@ -4,6 +4,7 @@ export * from "./agent-skill.js";
 export * from "./ai-consent.js";
 export * from "./answer-order.js";
 export * from "./answerable-ask.js";
+export * from "./app-marks.js";
 export * from "./ask-card/answering.js";
 export * from "./ask-card/card.js";
 export * from "./ask-card/form.js";
@@ -26,6 +27,21 @@ export * from "./computer-screen-url.js";
 export * from "./computer-updates.js";
 export * from "./cron.js";
 export * from "./dictation-language.js";
+export * from "./draft-card-view.js";
+export type { DraftPath, DraftSlots, RecipientRole, RecipientSlot } from "./draft-fields.js";
+export {
+  askDraftFields,
+  DRAFT_GONE,
+  draftFieldsError,
+  isMailAddress,
+  isRecipientRole,
+  LINE_BREAKS,
+  RECIPIENT_ROLES,
+  valueAt,
+  withValueAt,
+} from "./draft-fields.js";
+export * from "./draft-lines.js";
+export * from "./draft-proposal.js";
 export * from "./effect-phase.js";
 export * from "./events.js";
 export * from "./featured-connectors.js";
@@ -44,6 +60,8 @@ export * from "./messaging-prompts.js";
 export * from "./model-oauth.js";
 export * from "./model-probe.js";
 export * from "./model-providers.js";
+export * from "./outbound-draft.js";
+export * from "./outbound-message.js";
 export * from "./peer-messages.js";
 export * from "./plain-text.js";
 export * from "./proposal.js";
@@ -64,6 +82,7 @@ export * from "./session-log/jsonl.js";
 export * from "./session-log/project-inference.js";
 export * from "./session-log/project-thread-view.js";
 export * from "./session-log/project-ui.js";
+export { hasDraftOutcome, pendingPauseOfEffect } from "./session-log/run-fold.js";
 export * from "./session-log/takeover-card.js";
 export * from "./signup-policy.js";
 export * from "./skill-access.js";
@@ -77,5 +96,6 @@ export * from "./text-direction.js";
 export * from "./thread-subscription.js";
 export * from "./thread-time-markers.js";
 export * from "./tool-activity.js";
+export * from "./waiting-ask.js";
 export * from "./worker-plan.js";
 export * from "./worker-stop.js";

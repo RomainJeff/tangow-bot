@@ -1,5 +1,5 @@
 import type { RealtimeFanout } from "@rakazo/adapter-kit";
-import type { AskAnswers, FactualRunRecap, SessionId } from "@rakazo/contracts";
+import type { AskAnswers, AskDraftEdits, FactualRunRecap, SessionId } from "@rakazo/contracts";
 import {
   ASK_ANSWER_MAX_LENGTH,
   type AskQuestion,
@@ -8,22 +8,31 @@ import {
   type ProductEvent,
   RUN_WORK_TYPES,
 } from "@rakazo/contracts";
+import type { DraftRecord } from "@rakazo/core";
 import {
   ACTIVE_RUN_STATUSES,
+  askDraftDetail,
   blocksToAgentHistoryText,
   DISMISSABLE_EFFECT_KINDS,
   DISMISSED_EFFECT_RESULT,
+  DRAFT_GONE,
+  draftMessage,
+  draftWithState,
+  editDraftRequest,
   fromParent,
   isApprovalAskBlock,
   isSecretAskBlock,
   isWorkingStatus,
   messagingChannelId,
   normalizeSpawnBotArgs,
+  readDraft,
   runStartedByUser,
   sanitizeJsonValue,
   spawnBotApprovalBlock,
   spawnBotToolArgs,
   validateSpawnBotArgs,
+  valueAt,
+  withValueAt,
 } from "@rakazo/core";
 import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
 import { getLogger } from "@rakazo/logging";
@@ -190,8 +199,11 @@ export interface PauseRunForInput {
    */
   offeredActions?: Array<{ id: string; label: string }>;
   browserApprovalCheckpoint?: BrowserApprovalCheckpoint;
-  /** The effect an approval card asks about; its proposal is already redacted. */
-  effect?: { id: string; kind: string; proposal: Record<string, unknown> };
+  /**
+   * The effect an approval card asks about; its proposal is already redacted. `reopen` asks again
+   * about a draft that did not leave, in the same transaction that parks the run on it.
+   */
+  effect?: { id: string; kind: string; proposal: Record<string, unknown>; reopen?: DraftRecord };
   /** The logged tool call the run pauses on, which gets its one result here, naming the pause. */
   pausedCall?: { sessionId: string; botId: string; runId: string; callId: string; output: string };
 }
@@ -263,8 +275,8 @@ export interface AnswerRunInput {
   messageId: string;
   answeredByUserId: string;
   answer: string;
-  /** Changes to a Create bot card, applied with "allow" by the run's owner only. */
-  edits?: { name?: string; instructions?: string };
+  /** Changes to a Create bot card or a mail draft, applied with "allow" by the run's owner only. */
+  edits?: AskDraftEdits & { name?: string; instructions?: string };
 }
 
 export interface SendUserMessageInput {
@@ -909,6 +921,75 @@ async function planSpawnBotEdit(
   return { proposed, approved, key, card: { text, detail, spawnBot } };
 }
 
+type AskCard = Extract<MessageBlock, { kind: "ask" }>;
+
+/**
+ * What answering a draft card writes: Send approves the request with the user's edits written
+ * where the bot's message sat, Discard denies it. The key never changes, so the bot's own call
+ * finds the effect.
+ */
+function planDraftAnswer(
+  effect: { request: unknown },
+  draft: DraftRecord,
+  input: Pick<AnswerRunInput, "answer" | "edits">,
+  card: AskCard,
+  shownProposal: unknown,
+) {
+  if (input.edits?.name !== undefined || input.edits?.instructions !== undefined) {
+    throw new InvalidAnswerError("Only the message can be edited");
+  }
+  if (input.answer !== "allow") {
+    return { data: { status: "denied", draft: draftWithState(draft, { state: "discarded" }) } };
+  }
+  const before = draftMessage(effect.request, draft);
+  const edits: AskDraftEdits = {
+    text: input.edits?.text ?? before.body,
+    recipients: input.edits?.recipients,
+    subject: input.edits?.subject,
+  };
+  const edited = editDraftRequest(effect.request, draft, edits);
+  if ("error" in edited) throw new InvalidAnswerError(edited.error);
+  const after = draftMessage(edited.request, draft);
+  const shown = card.draft && {
+    ...card.draft,
+    ...after,
+    recipients: after.recipients ?? card.draft.recipients,
+    failure: undefined,
+  };
+  // The proposal the card was requested with, its run secrets masked, which the stored request
+  // may hold unmasked: the audit reads it, now with the user's edits.
+  const proposed = proposalRequest(shownProposal, effect.request);
+  const proposal = editDraftRequest(proposed, draft, edits);
+  return {
+    data: {
+      status: "approved",
+      request: edited.request,
+      draft: draftWithState(draft, { state: "approved" }),
+    },
+    edit:
+      JSON.stringify(after) === JSON.stringify(before)
+        ? undefined
+        : {
+            proposed: draftMessage(proposed, draft),
+            approved: after,
+            proposal: "request" in proposal ? asProposal(proposal.request, effect.request) : {},
+            card: shown ? { draft: shown, detail: askDraftDetail(shown) } : {},
+          },
+  };
+}
+
+/** The request inside a logged proposal, which wraps a request that is not an object. */
+function proposalRequest(proposal: unknown, request: unknown): unknown {
+  return Array.isArray(request) ? valueAt(proposal, ["request"]) : proposal;
+}
+
+function asProposal(edited: unknown, request: unknown): Record<string, unknown> {
+  const proposal = Array.isArray(request) ? { request: edited } : edited;
+  return proposal && typeof proposal === "object" && !Array.isArray(proposal)
+    ? (proposal as Record<string, unknown>)
+    : {};
+}
+
 /**
  * Answer the pending ask of a waiting_input run inside an existing transaction. Called by
  * answerRunInput, and exported so a caller that already holds a transaction can reuse it.
@@ -953,17 +1034,24 @@ export async function answerRunInputInTransaction(
           source: "card",
         },
       });
-    // Edits only make sense on a Create bot approval, answered "allow" by the run's owner. Checked
-    // before any other branch and before any name is read, so the refusal reveals nothing.
+    // Edits only apply to an approval card (a Create bot card or a mail draft), answered "allow"
+    // by the run's owner. Checked before any other branch and before any name is read, so the
+    // refusal reveals nothing.
     if (input.edits) {
       if (pendingAsk.questions?.length || !isApprovalAskBlock(pendingAsk)) {
         throw new InvalidAnswerError("Only a Create bot card can be edited");
       }
       if (input.answer !== "allow") {
-        throw new InvalidAnswerError("Edits can only be sent when creating the bot");
+        throw new InvalidAnswerError(
+          pendingAsk.draft
+            ? "Edits can only be sent with Send"
+            : "Edits can only be sent when creating the bot",
+        );
       }
       if (input.answeredByUserId !== run.userId) {
-        throw new InvalidAnswerError("Only the owner of this run can edit the bot");
+        throw new InvalidAnswerError(
+          `Only the owner of this run can edit the ${pendingAsk.draft ? "message" : "bot"}`,
+        );
       }
     }
 
@@ -1080,11 +1168,14 @@ export async function answerRunInputInTransaction(
     let approvalEffect: {
       id: string;
       kind: string;
+      status: string;
       request: unknown;
+      draft: unknown;
       idempotencyKey: string;
     } | null = null;
     let approvalUserId: string | null = null;
     let spawnBotEdit: SpawnBotEdit | undefined;
+    let draftAnswer: ReturnType<typeof planDraftAnswer> | undefined;
 
     if (approvalAsk) {
       if (!pendingAsk.actions?.some((action) => action.id === input.answer)) return null;
@@ -1097,11 +1188,30 @@ export async function answerRunInputInTransaction(
         },
       });
       if (!approvalEffect) return null;
+      const draft = readDraft(approvalEffect.status, approvalEffect.draft);
+      // A mail draft leaves in the owner's name: nobody else may send, edit or discard it.
+      if (draft && run.userId !== input.answeredByUserId) return null;
       if (input.answer === "always") {
-        if (run.userId !== input.answeredByUserId) return null;
+        if (draft || run.userId !== input.answeredByUserId) return null;
         approvalUserId = input.answeredByUserId;
       }
-      if (input.edits) {
+      if (draft) {
+        const requested = await tx.sessionEntry.findUnique({
+          where: { id: askId },
+          select: { payload: true },
+        });
+        draftAnswer = planDraftAnswer(
+          approvalEffect,
+          draft,
+          input,
+          pendingAsk,
+          (requested?.payload as { proposal?: unknown } | null)?.proposal,
+        );
+      } else if (input.edits) {
+        const { text, recipients, subject } = input.edits;
+        if (text !== undefined || recipients !== undefined || subject !== undefined) {
+          throw new InvalidAnswerError("Only a mail draft's message can be edited");
+        }
         if (approvalEffect.kind !== "spawn_bot") {
           throw new InvalidAnswerError("Only a Create bot card can be edited");
         }
@@ -1129,7 +1239,7 @@ export async function answerRunInputInTransaction(
 
     if (approvalAsk) {
       const allowed = input.answer === "allow" || input.answer === "always";
-      if (spawnBotEdit) {
+      if (spawnBotEdit || draftAnswer) {
         // Compare-and-set: only the effect the plan was made from may be rewritten. Anything
         // else throws, which rolls back the run update above and leaves the card pending.
         const rewritten = await tx.externalEffect.updateMany({
@@ -1139,9 +1249,13 @@ export async function answerRunInputInTransaction(
             idempotencyKey: approvalEffect!.idempotencyKey,
           },
           data: {
-            request: spawnBotEdit.approved,
-            idempotencyKey: spawnBotEdit.key,
-            status: "approved",
+            ...(spawnBotEdit
+              ? {
+                  request: spawnBotEdit.approved,
+                  idempotencyKey: spawnBotEdit.key,
+                  status: "approved",
+                }
+              : (draftAnswer!.data as Prisma.ExternalEffectUpdateManyMutationInput)),
             answeredAt: new Date(),
           },
         });
@@ -1217,16 +1331,18 @@ export async function answerRunInputInTransaction(
     const answeredAsk = {
       ...pendingAsk,
       ...(spawnBotEdit ? spawnBotEdit.card : {}),
+      ...draftAnswer?.edit?.card,
       status: "answered" as const,
       answer: secretAsk ? "" : freeTextAnswer || input.answer,
     };
     if (approvalEffect) {
       const effectId = approvalEffect.id;
-      if (spawnBotEdit) {
+      const edited = spawnBotEdit?.approved ?? draftAnswer?.edit?.proposal;
+      if (edited) {
         await appendSessionEntryInTransaction(tx, {
           ...runLog,
           type: "effect.edited",
-          payload: { effectId, proposal: spawnBotEdit.approved, card: answeredAsk },
+          payload: { effectId, proposal: edited, card: answeredAsk },
         });
       }
       await appendSessionEntryInTransaction(tx, {
@@ -1246,7 +1362,8 @@ export async function answerRunInputInTransaction(
       });
       if (!secretAsk) await answerEntry(selectedChoice?.label ?? (freeTextAnswer || input.answer));
     }
-    if (spawnBotEdit) {
+    const audit = spawnBotEdit ?? draftAnswer?.edit;
+    if (audit) {
       // The audit keeps what the model proposed next to what the person approved.
       await appendEventInTransaction(tx, {
         spaceId: input.spaceId,
@@ -1256,8 +1373,8 @@ export async function answerRunInputInTransaction(
         runId: input.runId,
         payload: {
           effectId: approvalEffect!.id,
-          proposed: spawnBotEdit.proposed,
-          approved: spawnBotEdit.approved,
+          proposed: audit.proposed,
+          approved: audit.approved,
         },
       });
     }
@@ -1373,12 +1490,19 @@ export async function resumeAskWithComposerTextInTransaction(
   return { resolvable: true, runId: input.runId };
 }
 
+/** A waiting mail draft as the user left it, named by its card's entry. */
+export type DraftLeft = AskDraftEdits & { messageId: string; text: string };
+
 export interface DismissProposalWithTextInput {
   spaceId: string;
   threadId: string;
   runId: string;
   /** Who typed: only the run's own user puts its card away. */
   userId: string;
+  /** A mail draft as the user left it on the card they typed over, named by its entry. */
+  draft?: DraftLeft;
+  /** Put away only a mail draft, as in a group, where other approval cards wait for a tap. */
+  draftsOnly?: true;
 }
 
 /**
@@ -1394,11 +1518,13 @@ export type DismissProposalWithTextResult =
 const STEERABLE_AFTER_ANSWER = new Set(["queued", "leased", "running"]);
 
 /**
- * Puts away a proposal card the user answered by typing instead of tapping. Separate
+ * Puts away a proposal or mail draft card the user answered by typing instead of tapping. Separate
  * from resumeAskWithComposerTextInTransaction, which never writes an effect. The card's kind is
  * read from the stored effect, never from the block; the only transition written is
  * intended → denied, marked dismissed so no guard counts it as a no. The run keeps its checkpoint:
- * the pending call resumes and reads that it was dismissed, then the typed message steers it.
+ * the pending call resumes and reads that it was dismissed, then the typed message steers it. A
+ * mail draft ends replaced, never sent, its body set to the text the user left on that card; the
+ * run logs that as the draft call's result when it resumes.
  */
 export async function dismissProposalWithTextInTransaction(
   tx: Prisma.TransactionClient,
@@ -1419,17 +1545,51 @@ export async function dismissProposalWithTextInTransaction(
   const pendingAsk = card.block;
   const effect = await tx.externalEffect.findFirst({
     where: { id: pendingAsk.approvalEffectId, spaceId: input.spaceId, runId: input.runId },
-    select: { id: true, kind: true, status: true },
+    select: { id: true, kind: true, status: true, request: true, draft: true },
   });
-  if (!effect || !DISMISSABLE_EFFECT_KINDS.has(effect.kind)) return { outcome: "keep" };
+  if (!effect) return { outcome: "keep" };
+  const draft = readDraft(effect.status, effect.draft);
+  if (!draft && (input.draftsOnly || !DISMISSABLE_EFFECT_KINDS.has(effect.kind))) {
+    return { outcome: "keep" };
+  }
+  // A tap answered the card first: the reply steers its run, and a draft's text is moot.
   if (!waiting) {
     return STEERABLE_AFTER_ANSWER.has(run.status)
       ? { outcome: "settled", status: run.status }
       : { outcome: "keep" };
   }
+  const replacing = draft?.state === "pending";
+  // A text is only ever for the very draft card it was edited on.
+  if (input.draft && (!replacing || input.draft.messageId !== card.entryId)) {
+    return { outcome: "keep" };
+  }
+  if (draft && !replacing) return { outcome: "keep" };
+  // Nothing leaves a replaced draft, so its text may be left empty; its recipients and subject
+  // are checked as on Send, since the bot reads them back.
+  const left =
+    replacing && input.draft
+      ? editDraftRequest(withValueAt(effect.request, draft.path, input.draft.text), draft, {
+          recipients: input.draft.recipients,
+          subject: input.draft.subject,
+        })
+      : { request: effect.request };
+  // A request with no place for the text is no longer this draft's: the usual rule applies.
+  if ("error" in left && left.error === DRAFT_GONE) return { outcome: "keep" };
+  if ("error" in left) throw new InvalidAnswerError(left.error);
+  const { request } = left;
+  const replaced = replacing ? draftWithState(draft, { state: "replaced" }) : undefined;
   const dismissed = await tx.externalEffect.updateMany({
-    where: { id: effect.id, status: "intended", kind: { in: [...DISMISSABLE_EFFECT_KINDS] } },
-    data: { status: "denied", answeredAt: new Date(), result: DISMISSED_EFFECT_RESULT },
+    where: replaced
+      ? { id: effect.id, status: "intended" }
+      : { id: effect.id, status: "intended", kind: { in: [...DISMISSABLE_EFFECT_KINDS] } },
+    data: replaced
+      ? {
+          status: "denied",
+          answeredAt: new Date(),
+          request: request as Prisma.InputJsonValue,
+          draft: replaced,
+        }
+      : { status: "denied", answeredAt: new Date(), result: DISMISSED_EFFECT_RESULT },
   });
   // Answered while the run still waits: steering into it would reach a run that never wakes, so
   // the caller keeps the usual pending-card rule.
@@ -1501,12 +1661,21 @@ export async function pauseRunForInput(
         id: input.attemptId,
         runId: input.runId,
         fence: input.leaseFence,
-        status: "running",
+        // A run can park during setup, before its runtime starts: a draft the user approved that
+        // did not leave is asked about again before any turn.
+        status: { in: ["setting_up", "running"] },
       },
       data: { status: "waiting_input", finishedAt: new Date() },
     });
     if (attempt.count !== 1) throw new Error("Active run attempt was not available to pause");
 
+    if (input.effect?.reopen) {
+      const reopened = await tx.externalEffect.updateMany({
+        where: { id: input.effect.id, status: { in: ["approved", "executing"] } },
+        data: { status: "intended", draft: input.effect.reopen },
+      });
+      if (reopened.count !== 1) throw new Error("The draft changed before it was shown again");
+    }
     if (input.effect) {
       const { sessionId } = await tx.run.findUniqueOrThrow({
         where: { id: input.runId },

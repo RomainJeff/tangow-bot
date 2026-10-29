@@ -56,10 +56,13 @@ pill, the call view.
 The only framed element of the thread: a decision or a question the bot cannot
 settle alone.
 
-Props: `header?: { who, dot? }`, `question`, `consequence?`, `children?`,
-`actions?`, `actionsAlign?: "end" | "start"` (default `end`), `answered?`.
+Props: `header?: { who, dot?, icon?, status? }`, `question?` (left out only on
+an answered block whose answer says it all on one line), `consequence?`,
+`children?`, `actions?`, `actionsAlign?: "end" | "start"` (default `end`),
+`answered?`.
 Anatomy: `bg-surface rounded-block shadow-card` (radius 28 on iPhone),
-padding 20; an optional header line with a 6 px ink dot and
+padding 20; an optional header line with a 6 px ink dot, the `icon` of the app
+the decision acts in, `who`, and a short `status` at the end, in
 `text-block-header`; the question in `text-question`; the consequence in
 `text-meta`; `children` for controls, with anything to read again or type in a
 `well` (`rounded-card`); the actions wrapped in a row of filled capsules.
@@ -93,6 +96,32 @@ second shadow or a bordered card inside it.
 
 Used by: approval asks, bot questions (`ask`, `ask_user`, `choice`) and secret
 asks, each rendered as a normal bot row.
+
+### Outbound draft card
+
+A message the bot wrote in the person's name, in a `FramedBlock`. The header
+holds the app's mark, from the bundled marks in `@rakazo/core` (Gmail, Outlook,
+Slack), else a neutral glyph in `mutedForeground`, never a letter; a catalog
+`logo` wins over both. Open, it reads as a grid: a 64 px label column (72 pt on iPhone), then From
+(avatar, name, account), To in 500, Cc, Bcc, Subject, all at `text-row-name`
+(15 / 20 on iPhone), and the text in a `well`. Values start 16 px in, where a
+field's text sits, so nothing moves sideways when editing starts. Touching a
+field turns each editable line into a 44 px field on the `well`
+(`rounded-card`, `text-body`, the body's hover and selected rings); a field of
+chips pads 8 around them, so the chip's text still sits 16 in, and `px-4`
+otherwise. Recipients become chips with their own 24 px remove button, and Cc
+and Bcc are buttons at the end of the To field that open their own row. A line
+already full has no field: the line itself takes focus and starts editing.
+Labels stay outside the fields. The lines stay fields until the card is
+answered, and keep their shape, read-only, while a send is on its way, so Send
+never moves from under the pointer.
+
+Sent, the card settles on the bot's paper (`FramedBlock` `answered`): the
+success disc on the left spanning "Sent" (`text-title`) and "to …" (`text-meta`,
+the address in ink), the time at the end of the "Sent" row (`text-time`), then
+one line under the text column with the app's mark and the subject, or the
+text's first line for chat. There is no Undo after Send. Discarded is one line:
+the mark, "Discarded", and "· Undo" while the 5 s window is open.
 
 ## OptionTile
 

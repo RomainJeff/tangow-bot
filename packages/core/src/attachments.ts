@@ -114,17 +114,26 @@ function toolStepsToHistoryText(steps: Extract<MessageBlock, { kind: "steps" }>[
     const stepLines = step.calls?.length
       ? step.calls.map((call) => {
           const input = abbreviateToolPayload(call.input, TOOL_TRACE_INPUT_MAX_CHARS);
-          const output = abbreviateToolPayload(call.output, TOOL_TRACE_OUTPUT_MAX_CHARS);
+          const whole = call.outcome === true;
+          const output = whole
+            ? call.output.replace(/\s+/g, " ").trim()
+            : abbreviateToolPayload(call.output, TOOL_TRACE_OUTPUT_MAX_CHARS);
           const ran = `(already ran ${humanizeToolName(call.name)}, input: ${input}`;
-          return output ? `${ran}, result: ${output})` : `${ran})`;
+          return { line: output ? `${ran}, result: ${output})` : `${ran})`, whole };
         })
-      : [`(already ran ${step.label} ${step.count === 1 ? "once" : `${step.count} times`})`];
-    for (const line of stepLines) {
-      if (line.length > budget) {
+      : [
+          {
+            line: `(already ran ${step.label} ${step.count === 1 ? "once" : `${step.count} times`})`,
+            whole: false,
+          },
+        ];
+    for (const { line, whole } of stepLines) {
+      if (line.length > budget && !whole) {
         dropped += 1;
         continue;
       }
-      budget -= line.length;
+      // A card's outcome is read whole and leaves the budget to the lines after it.
+      if (!whole) budget -= line.length;
       lines.push(line);
     }
   }
