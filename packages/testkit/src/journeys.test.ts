@@ -392,6 +392,12 @@ describeJourneys("required product journeys", () => {
     expect(chiefFile.content).toContain("isolation-ok");
     const computer = await rpc<{ state: string }>(app, ada, "computer/status", { botId: chief.id });
     expect(computer.state).toBe("running");
+    await waitForDatabase(
+      async () =>
+        (await prisma.computerExecutionLease.count({
+          where: { botId: coder.id, expiresAt: { gt: new Date() } },
+        })) === 0,
+    );
     await rpc(app, ada, "computer/stop", { botId: chief.id });
     const persisted = await rpc<{ content: string }>(app, ada, "computer/readFile", {
       botId: chief.id,
