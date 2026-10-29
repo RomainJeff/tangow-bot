@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
+- On web, desktop and mobile, worker runs save their native session when pausing for a question, approval or takeover, then restore their context, loaded tools and complete tool results after a restart while keeping current permissions.
 - On mobile, interacting with a widget no longer scales or swipes its entire card or opens the message menu on a long press.
 
 ### 2026-10-28

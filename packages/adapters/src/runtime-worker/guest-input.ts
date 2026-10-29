@@ -169,6 +169,12 @@ export function workerStart(
   request: AgentRunRequest,
   harness: HarnessDeclaration,
 ): WorkerStartV1 {
+  if (
+    request.persistence?.start.mode === "resume" &&
+    (request.persistence.start.snapshot.harness.name !== harness.name ||
+      !harness.capabilities.includes("resume"))
+  )
+    throw new Error("The run snapshot cannot resume with the selected harness");
   const offered = agentTools(request.tools, harness, mainBotRule(request, harness));
   const profiles = startable(request, harness);
   // A harness with its own loop keeps its own prompt: Rakazo's part is appended to it.
@@ -176,6 +182,11 @@ export function workerStart(
     ? (request.harnessAddendum ?? request.instructions)
     : request.instructions;
   const input: GuestRunInput = {
+    ...(request.resumeEvents ? { resumeEvents: request.resumeEvents } : {}),
+    ...(request.resumeEvent ? { resumeEvent: request.resumeEvent } : {}),
+    ...(request.persistence && harness.capabilities.includes("resume")
+      ? { start: request.persistence.start }
+      : {}),
     botId: request.botId,
     threadId: request.threadId,
     sourceMessageId: request.sourceMessageId,
@@ -225,6 +236,12 @@ export function workerStart(
     };
   };
   const bytes = (message: WorkerStartV1) => encodeMessage(message).byteLength;
+  if (input.start?.mode === "resume") {
+    const message = start(lazyCatalogs(offered));
+    if (bytes(message) > WORKER_LIMITS.controllerFrameBytes)
+      throw new Error("Complete resume state and current tools exceed the worker transfer limit");
+    return message;
+  }
   let room = WORKER_LIMITS.controllerFrameBytes - bytes(start([]));
   const sent = lazyCatalogs(offered).filter((catalog) => {
     if (catalog.bytes > room) return false;
@@ -267,6 +284,8 @@ export function helperRunInput(
     harness,
   ).run;
   return {
+    ...(request.helper && parent.resumeEvent ? { resumeEvent: parent.resumeEvent } : {}),
+    ...(request.helper && parent.start ? { start: parent.start } : {}),
     botId: parent.botId,
     threadId: parent.threadId,
     sourceMessageId: parent.sourceMessageId,

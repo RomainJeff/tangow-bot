@@ -34,6 +34,7 @@ import {
   historyCompactJob,
   linkPreviewJob,
   RAKAZO_TOOL_PREFIX,
+  RunResumeError,
   routineJobKey,
   routineWakeupJob,
   runContinueJob,
@@ -106,6 +107,7 @@ import {
   isOneShotRoutineCrons,
   isTerminal,
   isUserOpenedTrigger,
+  LIVE_WORKER_STATES,
   MAIN_BOT_BLOCKED_TOOLS,
   MISSING_MODEL_MESSAGE,
   MODEL_PROVIDER_NOT_CONNECTED_MESSAGE,
@@ -180,6 +182,7 @@ import {
   Prisma,
   parseComputerMode,
   RunHistoryWriteError,
+  runPersistence,
   SpaceLimitError,
   threadEventSeq,
 } from "@rakazo/db";
@@ -1496,8 +1499,24 @@ export function createRunExecutor(deps: ExecutorDeps) {
         run = await deps.prisma.run.findUniqueOrThrow({ where: { id: runId } });
         approvalHold = browserApprovalCheckpointOf(run.checkpoint);
       }
-      if (isTerminal(run.status as RunStatus) || (approvalHold && run.status === "waiting_input"))
+      if (
+        isTerminal(run.status as RunStatus) ||
+        ((approvalHold || run.resumeRequired) && run.status === "waiting_input")
+      )
         return;
+      if (run.resumeRequired && (run.status === "queued" || run.status === "waiting_takeover")) {
+        const closingWorker = await deps.prisma.attempt.findFirst({
+          where: {
+            runId,
+            fence: run.leaseFence,
+            status: { in: ["waiting_input", "waiting_takeover"] },
+            workerState: { in: [...LIVE_WORKER_STATES, "releasing"] },
+          },
+          select: { id: true },
+        });
+        if (closingWorker)
+          throw new AgentRuntimeBusyError("The previous worker has not finished its pause");
+      }
       let { resumeCheckpoint, heldForTakeover, resumeHeldLease, takeoverResume } =
         takeoverContinuePlan(run);
 
@@ -1766,7 +1785,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               // The tail is one read from the head, so its newest seq marks what this attempt saw:
               // a helper report after it wakes the bot once the turn ends, and a helper claims as
               // steering only what its parent sent after it.
-              if (run.routineId == null && !channelId) {
+              if (run.routineId == null && !channelId && !run.resumeRequired) {
                 const historyThroughSeq = entries.reduce(
                   (next, entry) => Math.max(next, entry.seq + 1),
                   0,
@@ -2324,6 +2343,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // A worker run learns how each answered approval came out from its history: the controller
         // runs what was approved, or logs the refusal, before the harness starts. The in-process
         // runtime, and a tool the guest runs itself, still replay an approval through the model.
+        const persistence =
+          runtime !== deps.runtime
+            ? await runPersistence(deps.prisma, runId, fence, runSecrets, fence > 1)
+            : undefined;
         const settlesApprovals = runtime !== deps.runtime;
         const answeredEffects = await deps.prisma.externalEffect.findMany({
           where: {
@@ -2774,14 +2797,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
           return result;
         };
 
-        const pauseForApproval = () => {
+        const pauseForApproval = (effectId: string) => {
           approvalPausePending = true;
-          return approvalPausedToolResult();
+          return { ...approvalPausedToolResult(), details: { approval: "paused", effectId } };
         };
 
-        const pauseForSecret = () => {
+        const pauseForSecret = (effectId: string) => {
           approvalPausePending = true;
-          return secretPausedToolResult();
+          return { ...secretPausedToolResult(), details: { secret: "paused", effectId } };
         };
 
         type InputPauseRequest = Extract<AgentRuntimeEvent, { type: "ask" | "takeover" }>;
@@ -3607,7 +3630,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const requestApproval = async () => {
             if (!(await renewRunLease(deps, runId, workerId, fence))) {
               // Another worker owns the run now; exit without leaving a local pause card.
-              return pauseForApproval();
+              return pauseForApproval(applied!.effect.id);
             }
             await workspaceCheckpoint.flush();
             let browserApprovalCheckpoint = null;
@@ -3671,7 +3694,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 threadId: thread.id,
               });
             }
-            return pauseForApproval();
+            return pauseForApproval(applied!.effect.id);
           };
 
           if (applied?.duplicate) {
@@ -3711,7 +3734,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   select: { status: true },
                 });
                 if (current?.status === "waiting_input") {
-                  return pauseForSecret();
+                  return pauseForSecret(applied!.effect.id);
                 }
                 // An intended secret request resumes protected entry below, including
                 // recovery after action approval but before the card was committed.
@@ -3724,7 +3747,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   select: { status: true },
                 });
                 if (current?.status === "waiting_input") {
-                  return pauseForApproval();
+                  return pauseForApproval(applied!.effect.id);
                 }
                 return requestApproval();
               }
@@ -4641,7 +4664,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               return settleUncertainEffect(deps.prisma, recordedForAsk.effect.id, "request_secret");
             }
             if (!(await renewRunLease(deps, runId, workerId, fence))) {
-              return pauseForSecret();
+              return pauseForSecret(applied!.effect.id);
             }
             await workspaceCheckpoint.flush();
             await retireApprovalHold();
@@ -4677,7 +4700,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               botId: bot.id,
               threadId: thread.id,
             });
-            return pauseForSecret();
+            return pauseForSecret(applied!.effect.id);
           }
           if (name === "run_subagent") {
             return {
@@ -5154,7 +5177,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
 
         try {
           if (refusal) throw new Error(refusal);
-          if (settledEffects.length > 0) {
+          if (settledEffects.length > 0 && persistence?.start.mode !== "resume") {
             if (!(await renewRunLease(deps, runId, workerId, fence))) return;
             // The approved request takes the guarded path a model's call takes, so it runs only
             // under the effect's claim; the effect's id as call id lets a later attempt find it.
@@ -5403,6 +5426,23 @@ export function createRunExecutor(deps: ExecutorDeps) {
             });
           }
           let nativeSteps: HarnessTranscriptEntry[] | undefined;
+          const resumeEvents =
+            persistence?.start.mode === "resume" && !backgroundHelper
+              ? historyEntries.flatMap((entry) =>
+                  (entry.type === "helper.report" || entry.type === "helper.question") &&
+                  entry.botId === bot.id &&
+                  entry.seq >= (run.historyThroughSeq ?? 0)
+                    ? [
+                        {
+                          id: entry.id,
+                          text: projectInferenceTurns([entry], { selfBotId: bot.id })
+                            .map((turn) => turn.content)
+                            .join("\n"),
+                        },
+                      ]
+                    : [],
+                )
+              : [];
           const runtimeEvents = runtime.run(
             {
               botId: bot.id,
@@ -5410,6 +5450,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
               runId,
               sourceMessageId: run.sourceMessageId,
               prompt: helperCall?.task ?? prompt,
+              resumeEvent: takeoverResume?.promptNote ?? task.prompt,
+              resumeEvents,
               instructions,
               ...(harnessAddendum ? { harnessAddendum } : {}),
               ...(helperCall ? { helper: helperCall } : {}),
@@ -5420,6 +5462,121 @@ export function createRunExecutor(deps: ExecutorDeps) {
               helperProfiles: HELPER_PROFILES,
               secrets: runSecrets,
               model: runtimeModel,
+              ...(persistence
+                ? {
+                    persistence: {
+                      ...persistence,
+                      async resolve() {
+                        const receipts = await persistence.resolve();
+                        for (const receipt of receipts) {
+                          if (receipt.outcome.kind !== "paused") continue;
+                          const paused = receipt.outcome.output;
+                          const details = isToolPauseResult(paused) ? paused.details : undefined;
+                          const effectId =
+                            details && typeof details === "object" && "effectId" in details
+                              ? details.effectId
+                              : undefined;
+                          const answered =
+                            typeof effectId === "string"
+                              ? settledEffects.find((effect) => effect.id === effectId)
+                              : undefined;
+                          if (effectId && !answered)
+                            throw new Error("The paused effect has no authoritative resolution");
+                          // messageHelper stores the parent's answer verbatim, outside tool-output projection.
+                          const parentAnswer =
+                            receipt.name === "ask_parent"
+                              ? priorApprovalEntries.findLast(
+                                  (entry) =>
+                                    entry.type === "tool.result" &&
+                                    entry.payload.callId === receipt.callId,
+                                )
+                              : undefined;
+                          if (receipt.name === "ask_parent" && !parentAnswer)
+                            throw new Error("The helper has no authoritative answer");
+                          const output =
+                            parentAnswer?.type === "tool.result"
+                              ? parentAnswer.payload.output
+                              : answered
+                                ? await runLoggedTool(
+                                    runLog,
+                                    writeRunEntry,
+                                    receipt.name,
+                                    receipt.args,
+                                    receipt.callId,
+                                  )
+                                : { response: takeoverResume?.promptNote ?? task.prompt };
+                          if (isToolPauseResult(output))
+                            throw new Error("The resumed call remains paused");
+                          if (
+                            answered &&
+                            approvedEffectReplays.nextKey() === answered.idempotencyKey
+                          ) {
+                            approvedEffectReplays.take(answered.kind);
+                            await deps.prisma.$transaction(async (tx) => {
+                              if (!(await renewRunLease({ prisma: tx }, runId, workerId, fence)))
+                                throw new Error("This attempt no longer holds the run.");
+                              await completeExternalEffect(tx, answered.id, "approved", output);
+                            });
+                          }
+                          await persistence.receipt({
+                            ...receipt,
+                            outcome: {
+                              kind: "result",
+                              output,
+                              isError:
+                                isFailedToolResult(output) ||
+                                (typeof output === "object" &&
+                                  output !== null &&
+                                  "isError" in output &&
+                                  output.isError === true),
+                            },
+                          });
+                        }
+                        const current = await persistence.resolve();
+                        // A synchronous helper ended at the pause. Its approved effect remains the
+                        // parent's responsibility, but there is no suspended helper session to revive.
+                        for (const effect of settledEffects) {
+                          const linked = current.some(
+                            (receipt) =>
+                              receipt.callId === effect.id || receipt.effectId === effect.id,
+                          );
+                          if (linked) continue;
+                          const call = approvedCall(
+                            effect,
+                            new Set(tools.map((tool) => tool.name)),
+                          );
+                          const args =
+                            call.args && typeof call.args === "object" && !Array.isArray(call.args)
+                              ? Object.fromEntries(Object.entries(call.args))
+                              : {};
+                          const output = await runLoggedTool(
+                            runLog,
+                            writeRunEntry,
+                            call.tool,
+                            args,
+                            effect.id,
+                          );
+                          await persistence.receipt({
+                            callId: effect.id,
+                            name: call.tool,
+                            args,
+                            outcome: {
+                              kind: "result",
+                              output,
+                              isError:
+                                isFailedToolResult(output) ||
+                                (typeof output === "object" &&
+                                  output !== null &&
+                                  "isError" in output &&
+                                  output.isError === true),
+                            },
+                          });
+                        }
+                        return persistence.resolve();
+                      },
+                    },
+                  }
+                : {}),
               resumeFromCheckpoint: takeoverResume?.checkpoint,
               script,
               allowSilentEmpty: allowSilentEmpty || messagingChannelRun,
@@ -5766,6 +5923,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
 
           if (approvalPausePending || !leaseValid) return;
+          if (resumeEvents.length) {
+            const delivered = new Set(resumeEvents.map((event) => event.id));
+            const through = historyEntries.reduce(
+              (next, entry) => (delivered.has(entry.id) ? Math.max(next, entry.seq + 1) : next),
+              0,
+            );
+            await deps.prisma
+              .$executeRaw`UPDATE runs SET "historyThroughSeq" = GREATEST(COALESCE("historyThroughSeq", 0), ${through})
+              WHERE id = ${runId} AND "leaseFence" = ${fence} AND status = 'running'`;
+          }
           approvedEffectReplays.assertDrained();
           for (const turn of script ?? []) {
             for (const file of turn.files ?? []) {
@@ -6037,10 +6204,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
         if (
           !retryForever &&
           (setupFailures + 1 >= MAX_SETUP_ATTEMPTS ||
-            setupError instanceof RunComputerRequiredError)
+            setupError instanceof RunComputerRequiredError ||
+            setupError instanceof RunResumeError)
         ) {
           const message = redactSecrets(
-            `${setupError instanceof RunComputerRequiredError ? "Run setup failed" : `Run setup failed after ${MAX_SETUP_ATTEMPTS} attempts`}: ${
+            `${setupError instanceof RunComputerRequiredError || setupError instanceof RunResumeError ? "Run setup failed" : `Run setup failed after ${MAX_SETUP_ATTEMPTS} attempts`}: ${
               setupError instanceof Error ? setupError.message : String(setupError)
             }`,
             runSecrets,

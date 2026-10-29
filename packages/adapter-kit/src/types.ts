@@ -5,6 +5,7 @@ import type {
   SandboxKind,
 } from "@rakazo/contracts";
 import type { HelperProfile } from "@rakazo/core";
+import type { RunPersistence, RunResumeEvent } from "./run-snapshot.js";
 import type { SkillCollision, WorkerSkill } from "./worker-protocol.js";
 
 export interface AdapterContext {
@@ -414,6 +415,9 @@ export interface AgentRunModel {
 }
 
 export interface AgentRunRequest {
+  persistence?: RunPersistence;
+  resumeEvent?: string;
+  resumeEvents?: RunResumeEvent[];
   botId: string;
   threadId: string;
   runId: string;

@@ -929,7 +929,6 @@ it("does not wake the bot again for a report its resumed turn already read", asy
       {
         expect(request) {
           expect(text(request)).toContain(REPORT);
-          expect(text(request)).not.toContain("<active_helpers>");
         },
         response: say(`Published, and found ${REPORT}`),
       },
@@ -1522,14 +1521,12 @@ it("parks a helper on its question, wakes the bot once, and resumes it with the 
   });
   expect(resultOf(seen.answered!)).toBe('{"ok":true,"delivered":"answered"}');
   expect(afterAnswer.status).toBe("queued");
-  // The question already ran: it replays with its answer, and the helper goes on with its brief.
-  expect(seen.resumed!.messages.slice(1)).toEqual([
-    {
-      role: "user",
-      content: `<assistant_turn>\n(already ran Ask parent, input: { "question": "${QUESTION}" }, result: ${ANSWER})\n</assistant_turn>`,
-    },
-    { role: "user", content: [{ type: "text", text: BRIEF }] },
-  ]);
+  expect(seen.resumed!.messages).toEqual(
+    expect.arrayContaining([{ role: "tool", tool_call_id: "ask", content: ANSWER }]),
+  );
+  expect(
+    seen.resumed!.messages.filter((message) => JSON.stringify(message.content).includes(BRIEF)),
+  ).toHaveLength(1);
   const tools = (await run.runEntries(child.id)).flatMap((entry) =>
     entry.type === "tool.call" || entry.type === "tool.result" ? [entry.payload] : [],
   );

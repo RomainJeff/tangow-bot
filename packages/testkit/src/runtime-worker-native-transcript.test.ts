@@ -6,7 +6,7 @@ import type { GuestHarness } from "@rakazo/agent-run-worker";
 import { HARNESSES } from "@rakazo/agent-run-worker";
 import { cancelRunsInTransaction } from "@rakazo/db";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
-import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
+import type { ModelEmulatorStep } from "./model-emulator.js";
 import { afterPrivateText, startWorkerRun } from "./worker-run-fixture.js";
 
 type WorkerRun = Awaited<ReturnType<typeof startWorkerRun>>;
@@ -62,17 +62,6 @@ async function toolLog(run: WorkerRun, runId: string, outputs = false) {
     );
 }
 
-const interrupted = (tool: string) =>
-  `The ${tool} call was interrupted, so its outcome is unknown. It was not replayed; check the state before retrying.`;
-
-/** The lines of the run's earlier work a retried attempt reads back, before its prompt. */
-const earlierWork = (request: ModelEmulatorRequest | undefined) =>
-  (request?.messages ?? []).flatMap((message) => {
-    const text = typeof message.content === "string" ? message.content : "";
-    const work = /^<assistant_turn>\n([\s\S]*)\n<\/assistant_turn>$/.exec(text)?.[1];
-    return work ? work.split("\n") : [];
-  });
-
 it("reminds a model that ended on private text to send it, so the person reads the answer", async () => {
   const run = await fixture([
     { expect() {}, response: { type: "text", text: "Paris." } },
@@ -97,33 +86,19 @@ it("reminds a model that ended on private text to send it, so the person reads t
   expect(toPerson).toEqual([expect.objectContaining({ kind: "text", text: "Paris." })]);
 });
 
-it("shows the next attempt a native call whose guest died during it as unknown, and never runs it again", async () => {
+it("keeps a native action's trace and fails instead of reconstructing an active crash", async () => {
   const probed = await probe();
-  let retried: ModelEmulatorRequest | undefined;
-  const run = await fixture([
-    bash("slow", probed.command("; sleep 30")),
-    {
-      expect(request) {
-        retried = request;
-      },
-      response: { type: "text", text: "I could not tell whether it ran." },
-    },
-    afterPrivateText,
-  ]);
+  const run = await fixture([bash("slow", probed.command("; sleep 30"))]);
   const runId = await run.send("Append to the probe.");
   const first = settled(run.continueRun(runId));
   await expect.poll(probed.lines, { timeout: 10_000 }).toEqual(["ran"]);
   await run.provider.destroy({ attemptId: run.provider.launches[0]!, providerRef: null }, null!);
   expect(await first).toBe("Run setup failed; retrying");
-  expect(await toolLog(run, runId)).toEqual(["call bash slow"]);
-
   await run.continueRun(runId);
   run.model.assertComplete();
   expect(await probed.lines()).toEqual(["ran"]);
   expect(await toolLog(run, runId)).toEqual(["call bash slow", "result slow"]);
-  expect(earlierWork(retried)).toEqual([
-    `(already ran Bash, input: { "command": "${probed.command("; sleep 30")}" }, result: ${interrupted("bash")})`,
-  ]);
+  expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe("failed");
 });
 
 it("logs native and controller calls along the session in the order the harness made them", async () => {
@@ -147,13 +122,15 @@ it("logs native and controller calls along the session in the order the harness 
   await run.continueRun(runId);
 
   run.model.assertComplete();
-  expect(
-    (await toolLog(run, runId)).map((line) => line.replace(/ mcp-[\w-]+$/, " (controller)")),
-  ).toEqual([
+  const controllerCall = (await run.runEntries(runId)).find(
+    (entry) => entry.type === "tool.call" && entry.payload.name === "scratchpad_add",
+  );
+  if (controllerCall?.type !== "tool.call") throw new Error("Missing scratchpad call");
+  expect(await toolLog(run, runId)).toEqual([
     "call bash first",
     "result first",
-    "call scratchpad_add (controller)",
-    "result (controller)",
+    `call scratchpad_add ${controllerCall.payload.callId}`,
+    `result ${controllerCall.payload.callId}`,
     "call bash second",
     "result second",
   ]);
@@ -177,49 +154,6 @@ it("keeps the native work done before a cancel, and the call it cut, without run
   );
   expect(await toolLog(run, runId)).toEqual(["call bash done", "result done", "call bash cut"]);
   expect(await probed.lines()).toEqual(["ran"]);
-});
-
-it("hands a retried attempt a message its dead attempt claimed, once", async () => {
-  const probed = await probe();
-  const steering = "Also check the tests.";
-  let reached!: () => void;
-  const claimedAttemptAsked = new Promise<void>((resolve) => {
-    reached = resolve;
-  });
-  let claimed: ModelEmulatorRequest | undefined;
-  let retried: ModelEmulatorRequest | undefined;
-  const run = await fixture([
-    bash("wait", probed.command("; sleep 1")),
-    {
-      async expect(request) {
-        claimed = request;
-        reached();
-        await new Promise<never>(() => {});
-      },
-      response: { type: "text", text: "unreachable" },
-    },
-    {
-      expect(request) {
-        retried = request;
-      },
-      response: { type: "text", text: "Checked them too." },
-    },
-    afterPrivateText,
-  ]);
-  const runId = await run.send("Wait, then report.");
-  const first = settled(run.continueRun(runId));
-  await expect.poll(probed.lines, { timeout: 10_000 }).toEqual(["ran"]);
-  await run.send(steering);
-  await claimedAttemptAsked;
-  await run.provider.destroy({ attemptId: run.provider.launches[0]!, providerRef: null }, null!);
-  expect(await first).toBe("Run setup failed; retrying");
-
-  await run.continueRun(runId);
-  expect(JSON.stringify(claimed?.messages).split(steering)).toHaveLength(2);
-  expect(JSON.stringify(retried?.messages).split(steering)).toHaveLength(2);
-  expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
-    "completed",
-  );
 });
 
 it("refuses a harness that reports its own call under a controller call's id", async () => {
@@ -256,6 +190,7 @@ it("refuses a harness that reports its own call under a controller call's id", a
       let forged = false;
       return pi.run(start, {
         signal: host.signal,
+        paused: () => host.paused(),
         emit: (body) => host.emit(body),
         model: (body, onPart, signal) => host.model(body, onPart, signal),
         callTool: (agent, name, args, callId) => host.callTool(agent, name, args, callId),

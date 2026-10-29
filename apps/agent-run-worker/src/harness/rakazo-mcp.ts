@@ -10,6 +10,7 @@ export function rakazoMcpTransport(
   tools: readonly GuestTool[],
   host: HarnessHost,
   screensDir: string,
+  nativeCallId?: () => string | undefined,
 ): Transport {
-  return rakazoMcpServer(tools, host, screensDir, { nativeToolSearch: true });
+  return rakazoMcpServer(tools, host, screensDir, { nativeToolSearch: true, nativeCallId });
 }

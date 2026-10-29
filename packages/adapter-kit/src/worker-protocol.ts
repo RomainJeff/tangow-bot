@@ -1,5 +1,11 @@
 import { AskQuestion, VolumeAccess, WorkerState } from "@rakazo/contracts";
 import { z } from "zod";
+import {
+  RunReceiptSchema,
+  RunResumeEventSchema,
+  RunSnapshotSchema,
+  RunStartSchema,
+} from "./run-snapshot.js";
 
 /** Every wire message carries it. A peer of another version is refused, never coerced. */
 export const WORKER_PROTOCOL_VERSION = 2;
@@ -99,6 +105,9 @@ const HistoryTurnSchema = z.strictObject({
 
 /** Everything a guest harness needs to run the attempt, as data: no callback, secret, key or route. */
 export const GuestRunInputSchema = z.strictObject({
+  start: RunStartSchema.optional(),
+  resumeEvent: z.string().optional(),
+  resumeEvents: z.array(RunResumeEventSchema).optional(),
   botId: Id,
   threadId: Id,
   sourceMessageId: z.string().nullish(),
@@ -200,6 +209,8 @@ export const SkillCollisionSchema = z.strictObject({
 export type SkillCollision = z.infer<typeof SkillCollisionSchema>;
 
 export const GuestBodySchema = z.discriminatedUnion("type", [
+  z.strictObject({ type: z.literal("snapshot.save"), snapshot: RunSnapshotSchema }),
+  z.strictObject({ type: z.literal("snapshot.resolve") }),
   z.strictObject({ type: z.literal("text"), text: z.string() }),
   z.strictObject({
     type: z.literal("progress"),
@@ -324,6 +335,7 @@ export type ReplyPart = z.infer<typeof ReplyPartSchema>;
 
 /** The reply that settles a guest frame. */
 export const ReplyFinalSchema = z.discriminatedUnion("type", [
+  z.strictObject({ type: z.literal("snapshot.receipts"), receipts: z.array(RunReceiptSchema) }),
   z.strictObject({ type: z.literal("ack") }),
   z.strictObject({ type: z.literal("model.end") }),
   /** A controller-run tool, already executed and logged. */
@@ -402,7 +414,7 @@ export type WorkerStatusV1 = z.infer<typeof WorkerStatusV1Schema>;
  * tool that needs one.
  */
 /** `native-loop`: the harness runs its own loop, prompt and tools, and reports a transcript. */
-export const HarnessCapability = z.enum(["subagents", "steering", "native-loop"]);
+export const HarnessCapability = z.enum(["subagents", "steering", "native-loop", "resume"]);
 export type HarnessCapability = z.infer<typeof HarnessCapability>;
 
 /** The guest frames a harness may send only with the capability it declared. */
@@ -414,6 +426,8 @@ export const FRAME_CAPABILITY: Readonly<Partial<Record<GuestBody["type"], Harnes
   "subagent.abandon": "subagents",
   "steering.claim": "steering",
   transcript: "native-loop",
+  "snapshot.save": "resume",
+  "snapshot.resolve": "resume",
 };
 
 /** The guest harness: which one runs the attempt, and its declared capabilities. */

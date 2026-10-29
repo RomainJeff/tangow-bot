@@ -74,20 +74,11 @@ async function seedExistingDeployment() {
     },
     select: { id: true },
   });
-  const run = await prisma.run.create({
-    data: {
-      id: "run_migration",
-      spaceId: SPACE,
-      botId: bot.id,
-      threadId: thread.id,
-      taskId: task.id,
-      userId: USER,
-      status: "completed",
-      trigger: "user",
-      leaseFence: 2,
-    },
-    select: { id: true },
-  });
+  const run = { id: "run_migration" };
+  await prisma.$executeRaw`INSERT INTO runs
+    (id, "spaceId", "botId", "threadId", "taskId", "userId", status, trigger, "leaseFence", "updatedAt")
+    VALUES (${run.id}, ${SPACE}, ${bot.id}, ${thread.id}, ${task.id}, ${USER},
+      'completed', 'user', 2, now())`;
   for (const [id, fence, status] of [
     ["attempt_one", 1, "interrupted"],
     ["attempt_two", 2, "completed"],
