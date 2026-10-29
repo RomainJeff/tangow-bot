@@ -448,6 +448,7 @@ import {
 import { createWebProvider } from "./web-provider-factory.js";
 import { withAbort } from "./web-ssrf.js";
 import { webFetchFromTool, webSearchFromTool } from "./web-tools.js";
+import { inlineWidgetImages, MAX_WIDGET_IMAGE_BYTES } from "./widget-images.js";
 import { indexWorkerSkills } from "./worker-skills.js";
 
 const modelCredentialLocks = new Map<string, Promise<void>>();
@@ -4083,10 +4084,17 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 return { error: error instanceof Error ? error.message : "Could not read widget" };
               }
             }
+            const inlined = await inlineWidgetImages(new TextDecoder().decode(bytes), (imagePath) =>
+              deps.sandbox.readFile(requireComputer(), resolveHomePath(imagePath), context, {
+                maxBytes: MAX_WIDGET_IMAGE_BYTES,
+              }),
+            );
+            if ("error" in inlined) return { error: inlined.error };
+            bytes = new TextEncoder().encode(inlined.html);
             if (bytes.byteLength > MAX_WIDGET_BYTES) {
               return { error: "Widget exceeds the 2 MiB limit" };
             }
-            if (/\b\d*\.?\d+(d|s|l)?vh\b/i.test(new TextDecoder().decode(bytes))) {
+            if (/\b\d*\.?\d+(d|s|l)?vh\b/i.test(inlined.html)) {
               return {
                 error: "Viewport height units are not supported. Use fixed pixel heights instead.",
               };
