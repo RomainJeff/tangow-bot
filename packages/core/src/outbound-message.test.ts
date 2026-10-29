@@ -20,27 +20,11 @@ function read(toolName: string, args: Record<string, unknown>): OutboundCall {
 }
 
 describe("readOutboundCall", () => {
-  it("drafts the traced send with every field it carries", () => {
-    expect(readOutboundCall(tracedSend)).toEqual({
-      kind: "draft",
-      draft: {
-        connectorKind: "gmail",
-        recipients: [{ role: "to", address: "someone@example.com" }],
-        subject: "Test Chief",
-        body: "Hello from Chief.",
-        account: undefined,
-        args: tracedSend.args,
-        textPath: ["body"],
-        // No schema reaches through the batch, so only the one To and the subject can change.
-        fields: {
-          recipients: [{ role: "to", path: ["recipient_email"], shape: "one" }],
-          subject: ["subject"],
-        },
-      },
-    });
+  it("reads the traced send as a message", () => {
+    expect(readOutboundCall(tracedSend)).toEqual({ kind: "message" });
   });
 
-  it("shows every recipient by role, whatever the connector calls the field", () => {
+  it("reads every recipient by role, whatever the connector calls the field", () => {
     const gmail = read("GMAIL_SEND_EMAIL", {
       recipient_email: "a@example.com",
       extra_recipients: ["b@example.com"],
@@ -68,10 +52,10 @@ describe("readOutboundCall", () => {
       subject: "Hi",
       content: "Hello",
     });
-    expect([gmail, outlook, fakeMcp].map(summary)).toEqual([
-      "draft to:a@example.com to:b@example.com cc:c@example.com bcc:d@example.com | Hi | Hello | me@example.com",
-      "draft to:a@example.com cc:c@example.com bcc:d@example.com | Hi | Hello | me@example.com",
-      "draft to:a@example.com cc:c@example.com | Hi | Hello | -",
+    expect([gmail, outlook, fakeMcp].map((call) => call.kind)).toEqual([
+      "message",
+      "message",
+      "message",
     ]);
   });
 
@@ -84,50 +68,31 @@ describe("readOutboundCall", () => {
     ["send_message", { email_address: "a@example.com", body: "Hi" }],
     ["SENDMAIL", { to: "a@example.com", body: "Hi" }],
     ["mcp__acme__sendEmail", { to: "a@example.com", body: "Hi" }],
-  ])("drafts %s with %j", (toolName, args) => {
-    expect(summary(read(toolName, args))).toBe("draft to:a@example.com | - | Hi | -");
+  ])("reads %s with %j as a message", (toolName, args) => {
+    expect(read(toolName, args).kind).toBe("message");
   });
 
-  it("shows one sender named twice, and the signed-in mailbox", () => {
+  it("reads one sender named twice, and the signed-in mailbox", () => {
     expect(
-      summary(
-        read("OUTLOOK_SEND_EMAIL", {
-          to: "a@example.com",
-          body: "Hi",
-          from_email: "me@example.com",
-          from_address: "ME@example.com",
-          user_id: "me",
-        }),
-      ),
-    ).toBe("draft to:a@example.com | - | Hi | me@example.com");
+      read("OUTLOOK_SEND_EMAIL", {
+        to: "a@example.com",
+        body: "Hi",
+        from_email: "me@example.com",
+        from_address: "ME@example.com",
+        user_id: "me",
+      }).kind,
+    ).toBe("message");
   });
 
-  it("drafts a reply that names its recipient and shows no subject", () => {
+  it("reads a reply that names its recipient and carries no subject", () => {
     expect(
-      summary(
-        read("GMAIL_REPLY_TO_THREAD", {
-          thread_id: "18c5f5d1a2b3c4d6",
-          recipient_email: "a@example.com",
-          message_body: "Thanks",
-          cc: "",
-        }),
-      ),
-    ).toBe("draft to:a@example.com | - | Thanks | -");
-  });
-
-  it("turns HTML and the automatic signature off in what is sent", () => {
-    const result = read("GMAIL_SEND_EMAIL", {
-      recipient_email: "a@example.com",
-      body: "Hello",
-      is_html: true,
-      include_signature: true,
-    });
-    expect(result.kind === "draft" && result.draft.args).toEqual({
-      recipient_email: "a@example.com",
-      body: "Hello",
-      is_html: false,
-      include_signature: false,
-    });
+      read("GMAIL_REPLY_TO_THREAD", {
+        thread_id: "18c5f5d1a2b3c4d6",
+        recipient_email: "a@example.com",
+        message_body: "Thanks",
+        cc: "",
+      }).kind,
+    ).toBe("message");
   });
 
   it.each([
@@ -171,6 +136,12 @@ describe("readOutboundCall", () => {
       { to: "a@example.com", body: "Hi", html_body: "<p>Other</p>" },
     ],
     ["two text fields", "GMAIL_SEND_EMAIL", { to: "a@example.com", body: "Hi", message: "Other" }],
+    ["HTML turned on", "GMAIL_SEND_EMAIL", { to: "a@example.com", body: "Hi", is_html: true }],
+    [
+      "the automatic signature turned on",
+      "GMAIL_SEND_EMAIL",
+      { to: "a@example.com", body: "Hi", include_signature: true },
+    ],
     [
       "a non-boolean HTML flag",
       "GMAIL_SEND_EMAIL",
@@ -307,11 +278,11 @@ describe("readOutboundCall", () => {
     });
   });
 
-  it("drafts nested recipients that fit, and sends the card the whole list", () => {
-    const result = read("OUTLOOK_SEND_EMAIL", {
-      payload: { toRecipients: nestedRecipients(3), body: "Hi" },
-    });
-    expect(result.kind === "draft" && result.draft.recipients.length).toBe(3);
+  it("reads nested recipients that fit as a message", () => {
+    expect(
+      read("OUTLOOK_SEND_EMAIL", { payload: { toRecipients: nestedRecipients(3), body: "Hi" } })
+        .kind,
+    ).toBe("message");
   });
 
   it("refuses a send the classic card would cut recipients from", () => {
@@ -398,9 +369,9 @@ describe("readOutboundCall", () => {
     });
   });
 
-  it("drafts a send to many recipients that still fit the card", () => {
+  it("reads a send to many recipients that still fit the card as a message", () => {
     const bcc = Array.from({ length: 100 }, (_, i) => `p${i}@example.test`);
-    expect(read("GMAIL_SEND_EMAIL", { to: "a@example.com", bcc, body: "Hi" }).kind).toBe("draft");
+    expect(read("GMAIL_SEND_EMAIL", { to: "a@example.com", bcc, body: "Hi" }).kind).toBe("message");
   });
 
   it.each([
@@ -416,70 +387,6 @@ describe("readOutboundCall", () => {
       error,
     });
   });
-
-  it("finds a body nested where the connector puts it", () => {
-    const result = read("mcp__acme-mail__sendMessage", {
-      toRecipients: [{ emailAddress: { address: "a@example.com" } }],
-      email: { body: "Hello" },
-    });
-    expect(result.kind === "draft" && result.draft.textPath).toEqual(["email", "body"]);
-  });
-
-  it("never drafts a mail with text the card does not show", () => {
-    const keys = fc.constantFrom(
-      "to",
-      "cc",
-      "bcc",
-      "recipient_email",
-      "toRecipients",
-      "emailAddress",
-      "address",
-      "message",
-      "body",
-      "subject",
-      "is_html",
-      "thread_id",
-      "notes",
-      "html_body",
-      "payload",
-    );
-    const value = fc.letrec((tie) => ({
-      leaf: fc.oneof(
-        fc.constantFrom("a@example.com", "Marie <m@example.com>", "Hello", "", true, false, null),
-        fc.string(),
-        fc.integer(),
-      ),
-      node: fc.oneof(
-        { depthSize: "small" },
-        tie("leaf"),
-        fc.array(tie("leaf"), { maxLength: 3 }),
-        fc.dictionary(keys, tie("node"), { maxKeys: 3 }),
-      ),
-    }));
-    fc.assert(
-      fc.property(fc.dictionary(keys, value.node, { maxKeys: 4 }), (extra) => {
-        const args = { recipient_email: "a@example.com", body: "Hello", ...extra };
-        const result = read("GMAIL_SEND_EMAIL", args);
-        if (result.kind !== "draft") return;
-        const shown = [
-          result.draft.body,
-          result.draft.subject,
-          ...result.draft.recipients.map((recipient) => recipient.address),
-        ];
-        for (const path of flagPaths(args)) {
-          expect(path.some((key) => /^(is_html|thread_id)$/.test(key))).toBe(true);
-        }
-        for (const [path, leaf] of stringLeaves(args)) {
-          if (!leaf.trim() || path.includes("thread_id")) continue;
-          const parts = path.some((key) => /to|cc|recipient/.test(key))
-            ? leaf.split(",").map((part) => part.trim())
-            : [leaf];
-          for (const part of parts) expect(shown).toContain(part);
-        }
-      }),
-      { numRuns: 500 },
-    );
-  });
 });
 
 describe("readOutboundCall on a chat app's send", () => {
@@ -489,26 +396,14 @@ describe("readOutboundCall on a chat app's send", () => {
   // Composio's Slack send as its docs give it (2026-10): a conversation id and Markdown text.
   const slackSend = { channel: "D0MARIE", markdown_text: "Thursday instead?" };
 
-  it("reads a send to one conversation as a chat draft waiting for its recipient's name", () => {
+  it("reads a send to one conversation as a message", () => {
     expect(
       chat("SLACK_SEND_MESSAGE", { ...slackSend, thread_ts: "1.2", unfurl_links: true }),
-    ).toEqual({
-      kind: "chat",
-      draft: {
-        connectorKind: "slack",
-        recipients: [{ role: "to", address: "D0MARIE" }],
-        body: "Thursday instead?",
-        args: { ...slackSend, thread_ts: "1.2", unfurl_links: true },
-        textPath: ["markdown_text"],
-      },
+    ).toEqual({ kind: "message" });
+    expect(chat("SLACK_CHAT_POST_MESSAGE", { channel_id: "C0GENERAL", text: "Hi" })).toEqual({
+      kind: "message",
     });
-    expect(chat("SLACK_CHAT_POST_MESSAGE", { channel_id: "C0GENERAL", text: "Hi" })).toMatchObject({
-      kind: "chat",
-      draft: { recipients: [{ role: "to", address: "C0GENERAL" }], textPath: ["text"] },
-    });
-  });
-
-  it("reads Slack's own server's send, a user id standing for a direct message", () => {
+    // Slack's own server's send, a user id standing for a direct message.
     const args = {
       channel_id: "U0MARIE",
       message: "Thursday instead?",
@@ -516,14 +411,7 @@ describe("readOutboundCall on a chat app's send", () => {
       reply_broadcast: false,
       unfurl_app_links: true,
     };
-    expect(chat("slack_send_message", args)).toMatchObject({
-      kind: "chat",
-      draft: {
-        recipients: [{ role: "to", address: "U0MARIE" }],
-        body: "Thursday instead?",
-        textPath: ["message"],
-      },
-    });
+    expect(chat("slack_send_message", args)).toEqual({ kind: "message" });
     // A Slack draft of its own, deleted once sent, is not something the card shows.
     expect(chat("slack_send_message", { ...args, draft_id: "Dr0" })).toEqual({ kind: "classic" });
   });
@@ -561,13 +449,13 @@ describe("readOutboundCall on a chat app's send", () => {
   });
 
   it("keeps reading a mail as a mail", () => {
-    expect(readOutboundCall(tracedSend, [], chatApps).kind).toBe("draft");
+    expect(readOutboundCall(tracedSend, [], chatApps).kind).toBe("message");
     expect(read("GMAIL_SEND_EMAIL", { ...tracedSend.args, channel: "C0GENERAL" })).toEqual({
       kind: "classic",
     });
   });
 
-  it("never drafts a chat message with text the card does not show", () => {
+  it("never leaves a chat app's send without a card", () => {
     const keys = fc.constantFrom(
       "channel",
       "channel_id",
@@ -587,43 +475,11 @@ describe("readOutboundCall on a chat app's send", () => {
     );
     fc.assert(
       fc.property(fc.dictionary(keys, value, { maxKeys: 4 }), (extra) => {
-        const args = { ...slackSend, ...extra };
-        const result = chat("SLACK_SEND_MESSAGE", args);
+        const result = chat("SLACK_SEND_MESSAGE", { ...slackSend, ...extra });
         // Whatever it holds, a Slack send shows a card: never none, which would send it unseen.
         expect(result.kind).not.toBe("none");
-        if (result.kind !== "chat") return;
-        const shown = [result.draft.body, result.draft.recipients[0]!.address];
-        for (const [path, leaf] of stringLeaves(args)) {
-          if (!leaf.trim() || path.includes("thread_ts")) continue;
-          expect(shown).toContain(leaf);
-        }
       }),
       { numRuns: 500 },
     );
   });
 });
-
-function summary(result: OutboundCall): string {
-  if (result.kind !== "draft") return result.kind;
-  const { recipients, subject, body, account } = result.draft;
-  const to = recipients.map((recipient) => `${recipient.role}:${recipient.address}`).join(" ");
-  return `draft ${to} | ${subject ?? "-"} | ${body} | ${account ?? "-"}`;
-}
-
-function stringLeaves(value: unknown, path: string[] = []): Array<[string[], string]> {
-  if (typeof value === "string") return [[path, value]];
-  if (Array.isArray(value)) return value.flatMap((item) => stringLeaves(item, path));
-  if (value && typeof value === "object") {
-    return Object.entries(value).flatMap(([key, child]) => stringLeaves(child, [...path, key]));
-  }
-  return [];
-}
-
-function flagPaths(value: unknown, path: string[] = []): string[][] {
-  if (typeof value === "boolean" || typeof value === "number") return [path];
-  if (Array.isArray(value)) return value.flatMap((item) => flagPaths(item, path));
-  if (value && typeof value === "object") {
-    return Object.entries(value).flatMap(([key, child]) => flagPaths(child, [...path, key]));
-  }
-  return [];
-}

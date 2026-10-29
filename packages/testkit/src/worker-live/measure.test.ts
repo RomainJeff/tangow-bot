@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it, onTestFinished } from "vitest";
 import type { ModelEmulatorStep } from "../model-emulator.js";
+import { prepares } from "../model-emulator.js";
 import { VolumeComputer } from "../volume-computer.js";
 import type { ScenarioId, TurnRecord } from "./measure.js";
 import { measureTokens, resolveModels, stableLocalWorkers } from "./measure.js";
@@ -26,6 +27,7 @@ const SCRIPTS: Record<ScenarioId, ModelEmulatorStep[]> = {
   computer: [tool("look", "computer_observe", {}), ...say("Example Domain."), ...say("Nothing.")],
   approval: [1, 2].flatMap((note) => [
     tool(`publish-${note}`, "publish_note", { title: `Measurement ${note}` }),
+    prepares(),
     text("Waiting for approval."),
     ...say("Published."),
   ]),

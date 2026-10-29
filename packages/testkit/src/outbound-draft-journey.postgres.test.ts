@@ -5,6 +5,7 @@ import { projectThreadItems } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import { latestCard } from "./index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
+import { prepares } from "./model-emulator.js";
 import type { JourneyFixture } from "./pi-journey.test-support.js";
 import { DONE, journey, reply, rpc, WAITING } from "./pi-journey.test-support.js";
 
@@ -22,7 +23,26 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
       recipient_email: "someone@example.test",
       subject: "Hello",
       body: "Draft from the bot.",
+      include_signature: false,
     };
+    const array = (role: string, key: string) => ({
+      role,
+      path: [key],
+      shape: "array",
+      addresses: [],
+    });
+    const prepareMail = prepares({
+      card: "mail",
+      recipients: [
+        { role: "to", path: ["recipient_email"], shape: "one", addresses: [mail.recipient_email] },
+        array("to", "extra_recipients"),
+        array("cc", "cc"),
+        array("bcc", "bcc"),
+      ],
+      subject: { path: ["subject"], value: mail.subject },
+      body: { path: ["body"], value: mail.body },
+      unshown: [["include_signature"]],
+    });
     const proposeMail: ModelEmulatorStep = {
       expect(request) {
         expect(offeredTools(request)).toContain("GMAIL_SEND_EMAIL");
@@ -81,6 +101,7 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
       await journey(
         [
           proposeMail,
+          prepareMail,
           WAITING,
           {
             expect(request) {
@@ -106,7 +127,7 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
           await answerDraft(fixture, sent.runId, { text: "Edited by me." });
           await sent.settled("completed");
           expect(composio.executions.map((call) => [call.tool, call.args])).toEqual([
-            ["GMAIL_SEND_EMAIL", { ...mail, body: "Edited by me.", include_signature: false }],
+            ["GMAIL_SEND_EMAIL", { ...mail, body: "Edited by me." }],
           ]);
           expect(mailed()).toEqual(["Edited by me."]);
           // The run also records its message_user call, so the mail's row is read by its tool.
@@ -126,6 +147,7 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
       await journey(
         [
           proposeMail,
+          prepareMail,
           WAITING,
           {
             expect(request) {
@@ -191,6 +213,17 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
               arguments: outlook,
             },
           },
+          prepares({
+            card: "mail",
+            recipients: [
+              { role: "to", path: ["to"], shape: "one", addresses: [outlook.to] },
+              array("cc", "cc_emails"),
+              array("bcc", "bcc_emails"),
+            ],
+            subject: { path: ["subject"], value: outlook.subject },
+            body: { path: ["body"], value: outlook.body },
+            unshown: [],
+          }),
           WAITING,
           { expect() {}, response: reply("Sent.") },
           DONE,
@@ -248,6 +281,12 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
               arguments: message,
             },
           },
+          prepares({
+            card: "chat",
+            conversation: { path: ["channel"], value: message.channel },
+            body: { path: ["markdown_text"], value: message.markdown_text },
+            unshown: [],
+          }),
           WAITING,
           {
             expect(request) {
@@ -289,7 +328,7 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
       const composio = new ComposioEmulator();
       composio.failNext("GMAIL_SEND_EMAIL", { kind: "timeout" });
       await journey(
-        [proposeMail, WAITING],
+        [proposeMail, prepareMail, WAITING],
         async (fixture) => {
           const mailed = await connectGmail(composio, fixture);
           const sent = await fixture.send("Mail them hello.");
@@ -316,6 +355,7 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
       await journey(
         [
           proposeMail,
+          prepareMail,
           WAITING,
           {
             expect(request) {
@@ -353,6 +393,7 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
       await journey(
         [
           proposeMail,
+          prepareMail,
           WAITING,
           {
             expect(request) {
@@ -416,6 +457,7 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
       await journey(
         [
           proposeMail,
+          prepareMail,
           WAITING,
           {
             expect(request) {

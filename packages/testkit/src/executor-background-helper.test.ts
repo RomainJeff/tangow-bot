@@ -7,6 +7,7 @@ import { stopThreadRuns, threadSnapshot } from "../../../apps/api/src/thread-tar
 import { toolResult } from "./file-task.js";
 import { latestCard } from "./index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
+import { prepares } from "./model-emulator.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
 
 const cleanups: Array<() => Promise<void>> = [];
@@ -924,6 +925,7 @@ it("does not wake the bot again for a report its resumed turn already read", asy
         },
         response: publish.response,
       },
+      prepares(),
       { expect() {}, response: { type: "text", text: "Waiting." } },
       { expect() {}, response: { type: "text", text: REPORT } },
       {

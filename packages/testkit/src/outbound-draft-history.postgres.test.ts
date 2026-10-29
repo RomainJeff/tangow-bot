@@ -7,6 +7,7 @@ import {
 import { describe, expect, it } from "vitest";
 import { latestCard } from "./index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
+import { prepares } from "./model-emulator.js";
 import type { JourneyFixture } from "./pi-journey.test-support.js";
 import { DONE, journey, reply, rpc, WAITING } from "./pi-journey.test-support.js";
 
@@ -26,6 +27,15 @@ const mailTo = (address: string, id: string, extra: Record<string, unknown> = {}
       arguments: { recipient_email: address, subject: "Hello", body: `Hi ${address}.`, ...extra },
     },
   }) satisfies ModelEmulatorStep;
+
+const prepareMail = (address: string, extra: Record<string, unknown> = {}) =>
+  prepares({
+    card: "mail",
+    recipients: [{ role: "to", path: ["recipient_email"], shape: "one", addresses: [address] }],
+    subject: { path: ["subject"], value: "Hello" },
+    body: { path: ["body"], value: `Hi ${address}.` },
+    unshown: Object.keys(extra).map((key) => [key]),
+  });
 
 /** The send calls the model reads back among its earlier steps, each with its recipient and result. */
 const sends = (request: ModelEmulatorRequest) => {
@@ -94,6 +104,7 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
     await journey(
       [
         mailTo("anna@example.test", "mail-a"),
+        prepareMail("anna@example.test"),
         WAITING,
         {
           expect(request) {
@@ -105,6 +116,7 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
           },
           response: mailTo("ben@example.test", "mail-b").response,
         },
+        prepareMail("ben@example.test"),
         WAITING,
         {
           expect(request) {
@@ -141,12 +153,13 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
     );
   }, 60_000);
 
-  it("tells the bot a draft was discarded, and a re-issued mail with other notes opens no new card", async () => {
+  it("tells the bot a draft was discarded, and the same mail issued again opens no new card", async () => {
     const composio = new ComposioEmulator();
     let answered: unknown;
     await journey(
       [
         mailTo("anna@example.test", "mail-1", { thought: "Mail Anna." }),
+        prepareMail("anna@example.test", { thought: "Mail Anna." }),
         WAITING,
         {
           expect(request) {
@@ -158,7 +171,7 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
               "resuming this run after the user answered your draft card",
             );
           },
-          response: mailTo("anna@example.test", "mail-2", { thought: "Mail Anna again." }).response,
+          response: mailTo("anna@example.test", "mail-2", { thought: "Mail Anna." }).response,
         },
         WAITING,
         {
@@ -204,6 +217,7 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
           },
         },
         mailTo("anna@example.test", "mail-h"),
+        prepareMail("anna@example.test"),
         WAITING,
         {
           expect(request) {
@@ -233,6 +247,7 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
     await journey(
       [
         mailTo("anna@example.test", "mail-1"),
+        prepareMail("anna@example.test"),
         WAITING,
         {
           expect(request) {
@@ -268,7 +283,7 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
     it("is told to the bot as a result that says it may or may not have left", async () => {
       const composio = new ComposioEmulator();
       await journey(
-        [mailTo("anna@example.test", "mail-1"), WAITING],
+        [mailTo("anna@example.test", "mail-1"), prepareMail("anna@example.test"), WAITING],
         async (fixture) => {
           const { mailed, runId, effect } = await stranded(fixture, composio);
           const { threadId } = await fixture.prisma.run.findUniqueOrThrow({ where: { id: runId } });
@@ -320,7 +335,7 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
     it("leaves a cancelled run's log as it is, without failing the stop", async () => {
       const composio = new ComposioEmulator();
       await journey(
-        [mailTo("anna@example.test", "mail-1"), WAITING],
+        [mailTo("anna@example.test", "mail-1"), prepareMail("anna@example.test"), WAITING],
         async (fixture) => {
           const { runId, effect } = await stranded(fixture, composio);
           await fixture.prisma.externalEffect.update({

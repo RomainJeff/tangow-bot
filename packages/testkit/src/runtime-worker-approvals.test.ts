@@ -2,6 +2,7 @@ import type { ConnectorProvider } from "@rakazo/adapter-kit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { latestCard } from "./index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
+import { prepares } from "./model-emulator.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
 
 type WorkerRun = Awaited<ReturnType<typeof startWorkerRun>>;
@@ -70,15 +71,18 @@ const ranBefore = (request: ModelEmulatorRequest | undefined) =>
     )
     .join("\n");
 
-/** Pi closes its turn with one more model call once a pausing call answers that the run waits. */
+const waiting: ModelEmulatorStep = { expect() {}, response: { type: "text", text: "Waiting." } };
+
+/**
+ * Pi closes its turn with one more model call once a pausing call answers that the run waits. A
+ * note asks its model first whether it is a message to show on the draft card, which it is not.
+ */
 function closingTurns(steps: ModelEmulatorStep[]): ModelEmulatorStep[] {
   return steps.flatMap((step) => {
     const response = step.response;
-    return typeof response !== "function" &&
-      response.type === "tool" &&
-      ["publish_note", "request_secret"].includes(response.name)
-      ? [step, { expect() {}, response: { type: "text", text: "Waiting." } }]
-      : [step];
+    if (typeof response === "function" || response.type !== "tool") return [step];
+    if (response.name === "publish_note") return [step, prepares(), waiting];
+    return response.name === "request_secret" ? [step, waiting] : [step];
   });
 }
 

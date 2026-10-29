@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { performance } from "node:perf_hooks";
 import type { AgentRunRequest } from "@rakazo/adapter-kit";
+import { DRAFT_CARDS } from "@rakazo/core";
 
 export interface ModelEmulatorRequest {
   model: string;
@@ -14,7 +15,10 @@ export interface ModelEmulatorRequest {
     tool_call_id?: string;
     tool_calls?: Array<{ id: string; type: string; function: { name: string; arguments: string } }>;
   }>;
-  tools?: Array<{ type: string; function: { name: string; parameters: unknown } }>;
+  tools?: Array<{
+    type: string;
+    function: { name: string; parameters: unknown; strict?: boolean };
+  }>;
 }
 
 /** Token counts the response reports in a final usage chunk. */
@@ -54,6 +58,22 @@ export interface ModelEmulatorStep {
   response: ModelEmulatorResponse | ((request: ModelEmulatorRequest) => ModelEmulatorResponse);
 }
 
+export function prepares(
+  proposal?: { card: keyof typeof DRAFT_CARDS } & Record<string, unknown>,
+): ModelEmulatorStep {
+  const offered = (request: ModelEmulatorRequest) =>
+    assert.deepEqual(
+      request.tools?.map((tool) => tool.function.name),
+      [DRAFT_CARDS.mail.name, DRAFT_CARDS.chat.name],
+    );
+  if (!proposal) return { expect: offered, response: { type: "text", text: "classic" } };
+  const { card, ...value } = proposal;
+  return {
+    expect: offered,
+    response: { type: "tool", id: "draft-card", name: DRAFT_CARDS[card].name, arguments: value },
+  };
+}
+
 /**
  * A loopback-only model protocol fixture. Pi itself and its HTTP/SSE transport
  * stay real. This tests execution, not whether a model can choose these actions.
@@ -77,6 +97,11 @@ export async function startModelEmulator(options: {
   const failures: Error[] = [];
   let stepIndex = 0;
   const server = createServer((request, response) => {
+    if (request.method === "GET" && request.url === "/") {
+      response.writeHead(404);
+      response.end();
+      return;
+    }
     const received = performance.now();
     let firstByte = received;
     response.once("finish", () =>
@@ -267,7 +292,7 @@ function fromAnthropic(raw: {
   model: string;
   stream: boolean;
   messages: Array<{ role: string; content: string | AnthropicBlock[] }>;
-  tools?: Array<{ name: string; input_schema: unknown }>;
+  tools?: Array<{ name: string; input_schema: unknown; strict?: boolean }>;
 }): ModelEmulatorRequest {
   const messages = raw.messages.flatMap((message): ModelEmulatorRequest["messages"] => {
     if (typeof message.content === "string")
@@ -292,7 +317,11 @@ function fromAnthropic(raw: {
     messages,
     tools: raw.tools?.map((tool) => ({
       type: "function",
-      function: { name: tool.name, parameters: tool.input_schema },
+      function: {
+        name: tool.name,
+        parameters: tool.input_schema,
+        ...(tool.strict === undefined ? {} : { strict: tool.strict }),
+      },
     })),
   };
 }

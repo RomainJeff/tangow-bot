@@ -414,6 +414,13 @@ export interface AgentRunModel {
   };
 }
 
+/** One typed result a model can answer a call with, named for the model to pick. */
+export interface AgentRunAnswerSchema {
+  name: string;
+  description: string;
+  schema: Record<string, unknown>;
+}
+
 export interface AgentRunRequest {
   persistence?: RunPersistence;
   resumeEvent?: string;
@@ -454,6 +461,11 @@ export interface AgentRunRequest {
   runRecap?: boolean;
   /** Contextual fallback when a non-silent run produces no written response. */
   emptyResponseText?: string;
+  /**
+   * Typed results the model may answer with instead of text, each an object JSON Schema. The model
+   * fills one in; nothing is executed. A runtime that cannot offer them answers with text only.
+   */
+  answer?: { schemas: AgentRunAnswerSchema[] };
   executeTool?: (
     name: string,
     args: Record<string, unknown>,
@@ -627,6 +639,8 @@ export type AgentRuntimeEvent =
       privateFinalText?: string;
       /** Recovery text authored by the runtime, never inferred from model prose. */
       runtimeNotice?: string;
+      /** The one typed result of `request.answer` the model filled in, as it gave it. */
+      answer?: { name: string; value: Record<string, unknown> };
     };
 
 export interface AgentRuntimeCapabilities {

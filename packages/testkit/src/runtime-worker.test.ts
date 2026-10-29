@@ -6,6 +6,7 @@ import { bundleGuest } from "@rakazo/agent-run-worker/bundle";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { latestCard } from "./index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
+import { prepares } from "./model-emulator.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
 
 type WorkerRun = Awaited<ReturnType<typeof startWorkerRun>>;
@@ -476,6 +477,7 @@ describe("a run whose bot runs in a guest", () => {
       },
       steps: [
         { expect() {}, response: { type: "tool", ...publish, siblings: [sibling] } },
+        prepares(),
         closingTurn,
         {
           expect(request) {

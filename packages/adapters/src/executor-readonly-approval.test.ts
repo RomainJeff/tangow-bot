@@ -8,7 +8,7 @@ import type {
 import type { AskDraftEdits, MessageBlock } from "@rakazo/contracts";
 import { askDraftState } from "@rakazo/contracts";
 import type { ActionApprovalRule, DraftRecord } from "@rakazo/core";
-import { draftWithState, editDraftRequest, valueAt, withValueAt } from "@rakazo/core";
+import { DRAFT_CARDS, draftWithState, editDraftRequest, valueAt, withValueAt } from "@rakazo/core";
 import { approvalEffectKey, toolEffectIdempotencyKey } from "@rakazo/core/node/approval-effect-key";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isApprovalPausedResult } from "./approval-effect.js";
@@ -48,6 +48,40 @@ type Effect = {
   answeredAt?: Date;
 };
 
+type Proposal = { card: keyof typeof DRAFT_CARDS } & Record<string, unknown>;
+
+function proposeDraft(args: Record<string, unknown>): Proposal | undefined {
+  const recipients: unknown[] = [];
+  const unshown: string[][] = [];
+  const fields: Record<string, { path: string[]; value: unknown }> = {};
+  for (const [key, value] of Object.entries(args)) {
+    if (key === "recipient_email" || key === "to") {
+      recipients.push({
+        role: "to",
+        path: [key],
+        shape: "one",
+        addresses: [value],
+      });
+    } else if (key === "cc") {
+      recipients.push({
+        role: "cc",
+        path: [key],
+        shape: "array",
+        addresses: value,
+      });
+    } else if (key === "subject") fields.subject = { path: [key], value };
+    else if (["body", "markdown_text", "message"].includes(key))
+      fields.body = { path: [key], value };
+    else if (["channel", "channel_id"].includes(key)) fields.conversation = { path: [key], value };
+    else if (["is_html", "include_signature", "thread_id", "thread_ts", "thought"].includes(key)) {
+      unshown.push([key]);
+    } else return undefined;
+  }
+  return fields.conversation
+    ? { card: "chat", ...fields, unshown }
+    : { card: "mail", recipients, ...fields, unshown };
+}
+
 function fixture({
   name = "demo_get_item",
   catalog = false,
@@ -69,16 +103,24 @@ function fixture({
   secrets = [] as string[],
   /** The connector that answers every call, such as the Composio emulator; a stub by default. */
   connector = undefined as
-    | { execute(call: ConnectorCall, context: AdapterContext): AsyncIterable<ConnectorEvent> }
+    | {
+        execute(call: ConnectorCall, context: AdapterContext): AsyncIterable<ConnectorEvent>;
+      }
     | undefined,
   connectorFailure = undefined as Extract<ConnectorEvent, { type: "error" }> | undefined,
+  prepare = proposeDraft,
+  readOnly = true,
 } = {}) {
   const tool: ConnectorTool = {
     name,
     description: "Read an item",
-    readOnly: true,
+    readOnly,
     inputSchema,
-    route: { connectorId, resourceId: "resource-1", toolName: routeToolName ?? name },
+    route: {
+      connectorId,
+      resourceId: "resource-1",
+      toolName: routeToolName ?? name,
+    },
   };
   const effects: Effect[] = [];
   const results: unknown[] = [];
@@ -201,7 +243,10 @@ function fixture({
           const index = orderBy?.seq === "desc" ? pauses.length - 1 : 0;
           const paused = pauses[index]?.[0];
           return paused
-            ? { id: `card-entry-${index + 1}`, payload: { card: paused.blocks[0] } }
+            ? {
+                id: `card-entry-${index + 1}`,
+                payload: { card: paused.blocks[0] },
+              }
             : null;
         },
       ),
@@ -219,7 +264,10 @@ function fixture({
       findUnique: vi.fn(async () => run),
       findUniqueOrThrow: vi.fn(async () => run),
       // The notification source of a push: a bot that notifies.
-      findFirst: vi.fn(async () => ({ bot: { notifyOnFinish: true }, thread: { groupId: null } })),
+      findFirst: vi.fn(async () => ({
+        bot: { notifyOnFinish: true },
+        thread: { groupId: null },
+      })),
       findMany: vi.fn(async () => []),
       updateMany: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
         // One worker leases a run: a second claim finds it taken.
@@ -249,11 +297,20 @@ function fixture({
       updateMany: vi.fn(async () => ({ count: 1 })),
     },
     thread: {
-      findUniqueOrThrow: vi.fn(async () => ({ id: run.threadId, groupId: null, nextEventSeq: 2 })),
+      findUniqueOrThrow: vi.fn(async () => ({
+        id: run.threadId,
+        groupId: null,
+        nextEventSeq: 2,
+      })),
       findFirst: vi.fn(async () => ({ groupId: null })),
       count: vi.fn(async () => 0),
     },
-    task: { findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: "Read the item" })) },
+    task: {
+      findUniqueOrThrow: vi.fn(async () => ({
+        id: run.taskId,
+        prompt: "Read the item",
+      })),
+    },
     connection: { findMany: vi.fn(async () => []) },
     mcpServer: {
       findFirst: vi.fn(
@@ -283,7 +340,9 @@ function fixture({
     botSkill: { findMany: vi.fn(async () => []) },
     scratchpadItem: { findMany: vi.fn(async () => []) },
     actionApprovalRule: { findMany: vi.fn(async () => rules) },
-    actionAutoReviewPreference: { findUnique: vi.fn(async () => ({ enabled: autoReview })) },
+    actionAutoReviewPreference: {
+      findUnique: vi.fn(async () => ({ enabled: autoReview })),
+    },
     externalEffect,
   };
   const finalizeRun = vi.fn(async () => ({ continuationRunId: null }));
@@ -299,7 +358,22 @@ function fixture({
   let calls: Array<{ args: Record<string, unknown>; executionId: string }> = [
     { args: { id: "item-1" }, executionId: "call-1" },
   ];
+  const preparations: Array<Record<string, unknown>> = [];
   const runtimeRun = vi.fn(async function* (request: AgentRunRequest) {
+    if (request.answer) {
+      const args = JSON.parse(
+        request.prompt.split("<arguments>\n")[1]!.split("\n</arguments>")[0]!,
+      );
+      preparations.push(args);
+      const proposal = prepare(args);
+      if (!proposal) {
+        yield { type: "done" as const, text: "classic" };
+        return;
+      }
+      const { card, ...value } = proposal;
+      yield { type: "done" as const, answer: { name: DRAFT_CARDS[card].name, value } };
+      return;
+    }
     for (const call of calls) {
       const result = await request.executeTool!(
         catalog ? "demo_execute_tool" : name,
@@ -321,7 +395,10 @@ function fixture({
   const executor = createRunExecutor({
     sessionLog: log.sessionLog,
     prisma,
-    runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
+    runtime: {
+      describe: () => ({ capabilities: { scripted: false } }),
+      run: runtimeRun,
+    },
     connector: {
       discoverTools: async () =>
         !connected
@@ -351,6 +428,7 @@ function fixture({
   return {
     effects,
     results,
+    preparations,
     execute,
     send,
     pauseRunForInput,
@@ -423,7 +501,11 @@ describe("connector read-only metadata and approval enforcement", () => {
     });
     await f.run();
     expect(f.results).toEqual([
-      { error: "Reconnect this app", kind: "auth_required", details: { status: 401 } },
+      {
+        error: "Reconnect this app",
+        kind: "auth_required",
+        details: { status: 401 },
+      },
     ]);
     expect(f.execute).toHaveBeenCalledOnce();
   });
@@ -433,7 +515,10 @@ describe("connector read-only metadata and approval enforcement", () => {
     f.setCalls([{ args: { id: 123 }, executionId: "invalid-call" }]);
     await f.run();
     expect(f.results).toEqual([
-      { error: expect.stringContaining("Tool arguments are invalid"), kind: "invalid_arguments" },
+      {
+        error: expect.stringContaining("Tool arguments are invalid"),
+        kind: "invalid_arguments",
+      },
     ]);
     expect(f.execute).not.toHaveBeenCalled();
   });
@@ -473,7 +558,12 @@ describe("connector read-only metadata and approval enforcement", () => {
         expect(f.pauseRunForInput).toHaveBeenCalledOnce();
         expect(f.pauseRunForInput).toHaveBeenCalledWith(
           expect.objectContaining({
-            blocks: [expect.objectContaining({ kind: "ask", approvalEffectId: f.effects[0]!.id })],
+            blocks: [
+              expect.objectContaining({
+                kind: "ask",
+                approvalEffectId: f.effects[0]!.id,
+              }),
+            ],
           }),
         );
         expect(isApprovalPausedResult(f.results[0])).toBe(true);
@@ -484,7 +574,13 @@ describe("connector read-only metadata and approval enforcement", () => {
     it("replays the approved arguments once and returns the result on retry", async () => {
       const f = fixture({
         catalog,
-        rules: [{ effect: "require_approval", matchKind: "tool", matchValue: "demo_get_item" }],
+        rules: [
+          {
+            effect: "require_approval",
+            matchKind: "tool",
+            matchValue: "demo_get_item",
+          },
+        ],
       });
       await f.run();
       expect(f.effects).toHaveLength(1);
@@ -495,7 +591,9 @@ describe("connector read-only metadata and approval enforcement", () => {
       expect(f.execute).toHaveBeenCalledWith(
         expect.objectContaining({
           args: { id: "item-1" },
-          executionId: approvalEffectKey("run-1", "demo_get_item", { id: "item-1" }),
+          executionId: approvalEffectKey("run-1", "demo_get_item", {
+            id: "item-1",
+          }),
         }),
         expect.anything(),
       );
@@ -508,7 +606,11 @@ describe("connector read-only metadata and approval enforcement", () => {
     it("executes a later identical-args call after an approved replay when approval is not required by default", async () => {
       const args = { id: "item-1" };
       const rules: ActionApprovalRule[] = [
-        { effect: "require_approval", matchKind: "tool", matchValue: "demo_get_item" },
+        {
+          effect: "require_approval",
+          matchKind: "tool",
+          matchValue: "demo_get_item",
+        },
       ];
       const f = fixture({ catalog, rules });
       await f.run();
@@ -533,7 +635,13 @@ describe("connector read-only metadata and approval enforcement", () => {
     it("honors a persisted denial on a new tool call id", async () => {
       const f = fixture({
         catalog,
-        rules: [{ effect: "require_approval", matchKind: "tool", matchValue: "demo_get_item" }],
+        rules: [
+          {
+            effect: "require_approval",
+            matchKind: "tool",
+            matchValue: "demo_get_item",
+          },
+        ],
       });
       await f.run();
       expect(f.effects).toHaveLength(1);
@@ -547,7 +655,11 @@ describe("connector read-only metadata and approval enforcement", () => {
 
     it("consumes the saved approval after the user chooses always allow", async () => {
       const rules: ActionApprovalRule[] = [
-        { effect: "require_approval", matchKind: "tool", matchValue: "demo_get_item" },
+        {
+          effect: "require_approval",
+          matchKind: "tool",
+          matchValue: "demo_get_item",
+        },
       ];
       const f = fixture({ catalog, rules });
       await f.run();
@@ -597,7 +709,13 @@ describe("connector read-only metadata and approval enforcement", () => {
         catalog,
         name: "demo_send_message",
         autoReview: true,
-        rules: [{ effect: "always_allow", matchKind: "tool", matchValue: "demo_send_message" }],
+        rules: [
+          {
+            effect: "always_allow",
+            matchKind: "tool",
+            matchValue: "demo_send_message",
+          },
+        ],
       });
       await f.run();
       expect(f.execute).toHaveBeenCalledOnce();
@@ -610,7 +728,13 @@ describe("connector read-only metadata and approval enforcement", () => {
         catalog,
         name: "demo_send_message",
         trigger: "webhook",
-        rules: [{ effect: "always_allow", matchKind: "tool", matchValue: "demo_send_message" }],
+        rules: [
+          {
+            effect: "always_allow",
+            matchKind: "tool",
+            matchValue: "demo_send_message",
+          },
+        ],
       });
       await f.run();
       expect(f.execute).not.toHaveBeenCalled();
@@ -635,7 +759,13 @@ describe("connector read-only metadata and approval enforcement", () => {
         name: "demo_send_message",
         trigger: "webhook",
         requireToolApproval: false,
-        rules: [{ effect: "require_approval", matchKind: "tool", matchValue: "demo_send_message" }],
+        rules: [
+          {
+            effect: "require_approval",
+            matchKind: "tool",
+            matchValue: "demo_send_message",
+          },
+        ],
       });
       await asked.run();
       expect(asked.execute).not.toHaveBeenCalled();
@@ -650,7 +780,11 @@ describe("connector read-only metadata and approval enforcement", () => {
           reason: "Review result",
           model: "scripted/checker",
         });
-        const f = fixture({ catalog, name: "demo_send_message", autoReview: true });
+        const f = fixture({
+          catalog,
+          name: "demo_send_message",
+          autoReview: true,
+        });
         await f.run();
         expect(runAutoReviewJudge).toHaveBeenCalledOnce();
         expect(f.effects[0]?.reviewDecision).toBe(decision);
@@ -734,7 +868,9 @@ describe("connector read-only metadata and approval enforcement", () => {
       await f.run();
       expect(f.send).toHaveBeenCalledOnce();
       expect(f.send).toHaveBeenCalledWith(
-        expect.objectContaining({ body: "Slack: Thursday instead? to Marie Dupont" }),
+        expect.objectContaining({
+          body: "Slack: Thursday instead? to Marie Dupont",
+        }),
         expect.anything(),
       );
     });
@@ -743,22 +879,18 @@ describe("connector read-only metadata and approval enforcement", () => {
       ["refuses", { kind: "fail", error: "missing_scope" } as const],
       ["never answers", { kind: "hang" } as const],
     ])(
-      "shows the classic card when Slack %s to name the recipient, sending nothing",
+      "shows the draft to the conversation's id when Slack %s to name it, sending nothing",
       async (_, fault) => {
         const slack = new ComposioEmulator();
         slack.failNext("SLACK_RETRIEVE_CONVERSATION_INFORMATION", fault);
         const f = slackSend(slack);
         await f.run();
         expect(sends(slack)).toEqual([]);
-        expect(card(f)).toMatchObject({
-          actions: [
-            { id: "allow", label: "Allow once" },
-            { id: "deny", label: "Deny" },
-          ],
-          detail: "channel: D0MARIE\nmarkdown_text: Thursday instead?",
+        expect(card(f).draft).toMatchObject({
+          recipients: [{ role: "to", address: "D0MARIE" }],
+          body: "Thursday instead?",
         });
-        expect(card(f).draft).toBeUndefined();
-        expect(f.effects[0]!.draft).toBeUndefined();
+        expect(card(f).draft?.conversation).toBeUndefined();
       },
     );
 
@@ -767,7 +899,9 @@ describe("connector read-only metadata and approval enforcement", () => {
       const f = slackSend(slack);
       await f.run();
       expect(() =>
-        approve(f.effects[0]!, { recipients: [{ role: "to", address: "a@b.co" }] }),
+        approve(f.effects[0]!, {
+          recipients: [{ role: "to", address: "a@b.co" }],
+        }),
       ).toThrow("Only the message text can be edited on this draft.");
       approve(f.effects[0]!, "Thursday at 10 instead?");
       f.setCalls([]);
@@ -775,7 +909,10 @@ describe("connector read-only metadata and approval enforcement", () => {
       expect(sends(slack).map((call) => [call.tool, call.args])).toEqual([
         ["SLACK_SEND_MESSAGE", { ...send, markdown_text: "Thursday at 10 instead?" }],
       ]);
-      expect(f.effects[0]).toMatchObject({ status: "completed", draft: { state: "sent" } });
+      expect(f.effects[0]).toMatchObject({
+        status: "completed",
+        draft: { state: "sent" },
+      });
     });
 
     describe("through Slack's own MCP server", () => {
@@ -818,7 +955,11 @@ describe("connector read-only metadata and approval enforcement", () => {
           expect(card(f).draft).toMatchObject({
             app: { name: "Slack" },
             recipients: [{ role: "to", address: "U0MARIE" }],
-            conversation: { kind: "person", name: "Marie Dupont", handle: "marie" },
+            conversation: {
+              kind: "person",
+              name: "Marie Dupont",
+              handle: "marie",
+            },
             body: "Thursday instead?",
           });
           approve(f.effects[0]!, "Thursday at 10 instead?");
@@ -828,7 +969,10 @@ describe("connector read-only metadata and approval enforcement", () => {
             ["slack_read_user_profile", { user_id: "U0MARIE", response_format: "detailed" }],
             ["slack_send_message", { ...mcpSend, message: "Thursday at 10 instead?" }],
           ]);
-          expect(f.effects[0]).toMatchObject({ status: "completed", draft: { state: "sent" } });
+          expect(f.effects[0]).toMatchObject({
+            status: "completed",
+            draft: { state: "sent" },
+          });
         },
       );
 
@@ -839,25 +983,41 @@ describe("connector read-only metadata and approval enforcement", () => {
           "a server row of another user's, under the same id",
           { mcpOwner: { spaceId: "space-1", userId: "user-2" } },
         ],
-      ])("shows the classic card for %s, sending nothing", async (_, options, refusal?: string) => {
-        const slack = new SlackMcpEmulator();
-        if (refusal) slack.failNext("slack_read_user_profile", { kind: "fail", error: refusal });
-        const f = viaMcp(slack, options);
-        await f.run();
-        expect(mcpSends(slack)).toEqual([]);
-        expect(card(f).draft).toBeUndefined();
-        expect(card(f).actions?.[0]).toEqual({ id: "allow", label: "Allow once" });
-      });
+      ])(
+        "shows the draft to the conversation's id for %s, sending nothing",
+        async (_, options, refusal?: string) => {
+          const slack = new SlackMcpEmulator();
+          if (refusal)
+            slack.failNext("slack_read_user_profile", {
+              kind: "fail",
+              error: refusal,
+            });
+          const f = viaMcp(slack, options);
+          await f.run();
+          expect(mcpSends(slack)).toEqual([]);
+          expect(card(f).draft).toMatchObject({
+            recipients: [{ role: "to", address: "U0MARIE" }],
+          });
+          expect(card(f).draft?.conversation).toBeUndefined();
+        },
+      );
     });
 
     it("shows the classic card for a Slack message the card cannot show whole", async () => {
       const slack = new ComposioEmulator();
-      const f = fixture({ name: "SLACK_SEND_MESSAGE", inputSchema, connector: slack });
+      const f = fixture({
+        name: "SLACK_SEND_MESSAGE",
+        inputSchema,
+        connector: slack,
+      });
       f.setCalls([{ args: { ...send, blocks: [{ type: "section" }] }, executionId: "c1" }]);
       await f.run();
       expect(slack.executions).toEqual([]);
       expect(card(f).draft).toBeUndefined();
-      expect(card(f).actions?.[0]).toEqual({ id: "allow", label: "Allow once" });
+      expect(card(f).actions?.[0]).toEqual({
+        id: "allow",
+        label: "Allow once",
+      });
     });
   });
 
@@ -925,7 +1085,9 @@ describe("connector read-only metadata and approval enforcement", () => {
       expect(f.execute).not.toHaveBeenCalled();
       expect(runAutoReviewJudge).not.toHaveBeenCalled();
       expect(f.pauseRunForInput).toHaveBeenCalledWith(
-        expect.objectContaining({ blocks: [expect.objectContaining(draftCard)] }),
+        expect.objectContaining({
+          blocks: [expect.objectContaining(draftCard)],
+        }),
       );
     });
 
@@ -936,7 +1098,10 @@ describe("connector read-only metadata and approval enforcement", () => {
         rules: always("tool", "GMAIL_SEND_EMAIL"),
       });
       f.setCalls([
-        { args: { to: "a@example.com", body: "Hi", notes: "evil@example.com" }, executionId: "c1" },
+        {
+          args: { to: "a@example.com", body: "Hi", notes: "evil@example.com" },
+          executionId: "c1",
+        },
       ]);
       await f.run();
       expect(f.execute).not.toHaveBeenCalled();
@@ -958,7 +1123,9 @@ describe("connector read-only metadata and approval enforcement", () => {
       f.setCalls([{ args: { ...send, bcc }, executionId: "c1" }]);
       await f.run();
       expect(f.results).toEqual([
-        { error: "Too many recipients to show the user. Send to fewer people at a time." },
+        {
+          error: "Too many recipients to show the user. Send to fewer people at a time.",
+        },
       ]);
       expect(f.effects).toEqual([]);
       expect(f.execute).not.toHaveBeenCalled();
@@ -973,7 +1140,12 @@ describe("connector read-only metadata and approval enforcement", () => {
       request: { recipient_email: "first@example.com", body: "First" },
       draft: { state: "pending", path: ["body"], proposed: "First" },
       runId: "run-0",
-      run: { threadId: "thread-1", botId: "bot-1", status: "waiting_input", ...run },
+      run: {
+        threadId: "thread-1",
+        botId: "bot-1",
+        status: "waiting_input",
+        ...run,
+      },
     });
 
     it("refuses a second draft while one from this bot waits in the thread", async () => {
@@ -982,7 +1154,12 @@ describe("connector read-only metadata and approval enforcement", () => {
       f.setCalls([{ args: send, executionId: "c1" }]);
       await f.run();
       expect(f.results).toEqual([{ error: "A draft is already waiting for the user." }]);
-      expect(f.effects.map((effect) => effect.id)).toEqual(["waiting"]);
+      expect(f.effects[0]).toMatchObject({ id: "waiting", status: "intended" });
+      expect(f.effects.at(-1)).toMatchObject({
+        status: "completed",
+        result: { error: "A draft is already waiting for the user." },
+      });
+      expect(f.execute).not.toHaveBeenCalled();
       expect(f.pauseRunForInput).not.toHaveBeenCalled();
     });
 
@@ -996,7 +1173,9 @@ describe("connector read-only metadata and approval enforcement", () => {
       f.setCalls([{ args: send, executionId: "c1" }]);
       await f.run();
       expect(f.pauseRunForInput).toHaveBeenCalledWith(
-        expect.objectContaining({ blocks: [expect.objectContaining(draftCard)] }),
+        expect.objectContaining({
+          blocks: [expect.objectContaining(draftCard)],
+        }),
       );
     });
 
@@ -1049,7 +1228,10 @@ describe("connector read-only metadata and approval enforcement", () => {
         });
         expect(f.log.drafts.filter((entry) => entry.type === "effect.applied")).toEqual([
           expect.objectContaining({
-            payload: { target: "card-entry-1", sent: { at: expect.any(String), edited: true } },
+            payload: {
+              target: "card-entry-1",
+              sent: { at: expect.any(String), edited: true },
+            },
           }),
         ]);
       });
@@ -1131,7 +1313,11 @@ describe("connector read-only metadata and approval enforcement", () => {
         f.execute.mockImplementationOnce(async function* () {
           yield {
             type: "result" as const,
-            data: { successful: false, error: "Invalid recipient", data: null } as never,
+            data: {
+              successful: false,
+              error: "Invalid recipient",
+              data: null,
+            } as never,
           };
         });
         approve(f.effects[0]!, "Edited.");
@@ -1168,7 +1354,9 @@ describe("connector read-only metadata and approval enforcement", () => {
         async (_, part) => {
           const f = await drafted({ ...send, ...part }, ["sk-live-123"]);
           expect(f.results).toEqual([
-            { error: "This message contains a secret. Write it without the secret." },
+            {
+              error: "This message contains a secret. Write it without the secret.",
+            },
           ]);
           expect(f.effects).toEqual([]);
           expect(f.pauseRunForInput).not.toHaveBeenCalled();
@@ -1209,8 +1397,13 @@ describe("connector read-only metadata and approval enforcement", () => {
         f.setCalls([]);
         await f.run();
         expect(f.execute).toHaveBeenCalledTimes(sends);
-        expect(f.effects[0]).toMatchObject({ status: "intended", draft: { state: "pending" } });
-        expect(lastCard(f).draft?.failure).toEqual({ reason: "Check Gmail before trying again." });
+        expect(f.effects[0]).toMatchObject({
+          status: "intended",
+          draft: { state: "pending" },
+        });
+        expect(lastCard(f).draft?.failure).toEqual({
+          reason: "Check Gmail before trying again.",
+        });
         await f.run();
         expect(f.execute).toHaveBeenCalledTimes(sends);
       });
@@ -1252,7 +1445,10 @@ describe("connector read-only metadata and approval enforcement", () => {
         [
           "while it was sending",
           "executing",
-          { failed: true, failure: { reason: "Check Gmail before trying again." } },
+          {
+            failed: true,
+            failure: { reason: "Check Gmail before trying again." },
+          },
         ],
       ])("ends Not sent when the run stops %s, never sending it", async (_, status, settled) => {
         const f = await drafted();
@@ -1263,7 +1459,9 @@ describe("connector read-only metadata and approval enforcement", () => {
           {
             prisma: {
               ...f.prisma,
-              run: { findMany: async () => [{ id, spaceId, threadId, botId }] },
+              run: {
+                findMany: async () => [{ id, spaceId, threadId, botId }],
+              },
             },
             events: f.events,
             sessionLog: f.log.sessionLog,
@@ -1271,16 +1469,24 @@ describe("connector read-only metadata and approval enforcement", () => {
           [id],
         );
         expect(f.execute).not.toHaveBeenCalled();
-        expect(f.effects[0]).toMatchObject({ status: "denied", draft: { state: "unsent" } });
+        expect(f.effects[0]).toMatchObject({
+          status: "denied",
+          draft: { state: "unsent" },
+        });
         expect(f.log.drafts.filter((entry) => entry.type === "effect.applied")).toEqual([
-          expect.objectContaining({ payload: { target: "card-entry-1", ...settled } }),
+          expect.objectContaining({
+            payload: { target: "card-entry-1", ...settled },
+          }),
         ]);
       });
 
       it("settles the card the user last saw when the run stops after a Try again", async () => {
         const f = await drafted();
         f.execute.mockImplementationOnce(async function* () {
-          yield { type: "result" as const, data: { error: "Quota exceeded" } as never };
+          yield {
+            type: "result" as const,
+            data: { error: "Quota exceeded" } as never,
+          };
         });
         approve(f.effects[0]!);
         f.setCalls([]);
@@ -1349,7 +1555,10 @@ describe("connector read-only metadata and approval enforcement", () => {
       it("tells the bot's next call that the user discarded the draft", async () => {
         const f = await drafted();
         f.effects[0]!.status = "denied";
-        f.effects[0]!.draft = { ...(f.effects[0]!.draft as DraftRecord), state: "discarded" };
+        f.effects[0]!.draft = {
+          ...(f.effects[0]!.draft as DraftRecord),
+          state: "discarded",
+        };
         f.setCalls([{ args: send, executionId: "c2" }]);
         await f.run();
         expect(f.execute).not.toHaveBeenCalled();
@@ -1363,20 +1572,19 @@ describe("connector read-only metadata and approval enforcement", () => {
       it.each([
         ["another thought", { thought: "Retrying the mail." }],
         ["its recipients in another case", { recipient_email: "Someone@Example.com" }],
-      ])(
-        "answers the same mail with %s as the stored outcome, opening no card",
-        async (_, other) => {
-          const f = await drafted();
-          f.effects[0]!.status = "denied";
-          f.effects[0]!.draft = { ...(f.effects[0]!.draft as DraftRecord), state: "discarded" };
-          f.pauseRunForInput.mockClear();
-          f.setCalls([{ args: { ...send, ...other }, executionId: "c2" }]);
-          await f.run();
-          expect(f.results.at(-1)).toMatchObject({ ok: false, discarded: true });
-          expect(f.effects).toHaveLength(1);
-          expect(f.pauseRunForInput).not.toHaveBeenCalled();
-        },
-      );
+      ])("opens a new card for the same mail with %s", async (_, other) => {
+        const f = await drafted();
+        f.effects[0]!.status = "denied";
+        f.effects[0]!.draft = {
+          ...(f.effects[0]!.draft as DraftRecord),
+          state: "discarded",
+        };
+        f.pauseRunForInput.mockClear();
+        f.setCalls([{ args: { ...send, ...other }, executionId: "c2" }]);
+        await f.run();
+        expect(f.effects.map((effect) => effect.status)).toEqual(["denied", "intended"]);
+        expect(f.pauseRunForInput).toHaveBeenCalledOnce();
+      });
 
       describe("after the person wrote in the thread", () => {
         const answeredAt = new Date("2026-10-25T10:00:00Z");
@@ -1386,7 +1594,10 @@ describe("connector read-only metadata and approval enforcement", () => {
           const f = await drafted();
           f.effects[0]!.status = "denied";
           f.effects[0]!.answeredAt = answeredAt;
-          f.effects[0]!.draft = { ...(f.effects[0]!.draft as DraftRecord), state };
+          f.effects[0]!.draft = {
+            ...(f.effects[0]!.draft as DraftRecord),
+            state,
+          };
           f.pauseRunForInput.mockClear();
           return f;
         };
@@ -1407,9 +1618,12 @@ describe("connector read-only metadata and approval enforcement", () => {
         it("keeps the stored outcome when the person wrote only before the card was answered", async () => {
           const f = await answered("discarded");
           f.userMessages.push({ at: before, source: "app" });
-          f.setCalls([{ args: { ...send, thought: "Again." }, executionId: "c2" }]);
+          f.setCalls([{ args: send, executionId: "c2" }]);
           await f.run();
-          expect(f.results.at(-1)).toMatchObject({ ok: false, discarded: true });
+          expect(f.results.at(-1)).toMatchObject({
+            ok: false,
+            discarded: true,
+          });
           expect(f.effects).toHaveLength(1);
           expect(f.pauseRunForInput).not.toHaveBeenCalled();
         });
@@ -1421,7 +1635,10 @@ describe("connector read-only metadata and approval enforcement", () => {
             f.userMessages.push({ at: after, source });
             f.setCalls([{ args: send, executionId: "c2" }]);
             await f.run();
-            expect(f.results.at(-1)).toMatchObject({ ok: false, discarded: true });
+            expect(f.results.at(-1)).toMatchObject({
+              ok: false,
+              discarded: true,
+            });
             expect(f.effects).toHaveLength(1);
           },
         );
@@ -1433,11 +1650,17 @@ describe("connector read-only metadata and approval enforcement", () => {
           await f.run();
           f.effects[1]!.status = "denied";
           f.effects[1]!.answeredAt = new Date("2026-10-25T10:10:00Z");
-          f.effects[1]!.draft = { ...(f.effects[1]!.draft as DraftRecord), state: "discarded" };
+          f.effects[1]!.draft = {
+            ...(f.effects[1]!.draft as DraftRecord),
+            state: "discarded",
+          };
           f.pauseRunForInput.mockClear();
           f.setCalls([{ args: send, executionId: "c3" }]);
           await f.run();
-          expect(f.results.at(-1)).toMatchObject({ ok: false, discarded: true });
+          expect(f.results.at(-1)).toMatchObject({
+            ok: false,
+            discarded: true,
+          });
           expect(f.effects).toHaveLength(2);
           expect(f.pauseRunForInput).not.toHaveBeenCalled();
         });
@@ -1446,8 +1669,15 @@ describe("connector read-only metadata and approval enforcement", () => {
           const f = await drafted();
           f.effects[0]!.status = "completed";
           f.effects[0]!.answeredAt = answeredAt;
-          f.effects[0]!.result = { ok: true, note: "The user sent this message." };
-          f.effects[0]!.draft = { ...(f.effects[0]!.draft as DraftRecord), state: "sent", at: "x" };
+          f.effects[0]!.result = {
+            ok: true,
+            note: "The user sent this message.",
+          };
+          f.effects[0]!.draft = {
+            ...(f.effects[0]!.draft as DraftRecord),
+            state: "sent",
+            at: "x",
+          };
           f.userMessages.push({ at: after, source: "app" });
           f.pauseRunForInput.mockClear();
           f.setCalls([{ args: send, executionId: "c2" }]);
@@ -1460,8 +1690,15 @@ describe("connector read-only metadata and approval enforcement", () => {
       it("opens a new card for the same text in another thread, whose reply is not the one sent", async () => {
         const f = await drafted({ ...send, thread_id: "thread-x" });
         f.effects[0]!.status = "completed";
-        f.effects[0]!.result = { ok: true, note: "The user sent this message." };
-        f.effects[0]!.draft = { ...(f.effects[0]!.draft as DraftRecord), state: "sent", at: "x" };
+        f.effects[0]!.result = {
+          ok: true,
+          note: "The user sent this message.",
+        };
+        f.effects[0]!.draft = {
+          ...(f.effects[0]!.draft as DraftRecord),
+          state: "sent",
+          at: "x",
+        };
         f.setCalls([{ args: { ...send, thread_id: "thread-y" }, executionId: "c2" }]);
         await f.run();
         expect(f.effects.map((effect) => effect.status)).toEqual(["completed", "intended"]);
@@ -1473,11 +1710,164 @@ describe("connector read-only metadata and approval enforcement", () => {
       it("opens a new card for a mail with another text", async () => {
         const f = await drafted();
         f.effects[0]!.status = "denied";
-        f.effects[0]!.draft = { ...(f.effects[0]!.draft as DraftRecord), state: "discarded" };
+        f.effects[0]!.draft = {
+          ...(f.effects[0]!.draft as DraftRecord),
+          state: "discarded",
+        };
         f.setCalls([{ args: { ...send, body: "Another text." }, executionId: "c2" }]);
         await f.run();
         expect(f.effects.map((effect) => effect.status)).toEqual(["denied", "intended"]);
       });
+    });
+  });
+
+  describe("a draft card prepared from a send's own arguments", () => {
+    const args = {
+      payload: {
+        target_addresses: ["ana@example.com"],
+        note: "Hello from the bot.",
+      },
+      thought: "Tell Ana.",
+    };
+    const proposal: Proposal = {
+      card: "mail",
+      recipients: [
+        {
+          role: "to",
+          path: ["payload", "target_addresses"],
+          shape: "array",
+          addresses: ["ana@example.com"],
+        },
+      ],
+      body: { path: ["payload", "note"], value: "Hello from the bot." },
+      unshown: [["thought"]],
+    };
+    const inputSchema = {
+      type: "object",
+      properties: { payload: { type: "object" } },
+    };
+    const asked = [
+      {
+        effect: "require_approval" as const,
+        matchKind: "tool" as const,
+        matchValue: "acme_deliver_note",
+      },
+    ];
+    const deliver = (options: Parameters<typeof fixture>[0] = {}) => {
+      const f = fixture({
+        name: "acme_deliver_note",
+        inputSchema,
+        readOnly: false,
+        rules: asked,
+        prepare: () => proposal,
+        ...options,
+      });
+      f.setCalls([{ args, executionId: "c1" }]);
+      return f;
+    };
+    const card = (f: ReturnType<typeof fixture>) =>
+      f.pauseRunForInput.mock.calls.at(-1)![0].blocks[0] as Extract<MessageBlock, { kind: "ask" }>;
+
+    it.each(["ask", "error", "pass"] as const)(
+      "prepares a draft only when automatic review resolves to approval: %s",
+      async (decision) => {
+        vi.mocked(runAutoReviewJudge).mockResolvedValue({
+          decision,
+          reason: "Review result",
+          model: "scripted/checker",
+        });
+        const f = deliver({ rules: [], autoReview: true });
+        await f.run();
+        expect(runAutoReviewJudge).toHaveBeenCalledOnce();
+        expect(f.preparations).toHaveLength(decision === "pass" ? 0 : 1);
+        expect(f.execute).toHaveBeenCalledTimes(decision === "pass" ? 1 : 0);
+        if (decision !== "pass") {
+          expect(card(f).draft).toMatchObject({ body: "Hello from the bot." });
+          expect(f.effects[0]?.draft).toMatchObject({ state: "pending" });
+        }
+      },
+    );
+
+    it.each([
+      ["called directly", false],
+      ["called through the tool catalog", true],
+    ])(
+      "shows the fields it finds, then sends the user's edit there once, %s",
+      async (_, catalog) => {
+        const f = deliver({ catalog });
+        await f.run();
+        expect(f.execute).not.toHaveBeenCalled();
+        expect(card(f).draft).toMatchObject({
+          recipients: [{ role: "to", address: "ana@example.com" }],
+          fields: { to: null },
+          body: "Hello from the bot.",
+        });
+        approve(f.effects[0]!, {
+          text: "Hello Bo.",
+          recipients: [{ role: "to", address: "bo@example.com" }],
+        });
+        f.setCalls([]);
+        await f.run();
+        expect(f.execute.mock.calls.map(([call]) => call.args)).toEqual([
+          {
+            ...args,
+            payload: {
+              target_addresses: ["bo@example.com"],
+              note: "Hello Bo.",
+            },
+          },
+        ]);
+        expect(f.effects[0]).toMatchObject({
+          status: "completed",
+          draft: { state: "sent" },
+        });
+        expect(f.preparations).toHaveLength(1);
+      },
+    );
+
+    it.each([
+      ["text", () => undefined],
+      [
+        "a body the call does not hold",
+        () => ({ ...proposal, body: { path: ["payload", "note"], value: "Hi" } }),
+      ],
+      [
+        "a failure",
+        () => {
+          throw new Error("model unavailable");
+        },
+      ],
+    ])("still asks on the classic card when the model answers %s", async (_, prepare) => {
+      const f = deliver({ prepare });
+      await f.run();
+      expect(f.execute).not.toHaveBeenCalled();
+      expect(card(f).draft).toBeUndefined();
+      expect(card(f).actions?.[0]).toEqual({
+        id: "allow",
+        label: "Allow once",
+      });
+      expect(f.effects[0]).toMatchObject({ status: "intended" });
+      expect(f.effects[0]!.draft).toBeUndefined();
+    });
+
+    it("never shows the model a call holding a run secret, and asks on the classic card", async () => {
+      const f = fixture({
+        name: "acme_deliver_note",
+        inputSchema,
+        readOnly: false,
+        rules: asked,
+        secrets: ["sk-live-123"],
+      });
+      f.setCalls([
+        {
+          args: { payload: { ...args.payload, note: "Key: sk-live-123" } },
+          executionId: "c1",
+        },
+      ]);
+      await f.run();
+      expect(f.preparations).toEqual([]);
+      expect(card(f).draft).toBeUndefined();
+      expect(f.execute).not.toHaveBeenCalled();
     });
   });
 });

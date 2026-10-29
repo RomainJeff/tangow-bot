@@ -2,6 +2,7 @@ import type { HarnessDeclaration } from "@rakazo/adapter-kit";
 import { ComposioEmulator, composioEntityId, createConnectorStack } from "@rakazo/adapters";
 import { createWorkerAgentRuntime } from "@rakazo/adapters/runtime-worker";
 import { HELPER_STOPPED_FOR_PAUSE } from "@rakazo/contracts";
+import { DRAFT_CARDS } from "@rakazo/core";
 import { describe, expect, it, vi } from "vitest";
 import {
   manualLauncher,
@@ -9,9 +10,18 @@ import {
 } from "../../adapters/src/runtime-worker/raw-guest.test-support.js";
 import { latestCard } from "./index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
+import { prepares } from "./model-emulator.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
 
 const databaseAvailable = process.env.VERIFY_DATABASE === "1" && Boolean(process.env.DATABASE_URL);
+
+const mailProposal = (address: string, body: string) => ({
+  card: "mail",
+  recipients: [{ role: "to", path: ["recipient_email"], shape: "one", addresses: [address] }],
+  subject: { path: ["subject"], value: "Hello" },
+  body: { path: ["body"], value: body },
+  unshown: [],
+});
 
 const mailTo = (address: string, body: string, id: string): ModelEmulatorStep[] => [
   {
@@ -23,6 +33,7 @@ const mailTo = (address: string, body: string, id: string): ModelEmulatorStep[] 
       arguments: { recipient_email: address, subject: "Hello", body },
     },
   },
+  prepares(mailProposal(address, body)),
   { expect() {}, response: { type: "text", text: "Waiting." } },
 ];
 
@@ -184,7 +195,17 @@ describe.skipIf(!databaseAvailable)("mail drafts in a worker run", () => {
         computerScope: "none",
         tools: createConnectorStack(false, composio).connector,
         steps: [],
-        runtime: () => runtime,
+        runtime: () => ({
+          describe: () => runtime.describe(),
+          abort: (id) => runtime.abort(id),
+          run(request, context) {
+            if (!request.answer) return runtime.run(request, context);
+            const { card: _, ...value } = mailProposal("anna@example.test", "Hi Anna.");
+            return (async function* () {
+              yield { type: "done" as const, answer: { name: DRAFT_CARDS.mail.name, value } };
+            })();
+          },
+        }),
       });
       try {
         await connectGmail(composio, run);

@@ -1,10 +1,5 @@
-import type {
-  AskDraft,
-  AskDraftConversation,
-  AskDraftEdits,
-  AskDraftRecipient,
-} from "@rakazo/contracts";
-import { ASK_DRAFT_TEXT_MAX_LENGTH } from "@rakazo/contracts";
+import type { AskDraft, AskDraftEdits, AskDraftRecipient } from "@rakazo/contracts";
+import { ASK_DRAFT_TEXT_MAX_LENGTH, AskDraftConversation } from "@rakazo/contracts";
 import type { DraftPath, DraftSlots } from "./draft-fields.js";
 import {
   askDraftFields,
@@ -31,9 +26,17 @@ export type DraftFields = DraftSlots & {
 /**
  * Where a draft's message sits in its effect's stored request. `proposed` is the bot's text; what
  * leaves is always what the request holds at `path` and at the `fields`, which a draft recorded
- * before recipients and subject were editable lacks.
+ * before recipients and subject were editable lacks. A chat message's conversation sits at
+ * `chat.path`, with the name its app gave it when one was found; `account` is the sending mailbox
+ * the request names.
  */
-export type DraftBinding = { path: DraftPath; proposed: string; fields?: DraftFields };
+export type DraftBinding = {
+  path: DraftPath;
+  proposed: string;
+  fields?: DraftFields;
+  account?: string;
+  chat?: { path: DraftPath; name?: AskDraftConversation };
+};
 
 export type DraftState =
   | { state: "pending"; failure?: DraftFailure }
@@ -50,6 +53,8 @@ export function draftWithState(draft: DraftBinding, next: DraftState): DraftReco
     path: draft.path,
     proposed: draft.proposed,
     ...(draft.fields ? { fields: draft.fields } : {}),
+    ...(draft.account !== undefined ? { account: draft.account } : {}),
+    ...(draft.chat ? { chat: draft.chat } : {}),
     ...next,
   };
 }
@@ -80,9 +85,17 @@ export function readDraft(status: string, draft: unknown): DraftRecord | undefin
   ) {
     return undefined;
   }
-  const { fields, ...rest } = draft;
+  const { fields, account, chat, ...rest } = draft;
   const parsed = readDraftFields(fields);
-  return { ...rest, ...(parsed ? { fields: parsed } : {}) } as DraftRecord;
+  const name = isRecord(chat) ? AskDraftConversation.safeParse(chat.name) : undefined;
+  return {
+    ...rest,
+    ...(parsed ? { fields: parsed } : {}),
+    ...(typeof account === "string" ? { account } : {}),
+    ...(isRecord(chat) && isPath(chat.path)
+      ? { chat: { path: chat.path, ...(name?.success ? { name: name.data } : {}) } }
+      : {}),
+  } as DraftRecord;
 }
 
 /** A stored draft's fields; ones that do not parse leave the draft editable in its text only. */

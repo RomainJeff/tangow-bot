@@ -3,6 +3,7 @@ import { afterEach, expect, it } from "vitest";
 import { catalogEntries, lazyCatalogTools } from "../../adapters/src/lazy-tool-catalog.js";
 import { latestCard } from "./index.js";
 import type { ModelEmulatorRequest } from "./model-emulator.js";
+import { prepares } from "./model-emulator.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
 
 const cleanups: (() => Promise<void>)[] = [];
@@ -314,6 +315,7 @@ it.each(["valid", "corrupt", "incompatible", "missing"])(
             arguments: { title: "Plan" },
           },
         },
+        prepares(),
         { expect() {}, response: { type: "text", text: "Waiting." } },
         ...(state === "valid"
           ? [
@@ -528,6 +530,20 @@ it.each(["allow", "deny", "corrupt", "retry", "helper"] as const)(
             },
           },
         },
+        prepares({
+          card: "mail",
+          recipients: [
+            {
+              role: "to",
+              path: ["recipient_email"],
+              shape: "one",
+              addresses: ["anna@example.test"],
+            },
+          ],
+          subject: { path: ["subject"], value: "Hello" },
+          body: { path: ["body"], value: "Original." },
+          unshown: [],
+        }),
         { expect() {}, response: { type: "text", text: "Waiting." } },
         ...(answer === "corrupt"
           ? []
@@ -609,7 +625,6 @@ it.each(["allow", "deny", "corrupt", "retry", "helper"] as const)(
             recipient_email: "anna@example.test",
             subject: "Hello",
             body: "Edited.",
-            include_signature: false,
           },
         ]);
         expect(JSON.stringify(resumed?.messages)).toContain("Edited.");

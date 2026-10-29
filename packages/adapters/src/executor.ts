@@ -70,6 +70,7 @@ import {
 import type {
   ActionApprovalRule,
   CreatedRoutine,
+  DraftBinding,
   DraftFailure,
   DraftRecord,
   OutboundCall,
@@ -129,7 +130,6 @@ import {
   nextFence,
   normalizeSpawnBotArgs,
   notificationBody,
-  outboundDraftIdentity,
   PENDING_CARD_EFFECT_KINDS,
   PROPOSAL_EFFECT_KINDS,
   PROPOSAL_KEY_FIELD,
@@ -147,6 +147,7 @@ import {
   proposalShown,
   REFUSE_UNSHOWABLE,
   readDraft,
+  readOutboundCall,
   redactSecrets,
   renderBotDirectory,
   resolveActionApprovalDetail,
@@ -315,6 +316,7 @@ import { formatCurrentTimeInstruction } from "./current-time.js";
 import type { DecisionProviderResolver } from "./decision-provider-factory.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
 import { endedDraftOutcomes } from "./draft-outcome.js";
+import { prepareDraft } from "./draft-preparation.js";
 import { FILE_TOOL_NAMES, runFileTool } from "./file-tools.js";
 import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
 import {
@@ -358,12 +360,7 @@ import {
   modelAcceptsImageInput,
   modelIdSupportsImages,
 } from "./model-vision.js";
-import {
-  draftRequest,
-  outboundAskDraft,
-  readConnectorOutbound,
-  readSendResult,
-} from "./outbound-gate.js";
+import { draftRequest, outboundAskDraft, readSendResult } from "./outbound-gate.js";
 import { toOAuthCredential } from "./pi-credentials.js";
 import {
   parseModelSecret,
@@ -424,7 +421,7 @@ import {
   userSkillsOpenedIn,
 } from "./skill-tools.js";
 import type { ChatRecipientCache } from "./slack-recipient.js";
-import { lookUpChatRecipient, slackServer } from "./slack-recipient.js";
+import { CHAT_APPS, lookUpChatRecipient, slackServer } from "./slack-recipient.js";
 import type { TakeoverResumeCheckpoint } from "./takeover-resume.js";
 import {
   continueRunClaimFence,
@@ -2178,6 +2175,21 @@ export function createRunExecutor(deps: ExecutorDeps) {
           (values) => runSecrets.push(...values),
         );
         runSecrets.push(...resolved.redact);
+        const runtimeModel: AgentRunRequest["model"] = {
+          provider: runModelProvider,
+          id: runModelId,
+          apiKey: resolved.oauth ? undefined : resolved.apiKey,
+          baseUrl: resolved.baseUrl,
+          reasoning: resolved.reasoning,
+          maxTokens: resolved.maxTokens,
+          contextWindow: resolved.contextWindow,
+          acceptsImages: resolved.acceptsImages,
+          maxImagesPerPrompt: resolved.maxImagesPerPrompt,
+          thinkingLevel: thinkingLevel ?? resolved.thinkingLevel ?? null,
+          oauth: resolved.oauth
+            ? { credential: resolved.oauth, persist: resolved.persistOAuth }
+            : undefined,
+        };
         await deps.prisma.run.updateMany({
           where: { id: runId, status: "running", leaseOwner: workerId, leaseFence: fence },
           data: { modelProvider: runModelProvider, modelId: runModelId },
@@ -3426,55 +3438,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const pluginProviders = connectedPlugins.map((plugin) => plugin.provider);
           const connectorKind = connectorKindFromToolName(name, pluginProviders);
           const ownToolName = connectorCall.route?.toolName ?? name;
-          let outbound: OutboundCall = viaConnector
-            ? readConnectorOutbound(
-                ownToolName,
-                args,
-                pluginProviders,
-                resolvedToolSchema ?? connectorSchemas.get(name),
-              )
+          const messageApp = connectorKindFromToolName(ownToolName, pluginProviders);
+          const outbound: OutboundCall = viaConnector
+            ? readOutboundCall({ toolName: ownToolName, args }, pluginProviders, CHAT_APPS)
             : { kind: "none" };
-          const { connector } = deps;
-          // A chat names its recipient as its app does, or its send shows the classic card. A
-          // resumed send asks nothing: its effect already holds what it shows and what leaves.
-          if (outbound.kind === "chat" && approvedReplayConsumed) outbound = { kind: "classic" };
-          if (outbound.kind === "chat") {
-            const { draft } = outbound;
-            const call = { ...connectorCall, tool: name, args, executionId };
-            // An MCP server is known by its endpoint, never by the name its user gave it.
-            const mcp =
-              call.route?.connectorId === "mcp" && call.route.resourceId
-                ? await deps.prisma.mcpServer.findFirst({
-                    where: { id: call.route.resourceId, spaceId: run.spaceId, userId: run.userId },
-                    select: { endpoint: true },
-                  })
-                : null;
-            const conversation = connector
-              ? await lookUpChatRecipient(
-                  connector,
-                  call,
-                  slackServer(call, mcp?.endpoint ?? undefined),
-                  draft.recipients[0]!.address,
-                  context,
-                  chatRecipients,
-                )
-              : undefined;
-            context.signal.throwIfAborted();
-            outbound = conversation
-              ? { kind: "draft", draft: { ...draft, conversation } }
-              : cardFitsArguments(args)
-                ? { kind: "classic" }
-                : REFUSE_UNSHOWABLE;
-          }
           if (outbound.kind === "refuse") return { error: outbound.error };
-          const drafted =
-            outbound.kind === "draft"
-              ? draftRequest(effectRequest, CATALOG_APPROVAL_TOOL, outbound.draft)
-              : undefined;
-          if (outbound.kind === "draft" && !drafted) outbound = { kind: "classic" };
-          // The card masks run secrets, so a draft holding one would send what it does not show.
           if (
-            outbound.kind === "draft" &&
+            outbound.kind === "message" &&
             !approvedReplayConsumed &&
             containsSecret(args, runSecrets)
           ) {
@@ -3530,26 +3500,23 @@ export function createRunExecutor(deps: ExecutorDeps) {
             name === "request_secret" ||
             needsApprovalEarly ||
             requiresApprovalByDefault;
-          // A draft is one effect per message it would send: the bot's own words in the call's
-          // other arguments, a `thought` or a step note, change on every retry.
-          const keyArgs = outbound.kind === "draft" ? outboundDraftIdentity(outbound.draft) : args;
           // Count before choosing a key so an approved replay (occurrence 0 / base
           // key) cannot collide with a later identical-args call in this attempt.
           // request_secret stays single-use: retries must reuse the same card.
           const occurrence =
             name === "request_secret"
               ? 0
-              : nextMutatingEffectOccurrence(replayEffectToolName, keyArgs);
+              : nextMutatingEffectOccurrence(replayEffectToolName, args);
           const calledKey =
             approvedReplayConsumed && nextApprovedKey
               ? nextApprovedKey
               : usesApprovalKey && occurrence === 0
-                ? approvalEffectKey(runId, replayEffectToolName, keyArgs)
-                : toolEffectIdempotencyKey(runId, replayEffectToolName, keyArgs, occurrence);
+                ? approvalEffectKey(runId, replayEffectToolName, args)
+                : toolEffectIdempotencyKey(runId, replayEffectToolName, args, occurrence);
           // A draft the user discarded or replaced, then wrote to the bot again, no longer stands
           // for the same mail: the identical call opens a new card, under the next key.
           const effectKey =
-            outbound.kind === "draft" && !approvedReplayConsumed
+            viaConnector && needsApprovalEarly && !approvedReplayConsumed
               ? await keyPastAnsweredDrafts(calledKey)
               : calledKey;
           // A first call is validated and rate-limited before it can record an effect or show a
@@ -3594,19 +3561,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
             });
             if (refusal) return "error" in refusal ? refusal : refusal.result;
           }
-          if (outbound.kind === "draft" && !approvedReplayConsumed) {
-            const waiting = await deps.prisma.externalEffect.findMany({
-              where: {
-                status: "intended",
-                runId: { not: runId },
-                run: { threadId: thread.id, botId: bot.id, status: "waiting_input" },
-              },
-              select: { status: true, draft: true },
-            });
-            if (waiting.some((effect) => readDraft(effect.status, effect.draft))) {
-              return { error: "A draft is already waiting for the user." };
-            }
-          }
           // Connector read-only hints must not bypass approval, review, or replay decisions.
           const applied =
             (localTools.get(name)?.readOnly ?? READ_ONLY_AGENT_TOOLS.has(name))
@@ -3616,12 +3570,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   run,
                   replayEffectToolName,
                   effectKey,
-                  drafted?.request ?? effectRequest,
+                  effectRequest,
                   executionId,
                   consumedEffectIds,
-                  drafted && outbound.kind === "draft"
-                    ? draftWithState(drafted.binding, { state: "pending" })
-                    : undefined,
                 );
           if (name === "spawn_bot" && applied && !applied.duplicate) {
             const lost = await spawnBotRaceLoss(deps, run, applied.effect.id);
@@ -3736,6 +3687,91 @@ export function createRunExecutor(deps: ExecutorDeps) {
             gateDecision = "ask";
           }
 
+          let drafted: DraftBinding | undefined;
+          if (
+            viaConnector &&
+            gateDecision === "ask" &&
+            applied &&
+            !applied.duplicate &&
+            !approvedReplayConsumed &&
+            !containsSecret(args, runSecrets)
+          ) {
+            const prepared = await prepareDraft({
+              runtime: deps.runtime,
+              model: runtimeModel,
+              tool: {
+                name: ownToolName,
+                description: exposedConnectorTools.find((tool) => tool.name === name)?.description,
+                schema: resolvedToolSchema ?? connectorSchemas.get(name),
+                app: messageApp,
+              },
+              args,
+              run: {
+                id: runId,
+                botId: bot.id,
+                threadId: thread.id,
+                spaceId: run.spaceId,
+                userId: run.userId,
+              },
+              signal: context.signal,
+            });
+            context.signal.throwIfAborted();
+            drafted = prepared && draftRequest(effectRequest, CATALOG_APPROVAL_TOOL, prepared);
+            const conversation = drafted?.chat && valueAt(args, prepared!.chat!.path);
+            if (drafted?.chat && typeof conversation === "string" && CHAT_APPS.has(messageApp)) {
+              const call = { ...connectorCall, tool: name, args, executionId };
+              const mcp =
+                call.route?.connectorId === "mcp" && call.route.resourceId
+                  ? await deps.prisma.mcpServer.findFirst({
+                      where: {
+                        id: call.route.resourceId,
+                        spaceId: run.spaceId,
+                        userId: run.userId,
+                      },
+                      select: { endpoint: true },
+                    })
+                  : null;
+              const named = deps.connector
+                ? await lookUpChatRecipient(
+                    deps.connector,
+                    call,
+                    slackServer(call, mcp?.endpoint ?? undefined),
+                    conversation,
+                    context,
+                    chatRecipients,
+                  )
+                : undefined;
+              context.signal.throwIfAborted();
+              if (named) drafted = { ...drafted, chat: { ...drafted.chat, name: named } };
+            }
+            if (drafted) {
+              const waiting = await deps.prisma.externalEffect.findMany({
+                where: {
+                  status: "intended",
+                  runId: { not: runId },
+                  run: { threadId: thread.id, botId: bot.id, status: "waiting_input" },
+                },
+                select: { status: true, draft: true },
+              });
+              if (waiting.some((effect) => readDraft(effect.status, effect.draft))) {
+                const result = { error: "A draft is already waiting for the user." };
+                await completeEffect(deps, applied.effect.id, "intended", result);
+                return result;
+              }
+            } else if (outbound.kind !== "none" && !cardFitsArguments(args)) {
+              await completeEffect(deps, applied.effect.id, "intended", REFUSE_UNSHOWABLE);
+              return REFUSE_UNSHOWABLE;
+            }
+            if (drafted) {
+              const draft = draftWithState(drafted, { state: "pending" });
+              await deps.prisma.externalEffect.update({
+                where: { id: applied.effect.id },
+                data: { draft },
+              });
+              applied.effect.draft = draft;
+            }
+          }
+
           const needsApproval = gateDecision === "ask";
           const bypassApproval = gateDecision === "allow" && requiresApprovalByDefault;
           let claimedEffect = false;
@@ -3783,17 +3819,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
               return pauseForApproval(applied!.effect.id);
             }
             await workspaceCheckpoint.flush();
-            const draft =
-              outbound.kind === "draft"
-                ? await outboundAskDraft(outbound.draft, {
-                    connections: connectedPlugins,
-                    catalog: (connectorId) =>
-                      deps.connectors
-                        ?.managed(connectorId)
-                        ?.catalog(context, outbound.draft.connectorKind),
-                    toolAppName: exposedConnectorTools.find((tool) => tool.name === name)?.appName,
-                  })
-                : undefined;
+            const stored = readDraft(applied!.effect.status, applied!.effect.draft);
+            const draft = stored
+              ? await outboundAskDraft(messageApp, applied!.effect.request, stored, {
+                  connections: connectedPlugins,
+                  catalog: (connectorId) =>
+                    deps.connectors?.managed(connectorId)?.catalog(context, messageApp),
+                  toolAppName: exposedConnectorTools.find((tool) => tool.name === name)?.appName,
+                })
+              : undefined;
             const owner = draft
               ? await deps.prisma.user.findUnique({
                   where: { id: run.userId },
@@ -3827,7 +3861,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 runUserId: run.userId,
                 ...(owner?.name ? { runUserName: owner.name } : {}),
                 draft,
-                unreadable: outbound.kind === "classic",
+                unreadable: outbound.kind !== "none" && !draft,
               },
             );
             const paused = await deps.events.pauseRunForInput({
@@ -5783,21 +5817,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 profile: run.helper,
               }
             : undefined;
-          const runtimeModel: AgentRunRequest["model"] = {
-            provider: runModelProvider,
-            id: runModelId,
-            apiKey: resolved.oauth ? undefined : resolved.apiKey,
-            baseUrl: resolved.baseUrl,
-            reasoning: resolved.reasoning,
-            maxTokens: resolved.maxTokens,
-            contextWindow: resolved.contextWindow,
-            acceptsImages: resolved.acceptsImages,
-            maxImagesPerPrompt: resolved.maxImagesPerPrompt,
-            thinkingLevel: thinkingLevel ?? resolved.thinkingLevel ?? null,
-            oauth: resolved.oauth
-              ? { credential: resolved.oauth, persist: resolved.persistOAuth }
-              : undefined,
-          };
           if (runtime === deps.runtime) {
             await deps.prisma.attempt.updateMany({
               where: { id: attempt.id, status: "setting_up" },
@@ -8280,7 +8299,6 @@ async function recordEffect(
   request: unknown,
   legacyIdempotencyKey?: string,
   consumedIds?: Set<string>,
-  draft?: DraftRecord,
 ) {
   const existing = await deps.prisma.externalEffect.findUnique({
     where: { idempotencyKey },
@@ -8384,7 +8402,6 @@ async function recordEffect(
         idempotencyKey,
         status: "intended",
         request: request as never,
-        ...(draft ? { draft } : {}),
       },
     });
     consumedIds?.add(effect.id);

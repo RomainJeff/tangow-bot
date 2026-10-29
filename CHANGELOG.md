@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
-- **A message a bot writes in your name now waits as a draft you send yourself, on web, desktop and iPhone.** An email through Gmail, Outlook or another mail app, or a Slack message, shows as it will leave, with every recipient (a Slack person or channel as Slack names them) and its text; you can change the text, and an email's recipients and subject, then Send, or discard it, with Undo for a moment. This replaces sends that went out with no card, or behind a card that only asked to allow the tool call.
+- **Messages a bot proposes to send can now be reviewed as editable drafts on web, desktop and iPhone.** When a connected app or MCP tool requires approval, Rakazo uses AI to prefill the recipients, subject and message, including tools with unfamiliar field names. Edit the draft before Send or discard it; actions that cannot be represented keep the standard approval card.
 
 #### Fixed
 
