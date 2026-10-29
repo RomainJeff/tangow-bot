@@ -11,7 +11,11 @@ import type {
 import type { HelperProfile } from "@rakazo/core";
 import { delegatedTools, selectTools, startableHelpers } from "@rakazo/core";
 import { isBackgroundHelperTool, isHelperTool } from "../builtin-tools.js";
-import { catalogIndexText, isLazyCatalogControlRoute } from "../lazy-tool-catalog.js";
+import {
+  catalogIndexText,
+  EXACT_TOOL_SEARCH_TEXT,
+  isLazyCatalogControlRoute,
+} from "../lazy-tool-catalog.js";
 import { encodeMessage } from "./framing.js";
 import { WORKER_LIMITS } from "./limits.js";
 import { guestModelOf } from "./model-relay.js";
@@ -283,6 +287,9 @@ export function helperRunInput(
     },
     harness,
   ).run;
+  const index = catalogIndexText(tools);
+  // The parent reads the same line in its harness addendum, which only a native-loop harness gets.
+  const search = harness.capabilities.includes("native-loop") ? `${EXACT_TOOL_SEARCH_TEXT}\n` : "";
   return {
     ...(request.helper && parent.resumeEvent ? { resumeEvent: parent.resumeEvent } : {}),
     ...(request.helper && parent.start ? { start: parent.start } : {}),
@@ -290,7 +297,7 @@ export function helperRunInput(
     threadId: parent.threadId,
     sourceMessageId: parent.sourceMessageId,
     prompt: helper.task,
-    instructions: [helper.instructions, catalogIndexText(tools)].filter(Boolean).join("\n\n"),
+    instructions: [helper.instructions, index && `${search}${index}`].filter(Boolean).join("\n\n"),
     history: parent.history,
     images: [],
     tools: parent.tools.filter((tool) => offered(tool.name)),

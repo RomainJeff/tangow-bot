@@ -132,7 +132,9 @@ describe("lazy tool catalog", () => {
     const members = [...tools(100), ...multiGroupTools()];
     const catalogs = lazyCatalogTools("mcp", "mcp", "MCP", catalogEntries(members));
     const text = catalogIndexText(catalogs);
-    expect(text).toContain("mcp: use the tool search of your harness or mcp_load_tool");
+    expect(text).toContain(
+      "mcp: use the tool search of your harness, or mcp_load_tool when offered",
+    );
     expect(text).toContain("source: 100 tools.");
     expect(text).toContain("gmail: 3 tools.");
     expect(text).toContain("hubspot: 2 tools.");
