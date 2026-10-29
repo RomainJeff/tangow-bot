@@ -161,6 +161,8 @@ function fixture({
   const widgetArtifacts: Array<{ id: string; [key: string]: unknown }> = [];
   const widgetBytes = new Map<string, Uint8Array>();
   const readFile = vi.fn(async (_computer: unknown, file: string) => {
+    if (file.endsWith("chart.png")) return new Uint8Array([137, 80, 78, 71]);
+    if (file.endsWith("a.png") || file.endsWith("b.png")) return new Uint8Array(900 * 1024);
     if (!file.endsWith("view.html")) throw new Error("file not found");
     return new TextEncoder().encode("<p>From the computer</p>");
   });
@@ -617,6 +619,50 @@ describe("show_widget", () => {
       ]);
     },
   );
+
+  it("embeds computer images at publish and leaves https images alone", async () => {
+    const f = fixture({
+      requireToolApproval: false,
+      async *runtimeRun(request) {
+        const input = {
+          title: "Chart",
+          html: '<img src="/home/user/chart.png" alt="a"><img src="https://example.com/x.png" alt="b">',
+        };
+        yield { type: "tool", name: "show_widget", args: input, executionId: "widget-0" };
+        await request.executeTool!("show_widget", input, "widget-0");
+        yield { type: "done" };
+      },
+    });
+    await f.run();
+    expect([...f.widgetBytes.values()].map((bytes) => new TextDecoder().decode(bytes))).toEqual([
+      '<img src="data:image/png;base64,iVBORw==" alt="a"><img src="https://example.com/x.png" alt="b">',
+    ]);
+  });
+
+  it("refuses a missing image and a body over 2 MiB once images are embedded", async () => {
+    const results: unknown[] = [];
+    const f = fixture({
+      requireToolApproval: false,
+      async *runtimeRun(request) {
+        for (const [index, html] of [
+          '<img src="/home/user/missing.png" alt="">',
+          '<img src="/home/user/a.png" alt=""><img src="/home/user/b.png" alt="">',
+        ].entries()) {
+          const input = { title: "Images", html };
+          yield { type: "tool", name: "show_widget", args: input, executionId: `widget-${index}` };
+          results.push(await request.executeTool!("show_widget", input, `widget-${index}`));
+        }
+        yield { type: "done" };
+      },
+    });
+    await f.run();
+    expect(results).toEqual([
+      { error: "Image not found: /home/user/missing.png" },
+      { error: "Widget exceeds the 2 MiB limit" },
+    ]);
+    expect(f.widgetArtifacts).toEqual([]);
+    expect(f.widgetBytes.size).toBe(0);
+  });
 
   it("refuses malformed, unreadable and oversized input without publishing or storing it", async () => {
     const results: unknown[] = [];

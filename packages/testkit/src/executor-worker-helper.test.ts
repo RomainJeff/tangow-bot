@@ -3,7 +3,7 @@ import { createWorkerAgentRuntime, WORKER_LIMITS } from "@rakazo/adapters/runtim
 import { HARNESSES } from "@rakazo/agent-run-worker";
 import type { HelperProfile } from "@rakazo/core";
 import { cancelRunsInTransaction } from "@rakazo/db";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { stopThreadRuns } from "../../../apps/api/src/thread-target.js";
 import {
   manualLauncher,
@@ -198,73 +198,84 @@ it("closes a helper stopped mid-turn with its parent as cancelled by the stopper
   );
 });
 
-it.skipIf(process.env.VERIFY_DATABASE !== "1" || !process.env.DATABASE_URL)(
-  "closes a helper behind its parent's thread lock, holding nothing a stop needs first",
-  async () => {
+describe.skipIf(process.env.VERIFY_DATABASE !== "1" || !process.env.DATABASE_URL)(
+  "helper closure under contention (PostgreSQL)",
+  () => {
     const helperAsked = Promise.withResolvers<void>();
     const answerHelper = Promise.withResolvers<void>();
-    const run = await startWorkerRun({
-      databaseUrl: process.env.DATABASE_URL,
-      steps: [
-        delegate,
-        {
-          async expect() {
-            helperAsked.resolve();
-            await answerHelper.promise;
+    let run: Awaited<ReturnType<typeof startWorkerRun>>;
+
+    beforeAll(async () => {
+      run = await startWorkerRun({
+        databaseUrl: process.env.DATABASE_URL,
+        steps: [
+          delegate,
+          {
+            async expect() {
+              helperAsked.resolve();
+              await answerHelper.promise;
+            },
+            // An empty reply logs no entry first, so closing the helper is what waits on the thread.
+            response: { type: "text", text: "" },
           },
-          // An empty reply logs no entry first, so closing the helper is what waits on the thread.
-          response: { type: "text", text: "" },
-        },
-        { expect() {}, response: { type: "text", text: "Checked." } },
-        afterPrivateText,
-      ],
+          { expect() {}, response: { type: "text", text: "Checked." } },
+          afterPrivateText,
+        ],
+      });
+      cleanups.push(() => run.close());
     });
-    cleanups.push(() => run.close());
-    const runId = await run.send("Have a helper check it.");
-    const continued = run.continueRun(runId);
-    await helperAsked.promise;
-    const helper = await run.prisma.run.findFirstOrThrow({ where: { parentRunId: runId } });
 
-    // A stop takes the thread first; the closing helper must queue behind it holding nothing.
-    const locked = Promise.withResolvers<void>();
-    const release = Promise.withResolvers<void>();
-    const stopLike = run.prisma.$transaction(
-      async (tx) => {
-        await tx.$queryRaw`SELECT id FROM threads WHERE id = ${run.thread.id} FOR UPDATE`;
-        locked.resolve();
-        await release.promise;
-      },
-      { timeout: 20_000 },
-    );
-    await locked.promise;
-    answerHelper.resolve();
-    await expect
-      .poll(
-        async () => {
-          const [row] = await run.prisma.$queryRaw<Array<{ waiting: number }>>`
-            SELECT count(*)::int AS waiting FROM pg_stat_activity
-            WHERE datname = current_database() AND wait_event_type = 'Lock'
-              AND query ILIKE '%FROM threads%FOR UPDATE%'`;
-          return row!.waiting;
+    it("closes a helper behind its parent's thread lock, holding nothing a stop needs first", async () => {
+      const runId = await run.send("Have a helper check it.");
+      const continued = run.continueRun(runId);
+      await helperAsked.promise;
+      const helper = await run.prisma.run.findFirstOrThrow({ where: { parentRunId: runId } });
+
+      // A stop takes the thread first; the closing helper must queue behind it holding nothing.
+      const locked = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      const stopLike = run.prisma.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT id FROM threads WHERE id = ${run.thread.id} FOR UPDATE`;
+          locked.resolve();
+          await release.promise;
         },
-        { timeout: 10_000, interval: 20 },
-      )
-      .toBe(1);
-    const probe = await run.prisma.$queryRaw`
-      SELECT id FROM runs WHERE id = ${helper.id} FOR NO KEY UPDATE NOWAIT`.then(
-      () => "free",
-      (error: unknown) => String(error),
-    );
-    release.resolve();
-    await stopLike;
-    await continued;
+        { timeout: 20_000 },
+      );
+      let probe: string;
+      try {
+        await locked.promise;
+        answerHelper.resolve();
+        await expect
+          .poll(
+            async () => {
+              const [row] = await run.prisma.$queryRaw<Array<{ waiting: number }>>`
+                SELECT count(*)::int AS waiting FROM pg_stat_activity
+                WHERE datname = current_database() AND wait_event_type = 'Lock'
+                  AND query ILIKE '%FROM threads%FOR UPDATE%'`;
+              return row!.waiting;
+            },
+            { timeout: 10_000, interval: 20 },
+          )
+          .toBe(1);
+        probe = await run.prisma.$queryRaw`
+          SELECT id FROM runs WHERE id = ${helper.id} FOR NO KEY UPDATE NOWAIT`.then(
+          () => "free",
+          (error: unknown) => String(error),
+        );
+      } finally {
+        release.resolve();
+        await Promise.allSettled([stopLike, continued]);
+      }
+      await stopLike;
+      await continued;
 
-    expect(probe).toBe("free");
-    expect((await run.prisma.run.findUniqueOrThrow({ where: { id: helper.id } })).status).toBe(
-      "completed",
-    );
+      expect(probe).toBe("free");
+      expect((await run.prisma.run.findUniqueOrThrow({ where: { id: helper.id } })).status).toBe(
+        "completed",
+      );
+    }, 30_000);
   },
-  30_000,
 );
 
 it("runs native Pi helpers in separate persisted sessions and resumes the parent without replaying them", async () => {
