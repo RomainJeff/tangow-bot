@@ -440,7 +440,16 @@ export function createSession(
     }
   }
 
-  async function callTool(
+  function callTool(
+    body: Extract<GuestBody, { type: "tool.call" }>,
+    part: (body: ReplyPart) => void,
+  ): Promise<ReplyFinal> {
+    const call = executeToolCall(body, part);
+    open.set(body.callId, call);
+    return call.finally(() => open.delete(body.callId));
+  }
+
+  async function executeToolCall(
     body: Extract<GuestBody, { type: "tool.call" }>,
     part: (body: ReplyPart) => void,
   ): Promise<ReplyFinal> {
@@ -471,32 +480,25 @@ export function createSession(
     await durable?.receipt({ callId, name, args: receiptArgs, outcome: { kind: "started" } });
     if (name === "run_subagent" && runsOwnLoop()) {
       recorder?.toolStart(callId, name, args);
-      const run = runHelper(body, part);
-      open.set(callId, run);
-      try {
-        const reply = await run;
-        const answered = reply.type === "tool.result";
-        await durable?.receipt({
-          callId,
-          name,
-          args: receiptArgs,
-          outcome: {
-            kind: "result",
-            output: answered ? reply.output : reply,
-            isError: !answered,
-          },
-        });
-        recorder?.toolEnd(callId, answered ? reply.output : reply, !answered);
-        return reply;
-      } finally {
-        open.delete(callId);
-      }
+      const reply = await runHelper(body, part);
+      const answered = reply.type === "tool.result";
+      await durable?.receipt({
+        callId,
+        name,
+        args: receiptArgs,
+        outcome: {
+          kind: "result",
+          output: answered ? reply.output : reply,
+          isError: !answered,
+        },
+      });
+      recorder?.toolEnd(callId, answered ? reply.output : reply, !answered);
+      return reply;
     }
     const execute = helper ? helper.log.executeTool : request.executeTool;
     if (!execute) return { type: "error", message: `${name} is unavailable here` };
     recorder?.toolStart(callId, name, args);
     const call = execute(name, args, callId, tools.get(name)?.route, recorder?.toolTrace(callId));
-    open.set(callId, call);
     try {
       const output = await call;
       const details = isToolPauseResult(output) ? output.details : undefined;
@@ -538,8 +540,6 @@ export function createSession(
       });
       recorder?.toolEnd(callId, message, true);
       return { type: "error", message };
-    } finally {
-      open.delete(callId);
     }
   }
 

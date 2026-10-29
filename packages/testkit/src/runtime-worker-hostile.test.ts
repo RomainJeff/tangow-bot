@@ -248,36 +248,71 @@ describe("a hostile guest", () => {
     expect(run.seen).toEqual([]);
   });
 
-  it("cannot end a run while one of its tool calls is still open", async () => {
-    const { runtime, launchedFor } = setup();
-    const answered = Promise.withResolvers<string>();
-    const run = consume(
-      runtime.run(
-        request("run_end", {
-          tools: [{ name: "lookup", description: "Lookup", inputSchema: { type: "object" } }],
-          executeTool: () => answered.promise,
-        }),
-      ),
-    );
-    const launched = await launchedFor("run_end");
-    const guest = rawGuest(launched.connect(), launched.capability);
-    await guest.hello();
+  it.each([false, true])(
+    "cannot end a run while a tool call is open, durable=%s",
+    async (durable) => {
+      const harness: HarnessDeclaration = {
+        ...HAND_WRITTEN,
+        capabilities: [...HAND_WRITTEN.capabilities, ...(durable ? ["resume" as const] : [])],
+      };
+      const { runtime, launchedFor } = setup(stillClock, harness);
+      const admitted = Promise.withResolvers<void>();
+      const persisted = Promise.withResolvers<void>();
+      const resultReached = Promise.withResolvers<void>();
+      const answered = Promise.withResolvers<string>();
+      const execute = vi.fn(() => answered.promise);
+      const run = consume(
+        runtime.run(
+          request("run_end", {
+            tools: [{ name: "lookup", description: "Lookup", inputSchema: { type: "object" } }],
+            executeTool: execute,
+            ...(durable
+              ? {
+                  persistence: {
+                    start: { mode: "fresh" as const },
+                    save: async () => {},
+                    resolve: async () => [],
+                    receipt: async (receipt) => {
+                      if (receipt.outcome.kind === "started") await admitted.promise;
+                      else {
+                        resultReached.resolve();
+                        await persisted.promise;
+                      }
+                    },
+                  },
+                }
+              : {}),
+          }),
+        ),
+      );
+      const launched = await launchedFor("run_end");
+      const guest = rawGuest(launched.connect(), launched.capability, harness);
+      await guest.hello();
 
-    guest.send(1, { type: "tool", name: "lookup", args: {}, executionId: "c1" });
-    guest.send(2, { type: "tool.call", agent: "root", callId: "c1", name: "lookup", args: {} });
-    guest.send(3, { type: "done", text: "All done." });
-    expect(await guest.replies(3, 1)).toEqual([{ type: "end.refused", pending: ["c1"] }]);
-    expect(run.seen.map((event) => event.type)).toEqual(["tool"]);
+      guest.send(1, { type: "tool", name: "lookup", args: {}, executionId: "c1" });
+      guest.send(2, { type: "tool.call", agent: "root", callId: "c1", name: "lookup", args: {} });
+      guest.send(3, { type: "done", text: "All done." });
+      expect(await guest.replies(3, 1)).toEqual([{ type: "end.refused", pending: ["c1"] }]);
+      expect(run.seen.map((event) => event.type)).toEqual(["tool"]);
 
-    answered.resolve("found");
-    expect(await guest.replies(2)).toEqual([{ type: "tool.result", output: "found" }]);
-    await run.done;
-    expect(run.seen.map((event) => event.type)).toEqual(["tool", "done"]);
-    expect(await guest.replies(3)).toEqual([
-      { type: "end.refused", pending: ["c1"] },
-      { type: "stop", reason: "done" },
-    ]);
-  });
+      if (durable) expect(execute).not.toHaveBeenCalled();
+      admitted.resolve();
+      await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce());
+      answered.resolve("found");
+      if (durable) {
+        await resultReached.promise;
+        expect(run.seen.map((event) => event.type)).toEqual(["tool"]);
+      }
+      persisted.resolve();
+      expect(await guest.replies(2)).toEqual([{ type: "tool.result", output: "found" }]);
+      await run.done;
+      expect(run.seen.map((event) => event.type)).toEqual(["tool", "done"]);
+      expect(await guest.replies(3)).toEqual([
+        { type: "end.refused", pending: ["c1"] },
+        { type: "stop", reason: "done" },
+      ]);
+    },
+  );
 
   it.each([
     ["asks the controller to run its own bash", [bash("own"), callBash("own")], "unknown_tool"],
