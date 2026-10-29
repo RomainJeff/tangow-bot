@@ -1,6 +1,12 @@
-import type { AgentRunRequest, ConnectorTool, WorkerStartV1 } from "@rakazo/adapter-kit";
+import type {
+  AgentRunRequest,
+  ConnectorTool,
+  HarnessDeclaration,
+  WorkerStartV1,
+} from "@rakazo/adapter-kit";
+import { PI_NATIVE_HARNESS } from "@rakazo/adapter-kit";
 import { describe, expect, it } from "vitest";
-import { catalogEntries, lazyCatalogTools } from "../lazy-tool-catalog.js";
+import { catalogEntries, EXACT_TOOL_SEARCH_TEXT, lazyCatalogTools } from "../lazy-tool-catalog.js";
 import { encodeMessage } from "./framing.js";
 import { helperRunInput, workerStart } from "./guest-input.js";
 import { WORKER_LIMITS } from "./limits.js";
@@ -128,29 +134,34 @@ describe("a large catalog in worker.start", () => {
 
 it("gives helpers the connector name index while replacing the parent's instructions", () => {
   const tools = catalog("mcp", 30, 20);
-  const run = helperRunInput(
-    ENVELOPE,
-    {
-      botId: "bot-1",
-      threadId: "thread-1",
-      prompt: "Parent task",
-      instructions: "Parent instructions",
-      history: [],
-      tools,
-      model: { provider: "test", id: "model" },
-    } as unknown as AgentRunRequest,
-    { name: "test", capabilities: [] },
-    {
-      task: "Helper task",
-      instructions: "Helper instructions",
-      model: { provider: "test", id: "model" },
-    },
-  );
+  const helperRun = (harness: HarnessDeclaration) =>
+    helperRunInput(
+      ENVELOPE,
+      {
+        botId: "bot-1",
+        threadId: "thread-1",
+        prompt: "Parent task",
+        instructions: "Parent instructions",
+        history: [],
+        tools,
+        model: { provider: "test", id: "model" },
+      } as unknown as AgentRunRequest,
+      harness,
+      {
+        task: "Helper task",
+        instructions: "Helper instructions",
+        model: { provider: "test", id: "model" },
+      },
+    );
+  const run = helperRun({ name: "test", capabilities: [] });
   expect(run.instructions).toContain("Helper instructions");
   expect(run.instructions).not.toContain("Parent instructions");
   expect(run.instructions).toContain("mcp__tool_29");
   expect(run.instructions).toContain("mcp_load_tool");
   expect(run.tools.filter((tool) => typeof tool.catalog === "object")).toHaveLength(30);
+  // Only a harness with Pi's exact-name tool_search is told about it.
+  expect(run.instructions).not.toContain("tool_search");
+  expect(helperRun(PI_NATIVE_HARNESS).instructions).toContain(EXACT_TOOL_SEARCH_TEXT);
 });
 
 it("rejects oversized resumptions instead of silently dropping current tool catalogs", () => {

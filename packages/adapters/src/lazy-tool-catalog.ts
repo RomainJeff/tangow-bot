@@ -4,6 +4,7 @@ import type {
   ConnectorRoute,
   ConnectorTool,
 } from "@rakazo/adapter-kit";
+import { RAKAZO_TOOL_PREFIX } from "@rakazo/adapter-kit";
 import { z } from "zod";
 import { ConnectorError } from "./connector-error.js";
 
@@ -20,6 +21,9 @@ const MAX_DESCRIPTION_LENGTH = 500;
 export const CATALOG_SEARCH = "__catalog_search";
 export const CATALOG_LOAD = "__catalog_load";
 export const CATALOG_EXECUTE = "__catalog_execute";
+
+/** Only for a `native-loop` worker harness, whose tool_search loads exact names. */
+export const EXACT_TOOL_SEARCH_TEXT = `tool_search loads a deferred tool when given its exact name, with or without the ${RAKAZO_TOOL_PREFIX} prefix, and searches by keyword otherwise; a catalog it cannot reach offers its own search, load and execute tools.`;
 
 type CatalogEntry = { id: string; tool: ConnectorTool; group: string };
 
@@ -346,7 +350,7 @@ export function catalogIndexText(tools: ConnectorTool[]): string {
     for (const { prefix, group, count, names } of groups) {
       if (prefix !== previous) {
         lines.push(
-          `\n${prefix}: use the tool search of your harness or ${prefix}_load_tool to discover parameters.`,
+          `\n${prefix}: use the tool search of your harness, or ${prefix}_load_tool when offered, to discover parameters.`,
         );
         previous = prefix;
       }
