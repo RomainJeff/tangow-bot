@@ -1497,7 +1497,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
         run = await deps.prisma.run.findUniqueOrThrow({ where: { id: runId } });
         approvalHold = browserApprovalCheckpointOf(run.checkpoint);
       }
-      if (isTerminal(run.status as RunStatus) || (approvalHold && run.status === "waiting_input"))
+      if (
+        isTerminal(run.status as RunStatus) ||
+        ((approvalHold || run.resumeRequired) && run.status === "waiting_input")
+      )
         return;
       let { resumeCheckpoint, heldForTakeover, resumeHeldLease, takeoverResume } =
         takeoverContinuePlan(run);

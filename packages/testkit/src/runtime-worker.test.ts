@@ -298,7 +298,7 @@ describe("a run whose bot runs in a guest", () => {
 
   it("runs nothing a restarted controller finds waiting for approval until the answer is stored", async () => {
     const run = await fixture({
-      steps: [note, closingTurn, note, closingTurn, ...finishing],
+      steps: [note, closingTurn, ...finishing],
     });
     await run.prisma.actionApprovalRule.create({
       data: {
@@ -319,8 +319,10 @@ describe("a run whose bot runs in a guest", () => {
     ]);
     const before = run.restart();
 
-    // A continue before the answer may ask the model again; it only asks for approval again.
+    const requestsBeforeAnswer = run.model.requests.length;
     await run.continueRun(runId);
+    expect(run.model.requests).toHaveLength(requestsBeforeAnswer);
+    expect(run.provider.launches).toHaveLength(0);
     expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
       "waiting_input",
     );
