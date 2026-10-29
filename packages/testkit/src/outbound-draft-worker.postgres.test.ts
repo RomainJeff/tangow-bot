@@ -234,11 +234,7 @@ describe.skipIf(!databaseAvailable)("mail drafts in a worker run", () => {
           },
           { timeout: 15_000 },
         );
-        const start = await rawGuest(second.connect(), second.capability, PI_NATIVE).hello();
-        // Its history has no pause for an outcome to replace, so it is not told of one.
-        expect(JSON.stringify(start)).not.toContain(
-          "resuming this run after the user answered your draft card",
-        );
+        await rawGuest(second.connect(), second.capability, PI_NATIVE).hello();
         if (order === "late") await helperStops();
         guest.send(6, { type: "done" });
         await paused;

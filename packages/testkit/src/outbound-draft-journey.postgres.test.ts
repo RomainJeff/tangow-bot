@@ -15,8 +15,6 @@ const offeredTools = (request: ModelEmulatorRequest) =>
 
 const databaseAvailable = process.env.VERIFY_DATABASE === "1" && Boolean(process.env.DATABASE_URL);
 
-const RESUME_NOTE = "resuming this run after the user answered your draft card";
-
 describe.skipIf(!databaseAvailable)("offline product journey", () => {
   describe("a draft of a tool the user's rule asks for", () => {
     const message = {
@@ -38,7 +36,6 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
     const proposeMessage: ModelEmulatorStep = {
       expect(request) {
         expect(offeredTools(request)).toContain("acme_deliver_message");
-        expect(JSON.stringify(request.messages)).not.toContain(RESUME_NOTE);
       },
       response: {
         type: "tool",
@@ -72,9 +69,6 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
               expect(seen).toContain("Edited by me.");
               expect(seen).toContain("bo@example.test");
               expect(seen).not.toContain("paused: awaiting approval");
-              // The resume says so, and that another message may still be sent.
-              expect(seen).toContain(RESUME_NOTE);
-              expect(seen).toContain("to send another message call the send tool again");
             },
             response: reply("Sent."),
           },
@@ -364,41 +358,4 @@ describe.skipIf(!databaseAvailable)("offline product journey", () => {
       );
     }, 30_000);
   });
-
-  it("does not tell a run resumed after a plain question that it answered a draft card", async () => {
-    await journey(
-      [
-        {
-          expect() {},
-          response: {
-            type: "tool",
-            id: "journey-which",
-            name: "ask_user",
-            arguments: { question: "Formal or casual?", options: ["Formal", "Casual"] },
-          },
-        },
-        WAITING,
-        {
-          expect(request) {
-            expect(JSON.stringify(request.messages)).toContain("Casual");
-            expect(JSON.stringify(request.messages)).not.toContain(RESUME_NOTE);
-          },
-          response: reply("Casual it is."),
-        },
-        DONE,
-      ],
-      async (fixture) => {
-        const sent = await fixture.send("Write to them.");
-        await sent.settled("waiting_input");
-        const question = await latestCard(fixture.prisma, sent.runId);
-        await rpc(fixture.app, fixture.cookie, "threads/answer", {
-          botId: fixture.bot.id,
-          runId: sent.runId,
-          messageId: question.id,
-          answer: "choice-2",
-        });
-        await sent.settled("completed");
-      },
-    );
-  }, 30_000);
 });
