@@ -201,6 +201,8 @@ it("closes a helper stopped mid-turn with its parent as cancelled by the stopper
 it.skipIf(process.env.VERIFY_DATABASE !== "1" || !process.env.DATABASE_URL)(
   "closes a helper behind its parent's thread lock, holding nothing a stop needs first",
   async () => {
+    const phase = (name: string) => console.info(`helper-lock: ${name}`);
+    phase("starting fixture");
     const helperAsked = Promise.withResolvers<void>();
     const answerHelper = Promise.withResolvers<void>();
     const run = await startWorkerRun({
@@ -219,10 +221,13 @@ it.skipIf(process.env.VERIFY_DATABASE !== "1" || !process.env.DATABASE_URL)(
         afterPrivateText,
       ],
     });
+    phase("fixture ready");
     cleanups.push(() => run.close());
     const runId = await run.send("Have a helper check it.");
+    phase("run sent");
     const continued = run.continueRun(runId);
     await helperAsked.promise;
+    phase("helper awaiting model response");
     const helper = await run.prisma.run.findFirstOrThrow({ where: { parentRunId: runId } });
 
     // A stop takes the thread first; the closing helper must queue behind it holding nothing.
@@ -237,6 +242,7 @@ it.skipIf(process.env.VERIFY_DATABASE !== "1" || !process.env.DATABASE_URL)(
       { timeout: 20_000 },
     );
     await locked.promise;
+    phase("parent thread locked");
     answerHelper.resolve();
     await expect
       .poll(
@@ -250,14 +256,18 @@ it.skipIf(process.env.VERIFY_DATABASE !== "1" || !process.env.DATABASE_URL)(
         { timeout: 10_000, interval: 20 },
       )
       .toBe(1);
+    phase("observed waiting thread lock");
     const probe = await run.prisma.$queryRaw`
       SELECT id FROM runs WHERE id = ${helper.id} FOR NO KEY UPDATE NOWAIT`.then(
       () => "free",
       (error: unknown) => String(error),
     );
+    phase(`helper row probe: ${probe}`);
     release.resolve();
     await stopLike;
+    phase("parent thread released");
     await continued;
+    phase("run continued");
 
     expect(probe).toBe("free");
     expect((await run.prisma.run.findUniqueOrThrow({ where: { id: helper.id } })).status).toBe(
