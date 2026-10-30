@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-10-30
 
+#### Added
+
+- **Auto model routing by complexity with Fast, Everyday and Complex model assignments, and subagents launched by category.** Configure routing on web, desktop and iOS; run debug shows the chosen model and any fallback on web and desktop.
+
 #### Changed
 
 - On web, desktop and mobile, approval rules, automatic review and protected webhook runs can use the configured Decision Model to assess connected-app and MCP calls without a read-only hint, while keeping the existing name-based fallback.

@@ -3592,6 +3592,10 @@ msgstr "Задача обновлена"
 msgid "Routines"
 msgstr "Задачи"
 
+#: src/pages/shell/session-view.tsx:245
+msgid "Routing"
+msgstr "Маршрутизация"
+
 #: src/pages/bot-page/RoutineTriggers.tsx:259
 msgid "Run at"
 msgstr "Запустить в"
