@@ -68,6 +68,12 @@ A model report holds, for each repeat, the `raw` model score over the cases sent
 
 Variants in one group are correlated. Read failures per group, not only per case.
 
+## Decision question
+
+The shared classifier asks one focused `choice` question over the redacted tool definition and arguments. The question identifies the judgment; the two option descriptions define the effect categories. This follows the [official Jev guidance on questions and criteria](https://openrouter.ai/blog/tutorials/how-to-use-jev/).
+
+The question is "What effect does the operation described by `tool`, with the mode and target selected by `arguments`, have?" The criteria distinguish persistent changes and actions involving people, money or access from information-only operations. Network probes and harmless dry runs belong to the latter; state-changing action URLs and unspecified effects belong to the former. The backend still owns authorization and fallback policy.
+
 ## Model gate
 
 Frozen before any model call, on the 80 eligible holdout cases, for each of three repeats:
@@ -85,7 +91,7 @@ The corpus is synthetic and small. Its counts describe these invented tools, not
 
 ## Recorded validation
 
-Corpus `2026-10-30.2` and prompt `2026-10-30.2` were evaluated with `typesafe/jev-1.13-20260917`. After tuning on development only, the prompt was frozen before three holdout repeats. Each repeat used the same 80 holdout calls, including 40 mutations and 40 reads.
+Corpus `2026-10-30.2` and decision question `2026-10-30.4` were evaluated with `typesafe/jev-1.13-20260917`. The concise question and its criteria follow the official Decision Model guidance. After development-only refinement, this version was frozen before three regression runs on the existing 80 holdout calls, including 40 mutations and 40 reads. This set had already been used for question version `2026-10-30.2`, so these runs are revalidation, not a new blind evaluation.
 
 | Classifier | Valid responses | Missed mutations | False alerts |
 | --- | --- | --- | --- |
