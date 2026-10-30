@@ -53,6 +53,8 @@ describe("approval classification report", () => {
       cases: 8,
       classified: 7,
       notRun: 1,
+      unavailable: 0,
+      failures: {},
       expectedConsequential: 4,
       expectedReadOnly: 4,
       truePositives: 2,
@@ -115,6 +117,36 @@ describe("approval classification report", () => {
     });
   });
 
+  it("keeps each provider failure apart and never scores it as a label", () => {
+    const selected = cases.filter((c) => c.annotation.expected.label === "consequential");
+    const answers = new Map<string, Prediction>([
+      ["fixture/send", classified("consequential")],
+      ["fixture/erase", { kind: "unavailable", reason: "timeout" }],
+      ["fixture/update", { kind: "unavailable", reason: "invalid_answer" }],
+      ["fixture/refresh", { kind: "unavailable", reason: "error" }],
+    ]);
+    const report = buildReport(scoreCases(selected, answers));
+
+    expect(report.complete).toBe(false);
+    expect(report.all).toMatchObject({
+      classified: 1,
+      notRun: 0,
+      unavailable: 3,
+      failures: { timeout: 1, invalid_answer: 1, error: 1 },
+      falseNegatives: 0,
+      recall: { numerator: 1, denominator: 4, value: null },
+      validResponses: { numerator: 1, denominator: 4, value: 0.25 },
+    });
+    expect(report.misses).toContainEqual({
+      id: "fixture/erase",
+      group: "fixture",
+      cohort: "eligible",
+      expected: "consequential",
+      outcome: "unavailable",
+      failure: "timeout",
+    });
+  });
+
   it("separates absent, true and false readOnly hints without reading them as labels", () => {
     const report = buildReport(scoreCases(cases, predictions));
 
@@ -143,7 +175,10 @@ describe("approval classification report", () => {
           cohort: "eligible" as const,
           risk: "read" as const,
           expected:
-            outcome === "true_positive" || outcome === "false_negative" || outcome === "not_run"
+            outcome === "true_positive" ||
+            outcome === "false_negative" ||
+            outcome === "not_run" ||
+            outcome === "unavailable"
               ? ("consequential" as const)
               : ("read_only" as const),
           predicted: "not-run" as const,
@@ -166,12 +201,13 @@ describe("approval classification report", () => {
       holdoutGate(measure(rows({ true_positive: 39, false_negative: 1, true_negative: 40 })))
         .passed,
     ).toBe(false);
-    expect(
-      holdoutGate(measure(rows({ true_positive: 39, not_run: 1, true_negative: 40 }))),
-    ).toEqual({
-      availability: { valid: 79, required: 80, passed: false },
-      quality: null,
-      passed: false,
-    });
+    for (const missing of ["not_run", "unavailable"] as const)
+      expect(
+        holdoutGate(measure(rows({ true_positive: 39, [missing]: 1, true_negative: 40 }))),
+      ).toEqual({
+        availability: { valid: 79, required: 80, passed: false },
+        quality: null,
+        passed: false,
+      });
   });
 });

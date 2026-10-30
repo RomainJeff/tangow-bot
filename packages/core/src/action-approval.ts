@@ -117,22 +117,30 @@ export function toolRequiresExplicitApproval(toolName: string): boolean {
 /**
  * External webhook runs may inspect state unattended, but side effects need the owner unless
  * the woken routine opted out, in which case the normal approval rules apply.
+ * `classifiedConsequential` adds a connector call classified from its definition; it never
+ * removes what the name already requires.
  */
 export function unattendedTriggerToolRequiresApproval(
   run: { trigger: string; requireToolApproval: boolean },
   toolName: string,
   viaConnector: boolean,
   localTool?: { readOnly?: boolean },
+  classifiedConsequential = false,
 ): boolean {
   if (run.trigger !== "webhook" || !run.requireToolApproval) return false;
   return viaConnector
-    ? connectorToolRequiresApproval(toolName)
+    ? classifiedConsequential || connectorToolRequiresApproval(toolName)
     : !(localTool?.readOnly ?? UNATTENDED_SAFE_BUILTIN_TOOLS.has(toolName));
 }
 
-function categoryMatches(category: string, toolName: string, connectorKind: string): boolean {
+function categoryMatches(
+  category: string,
+  toolName: string,
+  connectorKind: string,
+  classifiedConsequential: boolean,
+): boolean {
   const normalized = category.toLowerCase();
-  const consequential = connectorToolRequiresApproval(toolName);
+  const consequential = classifiedConsequential || connectorToolRequiresApproval(toolName);
   if (normalized === "email") {
     if (isEmailConnectorKind(connectorKind)) return consequential;
     return consequential && /send.*mail|gmail_send|outlook_send/i.test(toolName);
@@ -144,7 +152,12 @@ function categoryMatches(category: string, toolName: string, connectorKind: stri
   return false;
 }
 
-function ruleMatches(rule: ActionApprovalRule, toolName: string, connectorKind: string): boolean {
+function ruleMatches(
+  rule: ActionApprovalRule,
+  toolName: string,
+  connectorKind: string,
+  classifiedConsequential: boolean,
+): boolean {
   const value = rule.matchValue.toLowerCase();
   switch (rule.matchKind) {
     case "tool":
@@ -152,7 +165,7 @@ function ruleMatches(rule: ActionApprovalRule, toolName: string, connectorKind: 
     case "connector":
       return connectorKind.toLowerCase() === value;
     case "category":
-      return categoryMatches(rule.matchValue, toolName, connectorKind);
+      return categoryMatches(rule.matchValue, toolName, connectorKind, classifiedConsequential);
     default:
       return false;
   }
@@ -179,15 +192,20 @@ export type ActionApprovalResolved = {
   matchingRules: ActionApprovalRule[];
 };
 
-/** Deterministic rule resolution. Always-allow and require-approval both beat the default. */
+/**
+ * Deterministic rule resolution. Always-allow and require-approval both beat the default.
+ * `classifiedConsequential` lets a category also match a call classified as consequential from
+ * its definition; a name that already matches keeps matching.
+ */
 export function resolveActionApprovalDetail(input: {
   toolName: string;
   connectorKind?: string;
   rules: ActionApprovalRule[];
+  classifiedConsequential?: boolean;
 }): ActionApprovalResolved {
   const connectorKind = input.connectorKind ?? connectorKindFromToolName(input.toolName);
   const matchingRules = input.rules.filter((rule) =>
-    ruleMatches(rule, input.toolName, connectorKind),
+    ruleMatches(rule, input.toolName, connectorKind, input.classifiedConsequential === true),
   );
   if (matchingRules.length === 0) {
     return { decision: "allow", source: "default", matchingRules };

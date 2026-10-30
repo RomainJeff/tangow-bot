@@ -3,6 +3,9 @@ import type {
   ConnectorCall,
   ConnectorEvent,
   ConnectorTool,
+  DecisionProvider,
+  DecisionRequest,
+  DecisionResponse,
 } from "@rakazo/adapter-kit";
 import type { AskDraftEdits, MessageBlock } from "@rakazo/contracts";
 import { askDraftState } from "@rakazo/contracts";
@@ -15,6 +18,7 @@ import type * as AutoReviewModule from "./auto-review.js";
 import { runAutoReviewJudge } from "./auto-review.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor, settleCancelledRunCards } from "./executor.js";
+import { FakeDecisionProvider } from "./fake-decision.js";
 import { catalogEntries, resolveCatalogCall } from "./lazy-tool-catalog.js";
 import { recordingSessionLog } from "./session-log/recording.test-support.js";
 
@@ -90,13 +94,15 @@ function fixture({
   secrets = [] as string[],
   connectorFailure = undefined as Extract<ConnectorEvent, { type: "error" }> | undefined,
   prepare = proposeDraft,
-  readOnly = true,
+  readOnly = true as boolean | null,
+  decision = null as DecisionProvider | null,
+  shutdownSignal = undefined as AbortSignal | undefined,
 } = {}) {
   const tool: ConnectorTool = {
     name,
     description: "Read an item",
     appName: "Acme",
-    readOnly,
+    ...(readOnly === null ? {} : { readOnly }),
     inputSchema,
     route: {
       connectorId: "demo",
@@ -195,6 +201,7 @@ function fixture({
   const log = recordingSessionLog();
   /** When the person wrote in the thread, as the executor counts the messages after a card. */
   const userMessages: Array<{ at: Date; source: string }> = [];
+  const requestedCards: Array<{ id: string; effectId: string; card: unknown }> = [];
   const pauseRunForInput = vi.fn(
     async (input: { blocks: unknown[]; effect?: { id: string; reopen?: unknown } }) => {
       if (input.effect?.reopen) {
@@ -203,6 +210,12 @@ function fixture({
           draft: input.effect.reopen,
         });
       }
+      if (input.effect)
+        requestedCards.push({
+          id: `card-entry-${requestedCards.length + 1}`,
+          effectId: input.effect.id,
+          card: input.blocks[0],
+        });
       run.status = "waiting_input";
       return true;
     },
@@ -217,19 +230,13 @@ function fixture({
           where,
           orderBy,
         }: {
-          where?: { payload?: { path?: string[] } };
+          where?: { payload?: { path?: string[]; equals?: string } };
           orderBy?: { seq?: string };
         }) => {
           if (where?.payload?.path?.[0] !== "effectId") return null;
-          const pauses = pauseRunForInput.mock.calls;
-          const index = orderBy?.seq === "desc" ? pauses.length - 1 : 0;
-          const paused = pauses[index]?.[0];
-          return paused
-            ? {
-                id: `card-entry-${index + 1}`,
-                payload: { card: paused.blocks[0] },
-              }
-            : null;
+          const matching = requestedCards.filter((card) => card.effectId === where.payload?.equals);
+          const requested = orderBy?.seq === "desc" ? matching.at(-1) : matching[0];
+          return requested ? { id: requested.id, payload: { card: requested.card } } : null;
         },
       ),
       findUnique: vi.fn(async () => ({ sessionId: "session-main" })),
@@ -394,9 +401,12 @@ function fixture({
     notifications: { send },
     jobs: { enqueue: vi.fn(async () => undefined) },
     secrets,
+    decisionProviders: { resolve: async () => decision },
+    shutdownSignal,
   } as unknown as Parameters<typeof createRunExecutor>[0]);
   return {
     effects,
+    tool,
     results,
     preparations,
     execute,
@@ -411,11 +421,18 @@ function fixture({
     disconnect() {
       connected = false;
     },
+    disconnectDecisionModel() {
+      decision = null;
+    },
     takeNextClaimElsewhere() {
       claimTakenElsewhere = true;
     },
     setCalls(next: typeof calls) {
       calls = next;
+    },
+    async attempt() {
+      run.status = "queued";
+      await executor.continueRun(run.id, "worker-1");
     },
     async run(...workers: string[]) {
       run.status = "queued";
@@ -1675,5 +1692,301 @@ describe("connector read-only metadata and approval enforcement", () => {
       expect(card(f).draft).toBeUndefined();
       expect(f.execute).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("connector calls classified by the decision model", () => {
+  const modeSchema = {
+    type: "object",
+    properties: { mode: { type: "string", enum: ["preview", "apply"] } },
+    required: ["mode"],
+  };
+  const answer = (effect: "consequential" | "read_only"): DecisionResponse => ({
+    answers: {
+      effect: {
+        type: "choice",
+        choice: effect,
+        confidence: 0.9,
+        probabilities: {
+          [effect]: 0.9,
+          [effect === "consequential" ? "read_only" : "consequential"]: 0.1,
+        },
+      },
+    },
+  });
+  const byMode = (request: DecisionRequest) =>
+    answer(
+      JSON.stringify(request.state).includes('"mode":"apply"') ? "consequential" : "read_only",
+    );
+  const preview = { args: { mode: "preview" }, executionId: "call-preview" };
+  const apply = { args: { mode: "apply" }, executionId: "call-apply" };
+  const READ_NAME = "demo_get_item";
+  const WRITE_NAME = "mcp__crm__sync_records";
+
+  beforeEach(() => {
+    vi.mocked(runAutoReviewJudge).mockReset();
+    vi.mocked(runAutoReviewJudge).mockResolvedValue({
+      decision: "ask",
+      reason: "Review result",
+      model: "scripted/checker",
+    });
+  });
+
+  describe.each([false, true])("catalog = %s", (catalog) => {
+    it.each([READ_NAME, WRITE_NAME])(
+      "reviews %s by what its arguments do, not by its name",
+      async (name) => {
+        const decision = new FakeDecisionProvider({ script: [byMode, byMode] });
+        const f = fixture({
+          catalog,
+          name,
+          readOnly: null,
+          autoReview: true,
+          inputSchema: modeSchema,
+          decision,
+        });
+        f.setCalls([preview, apply]);
+        await f.run();
+        expect(f.execute).toHaveBeenCalledOnce();
+        expect(f.execute.mock.calls[0]![0].args).toEqual({ mode: "preview" });
+        expect(runAutoReviewJudge).toHaveBeenCalledOnce();
+        expect(isApprovalPausedResult(f.results[1])).toBe(true);
+        expect(decision.calls[1]!.state).toMatchObject({
+          calledTool: catalog ? "demo_execute_tool" : name,
+          tool: { name, description: "Read an item", inputSchema: modeSchema },
+          arguments: { mode: "apply" },
+        });
+      },
+    );
+
+    it.each([
+      [READ_NAME, true],
+      [READ_NAME, false],
+      [WRITE_NAME, true],
+      [WRITE_NAME, false],
+    ])("keeps the name rule for %s with readOnly hint %s", async (name, readOnly) => {
+      const decision = new FakeDecisionProvider();
+      const f = fixture({ catalog, name, readOnly, autoReview: true, decision });
+      await f.run();
+      expect(decision.calls).toHaveLength(0);
+      expect(runAutoReviewJudge).toHaveBeenCalledTimes(name === WRITE_NAME ? 1 : 0);
+      expect(f.execute).toHaveBeenCalledTimes(name === WRITE_NAME ? 0 : 1);
+    });
+
+    it.each([
+      ["no provider", () => null],
+      ["a provider error", () => new FakeDecisionProvider({ script: [new Error("down")] })],
+      [
+        "an invalid answer",
+        () =>
+          new FakeDecisionProvider({
+            script: [
+              {
+                answers: {
+                  effect: {
+                    type: "choice",
+                    choice: "maybe",
+                    confidence: 1,
+                    probabilities: { maybe: 1 },
+                  },
+                },
+              },
+            ],
+          }),
+      ],
+      ["an unsupported request", () => new FakeDecisionProvider({ maxOptions: 1 })],
+    ])("falls back to the name rule with %s", async (_, provider) => {
+      for (const name of [READ_NAME, WRITE_NAME]) {
+        vi.mocked(runAutoReviewJudge).mockClear();
+        const f = fixture({
+          catalog,
+          name,
+          readOnly: null,
+          autoReview: true,
+          decision: provider(),
+        });
+        await f.run();
+        expect(runAutoReviewJudge).toHaveBeenCalledTimes(name === WRITE_NAME ? 1 : 0);
+        expect(f.execute).toHaveBeenCalledTimes(name === WRITE_NAME ? 0 : 1);
+      }
+    });
+  });
+
+  it("stops before executing when the run is cancelled during classification", async () => {
+    const shutdown = new AbortController();
+    const decision = new FakeDecisionProvider({
+      script: [
+        () => {
+          shutdown.abort();
+          return answer("read_only");
+        },
+      ],
+    });
+    const f = fixture({
+      name: READ_NAME,
+      readOnly: null,
+      autoReview: true,
+      decision,
+      shutdownSignal: shutdown.signal,
+    });
+    await f.attempt();
+    expect(decision.calls).toHaveLength(1);
+    expect(f.execute).not.toHaveBeenCalled();
+    expect(runAutoReviewJudge).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["a classified write matches", "stripe_get_quote", 1],
+    ["a name that already matches needs no model", "stripe_create_charge", 0],
+  ])("asks under a purchase rule when %s", async (_, name, calls) => {
+    const decision = new FakeDecisionProvider({ script: [answer("consequential")] });
+    const f = fixture({
+      name,
+      readOnly: null,
+      decision,
+      rules: [{ effect: "require_approval", matchKind: "category", matchValue: "purchase" }],
+    });
+    await f.run();
+    expect(decision.calls).toHaveLength(calls);
+    expect(f.execute).not.toHaveBeenCalled();
+    expect(isApprovalPausedResult(f.results[0])).toBe(true);
+  });
+
+  it("runs an always-allowed call without asking the model", async () => {
+    const decision = new FakeDecisionProvider();
+    const f = fixture({
+      name: WRITE_NAME,
+      readOnly: null,
+      autoReview: true,
+      decision,
+      rules: [{ effect: "always_allow", matchKind: "tool", matchValue: WRITE_NAME }],
+    });
+    await f.run();
+    expect(decision.calls).toHaveLength(0);
+    expect(f.execute).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["a classified write", READ_NAME, "consequential", 1, 0],
+    ["a classified read", READ_NAME, "read_only", 1, 1],
+    ["a write by name", WRITE_NAME, "read_only", 0, 0],
+  ] as const)(
+    "lets a protected webhook run %s despite an allow rule only when it reads",
+    async (_, name, effect, calls, executions) => {
+      const decision = new FakeDecisionProvider({ script: [answer(effect)] });
+      const f = fixture({
+        name,
+        readOnly: null,
+        trigger: "webhook",
+        decision,
+        rules: [{ effect: "always_allow", matchKind: "tool", matchValue: name }],
+      });
+      await f.run();
+      expect(decision.calls).toHaveLength(calls);
+      expect(f.execute).toHaveBeenCalledTimes(executions);
+      expect(runAutoReviewJudge).not.toHaveBeenCalled();
+    },
+  );
+
+  it("replays an approved call once with its approved arguments and no new classification", async () => {
+    const decision = new FakeDecisionProvider({ script: [byMode] });
+    const f = fixture({
+      name: READ_NAME,
+      readOnly: null,
+      autoReview: true,
+      inputSchema: modeSchema,
+      decision,
+    });
+    f.setCalls([apply]);
+    await f.run();
+    expect(f.pauseRunForInput).toHaveBeenCalledOnce();
+    f.effects[0]!.status = "approved";
+    f.setCalls([{ args: { mode: "preview" }, executionId: "call-reconstructed" }]);
+    await f.run();
+    expect(decision.calls).toHaveLength(1);
+    expect(f.execute).toHaveBeenCalledOnce();
+    expect(f.execute.mock.calls[0]![0].args).toEqual({ mode: "apply" });
+  });
+
+  it.each([
+    ["a fresh read answer", () => undefined, 0],
+    [
+      "the decision model becomes unavailable",
+      (f: ReturnType<typeof fixture>) => f.disconnectDecisionModel(),
+      0,
+    ],
+    [
+      "automatic review turned off",
+      (f: ReturnType<typeof fixture>) =>
+        f.prisma.actionAutoReviewPreference.findUnique.mockResolvedValue({ enabled: false }),
+      0,
+    ],
+    [
+      "an always-allow rule",
+      (f: ReturnType<typeof fixture>) =>
+        f.prisma.actionApprovalRule.findMany.mockResolvedValue([
+          { effect: "always_allow", matchKind: "tool", matchValue: READ_NAME },
+        ]),
+      1,
+    ],
+  ])("releases a pending card after %s only on explicit consent", async (_, change, executions) => {
+    const decision = new FakeDecisionProvider({
+      script: [answer("consequential"), answer("read_only")],
+    });
+    const f = fixture({ name: READ_NAME, readOnly: null, autoReview: true, decision });
+    await f.run();
+    expect(isApprovalPausedResult(f.results[0])).toBe(true);
+    change(f);
+    await f.run();
+    expect(f.execute).toHaveBeenCalledTimes(executions);
+    expect(f.effects).toHaveLength(1);
+  });
+  it.each([true, false])(
+    "keeps a real pending card blocked when its hint becomes %s",
+    async (hint) => {
+      const decision = new FakeDecisionProvider({ script: [answer("consequential")] });
+      const f = fixture({ name: READ_NAME, readOnly: null, autoReview: true, decision });
+      await f.run();
+      expect(isApprovalPausedResult(f.results[0])).toBe(true);
+      f.pauseRunForInput.mockClear();
+      f.tool.readOnly = hint;
+      await f.run();
+      expect(decision.calls).toHaveLength(1);
+      expect(f.execute).not.toHaveBeenCalled();
+      expect(f.effects[0]?.status).toBe("intended");
+      expect(isApprovalPausedResult(f.results.at(-1))).toBe(true);
+    },
+  );
+
+  it("retries an intended automatic read without inventing a pending card", async () => {
+    const decision = new FakeDecisionProvider({ script: [answer("read_only")] });
+    const f = fixture({ name: READ_NAME, readOnly: null, autoReview: true, decision });
+    f.effects.push({
+      id: "effect-interrupted-read",
+      kind: READ_NAME,
+      idempotencyKey: approvalEffectKey("run-1", READ_NAME, { id: "item-1" }),
+      status: "intended",
+      request: { id: "item-1" },
+    });
+    await f.run();
+    expect(f.execute).toHaveBeenCalledOnce();
+    expect(f.effects[0]?.status).toBe("completed");
+    expect(f.pauseRunForInput).not.toHaveBeenCalled();
+  });
+
+  it("releases a pending semantic purchase after an explicit category allow", async () => {
+    const decision = new FakeDecisionProvider({
+      script: [answer("consequential"), answer("consequential")],
+    });
+    const f = fixture({ name: "stripe_get_quote", readOnly: null, autoReview: true, decision });
+    await f.run();
+    expect(isApprovalPausedResult(f.results[0])).toBe(true);
+    f.prisma.actionApprovalRule.findMany.mockResolvedValue([
+      { effect: "always_allow", matchKind: "category", matchValue: "purchase" },
+    ]);
+    await f.run();
+    expect(decision.calls).toHaveLength(2);
+    expect(f.execute).toHaveBeenCalledOnce();
+    expect(f.effects[0]?.status).toBe("completed");
   });
 });

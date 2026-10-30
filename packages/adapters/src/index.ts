@@ -108,6 +108,7 @@ export { SupermemoryMemoryProvider } from "./supermemory-memory-provider.js";
 export * from "./teaching-session.js";
 export * from "./team-chat-messaging.js";
 export * from "./third-party-connector-emulator.js";
+export * from "./tool-approval-classification.js";
 export * from "./trace-export.js";
 export * from "./voice-factory.js";
 export * from "./wakeup.js";
