@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
-- On web, desktop and mobile, when a decision model is set up, connected-app and MCP actions without a read-only annotation are judged by what they do rather than by their name for approval rules, automatic review and protected webhook runs, so a misleadingly named change is no longer treated as a read.
+- On web, desktop and mobile, approval rules, automatic review and protected webhook runs can use the configured Decision Model to assess connected-app and MCP calls without a read-only hint, while keeping the existing name-based fallback.
 
 ### 2026-10-29
 

@@ -3981,10 +3981,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 // recovery after action approval but before the card was committed.
               } else {
                 const requested =
-                  !needsApproval &&
-                  decisionProvider &&
-                  viaConnector &&
-                  approvalResolved.source !== "always_allow"
+                  !needsApproval && viaConnector && approvalResolved.source !== "always_allow"
                     ? await deps.prisma.sessionEntry.findFirst({
                         where: {
                           runId,

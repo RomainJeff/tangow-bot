@@ -421,6 +421,9 @@ function fixture({
     disconnect() {
       connected = false;
     },
+    disconnectDecisionModel() {
+      decision = null;
+    },
     takeNextClaimElsewhere() {
       claimTakenElsewhere = true;
     },
@@ -1907,6 +1910,11 @@ describe("connector calls classified by the decision model", () => {
 
   it.each([
     ["a fresh read answer", () => undefined, 0],
+    [
+      "the decision model becomes unavailable",
+      (f: ReturnType<typeof fixture>) => f.disconnectDecisionModel(),
+      0,
+    ],
     [
       "automatic review turned off",
       (f: ReturnType<typeof fixture>) =>

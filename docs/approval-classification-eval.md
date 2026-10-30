@@ -82,3 +82,18 @@ The gate reads the raw model answer. The default-path score after fallback is re
 ## Limits
 
 The corpus is synthetic and small. Its counts describe these invented tools, not the distribution of real calls. Protocol-derived hints, such as those set by installed API and GraphQL connectors, are known metadata: the executor keeps the name rule for those tools and the corpus does not represent them. The corpus covers native and MCP tools.
+
+## Recorded validation
+
+Corpus `2026-10-30.2` and prompt `2026-10-30.2` were evaluated with `typesafe/jev-1.13-20260917`. After tuning on development only, the prompt was frozen before three holdout repeats. Each repeat used the same 80 holdout calls, including 40 mutations and 40 reads.
+
+| Classifier | Valid responses | Missed mutations | False alerts |
+| --- | --- | --- | --- |
+| Current name heuristic | 80/80 | 2 | 22 |
+| Decision Model, repeat 1 | 80/80 | 0 | 0 |
+| Decision Model, repeat 2 | 80/80 | 0 | 0 |
+| Decision Model, repeat 3 | 80/80 | 0 | 0 |
+
+All three repeats passed the predefined gate without fallback or provider errors. These are repeated observations on 80 synthetic cases, not 240 independent cases or a production accuracy estimate. Generated per-case reports remain local.
+
+A pending connector approval remains pending if the model becomes unavailable or the connector later advertises a read-only hint. The executor checks its persisted approval request rather than inferring a card from an unfinished effect. Consent or an explicit always-allow rule can release it. First calls without a model keep the existing name policy.
