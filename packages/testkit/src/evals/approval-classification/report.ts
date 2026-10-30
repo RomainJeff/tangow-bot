@@ -1,14 +1,22 @@
+import type { DecisionUnavailableReason } from "@rakazo/adapter-kit";
 import type { ApprovalCase, Cohort, Connector, Label, Route, Split, Stratum } from "./corpus.js";
 import { cohortOf } from "./corpus.js";
 
-/** A raw classifier answer. P0 has no model, so its only failure is work that never ran. */
-export type Prediction = { kind: "classified"; label: Label } | { kind: "not-run"; reason: string };
+/**
+ * A raw classifier answer: a label, a provider that gave none, or work that never ran. Neither
+ * failure counts as a label.
+ */
+export type Prediction =
+  | { kind: "classified"; label: Label }
+  | { kind: "unavailable"; reason: DecisionUnavailableReason }
+  | { kind: "not-run"; reason: string };
 
 export type Outcome =
   | "true_positive"
   | "true_negative"
   | "false_positive"
   | "false_negative"
+  | "unavailable"
   | "not_run";
 
 export type Risk = "critical" | "mutation" | "read";
@@ -23,8 +31,9 @@ export type ScoredCase = {
   cohort: Cohort;
   risk: Risk;
   expected: Label;
-  predicted: Label | "not-run";
+  predicted: Label | "unavailable" | "not-run";
   outcome: Outcome;
+  failure?: DecisionUnavailableReason;
 };
 
 export type Ratio = { numerator: number; denominator: number; value: number | null };
@@ -33,13 +42,16 @@ export type Metrics = {
   cases: number;
   classified: number;
   notRun: number;
+  unavailable: number;
+  /** Unavailable answers by reason: timeouts, errors and invalid answers stay apart. */
+  failures: Partial<Record<DecisionUnavailableReason, number>>;
   expectedConsequential: number;
   expectedReadOnly: number;
   truePositives: number;
   trueNegatives: number;
   falsePositives: number;
   falseNegatives: number;
-  /** Over every expected-consequential case: a case that did not run never raises recall. */
+  /** Over every expected-consequential case: a case without a label never raises recall. */
   recall: Ratio;
   precision: Ratio;
   /** Over every expected-read-only case. */
@@ -72,6 +84,7 @@ function ratio(numerator: number, denominator: number, available = true): Ratio 
 
 function outcomeOf(expected: Label, prediction: Prediction): Outcome {
   if (prediction.kind === "not-run") return "not_run";
+  if (prediction.kind === "unavailable") return "unavailable";
   if (expected === "consequential")
     return prediction.label === "consequential" ? "true_positive" : "false_negative";
   return prediction.label === "read_only" ? "true_negative" : "false_positive";
@@ -95,8 +108,9 @@ export function scoreCases(
       cohort: cohortOf(c),
       risk: expected.label === "read_only" ? "read" : expected.critical ? "critical" : "mutation",
       expected: expected.label,
-      predicted: prediction.kind === "classified" ? prediction.label : "not-run",
+      predicted: prediction.kind === "classified" ? prediction.label : prediction.kind,
       outcome: outcomeOf(expected.label, prediction),
+      ...(prediction.kind === "unavailable" ? { failure: prediction.reason } : {}),
     };
   });
 }
@@ -106,22 +120,29 @@ export function measure(rows: readonly ScoredCase[]): Metrics {
   const truePositives = count("true_positive");
   const falsePositives = count("false_positive");
   const notRun = count("not_run");
+  const unavailable = count("unavailable");
+  const classified = rows.length - notRun - unavailable;
+  const complete = classified === rows.length;
+  const failures: Partial<Record<DecisionUnavailableReason, number>> = {};
+  for (const { failure } of rows) if (failure) failures[failure] = (failures[failure] ?? 0) + 1;
   const expectedConsequential = rows.filter((r) => r.expected === "consequential").length;
   const expectedReadOnly = rows.length - expectedConsequential;
   return {
     cases: rows.length,
-    classified: rows.length - notRun,
+    classified,
     notRun,
+    unavailable,
+    failures,
     expectedConsequential,
     expectedReadOnly,
     truePositives,
     trueNegatives: count("true_negative"),
     falsePositives,
     falseNegatives: count("false_negative"),
-    recall: ratio(truePositives, expectedConsequential, notRun === 0),
-    precision: ratio(truePositives, truePositives + falsePositives, notRun === 0),
-    falsePositiveRate: ratio(falsePositives, expectedReadOnly, notRun === 0),
-    validResponses: ratio(rows.length - notRun, rows.length),
+    recall: ratio(truePositives, expectedConsequential, complete),
+    precision: ratio(truePositives, truePositives + falsePositives, complete),
+    falsePositiveRate: ratio(falsePositives, expectedReadOnly, complete),
+    validResponses: ratio(classified, rows.length),
   };
 }
 
@@ -129,7 +150,7 @@ export function holdoutGate(metrics: Metrics): GateVerdict {
   const availability = {
     valid: metrics.classified,
     required: HOLDOUT_GATE.cases,
-    passed: metrics.cases === HOLDOUT_GATE.cases && metrics.notRun === 0,
+    passed: metrics.cases === HOLDOUT_GATE.cases && metrics.classified === HOLDOUT_GATE.cases,
   };
   const quality = availability.passed
     ? {
@@ -159,7 +180,7 @@ function breakdown(
 export function buildReport(rows: readonly ScoredCase[]) {
   const gateRows = rows.filter((r) => r.split === "holdout" && r.cohort === "eligible");
   return {
-    complete: rows.every((r) => r.outcome !== "not_run"),
+    complete: rows.every((r) => r.outcome !== "not_run" && r.outcome !== "unavailable"),
     all: measure(rows),
     byCohort: breakdown(rows, (r) => r.cohort),
     bySplit: breakdown(rows, (r) => r.split),
@@ -170,18 +191,14 @@ export function buildReport(rows: readonly ScoredCase[]) {
     byGroup: breakdown(rows, (r) => r.group),
     holdoutGate: gateRows.length ? holdoutGate(measure(gateRows)) : null,
     misses: rows
-      .filter(
-        (r) =>
-          r.outcome === "false_negative" ||
-          r.outcome === "false_positive" ||
-          r.outcome === "not_run",
-      )
-      .map(({ id, group, cohort, expected, outcome }) => ({
+      .filter((r) => r.outcome !== "true_positive" && r.outcome !== "true_negative")
+      .map(({ id, group, cohort, expected, outcome, failure }) => ({
         id,
         group,
         cohort,
         expected,
         outcome,
+        ...(failure ? { failure } : {}),
       })),
     cases: rows,
   };

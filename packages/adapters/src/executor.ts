@@ -438,6 +438,8 @@ import {
   materializeCurrentTurnFiles,
   storeWidgetArtifact,
 } from "./thread-artifacts.js";
+import type { ToolEffect } from "./tool-approval-classification.js";
+import { classifyToolEffect } from "./tool-approval-classification.js";
 import { advanceToolCallLoopGuard } from "./tool-loop.js";
 import {
   botMessageOutcomeFromMidTurn,
@@ -3240,7 +3242,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (approvedReplay.error) return { error: approvedReplay.error };
           if (approvedReplay.args) connectorCall.args = approvedReplay.args;
           let catalogRemapped = false;
-          let resolvedToolSchema: Record<string, unknown> | undefined;
+          const publicName = name;
+          let resolvedTool: ConnectorTool | undefined;
           let effectRequest: unknown = args;
           let approvedReplayConsumed = false;
           if (connectorCall.route && deps.connector?.resolveCall) {
@@ -3253,7 +3256,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 name = resolved.tool.name;
                 args = resolved.call.args;
                 catalogRemapped = true;
-                resolvedToolSchema = resolved.tool.inputSchema;
+                resolvedTool = resolved.tool;
                 effectRequest = catalogApprovalRequest(
                   connectorCall.tool,
                   connectorCall.args,
@@ -3417,7 +3420,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               boundDirectApprovalDetails(approvedRequest, CATALOG_APPROVAL_TOOL) ||
               (approvedCatalog && !catalogRemapped)
             ) {
-              const liveSchema = resolvedToolSchema ?? connectorSchemas.get(name);
+              const liveSchema = resolvedTool?.inputSchema ?? connectorSchemas.get(name);
               if (liveSchema) {
                 try {
                   assertConnectorToolArgs(liveSchema, args);
@@ -3428,12 +3431,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
               }
             }
           }
-          const requiresUnattendedApproval = unattendedTriggerToolRequiresApproval(
-            run,
-            name,
-            viaConnector,
-            localTools.get(name),
-          );
+          const unattendedApprovalFor = (effect?: ToolEffect) =>
+            unattendedTriggerToolRequiresApproval(
+              run,
+              name,
+              viaConnector,
+              localTools.get(name),
+              effect === "consequential",
+            );
           const pluginProviders = connectedPlugins.map((plugin) => plugin.provider);
           const connectorKind = connectorKindFromToolName(name, pluginProviders);
           const ownToolName = connectorCall.route?.toolName ?? name;
@@ -3449,17 +3454,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
           ) {
             return { error: "This message contains a secret. Write it without the secret." };
           }
-          const requiresApprovalByDefault =
-            proposal || requiresUnattendedApproval || toolRequiresApproval(name, viaConnector);
+          const requiresNominalApprovalByDefault =
+            proposal || unattendedApprovalFor() || toolRequiresApproval(name, viaConnector);
           const requiresMandatoryApproval =
             proposal ||
-            requiresUnattendedApproval ||
+            unattendedApprovalFor() ||
             toolRequiresExplicitApproval(name) ||
             outbound.kind !== "none";
           const approvalRules = requiresMandatoryApproval ? [] : await loadApprovalRules();
-          const approvalResolved = requiresMandatoryApproval
-            ? { decision: "ask" as const, source: "default" as const, matchingRules: [] }
-            : resolveActionApprovalDetail({ toolName: name, connectorKind, rules: approvalRules });
           const autoReviewPref = requiresMandatoryApproval
             ? false
             : await loadAutoReviewPreference();
@@ -3475,14 +3477,59 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   ),
                 )
               : false;
-          const plan = requiresMandatoryApproval
-            ? "ask"
-            : planActionGate({
-                resolved: approvalResolved,
-                consequential: requiresApprovalByDefault,
-                autoReviewEnabled: autoReviewPref,
-                checkerConfigured,
-              });
+          const gateFor = (effect?: ToolEffect) => {
+            const mandatory = requiresMandatoryApproval || unattendedApprovalFor(effect);
+            const resolved = mandatory
+              ? { decision: "ask" as const, source: "default" as const, matchingRules: [] }
+              : resolveActionApprovalDetail({
+                  toolName: name,
+                  connectorKind,
+                  rules: approvalRules,
+                  classifiedConsequential: effect === "consequential",
+                });
+            const plan = mandatory
+              ? ("ask" as const)
+              : planActionGate({
+                  resolved,
+                  consequential: effect
+                    ? effect === "consequential"
+                    : requiresNominalApprovalByDefault,
+                  autoReviewEnabled: autoReviewPref,
+                  checkerConfigured,
+                });
+            return { resolved, plan };
+          };
+          const targetTool = viaConnector
+            ? (resolvedTool ?? exposedConnectorTools.find((tool) => tool.name === name))
+            : undefined;
+          const classifiedPath = Boolean(
+            decisionProvider &&
+              targetTool?.route &&
+              targetTool.readOnly === undefined &&
+              !approvedReplayConsumed &&
+              !toolRequiresApproval(name, false),
+          );
+          const consequentialGate = gateFor("consequential");
+          const readOnlyGate = gateFor("read_only");
+          const classificationChangesGate =
+            consequentialGate.plan !== readOnlyGate.plan ||
+            (consequentialGate.resolved.source === "always_allow") !==
+              (readOnlyGate.resolved.source === "always_allow");
+          let effect: ToolEffect | undefined;
+          if (classifiedPath && targetTool && classificationChangesGate) {
+            const classified = await classifyToolEffect({
+              provider: decisionProvider ?? undefined,
+              call: { publicName, tool: targetTool, args },
+              secrets: runSecrets,
+              context,
+              trace,
+            });
+            if (classified.ok) effect = classified.effect;
+            else if (classified.reason === "aborted") context.signal.throwIfAborted();
+          }
+          const { resolved: approvalResolved, plan } = gateFor(effect);
+          const requiresApprovalByDefault =
+            requiresNominalApprovalByDefault || effect === "consequential";
           let reviewReason: string | undefined;
           let gateDecision: "ask" | "allow" = plan === "ask" ? "ask" : "allow";
           const needsApprovalEarly = plan === "ask" || plan === "judge";
@@ -3704,7 +3751,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               tool: {
                 name: ownToolName,
                 description: exposedConnectorTools.find((tool) => tool.name === name)?.description,
-                schema: resolvedToolSchema ?? connectorSchemas.get(name),
+                schema: resolvedTool?.inputSchema ?? connectorSchemas.get(name),
                 app: messageApp,
               },
               args,
@@ -3932,18 +3979,34 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 }
                 // An intended secret request resumes protected entry below, including
                 // recovery after action approval but before the card was committed.
-              } else if (!needsApproval) {
-                const early = await claimOrReturn("intended");
-                if (early !== undefined) return early;
               } else {
-                const current = await deps.prisma.run.findUnique({
-                  where: { id: runId },
-                  select: { status: true },
-                });
-                if (current?.status === "waiting_input") {
-                  return pauseForApproval(applied!.effect.id);
+                const requested =
+                  !needsApproval &&
+                  decisionProvider &&
+                  viaConnector &&
+                  approvalResolved.source !== "always_allow"
+                    ? await deps.prisma.sessionEntry.findFirst({
+                        where: {
+                          runId,
+                          type: "effect.requested",
+                          payload: { path: ["effectId"], equals: applied!.effect.id },
+                        },
+                        select: { id: true },
+                      })
+                    : null;
+                if (!needsApproval && !requested) {
+                  const early = await claimOrReturn("intended");
+                  if (early !== undefined) return early;
+                } else {
+                  const current = await deps.prisma.run.findUnique({
+                    where: { id: runId },
+                    select: { status: true },
+                  });
+                  if (current?.status === "waiting_input") {
+                    return pauseForApproval(applied!.effect.id);
+                  }
+                  return requestApproval();
                 }
-                return requestApproval();
               }
             } else if (gate.action === "uncertain") {
               if (readDraft(applied.effect.status, applied.effect.draft)) {

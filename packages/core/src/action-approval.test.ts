@@ -146,6 +146,18 @@ describe("unattendedTriggerToolRequiresApproval", () => {
     ).toBe(false);
   });
 
+  it("adds a classified connector write to the name rule without removing one", () => {
+    expect(
+      unattendedTriggerToolRequiresApproval(webhook, "crm_get_report", true, undefined, true),
+    ).toBe(true);
+    expect(
+      unattendedTriggerToolRequiresApproval(webhook, "crm_create_note", true, undefined, false),
+    ).toBe(true);
+    expect(
+      unattendedTriggerToolRequiresApproval(webhook, "crm_get_report", true, undefined, false),
+    ).toBe(false);
+  });
+
   it("leaves webhook runs to the normal rules when their routines opted out", () => {
     const optedOut = { trigger: "webhook", requireToolApproval: false };
     expect(unattendedTriggerToolRequiresApproval(optedOut, "shell", false)).toBe(false);
@@ -319,6 +331,19 @@ describe("resolveActionApproval", () => {
         ],
       }),
     ).toBe("allow");
+  });
+
+  it("lets a classified write match a category its name alone does not", () => {
+    const requirePurchase: ActionApprovalRule[] = [
+      { effect: "require_approval", matchKind: "category", matchValue: "purchase" },
+    ];
+    const resolve = (toolName: string, classifiedConsequential: boolean) =>
+      resolveActionApprovalDetail({ toolName, rules: requirePurchase, classifiedConsequential })
+        .decision;
+    expect(resolve("stripe_list_invoices", false)).toBe("allow");
+    expect(resolve("stripe_list_invoices", true)).toBe("ask");
+    expect(resolve("stripe_create_charge", false)).toBe("ask");
+    expect(resolve("acme_lookup_order", true)).toBe("allow");
   });
 
   it("labels always-allow vs default allow", () => {

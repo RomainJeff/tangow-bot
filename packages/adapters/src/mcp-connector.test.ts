@@ -45,7 +45,12 @@ function mcpFetch(
     failNext: boolean;
     initializations: number;
     headers?: Record<string, string>[];
-    tools?: Array<{ name: string; description?: string; inputSchema: Record<string, unknown> }>;
+    tools?: Array<{
+      name: string;
+      description?: string;
+      inputSchema: Record<string, unknown>;
+      annotations?: { readOnlyHint?: boolean };
+    }>;
     calls?: string[];
     toolError?: boolean;
   },
@@ -190,6 +195,38 @@ describe("MCP connector session cache", () => {
       }
       await connector.close();
     }
+  });
+
+  it("keeps a server's readOnlyHint absent, true or false", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mcpFetch({
+        failNext: false,
+        initializations: 0,
+        tools: [
+          { name: "unhinted", inputSchema: { type: "object" } },
+          { name: "reads", inputSchema: { type: "object" }, annotations: { readOnlyHint: true } },
+          { name: "writes", inputSchema: { type: "object" }, annotations: { readOnlyHint: false } },
+        ],
+      }),
+    );
+    const connector = new McpConnector(
+      { botMcpServer: { findMany: vi.fn().mockResolvedValue([ASSIGNMENT]) } } as never,
+      {} as never,
+      { network: TEST_NETWORK },
+    );
+    const tools = await connector.discoverTools({
+      spaceId: "w1",
+      userId: "u1",
+      botId: "bot-1",
+      signal: new AbortController().signal,
+    } as never);
+    expect(tools.map((tool) => [tool.name, tool.readOnly])).toEqual([
+      ["mcp__demo__unhinted", undefined],
+      ["mcp__demo__reads", true],
+      ["mcp__demo__writes", false],
+    ]);
+    await connector.close();
   });
 
   it("returns no tools when the MCP catalog is empty", async () => {
