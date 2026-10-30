@@ -3573,6 +3573,10 @@ msgstr "자동 실행 업데이트됨"
 msgid "Routines"
 msgstr "자동 실행"
 
+#: src/pages/shell/session-view.tsx:245
+msgid "Routing"
+msgstr "라우팅"
+
 #: src/pages/bot-page/RoutineTriggers.tsx:259
 msgid "Run at"
 msgstr "실행 시간"

@@ -3573,6 +3573,10 @@ msgstr "Rutina actualizada"
 msgid "Routines"
 msgstr "Rutinas"
 
+#: src/pages/shell/session-view.tsx:245
+msgid "Routing"
+msgstr "Enrutamiento"
+
 #: src/pages/bot-page/RoutineTriggers.tsx:259
 msgid "Run at"
 msgstr "Ejecutar a las"

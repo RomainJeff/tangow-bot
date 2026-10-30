@@ -3573,6 +3573,10 @@ msgstr "例行任务已更新"
 msgid "Routines"
 msgstr "例行任务"
 
+#: src/pages/shell/session-view.tsx:245
+msgid "Routing"
+msgstr "路由"
+
 #: src/pages/bot-page/RoutineTriggers.tsx:259
 msgid "Run at"
 msgstr "运行时间"

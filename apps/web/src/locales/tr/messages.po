@@ -3573,6 +3573,10 @@ msgstr "Rutin güncellendi"
 msgid "Routines"
 msgstr "Rutinler"
 
+#: src/pages/shell/session-view.tsx:245
+msgid "Routing"
+msgstr "Yönlendirme"
+
 #: src/pages/bot-page/RoutineTriggers.tsx:259
 msgid "Run at"
 msgstr "Çalışma zamanı"

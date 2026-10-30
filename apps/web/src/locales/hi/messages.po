@@ -3573,6 +3573,10 @@ msgstr "रूटीन अपडेट किया गया"
 msgid "Routines"
 msgstr "रूटीन्स"
 
+#: src/pages/shell/session-view.tsx:245
+msgid "Routing"
+msgstr "रूटिंग"
+
 #: src/pages/bot-page/RoutineTriggers.tsx:259
 msgid "Run at"
 msgstr "चलने का समय"
