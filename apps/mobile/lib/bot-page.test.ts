@@ -11,7 +11,7 @@ vi.mock("./api", () => ({
   selectedSpaceId: () => server.space,
   rpc: vi.fn(async (proc: string) => {
     if (proc === "me") return { userId: "user-1", ...server.defaults[server.space] };
-    return [];
+    return proc === "models/list" ? { models: [], auto: false, categories: [] } : [];
   }),
 }));
 

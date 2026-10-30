@@ -1,3 +1,4 @@
+import type { ModelCategory, ModelCategoryAssignment } from "@rakazo/contracts";
 import type { PrismaClient } from "./client.js";
 
 export const newestCredentialOrder = [
@@ -122,4 +123,55 @@ export async function findModelCredential(
   if (preference) return withModelPreference(preference);
   const credential = await findNewestUserModelCredential(prisma, scope.userId, provider);
   return credential ? { ...credential, isDefault: false, defaultModel: null } : null;
+}
+
+export function findModelCategories(
+  prisma: Pick<PrismaClient, "spaceModelCategory">,
+  scope: ModelCredentialScope,
+) {
+  return prisma.spaceModelCategory.findMany({
+    where: { spaceId: scope.spaceId, userId: scope.userId, credential: { userId: scope.userId } },
+    include: { credential: true },
+    orderBy: { category: "asc" },
+  });
+}
+
+export function setModelCategory(
+  prisma: Pick<PrismaClient, "spaceModelCategory">,
+  scope: ModelCredentialScope,
+  assignment: Omit<ModelCategoryAssignment, "provider"> & { credentialId: string },
+) {
+  const data = { ...assignment, thinkingLevel: assignment.thinkingLevel ?? null };
+  return prisma.spaceModelCategory.upsert({
+    where: {
+      spaceId_userId_category: {
+        spaceId: scope.spaceId,
+        userId: scope.userId,
+        category: assignment.category,
+      },
+    },
+    create: { spaceId: scope.spaceId, userId: scope.userId, ...data },
+    update: data,
+  });
+}
+
+export function clearModelCategory(
+  prisma: Pick<PrismaClient, "spaceModelCategory">,
+  scope: ModelCredentialScope,
+  category: ModelCategory,
+) {
+  return prisma.spaceModelCategory.deleteMany({
+    where: { spaceId: scope.spaceId, userId: scope.userId, category },
+  });
+}
+
+export function setModelAuto(
+  prisma: Pick<PrismaClient, "spaceMember">,
+  scope: ModelCredentialScope,
+  enabled: boolean,
+) {
+  return prisma.spaceMember.update({
+    where: { spaceId_userId: { spaceId: scope.spaceId, userId: scope.userId } },
+    data: { modelAuto: enabled },
+  });
 }

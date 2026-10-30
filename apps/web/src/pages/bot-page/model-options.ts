@@ -43,7 +43,11 @@ export function useModelCatalog(): ModelCatalog {
   });
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([rpc.models.credentials(), rpc.models.list(), rpc.me()])
+    void Promise.all([
+      rpc.models.credentials(),
+      rpc.models.list().then((result) => result.models),
+      rpc.me(),
+    ])
       .then(([credentials, catalog, me]) => {
         if (!cancelled) setState({ credentials, catalog, me, ready: true });
       })

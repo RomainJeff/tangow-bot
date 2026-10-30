@@ -84,6 +84,7 @@ import {
   toComputerRef,
   touchRunningComputer,
   updateRoutine,
+  validateConnectedModelChoice,
   verifyMcpInstall,
 } from "@rakazo/adapters";
 import type { Auth } from "@rakazo/auth";
@@ -99,8 +100,10 @@ import type {
 import {
   appContract,
   IntegrationProviderIdSchema,
+  ModelCategorySchema,
   OPENAI_COMPATIBLE_PROVIDER_ID,
   SessionId,
+  ThinkingLevelSchema,
 } from "@rakazo/contracts";
 import {
   ACTIVE_RUN_STATUSES,
@@ -121,6 +124,7 @@ import {
   CannotDeleteLastSpaceError,
   CannotDeleteSpaceAsNonOwnerError,
   claimEmptySpaceDeletionForMember,
+  clearModelCategory,
   conversationRunFilter,
   createExternalConversationRepos,
   createGroupRepos,
@@ -131,6 +135,7 @@ import {
   deleteUnreferencedCredentialSecret,
   findDefaultModelCredential,
   findDefaultVoiceCredential,
+  findModelCategories,
   findModelCredential,
   findSpaceDecisionConfig,
   findSpaceMemoryConfig,
@@ -155,6 +160,8 @@ import {
   SpaceNotFoundError,
   selectSpaceModelPreference,
   selectSpaceVoicePreference,
+  setModelAuto,
+  setModelCategory,
   threadEventSeq,
   touchGroupUpdatedAt,
 } from "@rakazo/db";
@@ -870,7 +877,27 @@ export function createRouter(deps: RouterDeps) {
       }),
     },
     models: {
-      list: authed.models.list.handler(async () => [...listPiCatalog(), scriptedCatalogEntry]),
+      list: authed.models.list.handler(async ({ context }) => {
+        const [member, assignments] = await Promise.all([
+          deps.prisma.spaceMember.findUniqueOrThrow({
+            where: {
+              spaceId_userId: { spaceId: context.actor.spaceId, userId: context.actor.userId },
+            },
+            select: { modelAuto: true },
+          }),
+          findModelCategories(deps.prisma, context.actor),
+        ]);
+        return {
+          models: [...listPiCatalog(), scriptedCatalogEntry],
+          auto: member.modelAuto,
+          categories: assignments.map((assignment) => ({
+            category: ModelCategorySchema.parse(assignment.category),
+            provider: assignment.credential.provider,
+            modelId: assignment.modelId,
+            thinkingLevel: ThinkingLevelSchema.nullable().parse(assignment.thinkingLevel),
+          })),
+        };
+      }),
       credentials: authed.models.credentials.handler(async ({ context }) => {
         const rows = await deps.prisma.userModelCredential.findMany({
           where: { userId: context.actor.userId },
@@ -1013,6 +1040,37 @@ export function createRouter(deps: RouterDeps) {
       }),
       cancelOAuth: authed.models.cancelOAuth.handler(async ({ context, input }) => {
         await deps.oauthLogins.cancel(input.loginId, context.actor);
+        return { ok: true as const };
+      }),
+      setCategory: authed.models.setCategory.handler(async ({ context, input }) => {
+        const validationError = await validateConnectedModelChoice(
+          deps.prisma,
+          context.actor,
+          input.provider,
+          input.modelId,
+        );
+        if (validationError) throw new ORPCError("BAD_REQUEST", { message: validationError });
+        await deps.prisma.$transaction(async (tx) => {
+          const credential = await tx.userModelCredential.findFirst({
+            where: { userId: context.actor.userId, provider: input.provider },
+            orderBy: newestModelCredentialOrder,
+          });
+          if (!credential) throw new ORPCError("NOT_FOUND");
+          await setModelCategory(tx, context.actor, {
+            category: input.category,
+            credentialId: credential.id,
+            modelId: input.modelId,
+            thinkingLevel: input.thinkingLevel,
+          });
+        });
+        return { ok: true as const };
+      }),
+      clearCategory: authed.models.clearCategory.handler(async ({ context, input }) => {
+        await clearModelCategory(deps.prisma, context.actor, input.category);
+        return { ok: true as const };
+      }),
+      setAuto: authed.models.setAuto.handler(async ({ context, input }) => {
+        await setModelAuto(deps.prisma, context.actor, input.enabled);
         return { ok: true as const };
       }),
       setDefault: authed.models.setDefault.handler(async ({ context, input }) => {

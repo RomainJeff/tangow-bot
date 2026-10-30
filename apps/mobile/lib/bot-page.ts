@@ -221,7 +221,7 @@ function useSharedRead<T>(read: SharedRead<T>, load: () => Promise<T>) {
 export function loadModelCatalog(): Promise<ModelCatalog> {
   return Promise.all([
     rpc<ModelCredential[]>("models/credentials"),
-    rpc<ModelCatalogEntry[]>("models/list"),
+    rpc<{ models: ModelCatalogEntry[] }>("models/list").then((result) => result.models),
     rpc<Me>("me"),
   ]).then(([credentials, catalog, me]) => ({ credentials, catalog, me }));
 }

@@ -68,7 +68,7 @@ export function useModelSettings() {
     const refreshRevision = ++refreshRevisionRef.current;
     const selectionRevision = selectionRevisionRef.current;
     const [nextCatalog, nextCredentials, nextMe] = await Promise.all([
-      rpc.models.list(),
+      rpc.models.list().then((result) => result.models),
       rpc.models.credentials(),
       rpc.me(),
     ]);

@@ -231,6 +231,8 @@ model SpaceMember {
   role             String                 @default("member")
   createdAt        DateTime
   modelPreferences SpaceModelPreference[]
+  modelCategories SpaceModelCategory[]
+  modelAuto Boolean @default(false)
   voicePreferences SpaceVoicePreference[]
   aiDataConsents AiDataConsent[]
 
@@ -283,6 +285,7 @@ model UserModelCredential {
   createdAt   DateTime               @default(now())
   updatedAt   DateTime               @updatedAt
   preferences SpaceModelPreference[]
+  categories SpaceModelCategory[]
 
   @@unique([id, userId])
   @@index([userId, provider, updatedAt])
@@ -321,6 +324,24 @@ model SpaceModelPreference {
   @@index([credentialId])
   // Partial unique index space_model_preferences_default_key is created in SQL.
   @@map("space_model_preferences")
+}
+
+model SpaceModelCategory {
+  id           String              @id @default(cuid())
+  spaceId      String
+  userId       String
+  category     String
+  spaceMember  SpaceMember         @relation(fields: [spaceId, userId], references: [spaceId, userId], onDelete: Cascade)
+  credentialId String
+  credential   UserModelCredential @relation(fields: [credentialId, userId], references: [id, userId], onDelete: Cascade)
+  modelId      String
+  thinkingLevel String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@unique([spaceId, userId, category])
+  @@index([credentialId])
+  @@map("space_model_categories")
 }
 
 model SpaceVoicePreference {
