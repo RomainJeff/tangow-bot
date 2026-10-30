@@ -520,7 +520,7 @@ export interface SubagentCall {
   name: string;
   task: string;
   args: Record<string, unknown>;
-  model: { provider: string; id: string };
+  model: Pick<AgentRunModel, "provider" | "id" | "thinkingLevel">;
   /** The profile the helper runs; its `exclusive` resource is held for the helper's run. */
   profile?: Pick<HelperProfile, "name" | "exclusive">;
 }

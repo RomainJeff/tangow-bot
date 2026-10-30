@@ -22,6 +22,7 @@ import type { LogEvent } from "@rakazo/logging";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { appendBotMessageInTransaction } from "./bot-messages.js";
+import type * as ChildBotsModule from "./child-bots.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
 import {
@@ -35,6 +36,17 @@ import { createWorkerAgentRuntime } from "./runtime-worker/runtime.js";
 import { transcriptIngest } from "./runtime-worker/transcript.js";
 import { PostgresSessionLog } from "./session-log/postgres.js";
 import { recordingSessionLog } from "./session-log/recording.test-support.js";
+
+vi.mock("./child-bots.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ChildBotsModule>()),
+  spawnBot: async () => ({
+    ok: true,
+    botId: "child-1",
+    name: "Research",
+    title: "Research",
+    threadId: "child-thread-1",
+  }),
+}));
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ComputerLifecycleModule>()),
@@ -114,6 +126,7 @@ function fixture(
     groupMembers?: Array<{ id: string; name: string }>;
     compaction?: boolean;
     model?: { provider: string; id: string };
+    botModel?: { modelProvider: string; modelId: string; thinkingLevel: string | null };
     /** A real backend to read the session from; the run's writes still go to the recording log. */
     reads?: SessionLog<unknown>;
     sourceEntry?: SessionEntry;
@@ -189,6 +202,7 @@ function fixture(
         memoryScope: "isolated",
         computerId: "computer-1",
         computer: { id: "computer-1", scope: "dedicated" },
+        ...options.botModel,
       })),
       findMany: vi.fn(async () => []),
     },
@@ -253,12 +267,16 @@ function fixture(
     const db = options.database;
     Object.assign(prisma, {
       run: db.run,
+      spaceModelPreference: db.spaceModelPreference,
+      userModelCredential: db.userModelCredential,
+      secret: db.secret,
       task: db.task,
       attempt: db.attempt,
       thread: db.thread,
       routine: db.routine,
       sessionEntry: db.sessionEntry,
       usageRecord: db.usageRecord,
+      externalEffect: db.externalEffect,
       $transaction: db.$transaction.bind(db),
       $queryRaw: db.$queryRaw.bind(db),
     });
@@ -292,6 +310,7 @@ function fixture(
           }
         : log.sessionLog,
     skillLearning: "off",
+    secretStore: { load: (ciphertext: string) => ciphertext },
     artifacts: { get: vi.fn(async () => new Uint8Array([1, 2])) },
     prisma,
     runtime: {
@@ -1061,6 +1080,7 @@ describe("interactive executor sessions with durable history", () => {
   afterAll(() => database.close());
 
   beforeEach(async () => {
+    await database.prisma.userModelCredential.deleteMany({ where: { userId: "user-1" } });
     await database.prisma.thread.deleteMany({ where: { spaceId: "space-1" } });
     await database.prisma.bot.upsert({
       where: { id: "parent-1" },
@@ -1100,6 +1120,113 @@ describe("interactive executor sessions with durable history", () => {
       parent: () => log.readTail(SessionIdSchema.parse(thread.sessionId)),
     };
   }
+
+  it.each(["available", "credential deleted", "secret deleted"] as const)(
+    "resumes approval on the stored model when its connection is %s",
+    async (connection) => {
+      const c = await conversation();
+      const secret = await c.prisma.secret.create({
+        data: { userId: "user-1", kind: "model", ciphertext: "fake-api-key" },
+      });
+      const credential = await c.prisma.userModelCredential.create({
+        data: {
+          userId: "user-1",
+          provider: "anthropic",
+          label: "Resume test",
+          secretId: secret.id,
+        },
+      });
+      const original = {
+        modelProvider: "anthropic",
+        modelId: "claude-fable-5",
+        thinkingLevel: "high",
+      };
+      const runtime = async function* (
+        request: AgentRunRequest,
+      ): AsyncGenerator<AgentRuntimeEvent> {
+        await request.executeTool!(
+          "spawn_bot",
+          {
+            name: "Research",
+            title: "Research",
+            instructions: "Research the task",
+            prompt: "Start researching",
+            computer_mode: "dedicated",
+          },
+          "spawn-1",
+        );
+        yield { type: "done", text: "Done" };
+      };
+      const first = await fixture({
+        database: c.prisma,
+        run: c.run,
+        botModel: original,
+        runtime,
+      }).request();
+      expect(first.model).toMatchObject({
+        provider: "anthropic",
+        id: "claude-fable-5",
+        thinkingLevel: "high",
+      });
+      const paused = await c.prisma.run.findUniqueOrThrow({ where: { id: c.run.id } });
+      expect(paused.status).toBe("waiting_input");
+      expect(paused).toMatchObject({
+        modelProvider: "anthropic",
+        modelId: "claude-fable-5",
+        thinkingLevel: "high",
+      });
+      const ask = (await c.log.readRun(c.run.id)).find(
+        (entry) => entry.type === "effect.requested",
+      );
+      expect(ask).toBeDefined();
+      expect(
+        await createThreadEvents(c.prisma).answerRunInput({
+          spaceId: "space-1",
+          threadId: c.thread.id,
+          runId: c.run.id,
+          messageId: ask!.id,
+          answeredByUserId: "user-1",
+          answer: "allow",
+        }),
+      ).toBe(true);
+      if (connection === "credential deleted") {
+        await c.prisma.userModelCredential.delete({ where: { id: credential.id } });
+      } else if (connection === "secret deleted") {
+        await c.prisma.secret.delete({ where: { id: secret.id } });
+      }
+      const resumed = await fixture({
+        database: c.prisma,
+        runtime,
+        run: c.run,
+        botModel: { modelProvider: "xai", modelId: "grok-4.6", thinkingLevel: "low" },
+        model: { provider: "scripted", id: "different-default" },
+      }).execute();
+      const finished = await c.prisma.run.findUniqueOrThrow({ where: { id: c.run.id } });
+      if (connection === "available") {
+        expect(resumed.runtimeRun).toHaveBeenCalledOnce();
+        expect(resumed.runtimeRun.mock.calls[0]![0].model).toMatchObject({
+          provider: "anthropic",
+          id: "claude-fable-5",
+          thinkingLevel: "high",
+        });
+        expect(finished.error).toBeNull();
+        expect(finished.status).toBe("completed");
+      } else {
+        expect(resumed.runtimeRun).not.toHaveBeenCalled();
+        expect(finished.status).toBe("failed");
+        expect(finished.error).toBe(
+          "This run's model connection is no longer available. Reconnect it in Settings and retry.",
+        );
+      }
+      expect(finished).toMatchObject({
+        modelProvider: "anthropic",
+        modelId: "claude-fable-5",
+        thinkingLevel: "high",
+      });
+      await c.prisma.userModelCredential.deleteMany({ where: { id: credential.id } });
+      await c.prisma.secret.deleteMany({ where: { id: secret.id } });
+    },
+  );
 
   it.each(["text", "runtimeNotice", "privateFinalText"] as const)(
     "preserves non-native Pi completion with %s and no transcript",

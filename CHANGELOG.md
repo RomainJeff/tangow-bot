@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - On web, desktop and mobile, approval rules, automatic review and protected webhook runs can use the configured Decision Model to assess connected-app and MCP calls without a read-only hint, while keeping the existing name-based fallback.
 
+#### Fixed
+
+- On web, desktop and mobile, runs resumed after approval or retry keep their original model and thinking level, and fail clearly if its connection is gone.
+
 ### 2026-10-29
 
 #### Added
