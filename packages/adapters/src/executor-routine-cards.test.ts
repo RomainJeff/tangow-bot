@@ -297,6 +297,8 @@ function fixture(
       })),
     },
     connection: { findMany: vi.fn(async () => []) },
+    spaceMember: { findUnique: async () => ({ modelAuto: false }) },
+    spaceModelCategory: { findMany: async () => [] },
     spaceModelPreference: { findFirst: vi.fn(async () => null) },
     userModelCredential: { findFirst: vi.fn(async () => null) },
     deploymentSettings: {

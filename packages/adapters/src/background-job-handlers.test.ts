@@ -114,6 +114,8 @@ describe("createBackgroundJobHandlers", () => {
 
   it("resolves the deployment model when no user credential is configured", async () => {
     const prisma = {
+      spaceMember: { findUnique: async () => ({ modelAuto: false }) },
+      spaceModelCategory: { findMany: async () => [] },
       spaceModelPreference: { findFirst: vi.fn(async () => null) },
       userModelCredential: { findFirst: vi.fn(async () => null) },
       deploymentSettings: { findUnique: vi.fn(async () => null) },
@@ -139,6 +141,8 @@ describe("createBackgroundJobHandlers", () => {
 
   it("preserves a configured local model when resolving background compaction", async () => {
     const prisma = {
+      spaceMember: { findUnique: async () => ({ modelAuto: false }) },
+      spaceModelCategory: { findMany: async () => [] },
       spaceModelPreference: { findFirst: vi.fn(async () => null) },
       userModelCredential: { findFirst: vi.fn(async () => null) },
       deploymentSettings: {

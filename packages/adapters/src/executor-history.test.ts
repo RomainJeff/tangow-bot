@@ -1,6 +1,7 @@
 import type {
   AgentRunRequest,
   AgentRuntimeEvent,
+  DecisionProvider,
   GuestBody,
   HarnessTranscriptEntry,
   SemanticMemoryRecallRequest,
@@ -25,12 +26,14 @@ import { appendBotMessageInTransaction } from "./bot-messages.js";
 import type * as ChildBotsModule from "./child-bots.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";
+import { FakeDecisionProvider } from "./fake-decision.js";
 import {
   estimateHistoryTokens,
   estimateTextTokens,
   estimateToolSchemaTokens,
   formatRecalledMemory,
 } from "./history-compaction.js";
+import { MODEL_ROUTE_TIMEOUT_MS } from "./model-route-classification.js";
 import { manualLauncher, rawGuest, stillClock } from "./runtime-worker/raw-guest.test-support.js";
 import { createWorkerAgentRuntime } from "./runtime-worker/runtime.js";
 import { transcriptIngest } from "./runtime-worker/transcript.js";
@@ -116,6 +119,14 @@ const started = {
 
 function fixture(
   options: {
+    auto?: boolean;
+    decision?: DecisionProvider;
+    categories?: Array<{
+      category: string;
+      modelId: string;
+      thinkingLevel: string | null;
+      credential: object;
+    }>;
     tail?: SessionEntry[];
     prompt?: string;
     page?: SessionEntry[];
@@ -236,8 +247,22 @@ function fixture(
     },
     routine: { findUnique: vi.fn(async () => null) },
     connection: { findMany: vi.fn(async () => []) },
+    spaceMember: { findUnique: async () => ({ modelAuto: options.auto ?? false }) },
+    spaceModelCategory: { findMany: async () => options.categories ?? [] },
     spaceModelPreference: { findFirst: vi.fn(async () => null) },
-    userModelCredential: { findFirst: vi.fn(async () => null) },
+    userModelCredential: {
+      findFirst: vi.fn(async () =>
+        options.botModel
+          ? {
+              id: "bot-cred",
+              userId: "user-1",
+              provider: options.botModel.modelProvider,
+              secretId: "fake-secret",
+            }
+          : null,
+      ),
+    },
+    secret: { findFirst: vi.fn(async () => null) },
     deploymentSettings: {
       findUnique: vi.fn(async () => ({
         defaultModelProvider: options.model?.provider ?? "scripted",
@@ -267,6 +292,8 @@ function fixture(
     const db = options.database;
     Object.assign(prisma, {
       run: db.run,
+      spaceMember: db.spaceMember,
+      spaceModelCategory: db.spaceModelCategory,
       spaceModelPreference: db.spaceModelPreference,
       userModelCredential: db.userModelCredential,
       secret: db.secret,
@@ -309,6 +336,7 @@ function fixture(
             readEntry: options.reads.readEntry.bind(options.reads),
           }
         : log.sessionLog,
+    decisionProviders: { resolve: async () => options.decision ?? null },
     skillLearning: "off",
     secretStore: { load: (ciphertext: string) => ciphertext },
     artifacts: { get: vi.fn(async () => new Uint8Array([1, 2])) },
@@ -361,7 +389,7 @@ function fixture(
     jobs,
     async execute() {
       await executor.continueRun(run.id, "worker-1");
-      return { runtimeRun, finalized };
+      return { runtimeRun, finalized, run, log };
     },
     async request() {
       await executor.continueRun(run.id, "worker-1");
@@ -373,6 +401,116 @@ function fixture(
     },
   };
 }
+
+describe("new run model routing", () => {
+  const credential = {
+    id: "route-credential",
+    userId: "user-1",
+    provider: "local",
+    label: "Test",
+    secretId: "route-secret",
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
+  };
+  const categories = [
+    { category: "fast", modelId: "quick-model", thinkingLevel: "low", credential },
+    { category: "everyday", modelId: "daily-model", thinkingLevel: null, credential },
+    { category: "complex", modelId: "deep-model", thinkingLevel: "high", credential },
+  ];
+  it.each([
+    { choice: "fast", modelId: "quick-model", thinkingLevel: "low" },
+    { choice: "complex", modelId: "deep-model", thinkingLevel: "high" },
+  ])(
+    "classifies $choice once and persists the decision",
+    async ({ choice, modelId, thinkingLevel }) => {
+      const decision = new FakeDecisionProvider({
+        script: [
+          {
+            answers: {
+              category: { type: "choice", choice, confidence: 1, probabilities: { [choice]: 1 } },
+            },
+          },
+        ],
+      });
+      const result = await fixture({ auto: true, decision, categories }).execute();
+      expect(result.runtimeRun.mock.calls[0]![0].model).toMatchObject({
+        provider: "local",
+        id: modelId,
+        thinkingLevel,
+      });
+      expect(decision.calls).toHaveLength(1);
+      expect(result.run).toMatchObject({ modelProvider: "local", modelId, thinkingLevel });
+      const entry = result.log.drafts.find((entry) => entry.type === "run.started");
+      expect(entry?.payload).toMatchObject({
+        routing: {
+          mode: "auto",
+          requestedCategory: choice,
+          category: choice,
+          provider: "local",
+          modelId,
+          thinkingLevel,
+        },
+      });
+    },
+  );
+  it.each(["no provider", "invalid answer", "timeout"] as const)(
+    "uses everyday after %s",
+    async (failure) => {
+      const decision =
+        failure === "no provider"
+          ? undefined
+          : new FakeDecisionProvider({
+              script: [
+                () => ({
+                  answers: {
+                    category: {
+                      type: "choice",
+                      choice: "bogus",
+                      confidence: 1,
+                      probabilities: { bogus: 1 },
+                    },
+                  },
+                }),
+              ],
+            });
+      if (failure === "timeout") decision!.latencyMs = MODEL_ROUTE_TIMEOUT_MS * 2;
+      if (failure === "timeout") vi.useFakeTimers();
+      try {
+        const pending = fixture({ auto: true, decision, categories }).execute();
+        if (failure === "timeout") await vi.runAllTimersAsync();
+        const result = await pending;
+        expect(result.runtimeRun.mock.calls[0]![0].model).toMatchObject({
+          provider: "local",
+          id: "daily-model",
+        });
+        expect(
+          result.log.drafts.find((entry) => entry.type === "run.started")?.payload,
+        ).toMatchObject({
+          routing: {
+            mode: "auto",
+            category: "everyday",
+            fallback: failure === "no provider" ? "no_decision_provider" : "decision_failed",
+          },
+        });
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+  it("keeps a bot override fixed with zero classification calls", async () => {
+    const decision = new FakeDecisionProvider();
+    const result = await fixture({
+      auto: true,
+      decision,
+      botModel: { modelProvider: "local", modelId: "bot-model", thinkingLevel: null },
+    }).execute();
+    expect(result.runtimeRun.mock.calls[0]![0].model).toMatchObject({
+      provider: "local",
+      id: "bot-model",
+    });
+    expect(decision.calls).toHaveLength(0);
+  });
+});
 
 describe("the history a run reads from its session log", () => {
   it.each([false, true])(
@@ -1080,6 +1218,7 @@ describe("interactive executor sessions with durable history", () => {
   afterAll(() => database.close());
 
   beforeEach(async () => {
+    await database.prisma.spaceMember.updateMany({ data: { modelAuto: false } });
     await database.prisma.userModelCredential.deleteMany({ where: { userId: "user-1" } });
     await database.prisma.thread.deleteMany({ where: { spaceId: "space-1" } });
     await database.prisma.bot.upsert({
@@ -1121,7 +1260,7 @@ describe("interactive executor sessions with durable history", () => {
     };
   }
 
-  it.each(["available", "credential deleted", "secret deleted"] as const)(
+  it.each(["available", "Auto", "credential deleted", "secret deleted"] as const)(
     "resumes approval on the stored model when its connection is %s",
     async (connection) => {
       const c = await conversation();
@@ -1157,10 +1296,61 @@ describe("interactive executor sessions with durable history", () => {
         );
         yield { type: "done", text: "Done" };
       };
+      const decision = new FakeDecisionProvider({
+        script: [
+          {
+            answers: {
+              category: {
+                type: "choice",
+                choice: "complex",
+                confidence: 1,
+                probabilities: { complex: 1 },
+              },
+            },
+          },
+        ],
+      });
+      if (connection === "Auto") {
+        await c.prisma.member.upsert({
+          where: { organizationId_userId: { organizationId: "org-1", userId: "user-1" } },
+          create: {
+            id: "routing-member",
+            organizationId: "org-1",
+            userId: "user-1",
+            role: "owner",
+            createdAt: new Date(0),
+          },
+          update: {},
+        });
+        await c.prisma.spaceMember.upsert({
+          where: { spaceId_userId: { spaceId: "space-1", userId: "user-1" } },
+          create: {
+            id: "routing-space-member",
+            organizationId: "org-1",
+            createdAt: new Date(0),
+            spaceId: "space-1",
+            userId: "user-1",
+            role: "owner",
+            modelAuto: true,
+          },
+          update: { modelAuto: true },
+        });
+        await c.prisma.spaceModelCategory.create({
+          data: {
+            spaceId: "space-1",
+            userId: "user-1",
+            category: "complex",
+            credentialId: credential.id,
+            modelId: original.modelId,
+            thinkingLevel: "high",
+          },
+        });
+      }
       const first = await fixture({
         database: c.prisma,
         run: c.run,
-        botModel: original,
+        botModel: connection === "Auto" ? undefined : original,
+        decision,
         runtime,
       }).request();
       expect(first.model).toMatchObject({
@@ -1196,13 +1386,16 @@ describe("interactive executor sessions with durable history", () => {
       }
       const resumed = await fixture({
         database: c.prisma,
+        auto: true,
+        decision,
         runtime,
         run: c.run,
         botModel: { modelProvider: "xai", modelId: "grok-4.6", thinkingLevel: "low" },
         model: { provider: "scripted", id: "different-default" },
       }).execute();
+      expect(decision.calls).toHaveLength(connection === "Auto" ? 1 : 0);
       const finished = await c.prisma.run.findUniqueOrThrow({ where: { id: c.run.id } });
-      if (connection === "available") {
+      if (connection === "available" || connection === "Auto") {
         expect(resumed.runtimeRun).toHaveBeenCalledOnce();
         expect(resumed.runtimeRun.mock.calls[0]![0].model).toMatchObject({
           provider: "anthropic",

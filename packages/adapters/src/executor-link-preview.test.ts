@@ -240,6 +240,8 @@ function fixture({
     event: { create: vi.fn(async () => ({ id: "event-1" })) },
     task: { findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: "Help the user" })) },
     connection: { findMany: vi.fn(async () => []) },
+    spaceMember: { findUnique: async () => ({ modelAuto: false }) },
+    spaceModelCategory: { findMany: async () => [] },
     spaceModelPreference: { findFirst: vi.fn(async () => null) },
     userModelCredential: { findFirst: vi.fn(async () => null) },
     deploymentSettings: {

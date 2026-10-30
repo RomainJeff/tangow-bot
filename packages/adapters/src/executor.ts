@@ -44,6 +44,7 @@ import type {
   ComputerMode,
   FactualRunRecap,
   MessageBlock,
+  RunModelDecision,
   RunStatus,
   SessionEntry,
   SessionEntryOf,
@@ -61,6 +62,7 @@ import {
   FactualRunRecapFactsSchema,
   isAttachmentImageMimeType,
   isHelperPauseResult,
+  ModelCategorySchema,
   OPENAI_COMPATIBLE_PROVIDER_ID,
   parseRunRecap,
   pausedOutput,
@@ -190,6 +192,7 @@ import {
   createSpaceForMember,
   effectiveMemoryScope,
   findDefaultModelCredential,
+  findModelCategories,
   findModelCredential,
   historyGeneration,
   InvalidSpaceNameError,
@@ -351,9 +354,10 @@ import { loadAgentMemoryContext } from "./memory-context.js";
 import type { MemoryProviderResolver } from "./memory-provider-factory.js";
 import { selectMemoryTools } from "./memory-tools.js";
 import { catalogContextWindow, catalogModel } from "./model-catalog.js";
+import { classifyModelRoute } from "./model-route-classification.js";
 import {
   isCatalogModelChoice,
-  selectConfiguredModel,
+  routeModel,
   validateConnectedModelChoice,
 } from "./model-selection.js";
 import {
@@ -1348,15 +1352,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
         findDefaultModelCredential(deps.prisma, scope),
         deps.prisma.deploymentSettings.findUnique({ where: { id: "default" } }),
       ]);
-      const selected = selectConfiguredModel({
+      const selected = routeModel({
         bot: override,
         overrideCredential,
         defaultCredential,
         settings,
         deployment: deps.deploymentModelKey ? resolveDeploymentModel() : null,
+        routing: { mode: "fixed" },
       });
-      const { credential, thinkingLevel } = selected;
-      let { provider, id } = selected;
+      const credential = selected?.credential ?? null;
+      const thinkingLevel = selected?.decision.thinkingLevel;
+      let provider = selected?.decision.provider;
+      let id = selected?.decision.modelId;
       if (!provider || !id) {
         const runtimeFallback = runtimeFallbackModel(deps.runtime);
         provider ??= runtimeFallback?.provider;
@@ -1797,6 +1804,8 @@ export function createRunExecutor(deps: ExecutorDeps) {
           agentSkills,
           agentSecretRows,
           decisionProvider,
+          modelMember,
+          categoryRows,
         ] = await Promise.all([
           deps.prisma.bot.findUniqueOrThrow({
             where: { id: run.botId },
@@ -1872,6 +1881,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }),
           // Optional: a broken decision connection must never fail the run.
           deps.decisionProviders?.resolve(run.spaceId).catch(() => null) ?? null,
+          deps.prisma.spaceMember.findUnique({
+            where: { spaceId_userId: { spaceId: run.spaceId, userId: run.userId } },
+            select: { modelAuto: true },
+          }),
+          findModelCategories(deps.prisma, run),
         ]);
         const agentEnvironment = decryptAgentEnvironment(agentSecretRows, deps.secretStore);
         runSecrets.push(...Object.values(agentEnvironment));
@@ -2103,22 +2117,85 @@ export function createRunExecutor(deps: ExecutorDeps) {
         }
         const runDeployment = deps.deploymentModelKey ? resolveDeploymentModel() : null;
         const runtimeFallback = runtimeFallbackModel(deps.runtime);
-        const selected = storedModel
-          ? {
-              ...storedModel,
-              credential: overrideCredential,
-              thinkingLevel: ThinkingLevelSchema.nullable().parse(run.thinkingLevel ?? null),
-            }
-          : selectConfiguredModel({
+        const autoApplies =
+          !storedModel && !bot.modelProvider && !bot.modelId && modelMember?.modelAuto === true;
+        const hasImages = Boolean(turnBlocks?.some((block) => block.kind === "image"));
+        const categories = await Promise.all(
+          categoryRows.map(async (row) => {
+            const credential = { ...row.credential, defaultModel: row.modelId, isDefault: false };
+            const capability =
+              hasImages && autoApplies && credential.provider === OPENAI_COMPATIBLE_PROVIDER_ID
+                ? await resolveModelKey(
+                    deps,
+                    run.userId,
+                    run.spaceId,
+                    credential,
+                    credential.provider,
+                    row.modelId,
+                    (values) => runSecrets.push(...values),
+                  )
+                : undefined;
+            return {
+              category: ModelCategorySchema.parse(row.category),
+              modelId: row.modelId,
+              thinkingLevel: ThinkingLevelSchema.nullable().parse(row.thinkingLevel),
+              credential,
+              acceptsImages: capability?.acceptsImages,
+            };
+          }),
+        );
+        const classification = autoApplies
+          ? await classifyModelRoute({
+              provider: decisionProvider ?? undefined,
+              context,
+              request: task.prompt,
+              recentTurns: uncompactedHistory.map((turn) => ({
+                role: turn.role,
+                text: turn.content,
+              })),
+              hasImages,
+              secrets: runSecrets,
+            })
+          : undefined;
+        const defaultCapability =
+          autoApplies &&
+          hasImages &&
+          defaultCredential?.defaultModel &&
+          defaultCredential.provider === OPENAI_COMPATIBLE_PROVIDER_ID
+            ? await resolveModelKey(
+                deps,
+                run.userId,
+                run.spaceId,
+                defaultCredential,
+                defaultCredential.provider,
+                defaultCredential.defaultModel,
+                (values) => runSecrets.push(...values),
+              )
+            : undefined;
+        const routed = storedModel
+          ? null
+          : routeModel({
               bot,
               overrideCredential,
               defaultCredential,
               settings,
-              deployment: runDeployment,
+              deployment:
+                runDeployment ??
+                (runtimeFallback
+                  ? { provider: runtimeFallback.provider, model: runtimeFallback.id }
+                  : null),
+              routing: classification ? { mode: "auto", classification } : { mode: "fixed" },
+              categories,
+              hasImages,
+              defaultAcceptsImages: defaultCapability?.acceptsImages,
             });
-        const { credential, thinkingLevel } = selected;
-        const runModelProvider = selected.provider ?? runtimeFallback?.provider;
-        const runModelId = selected.id ?? runtimeFallback?.id;
+        const routing = routed?.decision;
+        const credential = storedModel ? overrideCredential : (routed?.credential ?? null);
+        const thinkingLevel = storedModel
+          ? ThinkingLevelSchema.nullable().parse(run.thinkingLevel ?? null)
+          : routing?.thinkingLevel;
+        const runModelProvider = storedModel?.provider ?? routing?.provider;
+        const runModelId = storedModel?.id ?? routing?.modelId;
         const missingStoredConnection =
           storedModel &&
           (overrideCredential
@@ -5893,6 +5970,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             runLog,
             { provider: runModelProvider, id: runModelId },
             effort,
+            routing ? { ...routing, thinkingLevel: effort } : undefined,
           );
           runLog.sessionId = opened.sessionId;
           for (const [callId, input] of opened.awaitingResult) unansweredCalls.set(callId, input);
@@ -7593,6 +7671,7 @@ export async function openRunLog(
   log: RunLog,
   model: { provider: string; id: string },
   effort: SessionEntryOf<"run.started">["payload"]["effort"],
+  routing?: RunModelDecision,
 ): Promise<{ sessionId: SessionId; awaitingResult: Map<string, string> }> {
   return deps.prisma.$transaction(async (tx) => {
     // Its own statement, so the facts below see what an open that held this lock committed.
@@ -7675,7 +7754,7 @@ export async function openRunLog(
       ...log,
       sessionId,
       type: "run.started",
-      payload: { trigger, model, effort },
+      payload: { trigger, model, effort, ...(routing ? { routing } : {}) },
     });
     return { sessionId, awaitingResult };
   });

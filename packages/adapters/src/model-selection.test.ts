@@ -1,9 +1,9 @@
 import type { Actor } from "@rakazo/contracts";
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
-import { selectConfiguredModel, validateConnectedModelChoice } from "./model-selection.js";
+import { routeModel, validateConnectedModelChoice } from "./model-selection.js";
 
-type SelectionInput = Parameters<typeof selectConfiguredModel>[0];
+type SelectionInput = Parameters<typeof routeModel>[0];
 
 function credential(provider: string, defaultModel: string | null) {
   return {
@@ -23,6 +23,7 @@ const spaceCredential = credential("space-provider", "space-model");
 const overrideCredential = credential("bot-provider", "stored-model");
 const bot = { modelProvider: "bot-provider", modelId: "bot-model", thinkingLevel: "high" };
 const defaults: SelectionInput = {
+  routing: { mode: "fixed" },
   bot: null,
   overrideCredential: null,
   defaultCredential: spaceCredential,
@@ -34,80 +35,93 @@ describe("configured model selection", () => {
   it.each<{
     name: string;
     input: Partial<SelectionInput>;
-    expected: ReturnType<typeof selectConfiguredModel>;
+    expected: object | null;
   }>([
     {
       name: "uses the bot's model with its own credential",
       input: { bot, overrideCredential },
       expected: {
-        provider: "bot-provider",
-        id: "bot-model",
         credential: overrideCredential,
-        thinkingLevel: "high",
+        decision: {
+          mode: "fixed",
+          provider: "bot-provider",
+          modelId: "bot-model",
+          thinkingLevel: "high",
+        },
       },
     },
     {
       name: "drops override thinking when its provider has no credential",
       input: { bot },
       expected: {
-        provider: "space-provider",
-        id: "space-model",
         credential: spaceCredential,
-        thinkingLevel: null,
+        decision: {
+          mode: "fixed",
+          provider: "space-provider",
+          modelId: "space-model",
+          thinkingLevel: null,
+        },
       },
     },
     {
       name: "keeps bot thinking with the Space default",
       input: { bot: { modelProvider: null, modelId: null, thinkingLevel: "high" } },
       expected: {
-        provider: "space-provider",
-        id: "space-model",
         credential: spaceCredential,
-        thinkingLevel: "high",
+        decision: {
+          mode: "fixed",
+          provider: "space-provider",
+          modelId: "space-model",
+          thinkingLevel: "high",
+        },
       },
     },
     {
       name: "does not select an incomplete bot override",
       input: { bot: { ...bot, modelId: null }, overrideCredential },
       expected: {
-        provider: "space-provider",
-        id: "space-model",
         credential: spaceCredential,
-        thinkingLevel: "high",
+        decision: {
+          mode: "fixed",
+          provider: "space-provider",
+          modelId: "space-model",
+          thinkingLevel: "high",
+        },
       },
     },
     {
       name: "uses settings before deployment defaults without inventing a credential",
       input: { defaultCredential: null },
       expected: {
-        provider: "settings-provider",
-        id: "settings-model",
         credential: null,
-        thinkingLevel: null,
+        decision: {
+          mode: "fixed",
+          provider: "settings-provider",
+          modelId: "settings-model",
+          thinkingLevel: null,
+        },
       },
     },
     {
       name: "uses deployment defaults when no stored configuration exists",
       input: { defaultCredential: null, settings: null },
       expected: {
-        provider: "deployment-provider",
-        id: "deployment-model",
         credential: null,
-        thinkingLevel: null,
+        decision: {
+          mode: "fixed",
+          provider: "deployment-provider",
+          modelId: "deployment-model",
+          thinkingLevel: null,
+        },
       },
     },
     {
       name: "leaves missing configuration for the caller's runtime fallback or failure path",
       input: { defaultCredential: null, settings: null, deployment: null },
-      expected: {
-        provider: undefined,
-        id: undefined,
-        credential: null,
-        thinkingLevel: null,
-      },
+      expected: null,
     },
   ])("$name", ({ input, expected }) => {
-    expect(selectConfiguredModel({ ...defaults, ...input })).toEqual(expected);
+    expect(routeModel({ ...defaults, ...input })).toEqual(expected);
   });
 });
 
@@ -201,5 +215,154 @@ describe("connected model validation", () => {
     await expect(
       validateConnectedModelChoice(disconnectedPrisma, actor, "anthropic", "claude-opus-4-6"),
     ).resolves.toBe("Connect that model provider first");
+  });
+});
+
+describe("category routing", () => {
+  const categories: NonNullable<SelectionInput["categories"]> = [
+    { category: "fast", modelId: "fast-model", thinkingLevel: "low", credential: spaceCredential },
+    {
+      category: "everyday",
+      modelId: "daily-model",
+      thinkingLevel: null,
+      credential: spaceCredential,
+    },
+    {
+      category: "complex",
+      modelId: "deep-model",
+      thinkingLevel: "high",
+      credential: spaceCredential,
+    },
+  ];
+  it.each<{ name: string; input: Partial<SelectionInput>; expected: object | null }>([
+    {
+      name: "Auto fast",
+      input: { routing: { mode: "auto", classification: { category: "fast" } } },
+      expected: {
+        mode: "auto",
+        requestedCategory: "fast",
+        category: "fast",
+        provider: "space-provider",
+        modelId: "fast-model",
+        thinkingLevel: "low",
+      },
+    },
+    {
+      name: "explicit category with Auto off",
+      input: { routing: { mode: "category", category: "complex" }, bot, overrideCredential },
+      expected: {
+        mode: "category",
+        requestedCategory: "complex",
+        category: "complex",
+        provider: "space-provider",
+        modelId: "deep-model",
+        thinkingLevel: "high",
+      },
+    },
+    ...(["no_decision_provider", "decision_failed"] as const).map((fallback) => ({
+      name: fallback,
+      input: {
+        routing: { mode: "auto", classification: { fallback } },
+      } satisfies Partial<SelectionInput>,
+      expected: {
+        mode: "auto",
+        category: "everyday",
+        provider: "space-provider",
+        modelId: "daily-model",
+        thinkingLevel: null,
+        fallback,
+      },
+    })),
+    {
+      name: "unassigned category uses everyday",
+      input: { categories: [categories[1]!] },
+      expected: {
+        mode: "auto",
+        requestedCategory: "fast",
+        category: "everyday",
+        provider: "space-provider",
+        modelId: "daily-model",
+        thinkingLevel: null,
+        fallback: "category_unassigned",
+      },
+    },
+    {
+      name: "unassigned everyday uses fixed",
+      input: { categories: [] },
+      expected: {
+        mode: "auto",
+        requestedCategory: "fast",
+        provider: "space-provider",
+        modelId: "space-model",
+        thinkingLevel: null,
+        fallback: "category_unassigned",
+      },
+    },
+    {
+      name: "unavailable bot never activates Auto",
+      input: { bot },
+      expected: {
+        mode: "fixed",
+        provider: "space-provider",
+        modelId: "space-model",
+        thinkingLevel: null,
+      },
+    },
+    {
+      name: "available bot wins",
+      input: { bot, overrideCredential },
+      expected: {
+        mode: "fixed",
+        provider: "bot-provider",
+        modelId: "bot-model",
+        thinkingLevel: "high",
+      },
+    },
+    {
+      name: "image mismatch uses everyday",
+      input: {
+        hasImages: true,
+        categories: [
+          categories[0]!,
+          {
+            category: "everyday",
+            modelId: "gpt-4o",
+            thinkingLevel: null,
+            credential: credential("openai", "gpt-4o"),
+          },
+        ],
+      },
+      expected: {
+        mode: "auto",
+        requestedCategory: "fast",
+        category: "everyday",
+        provider: "openai",
+        modelId: "gpt-4o",
+        thinkingLevel: null,
+        fallback: "capability_mismatch",
+      },
+    },
+    {
+      name: "image mismatch uses compatible fixed",
+      input: { hasImages: true, defaultCredential: credential("openai", "gpt-4o") },
+      expected: {
+        mode: "auto",
+        requestedCategory: "fast",
+        provider: "openai",
+        modelId: "gpt-4o",
+        thinkingLevel: null,
+        fallback: "capability_mismatch",
+      },
+    },
+    { name: "no compatible model fails", input: { hasImages: true }, expected: null },
+  ])("$name", ({ input, expected }) => {
+    expect(
+      routeModel({
+        ...defaults,
+        categories,
+        routing: { mode: "auto", classification: { category: "fast" } },
+        ...input,
+      })?.decision ?? null,
+    ).toEqual(expected);
   });
 });
