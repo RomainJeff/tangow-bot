@@ -1,10 +1,18 @@
-import type { Bot, Me, ModelCatalogEntry, ModelCredential, ThinkingLevel } from "@rakazo/contracts";
+import type {
+  Bot,
+  Me,
+  ModelCatalogEntry,
+  ModelCategoryAssignment,
+  ModelCredential,
+  ThinkingLevel,
+} from "@rakazo/contracts";
 
 /** A model a bot can run, keyed `provider::modelId` so one picker value names both. */
 export type ModelOption = { key: string; provider: string; modelId: string; label: string };
 
 /** What a bot's model choice is read against: the connections, the catalog and the space default. */
 export type ModelCatalog = {
+  routing?: { auto: boolean; categories: ModelCategoryAssignment[] };
   credentials: ModelCredential[];
   catalog: ModelCatalogEntry[];
   me: Pick<Me, "defaultProvider" | "defaultModel"> | null;
@@ -92,4 +100,15 @@ export function thinkingChoices(
     (level) => level !== "off",
   );
   return { levels, fallback: credential?.thinkingLevel ?? "medium" };
+}
+
+export function defaultModelLabel(
+  catalog: ModelCatalog,
+  labels: { default: string; auto: string; fixed: string },
+): string {
+  if (catalog.routing?.auto) return `${labels.default} (${labels.auto})`;
+  const me = catalog.me;
+  return me?.defaultModel
+    ? `${labels.fixed} (${catalogLabel(catalog.catalog, me.defaultProvider, me.defaultModel) ?? me.defaultModel})`
+    : labels.fixed;
 }
