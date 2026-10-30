@@ -20,6 +20,10 @@ import { useModelOAuthSignIn } from "../../lib/use-model-oauth-signin";
 
 export function useModelSettings() {
   const { t } = useLingui();
+  const [routing, setRouting] = useState<Awaited<ReturnType<typeof rpc.models.routing>>>({
+    auto: false,
+    categories: [],
+  });
   const [catalog, setCatalog] = useState<ModelCatalogEntry[]>([]);
   const [credentials, setCredentials] = useState<ModelCredential[]>([]);
   const [me, setMe] = useState<Me | null>(null);
@@ -67,10 +71,11 @@ export function useModelSettings() {
   async function refresh() {
     const refreshRevision = ++refreshRevisionRef.current;
     const selectionRevision = selectionRevisionRef.current;
-    const [nextCatalog, nextCredentials, nextMe] = await Promise.all([
+    const [nextCatalog, nextCredentials, nextMe, nextRouting] = await Promise.all([
       rpc.models.list(),
       rpc.models.credentials(),
       rpc.me(),
+      rpc.models.routing(),
     ]);
     if (refreshRevision !== refreshRevisionRef.current) return;
     const nextProvider =
@@ -93,6 +98,7 @@ export function useModelSettings() {
     setCatalog(nextCatalog);
     setCredentials(nextCredentials);
     setMe(nextMe);
+    setRouting(nextRouting);
     if (selectionRevision === selectionRevisionRef.current) {
       resetOpenAiCompatibleProbe();
       setProvider(nextProvider);
@@ -153,6 +159,7 @@ export function useModelSettings() {
     (entry) => entry.provider === me?.defaultProvider && entry.id === me?.defaultModel,
   );
   const isActive =
+    !routing.auto &&
     me?.defaultProvider === selected?.provider &&
     me?.defaultModel === (isOpenAiCompatible ? modelId.trim() : selected?.id);
   const acceptsKey = selected?.auth !== "oauth";
@@ -227,6 +234,7 @@ export function useModelSettings() {
     setNotice(null);
     setPending("default");
     try {
+      await rpc.models.setAuto({ enabled: false });
       await rpc.models.setDefault({ provider: selected.provider, modelId: activeModelId });
       await refresh();
       setNotice(isOpenAiCompatible ? t`Model updated.` : t`Now using ${selected.label}.`);
@@ -317,6 +325,9 @@ export function useModelSettings() {
   }
 
   return {
+    routing,
+    catalog,
+    refresh,
     loading,
     me,
     currentEntry,

@@ -1,10 +1,7 @@
 import { t } from "@lingui/core/macro";
 import type { ThinkingLevel, VoiceInfo } from "@rakazo/contracts";
-import {
-  type ModelCatalog as CoreModelCatalog,
-  connectedModelOptions,
-  parseModelOptionKey,
-} from "@rakazo/core";
+import type { ModelCatalog as CoreModelCatalog } from "@rakazo/core";
+import { connectedModelOptions, defaultModelLabel, parseModelOptionKey } from "@rakazo/core";
 import { useEffect, useState } from "react";
 import { rpc } from "../../lib/rpc";
 
@@ -26,7 +23,12 @@ export function thinkingLevelLabel(level: ThinkingLevel): string {
 /** How the Model row names what a bot runs. */
 export function modelSummary(catalog: ModelCatalog, modelKey: string): string {
   const selected = modelKey ? parseModelOptionKey(modelKey) : null;
-  if (!selected) return t`Space default`;
+  if (!selected)
+    return defaultModelLabel(catalog, {
+      default: t`Default`,
+      auto: t`Auto`,
+      fixed: t`Space default`,
+    });
   return (
     connectedModelOptions(catalog.credentials, catalog.catalog).find(
       (option) => option.key === modelKey,
@@ -43,9 +45,9 @@ export function useModelCatalog(): ModelCatalog {
   });
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([rpc.models.credentials(), rpc.models.list(), rpc.me()])
-      .then(([credentials, catalog, me]) => {
-        if (!cancelled) setState({ credentials, catalog, me, ready: true });
+    void Promise.all([rpc.models.credentials(), rpc.models.list(), rpc.me(), rpc.models.routing()])
+      .then(([credentials, catalog, me, routing]) => {
+        if (!cancelled) setState({ credentials, catalog, me, routing, ready: true });
       })
       .catch(() => undefined);
     return () => {

@@ -12,6 +12,7 @@ import {
 import { X } from "lucide-react";
 import { localizedProviderHint } from "../lib/localized-provider-hint";
 import { ModelDetail } from "./model-settings/model-detail";
+import { RoutingSettings } from "./model-settings/routing-settings";
 import { useModelSettings } from "./model-settings/use-model-settings";
 
 export function ModelSettingsOverlay({
@@ -26,8 +27,6 @@ export function ModelSettingsOverlay({
   const settings = useModelSettings();
   const {
     loading,
-    me,
-    currentEntry,
     providerQuery,
     setProviderQuery,
     filteredGroups,
@@ -70,23 +69,9 @@ export function ModelSettingsOverlay({
         <p className="px-6 pt-1 text-[13.5px] text-muted-foreground/70 sm:px-8">{description}</p>
       )}
 
-      <div
-        className={`mx-6 rounded-card bg-group shadow-group px-4 py-3 sm:mx-8 ${embedded ? "mt-4" : "mt-5"}`}
-      >
-        <div className="text-[12.5px] uppercase tracking-[0.08em] text-muted-foreground/80">
-          <Trans>Active model</Trans>
-        </div>
-        <div className="mt-1 text-[16px] text-foreground">
-          {currentEntry?.label ?? me?.defaultModel ?? t`Deployment default`}
-        </div>
-        <div className="mt-1 text-[13px] text-muted-foreground">
-          {currentEntry?.providerName ?? me?.defaultProvider ?? (
-            <Trans>Configured by deployment</Trans>
-          )}
-        </div>
-      </div>
+      <RoutingSettings settings={settings} />
 
-      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden px-6 py-6 sm:px-8 md:flex-row">
+      <div className="flex shrink-0 flex-col gap-6 px-6 py-6 sm:px-8 md:flex-row">
         <div className="flex min-h-0 shrink-0 flex-col md:w-[310px]">
           <div className="mb-3 text-[13.5px] text-muted-foreground">
             <Trans>Providers</Trans>
@@ -101,7 +86,7 @@ export function ModelSettingsOverlay({
             placeholder={t`Search providers`}
             className="h-10 rounded-xl px-3.5"
           />
-          <div className="rk-scroll mt-3 max-h-[240px] overflow-y-auto rounded-card bg-group shadow-group md:min-h-0 md:max-h-none md:flex-1">
+          <div className="rk-scroll mt-3 max-h-[240px] overflow-y-auto rounded-card bg-group shadow-group md:min-h-0 md:max-h-64 md:flex-1">
             {filteredGroups.length ? (
               filteredGroups.map((group) => {
                 const connected = credentials.some((entry) => entry.provider === group.id);
@@ -147,7 +132,7 @@ export function ModelSettingsOverlay({
 
   if (embedded) {
     return (
-      <div data-testid="model-settings" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div data-testid="model-settings" className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {body}
       </div>
     );
@@ -163,7 +148,7 @@ export function ModelSettingsOverlay({
       <DialogContent
         variant="window"
         showCloseButton={false}
-        className="flex h-[760px] max-h-[calc(100%-2rem)] w-[min(1080px,calc(100%-2rem))] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[1080px]"
+        className="flex h-[760px] max-h-[calc(100%-2rem)] w-[min(1080px,calc(100%-2rem))] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-y-auto p-0 sm:max-w-[1080px]"
       >
         {body}
       </DialogContent>

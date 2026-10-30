@@ -196,7 +196,9 @@ test("model settings connect, replace, and cancel provider authentication", asyn
   const providerSearch = page.getByPlaceholder("Search providers");
   await providerSearch.fill("scripted");
   await page.getByRole("button", { name: /Scripted/ }).click();
-  await expect(page.getByRole("combobox", { name: "Model" })).toHaveText(/Scripted runtime/);
+  await expect(page.getByRole("combobox", { name: "Model", exact: true })).toHaveText(
+    /Scripted runtime/,
+  );
   const apiKeyInput = page.getByLabel("API key");
   await expect(apiKeyInput).toHaveAttribute("autocomplete", "new-password");
   await apiKeyInput.fill("fake-scripted-key-one");
@@ -254,4 +256,63 @@ test("model settings connect, replace, and cancel provider authentication", asyn
   await page.getByLabel("Replace API key").fill("fake-scripted-key-three");
   await expect(page.getByRole("button", { name: "Replace API key" })).toBeEnabled();
   await expect(page.getByText("Waiting for sign-in…")).toBeHidden();
+});
+
+test("Auto category models persist and a fixed default disables Auto", async ({
+  page,
+}, testInfo) => {
+  const stamp = Date.now();
+  await signup(page, `auto-model-${stamp}@rakazo.test`, "password12", "Model routing");
+  await completeOnboarding(page);
+  await rpc(page, "models/connect", {
+    provider: "scripted",
+    apiKey: "fake-scripted-key",
+    modelId: "scripted",
+    label: "Scripted",
+  });
+  await rpc(page, "models/connect", {
+    provider: "openai-compatible",
+    baseUrl: "http://127.0.0.1:8090/v1",
+    modelId: "local-model",
+    label: "Local",
+  });
+  await openUserSettings(page, "models");
+  const active = page.getByRole("combobox", { name: "Active model", exact: true });
+  await active.selectOption("auto");
+  for (const { category, model } of [
+    { category: "Fast", model: "Scripted" },
+    { category: "Everyday", model: "local-model" },
+    { category: "Complex", model: "Scripted" },
+  ]) {
+    await page.getByRole("combobox", { name: category, exact: true }).click();
+    await page
+      .getByRole("region", { name: category, exact: true })
+      .getByRole("option", { name: new RegExp(model) })
+      .click();
+    await expect(page.getByRole("combobox", { name: category, exact: true })).toContainText(model);
+  }
+  await page.reload();
+  await openUserSettings(page, "models");
+  await expect(active).toHaveValue("auto");
+  await expect(page.getByRole("combobox", { name: "Fast", exact: true })).toContainText("Scripted");
+  await expect(page.getByRole("combobox", { name: "Everyday", exact: true })).toContainText(
+    "local-model",
+  );
+  await expect(page.getByRole("combobox", { name: "Complex", exact: true })).toContainText(
+    "Scripted",
+  );
+  await captureScreenshot(page, testInfo, "auto-models-desktop");
+  await page.setViewportSize({ width: 390, height: 844 });
+  const phoneRow = await page.getByRole("region", { name: "Complex", exact: true }).boundingBox();
+  expect(phoneRow && phoneRow.x + phoneRow.width).toBeLessThanOrEqual(390);
+  await captureScreenshot(page, testInfo, "auto-models-phone");
+  await page.getByRole("combobox", { name: "Complex", exact: true }).click();
+  await page.getByRole("option", { name: "Default", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "Complex", exact: true })).toHaveText("Default");
+  await active.selectOption("openai-compatible::local-model");
+  await expect(page.getByRole("combobox", { name: "Fast", exact: true })).toBeHidden();
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.reload();
+  await openUserSettings(page, "models");
+  await expect(active).toHaveValue("openai-compatible::local-model");
 });
