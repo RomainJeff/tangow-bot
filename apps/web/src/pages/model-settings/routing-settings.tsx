@@ -48,9 +48,9 @@ export function RoutingSettings({ settings }: { settings: ModelSettings }) {
   return (
     <fieldset
       disabled={saving || settings.loading}
-      className="mx-6 flex min-w-0 shrink-0 flex-col gap-3 sm:mx-8"
+      className="mx-6 mt-5 flex min-w-0 shrink-0 flex-col gap-3 sm:mx-8"
     >
-      <label htmlFor={id} className="text-meta text-muted-foreground">
+      <label htmlFor={id} className="flex flex-col gap-1.5 text-meta text-muted-foreground">
         {t`Active model`}
         <NativeSelect
           id={id}
@@ -86,8 +86,9 @@ export function RoutingSettings({ settings }: { settings: ModelSettings }) {
           ))}
         </NativeSelect>
       </label>
-      {routing.auto
-        ? categories.map(({ category, label }) => {
+      {routing.auto ? (
+        <div className="rounded-card bg-group shadow-group">
+          {categories.map(({ category, label }) => {
             const assignment = routing.categories.find((item) => item.category === category);
             const key = assignment ? `${assignment.provider}::${assignment.modelId}` : "";
             const { levels } = thinkingChoices({ catalog, credentials, me }, key);
@@ -95,7 +96,7 @@ export function RoutingSettings({ settings }: { settings: ModelSettings }) {
               <section
                 key={category}
                 aria-label={label}
-                className="rounded-card bg-group p-3 shadow-group"
+                className="flex flex-col gap-2 border-b border-border px-3.5 py-3 last:border-0"
               >
                 <div className="text-meta text-foreground">{label}</div>
                 <ModelPicker
@@ -134,8 +135,9 @@ export function RoutingSettings({ settings }: { settings: ModelSettings }) {
                 ) : null}
               </section>
             );
-          })
-        : null}
+          })}
+        </div>
+      ) : null}
     </fieldset>
   );
 }
