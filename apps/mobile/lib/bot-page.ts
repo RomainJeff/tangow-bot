@@ -3,19 +3,13 @@ import type {
   ComputerMode,
   Me,
   ModelCatalogEntry,
+  ModelCategoryAssignment,
   ModelCredential,
   Routine,
   VoiceInfo,
 } from "@rakazo/contracts";
-import {
-  type Draft,
-  draftConflicts,
-  type FieldSaveState,
-  fieldValue,
-  type ModelCatalog,
-  type RoutinePayload,
-  saveKey,
-} from "@rakazo/core";
+import type { Draft, FieldSaveState, ModelCatalog, RoutinePayload } from "@rakazo/core";
+import { draftConflicts, fieldValue, saveKey } from "@rakazo/core";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { rpc, selectedSpaceId } from "./api";
 import {
@@ -223,7 +217,8 @@ export function loadModelCatalog(): Promise<ModelCatalog> {
     rpc<ModelCredential[]>("models/credentials"),
     rpc<ModelCatalogEntry[]>("models/list"),
     rpc<Me>("me"),
-  ]).then(([credentials, catalog, me]) => ({ credentials, catalog, me }));
+    rpc<{ auto: boolean; categories: ModelCategoryAssignment[] }>("models/routing"),
+  ]).then(([credentials, catalog, me, routing]) => ({ credentials, catalog, me, routing }));
 }
 
 /** The read of the space the calls go to: `loadModelCatalog` reads what the server says there. */

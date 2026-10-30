@@ -94,6 +94,14 @@ tags:
 - extendedWaitUntil:
     visible: "Active model"
     timeout: 10000
+- tapOn: "Active model"
+- tapOn: "Auto"
+- assertVisible: "Fast"
+- assertVisible: "Everyday"
+- assertVisible: "Complex"
+- takeScreenshot: "11-auto-models"
+- tapOn: "Active model"
+- tapOn: "Scripted.*"
 - scrollUntilVisible:
     element: "Show more"
     direction: DOWN

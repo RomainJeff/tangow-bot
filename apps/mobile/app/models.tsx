@@ -1,4 +1,9 @@
-import type { ModelOAuthBegin, ThinkingLevel } from "@rakazo/contracts";
+import type {
+  ModelCategory,
+  ModelCategoryAssignment,
+  ModelOAuthBegin,
+  ThinkingLevel,
+} from "@rakazo/contracts";
 import {
   DEFAULT_MODEL_CONTEXT_WINDOW,
   DEFAULT_MODEL_MAX_TOKENS,
@@ -11,7 +16,14 @@ import {
   parseModelMaxImagesPerPrompt,
   parseModelMaxTokens,
 } from "@rakazo/contracts";
-import { createModelProbe, featuredModelProviders, initialModelProbeState } from "@rakazo/core";
+import {
+  connectedModelOptions,
+  createModelProbe,
+  featuredModelProviders,
+  initialModelProbeState,
+  parseModelOptionKey,
+  thinkingChoices,
+} from "@rakazo/core";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
@@ -27,7 +39,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeMenu } from "../components/native-menu";
-import { type MobileMe, type MobileModel, type MobileModelCredential, rpc } from "../lib/api";
+import type { MobileMe, MobileModel, MobileModelCredential } from "../lib/api";
+import { rpc } from "../lib/api";
 import { mobileTokens } from "../lib/appearance";
 import { useI18n } from "../lib/i18n";
 import {
@@ -56,6 +69,11 @@ type ModelSelection = {
 export default function Models() {
   const styles = useThemedStyles(createModelsStyles);
   const { t } = useI18n();
+  const [routing, setRouting] = useState<{ auto: boolean; categories: ModelCategoryAssignment[] }>({
+    auto: false,
+    categories: [],
+  });
+  const [routingBusy, setRoutingBusy] = useState(false);
   const [catalog, setCatalog] = useState<MobileModel[]>([]);
   const [credentials, setCredentials] = useState<MobileModelCredential[]>([]);
   const [me, setMe] = useState<MobileMe | null>(null);
@@ -99,10 +117,11 @@ export default function Models() {
 
   const load = useCallback(async (preferred: ModelSelection = {}) => {
     setError(null);
-    const [nextMe, nextCatalog, nextCredentials] = await Promise.all([
+    const [nextMe, nextCatalog, nextCredentials, nextRouting] = await Promise.all([
       rpc<MobileMe>("me"),
       rpc<MobileModel[]>("models/list"),
       rpc<MobileModelCredential[]>("models/credentials"),
+      rpc<{ auto: boolean; categories: ModelCategoryAssignment[] }>("models/routing"),
     ]);
     const nextProvider =
       (preferred.provider && nextCatalog.some((entry) => entry.provider === preferred.provider)
@@ -126,6 +145,7 @@ export default function Models() {
           nextCatalog.find((entry) => entry.provider === nextProvider)?.id ??
           "");
     setMe(nextMe);
+    setRouting(nextRouting);
     setCatalog(nextCatalog);
     setCredentials(nextCredentials);
     resetOpenAiCompatibleProbe();
@@ -190,6 +210,7 @@ export default function Models() {
     (entry) => entry.provider === me?.defaultProvider && entry.id === me?.defaultModel,
   );
   const isActive =
+    !routing.auto &&
     me?.defaultProvider === selected?.provider &&
     me?.defaultModel === (isOpenAiCompatible ? modelId.trim() : selected?.id);
   const acceptsKey = selected?.auth !== "oauth";
@@ -268,6 +289,7 @@ export default function Models() {
     setNotice(null);
     setPending("default");
     try {
+      await rpc("models/setAuto", { enabled: false });
       await rpc("models/setDefault", { provider: selected.provider, modelId: activeModelId });
       await load({ provider, modelId: activeModelId });
       setNotice(
@@ -449,6 +471,37 @@ export default function Models() {
     }
   }
 
+  const connectedOptions = connectedModelOptions(credentials, catalog);
+  const categoryLabels: Array<{ category: ModelCategory; label: string }> = [
+    { category: "fast", label: t("Fast") },
+    { category: "everyday", label: t("Everyday") },
+    { category: "complex", label: t("Complex") },
+  ];
+  async function saveRouting(action: () => Promise<unknown>) {
+    setRoutingBusy(true);
+    setError(null);
+    try {
+      await action();
+      await load({ provider, modelId });
+    } catch (error) {
+      setError(error instanceof Error ? error.message : t("Could not change the default model"));
+    } finally {
+      setRoutingBusy(false);
+    }
+  }
+  function assignCategory(
+    category: ModelCategory,
+    key: string,
+    thinkingLevel: ThinkingLevel | null = null,
+  ) {
+    const model = parseModelOptionKey(key);
+    return saveRouting(() =>
+      model
+        ? rpc("models/setCategory", { category, ...model, thinkingLevel })
+        : rpc("models/clearCategory", { category }),
+    );
+  }
+
   if (loading && catalog.length === 0) {
     return (
       <SafeAreaView edges={["bottom"]} style={[styles.screen, styles.centered]}>
@@ -460,14 +513,101 @@ export default function Models() {
   return (
     <SafeAreaView edges={["bottom"]} style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.activeCard}>
-          <Text style={styles.eyebrow}>{t("Active model")}</Text>
-          <Text style={styles.activeModel}>
-            {currentEntry?.label ?? me?.defaultModel ?? t("Deployment default")}
-          </Text>
-          <Text style={styles.secondary}>
-            {currentEntry?.providerName ?? me?.defaultProvider ?? t("Configured by deployment")}
-          </Text>
+        <View style={styles.card}>
+          <NativeMenu
+            title={t("Active model")}
+            accessibilityLabel={t("Active model")}
+            disabled={busy || routingBusy}
+            selected={routing.auto ? "auto" : `${me?.defaultProvider}::${me?.defaultModel}`}
+            options={[
+              { value: "auto", label: t("Auto") },
+              ...connectedOptions.map((option) => ({ value: option.key, label: option.label })),
+            ]}
+            onSelect={(key) =>
+              void saveRouting(async () => {
+                if (key === "auto") {
+                  await rpc("models/setAuto", { enabled: true });
+                  return;
+                }
+                const model = parseModelOptionKey(key);
+                if (model) {
+                  await rpc("models/setAuto", { enabled: false });
+                  await rpc("models/setDefault", model);
+                }
+              })
+            }
+            style={styles.modelRow}
+          >
+            <Text style={styles.modelLabel}>{t("Active model")}</Text>
+            <Text style={styles.secondary}>
+              {routing.auto
+                ? t("Auto")
+                : (currentEntry?.label ?? me?.defaultModel ?? t("Deployment default"))}
+            </Text>
+          </NativeMenu>
+          {routing.auto
+            ? categoryLabels.map(({ category, label }) => {
+                const assignment = routing.categories.find((item) => item.category === category);
+                const key = assignment ? `${assignment.provider}::${assignment.modelId}` : "";
+                const { levels } = thinkingChoices({ catalog, credentials, me }, key);
+                return (
+                  <View key={category}>
+                    <NativeMenu
+                      title={label}
+                      accessibilityLabel={label}
+                      disabled={busy || routingBusy}
+                      selected={key}
+                      options={[
+                        { value: "", label: t("Default") },
+                        ...connectedOptions.map((option) => ({
+                          value: option.key,
+                          label: option.label,
+                        })),
+                      ]}
+                      onSelect={(value) => void assignCategory(category, value)}
+                      style={styles.modelRow}
+                    >
+                      <Text style={styles.modelLabel}>{label}</Text>
+                      <Text style={styles.secondary}>
+                        {connectedOptions.find((option) => option.key === key)?.label ??
+                          assignment?.modelId ??
+                          t("Default")}
+                      </Text>
+                    </NativeMenu>
+                    {assignment && levels.length ? (
+                      <NativeMenu
+                        title={t("Reasoning effort")}
+                        accessibilityLabel={t("Reasoning effort")}
+                        disabled={busy || routingBusy}
+                        selected={assignment.thinkingLevel ?? ""}
+                        options={[
+                          { value: "", label: t("Default") },
+                          ...levels.map((level) => ({
+                            value: level,
+                            label: thinkingLevelLabel(level),
+                          })),
+                        ]}
+                        onSelect={(value) =>
+                          void assignCategory(
+                            category,
+                            key,
+                            levels.find((level) => level === value) ?? null,
+                          )
+                        }
+                        style={styles.modelRow}
+                      >
+                        <Text style={styles.modelLabel}>{t("Reasoning effort")}</Text>
+                        <Text style={styles.secondary}>
+                          {assignment.thinkingLevel
+                            ? thinkingLevelLabel(assignment.thinkingLevel)
+                            : t("Default")}
+                        </Text>
+                      </NativeMenu>
+                    ) : null}
+                  </View>
+                );
+              })
+            : null}
         </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
