@@ -230,6 +230,8 @@ function fixture({
     thread: { findUniqueOrThrow: vi.fn(async () => ({ id: run.threadId, groupId: null })) },
     task: { findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: "Create a bot" })) },
     connection: { findMany: vi.fn(async () => []) },
+    spaceMember: { findUnique: async () => ({ modelAuto: false }) },
+    spaceModelCategory: { findMany: async () => [] },
     spaceModelPreference: { findFirst: vi.fn(async () => null) },
     userModelCredential: { findFirst: vi.fn(async () => null) },
     deploymentSettings: {

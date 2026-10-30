@@ -302,6 +302,8 @@ function fixture({
     },
     connection: { findMany: vi.fn(async () => []) },
     user: { findUnique: vi.fn(async () => ({ name: "Ana Lima" })) },
+    spaceMember: { findUnique: async () => ({ modelAuto: false }) },
+    spaceModelCategory: { findMany: async () => [] },
     spaceModelPreference: { findFirst: vi.fn(async () => null) },
     userModelCredential: { findFirst: vi.fn(async () => null) },
     deploymentSettings: {

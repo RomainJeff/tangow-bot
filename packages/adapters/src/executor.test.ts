@@ -1284,6 +1284,8 @@ description: Prepare standup notes
       },
       task: { findUniqueOrThrow: vi.fn(async () => ({ id: "task-1", prompt: "hello" })) },
       connection: { findMany: vi.fn(async () => []) },
+      spaceMember: { findUnique: async () => ({ modelAuto: false }) },
+      spaceModelCategory: { findMany: async () => [] },
       spaceModelPreference: { findFirst: vi.fn(async () => null) },
       userModelCredential: { findFirst: vi.fn(async () => null) },
       deploymentSettings: { findUnique: vi.fn(async () => null) },

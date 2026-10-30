@@ -3,16 +3,24 @@ import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
+import {
+  classifyModelRoute,
+  createDecisionProvider,
+  prepareDecisionProviderConnection,
+} from "@rakazo/adapters";
 import { ModelConnectInputSchema } from "@rakazo/contracts";
 import { DEFAULT_SKILL_LEARNING } from "@rakazo/core";
 import { loadRootEnv } from "@rakazo/core/node/load-root-env";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
+import { parseDecisionConnection } from "../evals/approval-classification/model-run.js";
 import { EVAL_CASES } from "../evals/cases.js";
+import { MODEL_ROUTE_CASES } from "../evals/model-route.js";
 import { emptyTrial, redact, summarize, validateControls } from "../evals/report.js";
 
 async function main() {
   const { values } = parseArgs({
     options: {
+      "model-route": { type: "boolean", default: false },
       live: { type: "boolean", default: false },
       list: { type: "boolean", default: false },
       connection: { type: "string" },
@@ -27,6 +35,52 @@ async function main() {
       output: { type: "string", default: "test-report/evals/report.json" },
     },
   });
+  if (values["model-route"]) {
+    if (values.list) {
+      for (const item of MODEL_ROUTE_CASES) console.log(item.id + ": " + item.expected);
+      return;
+    }
+    if (!values.live || !values.connection)
+      throw new Error("Model routing eval requires --live --connection <Decision Model JSON>");
+    const connection = await prepareDecisionProviderConnection(
+      parseDecisionConnection(JSON.parse(readFileSync(values.connection, "utf8"))),
+    );
+    const provider = createDecisionProvider(
+      connection.provider,
+      connection.settings,
+      connection.credentials,
+    );
+    const results = [];
+    for (const item of MODEL_ROUTE_CASES) {
+      const result = await classifyModelRoute({
+        provider,
+        request: item.request,
+        recentTurns: [],
+        hasImages: item.hasImages,
+        secrets: Object.values(connection.credentials),
+        context: {
+          operationId: "model-route-eval",
+          traceId: "model-route-eval",
+          spaceId: "synthetic",
+          userId: "synthetic",
+          signal: new AbortController().signal,
+        },
+      });
+      results.push({
+        id: item.id,
+        expected: item.expected,
+        ...result,
+        correct: result.category === item.expected,
+      });
+    }
+    const output = path.resolve(values.output!);
+    mkdirSync(path.dirname(output), { recursive: true });
+    writeFileSync(output, JSON.stringify({ kind: "model-route-eval", results }, null, 2), {
+      mode: 0o600,
+    });
+    console.log("Model routing eval report written; quality results are advisory.");
+    return;
+  }
   if (values.list) {
     for (const scenario of EVAL_CASES) console.log(`${scenario.id}: ${scenario.purpose}`);
     return;
