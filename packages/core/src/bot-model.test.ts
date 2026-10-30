@@ -1,6 +1,11 @@
 import type { ModelCatalogEntry, ModelCredential } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
-import { connectedModelOptions, parseModelOptionKey, thinkingChoices } from "./bot-model.js";
+import {
+  connectedModelOptions,
+  defaultModelLabel,
+  parseModelOptionKey,
+  thinkingChoices,
+} from "./bot-model.js";
 
 const catalog: ModelCatalogEntry[] = [
   {
@@ -56,4 +61,20 @@ describe("bot model choices", () => {
     });
     expect(parseModelOptionKey("::x")).toBeNull();
   });
+});
+
+it("names the inherited Auto default without replacing the fixed fallback label", () => {
+  const labels = { default: "Default", auto: "Auto", fixed: "Space default" };
+  const settings = {
+    catalog,
+    credentials: [],
+    me: { defaultProvider: "anthropic", defaultModel: "claude-a" },
+  };
+  expect(defaultModelLabel({ ...settings, routing: { auto: true, categories: [] } }, labels)).toBe(
+    "Default (Auto)",
+  );
+  expect(defaultModelLabel({ ...settings, routing: { auto: false, categories: [] } }, labels)).toBe(
+    "Space default (Claude A)",
+  );
+  expect(defaultModelLabel({ ...settings, me: null }, labels)).toBe("Space default");
 });

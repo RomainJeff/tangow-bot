@@ -22,7 +22,7 @@ msgid "(empty)"
 msgstr "(खाली)"
 
 #. placeholder {0}: group.entries.length
-#: src/pages/ModelSettingsOverlay.tsx:122
+#: src/pages/ModelSettingsOverlay.tsx:107
 msgid "{0, plural, one {# model} other {# models}}"
 msgstr "{0, plural, one {# मॉडल} other {# मॉडल}}"
 
@@ -109,7 +109,7 @@ msgstr ""
 msgid "{0}'s screen"
 msgstr "{0} की स्क्रीन"
 
-#: src/components/DraftCard.tsx:263
+#: src/components/DraftCard.tsx:262
 msgid "{app} is disconnected."
 msgstr ""
 
@@ -229,7 +229,7 @@ msgstr "एक्सेस टोकन (वैकल्पिक)"
 msgid "Account"
 msgstr "खाता"
 
-#: src/pages/bot-page/SettingDetails.tsx:192
+#: src/pages/bot-page/SettingDetails.tsx:194
 #: src/pages/bot-page/SettingsTab.tsx:37
 msgid "Account default"
 msgstr "खाता डिफ़ॉल्ट"
@@ -268,7 +268,8 @@ msgstr ""
 msgid "Active"
 msgstr "सक्रिय"
 
-#: src/pages/ModelSettingsOverlay.tsx:77
+#: src/pages/model-settings/routing-settings.tsx:53
+#: src/pages/model-settings/routing-settings.tsx:55
 msgid "Active model"
 msgstr "सक्रिय मॉडल"
 
@@ -391,6 +392,7 @@ msgstr "जोड़ा जा रहा है…"
 #: src/pages/DecisionModelSettingsPanel.tsx:132
 #: src/pages/McpServersOverlay.tsx:343
 #: src/pages/model-settings/model-detail.tsx:168
+#: src/pages/model-settings/routing-settings.tsx:115
 #: src/pages/Onboarding.tsx:496
 #: src/pages/plugins/advanced-integrations.tsx:77
 #: src/pages/RoutineSchedule.tsx:47
@@ -643,6 +645,9 @@ msgid "Authorize this server so agents can use its tools. A popup opens."
 msgstr "एजेंटों को इसके टूल का उपयोग करने देने के लिए इस सर्वर को ऑथराइज़ करें। एक पॉपअप खुलता है।"
 
 #: src/pages/bot-page/BotHero.tsx:161
+#: src/pages/bot-page/model-options.ts:29
+#: src/pages/bot-page/SettingDetails.tsx:119
+#: src/pages/model-settings/routing-settings.tsx:72
 msgid "Auto"
 msgstr "स्वतः"
 
@@ -683,7 +688,7 @@ msgstr "साइन इन पर वापस जाएँ"
 msgid "Base URL"
 msgstr "बेस URL"
 
-#: src/components/DraftCard.tsx:256
+#: src/components/DraftCard.tsx:255
 msgid "Bcc"
 msgstr ""
 
@@ -812,7 +817,7 @@ msgstr "उत्तर रद्द करें"
 msgid "Cancelled"
 msgstr "रद्द किया गया"
 
-#: src/components/DraftCard.tsx:256
+#: src/components/DraftCard.tsx:255
 msgid "Cc"
 msgstr ""
 
@@ -875,7 +880,7 @@ msgstr "एक बॉट चुनें…"
 msgid "Choose a new password"
 msgstr "नया पासवर्ड चुनें"
 
-#: src/pages/ModelSettingsOverlay.tsx:48
+#: src/pages/ModelSettingsOverlay.tsx:47
 msgid "Choose which connected model Rakazo uses."
 msgstr "चुनें कि Rakazo किस कनेक्टेड मॉडल का उपयोग करे।"
 
@@ -894,11 +899,11 @@ msgstr "{0} की बातचीत साफ़ करें?"
 msgid "Clear conversation"
 msgstr "बातचीत साफ़ करें"
 
-#: src/pages/bot-page/SettingDetails.tsx:60
+#: src/pages/bot-page/SettingDetails.tsx:62
 msgid "Clear description?"
 msgstr "विवरण साफ़ करें?"
 
-#: src/pages/bot-page/SettingDetails.tsx:60
+#: src/pages/bot-page/SettingDetails.tsx:62
 msgid "Clear instructions?"
 msgstr "निर्देश साफ़ करें?"
 
@@ -950,7 +955,7 @@ msgstr "मेमोरी सेटिंग्स बंद करें"
 msgid "Close messaging settings"
 msgstr "मैसेजिंग सेटिंग्स बंद करें"
 
-#: src/pages/ModelSettingsOverlay.tsx:64
+#: src/pages/ModelSettingsOverlay.tsx:63
 #: src/pages/SettingsOverlay.tsx:110
 msgid "Close model settings"
 msgstr "मॉडल सेटिंग्स बंद करें"
@@ -1003,6 +1008,10 @@ msgstr "कमांड"
 msgid "Complete"
 msgstr "पूर्ण"
 
+#: src/pages/model-settings/routing-settings.tsx:19
+msgid "Complex"
+msgstr "जटिल"
+
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
 #: src/pages/SettingsOverlay.tsx:100
@@ -1038,10 +1047,6 @@ msgstr "कंप्यूटर उपलब्ध नहीं"
 #: src/components/ComputerUpdateProgress.tsx:66
 msgid "Computer updated"
 msgstr ""
-
-#: src/pages/ModelSettingsOverlay.tsx:84
-msgid "Configured by deployment"
-msgstr "डिप्लॉयमेंट द्वारा कॉन्फ़िगर"
 
 #: src/pages/McpServersOverlay.tsx:422
 msgid "Configured servers"
@@ -1101,7 +1106,7 @@ msgstr "Treg कनेक्ट करें"
 #: src/pages/DecisionModelSettingsPanel.tsx:98
 #: src/pages/McpOAuthCallback.tsx:54
 #: src/pages/MemorySettingsOverlay.tsx:191
-#: src/pages/ModelSettingsOverlay.tsx:129
+#: src/pages/ModelSettingsOverlay.tsx:114
 #: src/pages/shell/message-cards.tsx:195
 #: src/pages/VoiceSettingsOverlay.tsx:226
 msgid "Connected"
@@ -1119,8 +1124,8 @@ msgstr "{0} कनेक्ट किया गया।"
 
 #. placeholder {0}: selected.label
 #. placeholder {0}: selectedLabelRef.current ?? "this model"
-#: src/pages/model-settings/use-model-settings.ts:63
-#: src/pages/model-settings/use-model-settings.ts:301
+#: src/pages/model-settings/use-model-settings.ts:67
+#: src/pages/model-settings/use-model-settings.ts:309
 msgid "Connected and using {0}."
 msgstr "{0} कनेक्ट किया गया और उपयोग में है।"
 
@@ -1171,7 +1176,7 @@ msgstr "ईमेल से जारी रखें"
 msgid "Conversation cleared"
 msgstr ""
 
-#: src/components/DraftCard.tsx:301
+#: src/components/DraftCard.tsx:299
 #: src/pages/shell/message-actions-sheet.tsx:75
 #: src/pages/shell/message-hover-actions.tsx:98
 #: src/pages/shell/message-hover-actions.tsx:169
@@ -1206,7 +1211,8 @@ msgstr "इस ऐप को ऑथराइज़ नहीं किया ज
 msgid "Could not change password"
 msgstr "पासवर्ड बदला नहीं जा सका"
 
-#: src/pages/model-settings/use-model-settings.ts:234
+#: src/pages/model-settings/routing-settings.tsx:29
+#: src/pages/model-settings/use-model-settings.ts:242
 msgid "Could not change the default model"
 msgstr "डिफ़ॉल्ट मॉडल बदला नहीं जा सका"
 
@@ -1244,7 +1250,7 @@ msgstr "{0} कनेक्ट नहीं हो सका"
 msgid "Could not connect OpenRouter"
 msgstr ""
 
-#: src/pages/model-settings/use-model-settings.ts:303
+#: src/pages/model-settings/use-model-settings.ts:311
 msgid "Could not connect this provider"
 msgstr "यह प्रोवाइडर कनेक्ट नहीं हो सका"
 
@@ -1384,7 +1390,7 @@ msgstr "इंटीग्रेशन लोड नहीं हो सके"
 msgid "Could not load MCP servers"
 msgstr "MCP सर्वर लोड नहीं हो सके"
 
-#: src/pages/model-settings/use-model-settings.ts:115
+#: src/pages/model-settings/use-model-settings.ts:121
 msgid "Could not load model settings"
 msgstr "मॉडल सेटिंग्स लोड नहीं हो सकीं"
 
@@ -1427,7 +1433,7 @@ msgstr "टेस्ट क्लिप नहीं चलाई जा सक�
 msgid "Could not reach the server"
 msgstr "सर्वर से संपर्क नहीं हो सका"
 
-#: src/pages/model-settings/use-model-settings.ts:218
+#: src/pages/model-settings/use-model-settings.ts:225
 #: src/pages/Onboarding.tsx:274
 msgid "Could not reach this model server"
 msgstr "इस मॉडल सर्वर तक नहीं पहुंचा जा सका"
@@ -1534,8 +1540,8 @@ msgid "Could not start teaching"
 msgstr "सिखाना शुरू नहीं किया जा सका"
 
 #: src/components/AskCard.tsx:199
-#: src/components/DraftCard.tsx:158
-#: src/components/DraftCard.tsx:171
+#: src/components/DraftCard.tsx:157
+#: src/components/DraftCard.tsx:170
 msgid "Could not submit this answer"
 msgstr "यह उत्तर सबमिट नहीं किया जा सका"
 
@@ -1721,13 +1727,17 @@ msgstr ""
 msgid "Decline"
 msgstr "अस्वीकार करें"
 
+#: src/pages/bot-page/model-options.ts:28
+#: src/pages/bot-page/SettingDetails.tsx:118
 #: src/pages/model-settings/model-detail.tsx:185
+#: src/pages/model-settings/routing-settings.tsx:103
+#: src/pages/model-settings/routing-settings.tsx:130
 #: src/pages/Onboarding.tsx:511
 msgid "Default"
 msgstr "डिफ़ॉल्ट"
 
 #. placeholder {0}: thinkingLevelLabel(fallback)
-#: src/pages/bot-page/SettingDetails.tsx:148
+#: src/pages/bot-page/SettingDetails.tsx:150
 msgid "Default ({0})"
 msgstr ""
 
@@ -1790,7 +1800,7 @@ msgstr "अस्वीकृत"
 msgid "Deny"
 msgstr "अस्वीकार करें"
 
-#: src/pages/ModelSettingsOverlay.tsx:80
+#: src/pages/model-settings/routing-settings.tsx:77
 msgid "Deployment default"
 msgstr "डिप्लॉयमेंट डिफ़ॉल्ट"
 
@@ -1798,7 +1808,7 @@ msgstr "डिप्लॉयमेंट डिफ़ॉल्ट"
 msgid "Describe what this bot does"
 msgstr "बताएं कि यह बॉट क्या करता है"
 
-#: src/pages/bot-page/SettingDetails.tsx:51
+#: src/pages/bot-page/SettingDetails.tsx:53
 #: src/pages/bot-page/SettingsTab.tsx:27
 #: src/pages/GroupPanel.tsx:143
 #: src/pages/GroupPanel.tsx:252
@@ -1831,12 +1841,12 @@ msgstr ""
 msgid "Disabled"
 msgstr "निष्क्रिय"
 
-#: src/components/DraftCard.tsx:292
+#: src/components/DraftCard.tsx:290
 msgid "Discard"
 msgstr ""
 
-#: src/components/DraftCard.tsx:223
-#: src/components/DraftCard.tsx:233
+#: src/components/DraftCard.tsx:222
+#: src/components/DraftCard.tsx:232
 msgid "Discarded"
 msgstr ""
 
@@ -1940,7 +1950,7 @@ msgstr "संपादित करें"
 msgid "Edit and resend"
 msgstr "संपादित करके फिर भेजें"
 
-#: src/components/DraftCard.tsx:397
+#: src/components/DraftCard.tsx:392
 msgid "Edit message"
 msgstr ""
 
@@ -1948,11 +1958,11 @@ msgstr ""
 msgid "Edit Profile"
 msgstr "प्रोफ़ाइल संपादित करें"
 
-#: src/components/DraftCard.tsx:260
+#: src/components/DraftCard.tsx:259
 msgid "Edited"
 msgstr ""
 
-#: src/components/DraftCard.tsx:259
+#: src/components/DraftCard.tsx:258
 msgid "Editing"
 msgstr ""
 
@@ -1973,17 +1983,17 @@ msgstr ""
 msgid "Engage when... Ignore..."
 msgstr ""
 
-#: src/pages/model-settings/use-model-settings.ts:268
+#: src/pages/model-settings/use-model-settings.ts:276
 #: src/pages/Onboarding.tsx:304
 msgid "Enter a whole number from 1 to {MAX_MODEL_CONTEXT_WINDOW} for the context limit."
 msgstr "कॉन्टेक्स्ट सीमा के लिए 1 से {MAX_MODEL_CONTEXT_WINDOW} के बीच कोई पूर्णांक दर्ज करें।"
 
-#: src/pages/model-settings/use-model-settings.ts:261
+#: src/pages/model-settings/use-model-settings.ts:269
 #: src/pages/Onboarding.tsx:297
 msgid "Enter a whole number from 1 to {MAX_MODEL_MAX_TOKENS} for maximum output tokens."
 msgstr "अधिकतम आउटपुट टोकन के लिए 1 से {MAX_MODEL_MAX_TOKENS} के बीच कोई पूर्णांक दर्ज करें।"
 
-#: src/pages/model-settings/use-model-settings.ts:252
+#: src/pages/model-settings/use-model-settings.ts:260
 #: src/pages/Onboarding.tsx:288
 msgid "Enter a whole number from 1 to 1000 for the image limit."
 msgstr "इमेज सीमा के लिए 1 से 1000 के बीच कोई पूर्णांक दर्ज करें।"
@@ -2029,6 +2039,10 @@ msgstr "हर महीने"
 msgid "Every week"
 msgstr "हर सप्ताह"
 
+#: src/pages/model-settings/routing-settings.tsx:18
+msgid "Everyday"
+msgstr "रोज़मर्रा"
+
 #: src/pages/plugins/advanced-integrations.tsx:304
 msgid "Executor token"
 msgstr "Executor टोकन"
@@ -2051,7 +2065,7 @@ msgstr "CRM से इस सप्ताह की सूची एक्सप
 msgid "External conversation"
 msgstr ""
 
-#: src/pages/bot-page/model-options.ts:17
+#: src/pages/bot-page/model-options.ts:14
 #: src/pages/model-settings/model-detail.tsx:181
 #: src/pages/Onboarding.tsx:507
 msgid "Extra high"
@@ -2087,6 +2101,10 @@ msgstr "विफल।"
 #: src/components/teach/SkillDraftCard.tsx:133
 msgid "Failure handling"
 msgstr "विफलता प्रबंधन"
+
+#: src/pages/model-settings/routing-settings.tsx:17
+msgid "Fast"
+msgstr "तेज़"
 
 #: src/pages/PluginsOverlay.tsx:227
 msgid "Featured"
@@ -2133,11 +2151,11 @@ msgstr "अप्रत्याशित क्रियाओं को चि
 msgid "Forgot password?"
 msgstr "पासवर्ड भूल गए?"
 
-#: src/pages/model-settings/model-picker.tsx:315
+#: src/pages/model-settings/model-picker.tsx:310
 msgid "Free"
 msgstr "मुफ़्त"
 
-#: src/components/DraftCard.tsx:337
+#: src/components/DraftCard.tsx:335
 msgid "From"
 msgstr ""
 
@@ -2232,7 +2250,7 @@ msgstr ""
 msgid "Hide password"
 msgstr "पासवर्ड छिपाएँ"
 
-#: src/pages/bot-page/model-options.ts:20
+#: src/pages/bot-page/model-options.ts:17
 #: src/pages/model-settings/model-detail.tsx:180
 #: src/pages/Onboarding.tsx:506
 msgid "High"
@@ -2259,7 +2277,7 @@ msgstr "यह कैसे चलता है"
 msgid "How often"
 msgstr "कितनी बार"
 
-#: src/pages/bot-page/SettingDetails.tsx:61
+#: src/pages/bot-page/SettingDetails.tsx:63
 msgid "How this bot should behave"
 msgstr "यह बॉट कैसा व्यवहार करे"
 
@@ -2317,7 +2335,7 @@ msgid "Instruction"
 msgstr "निर्देश"
 
 #: src/components/AskCard.tsx:363
-#: src/pages/bot-page/SettingDetails.tsx:51
+#: src/pages/bot-page/SettingDetails.tsx:53
 #: src/pages/bot-page/SettingsTab.tsx:26
 msgid "Instructions"
 msgstr "निर्देश"
@@ -2440,7 +2458,7 @@ msgid "Loading memory settings…"
 msgstr "मेमोरी सेटिंग्स लोड हो रही हैं…"
 
 #: src/pages/model-settings/model-detail.tsx:365
-#: src/pages/ModelSettingsOverlay.tsx:46
+#: src/pages/ModelSettingsOverlay.tsx:45
 msgid "Loading model catalog…"
 msgstr "मॉडल कैटलॉग लोड हो रहा है…"
 
@@ -2477,7 +2495,7 @@ msgstr "लोकल"
 msgid "Log out"
 msgstr "लॉग आउट"
 
-#: src/pages/bot-page/model-options.ts:18
+#: src/pages/bot-page/model-options.ts:15
 #: src/pages/model-settings/model-detail.tsx:178
 #: src/pages/Onboarding.tsx:504
 msgid "Low"
@@ -2516,7 +2534,7 @@ msgstr "पढ़ा हुआ चिह्नित करें"
 msgid "Mark as Unread"
 msgstr "अपठित चिह्नित करें"
 
-#: src/pages/bot-page/model-options.ts:22
+#: src/pages/bot-page/model-options.ts:19
 #: src/pages/model-settings/model-detail.tsx:182
 #: src/pages/Onboarding.tsx:508
 msgid "Max"
@@ -2540,7 +2558,7 @@ msgstr ""
 msgid "MCP servers"
 msgstr "MCP सर्वर"
 
-#: src/pages/bot-page/model-options.ts:19
+#: src/pages/bot-page/model-options.ts:16
 #: src/pages/model-settings/model-detail.tsx:179
 #: src/pages/Onboarding.tsx:505
 msgid "Medium"
@@ -2627,7 +2645,7 @@ msgstr "मैसेजिंग"
 msgid "Microphone failed"
 msgstr "माइक्रोफ़ोन विफल"
 
-#: src/pages/bot-page/model-options.ts:21
+#: src/pages/bot-page/model-options.ts:18
 #: src/pages/model-settings/model-detail.tsx:177
 #: src/pages/Onboarding.tsx:503
 msgid "Minimal"
@@ -2650,12 +2668,12 @@ msgstr "मिनट"
 msgid "minutes"
 msgstr "मिनट"
 
-#: src/pages/bot-page/SettingDetails.tsx:105
+#: src/pages/bot-page/SettingDetails.tsx:106
 #: src/pages/bot-page/SettingsTab.tsx:29
 #: src/pages/DecisionModelSettingsPanel.tsx:156
 #: src/pages/model-settings/model-detail.tsx:109
 #: src/pages/model-settings/model-detail.tsx:219
-#: src/pages/model-settings/model-picker.tsx:203
+#: src/pages/model-settings/model-picker.tsx:198
 #: src/pages/Onboarding.tsx:433
 #: src/pages/Onboarding.tsx:529
 #: src/pages/Onboarding.tsx:541
@@ -2671,7 +2689,7 @@ msgstr "मॉडल त्रुटि"
 msgid "Model id"
 msgstr "मॉडल आईडी"
 
-#: src/pages/model-settings/model-picker.tsx:239
+#: src/pages/model-settings/model-picker.tsx:234
 msgid "Model options"
 msgstr "मॉडल विकल्प"
 
@@ -2679,11 +2697,11 @@ msgstr "मॉडल विकल्प"
 msgid "Model spend uses your provider keys."
 msgstr "मॉडल का खर्च आपकी प्रोवाइडर कुंजियों से होता है।"
 
-#: src/pages/model-settings/use-model-settings.ts:232
+#: src/pages/model-settings/use-model-settings.ts:240
 msgid "Model updated."
 msgstr "मॉडल अपडेट किया गया।"
 
-#: src/pages/ModelSettingsOverlay.tsx:57
+#: src/pages/ModelSettingsOverlay.tsx:56
 #: src/pages/SettingsOverlay.tsx:95
 msgid "Models"
 msgstr "मॉडल्स"
@@ -2851,7 +2869,7 @@ msgstr "अभी कोई इंटीग्रेशन इंस्टॉल
 
 #: src/components/ask/AskSettled.tsx:28
 #: src/components/AskCard.tsx:260
-#: src/components/DraftCard.tsx:240
+#: src/components/DraftCard.tsx:239
 msgid "No longer active"
 msgstr "अब सक्रिय नहीं"
 
@@ -2859,7 +2877,7 @@ msgstr "अब सक्रिय नहीं"
 msgid "No managed app catalog is configured on this deployment."
 msgstr "इस डिप्लॉयमेंट पर कोई प्रबंधित ऐप कैटलॉग कॉन्फ़िगर नहीं है।"
 
-#: src/pages/model-settings/model-picker.tsx:267
+#: src/pages/model-settings/model-picker.tsx:262
 msgid "No matching models"
 msgstr "कोई मेल खाता मॉडल नहीं"
 
@@ -2883,7 +2901,7 @@ msgstr "कोई मॉडल कैटलॉग उपलब्ध नही�
 msgid "No model connected"
 msgstr "कोई मॉडल कनेक्ट नहीं"
 
-#: src/pages/ModelSettingsOverlay.tsx:137
+#: src/pages/ModelSettingsOverlay.tsx:122
 msgid "No providers found."
 msgstr "कोई प्रोवाइडर नहीं मिला।"
 
@@ -2938,7 +2956,7 @@ msgstr "प्लगइन कैटलॉग में नहीं"
 msgid "Not now"
 msgstr "अभी नहीं"
 
-#: src/components/DraftCard.tsx:258
+#: src/components/DraftCard.tsx:257
 msgid "Not sent"
 msgstr ""
 
@@ -2972,7 +2990,7 @@ msgid "Now"
 msgstr "अभी"
 
 #. placeholder {0}: selected.label
-#: src/pages/model-settings/use-model-settings.ts:232
+#: src/pages/model-settings/use-model-settings.ts:240
 msgid "Now using {0}."
 msgstr "अब {0} उपयोग में है।"
 
@@ -3202,7 +3220,7 @@ msgstr ""
 msgid "Provider"
 msgstr "प्रोवाइडर"
 
-#: src/pages/ModelSettingsOverlay.tsx:92
+#: src/pages/ModelSettingsOverlay.tsx:77
 #: src/pages/VoiceSettingsOverlay.tsx:186
 msgid "Providers"
 msgstr "प्रोवाइडर्स"
@@ -3224,8 +3242,8 @@ msgstr "प्रतिक्रिया दें"
 msgid "Reactions"
 msgstr "प्रतिक्रियाएँ"
 
-#: src/pages/bot-page/SettingDetails.tsx:202
-#: src/pages/bot-page/SettingDetails.tsx:206
+#: src/pages/bot-page/SettingDetails.tsx:204
+#: src/pages/bot-page/SettingDetails.tsx:208
 msgid "Read replies aloud"
 msgstr "उत्तर पढ़कर सुनाएं"
 
@@ -3234,6 +3252,7 @@ msgid "read-only"
 msgstr "केवल पढ़ने योग्य"
 
 #: src/pages/model-settings/model-detail.tsx:184
+#: src/pages/model-settings/routing-settings.tsx:129
 #: src/pages/Onboarding.tsx:510
 msgid "Reasoning effort"
 msgstr "रीज़निंग प्रयास"
@@ -3258,7 +3277,7 @@ msgstr ""
 msgid "Recommended · {description}"
 msgstr ""
 
-#: src/components/DraftCard.tsx:317
+#: src/components/DraftCard.tsx:315
 msgid "Reconnect {app}"
 msgstr ""
 
@@ -3428,7 +3447,7 @@ msgstr "API कुंजी बदलें"
 msgid "Replace key"
 msgstr "कुंजी बदलें"
 
-#: src/components/DraftCard.tsx:237
+#: src/components/DraftCard.tsx:236
 msgid "Replaced"
 msgstr ""
 
@@ -3437,8 +3456,8 @@ msgstr ""
 msgid "Reply"
 msgstr "उत्तर दें"
 
-#: src/pages/bot-page/SettingDetails.tsx:212
-#: src/pages/bot-page/SettingDetails.tsx:216
+#: src/pages/bot-page/SettingDetails.tsx:214
+#: src/pages/bot-page/SettingDetails.tsx:218
 msgid "Reply in several short messages"
 msgstr "कई छोटे संदेशों में उत्तर दें"
 
@@ -3621,7 +3640,7 @@ msgstr "सहेजा गया"
 msgid "Saved, but list refresh failed"
 msgstr "सहेजा गया, लेकिन सूची रिफ़्रेश विफल रही"
 
-#: src/pages/model-settings/use-model-settings.ts:301
+#: src/pages/model-settings/use-model-settings.ts:309
 msgid "Saved."
 msgstr "सहेजा गया।"
 
@@ -3652,7 +3671,7 @@ msgstr "हां या ना कहें, या एक वाक्य म�
 msgid "Screen"
 msgstr "स्क्रीन"
 
-#: src/pages/model-settings/model-picker.tsx:228
+#: src/pages/model-settings/model-picker.tsx:223
 #: src/pages/plugins/advanced-integrations.tsx:119
 #: src/pages/shell/bot-picker.tsx:55
 #: src/pages/shell/bot-picker.tsx:56
@@ -3680,12 +3699,12 @@ msgstr ""
 msgid "Search integrations.sh"
 msgstr ""
 
-#: src/pages/model-settings/model-picker.tsx:223
+#: src/pages/model-settings/model-picker.tsx:218
 msgid "Search models"
 msgstr "मॉडल खोजें"
 
-#: src/pages/ModelSettingsOverlay.tsx:95
-#: src/pages/ModelSettingsOverlay.tsx:101
+#: src/pages/ModelSettingsOverlay.tsx:80
+#: src/pages/ModelSettingsOverlay.tsx:86
 msgid "Search providers"
 msgstr "प्रोवाइडर्स खोजें"
 
@@ -3705,7 +3724,7 @@ msgstr "एक बॉट चुनें"
 
 #: src/components/ask/QuestionCard.tsx:205
 #: src/components/ask/QuestionCard.tsx:306
-#: src/components/DraftCard.tsx:328
+#: src/components/DraftCard.tsx:326
 #: src/pages/shell/composer.tsx:407
 msgid "Send"
 msgstr "भेजें"
@@ -3719,7 +3738,7 @@ msgid "Send reset link"
 msgstr "रीसेट लिंक भेजें"
 
 #: src/components/AskCard.tsx:304
-#: src/components/DraftCard.tsx:328
+#: src/components/DraftCard.tsx:326
 msgid "Sending…"
 msgstr "भेजा जा रहा है…"
 
@@ -3887,8 +3906,8 @@ msgstr "Slack संदेश"
 msgid "Software update"
 msgstr "सॉफ़्टवेयर अपडेट"
 
-#: src/pages/bot-page/model-options.ts:29
-#: src/pages/bot-page/SettingDetails.tsx:116
+#: src/pages/bot-page/model-options.ts:30
+#: src/pages/bot-page/SettingDetails.tsx:120
 msgid "Space default"
 msgstr "स्पेस डिफ़ॉल्ट"
 
@@ -3964,8 +3983,8 @@ msgstr "एन्क्रिप्टेड रूप में संग्र
 msgid "Stored securely. Never shown here."
 msgstr "सुरक्षित रूप से संग्रहीत। यहां कभी नहीं दिखाया जाता।"
 
-#: src/components/DraftCard.tsx:380
-#: src/components/DraftCard.tsx:387
+#: src/components/DraftCard.tsx:375
+#: src/components/DraftCard.tsx:382
 msgid "Subject"
 msgstr ""
 
@@ -3980,6 +3999,7 @@ msgid "Supports images"
 msgstr "छवियों का समर्थन"
 
 #: src/pages/model-settings/model-detail.tsx:169
+#: src/pages/model-settings/routing-settings.tsx:116
 #: src/pages/Onboarding.tsx:497
 msgid "Supports thinking"
 msgstr "सोचने की क्षमता का समर्थन करता है"
@@ -4049,7 +4069,7 @@ msgstr "API वापस नहीं आया। इस पेज को र�
 msgid "The selected memory provider is not available in this build."
 msgstr "चयनित मेमोरी प्रोवाइडर इस बिल्ड में उपलब्ध नहीं है।"
 
-#: src/pages/bot-page/SettingDetails.tsx:137
+#: src/pages/bot-page/SettingDetails.tsx:139
 msgid "Thinking"
 msgstr "सोच रहा है"
 
@@ -4107,7 +4127,7 @@ msgstr "दिन का समय"
 msgid "Title"
 msgstr "शीर्षक"
 
-#: src/components/DraftCard.tsx:256
+#: src/components/DraftCard.tsx:255
 msgid "To"
 msgstr ""
 
@@ -4141,7 +4161,7 @@ msgstr ""
 msgid "Treg token"
 msgstr "Treg टोकन"
 
-#: src/components/DraftCard.tsx:328
+#: src/components/DraftCard.tsx:326
 #: src/pages/Onboarding.tsx:685
 msgid "Try again"
 msgstr "फिर से कोशिश करें"
@@ -4158,7 +4178,7 @@ msgstr "असाइन नहीं किया गया"
 msgid "Unavailable"
 msgstr "अनुपलब्ध"
 
-#: src/components/DraftCard.tsx:229
+#: src/components/DraftCard.tsx:228
 msgid "Undo"
 msgstr ""
 
@@ -4276,8 +4296,8 @@ msgstr "पुष्टि करके जोड़ें"
 msgid "Verifying…"
 msgstr "पुष्टि की जा रही है…"
 
-#: src/pages/bot-page/SettingDetails.tsx:183
-#: src/pages/bot-page/SettingDetails.tsx:187
+#: src/pages/bot-page/SettingDetails.tsx:185
+#: src/pages/bot-page/SettingDetails.tsx:189
 #: src/pages/SettingsOverlay.tsx:98
 #: src/pages/shell/thread-header.tsx:139
 #: src/pages/shell/thread-header.tsx:140
@@ -4286,7 +4306,7 @@ msgstr "पुष्टि की जा रही है…"
 msgid "Voice"
 msgstr "आवाज़"
 
-#: src/pages/bot-page/SettingDetails.tsx:179
+#: src/pages/bot-page/SettingDetails.tsx:181
 #: src/pages/bot-page/SettingsTab.tsx:36
 msgid "Voice and replies"
 msgstr "आवाज़ और जवाब"
@@ -4345,7 +4365,7 @@ msgstr "आप कौन-सा परिणाम दिखाकर बता�
 msgid "What should this routine do each time it runs?"
 msgstr "हर बार चलने पर यह रूटीन क्या करे?"
 
-#: src/pages/bot-page/SettingDetails.tsx:61
+#: src/pages/bot-page/SettingDetails.tsx:63
 #: src/pages/shell/bot-panel.tsx:137
 msgid "What this bot is for"
 msgstr "यह बॉट किस लिए है"
@@ -4395,7 +4415,7 @@ msgstr "हर साल {date} को {time} बजे"
 msgid "Yesterday"
 msgstr "कल"
 
-#: src/components/DraftCard.tsx:54
+#: src/components/DraftCard.tsx:53
 #: src/pages/Shell.tsx:135
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"

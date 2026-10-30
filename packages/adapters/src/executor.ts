@@ -165,7 +165,6 @@ import {
   spawnBotToolArgs,
   toolRequiresApproval,
   toolRequiresExplicitApproval,
-  UNKNOWN_MODEL_MESSAGE,
   unattendedTriggerToolRequiresApproval,
   validateBotNameText,
   validateSpawnBotArgs,
@@ -355,11 +354,7 @@ import type { MemoryProviderResolver } from "./memory-provider-factory.js";
 import { selectMemoryTools } from "./memory-tools.js";
 import { catalogContextWindow, catalogModel } from "./model-catalog.js";
 import { classifyModelRoute } from "./model-route-classification.js";
-import {
-  isCatalogModelChoice,
-  routeModel,
-  validateConnectedModelChoice,
-} from "./model-selection.js";
+import { routeModel } from "./model-selection.js";
 import {
   filterImageReturningComputerTools,
   IMAGE_RETURNING_COMPUTER_TOOLS,
@@ -1205,7 +1200,7 @@ export function buildSystemInstructions(parts: SystemInstructionParts): string {
       : undefined,
     parts.subagentsExposed === false
       ? undefined
-      : `${tool("run_subagent")} is a helper for parallel work. It is not a bot, has no thread, and does not show in the list. It works inside this turn, or with background after it, and then its report wakes you to tell the user.`,
+      : `${tool("run_subagent")} is a helper for parallel work. It is not a bot, has no thread, and does not show in the list. It works inside this turn, or with background after it, and then its report wakes you to tell the user. Choose fast, everyday or complex from the brief's difficulty.`,
     parts.botDirectory
       ? BOT_DELEGATION_GUIDANCE.replaceAll("ask_user", tool("ask_user"))
       : undefined,
@@ -1281,54 +1276,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
       runId,
     ).catch((error) => getLogger().error("skill lines", error));
   const browser = deps.browser ?? createBrowserProvider(undefined, { sandbox: deps.sandbox });
-  const resolveConnectedModel = async (
-    scope: { userId: string; spaceId: string },
-    provider: string,
-    modelId: string,
-    registerSecrets?: (values: string[]) => void,
-  ): Promise<AgentRunRequest["model"]> => {
-    const validationError = await validateConnectedModelChoice(
-      deps.prisma,
-      scope,
-      provider,
-      modelId,
-    );
-    if (validationError) throw new Error(validationError);
-    const credential = await findModelCredential(deps.prisma, scope, provider, modelId);
-    if (!credential) throw new Error(MODEL_PROVIDER_NOT_CONNECTED_MESSAGE);
-    // Free-form selections must keep the preference that owns this modelId. A
-    // intervening delete/change can make findModelCredential fall back to another
-    // same-provider credential; reject that mismatch instead of mixing baseUrl.
-    if (!isCatalogModelChoice(provider, modelId) && credential.defaultModel !== modelId) {
-      throw new Error(UNKNOWN_MODEL_MESSAGE);
-    }
-    const resolved = await resolveModelKey(
-      deps,
-      scope.userId,
-      scope.spaceId,
-      credential,
-      provider,
-      modelId,
-      registerSecrets,
-    );
-    return {
-      provider,
-      id: modelId,
-      apiKey: resolved.oauth ? undefined : resolved.apiKey,
-      baseUrl: resolved.baseUrl,
-      reasoning: resolved.reasoning,
-      maxTokens: resolved.maxTokens,
-      contextWindow: resolved.contextWindow,
-      acceptsImages: resolved.acceptsImages,
-      maxImagesPerPrompt: resolved.maxImagesPerPrompt,
-      thinkingLevel: resolved.thinkingLevel ?? null,
-      oauth: resolved.oauth
-        ? { credential: resolved.oauth, persist: resolved.persistOAuth }
-        : undefined,
-    };
-  };
   return {
-    resolveConnectedModel,
     async resolveModel(scope: {
       userId: string;
       spaceId: string;
@@ -2808,6 +2756,18 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 : `${exclusive} was busy, try again`,
             );
           }
+          await deps.sessionLog.append(tx, {
+            type: "run.started",
+            sessionId,
+            botId: bot.id,
+            runId: helperRun.id,
+            payload: {
+              trigger: { kind: "subagent", entryId: callEntryId },
+              model: call.model,
+              effort: call.model.thinkingLevel ?? null,
+              routing: call.modelDecision,
+            },
+          });
           return { callEntryId, sessionId, runId: helperRun.id, taskId: task.id };
         };
         const startHelper = async (call: SubagentCall) => {
@@ -2834,17 +2794,6 @@ export function createRunExecutor(deps: ExecutorDeps) {
           await afterToolAnnounced(call.callId);
           const helper = await deps.prisma.$transaction(async (tx) => {
             const opened = await openHelperRun(tx, call, false);
-            await deps.sessionLog.append(tx, {
-              type: "run.started",
-              sessionId: opened.sessionId,
-              botId: bot.id,
-              runId: opened.runId,
-              payload: {
-                trigger: { kind: "subagent", entryId: opened.callEntryId },
-                model: call.model,
-                effort: call.model.thinkingLevel ?? null,
-              },
-            });
             return {
               log: { sessionId: opened.sessionId, runId: opened.runId, botId: bot.id },
               taskId: opened.taskId,
@@ -6230,12 +6179,62 @@ export function createRunExecutor(deps: ExecutorDeps) {
               attempt: { id: attempt.id, fence },
               startSubagent,
               startHelper,
-              resolveModel: scripted
-                ? undefined
-                : (provider, modelId) =>
-                    resolveConnectedModel(run, provider, modelId, (values) =>
-                      runSecrets.push(...values),
-                    ),
+              resolveCategory: async (category) => {
+                const [rows, defaultCredential, settings] = await Promise.all([
+                  findModelCategories(deps.prisma, run),
+                  findDefaultModelCredential(deps.prisma, run),
+                  deps.prisma.deploymentSettings.findUnique({ where: { id: "default" } }),
+                ]);
+                const fallback = runtimeFallbackModel(deps.runtime);
+                const selected = routeModel({
+                  bot: null,
+                  overrideCredential: null,
+                  defaultCredential,
+                  settings,
+                  deployment: deps.deploymentModelKey
+                    ? resolveDeploymentModel()
+                    : fallback
+                      ? { provider: fallback.provider, model: fallback.id }
+                      : null,
+                  routing: { mode: "category", category },
+                  categories: rows.map((row) => ({
+                    category: ModelCategorySchema.parse(row.category),
+                    modelId: row.modelId,
+                    thinkingLevel: ThinkingLevelSchema.nullable().parse(row.thinkingLevel),
+                    credential: { ...row.credential, defaultModel: row.modelId, isDefault: false },
+                  })),
+                });
+                if (!selected) throw new Error(MISSING_MODEL_MESSAGE);
+                const { provider, modelId, thinkingLevel } = selected.decision;
+                const resolved = await resolveModelKey(
+                  deps,
+                  run.userId,
+                  run.spaceId,
+                  selected.credential,
+                  provider,
+                  modelId,
+                  (values) => runSecrets.push(...values),
+                );
+                const effort = thinkingLevel ?? resolved.thinkingLevel ?? null;
+                return {
+                  model: {
+                    provider,
+                    id: modelId,
+                    baseUrl: resolved.baseUrl,
+                    reasoning: resolved.reasoning,
+                    maxTokens: resolved.maxTokens,
+                    contextWindow: resolved.contextWindow,
+                    acceptsImages: resolved.acceptsImages,
+                    maxImagesPerPrompt: resolved.maxImagesPerPrompt,
+                    apiKey: resolved.oauth ? undefined : resolved.apiKey,
+                    thinkingLevel: effort,
+                    oauth: resolved.oauth
+                      ? { credential: resolved.oauth, persist: resolved.persistOAuth }
+                      : undefined,
+                  },
+                  modelDecision: { ...selected.decision, thinkingLevel: effort },
+                };
+              },
               onToolCompleted: (completion) =>
                 appendToolCompletionAudit(
                   deps,

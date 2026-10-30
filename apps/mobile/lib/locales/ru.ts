@@ -1,4 +1,7 @@
 export const RU_MESSAGES: Record<string, string> = {
+  Fast: "Быстро",
+  Everyday: "Повседневно",
+  Complex: "Сложно",
   "Private Computer": "Личный компьютер",
   Bots: "Боты",
   "Busy. Try again when idle.": "Занят. Повторите, когда освободится.",

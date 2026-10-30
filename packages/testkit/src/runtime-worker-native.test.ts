@@ -108,6 +108,14 @@ async function nativeRun(
         history: [],
         tools: WORKER_NATIVE_TOOLS.filter((tool) => ["read", "bash"].includes(tool.name)),
         model: { ...server.model, ...modelPatch },
+        resolveCategory: async () => ({
+          model: { ...server.model, ...modelPatch },
+          modelDecision: {
+            mode: "category",
+            provider: server.model.provider,
+            modelId: server.model.id,
+          },
+        }),
         attempt: { id: "run_native-attempt", fence: 1 },
         ...overrides,
       },
@@ -274,12 +282,12 @@ describe("the pi-native harness through the controller", () => {
             type: "tool",
             id: "one",
             name: "mcp__rakazo__run_subagent",
-            arguments: { name: "slow", task: "slow-task" },
+            arguments: { category: "everyday", name: "slow", task: "slow-task" },
             siblings: [
               {
                 id: "two",
                 name: "mcp__rakazo__run_subagent",
-                arguments: { name: "peer", task: "peer-task" },
+                arguments: { category: "everyday", name: "peer", task: "peer-task" },
               },
             ],
           },
@@ -684,7 +692,7 @@ describe("the pi-native harness through the controller", () => {
               type: "tool",
               id: "delegate",
               name: "mcp__rakazo__run_subagent",
-              arguments: { name: "scout", task: "Find the child note." },
+              arguments: { category: "everyday", name: "scout", task: "Find the child note." },
             },
           },
           {
@@ -854,12 +862,12 @@ describe("the pi-native harness through the controller", () => {
               type: "tool",
               id: "slow",
               name: "mcp__rakazo__run_subagent",
-              arguments: { name: "slow", task: "slow-task" },
+              arguments: { category: "everyday", name: "slow", task: "slow-task" },
               siblings: [
                 {
                   id: "peer",
                   name: "mcp__rakazo__run_subagent",
-                  arguments: { name: "peer", task: "peer-task" },
+                  arguments: { category: "everyday", name: "peer", task: "peer-task" },
                 },
               ],
             },

@@ -1,21 +1,16 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChevronDown } from "lucide-react";
-import {
-  type KeyboardEvent as ReactKeyboardEvent,
-  type RefObject,
-  useEffect,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ModelCatalogEntry } from "../../lib/model-auth";
 
 export function ModelPicker({
   options,
   value,
   onChange,
+  ariaLabel,
 }: {
+  ariaLabel?: string;
   options: ModelCatalogEntry[];
   value: string;
   onChange: (value: string) => void;
@@ -200,7 +195,7 @@ export function ModelPicker({
         ref={triggerRef}
         type="button"
         role="combobox"
-        aria-label={t`Model`}
+        aria-label={ariaLabel ?? t`Model`}
         aria-controls={listboxId}
         aria-expanded={open}
         aria-haspopup="listbox"

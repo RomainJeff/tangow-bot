@@ -1,4 +1,7 @@
 export const ZH_MESSAGES: Record<string, string> = {
+  Fast: "快速",
+  Everyday: "日常",
+  Complex: "复杂",
   "Private Computer": "专用电脑",
   Bots: "机器人",
   "Busy. Try again when idle.": "正在使用。请在空闲时重试。",

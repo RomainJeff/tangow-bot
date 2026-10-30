@@ -193,6 +193,15 @@ describe("a scripted helper turn", () => {
       history: [],
       tools: [{ name: "message_user", description: "", inputSchema: {} }],
       model: { provider: "scripted", id: "scripted" },
+      resolveCategory: async () => ({
+        model: { provider: "scripted", id: "everyday-model" },
+        modelDecision: {
+          mode: "category",
+          category: "everyday",
+          provider: "scripted",
+          modelId: "everyday-model",
+        },
+      }),
       startSubagent: async (call) => {
         writes.push({ start: call });
         return {
@@ -211,8 +220,14 @@ describe("a scripted helper turn", () => {
           callId: "run-helper:run_subagent:0",
           name: "helper",
           task: "delegate to a helper",
-          args: { name: "helper", task: "delegate to a helper" },
-          model: { provider: "scripted", id: "scripted" },
+          args: { name: "helper", category: "everyday", task: "delegate to a helper" },
+          model: { provider: "scripted", id: "everyday-model" },
+          modelDecision: {
+            mode: "category",
+            category: "everyday",
+            provider: "scripted",
+            modelId: "everyday-model",
+          },
         },
       },
       { text: "it found: delegate to a helper" },
@@ -228,7 +243,7 @@ describe("a scripted helper turn", () => {
       {
         type: "tool",
         name: "run_subagent",
-        args: { name: "helper", task: "delegate to a helper" },
+        args: { name: "helper", category: "everyday", task: "delegate to a helper" },
         executionId: "run-helper:run_subagent:0",
       },
       {

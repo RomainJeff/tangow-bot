@@ -74,7 +74,12 @@ it("resumes a background helper in its own native session with its parent's full
           type: "tool",
           id: "spawn",
           name: "run_subagent",
-          arguments: { name: "Scout", task: "Choose a city.", background: true },
+          arguments: {
+            category: "everyday",
+            name: "Scout",
+            task: "Choose a city.",
+            background: true,
+          },
         },
       },
       {
