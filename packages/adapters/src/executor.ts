@@ -66,6 +66,7 @@ import {
   pausedOutput,
   RunTrigger,
   SessionId,
+  ThinkingLevelSchema,
 } from "@rakazo/contracts";
 import type {
   ActionApprovalRule,
@@ -155,6 +156,7 @@ import {
   routineConfirmationBlock,
   runStartedByUser,
   SHAPES,
+  STORED_MODEL_UNAVAILABLE_MESSAGE,
   sandboxCommandTimeoutMs,
   skillsReferencedInPrompt,
   skillWriteRefusal,
@@ -1874,14 +1876,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const agentEnvironment = decryptAgentEnvironment(agentSecretRows, deps.secretStore);
         runSecrets.push(...Object.values(agentEnvironment));
         const agentEnvironmentInstruction = formatAgentEnvironmentInstruction(agentEnvironment);
-        // A background helper runs the model its call chose, as a bot override would be.
-        const modelOwner =
-          backgroundHelper && run.modelProvider && run.modelId
-            ? { ...bot, modelProvider: run.modelProvider, modelId: run.modelId }
-            : bot;
-        const hasModelOverride = Boolean(modelOwner.modelProvider && modelOwner.modelId);
+        const storedModel =
+          run.modelProvider && run.modelId
+            ? { provider: run.modelProvider, id: run.modelId }
+            : null;
+        const modelOwner = storedModel
+          ? { modelProvider: storedModel.provider, modelId: storedModel.id }
+          : bot;
         const overrideCredential =
-          hasModelOverride && modelOwner.modelProvider
+          modelOwner.modelProvider && modelOwner.modelId
             ? await findModelCredential(
                 deps.prisma,
                 run,
@@ -2100,17 +2103,36 @@ export function createRunExecutor(deps: ExecutorDeps) {
         }
         const runDeployment = deps.deploymentModelKey ? resolveDeploymentModel() : null;
         const runtimeFallback = runtimeFallbackModel(deps.runtime);
-        const selected = selectConfiguredModel({
-          bot: modelOwner,
-          overrideCredential,
-          defaultCredential,
-          settings,
-          deployment: runDeployment,
-        });
+        const selected = storedModel
+          ? {
+              ...storedModel,
+              credential: overrideCredential,
+              thinkingLevel: ThinkingLevelSchema.nullable().parse(run.thinkingLevel ?? null),
+            }
+          : selectConfiguredModel({
+              bot,
+              overrideCredential,
+              defaultCredential,
+              settings,
+              deployment: runDeployment,
+            });
         const { credential, thinkingLevel } = selected;
         const runModelProvider = selected.provider ?? runtimeFallback?.provider;
         const runModelId = selected.id ?? runtimeFallback?.id;
-        if (!runModelProvider || !runModelId) {
+        const missingStoredConnection =
+          storedModel &&
+          (overrideCredential
+            ? !(await deps.prisma.secret.findFirst({
+                where: { id: overrideCredential.secretId, userId: run.userId, spaceId: null },
+                select: { id: true },
+              }))
+            : !deploymentKeyFor(deps, storedModel.provider) &&
+              storedModel.provider !== "scripted" &&
+              storedModel.provider !== "local");
+        const modelError = missingStoredConnection
+          ? STORED_MODEL_UNAVAILABLE_MESSAGE
+          : MISSING_MODEL_MESSAGE;
+        if (missingStoredConnection || !runModelProvider || !runModelId) {
           const failed = await deps.events.finalizeRun({
             spaceId: run.spaceId,
             threadId: thread.id,
@@ -2121,7 +2143,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             leaseOwner: workerId,
             leaseFence: fence,
             outcome: "failed",
-            error: MISSING_MODEL_MESSAGE,
+            error: modelError,
           });
           if (!failed) return;
           await settleStrandedCards();
@@ -2135,7 +2157,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               deps,
               { ...run, sourceMessageId: run.sourceMessageId },
               { id: bot.id, name: bot.name },
-              `Could not complete the delegated request: ${MISSING_MODEL_MESSAGE}`,
+              `Could not complete the delegated request: ${modelError}`,
               "status",
             ).catch((error) => getLogger().error("bot message failure return", error));
           }
@@ -2157,7 +2179,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               {
                 kind: "failure",
                 title: `${bot.name} failed`,
-                body: MISSING_MODEL_MESSAGE,
+                body: modelError,
                 botId: bot.id,
                 threadId: thread.id,
               },
@@ -2186,14 +2208,28 @@ export function createRunExecutor(deps: ExecutorDeps) {
           contextWindow: resolved.contextWindow,
           acceptsImages: resolved.acceptsImages,
           maxImagesPerPrompt: resolved.maxImagesPerPrompt,
-          thinkingLevel: thinkingLevel ?? resolved.thinkingLevel ?? null,
+          thinkingLevel: storedModel
+            ? thinkingLevel
+            : (thinkingLevel ?? resolved.thinkingLevel ?? null),
           oauth: resolved.oauth
             ? { credential: resolved.oauth, persist: resolved.persistOAuth }
             : undefined,
         };
         await deps.prisma.run.updateMany({
-          where: { id: runId, status: "running", leaseOwner: workerId, leaseFence: fence },
-          data: { modelProvider: runModelProvider, modelId: runModelId },
+          where: {
+            id: runId,
+            status: "running",
+            leaseOwner: workerId,
+            leaseFence: fence,
+            modelProvider: null,
+            modelId: null,
+            thinkingLevel: null,
+          },
+          data: {
+            modelProvider: runModelProvider,
+            modelId: runModelId,
+            thinkingLevel: runtimeModel.thinkingLevel,
+          },
         });
         const storedComputer = bot.computer;
         const computerMode = storedComputer ? parseComputerMode(storedComputer.scope) : null;
@@ -2624,7 +2660,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           return result;
         };
         const writeRunEntry = (entry: ToolLogEntry) => logEntry({ ...runLog, ...entry });
-        const effort = thinkingLevel ?? resolved.thinkingLevel ?? null;
+        const effort = runtimeModel.thinkingLevel ?? null;
         /**
          * The call, then the helper's session and run under it. A sync helper runs at once in
          * this attempt; a background one waits for an attempt of its own.
@@ -2676,6 +2712,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               parentRunId: runId,
               modelProvider: call.model.provider,
               modelId: call.model.id,
+              thinkingLevel: call.model.thinkingLevel ?? null,
               helper: call.profile?.name ?? null,
               exclusive: exclusive ?? null,
               startedAt: background ? null : new Date(),
@@ -2728,7 +2765,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               payload: {
                 trigger: { kind: "subagent", entryId: opened.callEntryId },
                 model: call.model,
-                effort,
+                effort: call.model.thinkingLevel ?? null,
               },
             });
             return {

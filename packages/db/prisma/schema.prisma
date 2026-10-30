@@ -557,6 +557,7 @@ model Run {
   trigger              String
   modelProvider        String?
   modelId              String?
+  thinkingLevel        String?
   error                String?
   leaseOwner           String?
   leaseFence           Int              @default(0)
