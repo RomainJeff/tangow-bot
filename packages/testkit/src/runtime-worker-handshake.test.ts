@@ -118,6 +118,10 @@ it("a recorded helper transcript cannot satisfy root completion", async () => {
       ],
       model: { provider: "openai-compatible", id: "unused", apiKey: "fake" },
       attempt: { id: "attempt", fence: 1 },
+      resolveCategory: async () => ({
+        model: { provider: "openai-compatible", id: "unused", apiKey: "fake" },
+        modelDecision: { mode: "category", provider: "openai-compatible", modelId: "unused" },
+      }),
       startSubagent: async () => ({
         executeTool: async () => "Done",
         text: async () => undefined,

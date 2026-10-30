@@ -27,7 +27,7 @@ describe.skipIf(!databaseAvailable)("a draft from a background helper", () => {
           type: "tool",
           id: "spawn",
           name: "run_subagent",
-          arguments: { name: "Mailer", task: "Mail Anna.", background: true },
+          arguments: { category: "everyday", name: "Mailer", task: "Mail Anna.", background: true },
         }),
         step({
           type: "tool",

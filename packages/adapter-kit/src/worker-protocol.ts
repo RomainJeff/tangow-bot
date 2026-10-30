@@ -1,4 +1,4 @@
-import { AskQuestion, VolumeAccess, WorkerState } from "@rakazo/contracts";
+import { AskQuestion, ModelCategorySchema, VolumeAccess, WorkerState } from "@rakazo/contracts";
 import { z } from "zod";
 import {
   RunReceiptSchema,
@@ -256,7 +256,7 @@ export const GuestBodySchema = z.discriminatedUnion("type", [
     name: z.string(),
     task: z.string(),
     args: JsonRecord,
-    model: z.strictObject({ provider: z.string(), id: z.string() }),
+    category: ModelCategorySchema,
   }),
   z.strictObject({ type: z.literal("subagent.text"), agent: Id, text: z.string() }),
   z.strictObject({

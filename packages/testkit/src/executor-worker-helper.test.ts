@@ -155,7 +155,7 @@ const delegate = {
     type: "tool",
     id: "helper",
     name: "run_subagent",
-    arguments: { name: "Checker", task: "Check it." },
+    arguments: { category: "everyday", name: "Checker", task: "Check it." },
   },
 } as const;
 
@@ -289,7 +289,7 @@ it("runs native Pi helpers in separate persisted sessions and resumes the parent
           type: "tool",
           id: "helper",
           name: "mcp__rakazo__run_subagent",
-          arguments: { name: "Planner", task: "Choose a city" },
+          arguments: { category: "everyday", name: "Planner", task: "Choose a city" },
         },
       },
       {

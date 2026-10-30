@@ -2,6 +2,7 @@ import type { AgentRunRequest, ConnectorTool } from "@rakazo/adapter-kit";
 import {
   BotSecretDestination,
   BotSecretName,
+  ModelCategorySchema,
   SecretAskPurpose,
   SecretHttpRequest,
   SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH,
@@ -32,7 +33,10 @@ export const isBackgroundHelperTool = (name: string) =>
   isHelperTool(name) && !["ask_user", "request_takeover", "request_secret"].includes(name);
 
 export function helperCallOf(args: Record<string, unknown>) {
+  const category = ModelCategorySchema.safeParse(args.category);
   return {
+    category: category.success ? category.data : ("everyday" as const),
+    fallback: category.success ? undefined : ("legacy_call" as const),
     name:
       String(args.name ?? "helper")
         .trim()
@@ -40,8 +44,6 @@ export function helperCallOf(args: Record<string, unknown>) {
     task: String(args.task ?? "").trim() || "Complete the delegated task.",
     instructions: args.instructions ? String(args.instructions).trim() : "",
     helper: String(args.helper ?? "").trim(),
-    provider: String(args.model_provider ?? "").trim(),
-    modelId: String(args.model_id ?? "").trim(),
     background: args.background === true,
   };
 }
@@ -58,19 +60,19 @@ export function helperProfileOf(
   throw new Error(`Unknown helper "${call.helper}". Available helpers: ${names}`);
 }
 
-/** The call's model, then its profile's, then the parent's. */
+/** Resolve the brief's category independently of the parent model. */
 export async function helperModel(
-  request: Pick<AgentRunRequest, "model" | "resolveModel">,
+  request: Pick<AgentRunRequest, "resolveCategory">,
   call: ReturnType<typeof helperCallOf>,
-  profile?: HelperProfile,
-): Promise<AgentRunRequest["model"]> {
-  if (Boolean(call.provider) !== Boolean(call.modelId)) {
-    throw new Error("model_provider and model_id must both be set");
-  }
-  const choice = call.provider ? { provider: call.provider, id: call.modelId } : profile?.model;
-  if (!choice) return request.model;
-  if (!request.resolveModel) throw new Error("Per-call subagent model selection is unavailable");
-  return request.resolveModel(choice.provider, choice.id);
+) {
+  if (!request.resolveCategory) throw new Error("Subagent category selection is unavailable");
+  const selected = await request.resolveCategory(call.category);
+  return {
+    ...selected,
+    modelDecision: call.fallback
+      ? { ...selected.modelDecision, fallback: call.fallback }
+      : selected.modelDecision,
+  };
 }
 
 export { HELPER_STOPPED_FOR_PAUSE } from "@rakazo/contracts";
@@ -847,7 +849,7 @@ that merely narrate internal operations.`,
   {
     name: "run_subagent",
     description:
-      "Run a helper and get its result in this turn. With background, it returns a helperId at once and keeps working after this turn ends; its report wakes you when it is done. It is not a bot: no list entry, no thread, no computer of its own. Never call this because the user asked to create a bot — that is spawn_bot, and spawn_bot alone.",
+      "Run a helper and get its result in this turn. Choose fast, everyday or complex from the brief's difficulty. With background, it returns a helperId at once and keeps working after this turn ends; its report wakes you when it is done. It is not a bot: no list entry, no thread, no computer of its own. Never call this because the user asked to create a bot — that is spawn_bot, and spawn_bot alone.",
     inputSchema: {
       type: "object",
       properties: {
@@ -860,13 +862,10 @@ that merely narrate internal operations.`,
           type: "string",
           description: "Optional extra system instructions for the helper.",
         },
-        model_provider: {
+        category: {
           type: "string",
-          description: "Optional connected model provider. Set together with model_id.",
-        },
-        model_id: {
-          type: "string",
-          description: "Optional connected model ID. Set together with model_provider.",
+          enum: ["fast", "everyday", "complex"],
+          description: "Choose fast, everyday or complex from the brief's difficulty.",
         },
         background: {
           type: "boolean",
@@ -874,7 +873,7 @@ that merely narrate internal operations.`,
             "Keep working after this turn, for a long task. Tell the user it started; its report comes back to you. A helper profile's forced execution mode overrides this flag.",
         },
       },
-      required: ["name", "task"],
+      required: ["name", "task", "category"],
     },
   },
   {
