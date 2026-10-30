@@ -417,8 +417,9 @@ test("in debug mode a run's dialog shows its facts and copies a diagnostic witho
     .click();
 
   const details = page.getByTestId("session-view").getByTestId("run-details");
-  await expect(details).toContainText("anthropic/claude-sonnet");
-  await expect(details).toContainText("1,840 tokens in · 96 out");
+  await expect(details).toContainText("anthropic/claude-sonnet · failed");
+  await details.getByTestId("run-details-toggle").click();
+  await expect(details).toContainText("1,840 in · 96 out");
   await expect(details).toContainText("run-52");
   await captureScreenshot(page, testInfo, "run-dialog-debug");
 

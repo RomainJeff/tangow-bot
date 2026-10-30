@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
+- On web and desktop, debug mode folds a run's details into one line that opens on everything the run recorded.
 - On web, desktop and mobile, approval rules, automatic review and protected webhook runs can use the configured Decision Model to assess connected-app and MCP calls without a read-only hint, while keeping the existing name-based fallback.
 
 #### Fixed
