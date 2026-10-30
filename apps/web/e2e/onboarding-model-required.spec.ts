@@ -48,9 +48,7 @@ for (const unavailable of ["empty", "failed"] as const) {
       await route.fulfill({ response, json: { json: { ...body.json, needsModel: true } } });
     });
     await page.route("**/rpc/models/list", (route) =>
-      unavailable === "failed"
-        ? route.abort()
-        : route.fulfill({ json: { json: { models: [], auto: false, categories: [] } } }),
+      unavailable === "failed" ? route.abort() : route.fulfill({ json: { json: [] } }),
     );
     const stamp = Date.now();
     await signup(page, `catalog-${unavailable}-${stamp}@rakazo.test`, "password12", "Model setup");

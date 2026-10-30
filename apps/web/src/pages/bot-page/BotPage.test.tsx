@@ -73,7 +73,7 @@ beforeEach(() => {
   }));
   api.bots.activity.mockResolvedValue({ items: [], nextCursor: null });
   api.models.credentials.mockResolvedValue([]);
-  api.models.list.mockResolvedValue({ models: [], auto: false, categories: [] });
+  api.models.list.mockResolvedValue([]);
   api.me.mockResolvedValue(null);
   api.voice.voices.mockResolvedValue([]);
   updateBot = vi.fn(async (_botId: string, patch: Partial<Bot>) => ({ ...BOT, ...patch }));

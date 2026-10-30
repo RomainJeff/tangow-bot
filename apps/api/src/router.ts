@@ -877,7 +877,8 @@ export function createRouter(deps: RouterDeps) {
       }),
     },
     models: {
-      list: authed.models.list.handler(async ({ context }) => {
+      list: authed.models.list.handler(async () => [...listPiCatalog(), scriptedCatalogEntry]),
+      routing: authed.models.routing.handler(async ({ context }) => {
         const [member, assignments] = await Promise.all([
           deps.prisma.spaceMember.findUniqueOrThrow({
             where: {
@@ -888,7 +889,6 @@ export function createRouter(deps: RouterDeps) {
           findModelCategories(deps.prisma, context.actor),
         ]);
         return {
-          models: [...listPiCatalog(), scriptedCatalogEntry],
           auto: member.modelAuto,
           categories: assignments.map((assignment) => ({
             category: ModelCategorySchema.parse(assignment.category),

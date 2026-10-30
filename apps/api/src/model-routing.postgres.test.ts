@@ -117,7 +117,7 @@ describePostgres("model category settings (PostgreSQL)", () => {
   }
 
   it("upserts category settings and exposes Auto only in the active member's Space", async () => {
-    expect((await rpc("list")).body.json).toMatchObject({ auto: false, categories: [] });
+    expect((await rpc("routing")).body.json).toMatchObject({ auto: false, categories: [] });
     expect(
       (
         await rpc("setCategory", {
@@ -139,19 +139,18 @@ describePostgres("model category settings (PostgreSQL)", () => {
       ).status,
     ).toBe(200);
     expect((await rpc("setAuto", { enabled: true })).status).toBe(200);
-    const listed = (await rpc("list")).body.json;
+    const listed = (await rpc("routing")).body.json;
     expect(listed).toMatchObject({
       auto: true,
       categories: [
         { category: "fast", provider: "scripted", modelId: "scripted", thinkingLevel: "high" },
       ],
     });
-    expect(listed.models).toContainEqual(expect.objectContaining({ provider: "scripted" }));
     expect(
-      (await rpc("list", undefined, { ...actor, spaceId: otherSpaceId })).body.json,
+      (await rpc("routing", undefined, { ...actor, spaceId: otherSpaceId })).body.json,
     ).toMatchObject({ auto: false, categories: [] });
     expect(
-      (await rpc("list", undefined, { ...actor, userId: otherUserId })).body.json,
+      (await rpc("routing", undefined, { ...actor, userId: otherUserId })).body.json,
     ).toMatchObject({ auto: false, categories: [] });
     expect(await findModelCategories(prisma, actor)).toMatchObject([{ credentialId }]);
     expect(
@@ -163,12 +162,12 @@ describePostgres("model category settings (PostgreSQL)", () => {
       (await rpc("setCategory", { category: "fast", provider: "scripted", modelId: "scripted" }))
         .status,
     ).toBe(200);
-    expect((await rpc("list")).body.json.categories).toEqual([
+    expect((await rpc("routing")).body.json.categories).toEqual([
       { category: "fast", provider: "scripted", modelId: "scripted", thinkingLevel: null },
     ]);
     expect((await rpc("clearCategory", { category: "fast" })).status).toBe(200);
     expect((await rpc("setAuto", { enabled: false })).status).toBe(200);
-    expect((await rpc("list")).body.json).toMatchObject({ auto: false, categories: [] });
+    expect((await rpc("routing")).body.json).toMatchObject({ auto: false, categories: [] });
   });
 
   it("rejects another user's connection and unknown models without saving an assignment", async () => {
@@ -217,6 +216,6 @@ describePostgres("model category settings (PostgreSQL)", () => {
     });
     expect(await findModelCategories(prisma, { ...actor, spaceId: otherSpaceId })).toEqual([]);
     await prisma.userModelCredential.delete({ where: { id: credentialId } });
-    expect((await rpc("list")).body.json.categories).toEqual([]);
+    expect((await rpc("routing")).body.json.categories).toEqual([]);
   });
 });

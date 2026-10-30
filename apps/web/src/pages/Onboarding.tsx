@@ -143,10 +143,7 @@ export function OnboardingPage() {
   useEffect(() => {
     void Promise.all([
       rpc.me(),
-      rpc.models
-        .list()
-        .then((result) => result.models)
-        .catch(() => []),
+      rpc.models.list().catch(() => []),
       rpc.integrationSetup.get().catch(() => null),
     ])
       .then(([me, models, integrations]) => {

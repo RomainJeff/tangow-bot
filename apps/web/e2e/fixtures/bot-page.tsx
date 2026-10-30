@@ -356,27 +356,23 @@ const READS: Record<string, unknown> = {
       thinkingLevel: "medium",
     },
   ],
-  "models/list": {
-    auto: false,
-    categories: [],
-    models: [
-      {
-        provider: "anthropic",
-        providerName: "Anthropic",
-        id: "claude-sonnet",
-        label: "Claude Sonnet",
-        billing: "api",
-        thinkingLevels: ["low", "medium", "high"],
-      },
-      {
-        provider: "anthropic",
-        providerName: "Anthropic",
-        id: "claude-haiku",
-        label: "Claude Haiku",
-        billing: "api",
-      },
-    ],
-  },
+  "models/list": [
+    {
+      provider: "anthropic",
+      providerName: "Anthropic",
+      id: "claude-sonnet",
+      label: "Claude Sonnet",
+      billing: "api",
+      thinkingLevels: ["low", "medium", "high"],
+    },
+    {
+      provider: "anthropic",
+      providerName: "Anthropic",
+      id: "claude-haiku",
+      label: "Claude Haiku",
+      billing: "api",
+    },
+  ],
   me: {
     userId: "user-1",
     email: "person@example.test",

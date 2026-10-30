@@ -101,7 +101,7 @@ export default function Models() {
     setError(null);
     const [nextMe, nextCatalog, nextCredentials] = await Promise.all([
       rpc<MobileMe>("me"),
-      rpc<{ models: MobileModel[] }>("models/list").then((result) => result.models),
+      rpc<MobileModel[]>("models/list"),
       rpc<MobileModelCredential[]>("models/credentials"),
     ]);
     const nextProvider =

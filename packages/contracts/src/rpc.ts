@@ -227,12 +227,9 @@ export const appContract = {
     apply: oc.input(ServerUpdateRequestSchema).output(ServerUpdateRunSchema),
   },
   models: {
-    list: oc.output(
-      z.object({
-        models: z.array(ModelCatalogEntrySchema),
-        auto: z.boolean(),
-        categories: z.array(ModelCategoryAssignmentSchema),
-      }),
+    list: oc.output(z.array(ModelCatalogEntrySchema)),
+    routing: oc.output(
+      z.object({ auto: z.boolean(), categories: z.array(ModelCategoryAssignmentSchema) }),
     ),
     credentials: oc.output(z.array(ModelCredentialSchema)),
     connect: oc.input(ModelConnectInputSchema).output(ModelCredentialSchema),
