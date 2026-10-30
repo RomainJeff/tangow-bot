@@ -1,5 +1,6 @@
-import type { ConnectorProvider } from "@rakazo/adapter-kit";
-import { PostgresSessionLog } from "@rakazo/adapters";
+import type { AgentRunRequest, ConnectorProvider } from "@rakazo/adapter-kit";
+import { AgentRuntimeUnavailableError } from "@rakazo/adapter-kit";
+import { PostgresSessionLog, ScriptedAgentRuntime } from "@rakazo/adapters";
 import { HARNESSES } from "@rakazo/agent-run-worker";
 import { createRepos } from "@rakazo/db";
 import { afterEach, expect, it, vi } from "vitest";
@@ -30,7 +31,7 @@ const spawn: ModelEmulatorStep = {
     type: "tool",
     id: "spawn",
     name: "run_subagent",
-    arguments: { name: "Scout", task: BRIEF, background: true },
+    arguments: { category: "everyday", name: "Scout", task: BRIEF, background: true },
   },
 };
 const text = (request: ModelEmulatorRequest) => JSON.stringify(request.messages);
@@ -325,12 +326,17 @@ it("wakes the bot for each of two reports, never losing or doubling one", async 
         type: "tool",
         id: "spawn-hotel",
         name: "run_subagent",
-        arguments: { name: "Hotels", task: BRIEF, background: true },
+        arguments: { category: "everyday", name: "Hotels", task: BRIEF, background: true },
         siblings: [
           {
             id: "spawn-train",
             name: "run_subagent",
-            arguments: { name: "Trains", task: "Find a train to Porto.", background: true },
+            arguments: {
+              category: "everyday",
+              name: "Trains",
+              task: "Find a train to Porto.",
+              background: true,
+            },
           },
         ],
       },
@@ -725,7 +731,13 @@ it("runs the helper on its call's whole instructions, and on the default brief w
         type: "tool",
         id: "spawn",
         name: "run_subagent",
-        arguments: { name: "Scout", task: "", instructions: rule, background: true },
+        arguments: {
+          category: "everyday",
+          name: "Scout",
+          task: "",
+          instructions: rule,
+          background: true,
+        },
       },
     },
     { expect() {}, response: say("I've started that.") },
@@ -1306,12 +1318,17 @@ it("stops one helper by id, then every other one with all, and no report follows
         type: "tool",
         id: "spawn-hotel",
         name: "run_subagent",
-        arguments: { name: "Hotels", task: BRIEF, background: true },
+        arguments: { category: "everyday", name: "Hotels", task: BRIEF, background: true },
         siblings: [
           {
             id: "spawn-train",
             name: "run_subagent",
-            arguments: { name: "Trains", task: "Find a train to Porto.", background: true },
+            arguments: {
+              category: "everyday",
+              name: "Trains",
+              task: "Find a train to Porto.",
+              background: true,
+            },
           },
         ],
       },
@@ -1555,7 +1572,7 @@ it("offers ask_parent to no sync helper: its parent waits on its result", async 
         type: "tool",
         id: "sync",
         name: "run_subagent",
-        arguments: { name: "Scout", task: BRIEF },
+        arguments: { category: "everyday", name: "Scout", task: BRIEF },
       },
     },
     {
@@ -1696,5 +1713,185 @@ it("cancels a helper stopped while it waits on its question, with no report", as
     ["user", "completed"],
     ["helper", "cancelled"],
     ["follow_up", "completed"],
+  ]);
+});
+
+it("routes children by category with Auto off and keeps a background model across a retry", async () => {
+  const runtime = new ScriptedAgentRuntime();
+  const original = runtime.run.bind(runtime);
+  const childModels: string[] = [];
+  let failChild = true;
+  runtime.run = async function* (request, context) {
+    if (request.helper) {
+      childModels.push(request.model.id);
+      if (failChild) {
+        failChild = false;
+        throw new AgentRuntimeUnavailableError("Temporary worker outage");
+      }
+    }
+    const script: AgentRunRequest["script"] = [
+      {
+        toolCalls: [
+          {
+            name: "run_subagent",
+            args: { name: "quick", task: "Extract a date", category: "fast" },
+          },
+          {
+            name: "run_subagent",
+            args: { name: "normal", task: "Draft a reply", category: "everyday" },
+          },
+          {
+            name: "run_subagent",
+            args: {
+              name: "deep",
+              task: "Check an invariant",
+              category: "complex",
+              background: true,
+            },
+          },
+        ],
+      },
+    ];
+    yield* original({ ...request, script }, context);
+  };
+  const run = await startWorkerRun({
+    steps: [],
+    runtime: () => runtime,
+    computerScope: "dedicated",
+  });
+  cleanups.push(() => run.close());
+  const credential = await run.prisma.userModelCredential.findFirstOrThrow();
+  await run.prisma.spaceModelCategory.createMany({
+    data: [
+      { category: "fast", modelId: "fast-model" },
+      { category: "everyday", modelId: "everyday-model" },
+      { category: "complex", modelId: "complex-model", thinkingLevel: "high" },
+    ].map((assignment) => ({
+      ...assignment,
+      spaceId: run.spaceId,
+      userId: run.userId,
+      credentialId: credential.id,
+    })),
+  });
+  const parentId = await run.send("Delegate the tasks");
+  await run.continueRun(parentId);
+  const children = await run.prisma.run.findMany({
+    where: { parentRunId: parentId },
+    orderBy: { createdAt: "asc" },
+  });
+  expect(
+    children.map((child) => [child.modelProvider, child.modelId, child.thinkingLevel]),
+  ).toEqual([
+    ["openai-compatible", "fast-model", null],
+    ["openai-compatible", "everyday-model", null],
+    ["openai-compatible", "complex-model", "high"],
+  ]);
+  const parent = await run.prisma.run.findUniqueOrThrow({ where: { id: parentId } });
+  expect(parent.modelId).toBe("offline-fixture");
+  const child = children[2]!;
+  expect(
+    (await run.runEntries(child.id)).find((entry) => entry.type === "run.started"),
+  ).toMatchObject({
+    payload: {
+      routing: {
+        mode: "category",
+        requestedCategory: "complex",
+        category: "complex",
+        provider: "openai-compatible",
+        modelId: "complex-model",
+        thinkingLevel: "high",
+      },
+    },
+  });
+  await expect(run.continueRun(child.id)).rejects.toThrow("retrying");
+  await run.prisma.spaceModelCategory.updateMany({
+    where: { spaceId: run.spaceId, category: "complex" },
+    data: { modelId: "replacement-model", thinkingLevel: "low" },
+  });
+  await run.continueRun(child.id);
+  expect(childModels).toEqual(["complex-model", "complex-model"]);
+  expect(await run.prisma.run.findUniqueOrThrow({ where: { id: child.id } })).toMatchObject({
+    status: "completed",
+    error: null,
+    modelId: "complex-model",
+    thinkingLevel: "high",
+  });
+});
+
+it("records everyday fallbacks for unassigned and legacy helper calls", async () => {
+  const runtime = new ScriptedAgentRuntime();
+  const original = runtime.run.bind(runtime);
+  runtime.run = async function* (request, context) {
+    yield* original(
+      {
+        ...request,
+        script: [
+          {
+            toolCalls: [
+              {
+                name: "run_subagent",
+                args: { name: "unassigned", task: "Analyze", category: "complex" },
+              },
+              {
+                name: "run_subagent",
+                args: {
+                  name: "legacy",
+                  task: "Extract",
+                  model_provider: "ignored",
+                  model_id: "ignored",
+                },
+              },
+            ],
+          },
+        ],
+      },
+      context,
+    );
+  };
+  const run = await startWorkerRun({ steps: [], runtime: () => runtime });
+  cleanups.push(() => run.close());
+  const credential = await run.prisma.userModelCredential.findFirstOrThrow();
+  await run.prisma.spaceModelCategory.create({
+    data: {
+      spaceId: run.spaceId,
+      userId: run.userId,
+      credentialId: credential.id,
+      category: "everyday",
+      modelId: "everyday-model",
+    },
+  });
+  const parentId = await run.send("Delegate");
+  await run.continueRun(parentId);
+  const children = await run.prisma.run.findMany({
+    where: { parentRunId: parentId },
+    orderBy: { createdAt: "asc" },
+  });
+  const decisions = await Promise.all(
+    children.map(async (child) => {
+      const started = (await run.runEntries(child.id)).find(
+        (entry) => entry.type === "run.started",
+      );
+      return started?.type === "run.started" ? started.payload.routing : null;
+    }),
+  );
+  expect(decisions).toEqual([
+    {
+      mode: "category",
+      requestedCategory: "complex",
+      category: "everyday",
+      provider: "openai-compatible",
+      modelId: "everyday-model",
+      thinkingLevel: null,
+      fallback: "category_unassigned",
+    },
+    {
+      mode: "category",
+      requestedCategory: "everyday",
+      category: "everyday",
+      provider: "openai-compatible",
+      modelId: "everyday-model",
+      thinkingLevel: null,
+      fallback: "legacy_call",
+    },
   ]);
 });

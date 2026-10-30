@@ -1,11 +1,9 @@
-import type { AgentRunRequest } from "@rakazo/adapter-kit";
-import type { Actor } from "@rakazo/contracts";
+import type { Actor, ModelCategory, RunModelDecision } from "@rakazo/contracts";
+import { ThinkingLevelSchema } from "@rakazo/contracts";
 import { MODEL_PROVIDER_NOT_CONNECTED_MESSAGE, UNKNOWN_MODEL_MESSAGE } from "@rakazo/core";
-import {
-  type findDefaultModelCredential,
-  findModelCredential,
-  type PrismaClient,
-} from "@rakazo/db";
+import type { findDefaultModelCredential, PrismaClient } from "@rakazo/db";
+import { findModelCredential } from "@rakazo/db";
+import { modelAcceptsImageInput } from "./model-vision.js";
 import { listPiCatalog, scriptedCatalogEntry } from "./pi-models.js";
 import { OPENAI_COMPATIBLE_PROVIDER_ID } from "./pi-openai-compatible-provider.js";
 
@@ -42,8 +40,11 @@ export async function validateConnectedModelChoice(
   return savedChoice ? undefined : UNKNOWN_MODEL_MESSAGE;
 }
 
-/** Select configuration without loading secrets or applying a runtime-specific fallback. */
-export function selectConfiguredModel(input: {
+export type ModelRouteClassification =
+  | { category: ModelCategory; fallback?: never }
+  | { category?: never; fallback: "no_decision_provider" | "decision_failed" };
+
+export type ModelRouteInput = {
   bot: {
     modelProvider: string | null;
     modelId: string | null;
@@ -53,28 +54,101 @@ export function selectConfiguredModel(input: {
   defaultCredential: ModelCredential;
   settings: { defaultModelProvider: string | null; defaultModelId: string | null } | null;
   deployment: { provider: string; model: string } | null;
-}) {
-  const { bot, overrideCredential, defaultCredential, settings, deployment } = input;
-  const hasOverride = Boolean(bot?.modelProvider && bot.modelId);
-  // The override provider, model and credential must win together.
-  const useOverride = Boolean(hasOverride && overrideCredential);
-  const credential = useOverride ? overrideCredential : defaultCredential;
+  routing:
+    | { mode: "fixed" }
+    | { mode: "auto"; classification: ModelRouteClassification }
+    | { mode: "category"; category: ModelCategory };
+  categories?: Array<{
+    category: ModelCategory;
+    modelId: string;
+    thinkingLevel: RunModelDecision["thinkingLevel"];
+    credential: NonNullable<ModelCredential>;
+    acceptsImages?: boolean;
+  }>;
+  hasImages?: boolean;
+  defaultAcceptsImages?: boolean;
+};
+
+/** Inputs contain only authorized connections; missing configuration remains an explicit failure. */
+export function routeModel(
+  input: ModelRouteInput,
+): { decision: RunModelDecision; credential: ModelCredential } | null {
+  const { bot, overrideCredential, defaultCredential, settings, deployment, routing } = input;
+  const hasOverride = routing.mode !== "category" && Boolean(bot?.modelProvider && bot.modelId);
+  const thinkingLevel = ThinkingLevelSchema.nullable().parse(bot?.thinkingLevel ?? null);
+  if (routing.mode !== "category" && bot?.modelProvider && bot.modelId && overrideCredential) {
+    return {
+      decision: { mode: "fixed", provider: bot.modelProvider, modelId: bot.modelId, thinkingLevel },
+      credential: overrideCredential,
+    };
+  }
+  const mode = hasOverride ? "fixed" : routing.mode;
+  const requestedCategory =
+    routing.mode === "category"
+      ? routing.category
+      : routing.mode === "auto"
+        ? routing.classification.category
+        : undefined;
+  let fallback: RunModelDecision["fallback"] =
+    mode === "auto" && routing.mode === "auto" ? routing.classification.fallback : undefined;
+  const compatible = (provider: string, modelId: string, acceptsImages?: boolean) =>
+    !input.hasImages || modelAcceptsImageInput(provider, modelId, acceptsImages);
+  if (mode !== "fixed") {
+    for (const category of new Set([requestedCategory, "everyday"])) {
+      if (!category) continue;
+      const assignment = input.categories?.find((item) => item.category === category);
+      if (!assignment) {
+        fallback ??= "category_unassigned";
+        continue;
+      }
+      if (
+        !compatible(assignment.credential.provider, assignment.modelId, assignment.acceptsImages)
+      ) {
+        fallback = "capability_mismatch";
+        continue;
+      }
+      return {
+        decision: {
+          mode,
+          requestedCategory,
+          category: assignment.category,
+          provider: assignment.credential.provider,
+          modelId: assignment.modelId,
+          thinkingLevel: assignment.thinkingLevel ?? null,
+          ...(fallback ? { fallback } : {}),
+        },
+        credential: assignment.credential,
+      };
+    }
+  }
+  const provider =
+    defaultCredential?.provider ?? settings?.defaultModelProvider ?? deployment?.provider;
+  const modelId = defaultCredential?.defaultModel ?? settings?.defaultModelId ?? deployment?.model;
+  if (
+    !provider ||
+    !modelId ||
+    (mode !== "fixed" && !compatible(provider, modelId, input.defaultAcceptsImages))
+  )
+    return null;
   return {
-    provider:
-      (useOverride ? bot!.modelProvider : null) ??
-      credential?.provider ??
-      settings?.defaultModelProvider ??
-      deployment?.provider,
-    id:
-      (useOverride ? bot!.modelId : null) ??
-      credential?.defaultModel ??
-      settings?.defaultModelId ??
-      deployment?.model,
-    credential,
-    // Preserve bot thinking for the Space default; drop it for an unavailable override.
-    thinkingLevel:
-      hasOverride && !useOverride
-        ? null
-        : ((bot?.thinkingLevel as AgentRunRequest["model"]["thinkingLevel"]) ?? null),
+    decision: {
+      mode,
+      ...(mode !== "fixed" ? { requestedCategory, ...(fallback ? { fallback } : {}) } : {}),
+      provider,
+      modelId,
+      thinkingLevel: hasOverride ? null : thinkingLevel,
+    },
+    credential: defaultCredential,
+  };
+}
+
+/** The consent API still consumes this projection; execution uses routeModel directly. */
+export function selectConfiguredModel(input: Omit<ModelRouteInput, "routing">) {
+  const selected = routeModel({ ...input, routing: { mode: "fixed" } });
+  return {
+    provider: selected?.decision.provider,
+    id: selected?.decision.modelId,
+    credential: selected?.credential ?? null,
+    thinkingLevel: selected?.decision.thinkingLevel ?? null,
   };
 }

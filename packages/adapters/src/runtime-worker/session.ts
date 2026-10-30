@@ -363,7 +363,7 @@ export function createSession(
           profile?.executionMode === "async" ||
           (profile?.executionMode !== "sync" && call.background);
         const args = { ...body.args, background };
-        const model = await helperModel(request, call, profile);
+        const { model, modelDecision } = await helperModel(request, call);
         if (!live()) return { type: "error", message: "The worker stopped" };
         if (paused) return pausedToolCall(paused);
         if (background) {
@@ -375,6 +375,7 @@ export function createSession(
             args,
             model: { provider: model.provider, id: model.id, thinkingLevel: model.thinkingLevel },
             profile,
+            modelDecision,
           });
           return { type: "tool.result", output: started };
         }
@@ -391,6 +392,7 @@ export function createSession(
           args,
           model: { provider: model.provider, id: model.id, thinkingLevel: model.thinkingLevel },
           profile,
+          modelDecision,
         });
         helper = {
           log,
@@ -780,16 +782,17 @@ export function createSession(
       case "subagent.open": {
         if (runsOwnLoop()) return refuse("invalid");
         if (paused) return { type: "error", message: PAUSED_MESSAGE };
-        if (!request.startSubagent || !request.resolveModel) {
+        if (!request.startSubagent || !request.resolveCategory) {
           return { type: "error", message: "Helpers are unavailable in this run" };
         }
-        const model = await request.resolveModel(body.model.provider, body.model.id);
+        const { model, modelDecision } = await request.resolveCategory(body.category);
         const log = await request.startSubagent({
           callId: body.callId,
           name: body.name,
           task: body.task,
           args: body.args,
-          model: { ...body.model, thinkingLevel: model.thinkingLevel },
+          model: { provider: model.provider, id: model.id, thinkingLevel: model.thinkingLevel },
+          modelDecision,
         });
         const agent = `helper:${helpers.size + 1}`;
         helpers.set(agent, {

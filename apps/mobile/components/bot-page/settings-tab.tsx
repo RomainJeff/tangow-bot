@@ -1,8 +1,14 @@
-import { botModelKey, connectedModelOptions, parseModelOptionKey } from "@rakazo/core";
+import {
+  botModelKey,
+  connectedModelOptions,
+  defaultModelLabel,
+  parseModelOptionKey,
+} from "@rakazo/core";
 import { useRouter } from "expo-router";
 import { View } from "react-native";
 import { useComputerChoice } from "../../lib/bot-choices";
-import { type BotPageContext, useBotSetting, useModelCatalog } from "../../lib/bot-page";
+import type { BotPageContext } from "../../lib/bot-page";
+import { useBotSetting, useModelCatalog } from "../../lib/bot-page";
 import { useI18n } from "../../lib/i18n";
 import { Group, InkSwitch, Row, SaveMeta } from "./kit";
 
@@ -16,7 +22,13 @@ export function SettingsTab({ page }: { page: BotPageContext }) {
   const modelKey = botModelKey(bot);
   const model = parseModelOptionKey(modelKey);
   const modelLabel = !model
-    ? t("Space default")
+    ? catalog
+      ? defaultModelLabel(catalog, {
+          default: t("Default"),
+          auto: t("Auto"),
+          fixed: t("Space default"),
+        })
+      : t("Space default")
     : ((catalog &&
         connectedModelOptions(catalog.credentials, catalog.catalog).find(
           (option) => option.key === modelKey,

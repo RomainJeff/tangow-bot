@@ -5,6 +5,7 @@ import type {
   AgentRuntimeEvent,
 } from "@rakazo/adapter-kit";
 import { abortableDelay, inferHandoffTargetName } from "@rakazo/core";
+import { helperCallOf, helperModel } from "./builtin-tools.js";
 
 const running = new Map<string, AbortController>();
 /** Runs that stopped on a question card, so their next turn answers it. */
@@ -90,7 +91,7 @@ export class ScriptedAgentRuntime implements AgentRuntime {
               name: String(call.args.name ?? "helper"),
               task: String(call.args.task ?? request.prompt),
               args: call.args,
-              model: request.model,
+              ...(await helperModel(request, helperCallOf(call.args))),
             });
           } else if (call.name === "run_subagent" && request.startSubagent) {
             const task = String(call.args.task ?? request.prompt);
@@ -99,7 +100,7 @@ export class ScriptedAgentRuntime implements AgentRuntime {
               name: String(call.args.name ?? "helper"),
               task,
               args: call.args,
-              model: request.model,
+              ...(await helperModel(request, helperCallOf(call.args))),
             });
             const result = helperResult(task);
             await log.text(result);
@@ -414,7 +415,10 @@ export function inferScript(
     return [
       {
         toolCalls: [
-          { name: "run_subagent", args: { name: "helper", task: prompt, background: true } },
+          {
+            name: "run_subagent",
+            args: { name: "helper", category: "everyday", task: prompt, background: true },
+          },
         ],
       },
       { assistant: "I've started that, I'll come back with it.", complete: true },
@@ -424,7 +428,9 @@ export function inferScript(
     return [
       {
         assistant: "spinning up a helper for that.",
-        toolCalls: [{ name: "run_subagent", args: { name: "helper", task: prompt } }],
+        toolCalls: [
+          { name: "run_subagent", args: { name: "helper", category: "everyday", task: prompt } },
+        ],
       },
       { assistant: `the helper is done. ${helperResult(prompt)}`, complete: true },
     ];

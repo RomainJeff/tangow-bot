@@ -22,7 +22,7 @@ msgid "(empty)"
 msgstr "(비어 있음)"
 
 #. placeholder {0}: group.entries.length
-#: src/pages/ModelSettingsOverlay.tsx:122
+#: src/pages/ModelSettingsOverlay.tsx:107
 msgid "{0, plural, one {# model} other {# models}}"
 msgstr "{0, plural, one {모델 #개} other {모델 #개}}"
 
@@ -109,7 +109,7 @@ msgstr ""
 msgid "{0}'s screen"
 msgstr "{0}의 화면"
 
-#: src/components/DraftCard.tsx:263
+#: src/components/DraftCard.tsx:262
 msgid "{app} is disconnected."
 msgstr ""
 
@@ -229,7 +229,7 @@ msgstr "액세스 토큰(선택 사항)"
 msgid "Account"
 msgstr "계정"
 
-#: src/pages/bot-page/SettingDetails.tsx:192
+#: src/pages/bot-page/SettingDetails.tsx:194
 #: src/pages/bot-page/SettingsTab.tsx:37
 msgid "Account default"
 msgstr "계정 기본값"
@@ -268,7 +268,8 @@ msgstr ""
 msgid "Active"
 msgstr "활성"
 
-#: src/pages/ModelSettingsOverlay.tsx:77
+#: src/pages/model-settings/routing-settings.tsx:53
+#: src/pages/model-settings/routing-settings.tsx:55
 msgid "Active model"
 msgstr "현재 모델"
 
@@ -391,6 +392,7 @@ msgstr "추가 중…"
 #: src/pages/DecisionModelSettingsPanel.tsx:132
 #: src/pages/McpServersOverlay.tsx:343
 #: src/pages/model-settings/model-detail.tsx:168
+#: src/pages/model-settings/routing-settings.tsx:115
 #: src/pages/Onboarding.tsx:496
 #: src/pages/plugins/advanced-integrations.tsx:77
 #: src/pages/RoutineSchedule.tsx:47
@@ -643,6 +645,9 @@ msgid "Authorize this server so agents can use its tools. A popup opens."
 msgstr "에이전트가 도구를 사용할 수 있도록 이 서버에 권한을 부여하세요. 팝업이 열립니다."
 
 #: src/pages/bot-page/BotHero.tsx:161
+#: src/pages/bot-page/model-options.ts:29
+#: src/pages/bot-page/SettingDetails.tsx:119
+#: src/pages/model-settings/routing-settings.tsx:72
 msgid "Auto"
 msgstr "자동"
 
@@ -683,7 +688,7 @@ msgstr "로그인으로 돌아가기"
 msgid "Base URL"
 msgstr "서버 주소"
 
-#: src/components/DraftCard.tsx:256
+#: src/components/DraftCard.tsx:255
 msgid "Bcc"
 msgstr ""
 
@@ -812,7 +817,7 @@ msgstr "답장 취소"
 msgid "Cancelled"
 msgstr "취소됨"
 
-#: src/components/DraftCard.tsx:256
+#: src/components/DraftCard.tsx:255
 msgid "Cc"
 msgstr ""
 
@@ -875,7 +880,7 @@ msgstr "Bot 선택…"
 msgid "Choose a new password"
 msgstr "새 비밀번호 선택"
 
-#: src/pages/ModelSettingsOverlay.tsx:48
+#: src/pages/ModelSettingsOverlay.tsx:47
 msgid "Choose which connected model Rakazo uses."
 msgstr "Rakazo에서 기본으로 사용할 연결된 모델을 선택하세요."
 
@@ -894,11 +899,11 @@ msgstr "{0}와의 대화 내용을 비울까요?"
 msgid "Clear conversation"
 msgstr "대화 내용 비우기"
 
-#: src/pages/bot-page/SettingDetails.tsx:60
+#: src/pages/bot-page/SettingDetails.tsx:62
 msgid "Clear description?"
 msgstr "설명을 비울까요?"
 
-#: src/pages/bot-page/SettingDetails.tsx:60
+#: src/pages/bot-page/SettingDetails.tsx:62
 msgid "Clear instructions?"
 msgstr "지침을 비울까요?"
 
@@ -950,7 +955,7 @@ msgstr "기억 설정 닫기"
 msgid "Close messaging settings"
 msgstr "메시징 설정 닫기"
 
-#: src/pages/ModelSettingsOverlay.tsx:64
+#: src/pages/ModelSettingsOverlay.tsx:63
 #: src/pages/SettingsOverlay.tsx:110
 msgid "Close model settings"
 msgstr "AI 모델 설정 닫기"
@@ -1003,6 +1008,10 @@ msgstr "실행 명령"
 msgid "Complete"
 msgstr "완료"
 
+#: src/pages/model-settings/routing-settings.tsx:19
+msgid "Complex"
+msgstr "복잡"
+
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
 #: src/pages/SettingsOverlay.tsx:100
@@ -1038,10 +1047,6 @@ msgstr "컴퓨터를 사용할 수 없음"
 #: src/components/ComputerUpdateProgress.tsx:66
 msgid "Computer updated"
 msgstr ""
-
-#: src/pages/ModelSettingsOverlay.tsx:84
-msgid "Configured by deployment"
-msgstr "서버에서 설정됨"
 
 #: src/pages/McpServersOverlay.tsx:422
 msgid "Configured servers"
@@ -1101,7 +1106,7 @@ msgstr "Treg 연결"
 #: src/pages/DecisionModelSettingsPanel.tsx:98
 #: src/pages/McpOAuthCallback.tsx:54
 #: src/pages/MemorySettingsOverlay.tsx:191
-#: src/pages/ModelSettingsOverlay.tsx:129
+#: src/pages/ModelSettingsOverlay.tsx:114
 #: src/pages/shell/message-cards.tsx:195
 #: src/pages/VoiceSettingsOverlay.tsx:226
 msgid "Connected"
@@ -1119,8 +1124,8 @@ msgstr "{0}에 연결했습니다."
 
 #. placeholder {0}: selected.label
 #. placeholder {0}: selectedLabelRef.current ?? "this model"
-#: src/pages/model-settings/use-model-settings.ts:63
-#: src/pages/model-settings/use-model-settings.ts:301
+#: src/pages/model-settings/use-model-settings.ts:67
+#: src/pages/model-settings/use-model-settings.ts:309
 msgid "Connected and using {0}."
 msgstr "{0}에 연결하고 기본 모델로 설정했습니다."
 
@@ -1171,7 +1176,7 @@ msgstr "이메일로 계속하기"
 msgid "Conversation cleared"
 msgstr ""
 
-#: src/components/DraftCard.tsx:301
+#: src/components/DraftCard.tsx:299
 #: src/pages/shell/message-actions-sheet.tsx:75
 #: src/pages/shell/message-hover-actions.tsx:98
 #: src/pages/shell/message-hover-actions.tsx:169
@@ -1206,7 +1211,8 @@ msgstr "앱 인증을 완료하지 못했습니다."
 msgid "Could not change password"
 msgstr "비밀번호를 변경할 수 없습니다"
 
-#: src/pages/model-settings/use-model-settings.ts:234
+#: src/pages/model-settings/routing-settings.tsx:29
+#: src/pages/model-settings/use-model-settings.ts:242
 msgid "Could not change the default model"
 msgstr "기본 모델을 변경하지 못했습니다."
 
@@ -1244,7 +1250,7 @@ msgstr "{0}에 연결하지 못했습니다."
 msgid "Could not connect OpenRouter"
 msgstr ""
 
-#: src/pages/model-settings/use-model-settings.ts:303
+#: src/pages/model-settings/use-model-settings.ts:311
 msgid "Could not connect this provider"
 msgstr "AI 서비스에 연결하지 못했습니다."
 
@@ -1384,7 +1390,7 @@ msgstr "연동 목록을 불러오지 못했습니다."
 msgid "Could not load MCP servers"
 msgstr "MCP 서버 목록을 불러오지 못했습니다."
 
-#: src/pages/model-settings/use-model-settings.ts:115
+#: src/pages/model-settings/use-model-settings.ts:121
 msgid "Could not load model settings"
 msgstr "AI 모델 설정을 불러오지 못했습니다."
 
@@ -1427,7 +1433,7 @@ msgstr "샘플 음성을 재생하지 못했습니다."
 msgid "Could not reach the server"
 msgstr "서버에 연결할 수 없습니다"
 
-#: src/pages/model-settings/use-model-settings.ts:218
+#: src/pages/model-settings/use-model-settings.ts:225
 #: src/pages/Onboarding.tsx:274
 msgid "Could not reach this model server"
 msgstr "모델 서버에 연결하지 못했습니다."
@@ -1534,8 +1540,8 @@ msgid "Could not start teaching"
 msgstr "가르치기를 시작하지 못했습니다."
 
 #: src/components/AskCard.tsx:199
-#: src/components/DraftCard.tsx:158
-#: src/components/DraftCard.tsx:171
+#: src/components/DraftCard.tsx:157
+#: src/components/DraftCard.tsx:170
 msgid "Could not submit this answer"
 msgstr "답변을 보내지 못했습니다."
 
@@ -1721,13 +1727,17 @@ msgstr ""
 msgid "Decline"
 msgstr "거절"
 
+#: src/pages/bot-page/model-options.ts:28
+#: src/pages/bot-page/SettingDetails.tsx:118
 #: src/pages/model-settings/model-detail.tsx:185
+#: src/pages/model-settings/routing-settings.tsx:103
+#: src/pages/model-settings/routing-settings.tsx:130
 #: src/pages/Onboarding.tsx:511
 msgid "Default"
 msgstr "기본값"
 
 #. placeholder {0}: thinkingLevelLabel(fallback)
-#: src/pages/bot-page/SettingDetails.tsx:148
+#: src/pages/bot-page/SettingDetails.tsx:150
 msgid "Default ({0})"
 msgstr ""
 
@@ -1790,7 +1800,7 @@ msgstr "거부됨"
 msgid "Deny"
 msgstr "거부"
 
-#: src/pages/ModelSettingsOverlay.tsx:80
+#: src/pages/model-settings/routing-settings.tsx:77
 msgid "Deployment default"
 msgstr "서버 기본값"
 
@@ -1798,7 +1808,7 @@ msgstr "서버 기본값"
 msgid "Describe what this bot does"
 msgstr "이 Bot이 하는 일을 짧게 설명하세요"
 
-#: src/pages/bot-page/SettingDetails.tsx:51
+#: src/pages/bot-page/SettingDetails.tsx:53
 #: src/pages/bot-page/SettingsTab.tsx:27
 #: src/pages/GroupPanel.tsx:143
 #: src/pages/GroupPanel.tsx:252
@@ -1831,12 +1841,12 @@ msgstr ""
 msgid "Disabled"
 msgstr "비활성"
 
-#: src/components/DraftCard.tsx:292
+#: src/components/DraftCard.tsx:290
 msgid "Discard"
 msgstr ""
 
-#: src/components/DraftCard.tsx:223
-#: src/components/DraftCard.tsx:233
+#: src/components/DraftCard.tsx:222
+#: src/components/DraftCard.tsx:232
 msgid "Discarded"
 msgstr ""
 
@@ -1940,7 +1950,7 @@ msgstr "수정"
 msgid "Edit and resend"
 msgstr "편집 후 다시 보내기"
 
-#: src/components/DraftCard.tsx:397
+#: src/components/DraftCard.tsx:392
 msgid "Edit message"
 msgstr ""
 
@@ -1948,11 +1958,11 @@ msgstr ""
 msgid "Edit Profile"
 msgstr "Bot 정보 수정"
 
-#: src/components/DraftCard.tsx:260
+#: src/components/DraftCard.tsx:259
 msgid "Edited"
 msgstr ""
 
-#: src/components/DraftCard.tsx:259
+#: src/components/DraftCard.tsx:258
 msgid "Editing"
 msgstr ""
 
@@ -1973,17 +1983,17 @@ msgstr ""
 msgid "Engage when... Ignore..."
 msgstr ""
 
-#: src/pages/model-settings/use-model-settings.ts:268
+#: src/pages/model-settings/use-model-settings.ts:276
 #: src/pages/Onboarding.tsx:304
 msgid "Enter a whole number from 1 to {MAX_MODEL_CONTEXT_WINDOW} for the context limit."
 msgstr "컨텍스트 한도는 1에서 {MAX_MODEL_CONTEXT_WINDOW} 사이의 정수로 입력하세요."
 
-#: src/pages/model-settings/use-model-settings.ts:261
+#: src/pages/model-settings/use-model-settings.ts:269
 #: src/pages/Onboarding.tsx:297
 msgid "Enter a whole number from 1 to {MAX_MODEL_MAX_TOKENS} for maximum output tokens."
 msgstr "최대 출력 토큰 수는 1에서 {MAX_MODEL_MAX_TOKENS} 사이의 정수로 입력하세요."
 
-#: src/pages/model-settings/use-model-settings.ts:252
+#: src/pages/model-settings/use-model-settings.ts:260
 #: src/pages/Onboarding.tsx:288
 msgid "Enter a whole number from 1 to 1000 for the image limit."
 msgstr "이미지 한도는 1에서 1000 사이의 정수로 입력하세요."
@@ -2029,6 +2039,10 @@ msgstr "매월"
 msgid "Every week"
 msgstr "매주"
 
+#: src/pages/model-settings/routing-settings.tsx:18
+msgid "Everyday"
+msgstr "일상"
+
 #: src/pages/plugins/advanced-integrations.tsx:304
 msgid "Executor token"
 msgstr "Executor 토큰"
@@ -2051,7 +2065,7 @@ msgstr "CRM에서 이번 주 목록을 내려받아 공유 폴더에 넣기"
 msgid "External conversation"
 msgstr ""
 
-#: src/pages/bot-page/model-options.ts:17
+#: src/pages/bot-page/model-options.ts:14
 #: src/pages/model-settings/model-detail.tsx:181
 #: src/pages/Onboarding.tsx:507
 msgid "Extra high"
@@ -2087,6 +2101,10 @@ msgstr "실패했습니다."
 #: src/components/teach/SkillDraftCard.tsx:133
 msgid "Failure handling"
 msgstr "실패했을 때 처리"
+
+#: src/pages/model-settings/routing-settings.tsx:17
+msgid "Fast"
+msgstr "빠름"
 
 #: src/pages/PluginsOverlay.tsx:227
 msgid "Featured"
@@ -2133,11 +2151,11 @@ msgstr "예상하지 못한 작업 표시"
 msgid "Forgot password?"
 msgstr "비밀번호를 잊으셨나요?"
 
-#: src/pages/model-settings/model-picker.tsx:315
+#: src/pages/model-settings/model-picker.tsx:310
 msgid "Free"
 msgstr "무료"
 
-#: src/components/DraftCard.tsx:337
+#: src/components/DraftCard.tsx:335
 msgid "From"
 msgstr ""
 
@@ -2232,7 +2250,7 @@ msgstr ""
 msgid "Hide password"
 msgstr "비밀번호 숨기기"
 
-#: src/pages/bot-page/model-options.ts:20
+#: src/pages/bot-page/model-options.ts:17
 #: src/pages/model-settings/model-detail.tsx:180
 #: src/pages/Onboarding.tsx:506
 msgid "High"
@@ -2259,7 +2277,7 @@ msgstr "실행 방식"
 msgid "How often"
 msgstr "실행 주기"
 
-#: src/pages/bot-page/SettingDetails.tsx:61
+#: src/pages/bot-page/SettingDetails.tsx:63
 msgid "How this bot should behave"
 msgstr "이 봇이 어떻게 동작해야 하는지"
 
@@ -2317,7 +2335,7 @@ msgid "Instruction"
 msgstr "실행할 내용"
 
 #: src/components/AskCard.tsx:363
-#: src/pages/bot-page/SettingDetails.tsx:51
+#: src/pages/bot-page/SettingDetails.tsx:53
 #: src/pages/bot-page/SettingsTab.tsx:26
 msgid "Instructions"
 msgstr "지침"
@@ -2440,7 +2458,7 @@ msgid "Loading memory settings…"
 msgstr "기억 설정을 불러오는 중…"
 
 #: src/pages/model-settings/model-detail.tsx:365
-#: src/pages/ModelSettingsOverlay.tsx:46
+#: src/pages/ModelSettingsOverlay.tsx:45
 msgid "Loading model catalog…"
 msgstr "모델 목록을 불러오는 중…"
 
@@ -2477,7 +2495,7 @@ msgstr "로컬"
 msgid "Log out"
 msgstr "로그아웃"
 
-#: src/pages/bot-page/model-options.ts:18
+#: src/pages/bot-page/model-options.ts:15
 #: src/pages/model-settings/model-detail.tsx:178
 #: src/pages/Onboarding.tsx:504
 msgid "Low"
@@ -2516,7 +2534,7 @@ msgstr "읽음으로 표시"
 msgid "Mark as Unread"
 msgstr "읽지 않음으로 표시"
 
-#: src/pages/bot-page/model-options.ts:22
+#: src/pages/bot-page/model-options.ts:19
 #: src/pages/model-settings/model-detail.tsx:182
 #: src/pages/Onboarding.tsx:508
 msgid "Max"
@@ -2540,7 +2558,7 @@ msgstr ""
 msgid "MCP servers"
 msgstr "MCP 서버"
 
-#: src/pages/bot-page/model-options.ts:19
+#: src/pages/bot-page/model-options.ts:16
 #: src/pages/model-settings/model-detail.tsx:179
 #: src/pages/Onboarding.tsx:505
 msgid "Medium"
@@ -2627,7 +2645,7 @@ msgstr "메시징"
 msgid "Microphone failed"
 msgstr "마이크를 사용할 수 없습니다."
 
-#: src/pages/bot-page/model-options.ts:21
+#: src/pages/bot-page/model-options.ts:18
 #: src/pages/model-settings/model-detail.tsx:177
 #: src/pages/Onboarding.tsx:503
 msgid "Minimal"
@@ -2650,12 +2668,12 @@ msgstr "분"
 msgid "minutes"
 msgstr "분"
 
-#: src/pages/bot-page/SettingDetails.tsx:105
+#: src/pages/bot-page/SettingDetails.tsx:106
 #: src/pages/bot-page/SettingsTab.tsx:29
 #: src/pages/DecisionModelSettingsPanel.tsx:156
 #: src/pages/model-settings/model-detail.tsx:109
 #: src/pages/model-settings/model-detail.tsx:219
-#: src/pages/model-settings/model-picker.tsx:203
+#: src/pages/model-settings/model-picker.tsx:198
 #: src/pages/Onboarding.tsx:433
 #: src/pages/Onboarding.tsx:529
 #: src/pages/Onboarding.tsx:541
@@ -2671,7 +2689,7 @@ msgstr "모델 오류"
 msgid "Model id"
 msgstr "모델 ID"
 
-#: src/pages/model-settings/model-picker.tsx:239
+#: src/pages/model-settings/model-picker.tsx:234
 msgid "Model options"
 msgstr "모델 선택지"
 
@@ -2679,11 +2697,11 @@ msgstr "모델 선택지"
 msgid "Model spend uses your provider keys."
 msgstr "모델 사용 비용은 연결한 서비스의 API 키로 청구됩니다."
 
-#: src/pages/model-settings/use-model-settings.ts:232
+#: src/pages/model-settings/use-model-settings.ts:240
 msgid "Model updated."
 msgstr "모델이 변경되었습니다."
 
-#: src/pages/ModelSettingsOverlay.tsx:57
+#: src/pages/ModelSettingsOverlay.tsx:56
 #: src/pages/SettingsOverlay.tsx:95
 msgid "Models"
 msgstr "AI 모델"
@@ -2851,7 +2869,7 @@ msgstr "아직 설치된 통합이 없습니다."
 
 #: src/components/ask/AskSettled.tsx:28
 #: src/components/AskCard.tsx:260
-#: src/components/DraftCard.tsx:240
+#: src/components/DraftCard.tsx:239
 msgid "No longer active"
 msgstr "이미 종료된 요청입니다"
 
@@ -2859,7 +2877,7 @@ msgstr "이미 종료된 요청입니다"
 msgid "No managed app catalog is configured on this deployment."
 msgstr "이 서버에는 관리형 앱 목록이 설정되지 않았습니다."
 
-#: src/pages/model-settings/model-picker.tsx:267
+#: src/pages/model-settings/model-picker.tsx:262
 msgid "No matching models"
 msgstr "일치하는 모델 없음"
 
@@ -2883,7 +2901,7 @@ msgstr "사용 가능한 모델 목록이 없습니다."
 msgid "No model connected"
 msgstr "연결된 모델 없음"
 
-#: src/pages/ModelSettingsOverlay.tsx:137
+#: src/pages/ModelSettingsOverlay.tsx:122
 msgid "No providers found."
 msgstr "검색된 AI 서비스가 없습니다."
 
@@ -2938,7 +2956,7 @@ msgstr "플러그인 카탈로그에 없음"
 msgid "Not now"
 msgstr "나중에"
 
-#: src/components/DraftCard.tsx:258
+#: src/components/DraftCard.tsx:257
 msgid "Not sent"
 msgstr ""
 
@@ -2972,7 +2990,7 @@ msgid "Now"
 msgstr "지금"
 
 #. placeholder {0}: selected.label
-#: src/pages/model-settings/use-model-settings.ts:232
+#: src/pages/model-settings/use-model-settings.ts:240
 msgid "Now using {0}."
 msgstr "이제 {0} 모델을 사용합니다."
 
@@ -3202,7 +3220,7 @@ msgstr ""
 msgid "Provider"
 msgstr "서비스"
 
-#: src/pages/ModelSettingsOverlay.tsx:92
+#: src/pages/ModelSettingsOverlay.tsx:77
 #: src/pages/VoiceSettingsOverlay.tsx:186
 msgid "Providers"
 msgstr "서비스"
@@ -3224,8 +3242,8 @@ msgstr "반응하기"
 msgid "Reactions"
 msgstr "반응"
 
-#: src/pages/bot-page/SettingDetails.tsx:202
-#: src/pages/bot-page/SettingDetails.tsx:206
+#: src/pages/bot-page/SettingDetails.tsx:204
+#: src/pages/bot-page/SettingDetails.tsx:208
 msgid "Read replies aloud"
 msgstr "답변을 자동으로 읽기"
 
@@ -3234,6 +3252,7 @@ msgid "read-only"
 msgstr "읽기 전용"
 
 #: src/pages/model-settings/model-detail.tsx:184
+#: src/pages/model-settings/routing-settings.tsx:129
 #: src/pages/Onboarding.tsx:510
 msgid "Reasoning effort"
 msgstr "추론 강도"
@@ -3258,7 +3277,7 @@ msgstr ""
 msgid "Recommended · {description}"
 msgstr ""
 
-#: src/components/DraftCard.tsx:317
+#: src/components/DraftCard.tsx:315
 msgid "Reconnect {app}"
 msgstr ""
 
@@ -3428,7 +3447,7 @@ msgstr "API 키 교체"
 msgid "Replace key"
 msgstr "키 교체"
 
-#: src/components/DraftCard.tsx:237
+#: src/components/DraftCard.tsx:236
 msgid "Replaced"
 msgstr ""
 
@@ -3437,8 +3456,8 @@ msgstr ""
 msgid "Reply"
 msgstr "답장"
 
-#: src/pages/bot-page/SettingDetails.tsx:212
-#: src/pages/bot-page/SettingDetails.tsx:216
+#: src/pages/bot-page/SettingDetails.tsx:214
+#: src/pages/bot-page/SettingDetails.tsx:218
 msgid "Reply in several short messages"
 msgstr "여러 개의 짧은 메시지로 답장"
 
@@ -3573,6 +3592,10 @@ msgstr "자동 실행 업데이트됨"
 msgid "Routines"
 msgstr "자동 실행"
 
+#: src/pages/shell/session-view.tsx:245
+msgid "Routing"
+msgstr "라우팅"
+
 #: src/pages/bot-page/RoutineTriggers.tsx:259
 msgid "Run at"
 msgstr "실행 시간"
@@ -3617,7 +3640,7 @@ msgstr "저장됨"
 msgid "Saved, but list refresh failed"
 msgstr "저장했지만 목록을 새로고침하지 못했습니다."
 
-#: src/pages/model-settings/use-model-settings.ts:301
+#: src/pages/model-settings/use-model-settings.ts:309
 msgid "Saved."
 msgstr "저장되었습니다."
 
@@ -3648,7 +3671,7 @@ msgstr "예 또는 아니요로 답하거나 문장으로 답해 주세요."
 msgid "Screen"
 msgstr "화면"
 
-#: src/pages/model-settings/model-picker.tsx:228
+#: src/pages/model-settings/model-picker.tsx:223
 #: src/pages/plugins/advanced-integrations.tsx:119
 #: src/pages/shell/bot-picker.tsx:55
 #: src/pages/shell/bot-picker.tsx:56
@@ -3676,12 +3699,12 @@ msgstr ""
 msgid "Search integrations.sh"
 msgstr ""
 
-#: src/pages/model-settings/model-picker.tsx:223
+#: src/pages/model-settings/model-picker.tsx:218
 msgid "Search models"
 msgstr "모델 검색"
 
-#: src/pages/ModelSettingsOverlay.tsx:95
-#: src/pages/ModelSettingsOverlay.tsx:101
+#: src/pages/ModelSettingsOverlay.tsx:80
+#: src/pages/ModelSettingsOverlay.tsx:86
 msgid "Search providers"
 msgstr "AI 서비스 검색"
 
@@ -3701,7 +3724,7 @@ msgstr "대화할 Bot을 선택하세요"
 
 #: src/components/ask/QuestionCard.tsx:205
 #: src/components/ask/QuestionCard.tsx:306
-#: src/components/DraftCard.tsx:328
+#: src/components/DraftCard.tsx:326
 #: src/pages/shell/composer.tsx:407
 msgid "Send"
 msgstr "보내기"
@@ -3715,7 +3738,7 @@ msgid "Send reset link"
 msgstr "재설정 링크 보내기"
 
 #: src/components/AskCard.tsx:304
-#: src/components/DraftCard.tsx:328
+#: src/components/DraftCard.tsx:326
 msgid "Sending…"
 msgstr "보내는 중…"
 
@@ -3883,8 +3906,8 @@ msgstr "Slack 메시지"
 msgid "Software update"
 msgstr "소프트웨어 업데이트"
 
-#: src/pages/bot-page/model-options.ts:29
-#: src/pages/bot-page/SettingDetails.tsx:116
+#: src/pages/bot-page/model-options.ts:30
+#: src/pages/bot-page/SettingDetails.tsx:120
 msgid "Space default"
 msgstr "스페이스 기본값"
 
@@ -3960,8 +3983,8 @@ msgstr "암호화해 저장"
 msgid "Stored securely. Never shown here."
 msgstr "안전하게 저장됩니다. 이 화면에 표시되지 않습니다."
 
-#: src/components/DraftCard.tsx:380
-#: src/components/DraftCard.tsx:387
+#: src/components/DraftCard.tsx:375
+#: src/components/DraftCard.tsx:382
 msgid "Subject"
 msgstr ""
 
@@ -3976,6 +3999,7 @@ msgid "Supports images"
 msgstr "이미지 지원"
 
 #: src/pages/model-settings/model-detail.tsx:169
+#: src/pages/model-settings/routing-settings.tsx:116
 #: src/pages/Onboarding.tsx:497
 msgid "Supports thinking"
 msgstr "사고 모드 지원"
@@ -4045,7 +4069,7 @@ msgstr "API가 다시 작동하지 않습니다. 이 페이지를 새로 고침�
 msgid "The selected memory provider is not available in this build."
 msgstr "선택한 기억 서비스는 현재 빌드에서 사용할 수 없습니다."
 
-#: src/pages/bot-page/SettingDetails.tsx:137
+#: src/pages/bot-page/SettingDetails.tsx:139
 msgid "Thinking"
 msgstr "생각 깊이"
 
@@ -4103,7 +4127,7 @@ msgstr "실행 시각"
 msgid "Title"
 msgstr "역할"
 
-#: src/components/DraftCard.tsx:256
+#: src/components/DraftCard.tsx:255
 msgid "To"
 msgstr ""
 
@@ -4137,7 +4161,7 @@ msgstr ""
 msgid "Treg token"
 msgstr "Treg 토큰"
 
-#: src/components/DraftCard.tsx:328
+#: src/components/DraftCard.tsx:326
 #: src/pages/Onboarding.tsx:685
 msgid "Try again"
 msgstr "다시 시도"
@@ -4154,7 +4178,7 @@ msgstr "섹션 없음"
 msgid "Unavailable"
 msgstr "사용할 수 없음"
 
-#: src/components/DraftCard.tsx:229
+#: src/components/DraftCard.tsx:228
 msgid "Undo"
 msgstr ""
 
@@ -4272,8 +4296,8 @@ msgstr "확인 후 추가"
 msgid "Verifying…"
 msgstr "확인 중…"
 
-#: src/pages/bot-page/SettingDetails.tsx:183
-#: src/pages/bot-page/SettingDetails.tsx:187
+#: src/pages/bot-page/SettingDetails.tsx:185
+#: src/pages/bot-page/SettingDetails.tsx:189
 #: src/pages/SettingsOverlay.tsx:98
 #: src/pages/shell/thread-header.tsx:139
 #: src/pages/shell/thread-header.tsx:140
@@ -4282,7 +4306,7 @@ msgstr "확인 중…"
 msgid "Voice"
 msgstr "음성"
 
-#: src/pages/bot-page/SettingDetails.tsx:179
+#: src/pages/bot-page/SettingDetails.tsx:181
 #: src/pages/bot-page/SettingsTab.tsx:36
 msgid "Voice and replies"
 msgstr "음성 및 답장"
@@ -4341,7 +4365,7 @@ msgstr "어떤 작업을 직접 보여줄까요?"
 msgid "What should this routine do each time it runs?"
 msgstr "이 루틴이 실행될 때마다 무엇을 해야 하나요?"
 
-#: src/pages/bot-page/SettingDetails.tsx:61
+#: src/pages/bot-page/SettingDetails.tsx:63
 #: src/pages/shell/bot-panel.tsx:137
 msgid "What this bot is for"
 msgstr "이 Bot을 언제, 어떤 일에 사용할지 적어주세요"
@@ -4391,7 +4415,7 @@ msgstr "매년 {date} {time}"
 msgid "Yesterday"
 msgstr "어제"
 
-#: src/components/DraftCard.tsx:54
+#: src/components/DraftCard.tsx:53
 #: src/pages/Shell.tsx:135
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"

@@ -198,10 +198,12 @@ function RunDetails({
   );
   const outcome = finished?.payload;
   const durationMs = finished ? Date.parse(finished.ts) - Date.parse(started.ts) : null;
+  const routing = started.payload.routing;
   const run = {
     runId: started.runId,
     model: started.payload.model,
     effort: started.payload.effort,
+    ...(routing ? { routing } : {}),
     trigger: started.payload.trigger.kind,
     startedAt: started.ts,
     status: outcome?.status ?? "running",
@@ -210,7 +212,7 @@ function RunDetails({
     durationMs,
   };
   const facts = [
-    `${run.model.provider}/${run.model.id}`,
+    routing ? `${routing.provider}/${routing.modelId}` : `${run.model.provider}/${run.model.id}`,
     run.usage
       ? t`${run.usage.inputTokens.toLocaleString()} tokens in · ${run.usage.outputTokens.toLocaleString()} out`
       : null,
@@ -238,6 +240,15 @@ function RunDetails({
             </span>
           ))}
         </span>
+        {routing ? (
+          <span className="break-words">
+            <Trans>Routing</Trans>: {routing.mode}
+            {routing.requestedCategory || routing.category ? (
+              <> · {[routing.requestedCategory, routing.category].filter(Boolean).join(" → ")}</>
+            ) : null}
+            {routing.fallback ? <> · {routing.fallback}</> : null}
+          </span>
+        ) : null}
         <span className="truncate font-mono text-mono select-all">{run.runId}</span>
       </p>
       <Button variant="outline" size="sm" onClick={copy}>

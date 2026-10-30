@@ -72,6 +72,7 @@ export * from "./messaging-platforms.js";
 export * from "./messaging-team-chat-emulator.js";
 export * from "./model-call-runtime.js";
 export * from "./model-connect.js";
+export { classifyModelRoute, MODEL_ROUTE_TIMEOUT_MS } from "./model-route-classification.js";
 export * from "./model-selection.js";
 export * from "./model-vision.js";
 export * from "./openai-compatible-url.js";

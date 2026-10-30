@@ -813,16 +813,36 @@ describe("session log writers", () => {
     const first = await seedRun(prisma, owner.bot.id, owner.threadId);
     await prisma.run.update({ where: { id: first.id }, data: { sourceMessageId: source.id } });
     const run = await prisma.run.findUniqueOrThrow({ where: { id: first.id } });
-    const open = () =>
+    const open = (category: "fast" | "complex") =>
       openRunLog(
         { prisma, sessionLog: log },
         run,
         { sessionId: owner.sessionId, runId: run.id, botId: owner.bot.id },
         SCRIPTED,
         null,
+        {
+          mode: "auto",
+          requestedCategory: category,
+          category,
+          provider: "scripted",
+          modelId: "scripted",
+          thinkingLevel: null,
+        },
       );
-    const opened = await open();
-    const again = await open();
+    const opened = await open("fast");
+    const again = await open("complex");
+    const starts = (await log.readRun(run.id)).filter((entry) => entry.type === "run.started");
+    expect(starts).toHaveLength(1);
+    expect(starts[0]?.payload).toMatchObject({
+      routing: {
+        mode: "auto",
+        requestedCategory: "fast",
+        category: "fast",
+        provider: "scripted",
+        modelId: "scripted",
+        thinkingLevel: null,
+      },
+    });
     expect(again.sessionId).toBe(opened.sessionId);
     expect(
       await prisma.conversationSession.findUnique({ where: { id: opened.sessionId } }),

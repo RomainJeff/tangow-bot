@@ -3,8 +3,8 @@ import type { ThinkingLevel } from "@rakazo/contracts";
 import { BOT_DESCRIPTION_MAX_LENGTH, BOT_INSTRUCTIONS_MAX_LENGTH } from "@rakazo/contracts";
 import {
   botModelKey,
-  catalogLabel,
   connectedModelOptions,
+  defaultModelLabel,
   parseModelOptionKey,
   thinkingChoices,
 } from "@rakazo/core";
@@ -16,9 +16,11 @@ import {
   Switch,
   TextSettingField,
 } from "@rakazo/ui-web";
-import { type FocusEvent, useId, useRef } from "react";
+import type { FocusEvent } from "react";
+import { useId, useRef } from "react";
 import { thinkingLevelLabel, useModelCatalog, useVoices } from "./model-options";
-import { type BotPageContext, SettingsGroup, useBotField, useSaveLabels } from "./page-kit";
+import type { BotPageContext } from "./page-kit";
+import { SettingsGroup, useBotField, useSaveLabels } from "./page-kit";
 
 /** Instructions or Description, edited at full height in the wide panel. */
 export function TextDetail({
@@ -95,7 +97,6 @@ export function ModelDetail({ page }: { page: BotPageContext }) {
   );
   const options = connectedModelOptions(catalog.credentials, catalog.catalog);
   const { levels, fallback } = thinkingChoices(catalog, model.value);
-  const { me } = catalog;
 
   return (
     <div className="flex flex-col gap-5 px-6 pt-1 pb-4">
@@ -113,10 +114,11 @@ export function ModelDetail({ page }: { page: BotPageContext }) {
           onChange={(event) => void model.save(event.target.value)}
         >
           <NativeSelectOption value="">
-            {t`Space default`}
-            {me?.defaultModel
-              ? ` (${catalogLabel(catalog.catalog, me.defaultProvider, me.defaultModel) ?? me.defaultModel})`
-              : ""}
+            {defaultModelLabel(catalog, {
+              default: t`Default`,
+              auto: t`Auto`,
+              fixed: t`Space default`,
+            })}
           </NativeSelectOption>
           {model.value && !options.some((option) => option.key === model.value) ? (
             <NativeSelectOption value={model.value}>

@@ -1,15 +1,13 @@
 import type { ComputerMode, ThinkingLevel } from "@rakazo/contracts";
 import {
   botModelKey,
-  catalogLabel,
   connectedModelOptions,
+  defaultModelLabel,
   parseModelOptionKey,
   thinkingChoices,
 } from "@rakazo/core";
+import type { BotPageContext, BotPatch, FieldSave } from "./bot-page";
 import {
-  type BotPageContext,
-  type BotPatch,
-  type FieldSave,
   setBotComputer,
   updateBot,
   useBotField,
@@ -143,9 +141,12 @@ export function modelChoice(
   { catalog, load, model }: ModelFields,
 ): BotChoice {
   const options = catalog ? connectedModelOptions(catalog.credentials, catalog.catalog) : [];
-  const me = catalog?.me;
-  const spaceDefault = me?.defaultModel
-    ? `${t("Space default")} (${catalogLabel(catalog?.catalog ?? [], me.defaultProvider, me.defaultModel) ?? me.defaultModel})`
+  const spaceDefault = catalog
+    ? defaultModelLabel(catalog, {
+        default: t("Default"),
+        auto: t("Auto"),
+        fixed: t("Space default"),
+      })
     : t("Space default");
   return choiceOf(
     t("Model"),

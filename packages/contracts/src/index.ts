@@ -9,6 +9,7 @@ export * from "./integration-settings.js";
 export * from "./link-preview.js";
 export * from "./mcp.js";
 export * from "./migrate-wait.js";
+export * from "./model-routing.js";
 export * from "./openai-compatible-ui.js";
 export * from "./page-head-reader.js";
 export * from "./reactions.js";

@@ -22,7 +22,7 @@ msgid "(empty)"
 msgstr "(empty)"
 
 #. placeholder {0}: group.entries.length
-#: src/pages/ModelSettingsOverlay.tsx:122
+#: src/pages/ModelSettingsOverlay.tsx:107
 msgid "{0, plural, one {# model} other {# models}}"
 msgstr "{0, plural, one {# model} other {# models}}"
 
@@ -109,7 +109,7 @@ msgstr "{0} will still respond to direct mentions."
 msgid "{0}'s screen"
 msgstr "{0}'s screen"
 
-#: src/components/DraftCard.tsx:263
+#: src/components/DraftCard.tsx:262
 msgid "{app} is disconnected."
 msgstr "{app} is disconnected."
 
@@ -229,7 +229,7 @@ msgstr "Access token (optional)"
 msgid "Account"
 msgstr "Account"
 
-#: src/pages/bot-page/SettingDetails.tsx:192
+#: src/pages/bot-page/SettingDetails.tsx:194
 #: src/pages/bot-page/SettingsTab.tsx:37
 msgid "Account default"
 msgstr "Account default"
@@ -268,7 +268,8 @@ msgstr "Actions for space"
 msgid "Active"
 msgstr "Active"
 
-#: src/pages/ModelSettingsOverlay.tsx:77
+#: src/pages/model-settings/routing-settings.tsx:53
+#: src/pages/model-settings/routing-settings.tsx:55
 msgid "Active model"
 msgstr "Active model"
 
@@ -391,6 +392,7 @@ msgstr "Adding…"
 #: src/pages/DecisionModelSettingsPanel.tsx:132
 #: src/pages/McpServersOverlay.tsx:343
 #: src/pages/model-settings/model-detail.tsx:168
+#: src/pages/model-settings/routing-settings.tsx:115
 #: src/pages/Onboarding.tsx:496
 #: src/pages/plugins/advanced-integrations.tsx:77
 #: src/pages/RoutineSchedule.tsx:47
@@ -643,6 +645,9 @@ msgid "Authorize this server so agents can use its tools. A popup opens."
 msgstr "Authorize this server so agents can use its tools. A popup opens."
 
 #: src/pages/bot-page/BotHero.tsx:161
+#: src/pages/bot-page/model-options.ts:29
+#: src/pages/bot-page/SettingDetails.tsx:119
+#: src/pages/model-settings/routing-settings.tsx:72
 msgid "Auto"
 msgstr "Auto"
 
@@ -683,7 +688,7 @@ msgstr "Back to sign in"
 msgid "Base URL"
 msgstr "Base URL"
 
-#: src/components/DraftCard.tsx:256
+#: src/components/DraftCard.tsx:255
 msgid "Bcc"
 msgstr "Bcc"
 
@@ -812,7 +817,7 @@ msgstr "Cancel reply"
 msgid "Cancelled"
 msgstr "Cancelled"
 
-#: src/components/DraftCard.tsx:256
+#: src/components/DraftCard.tsx:255
 msgid "Cc"
 msgstr "Cc"
 
@@ -875,7 +880,7 @@ msgstr "Choose a bot…"
 msgid "Choose a new password"
 msgstr "Choose a new password"
 
-#: src/pages/ModelSettingsOverlay.tsx:48
+#: src/pages/ModelSettingsOverlay.tsx:47
 msgid "Choose which connected model Rakazo uses."
 msgstr "Choose which connected model Rakazo uses."
 
@@ -894,11 +899,11 @@ msgstr "Clear {0}’s conversation?"
 msgid "Clear conversation"
 msgstr "Clear conversation"
 
-#: src/pages/bot-page/SettingDetails.tsx:60
+#: src/pages/bot-page/SettingDetails.tsx:62
 msgid "Clear description?"
 msgstr "Clear description?"
 
-#: src/pages/bot-page/SettingDetails.tsx:60
+#: src/pages/bot-page/SettingDetails.tsx:62
 msgid "Clear instructions?"
 msgstr "Clear instructions?"
 
@@ -950,7 +955,7 @@ msgstr "Close memory settings"
 msgid "Close messaging settings"
 msgstr "Close messaging settings"
 
-#: src/pages/ModelSettingsOverlay.tsx:64
+#: src/pages/ModelSettingsOverlay.tsx:63
 #: src/pages/SettingsOverlay.tsx:110
 msgid "Close model settings"
 msgstr "Close model settings"
@@ -1003,6 +1008,10 @@ msgstr "Command"
 msgid "Complete"
 msgstr "Complete"
 
+#: src/pages/model-settings/routing-settings.tsx:19
+msgid "Complex"
+msgstr "Complex"
+
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
 #: src/pages/SettingsOverlay.tsx:100
@@ -1038,10 +1047,6 @@ msgstr "Computer unavailable"
 #: src/components/ComputerUpdateProgress.tsx:66
 msgid "Computer updated"
 msgstr "Computer updated"
-
-#: src/pages/ModelSettingsOverlay.tsx:84
-msgid "Configured by deployment"
-msgstr "Configured by deployment"
 
 #: src/pages/McpServersOverlay.tsx:422
 msgid "Configured servers"
@@ -1101,7 +1106,7 @@ msgstr "Connect Treg"
 #: src/pages/DecisionModelSettingsPanel.tsx:98
 #: src/pages/McpOAuthCallback.tsx:54
 #: src/pages/MemorySettingsOverlay.tsx:191
-#: src/pages/ModelSettingsOverlay.tsx:129
+#: src/pages/ModelSettingsOverlay.tsx:114
 #: src/pages/shell/message-cards.tsx:195
 #: src/pages/VoiceSettingsOverlay.tsx:226
 msgid "Connected"
@@ -1119,8 +1124,8 @@ msgstr "Connected {0}."
 
 #. placeholder {0}: selected.label
 #. placeholder {0}: selectedLabelRef.current ?? "this model"
-#: src/pages/model-settings/use-model-settings.ts:63
-#: src/pages/model-settings/use-model-settings.ts:301
+#: src/pages/model-settings/use-model-settings.ts:67
+#: src/pages/model-settings/use-model-settings.ts:309
 msgid "Connected and using {0}."
 msgstr "Connected and using {0}."
 
@@ -1171,7 +1176,7 @@ msgstr "Continue with email"
 msgid "Conversation cleared"
 msgstr "Conversation cleared"
 
-#: src/components/DraftCard.tsx:301
+#: src/components/DraftCard.tsx:299
 #: src/pages/shell/message-actions-sheet.tsx:75
 #: src/pages/shell/message-hover-actions.tsx:98
 #: src/pages/shell/message-hover-actions.tsx:169
@@ -1206,7 +1211,8 @@ msgstr "Could not authorize this app"
 msgid "Could not change password"
 msgstr "Could not change password"
 
-#: src/pages/model-settings/use-model-settings.ts:234
+#: src/pages/model-settings/routing-settings.tsx:29
+#: src/pages/model-settings/use-model-settings.ts:242
 msgid "Could not change the default model"
 msgstr "Could not change the default model"
 
@@ -1244,7 +1250,7 @@ msgstr "Could not connect {0}"
 msgid "Could not connect OpenRouter"
 msgstr "Could not connect OpenRouter"
 
-#: src/pages/model-settings/use-model-settings.ts:303
+#: src/pages/model-settings/use-model-settings.ts:311
 msgid "Could not connect this provider"
 msgstr "Could not connect this provider"
 
@@ -1384,7 +1390,7 @@ msgstr "Could not load integrations"
 msgid "Could not load MCP servers"
 msgstr "Could not load MCP servers"
 
-#: src/pages/model-settings/use-model-settings.ts:115
+#: src/pages/model-settings/use-model-settings.ts:121
 msgid "Could not load model settings"
 msgstr "Could not load model settings"
 
@@ -1427,7 +1433,7 @@ msgstr "Could not play a test clip"
 msgid "Could not reach the server"
 msgstr "Could not reach the server"
 
-#: src/pages/model-settings/use-model-settings.ts:218
+#: src/pages/model-settings/use-model-settings.ts:225
 #: src/pages/Onboarding.tsx:274
 msgid "Could not reach this model server"
 msgstr "Could not reach this model server"
@@ -1534,8 +1540,8 @@ msgid "Could not start teaching"
 msgstr "Could not start teaching"
 
 #: src/components/AskCard.tsx:199
-#: src/components/DraftCard.tsx:158
-#: src/components/DraftCard.tsx:171
+#: src/components/DraftCard.tsx:157
+#: src/components/DraftCard.tsx:170
 msgid "Could not submit this answer"
 msgstr "Could not submit this answer"
 
@@ -1721,13 +1727,17 @@ msgstr "Decision Model"
 msgid "Decline"
 msgstr "Decline"
 
+#: src/pages/bot-page/model-options.ts:28
+#: src/pages/bot-page/SettingDetails.tsx:118
 #: src/pages/model-settings/model-detail.tsx:185
+#: src/pages/model-settings/routing-settings.tsx:103
+#: src/pages/model-settings/routing-settings.tsx:130
 #: src/pages/Onboarding.tsx:511
 msgid "Default"
 msgstr "Default"
 
 #. placeholder {0}: thinkingLevelLabel(fallback)
-#: src/pages/bot-page/SettingDetails.tsx:148
+#: src/pages/bot-page/SettingDetails.tsx:150
 msgid "Default ({0})"
 msgstr "Default ({0})"
 
@@ -1790,7 +1800,7 @@ msgstr "Denied"
 msgid "Deny"
 msgstr "Deny"
 
-#: src/pages/ModelSettingsOverlay.tsx:80
+#: src/pages/model-settings/routing-settings.tsx:77
 msgid "Deployment default"
 msgstr "Deployment default"
 
@@ -1798,7 +1808,7 @@ msgstr "Deployment default"
 msgid "Describe what this bot does"
 msgstr "Describe what this bot does"
 
-#: src/pages/bot-page/SettingDetails.tsx:51
+#: src/pages/bot-page/SettingDetails.tsx:53
 #: src/pages/bot-page/SettingsTab.tsx:27
 #: src/pages/GroupPanel.tsx:143
 #: src/pages/GroupPanel.tsx:252
@@ -1831,12 +1841,12 @@ msgstr "Direct MCP"
 msgid "Disabled"
 msgstr "Disabled"
 
-#: src/components/DraftCard.tsx:292
+#: src/components/DraftCard.tsx:290
 msgid "Discard"
 msgstr "Discard"
 
-#: src/components/DraftCard.tsx:223
-#: src/components/DraftCard.tsx:233
+#: src/components/DraftCard.tsx:222
+#: src/components/DraftCard.tsx:232
 msgid "Discarded"
 msgstr "Discarded"
 
@@ -1940,7 +1950,7 @@ msgstr "Edit"
 msgid "Edit and resend"
 msgstr "Edit and resend"
 
-#: src/components/DraftCard.tsx:397
+#: src/components/DraftCard.tsx:392
 msgid "Edit message"
 msgstr "Edit message"
 
@@ -1948,11 +1958,11 @@ msgstr "Edit message"
 msgid "Edit Profile"
 msgstr "Edit Profile"
 
-#: src/components/DraftCard.tsx:260
+#: src/components/DraftCard.tsx:259
 msgid "Edited"
 msgstr "Edited"
 
-#: src/components/DraftCard.tsx:259
+#: src/components/DraftCard.tsx:258
 msgid "Editing"
 msgstr "Editing"
 
@@ -1973,17 +1983,17 @@ msgstr "End call"
 msgid "Engage when... Ignore..."
 msgstr "Engage when... Ignore..."
 
-#: src/pages/model-settings/use-model-settings.ts:268
+#: src/pages/model-settings/use-model-settings.ts:276
 #: src/pages/Onboarding.tsx:304
 msgid "Enter a whole number from 1 to {MAX_MODEL_CONTEXT_WINDOW} for the context limit."
 msgstr "Enter a whole number from 1 to {MAX_MODEL_CONTEXT_WINDOW} for the context limit."
 
-#: src/pages/model-settings/use-model-settings.ts:261
+#: src/pages/model-settings/use-model-settings.ts:269
 #: src/pages/Onboarding.tsx:297
 msgid "Enter a whole number from 1 to {MAX_MODEL_MAX_TOKENS} for maximum output tokens."
 msgstr "Enter a whole number from 1 to {MAX_MODEL_MAX_TOKENS} for maximum output tokens."
 
-#: src/pages/model-settings/use-model-settings.ts:252
+#: src/pages/model-settings/use-model-settings.ts:260
 #: src/pages/Onboarding.tsx:288
 msgid "Enter a whole number from 1 to 1000 for the image limit."
 msgstr "Enter a whole number from 1 to 1000 for the image limit."
@@ -2029,6 +2039,10 @@ msgstr "Every month"
 msgid "Every week"
 msgstr "Every week"
 
+#: src/pages/model-settings/routing-settings.tsx:18
+msgid "Everyday"
+msgstr "Everyday"
+
 #: src/pages/plugins/advanced-integrations.tsx:304
 msgid "Executor token"
 msgstr "Executor token"
@@ -2051,7 +2065,7 @@ msgstr "Export this week's list from the CRM and drop it in the shared folder"
 msgid "External conversation"
 msgstr "External conversation"
 
-#: src/pages/bot-page/model-options.ts:17
+#: src/pages/bot-page/model-options.ts:14
 #: src/pages/model-settings/model-detail.tsx:181
 #: src/pages/Onboarding.tsx:507
 msgid "Extra high"
@@ -2087,6 +2101,10 @@ msgstr "Failed."
 #: src/components/teach/SkillDraftCard.tsx:133
 msgid "Failure handling"
 msgstr "Failure handling"
+
+#: src/pages/model-settings/routing-settings.tsx:17
+msgid "Fast"
+msgstr "Fast"
 
 #: src/pages/PluginsOverlay.tsx:227
 msgid "Featured"
@@ -2133,11 +2151,11 @@ msgstr "Flag unexpected actions"
 msgid "Forgot password?"
 msgstr "Forgot password?"
 
-#: src/pages/model-settings/model-picker.tsx:315
+#: src/pages/model-settings/model-picker.tsx:310
 msgid "Free"
 msgstr "Free"
 
-#: src/components/DraftCard.tsx:337
+#: src/components/DraftCard.tsx:335
 msgid "From"
 msgstr "From"
 
@@ -2232,7 +2250,7 @@ msgstr "Hide key"
 msgid "Hide password"
 msgstr "Hide password"
 
-#: src/pages/bot-page/model-options.ts:20
+#: src/pages/bot-page/model-options.ts:17
 #: src/pages/model-settings/model-detail.tsx:180
 #: src/pages/Onboarding.tsx:506
 msgid "High"
@@ -2259,7 +2277,7 @@ msgstr "How it runs"
 msgid "How often"
 msgstr "How often"
 
-#: src/pages/bot-page/SettingDetails.tsx:61
+#: src/pages/bot-page/SettingDetails.tsx:63
 msgid "How this bot should behave"
 msgstr "How this bot should behave"
 
@@ -2317,7 +2335,7 @@ msgid "Instruction"
 msgstr "Instruction"
 
 #: src/components/AskCard.tsx:363
-#: src/pages/bot-page/SettingDetails.tsx:51
+#: src/pages/bot-page/SettingDetails.tsx:53
 #: src/pages/bot-page/SettingsTab.tsx:26
 msgid "Instructions"
 msgstr "Instructions"
@@ -2440,7 +2458,7 @@ msgid "Loading memory settings…"
 msgstr "Loading memory settings…"
 
 #: src/pages/model-settings/model-detail.tsx:365
-#: src/pages/ModelSettingsOverlay.tsx:46
+#: src/pages/ModelSettingsOverlay.tsx:45
 msgid "Loading model catalog…"
 msgstr "Loading model catalog…"
 
@@ -2477,7 +2495,7 @@ msgstr "Local"
 msgid "Log out"
 msgstr "Log out"
 
-#: src/pages/bot-page/model-options.ts:18
+#: src/pages/bot-page/model-options.ts:15
 #: src/pages/model-settings/model-detail.tsx:178
 #: src/pages/Onboarding.tsx:504
 msgid "Low"
@@ -2516,7 +2534,7 @@ msgstr "Mark as Read"
 msgid "Mark as Unread"
 msgstr "Mark as Unread"
 
-#: src/pages/bot-page/model-options.ts:22
+#: src/pages/bot-page/model-options.ts:19
 #: src/pages/model-settings/model-detail.tsx:182
 #: src/pages/Onboarding.tsx:508
 msgid "Max"
@@ -2540,7 +2558,7 @@ msgstr "MCP endpoint"
 msgid "MCP servers"
 msgstr "MCP servers"
 
-#: src/pages/bot-page/model-options.ts:19
+#: src/pages/bot-page/model-options.ts:16
 #: src/pages/model-settings/model-detail.tsx:179
 #: src/pages/Onboarding.tsx:505
 msgid "Medium"
@@ -2627,7 +2645,7 @@ msgstr "Messaging"
 msgid "Microphone failed"
 msgstr "Microphone failed"
 
-#: src/pages/bot-page/model-options.ts:21
+#: src/pages/bot-page/model-options.ts:18
 #: src/pages/model-settings/model-detail.tsx:177
 #: src/pages/Onboarding.tsx:503
 msgid "Minimal"
@@ -2650,12 +2668,12 @@ msgstr "minute"
 msgid "minutes"
 msgstr "minutes"
 
-#: src/pages/bot-page/SettingDetails.tsx:105
+#: src/pages/bot-page/SettingDetails.tsx:106
 #: src/pages/bot-page/SettingsTab.tsx:29
 #: src/pages/DecisionModelSettingsPanel.tsx:156
 #: src/pages/model-settings/model-detail.tsx:109
 #: src/pages/model-settings/model-detail.tsx:219
-#: src/pages/model-settings/model-picker.tsx:203
+#: src/pages/model-settings/model-picker.tsx:198
 #: src/pages/Onboarding.tsx:433
 #: src/pages/Onboarding.tsx:529
 #: src/pages/Onboarding.tsx:541
@@ -2671,7 +2689,7 @@ msgstr "Model error"
 msgid "Model id"
 msgstr "Model id"
 
-#: src/pages/model-settings/model-picker.tsx:239
+#: src/pages/model-settings/model-picker.tsx:234
 msgid "Model options"
 msgstr "Model options"
 
@@ -2679,11 +2697,11 @@ msgstr "Model options"
 msgid "Model spend uses your provider keys."
 msgstr "Model spend uses your provider keys."
 
-#: src/pages/model-settings/use-model-settings.ts:232
+#: src/pages/model-settings/use-model-settings.ts:240
 msgid "Model updated."
 msgstr "Model updated."
 
-#: src/pages/ModelSettingsOverlay.tsx:57
+#: src/pages/ModelSettingsOverlay.tsx:56
 #: src/pages/SettingsOverlay.tsx:95
 msgid "Models"
 msgstr "Models"
@@ -2851,7 +2869,7 @@ msgstr "No integrations installed yet."
 
 #: src/components/ask/AskSettled.tsx:28
 #: src/components/AskCard.tsx:260
-#: src/components/DraftCard.tsx:240
+#: src/components/DraftCard.tsx:239
 msgid "No longer active"
 msgstr "No longer active"
 
@@ -2859,7 +2877,7 @@ msgstr "No longer active"
 msgid "No managed app catalog is configured on this deployment."
 msgstr "No managed app catalog is configured on this deployment."
 
-#: src/pages/model-settings/model-picker.tsx:267
+#: src/pages/model-settings/model-picker.tsx:262
 msgid "No matching models"
 msgstr "No matching models"
 
@@ -2883,7 +2901,7 @@ msgstr "No model catalog is available."
 msgid "No model connected"
 msgstr "No model connected"
 
-#: src/pages/ModelSettingsOverlay.tsx:137
+#: src/pages/ModelSettingsOverlay.tsx:122
 msgid "No providers found."
 msgstr "No providers found."
 
@@ -2938,7 +2956,7 @@ msgstr "Not in the plugin catalog"
 msgid "Not now"
 msgstr "Not now"
 
-#: src/components/DraftCard.tsx:258
+#: src/components/DraftCard.tsx:257
 msgid "Not sent"
 msgstr "Not sent"
 
@@ -2972,7 +2990,7 @@ msgid "Now"
 msgstr "Now"
 
 #. placeholder {0}: selected.label
-#: src/pages/model-settings/use-model-settings.ts:232
+#: src/pages/model-settings/use-model-settings.ts:240
 msgid "Now using {0}."
 msgstr "Now using {0}."
 
@@ -3202,7 +3220,7 @@ msgstr "Project ID"
 msgid "Provider"
 msgstr "Provider"
 
-#: src/pages/ModelSettingsOverlay.tsx:92
+#: src/pages/ModelSettingsOverlay.tsx:77
 #: src/pages/VoiceSettingsOverlay.tsx:186
 msgid "Providers"
 msgstr "Providers"
@@ -3224,8 +3242,8 @@ msgstr "React"
 msgid "Reactions"
 msgstr "Reactions"
 
-#: src/pages/bot-page/SettingDetails.tsx:202
-#: src/pages/bot-page/SettingDetails.tsx:206
+#: src/pages/bot-page/SettingDetails.tsx:204
+#: src/pages/bot-page/SettingDetails.tsx:208
 msgid "Read replies aloud"
 msgstr "Read replies aloud"
 
@@ -3234,6 +3252,7 @@ msgid "read-only"
 msgstr "read-only"
 
 #: src/pages/model-settings/model-detail.tsx:184
+#: src/pages/model-settings/routing-settings.tsx:129
 #: src/pages/Onboarding.tsx:510
 msgid "Reasoning effort"
 msgstr "Reasoning effort"
@@ -3258,7 +3277,7 @@ msgstr "Recommended"
 msgid "Recommended · {description}"
 msgstr "Recommended · {description}"
 
-#: src/components/DraftCard.tsx:317
+#: src/components/DraftCard.tsx:315
 msgid "Reconnect {app}"
 msgstr "Reconnect {app}"
 
@@ -3428,7 +3447,7 @@ msgstr "Replace API key"
 msgid "Replace key"
 msgstr "Replace key"
 
-#: src/components/DraftCard.tsx:237
+#: src/components/DraftCard.tsx:236
 msgid "Replaced"
 msgstr "Replaced"
 
@@ -3437,8 +3456,8 @@ msgstr "Replaced"
 msgid "Reply"
 msgstr "Reply"
 
-#: src/pages/bot-page/SettingDetails.tsx:212
-#: src/pages/bot-page/SettingDetails.tsx:216
+#: src/pages/bot-page/SettingDetails.tsx:214
+#: src/pages/bot-page/SettingDetails.tsx:218
 msgid "Reply in several short messages"
 msgstr "Reply in several short messages"
 
@@ -3573,6 +3592,10 @@ msgstr "Routine updated"
 msgid "Routines"
 msgstr "Routines"
 
+#: src/pages/shell/session-view.tsx:245
+msgid "Routing"
+msgstr "Routing"
+
 #: src/pages/bot-page/RoutineTriggers.tsx:259
 msgid "Run at"
 msgstr "Run at"
@@ -3617,7 +3640,7 @@ msgstr "Saved"
 msgid "Saved, but list refresh failed"
 msgstr "Saved, but list refresh failed"
 
-#: src/pages/model-settings/use-model-settings.ts:301
+#: src/pages/model-settings/use-model-settings.ts:309
 msgid "Saved."
 msgstr "Saved."
 
@@ -3648,7 +3671,7 @@ msgstr "Say yes or no, or answer in a sentence."
 msgid "Screen"
 msgstr "Screen"
 
-#: src/pages/model-settings/model-picker.tsx:228
+#: src/pages/model-settings/model-picker.tsx:223
 #: src/pages/plugins/advanced-integrations.tsx:119
 #: src/pages/shell/bot-picker.tsx:55
 #: src/pages/shell/bot-picker.tsx:56
@@ -3676,12 +3699,12 @@ msgstr "Search by domain"
 msgid "Search integrations.sh"
 msgstr "Search integrations.sh"
 
-#: src/pages/model-settings/model-picker.tsx:223
+#: src/pages/model-settings/model-picker.tsx:218
 msgid "Search models"
 msgstr "Search models"
 
-#: src/pages/ModelSettingsOverlay.tsx:95
-#: src/pages/ModelSettingsOverlay.tsx:101
+#: src/pages/ModelSettingsOverlay.tsx:80
+#: src/pages/ModelSettingsOverlay.tsx:86
 msgid "Search providers"
 msgstr "Search providers"
 
@@ -3701,7 +3724,7 @@ msgstr "Select a bot"
 
 #: src/components/ask/QuestionCard.tsx:205
 #: src/components/ask/QuestionCard.tsx:306
-#: src/components/DraftCard.tsx:328
+#: src/components/DraftCard.tsx:326
 #: src/pages/shell/composer.tsx:407
 msgid "Send"
 msgstr "Send"
@@ -3715,7 +3738,7 @@ msgid "Send reset link"
 msgstr "Send reset link"
 
 #: src/components/AskCard.tsx:304
-#: src/components/DraftCard.tsx:328
+#: src/components/DraftCard.tsx:326
 msgid "Sending…"
 msgstr "Sending…"
 
@@ -3883,8 +3906,8 @@ msgstr "Slack message"
 msgid "Software update"
 msgstr "Software update"
 
-#: src/pages/bot-page/model-options.ts:29
-#: src/pages/bot-page/SettingDetails.tsx:116
+#: src/pages/bot-page/model-options.ts:30
+#: src/pages/bot-page/SettingDetails.tsx:120
 msgid "Space default"
 msgstr "Space default"
 
@@ -3960,8 +3983,8 @@ msgstr "Stored encrypted"
 msgid "Stored securely. Never shown here."
 msgstr "Stored securely. Never shown here."
 
-#: src/components/DraftCard.tsx:380
-#: src/components/DraftCard.tsx:387
+#: src/components/DraftCard.tsx:375
+#: src/components/DraftCard.tsx:382
 msgid "Subject"
 msgstr "Subject"
 
@@ -3976,6 +3999,7 @@ msgid "Supports images"
 msgstr "Supports images"
 
 #: src/pages/model-settings/model-detail.tsx:169
+#: src/pages/model-settings/routing-settings.tsx:116
 #: src/pages/Onboarding.tsx:497
 msgid "Supports thinking"
 msgstr "Supports thinking"
@@ -4045,7 +4069,7 @@ msgstr "The API did not come back. Refresh this page."
 msgid "The selected memory provider is not available in this build."
 msgstr "The selected memory provider is not available in this build."
 
-#: src/pages/bot-page/SettingDetails.tsx:137
+#: src/pages/bot-page/SettingDetails.tsx:139
 msgid "Thinking"
 msgstr "Thinking"
 
@@ -4103,7 +4127,7 @@ msgstr "Time of day"
 msgid "Title"
 msgstr "Title"
 
-#: src/components/DraftCard.tsx:256
+#: src/components/DraftCard.tsx:255
 msgid "To"
 msgstr "To"
 
@@ -4137,7 +4161,7 @@ msgstr "Treat like a person"
 msgid "Treg token"
 msgstr "Treg token"
 
-#: src/components/DraftCard.tsx:328
+#: src/components/DraftCard.tsx:326
 #: src/pages/Onboarding.tsx:685
 msgid "Try again"
 msgstr "Try again"
@@ -4154,7 +4178,7 @@ msgstr "Unassigned"
 msgid "Unavailable"
 msgstr "Unavailable"
 
-#: src/components/DraftCard.tsx:229
+#: src/components/DraftCard.tsx:228
 msgid "Undo"
 msgstr "Undo"
 
@@ -4272,8 +4296,8 @@ msgstr "Verify and add"
 msgid "Verifying…"
 msgstr "Verifying…"
 
-#: src/pages/bot-page/SettingDetails.tsx:183
-#: src/pages/bot-page/SettingDetails.tsx:187
+#: src/pages/bot-page/SettingDetails.tsx:185
+#: src/pages/bot-page/SettingDetails.tsx:189
 #: src/pages/SettingsOverlay.tsx:98
 #: src/pages/shell/thread-header.tsx:139
 #: src/pages/shell/thread-header.tsx:140
@@ -4282,7 +4306,7 @@ msgstr "Verifying…"
 msgid "Voice"
 msgstr "Voice"
 
-#: src/pages/bot-page/SettingDetails.tsx:179
+#: src/pages/bot-page/SettingDetails.tsx:181
 #: src/pages/bot-page/SettingsTab.tsx:36
 msgid "Voice and replies"
 msgstr "Voice and replies"
@@ -4341,7 +4365,7 @@ msgstr "What result will you demonstrate?"
 msgid "What should this routine do each time it runs?"
 msgstr "What should this routine do each time it runs?"
 
-#: src/pages/bot-page/SettingDetails.tsx:61
+#: src/pages/bot-page/SettingDetails.tsx:63
 #: src/pages/shell/bot-panel.tsx:137
 msgid "What this bot is for"
 msgstr "What this bot is for"
@@ -4391,7 +4415,7 @@ msgstr "Yearly on {date} at {time}"
 msgid "Yesterday"
 msgstr "Yesterday"
 
-#: src/components/DraftCard.tsx:54
+#: src/components/DraftCard.tsx:53
 #: src/pages/Shell.tsx:135
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"

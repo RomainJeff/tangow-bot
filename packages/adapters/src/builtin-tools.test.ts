@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH, SPAWN_BOT_PROMPT_MAX_LENGTH } from "@rakazo/contracts";
 import { BOT_SKILL_DESCRIPTION_MAX_LENGTH } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
-import { builtinAgentTools } from "./builtin-tools.js";
+import { builtinAgentTools, helperCallOf, helperModel } from "./builtin-tools.js";
 import { parseConnectorToolArgs } from "./lazy-tool-catalog.js";
 
 describe("spawn_bot tool description", () => {
@@ -68,5 +68,35 @@ describe("request_secret parameters", () => {
         replace: true,
       }),
     ).toThrow();
+  });
+});
+
+describe("helper category calls", () => {
+  it.each([undefined, "invalid"])("reads legacy category %s as everyday", async (category) => {
+    const call = helperCallOf({ category, model_provider: "ignored", model_id: "ignored" });
+    expect(call.category).toBe("everyday");
+    const selected = await helperModel(
+      {
+        resolveCategory: async () => ({
+          model: { provider: "scripted", id: "everyday-model" },
+          modelDecision: {
+            mode: "category",
+            requestedCategory: "everyday",
+            category: "everyday",
+            provider: "scripted",
+            modelId: "everyday-model",
+          },
+        }),
+      },
+      call,
+    );
+    expect(selected.modelDecision).toEqual({
+      mode: "category",
+      requestedCategory: "everyday",
+      category: "everyday",
+      provider: "scripted",
+      modelId: "everyday-model",
+      fallback: "legacy_call",
+    });
   });
 });

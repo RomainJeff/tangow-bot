@@ -12,7 +12,6 @@ export interface HelperProfile {
   exclusive?: HelperResource;
   /** Overrides the call's background flag; auto or omitted leaves the choice to the bot. */
   executionMode?: "async" | "sync" | "auto";
-  model?: { provider: string; id: string };
   instructions: string;
 }
 
