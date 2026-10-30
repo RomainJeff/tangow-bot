@@ -1,11 +1,14 @@
 import type { RunFailureKind, RunStatus } from "@rakazo/contracts";
 
 export const MISSING_MODEL_MESSAGE = "Connect a model in Settings before running bots.";
+export const STORED_MODEL_UNAVAILABLE_MESSAGE =
+  "This run's model connection is no longer available. Reconnect it in Settings and retry.";
 export const MODEL_PROVIDER_NOT_CONNECTED_MESSAGE = "Connect that model provider first";
 export const UNKNOWN_MODEL_MESSAGE = "Unknown model for that provider";
 
 const MISSING_MODEL_ERRORS: ReadonlySet<string> = new Set([
   MISSING_MODEL_MESSAGE,
+  STORED_MODEL_UNAVAILABLE_MESSAGE,
   MODEL_PROVIDER_NOT_CONNECTED_MESSAGE,
   UNKNOWN_MODEL_MESSAGE,
 ]);

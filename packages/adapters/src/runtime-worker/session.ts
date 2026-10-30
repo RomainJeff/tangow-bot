@@ -373,7 +373,7 @@ export function createSession(
             name: call.name,
             task: call.task,
             args,
-            model: { provider: model.provider, id: model.id },
+            model: { provider: model.provider, id: model.id, thinkingLevel: model.thinkingLevel },
             profile,
           });
           return { type: "tool.result", output: started };
@@ -389,7 +389,7 @@ export function createSession(
           name: call.name,
           task: call.task,
           args,
-          model: { provider: model.provider, id: model.id },
+          model: { provider: model.provider, id: model.id, thinkingLevel: model.thinkingLevel },
           profile,
         });
         helper = {
@@ -789,7 +789,7 @@ export function createSession(
           name: body.name,
           task: body.task,
           args: body.args,
-          model: body.model,
+          model: { ...body.model, thinkingLevel: model.thinkingLevel },
         });
         const agent = `helper:${helpers.size + 1}`;
         helpers.set(agent, {

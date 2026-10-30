@@ -22,7 +22,7 @@ const ROUNDING_TOLERANCE_PER_ENTRY = 0.005;
 class DecisionTimeoutError extends Error {}
 
 /** What a call is for, logged only, so each use is measured separately. */
-export type DecisionPurpose = "run_step" | "tool_approval";
+export type DecisionPurpose = "run_step" | "tool_approval" | "model_route";
 
 /** Which validation check rejected a provider answer. Codes only, never content. */
 type InvalidCheck =

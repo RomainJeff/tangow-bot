@@ -10,6 +10,7 @@ import {
 } from "./events.js";
 import { Id, IsoDate, RunFailureKind, ThinkingLevelSchema } from "./ids.js";
 import { isLinkPreviewCard, LinkMentionBlock, LinkPreviewBlock } from "./link-preview.js";
+import { RunModelDecisionSchema } from "./model-routing.js";
 import { FactualRunRecapSchema } from "./run-recap.js";
 
 export const EntryId = Id.brand<"EntryId">();
@@ -242,6 +243,7 @@ const EntryShapes = z.discriminatedUnion("type", [
       trigger: SessionRunTrigger,
       model: RunModel,
       effort: ThinkingLevelSchema.nullable(),
+      routing: RunModelDecisionSchema.optional(),
     }),
   ),
   runEntry("run.finished", RunOutcome),
