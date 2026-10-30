@@ -3,16 +3,10 @@ import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import {
-  classifyModelRoute,
-  createDecisionProvider,
-  prepareDecisionProviderConnection,
-} from "@rakazo/adapters";
 import { ModelConnectInputSchema } from "@rakazo/contracts";
 import { DEFAULT_SKILL_LEARNING } from "@rakazo/core";
 import { loadRootEnv } from "@rakazo/core/node/load-root-env";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
-import { parseDecisionConnection } from "../evals/approval-classification/model-run.js";
 import { EVAL_CASES } from "../evals/cases.js";
 import { MODEL_ROUTE_CASES } from "../evals/model-route.js";
 import { emptyTrial, redact, summarize, validateControls } from "../evals/report.js";
@@ -42,6 +36,11 @@ async function main() {
     }
     if (!values.live || !values.connection)
       throw new Error("Model routing eval requires --live --connection <Decision Model JSON>");
+    const { classifyModelRoute, createDecisionProvider, prepareDecisionProviderConnection } =
+      await import("@rakazo/adapters");
+    const { parseDecisionConnection } = await import(
+      "../evals/approval-classification/model-run.js"
+    );
     const connection = await prepareDecisionProviderConnection(
       parseDecisionConnection(JSON.parse(readFileSync(values.connection, "utf8"))),
     );
