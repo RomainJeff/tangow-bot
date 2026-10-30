@@ -91,7 +91,20 @@ function helperRun(
         apiKey: "controller-only",
       },
       attempt: { id: `${runId}-attempt`, fence: 1 },
-      resolveModel: async (provider, id) => ({ provider, id, apiKey: "controller-only" }),
+      resolveCategory: async (category) => ({
+        model: {
+          provider: "openai-compatible",
+          id: category === "everyday" ? "unused" : category + "-model",
+          apiKey: "controller-only",
+        },
+        modelDecision: {
+          mode: "category",
+          requestedCategory: category,
+          category,
+          provider: "openai-compatible",
+          modelId: category === "everyday" ? "unused" : category + "-model",
+        },
+      }),
       executeTool: async (name) => `parent ran ${name}`,
       startSubagent: async (call) => {
         opened.push(call);
@@ -433,7 +446,7 @@ describe("a helper the controller starts for a harness with its own loop", () =>
       name: "scout",
       task: "Find the notes.",
       args: {},
-      model: { provider: "openai-compatible", id: "unused" },
+      category: "everyday",
     });
     expect(await guest.replies(1)).toEqual([{ type: "refused", reason: "invalid" }]);
     await expect(run.run.done).rejects.toThrow("The worker broke the run protocol: invalid");
@@ -446,7 +459,6 @@ const RESEARCHER: HelperProfile = {
   description: "Finds sources.",
   allow: ["rem*", "run_subagent"],
   block: ["bash"],
-  model: { provider: "openai-compatible", id: "research-model" },
   instructions: "Cite every source.",
 };
 
@@ -506,7 +518,7 @@ describe("a helper the call names by profile", () => {
     },
   );
 
-  it("runs with its profile's tools, instructions and model, and nothing else", async () => {
+  it("runs with its profile's tools and instructions on the category model", async () => {
     const run = helperRun("run_profiled", {
       tools: ["bash", "read", "remember", "forget", "run_subagent", "message_user"].map(tool),
       helperProfiles: [RESEARCHER],
@@ -537,11 +549,11 @@ describe("a helper the call names by profile", () => {
           { ...tool("read"), where: "guest" },
           { ...tool("remember"), where: "controller" },
         ],
-        model: { provider: "openai-compatible", id: "research-model" },
+        model: { provider: "openai-compatible", id: "unused" },
       },
     });
     expect(run.opened.map(({ model }) => model)).toEqual([
-      { provider: "openai-compatible", id: "research-model" },
+      { provider: "openai-compatible", id: "unused" },
     ]);
 
     helperRemembers(guest, 3, "helper:1", "forget");
@@ -561,7 +573,7 @@ describe("a helper the call names by profile", () => {
       {
         callId: "h1",
         task: "Find the notes.",
-        model: { provider: "openai-compatible", id: "research-model" },
+        model: { provider: "openai-compatible", id: "unused" },
         profile: { name: "researcher" },
       },
     ]);
@@ -599,7 +611,7 @@ describe("a helper the call names by profile", () => {
     expect(await guest.replies(2)).toEqual([{ type: "refused", reason: "unknown_tool" }]);
   });
 
-  it("takes the call's model over its profile's", async () => {
+  it("ignores legacy concrete model arguments and resolves everyday", async () => {
     const run = helperRun("run_profiled_model", { helperProfiles: [RESEARCHER] });
     const guest = await run.guest();
 
@@ -609,8 +621,28 @@ describe("a helper the call names by profile", () => {
       model_id: "call-model",
     });
     expect(await guest.replies(2, 1)).toMatchObject([
-      { type: "subagent.start", run: { model: { id: "call-model" } } },
+      { type: "subagent.start", run: { model: { id: "unused" } } },
     ]);
+  });
+
+  it.each([
+    ["fast", "fast-model"],
+    ["everyday", "unused"],
+    ["complex", "complex-model"],
+  ])("launches a %s child independently of the fixed parent", async (category, id) => {
+    const run = helperRun("category-" + category);
+    const guest = await run.guest();
+    callHelper(guest, 1, "h1", { category, model_provider: "ignored", model_id: "ignored" });
+    expect(await guest.replies(2, 1)).toMatchObject([
+      { type: "subagent.start", run: { model: { provider: "openai-compatible", id } } },
+    ]);
+    expect(run.opened[0]?.modelDecision).toEqual({
+      mode: "category",
+      requestedCategory: category,
+      category,
+      provider: "openai-compatible",
+      modelId: id,
+    });
   });
 
   it("names the available profiles when the call names another", async () => {

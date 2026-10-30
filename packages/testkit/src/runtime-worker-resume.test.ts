@@ -512,7 +512,7 @@ it.each(["allow", "deny", "corrupt", "retry", "helper"] as const)(
                   type: "tool" as const,
                   id: "helper-native",
                   name: "run_subagent",
-                  arguments: { name: "mailer", task: "Prepare the email." },
+                  arguments: { category: "everyday", name: "mailer", task: "Prepare the email." },
                 },
               },
             ]

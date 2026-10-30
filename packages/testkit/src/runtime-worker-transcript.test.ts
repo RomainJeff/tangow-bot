@@ -17,7 +17,16 @@ const REMEMBER = {
 };
 
 function request(overrides: Partial<AgentRunRequest>): AgentRunRequest {
+  const model = overrides.model ?? {
+    provider: "openai-compatible",
+    id: "unused",
+    apiKey: "controller-only-key",
+  };
   return {
+    resolveCategory: async () => ({
+      model,
+      modelDecision: { mode: "category", provider: model.provider, modelId: model.id },
+    }),
     botId: "bot",
     threadId: "thread",
     runId: "run_native",

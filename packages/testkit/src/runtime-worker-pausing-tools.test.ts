@@ -77,7 +77,7 @@ describe("pausing tools a worker harness leaves to the controller", () => {
             callId: "helper",
             ...args,
             args,
-            model: { provider: run.model.provider, id: run.model.id },
+            category: "everyday",
           },
           "subagent.opened",
         );

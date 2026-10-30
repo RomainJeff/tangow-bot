@@ -186,7 +186,7 @@ describe.skipIf(!databaseAvailable)("a draft's outcome in the bot's history", ()
             type: "tool",
             id: "helper",
             name: "run_subagent",
-            arguments: { name: "mailer", task: "Mail Anna." },
+            arguments: { category: "everyday", name: "mailer", task: "Mail Anna." },
           },
         },
         mailTo("anna@example.test", "mail-h"),

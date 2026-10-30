@@ -210,7 +210,7 @@ describe("a hostile guest", () => {
       executeTool: vi.fn(),
       claimSteering: vi.fn(),
       startSubagent: vi.fn(),
-      resolveModel: vi.fn(),
+      resolveCategory: vi.fn(),
     };
     const runB = consume(runtime.run(request("run_b")));
     const b = await launchedFor("run_b");
@@ -599,7 +599,7 @@ describe("the controller's pause guard, against a hostile harness", () => {
       executeTool,
       claimSteering,
       startSubagent: vi.fn(),
-      resolveModel: vi.fn(),
+      resolveCategory: vi.fn(),
     });
     await pauseOnTool(ask);
 
@@ -633,7 +633,7 @@ describe("the controller's pause guard, against a hostile harness", () => {
         name: "helper",
         task: "Send it again.",
         args: {},
-        model: { provider: "openai-compatible", id: "unused" },
+        category: "everyday",
       }),
     ).toEqual({ type: "error", message: "This run is paused until the user answers." });
     expect(await ask({ type: "done", text: "All sent!" })).toEqual({
@@ -672,7 +672,10 @@ describe("the controller's pause guard, against a hostile harness", () => {
     const { runtime, launchedFor } = setup();
     const { run, ask } = await startGuest(runtime, launchedFor, "run_helper", {
       executeTool: vi.fn(async () => "saved"),
-      resolveModel: async () => request("run_helper").model,
+      resolveCategory: async () => ({
+        model: request("run_helper").model,
+        modelDecision: { mode: "category", provider: "openai-compatible", modelId: "unused" },
+      }),
       startSubagent: async () => ({
         executeTool: async () => PAUSED,
         text: async (text) => void texts.push(text),
@@ -687,7 +690,7 @@ describe("the controller's pause guard, against a hostile harness", () => {
         name: "helper",
         task: "Look around.",
         args: {},
-        model: { provider: "openai-compatible", id: "unused" },
+        category: "everyday",
       }),
     ).toMatchObject({ type: "subagent.opened", agent: "helper:1" });
     await ask({ type: "subagent.text", agent: "helper:1", text: "Looking." });
@@ -1084,7 +1087,10 @@ describe("the controller's pause guard, against a hostile harness", () => {
     const { runtime, launchedFor } = setup();
     const { run, ask } = await startGuest(runtime, launchedFor, "concurrent-budget", {
       model,
-      resolveModel: async () => model,
+      resolveCategory: async () => ({
+        model,
+        modelDecision: { mode: "category", provider: model.provider, modelId: model.id },
+      }),
       startSubagent: async () => ({
         executeTool: async () => "saved",
         text: async () => {},
@@ -1098,7 +1104,7 @@ describe("the controller's pause guard, against a hostile harness", () => {
       name: "helper",
       task: "Help.",
       args: {},
-      model: { provider: model.provider, id: model.id },
+      category: "everyday",
     });
     expect(await ask(modelRequest)).toEqual({ type: "model.end" });
     void ask(modelRequest);

@@ -2,6 +2,8 @@ import type {
   AgentHistoryTurn,
   AskQuestion,
   ConnectionCatalogItem,
+  ModelCategory,
+  RunModelDecision,
   SandboxKind,
 } from "@rakazo/contracts";
 import type { HelperProfile } from "@rakazo/core";
@@ -446,8 +448,10 @@ export interface AgentRunRequest {
    */
   secrets?: readonly string[];
   model: AgentRunModel;
-  /** Resolve an explicitly requested helper model within the active user and space scope. */
-  resolveModel?: (provider: string, modelId: string) => Promise<AgentRunModel>;
+  /** Resolve a helper category within the active user and space scope. */
+  resolveCategory?: (
+    category: ModelCategory,
+  ) => Promise<{ model: AgentRunModel; modelDecision: RunModelDecision }>;
   resumeFromCheckpoint?: string;
   script?: ScriptedTurn[];
   /**
@@ -521,6 +525,7 @@ export interface SubagentCall {
   task: string;
   args: Record<string, unknown>;
   model: Pick<AgentRunModel, "provider" | "id" | "thinkingLevel">;
+  modelDecision: RunModelDecision;
   /** The profile the helper runs; its `exclusive` resource is held for the helper's run. */
   profile?: Pick<HelperProfile, "name" | "exclusive">;
 }

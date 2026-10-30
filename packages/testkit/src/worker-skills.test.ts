@@ -90,7 +90,11 @@ it.each(["memory", "child"] as const)(
             type: "tool",
             id: "helper",
             name: "run_subagent",
-            arguments: { name: "Reviewer", task: "Check the available skills." },
+            arguments: {
+              category: "everyday",
+              name: "Reviewer",
+              task: "Check the available skills.",
+            },
           },
         },
         {

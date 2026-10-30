@@ -151,7 +151,11 @@ describe("an approval answered for a run in a guest", () => {
                     type: "tool" as const,
                     id: "delegate",
                     name: "run_subagent",
-                    arguments: { name: "Publisher", task: "Publish the plan." },
+                    arguments: {
+                      category: "everyday",
+                      name: "Publisher",
+                      task: "Publish the plan.",
+                    },
                   },
                 },
               ]
