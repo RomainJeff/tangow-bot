@@ -95,6 +95,7 @@ import {
   LINK_PREVIEW_URL_MAX_LENGTH,
   LinkPreviewDraftSchema,
 } from "./link-preview.js";
+import { ModelCategoryAssignmentSchema, ModelCategorySchema } from "./model-routing.js";
 import { MessageReactionSchema } from "./reactions.js";
 import {
   BotActivityInputSchema,
@@ -227,6 +228,9 @@ export const appContract = {
   },
   models: {
     list: oc.output(z.array(ModelCatalogEntrySchema)),
+    routing: oc.output(
+      z.object({ auto: z.boolean(), categories: z.array(ModelCategoryAssignmentSchema) }),
+    ),
     credentials: oc.output(z.array(ModelCredentialSchema)),
     connect: oc.input(ModelConnectInputSchema).output(ModelCredentialSchema),
     probeOpenAiCompatible: oc
@@ -262,6 +266,11 @@ export const appContract = {
     cancelOAuth: oc
       .input(z.object({ loginId: z.string() }))
       .output(z.object({ ok: z.literal(true) })),
+    setCategory: oc.input(ModelCategoryAssignmentSchema).output(z.object({ ok: z.literal(true) })),
+    clearCategory: oc
+      .input(z.object({ category: ModelCategorySchema }))
+      .output(z.object({ ok: z.literal(true) })),
+    setAuto: oc.input(z.object({ enabled: z.boolean() })).output(z.object({ ok: z.literal(true) })),
     setDefault: oc
       .input(z.object({ provider: z.string(), modelId: z.string() }))
       .output(z.object({ ok: z.literal(true) })),
