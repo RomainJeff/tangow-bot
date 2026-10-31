@@ -777,12 +777,13 @@ app.delete("/computers/:id/screen", async (c) => {
       const index = assigned ? releaseAssignedScreen(assigned, screenId, screenLeaseId) : undefined;
       if (preserve && assigned && index !== undefined) {
         // Revoking control disconnects the run's input while the display and browser stay up.
+        // A revoke that fails or throws falls through to the normal teardown.
         const revoked = await runContainerCommand(container, [
           "bash",
           "-c",
           interactiveScreenCommand(false, undefined, screenPorts(index)),
-        ]);
-        if (revoked.code === 0) {
+        ]).catch(() => undefined);
+        if (revoked?.code === 0) {
           keepReleasedScreen(assigned, screenId, index);
           kept = true;
           return;

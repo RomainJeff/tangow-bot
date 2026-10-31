@@ -10,7 +10,7 @@ export function parseScreenLeaseId(leaseId: string): { ownerId: string; fence: n
   return { ownerId: leaseId.slice(0, separator), fence };
 }
 
-/** A kept screen belongs to no run, so the next run's first claim may match its fence. */
+/** Fences only order one run's attempts, so a kept screen, which no run owns, goes to any other run. */
 export function canTakeScreenLease(
   existing: string | undefined,
   incoming: string | undefined,
@@ -18,9 +18,10 @@ export function canTakeScreenLease(
 ): boolean {
   if (!incoming) return false;
   if (!existing || existing === incoming) return true;
-  const { fence } = parseScreenLeaseId(incoming);
-  const current = parseScreenLeaseId(existing).fence;
-  return kept ? fence >= current : fence > current;
+  const next = parseScreenLeaseId(incoming);
+  const current = parseScreenLeaseId(existing);
+  if (kept && next.ownerId !== current.ownerId) return true;
+  return kept ? next.fence >= current.fence : next.fence > current.fence;
 }
 
 export function canReleaseScreenLease(

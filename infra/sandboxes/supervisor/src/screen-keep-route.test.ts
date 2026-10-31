@@ -68,7 +68,7 @@ async function release(computer: string, extra: Record<string, string>) {
   });
   const commands = mock.exec.mock.calls
     .slice(calls)
-    .map(([options]: [{ Cmd: string[] }]) => options.Cmd.at(-1));
+    .map(([options]) => (options as { Cmd: string[] }).Cmd.at(-1));
   return { response, commands };
 }
 

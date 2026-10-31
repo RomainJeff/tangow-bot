@@ -64,8 +64,12 @@ export function computerSleepJobKey(computerId: string): string {
   return `computer.sleep:${computerId}`;
 }
 
-export function computerScreenSleepJobKey(computerId: string, botId: string): string {
-  return `computer.screen-sleep:${computerId}:${botId}`;
+export function computerScreenSleepJobKey(
+  computerId: string,
+  botId: string,
+  screenLeaseId: string,
+): string {
+  return `computer.screen-sleep:${computerId}:${botId}:${screenLeaseId}`;
 }
 
 export function computerControlExpireJobKey(computerId: string, leaseId?: string): string {
@@ -112,7 +116,7 @@ export function computerScreenSleepJob(
     name: "computer.screen-sleep",
     payload,
     availableAt,
-    replaceKey: computerScreenSleepJobKey(payload.computerId, payload.botId),
+    replaceKey: computerScreenSleepJobKey(payload.computerId, payload.botId, payload.screenLeaseId),
   };
 }
 
