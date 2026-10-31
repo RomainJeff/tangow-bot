@@ -42,6 +42,10 @@ name: Rakazo mobile smoke
     timeout: 30000
 - tapOn: "Open computer"
 - extendedWaitUntil:
+    visible: "Close computer"
+    timeout: 90000
+- tapOn: "Take control"
+- extendedWaitUntil:
     visible: "You have control"
     timeout: 90000
 - tapOn: "Close computer"

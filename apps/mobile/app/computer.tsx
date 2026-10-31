@@ -156,9 +156,9 @@ export default function Computer() {
     return () => clearInterval(timer);
   }, [botId, computer?.state]);
 
-  async function openComputer() {
+  async function openComputer({ takeControl = false }: { takeControl?: boolean } = {}) {
     if (!botId) return;
-    const needsTakeover = !(computer?.controlHolder === "user" && computer.controlBotId === botId);
+    const needsTakeover = takeControl && !hasControl;
     try {
       const opened = await bootComputer({
         takeControl: needsTakeover,
@@ -282,7 +282,7 @@ export default function Computer() {
           />
         ) : (
           <Pressable
-            onPress={() => void openComputer()}
+            onPress={() => void openComputer({ takeControl: true })}
             style={{
               backgroundColor: tokens.muted,
               paddingHorizontal: 14,
