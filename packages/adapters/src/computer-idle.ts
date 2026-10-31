@@ -193,7 +193,6 @@ export async function sleepBotScreenIfIdle(
   screen: BackgroundJobPayloads["computer.screen-sleep"],
 ): Promise<void> {
   const computer = await loadComputer(deps.prisma, screen.computerId);
-  // A stopped computer closed its screens with it.
   if (!computer?.providerRef || computer.state !== "running") return;
 
   // A run waiting for an answer leaves its screen to the idle delay like any finished one.
