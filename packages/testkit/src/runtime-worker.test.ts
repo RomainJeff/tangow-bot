@@ -74,12 +74,6 @@ const finishing: ModelEmulatorStep[] = [
   { expect() {}, response: { type: "text", text: recap } },
 ];
 
-/** Pi closes its turn with one more model call once a pausing call answers that the run waits. */
-const closingTurn: ModelEmulatorStep = {
-  expect() {},
-  response: { type: "text", text: "Waiting." },
-};
-
 /** A controller tool call with a visible effect. */
 const note: ModelEmulatorStep = {
   expect() {},
@@ -294,7 +288,7 @@ describe("a run whose bot runs in a guest", () => {
 
   it("runs nothing a restarted controller finds waiting for approval until the answer is stored", async () => {
     const run = await fixture({
-      steps: [note, closingTurn, ...finishing],
+      steps: [note, ...finishing],
     });
     await run.prisma.actionApprovalRule.create({
       data: {
@@ -478,7 +472,6 @@ describe("a run whose bot runs in a guest", () => {
       steps: [
         { expect() {}, response: { type: "tool", ...publish, siblings: [sibling] } },
         prepares(),
-        closingTurn,
         {
           expect(request) {
             resumed = request.messages;

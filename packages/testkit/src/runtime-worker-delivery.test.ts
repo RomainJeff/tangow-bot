@@ -101,7 +101,6 @@ it("resumes a background helper in its own native session with its parent's full
           arguments: { question: "Which city?" },
         },
       },
-      { expect() {}, response: { type: "text", text: "Waiting." } },
       {
         expect(request) {
           resumed = request;

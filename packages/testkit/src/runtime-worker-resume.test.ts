@@ -25,7 +25,6 @@ it("restores a native call and the user's answer in a new child process without 
           arguments: { message: "Which city?", options: ["Paris", "Lyon"] },
         },
       },
-      { expect() {}, response: { type: "text", text: "Waiting." } },
       {
         expect(request) {
           resumed = request;
@@ -100,7 +99,6 @@ it("keeps repeated provider call ids distinct across turns and resumes the right
           arguments: { message: "Which city?", options: ["Paris", "Lyon"] },
         },
       },
-      { expect() {}, response: { type: "text", text: "Waiting." } },
       {
         expect(request) {
           resumed = request;
@@ -221,7 +219,6 @@ it("keeps an uncalled loaded tool and a full parallel result receipt across a ch
           ],
         },
       },
-      { expect() {}, response: { type: "text", text: "Waiting." } },
       {
         expect(request) {
           resumed = request;
@@ -316,7 +313,6 @@ it.each(["valid", "corrupt", "incompatible", "missing"])(
           },
         },
         prepares(),
-        { expect() {}, response: { type: "text", text: "Waiting." } },
         ...(state === "valid"
           ? [
               {
@@ -406,7 +402,6 @@ it("resumes a native takeover at its original call after the user releases the c
           arguments: { reason: "Log in", resume: "The user finished the login." },
         },
       },
-      { expect() {}, response: { type: "text", text: "Waiting." } },
       {
         expect(request) {
           resumed = request;
@@ -544,7 +539,6 @@ it.each(["allow", "deny", "corrupt", "retry", "helper"] as const)(
           body: { path: ["body"], value: "Original." },
           unshown: [],
         }),
-        { expect() {}, response: { type: "text", text: "Waiting." } },
         ...(answer === "corrupt"
           ? []
           : [

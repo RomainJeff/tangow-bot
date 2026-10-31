@@ -21,6 +21,7 @@ import {
   ensureMayBeInFlight,
   LIVE_WORKER_STATES,
   lostSetupMove,
+  PAUSED_ATTEMPT_RUN_STATUSES,
   planLaunch,
   WORKER_TTL_SECONDS,
   WORKSPACE_ROOT,
@@ -29,6 +30,7 @@ import {
 } from "@rakazo/core";
 import type { PrismaClient, VolumeOwnerRef } from "@rakazo/db";
 import { Prisma } from "@rakazo/db";
+import { WORKER_LIMITS } from "./runtime-worker/limits.js";
 
 /** The attempt no longer holds its run's fence, its worker was started already, or torn down. */
 export class StaleAttemptError extends Error {
@@ -517,11 +519,18 @@ export function createWorkerLifecycle(deps: {
       await prisma.$executeRaw`
         UPDATE computers SET "maintenanceId" = NULL, "homeMoveExpiresAt" = NULL, "updatedAt" = ${HOME_MOVE_NOW}
         WHERE "maintenanceId" LIKE 'home-move:%' AND "homeMoveExpiresAt" <= ${HOME_MOVE_NOW}`;
+      const pauseDeadline = new Date(
+        Date.now() - WORKER_LIMITS.pausedGraceMs - WORKER_LIMITS.stopConfirmMs,
+      );
       const orphans = await prisma.$queryRaw<{ id: string }[]>`
         SELECT a.id FROM attempts a JOIN runs r ON r.id = a."runId"
         WHERE a."workerState" IN (${RELEASABLE})
           AND (a."workerState" = 'releasing' OR a.fence <> r."leaseFence"
             OR r.status NOT IN ('leased', 'running') OR r."leaseExpiresAt" < ${new Date()})
+          AND NOT (a."workerState" <> 'releasing' AND a.fence = r."leaseFence"
+            AND r.status IN (${Prisma.join(PAUSED_ATTEMPT_RUN_STATUSES)})
+            AND a.status IN ('waiting_input', 'waiting_takeover')
+            AND a."finishedAt" IS NOT NULL AND a."finishedAt" > ${pauseDeadline})
         ORDER BY a."workerStateAt", a.id
         LIMIT ${options.limit}`;
       const counts = { released: 0, awaitingEnsure: 0, failed: 0 };
