@@ -1310,6 +1310,7 @@ describe("session log writers", () => {
     expect(resumed).toEqual({
       sessionId: opened.sessionId,
       awaitingResult: new Map([["call_0", "{}"]]),
+      category: "fixed",
     });
     expect((await log.readTail(sessionId)).map(({ type, payload }) => ({ type, payload }))).toEqual(
       [

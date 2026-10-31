@@ -72,7 +72,8 @@ import {
   UpdateBotInput,
   UpdateExternalConversationPolicyInput,
   UpdateGroupInput,
-  UsageRecordSchema,
+  UsageCellSchema,
+  UsagePeriodSchema,
   VoiceCatalogEntrySchema,
   VoiceCredentialSchema,
   VoiceInfoSchema,
@@ -834,14 +835,7 @@ export const appContract = {
     get: oc.input(threadTarget.and(z.object({ artifactId: Id }))).output(ArtifactWithContentSchema),
   },
   usage: {
-    list: oc.output(z.array(UsageRecordSchema)),
-    summary: oc.output(
-      z.object({
-        inputTokens: z.number(),
-        outputTokens: z.number(),
-        runs: z.number(),
-      }),
-    ),
+    breakdown: oc.input(z.object({ period: UsagePeriodSchema })).output(z.array(UsageCellSchema)),
   },
   export: {
     bot: oc.input(botId).output(ExportManifestSchema),

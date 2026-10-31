@@ -405,6 +405,8 @@ export const sizes = {
   linkMentionIcon: 16,
   /** Space between a link mention's icon and its label. */
   linkMentionGap: 5,
+  /** Height of a share bar: the usage screen's split of spend. */
+  shareBar: 8,
 } as const satisfies Record<string, number>;
 
 /** Width over height of a large link preview's picture: the one ratio, web and iOS. */

@@ -894,7 +894,7 @@ export function toolCompletionAuditPayload(
 /** A model call's spend, counted on the usage screen under the run's bot. */
 async function recordRunUsage(
   deps: Pick<ExecutorDeps, "prisma">,
-  target: { spaceId: string; userId: string; botId: string; runId: string },
+  target: { spaceId: string; userId: string; botId: string; runId: string; category: string },
   event: Extract<AgentRuntimeEvent, { type: "usage" }>,
 ): Promise<void> {
   getLogger().info("agent.run.usage", {
@@ -918,6 +918,7 @@ async function recordRunUsage(
       model: event.model,
       inputTokens: event.inputTokens,
       outputTokens: event.outputTokens,
+      category: target.category,
     },
   });
 }
@@ -6483,7 +6484,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 }
               }
             } else if (event.type === "usage") {
-              await recordRunUsage(deps, { ...run, botId: bot.id, runId }, event);
+              await recordRunUsage(
+                deps,
+                { ...run, botId: bot.id, runId, category: opened.category },
+                event,
+              );
             } else if (event.type === "transcript") {
               await logHarnessTranscript(deps, runLog, { runId, fence }, event, runSecrets);
               nativeSteps ??= [];
@@ -7647,7 +7652,10 @@ function serialWrites() {
 
 type RunLogFacts = {
   sessionId: string;
-  logged: Array<{ type: string; payload: { callId: string; input?: string } }> | null;
+  logged: Array<{
+    type: string;
+    payload: { callId: string; input?: string; routing?: RunModelDecision };
+  }> | null;
   carrierType: string | null;
   steered: boolean;
   routineName: string | null;
@@ -7662,7 +7670,9 @@ type RunLogFacts = {
 
 /**
  * Open a run's log, once: `run.started`, after a routine run's own session and the routine's mark
- * in its thread. Returns the session the run writes to and the logged calls still awaiting a result.
+ * in its thread. Returns the session the run writes to, the logged calls still awaiting a result,
+ * and the model category its usage counts under: the one logged at its start, `fixed` when no
+ * category picked the model.
  */
 export async function openRunLog(
   deps: Pick<ExecutorDeps, "prisma" | "sessionLog">,
@@ -7671,7 +7681,7 @@ export async function openRunLog(
   model: { provider: string; id: string },
   effort: SessionEntryOf<"run.started">["payload"]["effort"],
   routing?: RunModelDecision,
-): Promise<{ sessionId: SessionId; awaitingResult: Map<string, string> }> {
+): Promise<{ sessionId: SessionId; awaitingResult: Map<string, string>; category: string }> {
   return deps.prisma.$transaction(async (tx) => {
     // Its own statement, so the facts below see what an open that held this lock committed.
     await tx.$queryRaw`SELECT id FROM threads WHERE id = ${run.threadId} FOR UPDATE`;
@@ -7703,7 +7713,14 @@ export async function openRunLog(
       if (type === "tool.call") awaitingResult.set(payload.callId, payload.input ?? "");
       if (type === "tool.result") awaitingResult.delete(payload.callId);
     }
-    if (logged.length > 0) return { sessionId: facts.sessionId as SessionId, awaitingResult };
+    if (logged.length > 0) {
+      const started = logged.find((entry) => entry.type === "run.started")?.payload.routing;
+      return {
+        sessionId: facts.sessionId as SessionId,
+        awaitingResult,
+        category: started?.category ?? "fixed",
+      };
+    }
     const trigger = sessionRunTrigger(run, facts);
     const interactive =
       facts.sessionKind === "thread" &&
@@ -7755,7 +7772,7 @@ export async function openRunLog(
       type: "run.started",
       payload: { trigger, model, effort, ...(routing ? { routing } : {}) },
     });
-    return { sessionId, awaitingResult };
+    return { sessionId, awaitingResult, category: routing?.category ?? "fixed" };
   });
 }
 

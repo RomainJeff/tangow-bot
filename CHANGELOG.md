@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-10-31
 
+#### Changed
+
+- On web, desktop, iPhone and Android, Usage shows input and output tokens over 7 days, 30 days or all time, split by bot, model and category (Fast, Everyday, Complex, Fixed, Compaction) with per-run and per-compaction averages, and any row opens the same breakdown for that bot, model or category, replacing the single runs and tokens line.
+
 #### Fixed
 
 - On web, desktop and mobile, answering a bot's question reliably resumes its saved session instead of failing when its paused worker is cleaned up too early.

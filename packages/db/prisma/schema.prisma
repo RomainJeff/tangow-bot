@@ -1179,6 +1179,11 @@ model UsageRecord {
   model        String
   inputTokens  Int
   outputTokens Int
+  /// The model category that ran a turn (fast, everyday, complex), `fixed` when none picked the
+  /// model, `compaction` for history compaction. Null before it was recorded.
+  category     String?
+  /// One history compaction pass, shared by its summary and fact-extraction calls.
+  compactionId String?
   createdAt    DateTime @default(now())
 
   @@index([spaceId, userId, createdAt])

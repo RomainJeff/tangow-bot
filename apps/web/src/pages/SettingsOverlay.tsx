@@ -13,15 +13,12 @@ import {
   XIcon,
 } from "lucide-react";
 import { type ComponentType, useEffect, useRef, useState } from "react";
-import {
-  GeneralSettingsPanels,
-  UpdatesSettingsPanel,
-  UsageSettingsPanel,
-} from "./AccountSettingsOverlay";
+import { GeneralSettingsPanels, UpdatesSettingsPanel } from "./AccountSettingsOverlay";
 import { ComputerSettingsPanel } from "./ComputerSettingsPanel";
 import { DecisionModelSettingsPanel } from "./DecisionModelSettingsPanel";
 import { MemorySettingsOverlay } from "./MemorySettingsOverlay";
 import { ModelSettingsOverlay } from "./ModelSettingsOverlay";
+import { UsageSettingsPanel } from "./usage-settings";
 import { VoiceSettingsOverlay } from "./VoiceSettingsOverlay";
 
 export type SettingsSection =
@@ -44,7 +41,6 @@ export function SettingsOverlay({
   email,
   name,
   initials,
-  usage,
   initialSection = "general",
   avatarStyle,
   onAvatarStyleChange,
@@ -59,7 +55,6 @@ export function SettingsOverlay({
   email?: string | null;
   name: string;
   initials: string;
-  usage?: { runs: number; inputTokens: number; outputTokens: number } | null;
   initialSection?: SettingsSection;
   avatarStyle: AvatarStyle;
   onAvatarStyleChange: (style: AvatarStyle) => Promise<void>;
@@ -225,9 +220,7 @@ export function SettingsOverlay({
                   isDeploymentOwner={isDeploymentOwner}
                 />
               ) : null}
-              {section === "usage" ? (
-                <UsageSettingsPanel usage={usage} panelRef={usageRef} />
-              ) : null}
+              {section === "usage" ? <UsageSettingsPanel panelRef={usageRef} /> : null}
               {section === "computer" ? <ComputerSettingsPanel /> : null}
               {section === "updates" ? (
                 <UpdatesSettingsPanel isDeploymentOwner={isDeploymentOwner} />

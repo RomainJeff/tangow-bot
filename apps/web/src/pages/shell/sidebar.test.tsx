@@ -111,7 +111,6 @@ function renderSidebar(overrides: Partial<ComponentProps<typeof BotsSidebar>> = 
     setMenuOpen: vi.fn(),
     userName: "Archive Owner",
     openSettings: vi.fn(),
-    setUsage: vi.fn(),
     botsSidebarEdgeDragRef: { current: null },
   } satisfies ComponentProps<typeof BotsSidebar>;
   act(() => root.render(<BotsSidebar {...props} {...overrides} />));
