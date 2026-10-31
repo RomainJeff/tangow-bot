@@ -104,6 +104,7 @@
   --spacing-link-photo-max: var(--size-link-photo-max);
   --spacing-composer-attachment-tile: var(--size-composer-attachment-tile);
   --spacing-composer-remove: var(--size-composer-remove);
+  --spacing-share-bar: var(--size-share-bar);
 
   --ease-quiet: var(--motion-ease);
   /* `backwards`, not `both`: a held end transform would leave every arrived row

@@ -21,6 +21,20 @@ msgstr " (अपठित)"
 msgid "(empty)"
 msgstr "(खाली)"
 
+#. placeholder {0}: totals.compactions.count
+#. placeholder {1}: tokens(totals.compactions.inputTokens)
+#. placeholder {2}: tokens(totals.compactions.outputTokens)
+#: src/pages/usage-settings.tsx:137
+msgid "{0, plural, one {# compaction} other {# compactions}} · {1} in · {2} out"
+msgstr ""
+
+#. placeholder {0}: value.count
+#. placeholder {1}: tokens(value.inputTokens)
+#. placeholder {2}: tokens(value.outputTokens)
+#: src/pages/usage-settings.tsx:60
+msgid "{0, plural, one {# compaction} other {# compactions}} · {1} in · {2} out / compaction"
+msgstr ""
+
 #. placeholder {0}: group.entries.length
 #: src/pages/ModelSettingsOverlay.tsx:107
 msgid "{0, plural, one {# model} other {# models}}"
@@ -34,6 +48,13 @@ msgstr "{0, plural, one {# रूटीन} other {# रूटीन}}"
 #. placeholder {0}: runs.length
 #: src/pages/bot-page/BotActivity.tsx:577
 msgid "{0, plural, one {# run} other {# runs}}"
+msgstr ""
+
+#. placeholder {0}: value.count
+#. placeholder {1}: tokens(value.inputTokens)
+#. placeholder {2}: tokens(value.outputTokens)
+#: src/pages/usage-settings.tsx:59
+msgid "{0, plural, one {# run} other {# runs}} · {1} in · {2} out / run"
 msgstr ""
 
 #. placeholder {0}: file.name
@@ -51,6 +72,16 @@ msgstr "{0} (10 MiB से अधिक)"
 msgid "{0} {unitLabel}"
 msgstr "{0} {unitLabel}"
 
+#. placeholder {0}: tokens(totals.inputTokens)
+#: src/pages/usage-settings.tsx:121
+msgid "{0} <0>in</0>"
+msgstr ""
+
+#. placeholder {0}: tokens(totals.outputTokens)
+#: src/pages/usage-settings.tsx:127
+msgid "{0} <0>out</0>"
+msgstr ""
+
 #. placeholder {0}: block.name
 #: src/pages/shell/message-cards.tsx:173
 msgid "{0} connection"
@@ -65,6 +96,11 @@ msgstr ""
 #. placeholder {0}: sender.name
 #: src/pages/ExternalConversationSettings.tsx:176
 msgid "{0} handling"
+msgstr ""
+
+#. placeholder {0}: tokens(row.inputTokens)
+#: src/pages/usage-settings.tsx:204
+msgid "{0} in"
 msgstr ""
 
 #. placeholder {0}: run.usage.inputTokens.toLocaleString()
@@ -88,16 +124,15 @@ msgstr "{0} KB"
 msgid "{0} MB"
 msgstr "{0} MB"
 
+#. placeholder {0}: tokens(row.outputTokens)
+#: src/pages/usage-settings.tsx:205
+msgid "{0} out"
+msgstr ""
+
 #. placeholder {0}: sender.name
 #: src/pages/ExternalConversationSettings.tsx:198
 msgid "{0} rollup hours"
 msgstr ""
-
-#. placeholder {0}: usage.runs
-#. placeholder {1}: usage.inputTokens + usage.outputTokens
-#: src/pages/AccountSettingsOverlay.tsx:232
-msgid "{0} runs · {1} tokens"
-msgstr "{0} रन · {1} टोकन"
 
 #. placeholder {0}: bot.name
 #: src/pages/ExternalConversationSettings.tsx:232
@@ -207,6 +242,14 @@ msgstr "{workingBotName} काम कर रहा है"
 msgid "@{0}"
 msgstr "@{0}"
 
+#: src/pages/usage-settings.tsx:101
+msgid "30d"
+msgstr ""
+
+#: src/pages/usage-settings.tsx:100
+msgid "7d"
+msgstr ""
+
 #: src/pages/shell/bot-picker.tsx:105
 #: src/pages/shell/bot-picker.tsx:106
 msgid "About groups"
@@ -225,7 +268,7 @@ msgstr ""
 msgid "Access token (optional)"
 msgstr "एक्सेस टोकन (वैकल्पिक)"
 
-#: src/pages/AccountSettingsOverlay.tsx:85
+#: src/pages/AccountSettingsOverlay.tsx:84
 msgid "Account"
 msgstr "खाता"
 
@@ -388,7 +431,7 @@ msgstr ""
 msgid "Adding…"
 msgstr "जोड़ा जा रहा है…"
 
-#: src/pages/AccountSettingsOverlay.tsx:195
+#: src/pages/AccountSettingsOverlay.tsx:194
 #: src/pages/DecisionModelSettingsPanel.tsx:132
 #: src/pages/McpServersOverlay.tsx:343
 #: src/pages/model-settings/model-detail.tsx:168
@@ -417,6 +460,7 @@ msgid "Agents:"
 msgstr "एजेंट:"
 
 #: src/pages/KnowledgeSection.tsx:446
+#: src/pages/usage-settings.tsx:102
 msgid "All"
 msgstr "सभी"
 
@@ -522,8 +566,8 @@ msgstr "API कुंजी"
 msgid "API key header"
 msgstr "API कुंजी हेडर"
 
-#: src/pages/AccountSettingsOverlay.tsx:110
-#: src/pages/AccountSettingsOverlay.tsx:273
+#: src/pages/AccountSettingsOverlay.tsx:109
+#: src/pages/AccountSettingsOverlay.tsx:241
 #: src/pages/bot-page/BotHero.tsx:123
 #: src/pages/bot-page/BotHero.tsx:144
 msgid "Appearance"
@@ -668,7 +712,7 @@ msgstr "स्वचालित आकार"
 msgid "Available when {0} is idle"
 msgstr "{0} के खाली होने पर उपलब्ध"
 
-#: src/pages/AccountSettingsOverlay.tsx:152
+#: src/pages/AccountSettingsOverlay.tsx:151
 msgid "Avatars"
 msgstr "अवतार"
 
@@ -676,6 +720,10 @@ msgstr "अवतार"
 #: src/pages/shell/thread-header.tsx:68
 msgid "Back"
 msgstr "वापस"
+
+#: src/pages/usage-settings.tsx:84
+msgid "Back to all usage"
+msgstr ""
 
 #: src/pages/Auth.tsx:124
 #: src/pages/Auth.tsx:238
@@ -744,6 +792,10 @@ msgstr ""
 msgid "Bot to link"
 msgstr "जोड़ने के लिए बॉट"
 
+#: src/pages/usage-settings.tsx:66
+msgid "Bots"
+msgstr ""
+
 #: src/components/ApprovalRulesSettings.tsx:115
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "बॉट डिफ़ॉल्ट रूप से बिना पूछे कार्रवाई करते हैं। अपवाद तभी जोड़ें जब आप किसी प्रकार की कार्रवाई की पहले समीक्षा करना चाहते हों।"
@@ -759,6 +811,10 @@ msgstr ""
 
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:63
 msgid "Brain label"
+msgstr ""
+
+#: src/pages/usage-settings.tsx:152
+msgid "Breakdown"
 msgstr ""
 
 #: src/pages/PluginsOverlay.tsx:163
@@ -817,6 +873,10 @@ msgstr "उत्तर रद्द करें"
 msgid "Cancelled"
 msgstr "रद्द किया गया"
 
+#: src/pages/usage-settings.tsx:68
+msgid "Categories"
+msgstr ""
+
 #: src/pages/shell/session-view.tsx:229
 msgid "Category"
 msgstr "श्रेणी"
@@ -845,7 +905,7 @@ msgstr "चैनल"
 msgid "Chat apps"
 msgstr "चैट ऐप्स"
 
-#: src/pages/AccountSettingsOverlay.tsx:100
+#: src/pages/AccountSettingsOverlay.tsx:99
 msgid "Chat apps, group channels, and agent connections."
 msgstr "चैट ऐप्स, ग्रुप चैनल और एजेंट कनेक्शन।"
 
@@ -951,7 +1011,7 @@ msgid "Close MCP servers"
 msgstr "MCP सर्वर बंद करें"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:112
+#: src/pages/SettingsOverlay.tsx:107
 msgid "Close memory settings"
 msgstr "मेमोरी सेटिंग्स बंद करें"
 
@@ -960,7 +1020,7 @@ msgid "Close messaging settings"
 msgstr "मैसेजिंग सेटिंग्स बंद करें"
 
 #: src/pages/ModelSettingsOverlay.tsx:63
-#: src/pages/SettingsOverlay.tsx:110
+#: src/pages/SettingsOverlay.tsx:105
 msgid "Close model settings"
 msgstr "मॉडल सेटिंग्स बंद करें"
 
@@ -977,11 +1037,11 @@ msgstr "प्रीव्यू बंद करें"
 msgid "Close skills"
 msgstr "स्किल्स बंद करें"
 
-#: src/pages/SettingsOverlay.tsx:115
+#: src/pages/SettingsOverlay.tsx:110
 msgid "Close user settings"
 msgstr "उपयोगकर्ता सेटिंग्स बंद करें"
 
-#: src/pages/SettingsOverlay.tsx:114
+#: src/pages/SettingsOverlay.tsx:109
 #: src/pages/VoiceSettingsOverlay.tsx:174
 msgid "Close voice settings"
 msgstr "आवाज़ सेटिंग्स बंद करें"
@@ -1008,17 +1068,22 @@ msgstr "रंग {0}"
 msgid "Command"
 msgstr "कमांड"
 
+#: src/pages/usage-settings.tsx:48
+msgid "Compaction"
+msgstr ""
+
 #: src/pages/ScratchpadSection.tsx:119
 msgid "Complete"
 msgstr "पूर्ण"
 
 #: src/pages/model-settings/routing-settings.tsx:20
+#: src/pages/usage-settings.tsx:46
 msgid "Complex"
 msgstr "जटिल"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:100
+#: src/pages/SettingsOverlay.tsx:95
 #: src/pages/shell/block-views.tsx:131
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
@@ -1191,7 +1256,7 @@ msgstr "कॉपी करें"
 msgid "Copy {label}"
 msgstr ""
 
-#: src/pages/shell/session-view.tsx:276
+#: src/pages/shell/session-view.tsx:277
 msgid "Copy diagnostic"
 msgstr "निदान कॉपी करें"
 
@@ -1592,7 +1657,7 @@ msgstr "नहीं बनाया जा सका"
 msgid "Couldn't load messaging settings"
 msgstr "मैसेजिंग सेटिंग्स लोड नहीं हो सकीं"
 
-#: src/pages/AccountSettingsOverlay.tsx:75
+#: src/pages/AccountSettingsOverlay.tsx:74
 msgid "Couldn't update avatars"
 msgstr "अवतार अपडेट नहीं हो सके"
 
@@ -1701,11 +1766,11 @@ msgstr "ग्राहक सहायता"
 
 #: src/pages/CustomizeOverlay.tsx:32
 #: src/pages/CustomizeOverlay.tsx:36
-#: src/pages/shell/sidebar-footer.tsx:179
+#: src/pages/shell/sidebar-footer.tsx:175
 msgid "Customize"
 msgstr "कस्टमाइज़ करें"
 
-#: src/pages/AccountSettingsOverlay.tsx:268
+#: src/pages/AccountSettingsOverlay.tsx:236
 msgid "Dark"
 msgstr "डार्क"
 
@@ -1717,12 +1782,12 @@ msgstr "दिन"
 msgid "days"
 msgstr "दिन"
 
-#: src/pages/AccountSettingsOverlay.tsx:125
-#: src/pages/AccountSettingsOverlay.tsx:133
+#: src/pages/AccountSettingsOverlay.tsx:124
+#: src/pages/AccountSettingsOverlay.tsx:132
 msgid "Debug mode"
 msgstr "डीबग मोड"
 
-#: src/pages/SettingsOverlay.tsx:97
+#: src/pages/SettingsOverlay.tsx:92
 msgid "Decision Model"
 msgstr ""
 
@@ -1788,6 +1853,14 @@ msgstr "रूटीन डिलीट करें"
 
 #: src/pages/shell/shell-overlays.tsx:238
 msgid "Delete space"
+msgstr ""
+
+#: src/pages/usage-settings.tsx:196
+msgid "Deleted"
+msgstr ""
+
+#: src/pages/usage-settings.tsx:53
+msgid "Deleted bot"
 msgstr ""
 
 #: src/pages/GroupPanel.tsx:287
@@ -2048,6 +2121,7 @@ msgid "Every week"
 msgstr "हर सप्ताह"
 
 #: src/pages/model-settings/routing-settings.tsx:19
+#: src/pages/usage-settings.tsx:45
 msgid "Everyday"
 msgstr "रोज़मर्रा"
 
@@ -2115,6 +2189,7 @@ msgid "Fallback"
 msgstr "फ़ॉलबैक"
 
 #: src/pages/model-settings/routing-settings.tsx:18
+#: src/pages/usage-settings.tsx:44
 msgid "Fast"
 msgstr "तेज़"
 
@@ -2155,6 +2230,10 @@ msgstr "पूरा हुआ।"
 msgid "Finishing MCP connection…"
 msgstr "MCP कनेक्शन पूरा हो रहा है…"
 
+#: src/pages/usage-settings.tsx:47
+msgid "Fixed"
+msgstr ""
+
 #: src/components/ApprovalRulesSettings.tsx:147
 msgid "Flag unexpected actions"
 msgstr "अप्रत्याशित क्रियाओं को चिह्नित करें"
@@ -2179,8 +2258,8 @@ msgstr "फ़ुलस्क्रीन"
 msgid "FYI"
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:94
-#: src/pages/SettingsOverlay.tsx:106
+#: src/pages/SettingsOverlay.tsx:89
+#: src/pages/SettingsOverlay.tsx:101
 msgid "General"
 msgstr "सामान्य"
 
@@ -2411,9 +2490,9 @@ msgstr "कुंजी"
 msgid "Knowledge"
 msgstr "ज्ञान"
 
-#: src/pages/AccountSettingsOverlay.tsx:145
-#: src/pages/AccountSettingsOverlay.tsx:389
-#: src/pages/AccountSettingsOverlay.tsx:406
+#: src/pages/AccountSettingsOverlay.tsx:144
+#: src/pages/AccountSettingsOverlay.tsx:357
+#: src/pages/AccountSettingsOverlay.tsx:374
 msgid "Language"
 msgstr "भाषा"
 
@@ -2437,7 +2516,7 @@ msgstr "छोड़ें"
 msgid "Let bots complete multi-step web page tasks faster."
 msgstr ""
 
-#: src/pages/AccountSettingsOverlay.tsx:267
+#: src/pages/AccountSettingsOverlay.tsx:235
 msgid "Light"
 msgstr "लाइट"
 
@@ -2503,7 +2582,7 @@ msgstr "लोड हो रहा है…"
 msgid "Local"
 msgstr "लोकल"
 
-#: src/pages/shell/sidebar-footer.tsx:235
+#: src/pages/shell/sidebar-footer.tsx:227
 msgid "Log out"
 msgstr "लॉग आउट"
 
@@ -2521,7 +2600,7 @@ msgstr "सुनिश्चित करें कि इस कंप्य�
 msgid "Manage MCP servers"
 msgstr "MCP सर्वर प्रबंधित करें"
 
-#: src/pages/AccountSettingsOverlay.tsx:103
+#: src/pages/AccountSettingsOverlay.tsx:102
 msgid "Manage messaging settings"
 msgstr "मैसेजिंग सेटिंग्स प्रबंधित करें"
 
@@ -2586,7 +2665,7 @@ msgstr "सदस्य ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX} चुनें
 
 #: src/pages/bot-page/KnowledgeTab.tsx:36
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:96
+#: src/pages/SettingsOverlay.tsx:91
 msgid "Memory"
 msgstr "मेमोरी"
 
@@ -2648,7 +2727,7 @@ msgstr "संदेश…"
 msgid "Messaged {peer}"
 msgstr "{peer} को संदेश भेजा"
 
-#: src/pages/AccountSettingsOverlay.tsx:97
+#: src/pages/AccountSettingsOverlay.tsx:96
 #: src/pages/MessagingSettingsOverlay.tsx:99
 msgid "Messaging"
 msgstr "मैसेजिंग"
@@ -2706,7 +2785,7 @@ msgstr "मॉडल आईडी"
 msgid "Model options"
 msgstr "मॉडल विकल्प"
 
-#: src/pages/AccountSettingsOverlay.tsx:238
+#: src/pages/usage-settings.tsx:221
 msgid "Model spend uses your provider keys."
 msgstr "मॉडल का खर्च आपकी प्रोवाइडर कुंजियों से होता है।"
 
@@ -2715,7 +2794,8 @@ msgid "Model updated."
 msgstr "मॉडल अपडेट किया गया।"
 
 #: src/pages/ModelSettingsOverlay.tsx:56
-#: src/pages/SettingsOverlay.tsx:95
+#: src/pages/SettingsOverlay.tsx:90
+#: src/pages/usage-settings.tsx:67
 msgid "Models"
 msgstr "मॉडल्स"
 
@@ -2951,6 +3031,10 @@ msgstr ""
 msgid "No trigger"
 msgstr "कोई ट्रिगर नहीं"
 
+#: src/pages/usage-settings.tsx:109
+msgid "No usage in this period."
+msgstr ""
+
 #: src/pages/ScratchpadSection.tsx:110
 msgid "None yet"
 msgstr "अभी तक कोई नहीं"
@@ -2968,6 +3052,10 @@ msgstr "प्लगइन कैटलॉग में नहीं"
 #: src/pages/shell/message-cards.tsx:291
 msgid "Not now"
 msgstr "अभी नहीं"
+
+#: src/pages/usage-settings.tsx:49
+msgid "Not recorded"
+msgstr ""
 
 #: src/components/DraftCard.tsx:257
 msgid "Not sent"
@@ -3100,7 +3188,7 @@ msgstr ""
 msgid "Optional"
 msgstr "वैकल्पिक"
 
-#: src/pages/AccountSettingsOverlay.tsx:198
+#: src/pages/AccountSettingsOverlay.tsx:197
 msgid "Optional controls most people never need"
 msgstr "वैकल्पिक नियंत्रण जिनकी अधिकांश लोगों को कभी ज़रूरत नहीं होती"
 
@@ -3116,7 +3204,7 @@ msgstr "या एक API कुंजी कनेक्ट करें"
 msgid "Or paste an API key"
 msgstr "या एक API कुंजी पेस्ट करें"
 
-#: src/pages/AccountSettingsOverlay.tsx:170
+#: src/pages/AccountSettingsOverlay.tsx:169
 msgid "Organic"
 msgstr "ऑर्गेनिक"
 
@@ -3184,6 +3272,10 @@ msgstr "अपनी API कुंजी पेस्ट करें"
 #: src/pages/bot-page/RoutinesTab.tsx:107
 msgid "Paused"
 msgstr "रोका गया"
+
+#: src/pages/usage-settings.tsx:96
+msgid "Period"
+msgstr ""
 
 #: src/pages/model-settings/model-detail.tsx:244
 msgid "Personal credential"
@@ -3567,7 +3659,7 @@ msgstr "रिवीज़न {0}"
 msgid "Revoke"
 msgstr "रद्द करें"
 
-#: src/pages/AccountSettingsOverlay.tsx:170
+#: src/pages/AccountSettingsOverlay.tsx:169
 msgid "Robot"
 msgstr "रोबोट"
 
@@ -3768,7 +3860,7 @@ msgid "Sent"
 msgstr ""
 
 #: src/components/integrations/IntegrationSetup.tsx:129
-#: src/pages/AccountSettingsOverlay.tsx:186
+#: src/pages/AccountSettingsOverlay.tsx:185
 msgid "Server integrations"
 msgstr ""
 
@@ -3786,10 +3878,10 @@ msgstr "सर्वर URL"
 
 #: src/pages/bot-page/BotPage.tsx:101
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:106
-#: src/pages/SettingsOverlay.tsx:162
-#: src/pages/shell/sidebar-footer.tsx:199
-#: src/pages/shell/sidebar-footer.tsx:206
+#: src/pages/SettingsOverlay.tsx:101
+#: src/pages/SettingsOverlay.tsx:157
+#: src/pages/shell/sidebar-footer.tsx:195
+#: src/pages/shell/sidebar-footer.tsx:202
 msgid "Settings"
 msgstr "सेटिंग्स"
 
@@ -3824,7 +3916,7 @@ msgstr ""
 msgid "Shared documents"
 msgstr "साझा दस्तावेज़"
 
-#: src/pages/AccountSettingsOverlay.tsx:128
+#: src/pages/AccountSettingsOverlay.tsx:127
 msgid "Show agent steps, and every run in a bot's activity."
 msgstr "एजेंट के चरण और बॉट की गतिविधि में हर रन दिखाएँ।"
 
@@ -4037,7 +4129,7 @@ msgstr "बॉट बदलें"
 msgid "Switching…"
 msgstr "बदला जा रहा है…"
 
-#: src/pages/AccountSettingsOverlay.tsx:266
+#: src/pages/AccountSettingsOverlay.tsx:234
 msgid "System"
 msgstr "सिस्टम"
 
@@ -4272,7 +4364,7 @@ msgstr ""
 msgid "Updated"
 msgstr "अपडेट किया गया"
 
-#: src/pages/SettingsOverlay.tsx:101
+#: src/pages/SettingsOverlay.tsx:96
 msgid "Updates"
 msgstr "अपडेट"
 
@@ -4300,10 +4392,9 @@ msgstr ""
 msgid "Updating…"
 msgstr "अपडेट हो रहा है…"
 
-#: src/pages/AccountSettingsOverlay.tsx:228
-#: src/pages/SettingsOverlay.tsx:99
-#: src/pages/shell/sidebar-footer.tsx:211
-#: src/pages/shell/sidebar-footer.tsx:222
+#: src/pages/SettingsOverlay.tsx:94
+#: src/pages/shell/sidebar-footer.tsx:207
+#: src/pages/shell/sidebar-footer.tsx:214
 msgid "Usage"
 msgstr "उपयोग"
 
@@ -4331,7 +4422,7 @@ msgstr "पुष्टि की जा रही है…"
 
 #: src/pages/bot-page/SettingDetails.tsx:185
 #: src/pages/bot-page/SettingDetails.tsx:189
-#: src/pages/SettingsOverlay.tsx:98
+#: src/pages/SettingsOverlay.tsx:93
 #: src/pages/shell/thread-header.tsx:139
 #: src/pages/shell/thread-header.tsx:140
 #: src/pages/VoiceSettingsOverlay.tsx:170
