@@ -174,6 +174,56 @@ describe("Docker sandbox", () => {
     );
   });
 
+  it("asks the supervisor to keep the screen and reports that it was kept", async () => {
+    const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) =>
+      Response.json({ ok: true, kept: true }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new DockerSandboxProvider("http://supervisor.test", "test-token");
+    const computer = {
+      id: "computer",
+      botId: "home-bot",
+      kind: "docker",
+      providerRef: "computer",
+    } as const;
+
+    await expect(provider.releaseScreen(computer, context, "keep")).resolves.toBe("kept");
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({
+      "x-rakazo-preserve-screen": "1",
+      "x-rakazo-screen-lease-id": "run-1:1",
+    });
+
+    fetchMock.mockImplementationOnce(async () => Response.json({ ok: true }));
+    await expect(provider.releaseScreen(computer, context, "keep")).resolves.toBeUndefined();
+  });
+
+  it("never asks to keep the screen when tearing down or when the run was cancelled", async () => {
+    const fetchMock = vi.fn(
+      async (_input: string | URL | Request, _init?: RequestInit) =>
+        new Response(null, { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new DockerSandboxProvider("http://supervisor.test", "test-token");
+    const computer = {
+      id: "computer",
+      botId: "home-bot",
+      kind: "docker",
+      providerRef: "computer",
+    } as const;
+    const aborted = new AbortController();
+    aborted.abort();
+
+    await provider.releaseScreen(computer, context);
+    await provider.releaseScreen(computer, context, "teardown");
+    await provider.releaseScreen(computer, { ...context, cancelRunWork: true }, "keep");
+    await provider.releaseScreen(computer, { ...context, signal: aborted.signal }, "keep");
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init?.headers).not.toHaveProperty("x-rakazo-preserve-screen");
+    }
+  });
+
   it("still releases the screen after the run abort signal has fired", async () => {
     const fetchMock = vi.fn(
       async (_input: string | URL | Request, _init?: RequestInit) =>
