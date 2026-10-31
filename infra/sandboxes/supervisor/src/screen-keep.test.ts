@@ -28,13 +28,20 @@ describe("a screen kept after a run", () => {
     );
   });
 
-  it("rejects a run whose fence is lower than the kept one", () => {
-    const assigned = keptSlot("run-a:3");
+  it("is taken by the next run even when an earlier run kept it at a higher fence", () => {
+    const assigned = keptSlot("run-a:2");
 
-    expect(() => nextScreenIndex(assigned, "writer", "run-b:2")).toThrow(
+    expect(nextScreenIndex(assigned, "writer", "run-b:1")).toBe(0);
+    expect(assigned.get("writer")?.leaseId).toBe("run-b:1");
+  });
+
+  it("rejects an older attempt of the run that kept it", () => {
+    const assigned = keptSlot("run-a:2");
+
+    expect(() => nextScreenIndex(assigned, "writer", "run-a:1")).toThrow(
       /owned by a newer execution/,
     );
-    expect(nextScreenIndex(assigned, "writer", "run-b:3")).toBe(0);
+    expect(nextScreenIndex(assigned, "writer", "run-a:2")).toBe(0);
   });
 
   it("does not let the previous run's release close the slot after the next run took it", () => {

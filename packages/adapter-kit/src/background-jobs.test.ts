@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  computerScreenSleepJob,
   dispatchBackgroundJob,
   historyCompactJob,
   historyCompactJobKey,
@@ -127,5 +128,25 @@ describe("historyCompactJob", () => {
 
   it("keys different threads differently", () => {
     expect(historyCompactJobKey("thread-1")).not.toBe(historyCompactJobKey("thread-2"));
+  });
+});
+
+describe("computerScreenSleepJob", () => {
+  const availableAt = new Date("2026-10-31T12:10:00.000Z");
+  const screen = { computerId: "computer-1", botId: "bot-1", screenLeaseId: "run-1:1" };
+
+  it("keys the job by the lease the screen was kept under", () => {
+    expect(computerScreenSleepJob(screen, availableAt)).toEqual({
+      name: "computer.screen-sleep",
+      payload: screen,
+      availableAt,
+      replaceKey: "computer.screen-sleep:computer-1:bot-1:run-1:1",
+    });
+  });
+
+  it("never lets a job for one lease replace the job for another", () => {
+    const next = computerScreenSleepJob({ ...screen, screenLeaseId: "run-2:1" }, availableAt);
+
+    expect(next.replaceKey).toBe("computer.screen-sleep:computer-1:bot-1:run-2:1");
   });
 });

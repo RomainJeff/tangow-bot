@@ -29,7 +29,7 @@ const idleJob = {
   name: "computer.screen-sleep",
   payload: { computerId: "computer-1", botId: "bot-1", screenLeaseId: "run-1:1" },
   availableAt: new Date("2026-10-31T12:10:00.000Z"),
-  replaceKey: "computer.screen-sleep:computer-1:bot-1",
+  replaceKey: "computer.screen-sleep:computer-1:bot-1:run-1:1",
 };
 
 beforeEach(() => {
@@ -47,7 +47,7 @@ function world(
   options: {
     release?: "kept" | undefined | Error;
     computer?: Record<string, unknown>;
-    runs?: (statuses: string[]) => boolean;
+    activeRuns?: Array<{ botId: string; status: string }>;
   } = {},
 ) {
   const botGeneration = { value: 4 };
@@ -79,8 +79,14 @@ function world(
       }),
     },
     run: {
-      findFirst: async ({ where }: { where: { status: { in: string[] } } }) =>
-        options.runs?.(where.status.in) ? { id: "run-2" } : null,
+      findFirst: async ({ where }: { where: { botId?: string; status: { in: string[] } } }) =>
+        options.activeRuns?.some(
+          (run) =>
+            (where.botId === undefined || run.botId === where.botId) &&
+            where.status.in.includes(run.status),
+        )
+          ? { id: "run-2" }
+          : null,
     },
   } as unknown as PrismaClient;
   const sandbox = {
@@ -154,7 +160,7 @@ describe("sleepBotScreenIfIdle", () => {
   it.each(["queued", "leased", "running", "waiting_takeover"])(
     "waits while the bot has a %s run",
     async (status) => {
-      const { queued, releases, deps } = world({ runs: (statuses) => statuses.includes(status) });
+      const { queued, releases, deps } = world({ activeRuns: [{ botId: "bot-1", status }] });
 
       await sleepBotScreenIfIdle(deps, payload);
 
@@ -164,11 +170,38 @@ describe("sleepBotScreenIfIdle", () => {
   );
 
   it("does not hold the screen for a run that waits for an answer", async () => {
-    const { releases, deps } = world({ runs: (statuses) => statuses.includes("waiting_input") });
+    const { releases, deps } = world({ activeRuns: [{ botId: "bot-1", status: "waiting_input" }] });
 
     await sleepBotScreenIfIdle(deps, payload);
 
     expect(releases).toHaveLength(1);
+  });
+
+  it("is not held by another bot's active run", async () => {
+    const { queued, releases, deps } = world({
+      activeRuns: [{ botId: "bot-2", status: "running" }],
+    });
+
+    await sleepBotScreenIfIdle(deps, payload);
+
+    expect(releases).toHaveLength(1);
+    expect(queued).toEqual([]);
+  });
+
+  it("is not held by another bot's control of the computer", async () => {
+    const { queued, releases, deps } = world({
+      computer: {
+        controlHolder: "user",
+        controlLeaseId: "control-1",
+        controlLeaseExpiresAt: new Date("2026-10-31T12:05:00.000Z"),
+        controlBotId: "bot-2",
+      },
+    });
+
+    await sleepBotScreenIfIdle(deps, payload);
+
+    expect(releases).toHaveLength(1);
+    expect(queued).toEqual([]);
   });
 
   it("waits while a person holds control of the screen as this bot", async () => {
