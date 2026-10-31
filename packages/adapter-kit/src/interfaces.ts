@@ -159,8 +159,16 @@ export interface SandboxProvider {
   ): Promise<void>;
   snapshot(computer: ComputerRef, context: AdapterContext): Promise<SnapshotRef>;
   keepAlive?(computer: ComputerRef): Promise<void>;
-  /** Drop a single-screen graphical claim for this bot so another Team bot can use the display. */
-  releaseScreen?(computer: ComputerRef, context: AdapterContext): Promise<void>;
+  /**
+   * Drop a single-screen graphical claim for this bot so another Team bot can use the display.
+   * `keep` asks the provider to leave the display and browser running and only revoke control,
+   * and answers `"kept"` when it did. Providers that ignore it tear down.
+   */
+  releaseScreen?(
+    computer: ComputerRef,
+    context: AdapterContext,
+    release?: "keep" | "teardown",
+  ): Promise<"kept" | void>;
   /** Keep what lives only on the machine's own disk before a replacement destroys it. */
   preserveBeforeReplace?(computer: ComputerRef, context: AdapterContext): Promise<void>;
   stop(computer: ComputerRef, context: AdapterContext): Promise<void>;

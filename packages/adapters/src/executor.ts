@@ -301,7 +301,7 @@ import {
   needsLivePluginSync,
   planLiveConnectionSync,
 } from "./composio-connector.js";
-import { BACKGROUND_WORK_LAUNCH, sandboxIdleMs, scheduleComputerSleep } from "./computer-idle.js";
+import { BACKGROUND_WORK_LAUNCH, scheduleComputerSleep } from "./computer-idle.js";
 import { ComputerBusyError, screenLeaseIdForRun } from "./computer-lifecycle.js";
 import { withComputerScreenAvailability } from "./computer-screens.js";
 import {
@@ -309,6 +309,7 @@ import {
   fromVolumePath,
   resolveBotWorkspaceCwd,
   resolveBotWorkspacePath,
+  sandboxIdleMs,
   teamBotWorkspaceDirectory,
   workspaceFileExists,
 } from "./computer-support.js";
@@ -6906,7 +6907,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
           !retainComputerLease &&
           !(approvalHold && finalRun?.status === "waiting_takeover")
         ) {
-          await runComputer?.release();
+          // Only a run that ended well leaves its browser for the next one to pick up.
+          await runComputer?.release(
+            finalRun?.status === "completed" || finalRun?.status === "waiting_input"
+              ? "keep"
+              : "teardown",
+          );
         }
         await deps.prisma.attempt
           .updateMany({

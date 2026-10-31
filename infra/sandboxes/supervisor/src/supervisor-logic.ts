@@ -196,14 +196,14 @@ export function nextScreenIndex(
       throw new Error("This Team Computer screen is still being released.");
     }
     if (leaseId) {
-      if (
-        existing.leaseId &&
-        existing.leaseId !== leaseId &&
-        !canTakeScreenLease(existing.leaseId, leaseId)
-      ) {
+      const takeable = canTakeScreenLease(existing.leaseId, leaseId, existing.kept);
+      if (existing.leaseId && existing.leaseId !== leaseId && !takeable) {
         throw new Error("This Team Computer screen is owned by a newer execution.");
       }
-      if (canTakeScreenLease(existing.leaseId, leaseId)) existing.leaseId = leaseId;
+      if (takeable) {
+        if (existing.leaseId !== leaseId) existing.kept = false;
+        existing.leaseId = leaseId;
+      }
     }
     return existing.index;
   }
@@ -240,6 +240,19 @@ export function completeReleasedScreen(
   if (slot?.releasing && slot.index === index) assigned.delete(screenId);
 }
 
+/** The slot's display and browser stay up, owned by no run until the next one takes it. */
+export function keepReleasedScreen(
+  assigned: Map<string, ScreenAssignment>,
+  screenId: string,
+  index: number,
+): void {
+  const slot = assigned.get(screenId);
+  if (slot?.releasing && slot.index === index) {
+    slot.releasing = false;
+    slot.kept = true;
+  }
+}
+
 export async function teardownReleasedScreen(
   assigned: Map<string, ScreenAssignment>,
   screenId: string,
@@ -255,6 +268,7 @@ export interface ScreenAssignment {
   index: number;
   leaseId?: string;
   releasing?: boolean;
+  kept?: boolean;
   viewToken?: string;
 }
 

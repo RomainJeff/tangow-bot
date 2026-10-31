@@ -1,6 +1,7 @@
 import {
   type AdapterContext,
   type AgentHomeStore,
+  type BackgroundJobPayloads,
   type ComputerRef,
   computerSleepJob,
   type JobPublisher,
@@ -10,10 +11,10 @@ import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import { recoverBrowserApprovalScreens } from "./browser-approval.js";
 import { expireComputerControl, hasActiveComputerControl } from "./computer-control.js";
-import { toComputerRef } from "./computer-lifecycle.js";
+import { releaseBotScreen, toComputerRef } from "./computer-lifecycle.js";
+import { sandboxIdleMs, scheduleBotScreenSleep } from "./computer-support.js";
 import { checkpointComputerWorkspace } from "./computer-workspace.js";
 
-export const DEFAULT_SANDBOX_IDLE_MS = 10 * 60 * 1000;
 const BACKGROUND_WORK_MARKER_PREFIX = "/tmp/rakazo-background-";
 const BACKGROUND_WORK_IDLE_SENTINEL = "rakazo-background-idle";
 
@@ -165,11 +166,6 @@ export const BACKGROUND_WORK_PROBE = [
   "exit 2",
 ].join("\n");
 
-export function sandboxIdleMs(): number {
-  const raw = Number(process.env.SANDBOX_IDLE_MS ?? DEFAULT_SANDBOX_IDLE_MS);
-  return Number.isFinite(raw) && raw >= 30_000 ? raw : DEFAULT_SANDBOX_IDLE_MS;
-}
-
 export function scheduleComputerSleep(jobs: JobPublisher, computerId: string): void {
   if (!computerId) return;
   void jobs.enqueue(computerSleepJob(computerId, new Date(Date.now() + sandboxIdleMs())));
@@ -181,6 +177,43 @@ export async function touchRunningComputer(
 ): Promise<void> {
   scheduleComputerSleep(deps.jobs, computer.id);
   await deps.sandbox.keepAlive?.(toComputerRef(computer));
+}
+
+/**
+ * Closes the screen a finished run kept, with the lease it was kept under: if a newer run took
+ * the screen since, the supervisor refuses and nothing is closed.
+ */
+export async function sleepBotScreenIfIdle(
+  deps: {
+    prisma: PrismaClient;
+    sandbox: SandboxProvider;
+    jobs: JobPublisher;
+    events: ThreadEvents;
+  },
+  screen: BackgroundJobPayloads["computer.screen-sleep"],
+): Promise<void> {
+  const computer = await loadComputer(deps.prisma, screen.computerId);
+  // A stopped computer closed its screens with it.
+  if (!computer?.providerRef || computer.state !== "running") return;
+
+  // A run waiting for an answer leaves its screen to the idle delay like any finished one.
+  const holdingStatuses = ACTIVE_RUN_STATUSES.filter((status) => status !== "waiting_input");
+  const busy =
+    (hasActiveComputerControl(computer) && computer.controlBotId === screen.botId) ||
+    (await findActiveRun(deps.prisma, screen.computerId, holdingStatuses, screen.botId));
+  if (!busy) {
+    const released = await releaseBotScreen(deps, toComputerRef(computer), {
+      operationId: "computer.screen-sleep",
+      traceId: "computer.screen-sleep",
+      spaceId: computer.spaceId,
+      userId: computer.userId,
+      botId: screen.botId,
+      screenLeaseId: screen.screenLeaseId,
+      signal: new AbortController().signal,
+    });
+    if (released) return;
+  }
+  await scheduleBotScreenSleep(deps.jobs, screen);
 }
 
 export async function sleepComputerIfIdle(
@@ -361,9 +394,15 @@ function loadComputer(prisma: PrismaClient, computerId: string) {
   });
 }
 
-function findActiveRun(prisma: PrismaClient, computerId: string, statuses: readonly string[]) {
+function findActiveRun(
+  prisma: PrismaClient,
+  computerId: string,
+  statuses: readonly string[],
+  botId?: string,
+) {
   return prisma.run.findFirst({
     where: {
+      ...(botId ? { botId } : {}),
       bot: { computerId },
       status: { in: statuses as (typeof ACTIVE_RUN_STATUSES)[number][] },
     },

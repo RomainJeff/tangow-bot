@@ -159,12 +159,12 @@ export function createRunComputer(
       return (await renewComputerExecutionLease(deps.prisma, held)) || held !== lease();
     },
     holdForTakeover: () => holdComputerExecutionLeaseForTakeover(deps.prisma, lease()),
-    async release(): Promise<void> {
+    async release(screen: "keep" | "teardown" = "teardown"): Promise<void> {
       while (state.phase === "acquiring") await state.ready.catch(() => undefined);
       const held = state;
       state = { phase: "released" };
       if (held.phase === "released") return;
-      if (held.phase === "ready") await releaseBotScreen(deps, held.computer, held.context);
+      if (held.phase === "ready") await releaseBotScreen(deps, held.computer, held.context, screen);
       await releaseComputerExecutionLease(deps.prisma, held.lease).catch(() => undefined);
     },
   };

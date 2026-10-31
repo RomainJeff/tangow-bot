@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Fixed
 
 - On web, desktop and iPhone, a bot message posted right after another one now shows its link previews, which used to land on the earlier message and stay hidden.
+- When a bot's run ends well, its Docker computer keeps the browser open for a while, so the next run, a helper's follow-up or your takeover finds the page it left instead of a blank tab.
 
 ### 2026-10-30
 

@@ -26,6 +26,12 @@ describe("canTakeScreenLease", () => {
     expect(canTakeScreenLease("run-1:8", "run-1:1")).toBe(false);
     expect(canTakeScreenLease("run-2:2", undefined)).toBe(false);
   });
+
+  it("lets a kept screen be taken at the same fence but never at a lower one", () => {
+    expect(canTakeScreenLease("run-1:1", "run-2:1")).toBe(false);
+    expect(canTakeScreenLease("run-1:1", "run-2:1", true)).toBe(true);
+    expect(canTakeScreenLease("run-1:3", "run-2:2", true)).toBe(false);
+  });
 });
 
 describe("canReleaseScreenLease", () => {

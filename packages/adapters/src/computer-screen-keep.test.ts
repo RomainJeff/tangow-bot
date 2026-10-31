@@ -132,7 +132,7 @@ describe("releaseBotScreen after a run", () => {
 
     await releaseBotScreen(deps, ref, context);
 
-    expect(releases).toEqual([{ botId: "bot-1", screenLeaseId: "run-1:1", release: "teardown" }]);
+    expect(releases).toEqual([{ botId: "bot-1", screenLeaseId: "run-1:1", release: undefined }]);
     expect(botGeneration.value).toBe(5);
     expect(queued).toEqual([]);
   });
@@ -146,7 +146,7 @@ describe("sleepBotScreenIfIdle", () => {
 
     await sleepBotScreenIfIdle(deps, payload);
 
-    expect(releases).toEqual([{ botId: "bot-1", screenLeaseId: "run-1:1", release: "teardown" }]);
+    expect(releases).toEqual([{ botId: "bot-1", screenLeaseId: "run-1:1", release: undefined }]);
     expect(botGeneration.value).toBe(5);
     expect(queued).toEqual([]);
   });

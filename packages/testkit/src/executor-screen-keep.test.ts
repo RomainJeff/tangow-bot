@@ -84,12 +84,12 @@ it("keeps the screen when a run waits for an answer", async () => {
 });
 
 it("tears the screen down when a run fails", async () => {
-  expect(await runEndingWith("fails")).toEqual({ releases: ["teardown"], status: "failed" });
+  expect(await runEndingWith("fails")).toEqual({ releases: [undefined], status: "failed" });
 });
 
 it("tears the screen down when a run is stopped", async () => {
   expect(await runEndingWith("is stopped")).toEqual({
-    releases: ["teardown"],
+    releases: [undefined],
     status: "cancelled",
   });
 });
