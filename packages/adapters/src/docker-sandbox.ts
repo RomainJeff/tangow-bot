@@ -452,10 +452,10 @@ export class DockerSandboxProvider implements SandboxProvider {
     computer: ComputerRef,
     context: AdapterContext,
     release: "keep" | "teardown" = "teardown",
-  ): Promise<"kept" | void> {
+  ): Promise<"kept" | "refused" | void> {
     if (!context.botId) return;
-    // A cancelled or aborted run never leaves a browser behind.
-    const keep = release === "keep" && !context.cancelRunWork && !context.signal.aborted;
+    // A cancelled run never leaves a browser behind.
+    const keep = release === "keep" && !context.cancelRunWork;
     // Run cancellation must not skip cleanup, but cleanup still needs its own deadline.
     const deadline = requestDeadline(SCREEN_RELEASE_TIMEOUT_MS, "sandbox screen release timed out");
     try {
@@ -473,7 +473,9 @@ export class DockerSandboxProvider implements SandboxProvider {
       if (!res.ok && res.status !== 404) {
         throw new Error(`sandbox screen release failed: ${res.status}`);
       }
-      if (keep && res.ok && (await res.json().catch(() => null))?.kept === true) return "kept";
+      const answer = res.ok ? await res.json().catch(() => null) : null;
+      if (keep && answer?.kept === true) return "kept";
+      if (answer?.released === false) return "refused";
     } finally {
       deadline.dispose();
     }

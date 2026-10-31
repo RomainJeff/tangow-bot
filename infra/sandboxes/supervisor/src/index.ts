@@ -772,9 +772,12 @@ app.delete("/computers/:id/screen", async (c) => {
     const preserve =
       c.req.header("x-rakazo-preserve-screen") === "1" && !cancelRunWork && Boolean(screenLeaseId);
     let kept = false;
+    let refused = false;
     await withComputerScreenLock(id, async () => {
       const assigned = computerScreens.get(id);
       const index = assigned ? releaseAssignedScreen(assigned, screenId, screenLeaseId) : undefined;
+      // A newer run owns the slot: the caller must not treat its screen as released.
+      refused = Boolean(screenLeaseId && assigned?.has(screenId) && index === undefined);
       if (preserve && assigned && index !== undefined) {
         // Revoking control disconnects the run's input while the display and browser stay up.
         // A revoke that fails or throws falls through to the normal teardown.
@@ -806,7 +809,8 @@ app.delete("/computers/:id/screen", async (c) => {
       }
       if (assigned?.size === 0) computerScreens.delete(id);
     });
-    return c.json(kept ? { ok: true, kept } : { ok: true });
+    if (kept) return c.json({ ok: true, kept });
+    return c.json(refused ? { ok: true, released: false } : { ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return c.json({ error: message }, 404);

@@ -162,13 +162,14 @@ export interface SandboxProvider {
   /**
    * Drop a single-screen graphical claim for this bot so another Team bot can use the display.
    * `keep` asks the provider to leave the display and browser running and only revoke control,
-   * and answers `"kept"` when it did. Providers that ignore it tear down.
+   * and answers `"kept"` when it did. Providers that ignore it tear down. `"refused"` means a
+   * newer run owns the screen, so nothing was released.
    */
   releaseScreen?(
     computer: ComputerRef,
     context: AdapterContext,
     release?: "keep" | "teardown",
-  ): Promise<"kept" | void>;
+  ): Promise<"kept" | "refused" | void>;
   /** Keep what lives only on the machine's own disk before a replacement destroys it. */
   preserveBeforeReplace?(computer: ComputerRef, context: AdapterContext): Promise<void>;
   stop(computer: ComputerRef, context: AdapterContext): Promise<void>;

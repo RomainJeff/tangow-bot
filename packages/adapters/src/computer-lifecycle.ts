@@ -703,19 +703,21 @@ export async function releaseBotScreen(
   release: "keep" | "teardown" = "teardown",
 ): Promise<boolean> {
   if (!deps.sandbox.releaseScreen) return false;
-  let kept: boolean;
+  let released: "kept" | "refused" | void;
   try {
     // Teardown is every provider's default, so only a keep request carries an argument.
-    kept =
-      (release === "keep"
+    released =
+      release === "keep"
         ? await deps.sandbox.releaseScreen(computer, context, "keep")
-        : await deps.sandbox.releaseScreen(computer, context)) === "kept";
+        : await deps.sandbox.releaseScreen(computer, context);
   } catch {
     // A failed release keeps the slot and its token.
     return false;
   }
+  // A newer run owns the screen: its token and viewers are not this release's to move on.
+  if (released === "refused") return true;
   const botId = context.botId;
-  if (kept) {
+  if (released === "kept") {
     // A screen nobody closes stays until its computer's own idle shutdown.
     await scheduleKeptScreenSleep(deps, context).catch(() => undefined);
     return true;

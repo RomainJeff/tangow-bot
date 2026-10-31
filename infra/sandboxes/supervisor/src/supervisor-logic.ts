@@ -201,7 +201,7 @@ export function nextScreenIndex(
         throw new Error("This Team Computer screen is owned by a newer execution.");
       }
       if (takeable) {
-        if (existing.leaseId !== leaseId) existing.kept = false;
+        existing.kept = false;
         existing.leaseId = leaseId;
       }
     }
