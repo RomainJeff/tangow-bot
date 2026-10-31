@@ -153,7 +153,9 @@ async function previewRunMessages(
   // Only a run that ended well, and only one a person is reading (never bot to bot).
   if (run?.status !== "completed" || run.trigger === "bot_message") return;
   // The final reply and message_user posts are addressed to the person; narration never is.
-  const said = (await runMessages(deps.prisma, runId)).flatMap((message) =>
+  // Each post gets its own previews, on the bubble the thread draws it in.
+  const messages = await runMessages(deps.prisma, runId, { splitAtPersonMessages: true });
+  const said = messages.flatMap((message) =>
     message.midTurn && !message.toPerson
       ? []
       : [{ id: message.id, ...messageLinks({ role: "bot", blocks: message.blocks }) }],

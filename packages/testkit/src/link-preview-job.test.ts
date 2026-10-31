@@ -807,6 +807,22 @@ describe("link.preview job for a bot's run (CA 13, CA 70, CA 71)", () => {
     ]);
   });
 
+  it("puts a post's previews on that post when another post came just before it", async () => {
+    // Tool calls live in another session, so the two posts follow each other in the thread's.
+    const { deps } = await run({
+      messages: [
+        { id: "first", midTurn: true, toPerson: true, blocks: [text("Looking into it.")] },
+        { id: "second", midTurn: true, toPerson: true, blocks: [text(`Found it: ${LINK}`)] },
+      ],
+    });
+
+    await runLinkPreviewJob(deps, { runId: "run-1" });
+
+    expect(await card("second")).toMatchObject({ url: LINK });
+    expect(await card("first")).toBeUndefined();
+    expect(await db.mentionsOf("first")).toEqual([]);
+  });
+
   it("previews a link from a run that used no tool at all", async () => {
     const { deps } = await run({
       messages: [{ id: "final", blocks: [text("https://never-opened.test/page")] }],
