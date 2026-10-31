@@ -36,7 +36,6 @@ const mailTo = (address: string, body: string, id: string): ModelEmulatorStep[] 
     },
   },
   prepares(mailProposal(address, body)),
-  { expect() {}, response: { type: "text", text: "Waiting." } },
 ];
 
 /** The send calls to `address` the resumed model reads back among its earlier steps. */
