@@ -76,7 +76,7 @@ export function ShellMain({
   const { panelCoversColumn } = panels;
   const { callOpen, setCallOpen, voiceStatus } = voice;
   const { activeSnapshot, view } = thread;
-  const { openSettings, setUsage, setPeerConversation, runView, setRunView } = overlays;
+  const { openSettings, setPeerConversation, runView, setRunView } = overlays;
   const { setReplyTarget, setRewindArtifacts } = draft;
   const openBot = useCallback(
     (id: string, messageId?: string) => navigate(threadJumpLocation({ botId: id, messageId })),
@@ -288,13 +288,7 @@ export function ShellMain({
                   openSettings("general");
                   return;
                 }
-                if (action === "settings-usage") {
-                  void rpc.usage
-                    .summary()
-                    .then(setUsage)
-                    .catch(() => undefined);
-                  openSettings("usage");
-                }
+                if (action === "settings-usage") openSettings("usage");
               }}
             />
           ) : null}

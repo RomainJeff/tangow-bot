@@ -4,7 +4,6 @@ import { BotAvatar, Button, Switch, Toggle } from "@rakazo/ui-web";
 import { ChevronDown } from "lucide-react";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
-  type RefObject,
   useEffect,
   useId,
   useRef,
@@ -206,37 +205,6 @@ export function GeneralSettingsPanels({
           <ApprovalRulesSettings />
         </div>
       </details>
-    </div>
-  );
-}
-
-export function UsageSettingsPanel({
-  usage,
-  panelRef,
-}: {
-  usage?: { runs: number; inputTokens: number; outputTokens: number } | null;
-  panelRef?: RefObject<HTMLDivElement | null>;
-}) {
-  return (
-    <div
-      ref={panelRef}
-      tabIndex={-1}
-      data-testid="usage-settings"
-      className="rounded-card bg-group shadow-group px-4 py-4 outline-none"
-    >
-      <h3 className="text-[15px] font-medium text-foreground">
-        <Trans>Usage</Trans>
-      </h3>
-      {usage ? (
-        <p className="mt-3 text-[14px] text-foreground/75">
-          <Trans>
-            {usage.runs} runs · {usage.inputTokens + usage.outputTokens} tokens
-          </Trans>
-        </p>
-      ) : null}
-      <p className={`text-[12.5px] text-muted-foreground/80 ${usage ? "mt-2" : "mt-3"}`}>
-        <Trans>Model spend uses your provider keys.</Trans>
-      </p>
     </div>
   );
 }

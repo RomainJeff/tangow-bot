@@ -4,8 +4,12 @@ import { cn } from "./lib/utils.js";
 
 interface SettingRowContent {
   label: ReactNode;
+  /** An avatar or a dot ahead of the label. */
+  leading?: ReactNode;
   /** One quiet line under the label. */
   subline?: ReactNode;
+  /** A read-only figure on the trailing side, allowed on a pressable row too. */
+  value?: ReactNode;
   /** Marks a row that opens something. */
   chevron?: boolean;
 }
@@ -41,7 +45,9 @@ const pressableClass =
  */
 export function SettingRow({
   label,
+  leading,
   subline,
+  value,
   meta,
   children,
   chevron,
@@ -50,6 +56,7 @@ export function SettingRow({
 }: SettingRowProps) {
   const body = (
     <>
+      {leading}
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span data-slot="setting-row-label" className="text-row-name text-foreground">
           {label}
@@ -60,6 +67,14 @@ export function SettingRow({
           </span>
         ) : null}
       </span>
+      {value ? (
+        <span
+          data-slot="setting-row-value"
+          className="flex shrink-0 flex-col items-end text-meta text-muted-foreground tabular-nums"
+        >
+          {value}
+        </span>
+      ) : null}
       {meta}
       {children ? (
         <span

@@ -8,8 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-10-31
 
+#### Changed
+
+- On web, desktop and mobile, model settings offer the refreshed provider catalog, including MiniMax M3.1 Flash, and omit entries retired from the upstream catalog.
+- On web, desktop, iPhone and Android, Usage shows input and output tokens over 7 days, 30 days or all time, split by bot, model and category (Fast, Everyday, Complex, Fixed, Compaction) with per-run and per-compaction averages, and any row opens the same breakdown for that bot, model or category, replacing the single runs and tokens line.
+
 #### Fixed
 
+- On web, desktop and mobile, answering a bot's question reliably resumes its saved session instead of failing when its paused worker is cleaned up too early.
 - On web, desktop and iPhone, a bot message posted right after another one now shows its link previews, which used to land on the earlier message and stay hidden.
 - When a bot's run ends well, its Docker computer keeps the browser open for a while, and reopens the bot's last tabs whenever it has to start again, so the next run, a helper's follow-up or your takeover finds the page it left instead of a blank tab.
 

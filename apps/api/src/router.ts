@@ -164,6 +164,7 @@ import {
   setModelCategory,
   threadEventSeq,
   touchGroupUpdatedAt,
+  usageBreakdown,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { deleteAgentSecret, listAgentSecrets, putAgentSecret } from "./agent-secrets.js";
@@ -4688,35 +4689,9 @@ export function createRouter(deps: RouterDeps) {
       }),
     },
     usage: {
-      list: authed.usage.list.handler(async ({ context }) => {
-        const rows = await deps.prisma.usageRecord.findMany({
-          where: { spaceId: context.actor.spaceId, userId: context.actor.userId },
-          orderBy: { createdAt: "desc" },
-          take: 100,
-        });
-        return rows.map((row) => ({
-          id: row.id,
-          botId: row.botId,
-          runId: row.runId,
-          provider: row.provider,
-          model: row.model,
-          inputTokens: row.inputTokens,
-          outputTokens: row.outputTokens,
-          createdAt: row.createdAt.toISOString(),
-        }));
-      }),
-      summary: authed.usage.summary.handler(async ({ context }) => {
-        const result = await deps.prisma.usageRecord.aggregate({
-          where: { spaceId: context.actor.spaceId, userId: context.actor.userId },
-          _sum: { inputTokens: true, outputTokens: true },
-          _count: { _all: true },
-        });
-        return {
-          inputTokens: result._sum.inputTokens ?? 0,
-          outputTokens: result._sum.outputTokens ?? 0,
-          runs: result._count._all,
-        };
-      }),
+      breakdown: authed.usage.breakdown.handler(({ context, input }) =>
+        usageBreakdown(deps.prisma, context.actor, input.period),
+      ),
     },
     export: {
       bot: authed.export.bot.handler(async ({ context, input }) => {

@@ -12,6 +12,7 @@ import {
   MessageMeta,
   MessageRow,
   ReasoningDisclosure,
+  ShareBar,
   Shimmer,
   StackedAvatars,
   StopContour,
@@ -236,6 +237,24 @@ function Kitchen() {
         <Surface variant="outlined" className="p-4 font-mono text-mono text-foreground">
           pnpm --filter @rakazo/ui-tokens generate
         </Surface>
+      </Section>
+
+      <Section title="share bar">
+        <ShareBar
+          segments={[
+            { key: "maya", value: 6, color: MAYA.color },
+            { key: "atlas", value: 3, color: ATLAS.color },
+          ]}
+        />
+        <ShareBar
+          segments={[
+            { key: "a", value: 5 },
+            { key: "b", value: 3 },
+            { key: "c", value: 2 },
+            { key: "d", value: 1 },
+            { key: "e", value: 1 },
+          ]}
+        />
       </Section>
 
       <Section title="composer">
