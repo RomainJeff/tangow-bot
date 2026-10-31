@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Fixed
 
 - On web, desktop and iPhone, a bot message posted right after another one now shows its link previews, which used to land on the earlier message and stay hidden.
+- When you take over a bot's computer, its browser reopens the pages the bot left open instead of a blank Google tab.
 
 ### 2026-10-30
 
