@@ -315,6 +315,7 @@ export function ShellPage() {
 
       <ComputerOverlay
         booting={control.booting}
+        opening={control.opening}
         active={active}
         computer={store.computer}
         computerOpen={screen.computerOpen}

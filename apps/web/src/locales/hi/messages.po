@@ -750,7 +750,7 @@ msgid "Booting live desktop…"
 msgstr "लाइव डेस्कटॉप शुरू हो रहा है…"
 
 #. placeholder {0}: active?.name
-#: src/pages/shell/side-panel.tsx:276
+#: src/pages/shell/side-panel.tsx:279
 msgid "Booting up {0}’s computer"
 msgstr "{0} का कंप्यूटर शुरू हो रहा है"
 
@@ -773,7 +773,7 @@ msgstr "बॉट"
 msgid "Bot"
 msgstr "बॉट"
 
-#: src/pages/shell/side-panel.tsx:402
+#: src/pages/shell/side-panel.tsx:408
 msgid "Bot screen"
 msgstr "बॉट स्क्रीन"
 
@@ -994,7 +994,7 @@ msgstr ""
 msgid "Close"
 msgstr "बंद करें"
 
-#: src/pages/shell/side-panel.tsx:382
+#: src/pages/shell/side-panel.tsx:385
 msgid "Close computer"
 msgstr "कंप्यूटर बंद करें"
 
@@ -1093,7 +1093,7 @@ msgstr "कंप्यूटर"
 msgid "Computer failed to boot"
 msgstr "कंप्यूटर शुरू नहीं हो सका"
 
-#: src/pages/shell/side-panel.tsx:421
+#: src/pages/shell/side-panel.tsx:427
 msgid "Computer is asleep"
 msgstr "कंप्यूटर निष्क्रिय है"
 
@@ -1333,7 +1333,7 @@ msgid "Could not connect to the computer screen"
 msgstr "कंप्यूटर स्क्रीन से कनेक्ट नहीं हो सका"
 
 #: src/pages/Auth.tsx:102
-#: src/pages/shell/use-computer-control.ts:185
+#: src/pages/shell/use-computer-control.ts:193
 msgid "Could not continue"
 msgstr "जारी नहीं रखा जा सका"
 
@@ -1614,7 +1614,7 @@ msgstr "सिखाना शुरू नहीं किया जा सक�
 msgid "Could not submit this answer"
 msgstr "यह उत्तर सबमिट नहीं किया जा सका"
 
-#: src/pages/shell/use-computer-control.ts:63
+#: src/pages/shell/use-computer-control.ts:64
 msgid "Could not take control"
 msgstr "नियंत्रण नहीं लिया जा सका"
 
@@ -2376,7 +2376,7 @@ msgstr "यह बॉट कैसा व्यवहार करे"
 msgid "How to check"
 msgstr "जांच कैसे करें"
 
-#: src/pages/shell/side-panel.tsx:470
+#: src/pages/shell/side-panel.tsx:480
 msgid "I’m done"
 msgstr "मेरा काम हो गया"
 
@@ -2859,7 +2859,7 @@ msgstr "इस रूटीन का नाम दें"
 msgid "Needs takeover"
 msgstr "नियंत्रण लेना ज़रूरी"
 
-#: src/pages/shell/side-panel.tsx:325
+#: src/pages/shell/side-panel.tsx:328
 msgid "Needs you"
 msgstr "आपकी ज़रूरत है"
 
@@ -3454,7 +3454,7 @@ msgstr "दृश्य रिफ़्रेश करें"
 msgid "Refreshing…"
 msgstr "रिफ़्रेश हो रहा है…"
 
-#: src/pages/shell/side-panel.tsx:460
+#: src/pages/shell/side-panel.tsx:470
 msgid "Release"
 msgstr "नियंत्रण छोड़ें"
 
@@ -3992,7 +3992,7 @@ msgstr "स्किल्स"
 
 #: src/components/ask/QuestionCard.tsx:194
 #: src/components/integrations/IntegrationSetup.tsx:359
-#: src/pages/shell/side-panel.tsx:467
+#: src/pages/shell/side-panel.tsx:477
 msgid "Skip"
 msgstr "छोड़ें"
 
@@ -4072,8 +4072,8 @@ msgid "Steps"
 msgstr "चरण"
 
 #: src/pages/shell/composer.tsx:299
-#: src/pages/shell/side-panel.tsx:341
-#: src/pages/shell/side-panel.tsx:346
+#: src/pages/shell/side-panel.tsx:344
+#: src/pages/shell/side-panel.tsx:349
 msgid "Stop"
 msgstr "रोकें"
 
@@ -4133,7 +4133,7 @@ msgstr "बदला जा रहा है…"
 msgid "System"
 msgstr "सिस्टम"
 
-#: src/pages/shell/side-panel.tsx:445
+#: src/pages/shell/side-panel.tsx:455
 msgid "Take control"
 msgstr ""
 
@@ -4558,7 +4558,7 @@ msgid "You can close this window."
 msgstr "आप यह विंडो बंद कर सकते हैं।"
 
 #: src/pages/ComputerSettingsPanel.tsx:109
-#: src/pages/shell/side-panel.tsx:329
+#: src/pages/shell/side-panel.tsx:332
 msgid "You have control"
 msgstr "नियंत्रण आपके पास है"
 

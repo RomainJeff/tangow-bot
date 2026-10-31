@@ -38,6 +38,7 @@ export function useComputerControl({
   const { setComputerError, setComputerErrorFromScreen, refreshComputerScreen } = computerScreen;
   const { refreshThread, refreshThreadRef } = sync;
   const [booting, setBooting] = useState(false);
+  const [opening, setOpening] = useState(false);
   const [teachBusy, setTeachBusy] = useState(false);
   const autoBooted = useRef<string | null>(null);
 
@@ -139,24 +140,31 @@ export function useComputerControl({
     return () => window.clearInterval(timer);
   }, [panel, computerOpen, active?.id, computer?.state]);
 
-  /** Opens the full window to watch; `takeControl` also takes the mouse and keyboard (the Needs you card). */
+  /**
+   * Opens the full window to watch, at once: it shows Connecting… while the computer boots and a
+   * fresh screen URL loads, so it never renders a cached one. `takeControl` (the Needs you card)
+   * also takes the mouse and keyboard, and opens the window once that has landed.
+   */
   async function openComputer({ takeControl = false }: { takeControl?: boolean } = {}) {
     if (!active) return;
     const takeover =
       takeControl &&
       !userHoldsComputerControl(computer, active.id) &&
       !computerTakeoverBlocked(computer, snapshot?.run?.status);
+    setOpening(true);
+    if (!takeover) setComputerOpen(true);
     try {
       await bootComputer({
         takeControl: takeover,
         overlay: takeover || computer?.state !== "running",
         force: computer?.state !== "running",
       });
-      // The full viewer opens a new connection, so it waits for a URL the proxy still accepts.
       await refreshComputerScreen(active.id, { visible: true });
       setComputerOpen(true);
     } catch {
       // computerError already set in bootComputer
+    } finally {
+      setOpening(false);
     }
   }
 
@@ -220,6 +228,7 @@ export function useComputerControl({
 
   return {
     booting,
+    opening,
     openComputer,
     takeComputerControl,
     releaseComputer,

@@ -248,6 +248,54 @@ test("an active Team bot must be stopped before user takeover", async ({ page },
   await expect(page.getByRole("button", { name: "Close computer" })).toHaveCount(0);
 });
 
+test("opening the bot's screen responds at once while a fresh screen URL loads", async ({
+  page,
+}, testInfo) => {
+  await page.clock.install();
+  await signup(page, `screen-open-${Date.now()}@rakazo.test`, "password12", "Screen Open");
+  await completeOnboarding(page);
+  const botId = activeBotId(page);
+  await rpc(page, "computer/boot", { botId });
+  await expect(rpc<{ state: string }>(page, "computer/status", { botId })).resolves.toMatchObject({
+    state: "running",
+  });
+
+  const screenUrl = "https://screen.example/vnc.html";
+  let delayMs = 0;
+  await page.route("https://screen.example/**", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: "<!doctype html><title>Test desktop</title><p>Desktop connected</p>",
+    }),
+  );
+  await page.route("**/rpc/computer/screenUrl", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ json: { url: screenUrl } }),
+    });
+  });
+
+  await page.getByTestId("open-computer-panel").click();
+  const preview = page.getByTestId("computer-preview");
+  await expect(preview.locator("iframe")).toHaveAttribute("src", screenUrl);
+
+  // Past the renew age the held URL is stale, so Open must read a new one, slowly.
+  await page.clock.fastForward(55 * 60_000);
+  delayMs = 3_000;
+  await preview.hover();
+  await preview.getByTestId("computer-preview-open").click();
+  const viewport = page.getByTestId("computer-viewport");
+  await expect(page.getByRole("button", { name: "Close computer" })).toBeVisible({
+    timeout: 1_000,
+  });
+  await expect(viewport.getByRole("status")).toHaveText("Connecting…");
+  await expect(viewport.locator("iframe")).toHaveCount(0);
+  await captureScreenshot(page, testInfo, "50-team-computer-open-connecting");
+
+  await expect(viewport.locator("iframe")).toHaveAttribute("src", screenUrl);
+});
+
 async function createBot(page: Page, name: string, mode: "team" | "dedicated") {
   return createNamedBot(page, name, { computerMode: mode });
 }

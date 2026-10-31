@@ -30,7 +30,7 @@ import type { BotPageView, Panel, PanelSize } from "./layout";
 import { firstThreadRoute, panelIsOpen } from "./layout";
 import { usePanelEscape } from "./panel-escape";
 import type { ScreenLinkHandlers } from "./screen-frame";
-import { ScreenFrame } from "./screen-frame";
+import { ScreenFrame, ScreenLinkOverlay } from "./screen-frame";
 
 export function SidePanel({
   panel,
@@ -223,6 +223,7 @@ export function SidePanel({
 
 export function ComputerOverlay({
   booting,
+  opening,
   active,
   computer,
   computerOpen,
@@ -246,6 +247,8 @@ export function ComputerOverlay({
   sendError,
 }: {
   booting: boolean;
+  /** An open is loading a fresh screen URL: the window shows Connecting… until it lands. */
+  opening: boolean;
   active: Bot | undefined;
   computer: ComputerStatus | null;
   computerOpen: boolean;
@@ -395,7 +398,10 @@ export function ComputerOverlay({
           </div>
         ) : null}
         <div className="relative min-h-0 flex-1 bg-background">
-          {computer?.state === "running" && embeddedScreenUrl && !computerScreenError ? (
+          {computer?.state === "running" &&
+          embeddedScreenUrl &&
+          !computerScreenError &&
+          !opening ? (
             <>
               <ScreenFrame
                 url={embeddedScreenUrl}
@@ -417,9 +423,13 @@ export function ComputerOverlay({
           ) : (
             <div className="grid h-full place-items-center text-meta text-muted-foreground/80">
               {computerScreenError ??
-                (computer?.state === "suspended"
-                  ? t`Computer is asleep`
-                  : computerLabel(computer?.mode, active.name))}
+                (computer?.state === "suspended" ? (
+                  t`Computer is asleep`
+                ) : opening ? (
+                  <ScreenLinkOverlay view="connecting" />
+                ) : (
+                  computerLabel(computer?.mode, active.name)
+                ))}
             </div>
           )}
         </div>

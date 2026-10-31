@@ -47,6 +47,7 @@ export default function Computer() {
   const booting = bootingCount > 0;
   const switching = switchingCount > 0;
   const [computerOpen, setComputerOpen] = useState(false);
+  const [opening, setOpening] = useState(false);
   const autoBooted = useRef<string | null>(null);
 
   const embeddedScreenUrl = embeddableScreenUrl(screenUrl, currentApiBase());
@@ -159,6 +160,8 @@ export default function Computer() {
   async function openComputer({ takeControl = false }: { takeControl?: boolean } = {}) {
     if (!botId) return;
     const needsTakeover = takeControl && !hasControl;
+    setOpening(true);
+    if (!needsTakeover) setComputerOpen(true);
     try {
       const opened = await bootComputer({
         takeControl: needsTakeover,
@@ -170,6 +173,8 @@ export default function Computer() {
       setScreenError(null);
     } catch {
       // error already set
+    } finally {
+      setOpening(false);
     }
   }
 
@@ -437,7 +442,9 @@ export default function Computer() {
                 </View>
               </SafeAreaView>
               <View style={{ flex: 1, backgroundColor: tokens.card }}>
-                {computer?.state === "running" && embeddedScreenUrl && !screenError ? (
+                {opening && !screenError ? (
+                  <ScreenLinkOverlay view="connecting" />
+                ) : computer?.state === "running" && embeddedScreenUrl && !screenError ? (
                   <ScreenWebView
                     url={embeddedScreenUrl}
                     interactive={hasControl}
@@ -449,7 +456,7 @@ export default function Computer() {
                     style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 16 }}
                   >
                     <Text style={{ color: tokens.mutedForeground, textAlign: "center" }}>
-                      {placeholder}
+                      {error ?? placeholder}
                     </Text>
                   </View>
                 )}

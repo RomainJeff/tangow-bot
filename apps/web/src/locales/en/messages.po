@@ -750,7 +750,7 @@ msgid "Booting live desktop…"
 msgstr "Booting live desktop…"
 
 #. placeholder {0}: active?.name
-#: src/pages/shell/side-panel.tsx:276
+#: src/pages/shell/side-panel.tsx:279
 msgid "Booting up {0}’s computer"
 msgstr "Booting up {0}’s computer"
 
@@ -773,7 +773,7 @@ msgstr "Bot"
 msgid "Bot"
 msgstr "Bot"
 
-#: src/pages/shell/side-panel.tsx:402
+#: src/pages/shell/side-panel.tsx:408
 msgid "Bot screen"
 msgstr "Bot screen"
 
@@ -994,7 +994,7 @@ msgstr "Client secret"
 msgid "Close"
 msgstr "Close"
 
-#: src/pages/shell/side-panel.tsx:382
+#: src/pages/shell/side-panel.tsx:385
 msgid "Close computer"
 msgstr "Close computer"
 
@@ -1093,7 +1093,7 @@ msgstr "Computer"
 msgid "Computer failed to boot"
 msgstr "Computer failed to boot"
 
-#: src/pages/shell/side-panel.tsx:421
+#: src/pages/shell/side-panel.tsx:427
 msgid "Computer is asleep"
 msgstr "Computer is asleep"
 
@@ -1333,7 +1333,7 @@ msgid "Could not connect to the computer screen"
 msgstr "Could not connect to the computer screen"
 
 #: src/pages/Auth.tsx:102
-#: src/pages/shell/use-computer-control.ts:185
+#: src/pages/shell/use-computer-control.ts:193
 msgid "Could not continue"
 msgstr "Could not continue"
 
@@ -1614,7 +1614,7 @@ msgstr "Could not start teaching"
 msgid "Could not submit this answer"
 msgstr "Could not submit this answer"
 
-#: src/pages/shell/use-computer-control.ts:63
+#: src/pages/shell/use-computer-control.ts:64
 msgid "Could not take control"
 msgstr "Could not take control"
 
@@ -2376,7 +2376,7 @@ msgstr "How this bot should behave"
 msgid "How to check"
 msgstr "How to check"
 
-#: src/pages/shell/side-panel.tsx:470
+#: src/pages/shell/side-panel.tsx:480
 msgid "I’m done"
 msgstr "I’m done"
 
@@ -2859,7 +2859,7 @@ msgstr "Name this routine"
 msgid "Needs takeover"
 msgstr "Needs takeover"
 
-#: src/pages/shell/side-panel.tsx:325
+#: src/pages/shell/side-panel.tsx:328
 msgid "Needs you"
 msgstr "Needs you"
 
@@ -3454,7 +3454,7 @@ msgstr "Refresh view"
 msgid "Refreshing…"
 msgstr "Refreshing…"
 
-#: src/pages/shell/side-panel.tsx:460
+#: src/pages/shell/side-panel.tsx:470
 msgid "Release"
 msgstr "Release"
 
@@ -3992,7 +3992,7 @@ msgstr "Skills"
 
 #: src/components/ask/QuestionCard.tsx:194
 #: src/components/integrations/IntegrationSetup.tsx:359
-#: src/pages/shell/side-panel.tsx:467
+#: src/pages/shell/side-panel.tsx:477
 msgid "Skip"
 msgstr "Skip"
 
@@ -4072,8 +4072,8 @@ msgid "Steps"
 msgstr "Steps"
 
 #: src/pages/shell/composer.tsx:299
-#: src/pages/shell/side-panel.tsx:341
-#: src/pages/shell/side-panel.tsx:346
+#: src/pages/shell/side-panel.tsx:344
+#: src/pages/shell/side-panel.tsx:349
 msgid "Stop"
 msgstr "Stop"
 
@@ -4133,7 +4133,7 @@ msgstr "Switching…"
 msgid "System"
 msgstr "System"
 
-#: src/pages/shell/side-panel.tsx:445
+#: src/pages/shell/side-panel.tsx:455
 msgid "Take control"
 msgstr "Take control"
 
@@ -4558,7 +4558,7 @@ msgid "You can close this window."
 msgstr "You can close this window."
 
 #: src/pages/ComputerSettingsPanel.tsx:109
-#: src/pages/shell/side-panel.tsx:329
+#: src/pages/shell/side-panel.tsx:332
 msgid "You have control"
 msgstr "You have control"
 
