@@ -69,6 +69,13 @@ test("model dropdown search and provider group headers", async ({ page }, testIn
 
   await modelCombobox.click();
   await expect(modelSearch).toBeVisible();
+  await modelSearch.fill("minimax-m3.1-flash");
+  await expect(modelOptions.getByRole("option")).toHaveCount(1);
+  await expect(modelOptions.getByRole("option")).toContainText("MiniMax M3.1 Flash");
+  await captureScreenshot(page, testInfo, "updated-model-catalog-desktop");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await captureScreenshot(page, testInfo, "updated-model-catalog-phone");
+
   await modelSearch.fill("no-model-matches-this");
   await expect(page.getByText("No matching models")).toBeVisible();
   await expect(modelOptions.getByRole("option")).toHaveCount(0);
