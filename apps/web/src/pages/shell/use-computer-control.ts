@@ -139,19 +139,33 @@ export function useComputerControl({
     return () => window.clearInterval(timer);
   }, [panel, computerOpen, active?.id, computer?.state]);
 
-  async function openComputer() {
+  /** Opens the full window to watch; `takeControl` also takes the mouse and keyboard (the Needs you card). */
+  async function openComputer({ takeControl = false }: { takeControl?: boolean } = {}) {
     if (!active) return;
-    const needsTakeover = !userHoldsComputerControl(computer, active.id);
-    const blocked = computerTakeoverBlocked(computer, snapshot?.run?.status);
+    const takeover =
+      takeControl &&
+      !userHoldsComputerControl(computer, active.id) &&
+      !computerTakeoverBlocked(computer, snapshot?.run?.status);
     try {
       await bootComputer({
-        takeControl: needsTakeover && !blocked,
-        overlay: (needsTakeover && !blocked) || computer?.state !== "running",
+        takeControl: takeover,
+        overlay: takeover || computer?.state !== "running",
         force: computer?.state !== "running",
       });
       // The full viewer opens a new connection, so it waits for a URL the proxy still accepts.
       await refreshComputerScreen(active.id, { visible: true });
       setComputerOpen(true);
+    } catch {
+      // computerError already set in bootComputer
+    }
+  }
+
+  async function takeComputerControl() {
+    if (!active) return;
+    try {
+      await bootComputer({ takeControl: true, overlay: false });
+      // The screen URL changes with control: wait for the interactive one before the button settles.
+      await refreshComputerScreen(active.id, { visible: true });
     } catch {
       // computerError already set in bootComputer
     }
@@ -207,6 +221,7 @@ export function useComputerControl({
   return {
     booting,
     openComputer,
+    takeComputerControl,
     releaseComputer,
     teachBusy,
     stopTeaching,

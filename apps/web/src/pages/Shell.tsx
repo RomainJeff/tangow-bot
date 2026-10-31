@@ -130,7 +130,10 @@ export function ShellPage() {
   // The transcript is memoized, so its Needs you card calls the latest openComputer through a ref.
   const openComputerRef = useRef(control.openComputer);
   openComputerRef.current = control.openComputer;
-  const openComputerFromThread = useCallback(() => void openComputerRef.current(), []);
+  const openComputerFromThread = useCallback(
+    () => void openComputerRef.current({ takeControl: true }),
+    [],
+  );
 
   const userName = session.data?.user.name ?? t`You`;
   const initials = userInitials(userName);
@@ -329,6 +332,10 @@ export function ShellPage() {
         composerRunning={thread.composerRunning}
         sending={send.sending}
         stopRun={send.stopRun}
+        canTakeControl={
+          !thread.composerRunning || store.snapshot?.run?.status === "waiting_takeover"
+        }
+        takeComputerControl={control.takeComputerControl}
         releaseComputer={control.releaseComputer}
         refreshThread={sync.refreshThread}
         sendError={draft.sendError}

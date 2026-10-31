@@ -13,7 +13,7 @@ import type {
 import { BotAvatar, Button } from "@rakazo/ui-web";
 import { X } from "lucide-react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { ComputerMaintenanceActions } from "../../components/ComputerMaintenanceActions";
 import { TeachCaptureOverlay } from "../../components/teach/TeachCaptureOverlay";
 import { TeachComputerOverlayControl } from "../../components/teach/TeachComputerOverlay";
@@ -239,6 +239,8 @@ export function ComputerOverlay({
   composerRunning,
   sending,
   stopRun,
+  canTakeControl,
+  takeComputerControl,
   releaseComputer,
   refreshThread,
   sendError,
@@ -260,6 +262,9 @@ export function ComputerOverlay({
   composerRunning: boolean;
   sending: boolean;
   stopRun: () => Promise<void>;
+  /** False while a run is active, except when it waits for the user to take over. */
+  canTakeControl: boolean;
+  takeComputerControl: () => Promise<void>;
   releaseComputer: (reason?: ComputerReleaseReason) => Promise<void>;
   refreshThread: (id: string, signal?: AbortSignal) => Promise<ThreadSnapshot>;
   sendError: string | null;
@@ -348,6 +353,8 @@ export function ComputerOverlay({
                 takeoverRequested={Boolean(computer?.takeoverRequested)}
                 onRelease={releaseComputer}
               />
+            ) : canTakeControl ? (
+              <TakeControlButton onTake={takeComputerControl} />
             ) : null}
             {active && !recordingSkill ? (
               <TeachComputerOverlayControl
@@ -419,6 +426,25 @@ export function ComputerOverlay({
       </div>
     </div>
   ) : null;
+}
+
+function TakeControlButton({ onTake }: { onTake: () => Promise<void> }) {
+  const [pending, setPending] = useState(false);
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      data-testid="computer-take-control"
+      disabled={pending}
+      onClick={() => {
+        setPending(true);
+        void onTake().finally(() => setPending(false));
+      }}
+    >
+      <Trans>Take control</Trans>
+    </Button>
+  );
 }
 
 function ComputerReleaseActions({

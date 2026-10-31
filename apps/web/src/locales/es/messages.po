@@ -702,7 +702,7 @@ msgid "Booting live desktop…"
 msgstr "Iniciando escritorio en vivo…"
 
 #. placeholder {0}: active?.name
-#: src/pages/shell/side-panel.tsx:271
+#: src/pages/shell/side-panel.tsx:276
 msgid "Booting up {0}’s computer"
 msgstr "Iniciando la computadora de {0}"
 
@@ -725,7 +725,7 @@ msgstr "Bot"
 msgid "Bot"
 msgstr "Bot"
 
-#: src/pages/shell/side-panel.tsx:395
+#: src/pages/shell/side-panel.tsx:402
 msgid "Bot screen"
 msgstr "Pantalla del bot"
 
@@ -934,7 +934,7 @@ msgstr ""
 msgid "Close"
 msgstr "Cerrar"
 
-#: src/pages/shell/side-panel.tsx:375
+#: src/pages/shell/side-panel.tsx:382
 msgid "Close computer"
 msgstr "Cerrar computadora"
 
@@ -1028,7 +1028,7 @@ msgstr "Computadora"
 msgid "Computer failed to boot"
 msgstr "La computadora no pudo iniciarse"
 
-#: src/pages/shell/side-panel.tsx:414
+#: src/pages/shell/side-panel.tsx:421
 msgid "Computer is asleep"
 msgstr "La computadora está en reposo"
 
@@ -1191,7 +1191,7 @@ msgstr "Copiar"
 msgid "Copy {label}"
 msgstr ""
 
-#: src/pages/shell/session-view.tsx:276
+#: src/pages/shell/session-view.tsx:277
 msgid "Copy diagnostic"
 msgstr "Copiar diagnóstico"
 
@@ -1268,7 +1268,7 @@ msgid "Could not connect to the computer screen"
 msgstr "No se pudo conectar a la pantalla de la computadora"
 
 #: src/pages/Auth.tsx:102
-#: src/pages/shell/use-computer-control.ts:171
+#: src/pages/shell/use-computer-control.ts:185
 msgid "Could not continue"
 msgstr "No se pudo continuar"
 
@@ -2297,7 +2297,7 @@ msgstr "Cómo debe comportarse este bot"
 msgid "How to check"
 msgstr "Cómo comprobar"
 
-#: src/pages/shell/side-panel.tsx:444
+#: src/pages/shell/side-panel.tsx:470
 msgid "I’m done"
 msgstr "Listo"
 
@@ -2779,7 +2779,7 @@ msgstr "Nombra esta rutina"
 msgid "Needs takeover"
 msgstr "Necesita toma de control"
 
-#: src/pages/shell/side-panel.tsx:320
+#: src/pages/shell/side-panel.tsx:325
 msgid "Needs you"
 msgstr "Te necesita"
 
@@ -3362,7 +3362,7 @@ msgstr "Actualizar vista"
 msgid "Refreshing…"
 msgstr "Actualizando…"
 
-#: src/pages/shell/side-panel.tsx:434
+#: src/pages/shell/side-panel.tsx:460
 msgid "Release"
 msgstr "Liberar"
 
@@ -3900,7 +3900,7 @@ msgstr "Habilidades"
 
 #: src/components/ask/QuestionCard.tsx:194
 #: src/components/integrations/IntegrationSetup.tsx:359
-#: src/pages/shell/side-panel.tsx:441
+#: src/pages/shell/side-panel.tsx:467
 msgid "Skip"
 msgstr "Omitir"
 
@@ -3980,8 +3980,8 @@ msgid "Steps"
 msgstr "Pasos"
 
 #: src/pages/shell/composer.tsx:299
-#: src/pages/shell/side-panel.tsx:336
 #: src/pages/shell/side-panel.tsx:341
+#: src/pages/shell/side-panel.tsx:346
 msgid "Stop"
 msgstr "Detener"
 
@@ -4040,6 +4040,10 @@ msgstr "Cambiando…"
 #: src/pages/AccountSettingsOverlay.tsx:266
 msgid "System"
 msgstr "Sistema"
+
+#: src/pages/shell/side-panel.tsx:445
+msgid "Take control"
+msgstr ""
 
 #: src/components/ComputerMaintenanceActions.tsx:160
 #: src/components/teach/TeachComputerOverlay.tsx:213
@@ -4449,7 +4453,7 @@ msgid "Yesterday"
 msgstr "Ayer"
 
 #: src/components/DraftCard.tsx:53
-#: src/pages/Shell.tsx:135
+#: src/pages/Shell.tsx:138
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"
 msgstr "Tú"
@@ -4463,7 +4467,7 @@ msgid "You can close this window."
 msgstr "Puedes cerrar esta ventana."
 
 #: src/pages/ComputerSettingsPanel.tsx:109
-#: src/pages/shell/side-panel.tsx:324
+#: src/pages/shell/side-panel.tsx:329
 msgid "You have control"
 msgstr "Tienes el control"
 

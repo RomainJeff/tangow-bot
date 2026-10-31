@@ -49,10 +49,11 @@ test("screen connection failures stay visible and can be retried", async ({ page
   await expect(preview.locator("iframe")).toHaveAttribute("src", screenUrl);
   await expect(preview.getByRole("alert")).toHaveCount(0);
 
-  failScreen = true;
   await preview.hover();
   await preview.getByTestId("computer-preview-open").click();
   await expect(page.getByRole("button", { name: "Close computer" })).toBeVisible();
+  failScreen = true;
+  await page.getByTestId("computer-take-control").click();
   await expect(page.getByRole("alert")).toContainText("temporarily busy");
   await captureScreenshot(page, testInfo, "computer-full-screen-connection-error");
 

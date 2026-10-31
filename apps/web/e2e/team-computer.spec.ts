@@ -98,6 +98,8 @@ test("user control leaves another Team bot's screen available", async ({ page },
   await page.getByTestId("computer-preview").hover();
   await page.getByTestId("computer-preview-open").click();
   await expect(page.getByRole("button", { name: "Close computer" })).toBeVisible();
+  await page.getByTestId("computer-take-control").click();
+  await expect(page.getByTestId("computer-chrome").getByText("You have control")).toBeVisible();
   await page.getByRole("button", { name: "Close computer" }).click();
 
   await openBot(page, "Worker");
@@ -135,6 +137,7 @@ test("a failed control release keeps the computer open for retry", async ({ page
   await page.getByTestId("computer-preview").hover();
   await page.getByTestId("computer-preview-open").click();
   const chrome = page.getByTestId("computer-chrome");
+  await page.getByTestId("computer-take-control").click();
   const release = chrome.getByRole("button", { name: "Release", exact: true });
   await expect(release).toBeVisible();
   await page.route("**/rpc/computer/release", (route) =>
@@ -220,14 +223,20 @@ test("an active Team bot must be stopped before user takeover", async ({ page },
     )
     .toBeNull();
 
-  // After stop, Open via hover is the takeover path (no Take control button).
+  // After stop, Open only watches. Take control is the one way to get the mouse and keyboard.
   await page.getByTestId("computer-preview").hover();
   await page.getByTestId("computer-preview-open").click();
   await expect(page.getByRole("button", { name: "Close computer" })).toBeVisible();
+  const takeControl = chrome.getByRole("button", { name: "Take control", exact: true });
+  await expect(takeControl).toBeVisible();
+  await expect(chrome.getByText("You have control", { exact: true })).toHaveCount(0);
+  await expect(chrome.getByRole("button", { name: "Release", exact: true })).toHaveCount(0);
+  await captureScreenshot(page, testInfo, "49-team-computer-open-view-only");
+  await takeControl.click();
   await expect(chrome.getByText("You have control", { exact: true })).toBeVisible();
-  await expect(chrome.getByRole("button", { name: /Take control/i })).toHaveCount(0);
+  await expect(takeControl).toHaveCount(0);
   await expect(chrome.getByRole("button", { name: "Release", exact: true })).toBeVisible();
-  await captureScreenshot(page, testInfo, "49-team-computer-open-after-stop");
+  await captureScreenshot(page, testInfo, "49b-team-computer-take-control");
   await chrome.getByRole("button", { name: "Release", exact: true }).click();
   // Release closes the overlay and clears control without a DB edit.
   await expect(page.getByRole("button", { name: "Close computer" })).toHaveCount(0);

@@ -702,7 +702,7 @@ msgid "Booting live desktop…"
 msgstr "लाइव डेस्कटॉप शुरू हो रहा है…"
 
 #. placeholder {0}: active?.name
-#: src/pages/shell/side-panel.tsx:271
+#: src/pages/shell/side-panel.tsx:276
 msgid "Booting up {0}’s computer"
 msgstr "{0} का कंप्यूटर शुरू हो रहा है"
 
@@ -725,7 +725,7 @@ msgstr "बॉट"
 msgid "Bot"
 msgstr "बॉट"
 
-#: src/pages/shell/side-panel.tsx:395
+#: src/pages/shell/side-panel.tsx:402
 msgid "Bot screen"
 msgstr "बॉट स्क्रीन"
 
@@ -934,7 +934,7 @@ msgstr ""
 msgid "Close"
 msgstr "बंद करें"
 
-#: src/pages/shell/side-panel.tsx:375
+#: src/pages/shell/side-panel.tsx:382
 msgid "Close computer"
 msgstr "कंप्यूटर बंद करें"
 
@@ -1028,7 +1028,7 @@ msgstr "कंप्यूटर"
 msgid "Computer failed to boot"
 msgstr "कंप्यूटर शुरू नहीं हो सका"
 
-#: src/pages/shell/side-panel.tsx:414
+#: src/pages/shell/side-panel.tsx:421
 msgid "Computer is asleep"
 msgstr "कंप्यूटर निष्क्रिय है"
 
@@ -1191,7 +1191,7 @@ msgstr "कॉपी करें"
 msgid "Copy {label}"
 msgstr ""
 
-#: src/pages/shell/session-view.tsx:276
+#: src/pages/shell/session-view.tsx:277
 msgid "Copy diagnostic"
 msgstr "निदान कॉपी करें"
 
@@ -1268,7 +1268,7 @@ msgid "Could not connect to the computer screen"
 msgstr "कंप्यूटर स्क्रीन से कनेक्ट नहीं हो सका"
 
 #: src/pages/Auth.tsx:102
-#: src/pages/shell/use-computer-control.ts:171
+#: src/pages/shell/use-computer-control.ts:185
 msgid "Could not continue"
 msgstr "जारी नहीं रखा जा सका"
 
@@ -2297,7 +2297,7 @@ msgstr "यह बॉट कैसा व्यवहार करे"
 msgid "How to check"
 msgstr "जांच कैसे करें"
 
-#: src/pages/shell/side-panel.tsx:444
+#: src/pages/shell/side-panel.tsx:470
 msgid "I’m done"
 msgstr "मेरा काम हो गया"
 
@@ -2779,7 +2779,7 @@ msgstr "इस रूटीन का नाम दें"
 msgid "Needs takeover"
 msgstr "नियंत्रण लेना ज़रूरी"
 
-#: src/pages/shell/side-panel.tsx:320
+#: src/pages/shell/side-panel.tsx:325
 msgid "Needs you"
 msgstr "आपकी ज़रूरत है"
 
@@ -3362,7 +3362,7 @@ msgstr "दृश्य रिफ़्रेश करें"
 msgid "Refreshing…"
 msgstr "रिफ़्रेश हो रहा है…"
 
-#: src/pages/shell/side-panel.tsx:434
+#: src/pages/shell/side-panel.tsx:460
 msgid "Release"
 msgstr "नियंत्रण छोड़ें"
 
@@ -3900,7 +3900,7 @@ msgstr "स्किल्स"
 
 #: src/components/ask/QuestionCard.tsx:194
 #: src/components/integrations/IntegrationSetup.tsx:359
-#: src/pages/shell/side-panel.tsx:441
+#: src/pages/shell/side-panel.tsx:467
 msgid "Skip"
 msgstr "छोड़ें"
 
@@ -3980,8 +3980,8 @@ msgid "Steps"
 msgstr "चरण"
 
 #: src/pages/shell/composer.tsx:299
-#: src/pages/shell/side-panel.tsx:336
 #: src/pages/shell/side-panel.tsx:341
+#: src/pages/shell/side-panel.tsx:346
 msgid "Stop"
 msgstr "रोकें"
 
@@ -4040,6 +4040,10 @@ msgstr "बदला जा रहा है…"
 #: src/pages/AccountSettingsOverlay.tsx:266
 msgid "System"
 msgstr "सिस्टम"
+
+#: src/pages/shell/side-panel.tsx:445
+msgid "Take control"
+msgstr ""
 
 #: src/components/ComputerMaintenanceActions.tsx:160
 #: src/components/teach/TeachComputerOverlay.tsx:213
@@ -4449,7 +4453,7 @@ msgid "Yesterday"
 msgstr "कल"
 
 #: src/components/DraftCard.tsx:53
-#: src/pages/Shell.tsx:135
+#: src/pages/Shell.tsx:138
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"
 msgstr "आप"
@@ -4463,7 +4467,7 @@ msgid "You can close this window."
 msgstr "आप यह विंडो बंद कर सकते हैं।"
 
 #: src/pages/ComputerSettingsPanel.tsx:109
-#: src/pages/shell/side-panel.tsx:324
+#: src/pages/shell/side-panel.tsx:329
 msgid "You have control"
 msgstr "नियंत्रण आपके पास है"
 
