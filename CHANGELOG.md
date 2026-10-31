@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
+- On web, desktop and mobile, answering a bot's question reliably resumes its saved session instead of failing when its paused worker is cleaned up too early.
 - On web, desktop and iPhone, a bot message posted right after another one now shows its link previews, which used to land on the earlier message and stay hidden.
 
 ### 2026-10-30

@@ -938,7 +938,6 @@ it("does not wake the bot again for a report its resumed turn already read", asy
         response: publish.response,
       },
       prepares(),
-      { expect() {}, response: { type: "text", text: "Waiting." } },
       { expect() {}, response: { type: "text", text: REPORT } },
       {
         expect(request) {
@@ -1061,8 +1060,6 @@ const askParent: ModelEmulatorStep = {
   expect() {},
   response: { type: "tool", id: "ask", name: "ask_parent", arguments: { question: QUESTION } },
 };
-/** The helper's last request in the attempt its question parks. */
-const parked: ModelEmulatorStep = { expect() {}, response: { type: "text", text: "Waiting." } };
 const snapshotOf = (run: Awaited<ReturnType<typeof fixture>>["run"]) =>
   threadSnapshot(
     { prisma: run.prisma, sessionLog: new PostgresSessionLog(run.prisma) },
@@ -1270,7 +1267,6 @@ it("hands a helper each message of its parent once, across its question and its 
       },
       response: askParent.response,
     },
-    parked,
     callWith("answer", "helper_message", () => ({ helperId: childId, message: ANSWER })),
     callWith("more", "helper_message", () => ({ helperId: childId, message: OLD_TOWN })),
     { expect() {}, response: say("I gave the helper your dates.") },
@@ -1454,7 +1450,6 @@ it("parks a helper on its question, wakes the bot once, and resumes it with the 
       },
       response: askParent.response,
     },
-    parked,
     {
       expect(request) {
         seen.woken = request;
@@ -1648,7 +1643,6 @@ it("shows the person no wait and blocks no card of the bot while a helper waits 
   const { run, runs, childOf } = await fixture([
     ...startedTurn,
     askParent,
-    parked,
     { expect() {}, response: say("Which dates would you like?") },
     { expect() {}, response: { type: "text", text: recap } },
     {
@@ -1687,7 +1681,6 @@ it("cancels a helper stopped while it waits on its question, with no report", as
   const { run, runs, reports, childOf } = await fixture([
     ...startedTurn,
     askParent,
-    parked,
     callWith("stop", "helper_stop", () => ({ helperId: childId })),
     {
       expect(request) {

@@ -375,8 +375,6 @@ describe("a worker run's computer", () => {
           arguments: { reason: "Log in" },
         },
       },
-      // Pi native closes its turn once the controller answers that the run waits.
-      { expect() {}, response: { type: "text" as const, text: "" } },
     ]);
     const runId = await bot.start();
 
