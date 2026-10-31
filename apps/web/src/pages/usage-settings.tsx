@@ -27,6 +27,8 @@ export function UsageSettingsPanel({ panelRef }: { panelRef?: RefObject<HTMLDivE
 
   useEffect(() => {
     let current = true;
+    // A failed fetch must not leave another period's figures under this one.
+    setCells(null);
     void rpc.usage
       .breakdown({ period })
       .then((next) => {
@@ -103,13 +105,13 @@ export function UsageSettingsPanel({ panelRef }: { panelRef?: RefObject<HTMLDivE
         />
       </div>
 
-      {cells && cells.length === 0 ? (
+      {cells && rows.length === 0 ? (
         <p className="rounded-card bg-group px-4 py-4 text-meta text-muted-foreground shadow-group">
           <Trans>No usage in this period.</Trans>
         </p>
       ) : null}
 
-      {cells && cells.length > 0 ? (
+      {rows.length > 0 ? (
         <>
           <section
             data-testid="usage-totals"

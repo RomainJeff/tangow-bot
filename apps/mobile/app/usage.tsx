@@ -48,6 +48,8 @@ export default function Usage() {
 
   useEffect(() => {
     let current = true;
+    // A failed fetch must not leave another period's figures under this one.
+    setCells(null);
     void rpc<UsageCell[]>("usage/breakdown", { period })
       .then((next) => {
         if (current) setCells(next);
@@ -111,10 +113,10 @@ export default function Usage() {
             { value: "all", label: t("All") },
           ]}
         />
-        {cells && cells.length === 0 ? (
+        {cells && rows.length === 0 ? (
           <Text style={styles.empty}>{t("No usage in this period.")}</Text>
         ) : null}
-        {cells && cells.length > 0 ? (
+        {rows.length > 0 ? (
           <>
             <View style={styles.group}>
               <View style={styles.figures}>
