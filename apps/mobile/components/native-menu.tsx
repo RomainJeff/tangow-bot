@@ -52,7 +52,9 @@ function IosMenu(props: NativeMenuProps) {
   const colorScheme = useResolvedAppearance();
   const style = typeof props.style === "function" ? props.style({ pressed: false }) : props.style;
   return (
-    <Host colorScheme={colorScheme} matchContents={matchContents}>
+    // React Native lays the menu out; SwiftUI's own keyboard avoidance would lift its label
+    // whenever the keyboard overlaps the frame, as it does under the thread's sticky composer.
+    <Host colorScheme={colorScheme} matchContents={matchContents} ignoreSafeArea="keyboard">
       <Menu
         label={
           <RNHostView matchContents={matchContents}>

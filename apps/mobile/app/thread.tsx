@@ -89,7 +89,12 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
-import { KeyboardAvoidingView, useKeyboardState } from "react-native-keyboard-controller";
+import {
+  KeyboardAvoidingView,
+  KeyboardChatScrollView,
+  KeyboardStickyView,
+  useKeyboardState,
+} from "react-native-keyboard-controller";
 import Animated, {
   Easing,
   FadeIn,
@@ -423,8 +428,14 @@ function Thread() {
   const insets = useSafeAreaInsets();
   // The composer floats over the thread's end; the thread keeps its last message above it.
   const [composerHeight, setComposerHeight] = useState(COMPOSER_ROW_ESTIMATE);
+  // On iOS the keyboard slides the composer and insets the thread without laying the thread out
+  // again, so it can follow a finger dragging the keyboard away. Android resizes the thread.
+  const keyboardSlides = Platform.OS === "ios";
   const keyboardVisible = useKeyboardState((state) => state.isVisible);
-  const composerBottomInset = keyboardVisible ? 8 : Math.max(insets.bottom + 8, 20);
+  const composerBottomInset =
+    keyboardVisible && !keyboardSlides ? 8 : Math.max(insets.bottom + 8, 20);
+  // The keyboard covers the safe area: the composer ends 8 px above it, not its inset above it.
+  const keyboardOffset = composerBottomInset - 8;
   const barTransparent = !useReduceTransparency();
   // What of the thread's top sits under the bar.
   const underBar = barTransparent ? headerHeight : 0;
@@ -525,6 +536,11 @@ function Thread() {
   // The live list's scroll offset, and whether the pinned page (a plain
   // ScrollView, not inverted) is showing instead of it.
   const listOffset = useRef(0);
+  // The keyboard's inset on the inverted list: its latest messages sit at -inset, not 0.
+  const keyboardInset = useRef(0);
+  const trackKeyboardInset = useCallback((inset: { top: number }) => {
+    keyboardInset.current = inset.top;
+  }, []);
   const pinnedPageShowing = useRef(false);
   const contentChanged = useRef(() => {});
   const tableActions = useMemo<TableActions>(
@@ -1795,7 +1811,7 @@ function Thread() {
   function performScroll(action: ThreadScrollAction) {
     if (!action || showPinnedPage) return;
     scroll.current?.scrollToOffset({
-      offset: 0,
+      offset: -keyboardInset.current,
       animated: action === "smooth" && !reducedMotion,
     });
   }
@@ -1822,7 +1838,9 @@ function Thread() {
     listOffset.current = event.nativeEvent.contentOffset.y;
     // Inverted FlatList: contentOffset.y is distance from the latest messages.
     setThreadScrollState(
-      scrollBehavior.current.onUserScroll(Math.max(0, event.nativeEvent.contentOffset.y)),
+      scrollBehavior.current.onUserScroll(
+        Math.max(0, event.nativeEvent.contentOffset.y + keyboardInset.current),
+      ),
     );
   }
 
@@ -2406,6 +2424,7 @@ function Thread() {
       <AmbientBackground />
       <KeyboardAvoidingView
         behavior="height"
+        enabled={!keyboardSlides}
         keyboardVerticalOffset={headerHeight - underBar}
         style={{
           flex: 1,
@@ -2426,6 +2445,7 @@ function Thread() {
               scrollIndicatorInsets={{ top: underBar, bottom: composerHeight }}
               automaticallyAdjustsScrollIndicatorInsets={false}
               maintainVisibleContentPosition={KEEP_VISIBLE_POSITION}
+              automaticallyAdjustKeyboardInsets={keyboardSlides}
               keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
               keyboardShouldPersistTaps="handled"
             >
@@ -2441,6 +2461,18 @@ function Thread() {
               ref={scroll}
               data={liveRows}
               inverted
+              renderScrollComponent={
+                keyboardSlides
+                  ? (props) => (
+                      <KeyboardChatScrollView
+                        {...props}
+                        inverted
+                        offset={keyboardOffset}
+                        onContentInsetChange={trackKeyboardInset}
+                      />
+                    )
+                  : undefined
+              }
               keyExtractor={(row) => row.item.id}
               extraData={listExtraData}
               style={[{ flex: 1 }, BLEED_STYLE]}
@@ -2489,54 +2521,63 @@ function Thread() {
             />
           )}
           {!showPinnedPage && threadScrollState.detached ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={
-                threadScrollState.unread ? t("Jump to latest, new messages") : t("Jump to latest")
-              }
-              onPress={() => {
-                performScroll(scrollBehavior.current.jumpToLatest());
-                setThreadScrollState(scrollBehavior.current.state());
-              }}
+            <KeyboardStickyView
+              enabled={keyboardSlides}
+              offset={{ opened: keyboardOffset }}
               style={{
                 position: "absolute",
                 left: "50%",
                 marginLeft: -21,
                 bottom: composerHeight + 12,
-                width: 42,
-                height: 42,
-                borderRadius: 21,
-                borderWidth: 1,
-                borderColor: native.fillPressed,
-                backgroundColor: native.fill,
-                boxShadow: shadowsForAppearance(colorScheme).floating,
-                alignItems: "center",
-                justifyContent: "center",
               }}
             >
-              <NativeSymbol
-                ios="arrow.down"
-                android="arrow-down"
-                size={18}
-                color={tokens.foreground}
-              />
-              {threadScrollState.unread ? (
-                <View
-                  style={{
-                    position: "absolute",
-                    top: 3,
-                    right: 3,
-                    width: 8,
-                    height: 8,
-                    borderRadius: 4,
-                    backgroundColor: tokens.primary,
-                  }}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  threadScrollState.unread ? t("Jump to latest, new messages") : t("Jump to latest")
+                }
+                onPress={() => {
+                  performScroll(scrollBehavior.current.jumpToLatest());
+                  setThreadScrollState(scrollBehavior.current.state());
+                }}
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 21,
+                  borderWidth: 1,
+                  borderColor: native.fillPressed,
+                  backgroundColor: native.fill,
+                  boxShadow: shadowsForAppearance(colorScheme).floating,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <NativeSymbol
+                  ios="arrow.down"
+                  android="arrow-down"
+                  size={18}
+                  color={tokens.foreground}
                 />
-              ) : null}
-            </Pressable>
+                {threadScrollState.unread ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: 3,
+                      right: 3,
+                      width: 8,
+                      height: 8,
+                      borderRadius: 4,
+                      backgroundColor: tokens.primary,
+                    }}
+                  />
+                ) : null}
+              </Pressable>
+            </KeyboardStickyView>
           ) : null}
         </View>
-        <View
+        <KeyboardStickyView
+          enabled={keyboardSlides}
+          offset={{ opened: keyboardOffset }}
           onLayout={(event) => setComposerHeight(Math.round(event.nativeEvent.layout.height))}
           style={{
             // Floats over the thread's end, so the bubbles pass under the composer's glass.
@@ -3065,7 +3106,7 @@ function Thread() {
               )}
             </ComposerShell>
           </View>
-        </View>
+        </KeyboardStickyView>
         <Modal
           visible={botActionsOpen}
           transparent

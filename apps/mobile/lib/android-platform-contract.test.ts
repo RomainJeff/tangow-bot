@@ -30,10 +30,14 @@ describe("Android mobile platform contract", () => {
     // applies while the bar is opaque.
     expect(thread).toContain("keyboardVerticalOffset={headerHeight - underBar}");
     expect(thread).not.toContain("automaticOffset");
-    expect(thread).not.toContain("KeyboardStickyView");
+    // The keyboard-driven sticky composer and thread inset are iOS only; Android resizes the thread.
+    expect(thread).toContain('const keyboardSlides = Platform.OS === "ios"');
+    expect(thread).toContain("enabled={!keyboardSlides}");
     expect(thread).toContain("useSafeAreaInsets");
     expect(thread).toContain("useKeyboardState");
-    expect(thread).toContain("keyboardVisible ? 8 : Math.max(insets.bottom + 8, 20)");
+    expect(thread).toContain(
+      "keyboardVisible && !keyboardSlides ? 8 : Math.max(insets.bottom + 8, 20)",
+    );
   });
 
   it("requests live-update promotion and exposes its Android settings", () => {
