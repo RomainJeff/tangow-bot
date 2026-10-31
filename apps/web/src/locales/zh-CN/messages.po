@@ -21,6 +21,20 @@ msgstr "（未读）"
 msgid "(empty)"
 msgstr "（空）"
 
+#. placeholder {0}: totals.compactions.count
+#. placeholder {1}: tokens(totals.compactions.inputTokens)
+#. placeholder {2}: tokens(totals.compactions.outputTokens)
+#: src/pages/usage-settings.tsx:137
+msgid "{0, plural, one {# compaction} other {# compactions}} · {1} in · {2} out"
+msgstr ""
+
+#. placeholder {0}: value.count
+#. placeholder {1}: tokens(value.inputTokens)
+#. placeholder {2}: tokens(value.outputTokens)
+#: src/pages/usage-settings.tsx:60
+msgid "{0, plural, one {# compaction} other {# compactions}} · {1} in · {2} out / compaction"
+msgstr ""
+
 #. placeholder {0}: group.entries.length
 #: src/pages/ModelSettingsOverlay.tsx:107
 msgid "{0, plural, one {# model} other {# models}}"
@@ -34,6 +48,13 @@ msgstr "{0, plural, one {# 个例行任务} other {# 个例行任务}}"
 #. placeholder {0}: runs.length
 #: src/pages/bot-page/BotActivity.tsx:577
 msgid "{0, plural, one {# run} other {# runs}}"
+msgstr ""
+
+#. placeholder {0}: value.count
+#. placeholder {1}: tokens(value.inputTokens)
+#. placeholder {2}: tokens(value.outputTokens)
+#: src/pages/usage-settings.tsx:59
+msgid "{0, plural, one {# run} other {# runs}} · {1} in · {2} out / run"
 msgstr ""
 
 #. placeholder {0}: file.name
@@ -51,6 +72,16 @@ msgstr "{0}（超过 10 MiB）"
 msgid "{0} {unitLabel}"
 msgstr "{0} {unitLabel}"
 
+#. placeholder {0}: tokens(totals.inputTokens)
+#: src/pages/usage-settings.tsx:121
+msgid "{0} <0>in</0>"
+msgstr ""
+
+#. placeholder {0}: tokens(totals.outputTokens)
+#: src/pages/usage-settings.tsx:127
+msgid "{0} <0>out</0>"
+msgstr ""
+
 #. placeholder {0}: block.name
 #: src/pages/shell/message-cards.tsx:173
 msgid "{0} connection"
@@ -65,6 +96,11 @@ msgstr ""
 #. placeholder {0}: sender.name
 #: src/pages/ExternalConversationSettings.tsx:176
 msgid "{0} handling"
+msgstr ""
+
+#. placeholder {0}: tokens(row.inputTokens)
+#: src/pages/usage-settings.tsx:204
+msgid "{0} in"
 msgstr ""
 
 #. placeholder {0}: run.usage.inputTokens.toLocaleString()
@@ -88,16 +124,15 @@ msgstr "{0} KB"
 msgid "{0} MB"
 msgstr "{0} MB"
 
+#. placeholder {0}: tokens(row.outputTokens)
+#: src/pages/usage-settings.tsx:205
+msgid "{0} out"
+msgstr ""
+
 #. placeholder {0}: sender.name
 #: src/pages/ExternalConversationSettings.tsx:198
 msgid "{0} rollup hours"
 msgstr ""
-
-#. placeholder {0}: usage.runs
-#. placeholder {1}: usage.inputTokens + usage.outputTokens
-#: src/pages/AccountSettingsOverlay.tsx:232
-msgid "{0} runs · {1} tokens"
-msgstr "{0} 次运行 · {1} tokens"
 
 #. placeholder {0}: bot.name
 #: src/pages/ExternalConversationSettings.tsx:232
@@ -207,6 +242,14 @@ msgstr "{workingBotName} 正在工作"
 msgid "@{0}"
 msgstr "@{0}"
 
+#: src/pages/usage-settings.tsx:101
+msgid "30d"
+msgstr ""
+
+#: src/pages/usage-settings.tsx:100
+msgid "7d"
+msgstr ""
+
 #: src/pages/shell/bot-picker.tsx:105
 #: src/pages/shell/bot-picker.tsx:106
 msgid "About groups"
@@ -225,7 +268,7 @@ msgstr ""
 msgid "Access token (optional)"
 msgstr "访问令牌（可选）"
 
-#: src/pages/AccountSettingsOverlay.tsx:85
+#: src/pages/AccountSettingsOverlay.tsx:84
 msgid "Account"
 msgstr "账户"
 
@@ -388,7 +431,7 @@ msgstr ""
 msgid "Adding…"
 msgstr "正在添加…"
 
-#: src/pages/AccountSettingsOverlay.tsx:195
+#: src/pages/AccountSettingsOverlay.tsx:194
 #: src/pages/DecisionModelSettingsPanel.tsx:132
 #: src/pages/McpServersOverlay.tsx:343
 #: src/pages/model-settings/model-detail.tsx:168
@@ -417,6 +460,7 @@ msgid "Agents:"
 msgstr "Agent："
 
 #: src/pages/KnowledgeSection.tsx:446
+#: src/pages/usage-settings.tsx:102
 msgid "All"
 msgstr "全部"
 
@@ -522,8 +566,8 @@ msgstr "API 密钥"
 msgid "API key header"
 msgstr "API 密钥请求头"
 
-#: src/pages/AccountSettingsOverlay.tsx:110
-#: src/pages/AccountSettingsOverlay.tsx:273
+#: src/pages/AccountSettingsOverlay.tsx:109
+#: src/pages/AccountSettingsOverlay.tsx:241
 #: src/pages/bot-page/BotHero.tsx:123
 #: src/pages/bot-page/BotHero.tsx:144
 msgid "Appearance"
@@ -668,7 +712,7 @@ msgstr "自动形状"
 msgid "Available when {0} is idle"
 msgstr "{0} 空闲时可用"
 
-#: src/pages/AccountSettingsOverlay.tsx:152
+#: src/pages/AccountSettingsOverlay.tsx:151
 msgid "Avatars"
 msgstr "头像"
 
@@ -676,6 +720,10 @@ msgstr "头像"
 #: src/pages/shell/thread-header.tsx:68
 msgid "Back"
 msgstr "返回"
+
+#: src/pages/usage-settings.tsx:84
+msgid "Back to all usage"
+msgstr ""
 
 #: src/pages/Auth.tsx:124
 #: src/pages/Auth.tsx:238
@@ -744,6 +792,10 @@ msgstr ""
 msgid "Bot to link"
 msgstr "要关联的 Bot"
 
+#: src/pages/usage-settings.tsx:66
+msgid "Bots"
+msgstr ""
+
 #: src/components/ApprovalRulesSettings.tsx:115
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "默认情况下 Bot 会直接执行。只有当你想先审核某类操作时，才添加例外。"
@@ -759,6 +811,10 @@ msgstr ""
 
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:63
 msgid "Brain label"
+msgstr ""
+
+#: src/pages/usage-settings.tsx:152
+msgid "Breakdown"
 msgstr ""
 
 #: src/pages/PluginsOverlay.tsx:163
@@ -817,6 +873,10 @@ msgstr "取消回复"
 msgid "Cancelled"
 msgstr "已取消"
 
+#: src/pages/usage-settings.tsx:68
+msgid "Categories"
+msgstr ""
+
 #: src/pages/shell/session-view.tsx:229
 msgid "Category"
 msgstr "类别"
@@ -845,7 +905,7 @@ msgstr "频道"
 msgid "Chat apps"
 msgstr "聊天应用"
 
-#: src/pages/AccountSettingsOverlay.tsx:100
+#: src/pages/AccountSettingsOverlay.tsx:99
 msgid "Chat apps, group channels, and agent connections."
 msgstr "聊天应用、群组频道和 Agent 连接。"
 
@@ -951,7 +1011,7 @@ msgid "Close MCP servers"
 msgstr "关闭 MCP 服务器"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:112
+#: src/pages/SettingsOverlay.tsx:107
 msgid "Close memory settings"
 msgstr "关闭记忆设置"
 
@@ -960,7 +1020,7 @@ msgid "Close messaging settings"
 msgstr "关闭消息设置"
 
 #: src/pages/ModelSettingsOverlay.tsx:63
-#: src/pages/SettingsOverlay.tsx:110
+#: src/pages/SettingsOverlay.tsx:105
 msgid "Close model settings"
 msgstr "关闭模型设置"
 
@@ -977,11 +1037,11 @@ msgstr "关闭预览"
 msgid "Close skills"
 msgstr "关闭技能"
 
-#: src/pages/SettingsOverlay.tsx:115
+#: src/pages/SettingsOverlay.tsx:110
 msgid "Close user settings"
 msgstr "关闭用户设置"
 
-#: src/pages/SettingsOverlay.tsx:114
+#: src/pages/SettingsOverlay.tsx:109
 #: src/pages/VoiceSettingsOverlay.tsx:174
 msgid "Close voice settings"
 msgstr "关闭语音设置"
@@ -1008,17 +1068,22 @@ msgstr "颜色 {0}"
 msgid "Command"
 msgstr "命令"
 
+#: src/pages/usage-settings.tsx:48
+msgid "Compaction"
+msgstr ""
+
 #: src/pages/ScratchpadSection.tsx:119
 msgid "Complete"
 msgstr "完成"
 
 #: src/pages/model-settings/routing-settings.tsx:20
+#: src/pages/usage-settings.tsx:46
 msgid "Complex"
 msgstr "复杂"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:100
+#: src/pages/SettingsOverlay.tsx:95
 #: src/pages/shell/block-views.tsx:131
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
@@ -1592,7 +1657,7 @@ msgstr "无法创建"
 msgid "Couldn't load messaging settings"
 msgstr "无法加载消息设置"
 
-#: src/pages/AccountSettingsOverlay.tsx:75
+#: src/pages/AccountSettingsOverlay.tsx:74
 msgid "Couldn't update avatars"
 msgstr "无法更新头像"
 
@@ -1701,11 +1766,11 @@ msgstr "客户支持"
 
 #: src/pages/CustomizeOverlay.tsx:32
 #: src/pages/CustomizeOverlay.tsx:36
-#: src/pages/shell/sidebar-footer.tsx:179
+#: src/pages/shell/sidebar-footer.tsx:175
 msgid "Customize"
 msgstr "自定义"
 
-#: src/pages/AccountSettingsOverlay.tsx:268
+#: src/pages/AccountSettingsOverlay.tsx:236
 msgid "Dark"
 msgstr "深色"
 
@@ -1717,12 +1782,12 @@ msgstr "天"
 msgid "days"
 msgstr "天"
 
-#: src/pages/AccountSettingsOverlay.tsx:125
-#: src/pages/AccountSettingsOverlay.tsx:133
+#: src/pages/AccountSettingsOverlay.tsx:124
+#: src/pages/AccountSettingsOverlay.tsx:132
 msgid "Debug mode"
 msgstr "调试模式"
 
-#: src/pages/SettingsOverlay.tsx:97
+#: src/pages/SettingsOverlay.tsx:92
 msgid "Decision Model"
 msgstr ""
 
@@ -1788,6 +1853,14 @@ msgstr "删除例行任务"
 
 #: src/pages/shell/shell-overlays.tsx:238
 msgid "Delete space"
+msgstr ""
+
+#: src/pages/usage-settings.tsx:196
+msgid "Deleted"
+msgstr ""
+
+#: src/pages/usage-settings.tsx:53
+msgid "Deleted bot"
 msgstr ""
 
 #: src/pages/GroupPanel.tsx:287
@@ -2048,6 +2121,7 @@ msgid "Every week"
 msgstr "每周"
 
 #: src/pages/model-settings/routing-settings.tsx:19
+#: src/pages/usage-settings.tsx:45
 msgid "Everyday"
 msgstr "日常"
 
@@ -2115,6 +2189,7 @@ msgid "Fallback"
 msgstr "回退"
 
 #: src/pages/model-settings/routing-settings.tsx:18
+#: src/pages/usage-settings.tsx:44
 msgid "Fast"
 msgstr "快速"
 
@@ -2155,6 +2230,10 @@ msgstr "已完成。"
 msgid "Finishing MCP connection…"
 msgstr "正在完成 MCP 连接…"
 
+#: src/pages/usage-settings.tsx:47
+msgid "Fixed"
+msgstr ""
+
 #: src/components/ApprovalRulesSettings.tsx:147
 msgid "Flag unexpected actions"
 msgstr "标记异常操作"
@@ -2179,8 +2258,8 @@ msgstr "全屏"
 msgid "FYI"
 msgstr "供参考"
 
-#: src/pages/SettingsOverlay.tsx:94
-#: src/pages/SettingsOverlay.tsx:106
+#: src/pages/SettingsOverlay.tsx:89
+#: src/pages/SettingsOverlay.tsx:101
 msgid "General"
 msgstr "通用"
 
@@ -2411,9 +2490,9 @@ msgstr "密钥"
 msgid "Knowledge"
 msgstr "知识"
 
-#: src/pages/AccountSettingsOverlay.tsx:145
-#: src/pages/AccountSettingsOverlay.tsx:389
-#: src/pages/AccountSettingsOverlay.tsx:406
+#: src/pages/AccountSettingsOverlay.tsx:144
+#: src/pages/AccountSettingsOverlay.tsx:357
+#: src/pages/AccountSettingsOverlay.tsx:374
 msgid "Language"
 msgstr "语言"
 
@@ -2437,7 +2516,7 @@ msgstr "退出"
 msgid "Let bots complete multi-step web page tasks faster."
 msgstr ""
 
-#: src/pages/AccountSettingsOverlay.tsx:267
+#: src/pages/AccountSettingsOverlay.tsx:235
 msgid "Light"
 msgstr "浅色"
 
@@ -2503,7 +2582,7 @@ msgstr "加载中…"
 msgid "Local"
 msgstr "本地"
 
-#: src/pages/shell/sidebar-footer.tsx:235
+#: src/pages/shell/sidebar-footer.tsx:227
 msgid "Log out"
 msgstr "退出登录"
 
@@ -2521,7 +2600,7 @@ msgstr "请确认这台电脑上没有仍在运行的任务。"
 msgid "Manage MCP servers"
 msgstr "管理 MCP 服务器"
 
-#: src/pages/AccountSettingsOverlay.tsx:103
+#: src/pages/AccountSettingsOverlay.tsx:102
 msgid "Manage messaging settings"
 msgstr "管理消息设置"
 
@@ -2586,7 +2665,7 @@ msgstr "成员（选择 {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX} 个）"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:36
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:96
+#: src/pages/SettingsOverlay.tsx:91
 msgid "Memory"
 msgstr "记忆"
 
@@ -2648,7 +2727,7 @@ msgstr "消息…"
 msgid "Messaged {peer}"
 msgstr "已发给 {peer}"
 
-#: src/pages/AccountSettingsOverlay.tsx:97
+#: src/pages/AccountSettingsOverlay.tsx:96
 #: src/pages/MessagingSettingsOverlay.tsx:99
 msgid "Messaging"
 msgstr "消息"
@@ -2706,7 +2785,7 @@ msgstr "模型 ID"
 msgid "Model options"
 msgstr "模型选项"
 
-#: src/pages/AccountSettingsOverlay.tsx:238
+#: src/pages/usage-settings.tsx:221
 msgid "Model spend uses your provider keys."
 msgstr "模型费用使用你的提供方密钥。"
 
@@ -2715,7 +2794,8 @@ msgid "Model updated."
 msgstr "模型已更新。"
 
 #: src/pages/ModelSettingsOverlay.tsx:56
-#: src/pages/SettingsOverlay.tsx:95
+#: src/pages/SettingsOverlay.tsx:90
+#: src/pages/usage-settings.tsx:67
 msgid "Models"
 msgstr "模型"
 
@@ -2951,6 +3031,10 @@ msgstr ""
 msgid "No trigger"
 msgstr "无触发器"
 
+#: src/pages/usage-settings.tsx:109
+msgid "No usage in this period."
+msgstr ""
+
 #: src/pages/ScratchpadSection.tsx:110
 msgid "None yet"
 msgstr "暂无"
@@ -2968,6 +3052,10 @@ msgstr "不在插件目录中"
 #: src/pages/shell/message-cards.tsx:291
 msgid "Not now"
 msgstr "暂不"
+
+#: src/pages/usage-settings.tsx:49
+msgid "Not recorded"
+msgstr ""
 
 #: src/components/DraftCard.tsx:257
 msgid "Not sent"
@@ -3100,7 +3188,7 @@ msgstr ""
 msgid "Optional"
 msgstr "可选"
 
-#: src/pages/AccountSettingsOverlay.tsx:198
+#: src/pages/AccountSettingsOverlay.tsx:197
 msgid "Optional controls most people never need"
 msgstr "多数人用不到的可选项"
 
@@ -3116,7 +3204,7 @@ msgstr "或连接 API 密钥"
 msgid "Or paste an API key"
 msgstr "或粘贴 API 密钥"
 
-#: src/pages/AccountSettingsOverlay.tsx:170
+#: src/pages/AccountSettingsOverlay.tsx:169
 msgid "Organic"
 msgstr "自然"
 
@@ -3184,6 +3272,10 @@ msgstr "粘贴你的 API 密钥"
 #: src/pages/bot-page/RoutinesTab.tsx:107
 msgid "Paused"
 msgstr "已暂停"
+
+#: src/pages/usage-settings.tsx:96
+msgid "Period"
+msgstr ""
 
 #: src/pages/model-settings/model-detail.tsx:244
 msgid "Personal credential"
@@ -3567,7 +3659,7 @@ msgstr "版本 {0}"
 msgid "Revoke"
 msgstr "撤销"
 
-#: src/pages/AccountSettingsOverlay.tsx:170
+#: src/pages/AccountSettingsOverlay.tsx:169
 msgid "Robot"
 msgstr "机器人"
 
@@ -3768,7 +3860,7 @@ msgid "Sent"
 msgstr ""
 
 #: src/components/integrations/IntegrationSetup.tsx:129
-#: src/pages/AccountSettingsOverlay.tsx:186
+#: src/pages/AccountSettingsOverlay.tsx:185
 msgid "Server integrations"
 msgstr ""
 
@@ -3786,10 +3878,10 @@ msgstr "服务器 URL"
 
 #: src/pages/bot-page/BotPage.tsx:101
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:106
-#: src/pages/SettingsOverlay.tsx:162
-#: src/pages/shell/sidebar-footer.tsx:199
-#: src/pages/shell/sidebar-footer.tsx:206
+#: src/pages/SettingsOverlay.tsx:101
+#: src/pages/SettingsOverlay.tsx:157
+#: src/pages/shell/sidebar-footer.tsx:195
+#: src/pages/shell/sidebar-footer.tsx:202
 msgid "Settings"
 msgstr "设置"
 
@@ -3824,7 +3916,7 @@ msgstr ""
 msgid "Shared documents"
 msgstr "共享文档"
 
-#: src/pages/AccountSettingsOverlay.tsx:128
+#: src/pages/AccountSettingsOverlay.tsx:127
 msgid "Show agent steps, and every run in a bot's activity."
 msgstr "显示智能体步骤，以及机器人动态中的每次运行。"
 
@@ -4037,7 +4129,7 @@ msgstr "切换机器人"
 msgid "Switching…"
 msgstr "正在切换…"
 
-#: src/pages/AccountSettingsOverlay.tsx:266
+#: src/pages/AccountSettingsOverlay.tsx:234
 msgid "System"
 msgstr "系统"
 
@@ -4276,7 +4368,7 @@ msgstr ""
 msgid "Updated"
 msgstr "已更新"
 
-#: src/pages/SettingsOverlay.tsx:101
+#: src/pages/SettingsOverlay.tsx:96
 msgid "Updates"
 msgstr "更新"
 
@@ -4304,10 +4396,9 @@ msgstr ""
 msgid "Updating…"
 msgstr "正在更新…"
 
-#: src/pages/AccountSettingsOverlay.tsx:228
-#: src/pages/SettingsOverlay.tsx:99
-#: src/pages/shell/sidebar-footer.tsx:211
-#: src/pages/shell/sidebar-footer.tsx:222
+#: src/pages/SettingsOverlay.tsx:94
+#: src/pages/shell/sidebar-footer.tsx:207
+#: src/pages/shell/sidebar-footer.tsx:214
 msgid "Usage"
 msgstr "用量"
 
@@ -4335,7 +4426,7 @@ msgstr "正在校验…"
 
 #: src/pages/bot-page/SettingDetails.tsx:185
 #: src/pages/bot-page/SettingDetails.tsx:189
-#: src/pages/SettingsOverlay.tsx:98
+#: src/pages/SettingsOverlay.tsx:93
 #: src/pages/shell/thread-header.tsx:139
 #: src/pages/shell/thread-header.tsx:140
 #: src/pages/VoiceSettingsOverlay.tsx:170

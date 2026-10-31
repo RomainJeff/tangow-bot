@@ -77,6 +77,7 @@ export {
 } from "./save-store.js";
 export { SegmentedControl, type SegmentedControlProps } from "./segmented-control.js";
 export { SettingRow, type SettingRowProps } from "./setting-row.js";
+export { ShareBar, type ShareBarSegment, shareBarInk } from "./share-bar.js";
 export { Shimmer, type ShimmerProps } from "./shimmer.js";
 export { StackLine, type StackLineProps } from "./stack-line.js";
 export {

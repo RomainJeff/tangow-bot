@@ -1,3 +1,4 @@
+import { isToolPauseResult, readControllerFrame } from "@rakazo/adapters/runtime-worker/wire";
 import { afterEach, expect, it } from "vitest";
 import { latestCard } from "./index.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
@@ -7,7 +8,7 @@ afterEach(async () => {
   for (const close of cleanups.splice(0)) await close();
 });
 
-it("writes a single checkpoint at each pause and none during model or tool work", async () => {
+it("checkpoints each settled tool batch at a pause without another model request", async () => {
   let expectedWrites = 0;
   const checkWrites = async () => {
     expect(
@@ -45,7 +46,6 @@ it("writes a single checkpoint at each pause and none during model or tool work"
           ],
         },
       },
-      { expect: checkWrites, response: { type: "text", text: "Waiting." } },
       {
         expect(request) {
           return checkWrites().then(() =>
@@ -62,7 +62,6 @@ it("writes a single checkpoint at each pause and none during model or tool work"
         },
         response: question("second-question"),
       },
-      { expect: checkWrites, response: { type: "text", text: "Waiting." } },
       {
         expect: checkWrites,
         response: {
@@ -86,6 +85,7 @@ it("writes a single checkpoint at each pause and none during model or tool work"
   const runId = await run.send("Prepare a note, then ask twice.");
   for (const revision of [1, 2]) {
     await run.continueRun(runId);
+    expect(run.model.requests).toHaveLength(revision + 1);
     expectedWrites = revision;
     await checkWrites();
     expect(
@@ -121,7 +121,7 @@ it("writes a single checkpoint at each pause and none during model or tool work"
   await checkWrites();
 });
 
-it("fails explicitly when the pause checkpoint cannot be saved", async () => {
+it("fails explicitly on a checkpoint write error without compacting the paused session", async () => {
   const run = await startWorkerRun({
     mode: "child",
     steps: [
@@ -132,9 +132,9 @@ it("fails explicitly when the pause checkpoint cannot be saved", async () => {
           id: "question",
           name: "ask_user",
           arguments: { message: "Which city?", options: ["Paris", "Lyon"] },
+          usage: { promptTokens: 1_000_000, completionTokens: 1 },
         },
       },
-      { expect() {}, response: { type: "text", text: "Waiting." } },
     ],
   });
   cleanups.push(() => run.close());
@@ -149,6 +149,7 @@ it("fails explicitly when the pause checkpoint cannot be saved", async () => {
   expect(ended.status).toBe("failed");
   expect(ended.error).toContain("fixture checkpoint write failed");
   expect(await run.prisma.runSnapshot.count({ where: { runId } })).toBe(0);
+  expect(run.model.requests).toHaveLength(1);
   run.model.assertComplete();
 });
 
@@ -156,6 +157,33 @@ it("waits for the pause checkpoint when an answer arrives before the worker clos
   let runId = "";
   const run = await startWorkerRun({
     mode: "child",
+    connector(provider) {
+      return {
+        connect(target, capability) {
+          const guest = provider.connect(target, capability);
+          return {
+            ...guest,
+            connections: (async function* () {
+              for await (const channel of guest.connections) {
+                yield {
+                  ...channel,
+                  async send(frame: Uint8Array) {
+                    const read = readControllerFrame(frame);
+                    if (read.ok && read.message.kind === "worker.reply") {
+                      const { body } = read.message.payload;
+                      if (body.type === "tool.result" && isToolPauseResult(body.output)) {
+                        await answerBeforeClose();
+                      }
+                    }
+                    await channel.send(frame);
+                  },
+                };
+              }
+            })(),
+          };
+        },
+      };
+    },
     steps: [
       {
         expect() {},
@@ -167,25 +195,10 @@ it("waits for the pause checkpoint when an answer arrives before the worker clos
         },
       },
       {
-        async expect() {
-          const card = await latestCard(run.prisma, runId);
-          await run.events.answerRunInput({
-            spaceId: run.spaceId,
-            threadId: run.thread.id,
-            runId,
-            messageId: card.id,
-            answeredByUserId: run.userId,
-            answer: "choice-1",
-          });
-          await expect(run.continueRun(runId)).rejects.toThrow("has not finished its pause");
-          expect(
-            (await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).leaseFence,
-          ).toBe(1);
-        },
-        response: { type: "text", text: "Waiting." },
-      },
-      {
         expect(request) {
+          expect(JSON.stringify(request.messages).split("Also include travel dates.")).toHaveLength(
+            2,
+          );
           expect(request.messages).toEqual(
             expect.arrayContaining([
               expect.objectContaining({
@@ -207,6 +220,32 @@ it("waits for the pause checkpoint when an answer arrives before the worker clos
     ],
   });
   cleanups.push(() => run.close());
+  const answerBeforeClose = async () => {
+    const card = await latestCard(run.prisma, runId);
+    await run.events.answerRunInput({
+      spaceId: run.spaceId,
+      threadId: run.thread.id,
+      runId,
+      messageId: card.id,
+      answeredByUserId: run.userId,
+      answer: "choice-1",
+    });
+    expect(await run.send("Also include travel dates.")).toBe(runId);
+    await expect(run.continueRun(runId)).rejects.toThrow("has not finished its pause");
+    await run.lifecycle.reconcile(
+      { limit: 10 },
+      {
+        operationId: "pause-test",
+        traceId: runId,
+        spaceId: run.spaceId,
+        userId: run.userId,
+        signal: new AbortController().signal,
+      },
+    );
+    const attempt = await run.prisma.attempt.findFirstOrThrow({ where: { runId } });
+    expect(attempt.workerState).toBe("ready");
+    expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).leaseFence).toBe(1);
+  };
   runId = await run.send("Choose a city.");
   await run.continueRun(runId);
   expect(await run.prisma.runSnapshot.count({ where: { runId } })).toBe(1);

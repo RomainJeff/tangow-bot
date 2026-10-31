@@ -3,6 +3,7 @@ import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeWorkerProvider } from "./fake-worker-provider.js";
+import { WORKER_LIMITS } from "./runtime-worker/limits.js";
 import {
   allFiles,
   mcpOnly,
@@ -524,6 +525,54 @@ describe("worker release", () => {
     ]).toEqual(["released", "released"]);
     expect(await fixture.workerStateOf(active.id)).toBe("ready");
   });
+
+  it.each([
+    ["waiting_input", "waiting_input", "ready", 1, true],
+    ["waiting_takeover", "waiting_takeover", "ready", 1, true],
+    ["queued", "waiting_input", "ready", 1, true],
+    ["cancelled", "waiting_input", "ready", 1, false],
+    ["waiting_input", "waiting_input", "ready", 2, false],
+    ["waiting_input", "waiting_input", "releasing", 1, false],
+    ["queued", "setup_failed", "ready", 1, false],
+  ])(
+    "reclaims %s/%s worker %s with fence %i, protecting a recent pause=%s",
+    async (status, attemptStatus, workerState, leaseFence, protectedPause) => {
+      const { bot } = await fixture.migratedBot();
+      const run = await fixture.seedRun(bot);
+      const attempt = await fixture.seedAttempt(run.id);
+      await workers.start(await fixture.launchFor(workers, attempt.id, mcpOnly), fixture.context);
+      const pausedAt = new Date();
+      await prisma.run.update({
+        where: { id: run.id },
+        data: { status, leaseFence, leaseOwner: null, leaseExpiresAt: null },
+      });
+      await prisma.attempt.update({
+        where: { id: attempt.id },
+        data: {
+          status: attemptStatus,
+          workerState,
+          finishedAt: pausedAt,
+          workerStateAt: new Date(pausedAt.getTime() - 600_000),
+        },
+      });
+      vi.useFakeTimers({ toFake: ["Date"] });
+      try {
+        const deadline =
+          pausedAt.getTime() + WORKER_LIMITS.pausedGraceMs + WORKER_LIMITS.stopConfirmMs;
+        vi.setSystemTime(deadline - 1);
+        await workers.reconcile({ limit: 100 }, fixture.context);
+        expect(fake.live.has(`fake-worker-${attempt.id}`)).toBe(protectedPause);
+        expect(await fixture.workerStateOf(attempt.id)).toBe(protectedPause ? "ready" : "released");
+
+        vi.setSystemTime(deadline);
+        await workers.reconcile({ limit: 100 }, fixture.context);
+        expect(fake.live.has(`fake-worker-${attempt.id}`)).toBe(false);
+        expect(await fixture.workerStateOf(attempt.id)).toBe("released");
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
 
   it("reaches a healthy worker behind one whose destroy fails, one worker per pass", async () => {
     const { bot } = await fixture.migratedBot();

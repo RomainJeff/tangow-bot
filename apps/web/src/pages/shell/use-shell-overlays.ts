@@ -8,8 +8,6 @@ import { isCommandPaletteHotkey } from "./command-palette";
 
 type ChatTarget = { kind: "bot"; chat: Bot } | { kind: "group"; chat: Group };
 
-type Usage = { inputTokens: number; outputTokens: number; runs: number };
-
 /**
  * What opens over the shell: context menus, confirmations, the command palette
  * and the settings overlays, with the account data those overlays show.
@@ -97,7 +95,6 @@ export function useShellOverlays(sessionUser: unknown) {
       cancelled = true;
     };
   }, [sessionUser]);
-  const [usage, setUsage] = useState<Usage | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -193,8 +190,6 @@ export function useShellOverlays(sessionUser: unknown) {
     setSectionMenu,
     sectionMenuAnchor,
     closeSectionMenu,
-    usage,
-    setUsage,
   };
 }
 

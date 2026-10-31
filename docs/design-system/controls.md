@@ -192,8 +192,24 @@ no row classes. Static by default; `onClick` makes it a button
 with a hover fill and a focus ring, which carries a sub-line and a chevron, never a
 control or a `SaveMeta`, which would nest an interactive element inside another.
 
-Props: `label`, `subline?`, `meta?`, `children?` (the trailing control or
-value; neither on a pressable row, which the type refuses), `chevron?`.
+Props: `label`, `leading?` (an avatar or a dot ahead of the label), `subline?`,
+`value?` (a read-only figure on the trailing side, right-aligned in tabular
+numbers, which a pressable row may carry), `meta?`, `children?` (the trailing
+control; neither on a pressable row, which the type refuses), `chevron?`.
+
+## ShareBar
+
+A thin full-capsule bar split in proportion to its segments, over a `muted`
+track: `h-share-bar` (8 px), segments a hairline apart. A segment takes a bot's
+colour when given one; otherwise segments take the ink ramp in order
+(`foreground`, `mutedForeground`, `foregroundSubtle`, `input`) and every
+segment after the third merges into one `input` segment. Decorative
+(`aria-hidden`): the list beside it carries the numbers, and `shareBarInk(index)`
+gives a row's dot the class of its segment.
+
+Props: `segments` (`{ key, value, color? }`, heaviest first).
+
+Used by: the usage settings.
 
 ## SegmentedControl
 

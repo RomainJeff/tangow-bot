@@ -71,23 +71,17 @@ const ranBefore = (request: ModelEmulatorRequest | undefined) =>
     )
     .join("\n");
 
-const waiting: ModelEmulatorStep = { expect() {}, response: { type: "text", text: "Waiting." } };
-
-/**
- * Pi closes its turn with one more model call once a pausing call answers that the run waits. A
- * note asks its model first whether it is a message to show on the draft card, which it is not.
- */
-function closingTurns(steps: ModelEmulatorStep[]): ModelEmulatorStep[] {
+function withDraftPreparation(steps: ModelEmulatorStep[]): ModelEmulatorStep[] {
   return steps.flatMap((step) => {
     const response = step.response;
     if (typeof response === "function" || response.type !== "tool") return [step];
-    if (response.name === "publish_note") return [step, prepares(), waiting];
-    return response.name === "request_secret" ? [step, waiting] : [step];
+    if (response.name === "publish_note") return [step, prepares()];
+    return [step];
   });
 }
 
 async function fixture(steps: ModelEmulatorStep[], tools: ConnectorProvider) {
-  const run = await startWorkerRun({ steps: closingTurns(steps), tools });
+  const run = await startWorkerRun({ steps: withDraftPreparation(steps), tools });
   cleanups.push(() => run.close());
   await run.prisma.actionApprovalRule.create({
     data: {
@@ -426,7 +420,7 @@ describe("an approval answered for a run in a guest", () => {
     };
     let resumed: ModelEmulatorRequest | undefined;
     const run = await startWorkerRun({
-      steps: closingTurns([
+      steps: withDraftPreparation([
         {
           expect() {},
           response: { type: "tool", id: "ask", name: "request_secret", arguments: requested },

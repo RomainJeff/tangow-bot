@@ -1,6 +1,7 @@
 import type {
   ComputerMode,
   HomeStorage,
+  RunStatus,
   VolumeAccess,
   VolumeKind,
   WorkerState,
@@ -171,6 +172,12 @@ export function attemptHoldsFence(
   return attempt.fence === run.leaseFence && (run.status === "leased" || run.status === "running");
 }
 
+export const PAUSED_ATTEMPT_RUN_STATUSES = [
+  "queued",
+  "waiting_input",
+  "waiting_takeover",
+] as const satisfies readonly RunStatus[];
+
 /** A run paused on the user stays its attempt's: the attempt may conclude its turn, not act. */
 export function attemptOwnsFence(
   attempt: { fence: number },
@@ -179,9 +186,7 @@ export function attemptOwnsFence(
   return (
     attemptHoldsFence(attempt, run) ||
     (attempt.fence === run.leaseFence &&
-      (run.status === "queued" ||
-        run.status === "waiting_input" ||
-        run.status === "waiting_takeover"))
+      PAUSED_ATTEMPT_RUN_STATUSES.some((status) => status === run.status))
   );
 }
 

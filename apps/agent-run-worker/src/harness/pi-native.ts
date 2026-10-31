@@ -96,7 +96,7 @@ function rakazoExtension(
       if (name) await host.decide({ type: "skills.used", name }, "recorded");
     });
     pi.on("turn_end", async (event) => {
-      if (agent !== "root") return;
+      if (agent !== "root" || host.paused()) return;
       if (event.message.role === "assistant") {
         const { content } = event.message;
         const prompts = textPolicy.turn({
@@ -384,6 +384,13 @@ export const piNativeHarness: GuestHarness = {
         ],
       }));
       const active = session;
+      const finishTurn = active.agent.finishTurn;
+      active.agent.finishTurn = async (turn, signal) => {
+        const decision = await finishTurn?.(turn, signal);
+        if (!durable || !host.paused()) return decision ?? undefined;
+        active.setAutoCompactionEnabled(false);
+        return { action: "end" };
+      };
 
       const abort = () => void active.abort();
       host.signal.addEventListener("abort", abort, { once: true });

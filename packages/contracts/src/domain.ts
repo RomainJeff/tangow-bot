@@ -11,6 +11,7 @@ import {
   ThinkingLevelSchema,
 } from "./ids.js";
 import { McpHeadersSchema, McpRemoteEndpointSchema, McpTransportSchema } from "./mcp.js";
+import { ModelCategorySchema } from "./model-routing.js";
 import { EntryId, ThreadEntrySchema } from "./session-log.js";
 
 export const ComputerModeSchema = z.enum(["team", "dedicated"]);
@@ -763,16 +764,39 @@ export const ArtifactWithContentSchema = ArtifactSchema.extend({
 });
 export type ArtifactWithContent = z.infer<typeof ArtifactWithContentSchema>;
 
-export const UsageRecordSchema = z.object({
-  id: Id,
-  botId: Id.nullable(),
-  runId: Id.nullable(),
+export const USAGE_PERIODS = ["7d", "30d", "all"] as const;
+export const UsagePeriodSchema = z.enum(USAGE_PERIODS);
+export type UsagePeriod = z.infer<typeof UsagePeriodSchema>;
+
+/** What a model call counted under: its routing category, or why it had none. */
+export const UsageCategorySchema = z.enum([...ModelCategorySchema.options, "fixed", "compaction"]);
+export type UsageCategory = z.infer<typeof UsageCategorySchema>;
+
+/**
+ * The spend of one bot on one model under one category, apart for the calls that belonged to a
+ * run. `bot` is null when the bot is gone and its name with it; `deleted` when only its name is
+ * left. `category` is null for usage recorded before categories were.
+ */
+export const UsageCellSchema = z.object({
+  bot: z
+    .object({
+      id: Id,
+      name: z.string(),
+      color: z.string().nullable(),
+      shapeSeed: ShapeSeedSchema.nullable(),
+      deleted: z.boolean(),
+    })
+    .nullable(),
   provider: z.string(),
   model: z.string(),
+  category: UsageCategorySchema.nullable(),
+  hasRun: z.boolean(),
+  runs: z.number().int(),
+  compactions: z.number().int(),
   inputTokens: z.number().int(),
   outputTokens: z.number().int(),
-  createdAt: z.string(),
 });
+export type UsageCell = z.infer<typeof UsageCellSchema>;
 
 export const COMPUTER_UPDATE_STAGES = [
   "preparing",

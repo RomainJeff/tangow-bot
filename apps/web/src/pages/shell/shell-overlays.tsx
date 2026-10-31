@@ -446,7 +446,6 @@ export function ShellOverlays({
             name={userName}
             initials={initials}
             email={email}
-            usage={overlays.usage}
             initialSection={overlays.settingsSection}
             avatarStyle={bootstrapMe?.avatarStyle ?? "organic"}
             isDeploymentOwner={bootstrapMe?.isDeploymentOwner === true}

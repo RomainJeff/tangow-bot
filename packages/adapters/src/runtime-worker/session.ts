@@ -995,7 +995,8 @@ export function createSession(
     for await (const channel of guest.connections) serving.push(serve(channel));
     await Promise.all(serving);
     if (!finished && !stopping) {
-      fail(new AgentRuntimeUnavailableError("The worker disconnected before the run ended"));
+      if (paused) endPaused();
+      else fail(new AgentRuntimeUnavailableError("The worker disconnected before the run ended"));
     }
   }
 

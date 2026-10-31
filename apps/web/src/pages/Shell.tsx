@@ -241,7 +241,6 @@ export function ShellPage() {
         setMenuOpen={overlays.setMenuOpen}
         userName={userName}
         openSettings={overlays.openSettings}
-        setUsage={overlays.setUsage}
       />
 
       <ShellMain
