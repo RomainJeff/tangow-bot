@@ -262,7 +262,7 @@ export function ComputerOverlay({
   composerRunning: boolean;
   sending: boolean;
   stopRun: () => Promise<void>;
-  /** False while a run is active, except when it waits for the user to take over. */
+  /** False while a run is active or another bot holds the computer, except when a run waits for the user to take over. */
   canTakeControl: boolean;
   takeComputerControl: () => Promise<void>;
   releaseComputer: (reason?: ComputerReleaseReason) => Promise<void>;

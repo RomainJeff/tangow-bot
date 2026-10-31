@@ -280,7 +280,7 @@ export default function Computer() {
             takeoverRequested={computer?.takeoverRequested ?? false}
             onRelease={releaseComputer}
           />
-        ) : (
+        ) : computer?.busyBotName ? null : (
           <Pressable
             onPress={() => void openComputer({ takeControl: true })}
             style={{
@@ -395,7 +395,7 @@ export default function Computer() {
                       takeoverRequested={computer?.takeoverRequested ?? false}
                       onRelease={releaseComputer}
                     />
-                  ) : (
+                  ) : computer?.busyBotName ? null : (
                     <Pressable
                       onPress={() =>
                         void bootComputer({ takeControl: true, overlay: false }).catch(

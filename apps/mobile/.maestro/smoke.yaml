@@ -44,6 +44,7 @@ name: Rakazo mobile smoke
 - extendedWaitUntil:
     visible: "Close computer"
     timeout: 90000
+- assertNotVisible: "You have control"
 - tapOn: "Take control"
 - extendedWaitUntil:
     visible: "You have control"

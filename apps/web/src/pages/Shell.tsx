@@ -333,7 +333,8 @@ export function ShellPage() {
         sending={send.sending}
         stopRun={send.stopRun}
         canTakeControl={
-          !thread.composerRunning || store.snapshot?.run?.status === "waiting_takeover"
+          store.snapshot?.run?.status === "waiting_takeover" ||
+          (!thread.composerRunning && !store.computer?.busyBotName)
         }
         takeComputerControl={control.takeComputerControl}
         releaseComputer={control.releaseComputer}

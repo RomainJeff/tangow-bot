@@ -224,6 +224,10 @@ test("an active Team bot must be stopped before user takeover", async ({ page },
     .toBeNull();
 
   // After stop, Open only watches. Take control is the one way to get the mouse and keyboard.
+  const takeovers: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/rpc/computer/takeover")) takeovers.push(request.url());
+  });
   await page.getByTestId("computer-preview").hover();
   await page.getByTestId("computer-preview-open").click();
   await expect(page.getByRole("button", { name: "Close computer" })).toBeVisible();
@@ -231,10 +235,12 @@ test("an active Team bot must be stopped before user takeover", async ({ page },
   await expect(takeControl).toBeVisible();
   await expect(chrome.getByText("You have control", { exact: true })).toHaveCount(0);
   await expect(chrome.getByRole("button", { name: "Release", exact: true })).toHaveCount(0);
+  expect(takeovers).toHaveLength(0);
   await captureScreenshot(page, testInfo, "49-team-computer-open-view-only");
   await takeControl.click();
   await expect(chrome.getByText("You have control", { exact: true })).toBeVisible();
   await expect(takeControl).toHaveCount(0);
+  expect(takeovers).toHaveLength(1);
   await expect(chrome.getByRole("button", { name: "Release", exact: true })).toBeVisible();
   await captureScreenshot(page, testInfo, "49b-team-computer-take-control");
   await chrome.getByRole("button", { name: "Release", exact: true }).click();
