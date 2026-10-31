@@ -12,6 +12,7 @@ afterEach(async () => {
 
 async function runEndingWith(end: "completes" | "asks" | "fails" | "is stopped") {
   const releases: Array<string | undefined> = [];
+  const signalAborted: boolean[] = [];
   class Computer extends E2BSandboxEmulator {
     async pageBrowser(
       computer: ComputerRef,
@@ -34,6 +35,7 @@ async function runEndingWith(end: "completes" | "asks" | "fails" | "is stopped")
       release?: "keep" | "teardown",
     ) {
       releases.push(release);
+      signalAborted.push(context.signal.aborted);
       await super.releaseScreen(computer, context);
     }
   }
@@ -72,24 +74,29 @@ async function runEndingWith(end: "completes" | "asks" | "fails" | "is stopped")
   const id = await run.send("Open the page.");
   await run.continueRun(id).catch(() => undefined);
   const status = (await run.prisma.run.findUniqueOrThrow({ where: { id } })).status;
-  return { releases, status };
+  return { releases, status, signalAborted };
 }
 
 it("keeps the screen when a run completes", async () => {
-  expect(await runEndingWith("completes")).toEqual({ releases: ["keep"], status: "completed" });
+  const { releases, status } = await runEndingWith("completes");
+  expect({ releases, status }).toEqual({ releases: ["keep"], status: "completed" });
 });
 
-it("keeps the screen when a run waits for an answer", async () => {
-  expect(await runEndingWith("asks")).toEqual({ releases: ["keep"], status: "waiting_input" });
+it("keeps the screen when a run waits for an answer, though its signal is aborted by then", async () => {
+  const { releases, status, signalAborted } = await runEndingWith("asks");
+  expect({ releases, status, signalAborted }).toEqual({
+    releases: ["keep"],
+    status: "waiting_input",
+    signalAborted: [true],
+  });
 });
 
 it("tears the screen down when a run fails", async () => {
-  expect(await runEndingWith("fails")).toEqual({ releases: [undefined], status: "failed" });
+  const { releases, status } = await runEndingWith("fails");
+  expect({ releases, status }).toEqual({ releases: [undefined], status: "failed" });
 });
 
 it("tears the screen down when a run is stopped", async () => {
-  expect(await runEndingWith("is stopped")).toEqual({
-    releases: [undefined],
-    status: "cancelled",
-  });
+  const { releases, status } = await runEndingWith("is stopped");
+  expect({ releases, status }).toEqual({ releases: [undefined], status: "cancelled" });
 });

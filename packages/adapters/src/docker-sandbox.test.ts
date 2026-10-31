@@ -197,10 +197,9 @@ describe("Docker sandbox", () => {
     await expect(provider.releaseScreen(computer, context, "keep")).resolves.toBeUndefined();
   });
 
-  it("never asks to keep the screen when tearing down or when the run was cancelled", async () => {
-    const fetchMock = vi.fn(
-      async (_input: string | URL | Request, _init?: RequestInit) =>
-        new Response(null, { status: 200 }),
+  it("asks to keep the screen even once the run's abort signal has fired", async () => {
+    const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) =>
+      Response.json({ ok: true, kept: true }),
     );
     vi.stubGlobal("fetch", fetchMock);
     const provider = new DockerSandboxProvider("http://supervisor.test", "test-token");
@@ -213,12 +212,52 @@ describe("Docker sandbox", () => {
     const aborted = new AbortController();
     aborted.abort();
 
+    await expect(
+      provider.releaseScreen(computer, { ...context, signal: aborted.signal }, "keep"),
+    ).resolves.toBe("kept");
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({
+      "x-rakazo-preserve-screen": "1",
+    });
+  });
+
+  it.each(["keep", "teardown"] as const)(
+    "reports a %s release the supervisor refused because a newer run owns the screen",
+    async (release) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => Response.json({ ok: true, released: false })),
+      );
+      const provider = new DockerSandboxProvider("http://supervisor.test", "test-token");
+      const computer = {
+        id: "computer",
+        botId: "home-bot",
+        kind: "docker",
+        providerRef: "computer",
+      } as const;
+
+      await expect(provider.releaseScreen(computer, context, release)).resolves.toBe("refused");
+    },
+  );
+
+  it("never asks to keep the screen when tearing down or when the run's work is cancelled", async () => {
+    const fetchMock = vi.fn(
+      async (_input: string | URL | Request, _init?: RequestInit) =>
+        new Response(null, { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new DockerSandboxProvider("http://supervisor.test", "test-token");
+    const computer = {
+      id: "computer",
+      botId: "home-bot",
+      kind: "docker",
+      providerRef: "computer",
+    } as const;
+
     await provider.releaseScreen(computer, context);
     await provider.releaseScreen(computer, context, "teardown");
     await provider.releaseScreen(computer, { ...context, cancelRunWork: true }, "keep");
-    await provider.releaseScreen(computer, { ...context, signal: aborted.signal }, "keep");
 
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     for (const [, init] of fetchMock.mock.calls) {
       expect(init?.headers).not.toHaveProperty("x-rakazo-preserve-screen");
     }

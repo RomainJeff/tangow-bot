@@ -28,6 +28,15 @@ describe("a screen kept after a run", () => {
     );
   });
 
+  it("stops being kept when a late request of the run that kept it uses the slot again", () => {
+    const assigned = keptSlot("run-a:1");
+
+    expect(nextScreenIndex(assigned, "writer", "run-a:1")).toBe(0);
+    expect(() => nextScreenIndex(assigned, "writer", "run-b:1")).toThrow(
+      /owned by a newer execution/,
+    );
+  });
+
   it("is taken by the next run even when an earlier run kept it at a higher fence", () => {
     const assigned = keptSlot("run-a:2");
 

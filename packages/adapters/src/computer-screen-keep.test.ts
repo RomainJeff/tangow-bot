@@ -45,7 +45,7 @@ afterEach(() => {
 
 function world(
   options: {
-    release?: "kept" | undefined | Error;
+    release?: "kept" | "refused" | undefined | Error;
     computer?: Record<string, unknown>;
     activeRuns?: Array<{ botId: string; status: string }>;
   } = {},
@@ -132,6 +132,19 @@ describe("releaseBotScreen after a run", () => {
     ]);
     expect(queued).toEqual([]);
   });
+
+  it.each(["keep", "teardown"] as const)(
+    "leaves the generation and viewers alone when the supervisor refuses a %s release",
+    async (release) => {
+      const { botGeneration, queued, appended, deps } = world({ release: "refused" });
+
+      await expect(releaseBotScreen(deps, ref, context, release)).resolves.toBe(true);
+
+      expect(botGeneration.value).toBe(4);
+      expect(appended).toEqual([]);
+      expect(queued).toEqual([]);
+    },
+  );
 
   it("tears down by default, moving the generation on and scheduling nothing", async () => {
     const { botGeneration, queued, releases, deps } = world({ release: undefined });
@@ -227,6 +240,17 @@ describe("sleepBotScreenIfIdle", () => {
 
     expect(botGeneration.value).toBe(4);
     expect(queued).toEqual([idleJob]);
+  });
+
+  it("ends without trying again when a newer run owns the screen and the release is refused", async () => {
+    const { botGeneration, queued, appended, releases, deps } = world({ release: "refused" });
+
+    await sleepBotScreenIfIdle(deps, payload);
+
+    expect(releases).toEqual([{ botId: "bot-1", screenLeaseId: "run-1:1", release: undefined }]);
+    expect(botGeneration.value).toBe(4);
+    expect(appended).toEqual([]);
+    expect(queued).toEqual([]);
   });
 
   it("leaves a computer that is no longer running to its own shutdown", async () => {

@@ -134,4 +134,20 @@ describe("releasing a screen to keep it", () => {
     expect(await response.json()).toEqual({ ok: true });
     expect(commands.at(-1)).toBe(teardown);
   });
+
+  it("answers a release a newer run owns as refused, without stopping anything", async () => {
+    await claim("keep-refused", "run-2:1");
+
+    const { response, commands } = await release("keep-refused", keep);
+
+    expect(await response.json()).toEqual({ ok: true, released: false });
+    expect(commands).toEqual([]);
+  });
+
+  it("answers a release of a screen that is already gone as plain success", async () => {
+    const { response, commands } = await release("keep-gone", keep);
+
+    expect(await response.json()).toEqual({ ok: true });
+    expect(commands).toEqual([]);
+  });
 });
