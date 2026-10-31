@@ -432,10 +432,15 @@ export type RunMessage = {
   toPerson: boolean;
 };
 
-/** A run's words in the thread's main session, as the messages it sent them in. */
+/**
+ * A run's words in the thread's main session, as the messages it sent them in. With
+ * `splitAtPersonMessages`, each published message stands alone, as the thread draws it
+ * (`foldRuns`): tool calls live in another session, so two posts can still follow each other.
+ */
 export async function runMessages(
   prisma: Pick<PrismaClient, "sessionEntry"> | Prisma.TransactionClient,
   runId: string,
+  { splitAtPersonMessages = false }: { splitAtPersonMessages?: boolean } = {},
 ): Promise<RunMessage[]> {
   const said = await prisma.sessionEntry.findMany({
     where: { runId, type: "assistant.text", session: { kind: "thread" } },
@@ -449,7 +454,13 @@ export async function runMessages(
       toPerson?: boolean;
     };
     const last = messages.at(-1);
-    if (last?.seq === entry.seq - 1 && last.midTurn === midTurn && last.toPerson === toPerson) {
+    const separate = splitAtPersonMessages && toPerson;
+    if (
+      !separate &&
+      last?.seq === entry.seq - 1 &&
+      last.midTurn === midTurn &&
+      last.toPerson === toPerson
+    ) {
       last.seq = entry.seq;
       last.blocks.push(...blocksOf(entry));
     } else {
