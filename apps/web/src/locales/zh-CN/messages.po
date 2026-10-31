@@ -67,6 +67,12 @@ msgstr ""
 msgid "{0} handling"
 msgstr ""
 
+#. placeholder {0}: run.usage.inputTokens.toLocaleString()
+#. placeholder {1}: run.usage.outputTokens.toLocaleString()
+#: src/pages/shell/session-view.tsx:235
+msgid "{0} in · {1} out"
+msgstr "输入 {0} · 输出 {1}"
+
 #. placeholder {0}: item.status.busyBotName
 #: src/pages/ComputerSettingsPanel.tsx:112
 msgid "{0} is using it"
@@ -92,12 +98,6 @@ msgstr ""
 #: src/pages/AccountSettingsOverlay.tsx:232
 msgid "{0} runs · {1} tokens"
 msgstr "{0} 次运行 · {1} tokens"
-
-#. placeholder {0}: run.usage.inputTokens.toLocaleString()
-#. placeholder {1}: run.usage.outputTokens.toLocaleString()
-#: src/pages/shell/session-view.tsx:215
-msgid "{0} tokens in · {1} out"
-msgstr "输入 {0} 个令牌 · 输出 {1}"
 
 #. placeholder {0}: bot.name
 #: src/pages/ExternalConversationSettings.tsx:232
@@ -268,8 +268,8 @@ msgstr ""
 msgid "Active"
 msgstr "启用"
 
-#: src/pages/model-settings/routing-settings.tsx:53
-#: src/pages/model-settings/routing-settings.tsx:55
+#: src/pages/model-settings/routing-settings.tsx:54
+#: src/pages/model-settings/routing-settings.tsx:57
 msgid "Active model"
 msgstr "当前模型"
 
@@ -392,7 +392,7 @@ msgstr "正在添加…"
 #: src/pages/DecisionModelSettingsPanel.tsx:132
 #: src/pages/McpServersOverlay.tsx:343
 #: src/pages/model-settings/model-detail.tsx:168
-#: src/pages/model-settings/routing-settings.tsx:115
+#: src/pages/model-settings/routing-settings.tsx:118
 #: src/pages/Onboarding.tsx:496
 #: src/pages/plugins/advanced-integrations.tsx:77
 #: src/pages/RoutineSchedule.tsx:47
@@ -647,7 +647,7 @@ msgstr "授权此服务器后，Agent 才能使用其工具。将打开弹窗。
 #: src/pages/bot-page/BotHero.tsx:161
 #: src/pages/bot-page/model-options.ts:29
 #: src/pages/bot-page/SettingDetails.tsx:119
-#: src/pages/model-settings/routing-settings.tsx:72
+#: src/pages/model-settings/routing-settings.tsx:74
 msgid "Auto"
 msgstr "自动"
 
@@ -817,6 +817,10 @@ msgstr "取消回复"
 msgid "Cancelled"
 msgstr "已取消"
 
+#: src/pages/shell/session-view.tsx:229
+msgid "Category"
+msgstr "类别"
+
 #: src/components/DraftCard.tsx:255
 msgid "Cc"
 msgstr ""
@@ -924,7 +928,7 @@ msgstr ""
 #: src/pages/MessagingSettingsOverlay.tsx:362
 #: src/pages/PeerMessagesOverlay.tsx:133
 #: src/pages/PeerMessagesOverlay.tsx:136
-#: src/pages/shell/session-view.tsx:107
+#: src/pages/shell/session-view.tsx:108
 #: src/pages/shell/widget-block.tsx:177
 #: src/pages/WindowChrome.tsx:21
 msgid "Close"
@@ -1008,7 +1012,7 @@ msgstr "命令"
 msgid "Complete"
 msgstr "完成"
 
-#: src/pages/model-settings/routing-settings.tsx:19
+#: src/pages/model-settings/routing-settings.tsx:20
 msgid "Complex"
 msgstr "复杂"
 
@@ -1187,7 +1191,7 @@ msgstr "复制"
 msgid "Copy {label}"
 msgstr ""
 
-#: src/pages/shell/session-view.tsx:245
+#: src/pages/shell/session-view.tsx:276
 msgid "Copy diagnostic"
 msgstr "复制诊断信息"
 
@@ -1211,7 +1215,7 @@ msgstr "无法授权此应用"
 msgid "Could not change password"
 msgstr "无法修改密码"
 
-#: src/pages/model-settings/routing-settings.tsx:29
+#: src/pages/model-settings/routing-settings.tsx:30
 #: src/pages/model-settings/use-model-settings.ts:242
 msgid "Could not change the default model"
 msgstr "无法更改默认模型"
@@ -1404,7 +1408,7 @@ msgid "Could not load skills"
 msgstr "无法加载技能"
 
 #: src/pages/PeerMessagesOverlay.tsx:147
-#: src/pages/shell/session-view.tsx:120
+#: src/pages/shell/session-view.tsx:122
 msgid "Could not load this chat."
 msgstr "无法加载此对话。"
 
@@ -1730,8 +1734,8 @@ msgstr "拒绝"
 #: src/pages/bot-page/model-options.ts:28
 #: src/pages/bot-page/SettingDetails.tsx:118
 #: src/pages/model-settings/model-detail.tsx:185
-#: src/pages/model-settings/routing-settings.tsx:103
-#: src/pages/model-settings/routing-settings.tsx:130
+#: src/pages/model-settings/routing-settings.tsx:106
+#: src/pages/model-settings/routing-settings.tsx:133
 #: src/pages/Onboarding.tsx:511
 msgid "Default"
 msgstr "默认"
@@ -1800,7 +1804,7 @@ msgstr "已拒绝"
 msgid "Deny"
 msgstr "拒绝"
 
-#: src/pages/model-settings/routing-settings.tsx:77
+#: src/pages/model-settings/routing-settings.tsx:79
 msgid "Deployment default"
 msgstr "部署默认"
 
@@ -1971,6 +1975,10 @@ msgstr ""
 msgid "Editing message from {rewindTime} · {0} messages after it will be removed"
 msgstr "正在编辑 {rewindTime} 的消息 · 其后的 {0} 条消息将被移除"
 
+#: src/pages/shell/session-view.tsx:226
+msgid "Effort"
+msgstr "思考强度"
+
 #: src/pages/Auth.tsx:147
 msgid "Email"
 msgstr "邮箱"
@@ -2039,7 +2047,7 @@ msgstr "每月"
 msgid "Every week"
 msgstr "每周"
 
-#: src/pages/model-settings/routing-settings.tsx:18
+#: src/pages/model-settings/routing-settings.tsx:19
 msgid "Everyday"
 msgstr "日常"
 
@@ -2102,7 +2110,11 @@ msgstr "失败。"
 msgid "Failure handling"
 msgstr "失败处理"
 
-#: src/pages/model-settings/routing-settings.tsx:17
+#: src/pages/shell/session-view.tsx:230
+msgid "Fallback"
+msgstr "回退"
+
+#: src/pages/model-settings/routing-settings.tsx:18
 msgid "Fast"
 msgstr "快速"
 
@@ -2482,7 +2494,7 @@ msgstr "正在加载语音提供方…"
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
-#: src/pages/shell/session-view.tsx:127
+#: src/pages/shell/session-view.tsx:129
 #: src/pages/shell/transcript.tsx:248
 msgid "Loading…"
 msgstr "加载中…"
@@ -2677,6 +2689,7 @@ msgstr "分钟"
 #: src/pages/Onboarding.tsx:433
 #: src/pages/Onboarding.tsx:529
 #: src/pages/Onboarding.tsx:541
+#: src/pages/shell/session-view.tsx:225
 msgid "Model"
 msgstr "模型"
 
@@ -3252,7 +3265,7 @@ msgid "read-only"
 msgstr "只读"
 
 #: src/pages/model-settings/model-detail.tsx:184
-#: src/pages/model-settings/routing-settings.tsx:129
+#: src/pages/model-settings/routing-settings.tsx:132
 #: src/pages/Onboarding.tsx:510
 msgid "Reasoning effort"
 msgstr "推理强度"
@@ -3469,6 +3482,10 @@ msgstr "正在回复 {replyName}"
 msgid "Request"
 msgstr "请求"
 
+#: src/pages/shell/session-view.tsx:228
+msgid "Requested"
+msgstr "请求"
+
 #: src/components/ComputerMaintenanceActions.tsx:103
 msgid "Reset"
 msgstr "重置"
@@ -3529,7 +3546,7 @@ msgstr "重试"
 
 #: src/App.tsx:173
 #: src/pages/PeerMessagesOverlay.tsx:153
-#: src/pages/shell/session-view.tsx:122
+#: src/pages/shell/session-view.tsx:124
 msgid "Retry now"
 msgstr "立即重试"
 
@@ -3592,9 +3609,13 @@ msgstr "例行任务已更新"
 msgid "Routines"
 msgstr "例行任务"
 
-#: src/pages/shell/session-view.tsx:245
+#: src/pages/shell/session-view.tsx:227
 msgid "Routing"
 msgstr "路由"
+
+#: src/pages/shell/session-view.tsx:269
+msgid "Run"
+msgstr "运行"
 
 #: src/pages/bot-page/RoutineTriggers.tsx:259
 msgid "Run at"
@@ -3936,6 +3957,10 @@ msgstr "指定智能体"
 msgid "Start recording"
 msgstr "开始录制"
 
+#: src/pages/shell/session-view.tsx:238
+msgid "Started"
+msgstr "开始"
+
 #: src/pages/ActivityList.tsx:150
 msgid "Starting"
 msgstr "正在开始"
@@ -3999,7 +4024,7 @@ msgid "Supports images"
 msgstr "支持图片"
 
 #: src/pages/model-settings/model-detail.tsx:169
-#: src/pages/model-settings/routing-settings.tsx:116
+#: src/pages/model-settings/routing-settings.tsx:119
 #: src/pages/Onboarding.tsx:497
 msgid "Supports thinking"
 msgstr "支持思考"
@@ -4145,6 +4170,10 @@ msgstr "至:"
 msgid "Today"
 msgstr "今天"
 
+#: src/pages/shell/session-view.tsx:233
+msgid "Tokens"
+msgstr "令牌"
+
 #: src/pages/plugins/advanced-integrations.tsx:346
 msgid "Tool sources"
 msgstr "工具源"
@@ -4160,6 +4189,10 @@ msgstr ""
 #: src/pages/plugins/advanced-integrations.tsx:302
 msgid "Treg token"
 msgstr "Treg token"
+
+#: src/pages/shell/session-view.tsx:231
+msgid "Trigger"
+msgstr "触发"
 
 #: src/components/DraftCard.tsx:326
 #: src/pages/Onboarding.tsx:685

@@ -67,6 +67,12 @@ msgstr ""
 msgid "{0} handling"
 msgstr ""
 
+#. placeholder {0}: run.usage.inputTokens.toLocaleString()
+#. placeholder {1}: run.usage.outputTokens.toLocaleString()
+#: src/pages/shell/session-view.tsx:235
+msgid "{0} in · {1} out"
+msgstr "{0} de entrada · {1} de saída"
+
 #. placeholder {0}: item.status.busyBotName
 #: src/pages/ComputerSettingsPanel.tsx:112
 msgid "{0} is using it"
@@ -92,12 +98,6 @@ msgstr ""
 #: src/pages/AccountSettingsOverlay.tsx:232
 msgid "{0} runs · {1} tokens"
 msgstr "{0} execuções · {1} tokens"
-
-#. placeholder {0}: run.usage.inputTokens.toLocaleString()
-#. placeholder {1}: run.usage.outputTokens.toLocaleString()
-#: src/pages/shell/session-view.tsx:215
-msgid "{0} tokens in · {1} out"
-msgstr "{0} tokens de entrada · {1} de saída"
 
 #. placeholder {0}: bot.name
 #: src/pages/ExternalConversationSettings.tsx:232
@@ -268,8 +268,8 @@ msgstr ""
 msgid "Active"
 msgstr "Ativo"
 
-#: src/pages/model-settings/routing-settings.tsx:53
-#: src/pages/model-settings/routing-settings.tsx:55
+#: src/pages/model-settings/routing-settings.tsx:54
+#: src/pages/model-settings/routing-settings.tsx:57
 msgid "Active model"
 msgstr "Modelo ativo"
 
@@ -392,7 +392,7 @@ msgstr "Adicionando"
 #: src/pages/DecisionModelSettingsPanel.tsx:132
 #: src/pages/McpServersOverlay.tsx:343
 #: src/pages/model-settings/model-detail.tsx:168
-#: src/pages/model-settings/routing-settings.tsx:115
+#: src/pages/model-settings/routing-settings.tsx:118
 #: src/pages/Onboarding.tsx:496
 #: src/pages/plugins/advanced-integrations.tsx:77
 #: src/pages/RoutineSchedule.tsx:47
@@ -647,7 +647,7 @@ msgstr "Autorize este servidor para que os agentes usem suas ferramentas. Uma ja
 #: src/pages/bot-page/BotHero.tsx:161
 #: src/pages/bot-page/model-options.ts:29
 #: src/pages/bot-page/SettingDetails.tsx:119
-#: src/pages/model-settings/routing-settings.tsx:72
+#: src/pages/model-settings/routing-settings.tsx:74
 msgid "Auto"
 msgstr "Automático"
 
@@ -817,6 +817,10 @@ msgstr "cancelar resposta"
 msgid "Cancelled"
 msgstr "Cancelado"
 
+#: src/pages/shell/session-view.tsx:229
+msgid "Category"
+msgstr "Categoria"
+
 #: src/components/DraftCard.tsx:255
 msgid "Cc"
 msgstr ""
@@ -924,7 +928,7 @@ msgstr ""
 #: src/pages/MessagingSettingsOverlay.tsx:362
 #: src/pages/PeerMessagesOverlay.tsx:133
 #: src/pages/PeerMessagesOverlay.tsx:136
-#: src/pages/shell/session-view.tsx:107
+#: src/pages/shell/session-view.tsx:108
 #: src/pages/shell/widget-block.tsx:177
 #: src/pages/WindowChrome.tsx:21
 msgid "Close"
@@ -1008,7 +1012,7 @@ msgstr "Comando"
 msgid "Complete"
 msgstr "Concluir"
 
-#: src/pages/model-settings/routing-settings.tsx:19
+#: src/pages/model-settings/routing-settings.tsx:20
 msgid "Complex"
 msgstr "Complexo"
 
@@ -1187,7 +1191,7 @@ msgstr "Copiar"
 msgid "Copy {label}"
 msgstr ""
 
-#: src/pages/shell/session-view.tsx:245
+#: src/pages/shell/session-view.tsx:276
 msgid "Copy diagnostic"
 msgstr "Copiar diagnóstico"
 
@@ -1211,7 +1215,7 @@ msgstr "Não foi possível autorizar este aplicativo"
 msgid "Could not change password"
 msgstr "Não foi possível alterar a senha"
 
-#: src/pages/model-settings/routing-settings.tsx:29
+#: src/pages/model-settings/routing-settings.tsx:30
 #: src/pages/model-settings/use-model-settings.ts:242
 msgid "Could not change the default model"
 msgstr "Não foi possível alterar o modelo padrão"
@@ -1404,7 +1408,7 @@ msgid "Could not load skills"
 msgstr "Não foi possível carregar as skills"
 
 #: src/pages/PeerMessagesOverlay.tsx:147
-#: src/pages/shell/session-view.tsx:120
+#: src/pages/shell/session-view.tsx:122
 msgid "Could not load this chat."
 msgstr "Não foi possível carregar este chat."
 
@@ -1730,8 +1734,8 @@ msgstr "Recusar"
 #: src/pages/bot-page/model-options.ts:28
 #: src/pages/bot-page/SettingDetails.tsx:118
 #: src/pages/model-settings/model-detail.tsx:185
-#: src/pages/model-settings/routing-settings.tsx:103
-#: src/pages/model-settings/routing-settings.tsx:130
+#: src/pages/model-settings/routing-settings.tsx:106
+#: src/pages/model-settings/routing-settings.tsx:133
 #: src/pages/Onboarding.tsx:511
 msgid "Default"
 msgstr "Padrão"
@@ -1800,7 +1804,7 @@ msgstr "Negado"
 msgid "Deny"
 msgstr "Negar"
 
-#: src/pages/model-settings/routing-settings.tsx:77
+#: src/pages/model-settings/routing-settings.tsx:79
 msgid "Deployment default"
 msgstr "Padrão de implantação"
 
@@ -1971,6 +1975,10 @@ msgstr ""
 msgid "Editing message from {rewindTime} · {0} messages after it will be removed"
 msgstr "Editando a mensagem de {rewindTime} · as {0} mensagens seguintes serão removidas"
 
+#: src/pages/shell/session-view.tsx:226
+msgid "Effort"
+msgstr "Esforço"
+
 #: src/pages/Auth.tsx:147
 msgid "Email"
 msgstr "E-mail"
@@ -2039,7 +2047,7 @@ msgstr "A cada mês"
 msgid "Every week"
 msgstr "A cada semana"
 
-#: src/pages/model-settings/routing-settings.tsx:18
+#: src/pages/model-settings/routing-settings.tsx:19
 msgid "Everyday"
 msgstr "Cotidiano"
 
@@ -2102,7 +2110,11 @@ msgstr "Falhou."
 msgid "Failure handling"
 msgstr "Tratamento de falhas"
 
-#: src/pages/model-settings/routing-settings.tsx:17
+#: src/pages/shell/session-view.tsx:230
+msgid "Fallback"
+msgstr "Alternativa"
+
+#: src/pages/model-settings/routing-settings.tsx:18
 msgid "Fast"
 msgstr "Rápido"
 
@@ -2482,7 +2494,7 @@ msgstr "Carregando provedores de voz..."
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
-#: src/pages/shell/session-view.tsx:127
+#: src/pages/shell/session-view.tsx:129
 #: src/pages/shell/transcript.tsx:248
 msgid "Loading…"
 msgstr "Carregando..."
@@ -2677,6 +2689,7 @@ msgstr "minutos"
 #: src/pages/Onboarding.tsx:433
 #: src/pages/Onboarding.tsx:529
 #: src/pages/Onboarding.tsx:541
+#: src/pages/shell/session-view.tsx:225
 msgid "Model"
 msgstr "Modelo"
 
@@ -3252,7 +3265,7 @@ msgid "read-only"
 msgstr "somente leitura"
 
 #: src/pages/model-settings/model-detail.tsx:184
-#: src/pages/model-settings/routing-settings.tsx:129
+#: src/pages/model-settings/routing-settings.tsx:132
 #: src/pages/Onboarding.tsx:510
 msgid "Reasoning effort"
 msgstr "Esforço de raciocínio"
@@ -3469,6 +3482,10 @@ msgstr "Respondendo a {replyName}"
 msgid "Request"
 msgstr ""
 
+#: src/pages/shell/session-view.tsx:228
+msgid "Requested"
+msgstr "Solicitada"
+
 #: src/components/ComputerMaintenanceActions.tsx:103
 msgid "Reset"
 msgstr "Redefinir"
@@ -3529,7 +3546,7 @@ msgstr "Tentar novamente"
 
 #: src/App.tsx:173
 #: src/pages/PeerMessagesOverlay.tsx:153
-#: src/pages/shell/session-view.tsx:122
+#: src/pages/shell/session-view.tsx:124
 msgid "Retry now"
 msgstr "Nova tentativa agora"
 
@@ -3592,9 +3609,13 @@ msgstr "Rotina atualizada"
 msgid "Routines"
 msgstr "Rotinas"
 
-#: src/pages/shell/session-view.tsx:245
+#: src/pages/shell/session-view.tsx:227
 msgid "Routing"
 msgstr "Roteamento"
+
+#: src/pages/shell/session-view.tsx:269
+msgid "Run"
+msgstr "Execução"
 
 #: src/pages/bot-page/RoutineTriggers.tsx:259
 msgid "Run at"
@@ -3936,6 +3957,10 @@ msgstr "Agentes específicos"
 msgid "Start recording"
 msgstr "Começar a gravar"
 
+#: src/pages/shell/session-view.tsx:238
+msgid "Started"
+msgstr "Início"
+
 #: src/pages/ActivityList.tsx:150
 msgid "Starting"
 msgstr "Iniciando"
@@ -3999,7 +4024,7 @@ msgid "Supports images"
 msgstr "Suporta imagens"
 
 #: src/pages/model-settings/model-detail.tsx:169
-#: src/pages/model-settings/routing-settings.tsx:116
+#: src/pages/model-settings/routing-settings.tsx:119
 #: src/pages/Onboarding.tsx:497
 msgid "Supports thinking"
 msgstr "Suporta raciocínio"
@@ -4145,6 +4170,10 @@ msgstr "Para:"
 msgid "Today"
 msgstr "Hoje"
 
+#: src/pages/shell/session-view.tsx:233
+msgid "Tokens"
+msgstr "Tokens"
+
 #: src/pages/plugins/advanced-integrations.tsx:346
 msgid "Tool sources"
 msgstr "Fontes de ferramentas"
@@ -4160,6 +4189,10 @@ msgstr ""
 #: src/pages/plugins/advanced-integrations.tsx:302
 msgid "Treg token"
 msgstr "Token Treg"
+
+#: src/pages/shell/session-view.tsx:231
+msgid "Trigger"
+msgstr "Gatilho"
 
 #: src/components/DraftCard.tsx:326
 #: src/pages/Onboarding.tsx:685

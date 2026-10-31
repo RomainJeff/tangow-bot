@@ -14,6 +14,7 @@ import {
   DialogContent,
   DialogTitle,
   formatShortDuration,
+  ReasoningDisclosure,
 } from "@rakazo/ui-web";
 import { Check, Copy, X } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
@@ -110,6 +111,7 @@ export function SessionView({
         </div>
         {showSteps && read.entries ? (
           <RunDetails
+            key={current.kind === "run" ? current.runId : current.sessionId}
             entries={read.entries}
             truncated={read.truncated}
             runId={current.kind === "run" ? current.runId : undefined}
@@ -181,6 +183,7 @@ function RunDetails({
 }) {
   const { t } = useLingui();
   const [copied, setCopied] = useState(false);
+  const [open, setOpen] = useState(false);
   useEffect(() => {
     if (!copied) return;
     const timer = setTimeout(() => setCopied(false), 2000);
@@ -211,14 +214,29 @@ function RunDetails({
     usage: outcome?.usage ?? null,
     durationMs,
   };
-  const facts = [
-    routing ? `${routing.provider}/${routing.modelId}` : `${run.model.provider}/${run.model.id}`,
-    run.usage
-      ? t`${run.usage.inputTokens.toLocaleString()} tokens in · ${run.usage.outputTokens.toLocaleString()} out`
-      : null,
-    durationMs === null ? null : formatShortDuration(durationMs),
-    run.trigger,
-  ].filter((fact) => fact !== null);
+  const model = routing
+    ? `${routing.provider}/${routing.modelId}`
+    : `${run.model.provider}/${run.model.id}`;
+  const summary = [model, run.status, durationMs === null ? null : formatShortDuration(durationMs)]
+    .filter((fact) => fact !== null)
+    .join(" · ");
+  // What the run recorded, as recorded: only the labels are translated.
+  const rows: [label: string, value: string | null | undefined][] = [
+    [t`Model`, model],
+    [t`Effort`, run.effort ?? "—"],
+    [t`Routing`, routing?.mode],
+    [t`Requested`, routing?.requestedCategory],
+    [t`Category`, routing?.category],
+    [t`Fallback`, routing?.fallback],
+    [t`Trigger`, run.trigger],
+    [
+      t`Tokens`,
+      run.usage
+        ? t`${run.usage.inputTokens.toLocaleString()} in · ${run.usage.outputTokens.toLocaleString()} out`
+        : null,
+    ],
+    [t`Started`, new Date(run.startedAt).toLocaleTimeString()],
+  ];
   const copy = () =>
     void navigator.clipboard
       ?.writeText(JSON.stringify({ run, truncated, entries }, withoutRawErrors, 2))
@@ -229,31 +247,35 @@ function RunDetails({
   return (
     <div
       data-testid="run-details"
-      className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-meta text-muted-foreground"
+      className="flex items-start justify-between gap-3 text-meta text-muted-foreground"
     >
-      <p className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="flex flex-wrap gap-x-1">
-          {facts.map((fact, index) => (
-            <span key={fact} className="whitespace-nowrap">
-              {index > 0 ? "· " : null}
-              {fact}
-            </span>
-          ))}
-        </span>
-        {routing ? (
-          <span className="break-words">
-            <Trans>Routing</Trans>: {routing.mode}
-            {routing.requestedCategory || routing.category ? (
-              <> · {[routing.requestedCategory, routing.category].filter(Boolean).join(" → ")}</>
-            ) : null}
-            {routing.fallback ? <> · {routing.fallback}</> : null}
-          </span>
-        ) : null}
-        <span className="truncate font-mono text-mono select-all">{run.runId}</span>
-      </p>
+      <ReasoningDisclosure
+        className="min-w-0"
+        open={open}
+        onToggle={() => setOpen((value) => !value)}
+        summary={<span className="text-start wrap-anywhere">{summary}</span>}
+        toggleProps={{ "data-testid": "run-details-toggle" }}
+      >
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1">
+          {rows.map(([label, value]) =>
+            value ? (
+              <Fragment key={label}>
+                <dt>{label}</dt>
+                <dd className="break-words text-foreground">{value}</dd>
+              </Fragment>
+            ) : null,
+          )}
+          <dt>
+            <Trans>Run</Trans>
+          </dt>
+          <dd className="truncate font-mono text-mono text-foreground select-all">{run.runId}</dd>
+        </dl>
+      </ReasoningDisclosure>
       <Button variant="outline" size="sm" onClick={copy}>
         {copied ? <Check /> : <Copy />}
-        <Trans>Copy diagnostic</Trans>
+        <span className="max-sm:sr-only">
+          <Trans>Copy diagnostic</Trans>
+        </span>
       </Button>
     </div>
   );

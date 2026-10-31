@@ -67,6 +67,12 @@ msgstr "{0} по умолчанию"
 msgid "{0} handling"
 msgstr "Обработка {0}"
 
+#. placeholder {0}: run.usage.inputTokens.toLocaleString()
+#. placeholder {1}: run.usage.outputTokens.toLocaleString()
+#: src/pages/shell/session-view.tsx:235
+msgid "{0} in · {1} out"
+msgstr "{0} на входе · {1} на выходе"
+
 #. placeholder {0}: item.status.busyBotName
 #: src/pages/ComputerSettingsPanel.tsx:112
 msgid "{0} is using it"
@@ -92,12 +98,6 @@ msgstr "{0} ч. сводки"
 #: src/pages/AccountSettingsOverlay.tsx:232
 msgid "{0} runs · {1} tokens"
 msgstr "Запусков: {0} · токенов: {1}"
-
-#. placeholder {0}: run.usage.inputTokens.toLocaleString()
-#. placeholder {1}: run.usage.outputTokens.toLocaleString()
-#: src/pages/shell/session-view.tsx:215
-msgid "{0} tokens in · {1} out"
-msgstr "{0} токенов на входе · {1} на выходе"
 
 #. placeholder {0}: bot.name
 #: src/pages/ExternalConversationSettings.tsx:232
@@ -268,8 +268,8 @@ msgstr "Действия для пространства"
 msgid "Active"
 msgstr "Активный"
 
-#: src/pages/model-settings/routing-settings.tsx:53
-#: src/pages/model-settings/routing-settings.tsx:55
+#: src/pages/model-settings/routing-settings.tsx:54
+#: src/pages/model-settings/routing-settings.tsx:57
 msgid "Active model"
 msgstr "Активная модель"
 
@@ -392,7 +392,7 @@ msgstr "Добавление…"
 #: src/pages/DecisionModelSettingsPanel.tsx:132
 #: src/pages/McpServersOverlay.tsx:343
 #: src/pages/model-settings/model-detail.tsx:168
-#: src/pages/model-settings/routing-settings.tsx:115
+#: src/pages/model-settings/routing-settings.tsx:118
 #: src/pages/Onboarding.tsx:496
 #: src/pages/plugins/advanced-integrations.tsx:77
 #: src/pages/RoutineSchedule.tsx:47
@@ -647,7 +647,7 @@ msgstr ""
 #: src/pages/bot-page/BotHero.tsx:161
 #: src/pages/bot-page/model-options.ts:29
 #: src/pages/bot-page/SettingDetails.tsx:119
-#: src/pages/model-settings/routing-settings.tsx:72
+#: src/pages/model-settings/routing-settings.tsx:74
 msgid "Auto"
 msgstr "Авто"
 
@@ -817,6 +817,10 @@ msgstr "Отменить ответ"
 msgid "Cancelled"
 msgstr "Отменено"
 
+#: src/pages/shell/session-view.tsx:229
+msgid "Category"
+msgstr "Категория"
+
 #: src/components/DraftCard.tsx:255
 msgid "Cc"
 msgstr ""
@@ -924,7 +928,7 @@ msgstr "Секрет клиента"
 #: src/pages/MessagingSettingsOverlay.tsx:362
 #: src/pages/PeerMessagesOverlay.tsx:133
 #: src/pages/PeerMessagesOverlay.tsx:136
-#: src/pages/shell/session-view.tsx:107
+#: src/pages/shell/session-view.tsx:108
 #: src/pages/shell/widget-block.tsx:177
 #: src/pages/WindowChrome.tsx:21
 msgid "Close"
@@ -1008,7 +1012,7 @@ msgstr "Команда"
 msgid "Complete"
 msgstr "Завершить"
 
-#: src/pages/model-settings/routing-settings.tsx:19
+#: src/pages/model-settings/routing-settings.tsx:20
 msgid "Complex"
 msgstr "Сложно"
 
@@ -1187,7 +1191,7 @@ msgstr "Копировать"
 msgid "Copy {label}"
 msgstr ""
 
-#: src/pages/shell/session-view.tsx:245
+#: src/pages/shell/session-view.tsx:276
 msgid "Copy diagnostic"
 msgstr "Скопировать диагностику"
 
@@ -1211,7 +1215,7 @@ msgstr "Не удалось авторизовать это приложение
 msgid "Could not change password"
 msgstr "Не удалось изменить пароль"
 
-#: src/pages/model-settings/routing-settings.tsx:29
+#: src/pages/model-settings/routing-settings.tsx:30
 #: src/pages/model-settings/use-model-settings.ts:242
 msgid "Could not change the default model"
 msgstr "Не удалось изменить модель по умолчанию."
@@ -1404,7 +1408,7 @@ msgid "Could not load skills"
 msgstr ""
 
 #: src/pages/PeerMessagesOverlay.tsx:147
-#: src/pages/shell/session-view.tsx:120
+#: src/pages/shell/session-view.tsx:122
 msgid "Could not load this chat."
 msgstr "Не удалось загрузить этот чат."
 
@@ -1730,8 +1734,8 @@ msgstr "Отклонить"
 #: src/pages/bot-page/model-options.ts:28
 #: src/pages/bot-page/SettingDetails.tsx:118
 #: src/pages/model-settings/model-detail.tsx:185
-#: src/pages/model-settings/routing-settings.tsx:103
-#: src/pages/model-settings/routing-settings.tsx:130
+#: src/pages/model-settings/routing-settings.tsx:106
+#: src/pages/model-settings/routing-settings.tsx:133
 #: src/pages/Onboarding.tsx:511
 msgid "Default"
 msgstr ""
@@ -1800,7 +1804,7 @@ msgstr "Отклонено"
 msgid "Deny"
 msgstr "Запретить"
 
-#: src/pages/model-settings/routing-settings.tsx:77
+#: src/pages/model-settings/routing-settings.tsx:79
 msgid "Deployment default"
 msgstr "Развертывание по умолчанию"
 
@@ -1971,6 +1975,10 @@ msgstr ""
 msgid "Editing message from {rewindTime} · {0} messages after it will be removed"
 msgstr ""
 
+#: src/pages/shell/session-view.tsx:226
+msgid "Effort"
+msgstr "Усилие"
+
 #: src/pages/Auth.tsx:147
 msgid "Email"
 msgstr "Электронная почта"
@@ -2039,7 +2047,7 @@ msgstr "Каждый месяц"
 msgid "Every week"
 msgstr "Каждую неделю"
 
-#: src/pages/model-settings/routing-settings.tsx:18
+#: src/pages/model-settings/routing-settings.tsx:19
 msgid "Everyday"
 msgstr "Повседневно"
 
@@ -2102,7 +2110,11 @@ msgstr "Неуспешный."
 msgid "Failure handling"
 msgstr "Обработка сбоев"
 
-#: src/pages/model-settings/routing-settings.tsx:17
+#: src/pages/shell/session-view.tsx:230
+msgid "Fallback"
+msgstr "Запасной вариант"
+
+#: src/pages/model-settings/routing-settings.tsx:18
 msgid "Fast"
 msgstr "Быстро"
 
@@ -2482,7 +2494,7 @@ msgstr "Загрузка поставщиков голосовой связи…
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
-#: src/pages/shell/session-view.tsx:127
+#: src/pages/shell/session-view.tsx:129
 #: src/pages/shell/transcript.tsx:248
 msgid "Loading…"
 msgstr "Загрузка…"
@@ -2677,6 +2689,7 @@ msgstr "минуты"
 #: src/pages/Onboarding.tsx:433
 #: src/pages/Onboarding.tsx:529
 #: src/pages/Onboarding.tsx:541
+#: src/pages/shell/session-view.tsx:225
 msgid "Model"
 msgstr "Модель"
 
@@ -3252,7 +3265,7 @@ msgid "read-only"
 msgstr "только для чтения"
 
 #: src/pages/model-settings/model-detail.tsx:184
-#: src/pages/model-settings/routing-settings.tsx:129
+#: src/pages/model-settings/routing-settings.tsx:132
 #: src/pages/Onboarding.tsx:510
 msgid "Reasoning effort"
 msgstr ""
@@ -3469,6 +3482,10 @@ msgstr "Ответ на {replyName}"
 msgid "Request"
 msgstr "Запрос"
 
+#: src/pages/shell/session-view.tsx:228
+msgid "Requested"
+msgstr "Запрошено"
+
 #: src/components/ComputerMaintenanceActions.tsx:103
 msgid "Reset"
 msgstr "Сбросить"
@@ -3529,7 +3546,7 @@ msgstr "Повторить"
 
 #: src/App.tsx:173
 #: src/pages/PeerMessagesOverlay.tsx:153
-#: src/pages/shell/session-view.tsx:122
+#: src/pages/shell/session-view.tsx:124
 msgid "Retry now"
 msgstr "Повторить попытку сейчас"
 
@@ -3592,9 +3609,13 @@ msgstr "Задача обновлена"
 msgid "Routines"
 msgstr "Задачи"
 
-#: src/pages/shell/session-view.tsx:245
+#: src/pages/shell/session-view.tsx:227
 msgid "Routing"
 msgstr "Маршрутизация"
+
+#: src/pages/shell/session-view.tsx:269
+msgid "Run"
+msgstr "Запуск"
 
 #: src/pages/bot-page/RoutineTriggers.tsx:259
 msgid "Run at"
@@ -3936,6 +3957,10 @@ msgstr ""
 msgid "Start recording"
 msgstr "Начать запись"
 
+#: src/pages/shell/session-view.tsx:238
+msgid "Started"
+msgstr "Начало"
+
 #: src/pages/ActivityList.tsx:150
 msgid "Starting"
 msgstr "Запуск"
@@ -3999,7 +4024,7 @@ msgid "Supports images"
 msgstr ""
 
 #: src/pages/model-settings/model-detail.tsx:169
-#: src/pages/model-settings/routing-settings.tsx:116
+#: src/pages/model-settings/routing-settings.tsx:119
 #: src/pages/Onboarding.tsx:497
 msgid "Supports thinking"
 msgstr "Поддерживает рассуждения"
@@ -4145,6 +4170,10 @@ msgstr "К:"
 msgid "Today"
 msgstr ""
 
+#: src/pages/shell/session-view.tsx:233
+msgid "Tokens"
+msgstr "Токены"
+
 #: src/pages/plugins/advanced-integrations.tsx:346
 msgid "Tool sources"
 msgstr "Источники инструментов"
@@ -4160,6 +4189,10 @@ msgstr "Считать человеком"
 #: src/pages/plugins/advanced-integrations.tsx:302
 msgid "Treg token"
 msgstr "Токен Treg"
+
+#: src/pages/shell/session-view.tsx:231
+msgid "Trigger"
+msgstr "Триггер"
 
 #: src/components/DraftCard.tsx:326
 #: src/pages/Onboarding.tsx:685
