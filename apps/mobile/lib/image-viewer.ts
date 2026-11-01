@@ -15,51 +15,50 @@ export type ImageViewerPayload = {
   startIndex: number;
   author: string;
   target: MobileArtifactTarget;
+  /** The viewer opened out of a stack in the thread: it holds the thread's rows while it is on screen. */
+  holdThread?: boolean;
 };
 
 let payload: ImageViewerPayload | null = null;
-let threadHeld = false;
+let holds = 0;
 const listeners = new Set<() => void>();
 
-function holdThread(held: boolean): void {
-  if (threadHeld === held) return;
-  threadHeld = held;
+function changeHolds(by: 1 | -1): void {
+  holds += by;
   for (const listener of listeners) listener();
 }
 
-/**
- * Hands the viewer what to show. `holdThread` is for a tap on a stack in the thread: the viewer opens
- * out of that stack, so the thread keeps its rows until `releaseImageViewer`.
- */
-export function setImageViewerPayload(
-  next: ImageViewerPayload,
-  options?: { holdThread?: boolean },
-): void {
+export function setImageViewerPayload(next: ImageViewerPayload): void {
   payload = next;
-  if (options?.holdThread) holdThread(true);
 }
 
 export function imageViewerPayload(): ImageViewerPayload | null {
   return payload;
 }
 
-/**
- * The viewer is gone, which is after the system has finished closing it. The thread is let go a
- * frame later, once the zoom source is on screen again.
- */
-export function releaseImageViewer(): void {
+export function clearImageViewerPayload(): void {
   payload = null;
-  requestAnimationFrame(() => holdThread(false));
 }
 
-/** True from a tap on a thread stack until its viewer has closed: the thread draws the rows it had. */
+/**
+ * The thread keeps its rows from the moment the viewer is on screen. The returned release is for
+ * when the viewer is gone, which is after the system has finished closing it, and lets the thread go
+ * a frame later, once the zoom source is on screen again. Each viewer holds once, so a second one
+ * never releases the first's hold.
+ */
+export function holdThreadForViewer(): () => void {
+  changeHolds(1);
+  return () => requestAnimationFrame(() => changeHolds(-1));
+}
+
+/** True while a viewer opened from the thread is on screen: the thread draws the rows it had. */
 export function useThreadHeldByImageViewer(): boolean {
   return useSyncExternalStore(
     (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    () => threadHeld,
+    () => holds > 0,
   );
 }
 

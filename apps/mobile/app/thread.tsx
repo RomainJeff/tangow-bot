@@ -3810,7 +3810,7 @@ const MessageBubble = memo(function MessageBubble({
         target: artifactTarget,
       };
       if (openImageViewer) openImageViewer(payload);
-      else setImageViewerPayload(payload, { holdThread: true });
+      else setImageViewerPayload({ ...payload, holdThread: true });
     };
     const words =
       quote || caption ? (
