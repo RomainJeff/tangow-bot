@@ -21,6 +21,18 @@ async function cacheMobileArtifact(
   return file;
 }
 
+/** An artifact never changes, so a file already in the cache is reused instead of fetched again. */
+async function cachedMobileArtifact(
+  target: MobileArtifactTarget,
+  artifactId: string,
+  mimeType: string,
+): Promise<File> {
+  const cached = new File(Paths.cache, artifactCacheFileName(artifactId, mimeType));
+  return cached.exists && cached.size > 0
+    ? cached
+    : cacheMobileArtifact(target, artifactId, mimeType);
+}
+
 /**
  * A thread image artifact as a local file uri, for drawing inline. An artifact never changes, so
  * a file already in the cache is reused instead of fetched again each time its row mounts.
@@ -41,12 +53,7 @@ export async function readMobileArtifactText(
   artifactId: string,
   mimeType: string,
 ): Promise<string> {
-  const cached = new File(Paths.cache, artifactCacheFileName(artifactId, mimeType));
-  const file =
-    cached.exists && cached.size > 0
-      ? cached
-      : await cacheMobileArtifact(target, artifactId, mimeType);
-  return file.text();
+  return (await cachedMobileArtifact(target, artifactId, mimeType)).text();
 }
 
 export async function openMobileArtifact(
@@ -55,7 +62,7 @@ export async function openMobileArtifact(
   name: string,
   mimeType: string,
 ): Promise<void> {
-  const file = await cacheMobileArtifact(target, artifactId, mimeType);
+  const file = await cachedMobileArtifact(target, artifactId, mimeType);
   if (await Sharing.isAvailableAsync()) {
     await Sharing.shareAsync(file.uri, { mimeType });
     return;
