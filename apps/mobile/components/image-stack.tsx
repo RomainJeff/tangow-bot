@@ -98,20 +98,15 @@ export function ImageStack({
           author,
         })
       : t("Image, from {author}", { author });
-  const retryAction = { name: "retry", label: t("Retry") };
 
   return (
     <Pressable
       accessible
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityActions={
-        retryFront ? [...(accessibilityActions ?? []), retryAction] : accessibilityActions
-      }
-      onAccessibilityAction={(event) => {
-        if (event.nativeEvent.actionName === "retry") retryFront?.();
-        else onAccessibilityAction?.(event);
-      }}
+      accessibilityHint={retryFront ? t("Retry") : undefined}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
       onPress={() => (retryFront ? retryFront() : onOpen(front))}
       onLongPress={onLongPress}
       // A thumb scrolling the thread past the stack does not press it.
@@ -149,7 +144,7 @@ export function ImageStack({
             <NativeSymbol
               ios="square.stack"
               android="layers-outline"
-              size={12}
+              size={14}
               color={tokens.chatUserForeground}
             />
             <Text style={{ color: tokens.chatUserForeground, ...nativeTextStyle("meta") }}>
@@ -278,7 +273,7 @@ function StackCard({
           <NativeSymbol
             ios="arrow.clockwise"
             android="refresh"
-            size={22}
+            size={20}
             color={tokens.mutedForeground}
           />
         </View>

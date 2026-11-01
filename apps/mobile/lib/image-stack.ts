@@ -7,7 +7,7 @@ export const IMAGE_STACK = {
   /** Cards drawn behind the front one, toward the thread's centre. Their room is always kept. */
   peekLevels: 2,
   /** How far each level shows beyond the front frame's edge, in px. */
-  peek: 10,
+  peek: 8,
   /** How much smaller than the front each level is, as a share of its size. */
   shrink: 0.06,
   /** How far above its place a card sits as it starts to land, in px. */
