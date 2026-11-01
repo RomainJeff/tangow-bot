@@ -33,12 +33,12 @@ import { stackFrame } from "../lib/image-stack";
 import {
   CLOSE_DISTANCE,
   CLOSE_VELOCITY,
-  clearImageViewerPayload,
   containRect,
   type ImageViewerPayload,
   imageKey,
   imageLabel,
   imageViewerPayload,
+  releaseImageViewer,
   type Size,
   useImageZoom,
 } from "../lib/image-viewer";
@@ -56,7 +56,7 @@ const BAND_GAP = 12;
  */
 export default function ImageViewerScreen() {
   const [opened] = useState(imageViewerPayload);
-  useEffect(() => clearImageViewerPayload, []);
+  useEffect(() => releaseImageViewer, []);
   return (
     <>
       <StatusBar style="light" />

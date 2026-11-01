@@ -202,6 +202,7 @@ import {
   IMAGE_VIEWER_HREF,
   type ImageViewerPayload,
   setImageViewerPayload,
+  useThreadHeldByImageViewer,
 } from "../lib/image-viewer";
 import { unreadConversationCount } from "../lib/inbox-spaces";
 import { saveLastBotId } from "../lib/last-bot";
@@ -550,7 +551,7 @@ function Thread() {
   );
   const showSteps = useDebugMode();
   const drawnRows = useRef<ReadonlyMap<string, ThreadRow>>(new Map());
-  const view = useMemo((): ThreadView => {
+  const liveView = useMemo((): ThreadView => {
     const projected = projectThreadView(snap?.entries ?? [], {
       rendersNothing: (item) =>
         drawsNothing(item, (blocks) => hasVisibleMessagePresentation(blocks, showSteps)),
@@ -561,6 +562,15 @@ function Thread() {
     drawnRows.current = new Map(rows.map((row) => [row.item.id, row]));
     return { ...projected, rows };
   }, [snap?.entries, snap?.layer, showSteps]);
+  // The image viewer zooms out of a stack in the list. A run adding images, a helper's report or a
+  // recap while it is open can fold that stack's row away, and the list would recycle the very view
+  // the system hid as the zoom's source, leaving a hole. So the thread keeps the view it had until
+  // the viewer is gone; what arrived meanwhile then comes in as new.
+  const viewerHoldsThread = useThreadHeldByImageViewer();
+  const heldView = useRef<ThreadView | null>(null);
+  if (!viewerHoldsThread) heldView.current = null;
+  else heldView.current ??= liveView;
+  const view = heldView.current ?? liveView;
   const rows = view.rows;
   const waiting = view.waiting;
   const waitingRef = useRef(waiting);
@@ -3792,13 +3802,16 @@ const MessageBubble = memo(function MessageBubble({
       ...(message.role === "user" ? { backgroundColor: tokens.chatUser } : null),
     };
     const quote = replyQuote(message, replyPreview);
-    const openImage = () =>
-      (openImageViewer ?? setImageViewerPayload)({
+    const openImage = () => {
+      const payload = {
         images,
         startIndex: images.length - 1,
         author: authorName,
         target: artifactTarget,
-      });
+      };
+      if (openImageViewer) openImageViewer(payload);
+      else setImageViewerPayload(payload, { holdThread: true });
+    };
     const words =
       quote || caption ? (
         <>
