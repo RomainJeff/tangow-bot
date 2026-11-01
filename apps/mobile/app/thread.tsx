@@ -37,6 +37,7 @@ import {
   drawsNothing,
   editedWaitingDraft,
   failureSinceLabel,
+  imagesOf,
   isApprovalAskBlock,
   isAsideOnlyMessage,
   isRunTerminalEvent,
@@ -550,7 +551,9 @@ function Thread() {
   const waiting = view.waiting;
   const waitingRef = useRef(waiting);
   waitingRef.current = waiting;
-  const latestMessageId = rows.at(-1)?.item.id ?? null;
+  const lastRow = rows.at(-1);
+  // An image joining the last stack is the thread's newest message, though it draws no row.
+  const latestMessageId = lastRow ? (lastRow.imageStack?.front.item.id ?? lastRow.item.id) : null;
   const rowIndex = useMemo(() => new Map(rows.map((row, index) => [row.item.id, index])), [rows]);
   const rewindIndex = rewindTarget
     ? (rowIndex.get(view.rowOf.get(rewindTarget.id) ?? rewindTarget.id) ?? -1)
@@ -2132,8 +2135,7 @@ function Thread() {
   ) {
     const actionProps = messageActionProps(message, row.messageId);
     const stack = row.imageStack;
-    // An image stack acts on its newest message; the person's bubble gesture sits around the whole
-    // row, so it takes the same actions rather than racing the stack's own long press.
+    // An image stack acts on its newest message, the rest of the row on the message that opens it.
     const frontActionProps = stack
       ? messageActionProps(stack.front.item, stack.front.messageId)
       : actionProps;
@@ -2280,15 +2282,25 @@ function Thread() {
           </MessageRow>
         ) : chrome === "row" ? (
           withPreview(
-            <AnimatedMessageBubble
-              variant="user"
-              isNew={isNew}
-              onLongPress={frontActionProps.onLongPress}
-              accessibilityActions={frontActionProps.accessibilityActions}
-              onAccessibilityAction={frontActionProps.onAccessibilityAction}
-            >
-              {bubble}
-            </AnimatedMessageBubble>,
+            stack ? (
+              // The bubble gesture would race the stack's own long press: here the caption's
+              // long press is the outer one and the stack's, being inner, wins.
+              <MessageArrival isNew={isNew}>
+                <Pressable accessible={false} onLongPress={actionProps.onLongPress}>
+                  {bubble}
+                </Pressable>
+              </MessageArrival>
+            ) : (
+              <AnimatedMessageBubble
+                variant="user"
+                isNew={isNew}
+                onLongPress={actionProps.onLongPress}
+                accessibilityActions={actionProps.accessibilityActions}
+                onAccessibilityAction={actionProps.onAccessibilityAction}
+              >
+                {bubble}
+              </AnimatedMessageBubble>
+            ),
           )
         ) : (
           <View>{bubble}</View>
@@ -3732,21 +3744,7 @@ const MessageBubble = memo(function MessageBubble({
     })
     .join("\n");
   if (attachments.length > 0) {
-    const images: readonly StackImage[] =
-      imageStack?.images ??
-      attachments.flatMap((attachment) =>
-        attachment.kind === "image" && attachment.artifactId
-          ? [
-              {
-                messageId: message.id,
-                artifactId: attachment.artifactId,
-                mimeType: attachment.mimeType ?? "image/png",
-                name: attachment.name ?? t("Image"),
-                ts: message.ts,
-              },
-            ]
-          : [],
-      );
+    const images = imageStack?.images ?? imagesOf(message, message.id);
     const files = attachments.filter((attachment) => attachment.kind === "file");
     const ink = message.role === "user" ? tokens.chatUserForeground : tokens.foreground;
     const surfaceStyle = {
