@@ -41,14 +41,22 @@ export function clearImageViewerPayload(): void {
 }
 
 /**
+ * How long the thread stays held after the viewer unmounts. Closing with the X unmounts it as the
+ * system's dismissal starts, and the zoom source stays hidden until that animation ends.
+ */
+const HOLD_AFTER_CLOSE_MS = 700;
+
+/**
  * The thread keeps its rows from the moment the viewer is on screen. The returned release is for
- * when the viewer is gone, which is after the system has finished closing it, and lets the thread go
- * a frame later, once the zoom source is on screen again. Each viewer holds once, so a second one
- * never releases the first's hold.
+ * when the viewer has unmounted, and lets the thread go once the dismissal has finished and the
+ * zoom source is on screen again. Each viewer holds once, so a second one never releases the first's
+ * hold.
  */
 export function holdThreadForViewer(): () => void {
   changeHolds(1);
-  return () => requestAnimationFrame(() => changeHolds(-1));
+  return () => {
+    setTimeout(() => changeHolds(-1), HOLD_AFTER_CLOSE_MS);
+  };
 }
 
 /** True while a viewer opened from the thread is on screen: the thread draws the rows it had. */
