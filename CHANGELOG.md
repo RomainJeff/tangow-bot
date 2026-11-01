@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-11-01
 
+#### Added
+
+- **Share a link to a bot or group from any iPhone app.** Pick Tangow in the share sheet and the link goes to the last bot or group you shared with, with an optional message, without leaving the app you were reading; tap To to pick another.
+
 #### Changed
 
 - Opening a bot's screen on web, desktop and iPhone now lets you watch without taking control, and Take control gives you the mouse and keyboard when you want them.
