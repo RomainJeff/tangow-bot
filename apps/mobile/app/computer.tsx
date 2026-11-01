@@ -221,6 +221,12 @@ export default function Computer() {
     }
   }
 
+  const connecting =
+    !error &&
+    !screenError &&
+    (opening ||
+      computer?.state === "booting" ||
+      (computer?.state === "running" && !embeddedScreenUrl));
   const placeholder =
     screenError ?? previewPlaceholder(computer?.state, booting, name, computer?.mode);
   const openPreview = (
@@ -442,7 +448,7 @@ export default function Computer() {
                 </View>
               </SafeAreaView>
               <View style={{ flex: 1, backgroundColor: tokens.card }}>
-                {opening && !screenError ? (
+                {connecting ? (
                   <ScreenLinkOverlay view="connecting" />
                 ) : computer?.state === "running" && embeddedScreenUrl && !screenError ? (
                   <ScreenWebView

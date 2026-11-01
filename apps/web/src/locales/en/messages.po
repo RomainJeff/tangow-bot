@@ -750,7 +750,7 @@ msgid "Booting live desktop…"
 msgstr "Booting live desktop…"
 
 #. placeholder {0}: active?.name
-#: src/pages/shell/side-panel.tsx:279
+#: src/pages/shell/side-panel.tsx:283
 msgid "Booting up {0}’s computer"
 msgstr "Booting up {0}’s computer"
 
@@ -773,7 +773,7 @@ msgstr "Bot"
 msgid "Bot"
 msgstr "Bot"
 
-#: src/pages/shell/side-panel.tsx:408
+#: src/pages/shell/side-panel.tsx:412
 msgid "Bot screen"
 msgstr "Bot screen"
 
@@ -994,7 +994,7 @@ msgstr "Client secret"
 msgid "Close"
 msgstr "Close"
 
-#: src/pages/shell/side-panel.tsx:385
+#: src/pages/shell/side-panel.tsx:389
 msgid "Close computer"
 msgstr "Close computer"
 
@@ -1093,7 +1093,7 @@ msgstr "Computer"
 msgid "Computer failed to boot"
 msgstr "Computer failed to boot"
 
-#: src/pages/shell/side-panel.tsx:427
+#: src/pages/shell/side-panel.tsx:439
 msgid "Computer is asleep"
 msgstr "Computer is asleep"
 
@@ -2376,7 +2376,7 @@ msgstr "How this bot should behave"
 msgid "How to check"
 msgstr "How to check"
 
-#: src/pages/shell/side-panel.tsx:480
+#: src/pages/shell/side-panel.tsx:488
 msgid "I’m done"
 msgstr "I’m done"
 
@@ -2859,7 +2859,7 @@ msgstr "Name this routine"
 msgid "Needs takeover"
 msgstr "Needs takeover"
 
-#: src/pages/shell/side-panel.tsx:328
+#: src/pages/shell/side-panel.tsx:332
 msgid "Needs you"
 msgstr "Needs you"
 
@@ -3454,7 +3454,7 @@ msgstr "Refresh view"
 msgid "Refreshing…"
 msgstr "Refreshing…"
 
-#: src/pages/shell/side-panel.tsx:470
+#: src/pages/shell/side-panel.tsx:478
 msgid "Release"
 msgstr "Release"
 
@@ -3992,7 +3992,7 @@ msgstr "Skills"
 
 #: src/components/ask/QuestionCard.tsx:194
 #: src/components/integrations/IntegrationSetup.tsx:359
-#: src/pages/shell/side-panel.tsx:477
+#: src/pages/shell/side-panel.tsx:485
 msgid "Skip"
 msgstr "Skip"
 
@@ -4072,8 +4072,8 @@ msgid "Steps"
 msgstr "Steps"
 
 #: src/pages/shell/composer.tsx:299
-#: src/pages/shell/side-panel.tsx:344
-#: src/pages/shell/side-panel.tsx:349
+#: src/pages/shell/side-panel.tsx:348
+#: src/pages/shell/side-panel.tsx:353
 msgid "Stop"
 msgstr "Stop"
 
@@ -4133,7 +4133,7 @@ msgstr "Switching…"
 msgid "System"
 msgstr "System"
 
-#: src/pages/shell/side-panel.tsx:455
+#: src/pages/shell/side-panel.tsx:463
 msgid "Take control"
 msgstr "Take control"
 
@@ -4558,7 +4558,7 @@ msgid "You can close this window."
 msgstr "You can close this window."
 
 #: src/pages/ComputerSettingsPanel.tsx:109
-#: src/pages/shell/side-panel.tsx:332
+#: src/pages/shell/side-panel.tsx:336
 msgid "You have control"
 msgstr "You have control"
 

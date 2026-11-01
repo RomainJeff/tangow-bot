@@ -750,7 +750,7 @@ msgid "Booting live desktop…"
 msgstr "正在启动实时桌面…"
 
 #. placeholder {0}: active?.name
-#: src/pages/shell/side-panel.tsx:279
+#: src/pages/shell/side-panel.tsx:283
 msgid "Booting up {0}’s computer"
 msgstr "正在启动 {0} 的电脑"
 
@@ -773,7 +773,7 @@ msgstr "Bot"
 msgid "Bot"
 msgstr "Bot"
 
-#: src/pages/shell/side-panel.tsx:408
+#: src/pages/shell/side-panel.tsx:412
 msgid "Bot screen"
 msgstr "Bot 屏幕"
 
@@ -994,7 +994,7 @@ msgstr ""
 msgid "Close"
 msgstr "关闭"
 
-#: src/pages/shell/side-panel.tsx:385
+#: src/pages/shell/side-panel.tsx:389
 msgid "Close computer"
 msgstr "关闭电脑"
 
@@ -1093,7 +1093,7 @@ msgstr "电脑"
 msgid "Computer failed to boot"
 msgstr "电脑启动失败"
 
-#: src/pages/shell/side-panel.tsx:427
+#: src/pages/shell/side-panel.tsx:439
 msgid "Computer is asleep"
 msgstr "电脑已休眠"
 
@@ -2376,7 +2376,7 @@ msgstr "此机器人应如何表现"
 msgid "How to check"
 msgstr "如何检查"
 
-#: src/pages/shell/side-panel.tsx:480
+#: src/pages/shell/side-panel.tsx:488
 msgid "I’m done"
 msgstr "我做完了"
 
@@ -2859,7 +2859,7 @@ msgstr "给这个例行任务命名"
 msgid "Needs takeover"
 msgstr "需要接管"
 
-#: src/pages/shell/side-panel.tsx:328
+#: src/pages/shell/side-panel.tsx:332
 msgid "Needs you"
 msgstr "需要你处理"
 
@@ -3454,7 +3454,7 @@ msgstr "刷新视图"
 msgid "Refreshing…"
 msgstr "正在刷新…"
 
-#: src/pages/shell/side-panel.tsx:470
+#: src/pages/shell/side-panel.tsx:478
 msgid "Release"
 msgstr "释放"
 
@@ -3992,7 +3992,7 @@ msgstr "技能"
 
 #: src/components/ask/QuestionCard.tsx:194
 #: src/components/integrations/IntegrationSetup.tsx:359
-#: src/pages/shell/side-panel.tsx:477
+#: src/pages/shell/side-panel.tsx:485
 msgid "Skip"
 msgstr "跳过"
 
@@ -4072,8 +4072,8 @@ msgid "Steps"
 msgstr "步骤"
 
 #: src/pages/shell/composer.tsx:299
-#: src/pages/shell/side-panel.tsx:344
-#: src/pages/shell/side-panel.tsx:349
+#: src/pages/shell/side-panel.tsx:348
+#: src/pages/shell/side-panel.tsx:353
 msgid "Stop"
 msgstr "停止"
 
@@ -4133,7 +4133,7 @@ msgstr "正在切换…"
 msgid "System"
 msgstr "系统"
 
-#: src/pages/shell/side-panel.tsx:455
+#: src/pages/shell/side-panel.tsx:463
 msgid "Take control"
 msgstr ""
 
@@ -4558,7 +4558,7 @@ msgid "You can close this window."
 msgstr "可以关闭此窗口。"
 
 #: src/pages/ComputerSettingsPanel.tsx:109
-#: src/pages/shell/side-panel.tsx:332
+#: src/pages/shell/side-panel.tsx:336
 msgid "You have control"
 msgstr "你已接管"
 

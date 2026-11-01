@@ -750,7 +750,7 @@ msgid "Booting live desktop…"
 msgstr "Загрузка рабочего стола…"
 
 #. placeholder {0}: active?.name
-#: src/pages/shell/side-panel.tsx:279
+#: src/pages/shell/side-panel.tsx:283
 msgid "Booting up {0}’s computer"
 msgstr "Загрузка компьютера {0}"
 
@@ -773,7 +773,7 @@ msgstr "Бот"
 msgid "Bot"
 msgstr "Бот"
 
-#: src/pages/shell/side-panel.tsx:408
+#: src/pages/shell/side-panel.tsx:412
 msgid "Bot screen"
 msgstr "Экран бота"
 
@@ -994,7 +994,7 @@ msgstr "Секрет клиента"
 msgid "Close"
 msgstr "Закрыть"
 
-#: src/pages/shell/side-panel.tsx:385
+#: src/pages/shell/side-panel.tsx:389
 msgid "Close computer"
 msgstr "Закрыть компьютер"
 
@@ -1093,7 +1093,7 @@ msgstr "Компьютер"
 msgid "Computer failed to boot"
 msgstr "Компьютер не смог загрузиться"
 
-#: src/pages/shell/side-panel.tsx:427
+#: src/pages/shell/side-panel.tsx:439
 msgid "Computer is asleep"
 msgstr "Компьютер спит"
 
@@ -2376,7 +2376,7 @@ msgstr ""
 msgid "How to check"
 msgstr "Как проверить"
 
-#: src/pages/shell/side-panel.tsx:480
+#: src/pages/shell/side-panel.tsx:488
 msgid "I’m done"
 msgstr "Готово"
 
@@ -2859,7 +2859,7 @@ msgstr "Назовите эту задачу"
 msgid "Needs takeover"
 msgstr "Требуется передача управления"
 
-#: src/pages/shell/side-panel.tsx:328
+#: src/pages/shell/side-panel.tsx:332
 msgid "Needs you"
 msgstr "Требуется ваше участие"
 
@@ -3454,7 +3454,7 @@ msgstr "Обновить экран"
 msgid "Refreshing…"
 msgstr "Обновление…"
 
-#: src/pages/shell/side-panel.tsx:470
+#: src/pages/shell/side-panel.tsx:478
 msgid "Release"
 msgstr "Освободить управление"
 
@@ -3992,7 +3992,7 @@ msgstr "Навыки"
 
 #: src/components/ask/QuestionCard.tsx:194
 #: src/components/integrations/IntegrationSetup.tsx:359
-#: src/pages/shell/side-panel.tsx:477
+#: src/pages/shell/side-panel.tsx:485
 msgid "Skip"
 msgstr "Пропустить"
 
@@ -4072,8 +4072,8 @@ msgid "Steps"
 msgstr "Шаги"
 
 #: src/pages/shell/composer.tsx:299
-#: src/pages/shell/side-panel.tsx:344
-#: src/pages/shell/side-panel.tsx:349
+#: src/pages/shell/side-panel.tsx:348
+#: src/pages/shell/side-panel.tsx:353
 msgid "Stop"
 msgstr "Остановить"
 
@@ -4133,7 +4133,7 @@ msgstr "Переключение…"
 msgid "System"
 msgstr "Системная"
 
-#: src/pages/shell/side-panel.tsx:455
+#: src/pages/shell/side-panel.tsx:463
 msgid "Take control"
 msgstr ""
 
@@ -4558,7 +4558,7 @@ msgid "You can close this window."
 msgstr "Вы можете закрыть это окно."
 
 #: src/pages/ComputerSettingsPanel.tsx:109
-#: src/pages/shell/side-panel.tsx:332
+#: src/pages/shell/side-panel.tsx:336
 msgid "You have control"
 msgstr "Вы управляете"
 

@@ -273,6 +273,10 @@ export function ComputerOverlay({
   sendError: string | null;
 }) {
   const { t } = useLingui();
+  const connecting =
+    opening ||
+    computer?.state === "booting" ||
+    (computer?.state === "running" && !embeddedScreenUrl);
   return booting ? (
     <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-[22px] bg-background/95">
       <div className="text-title font-medium text-foreground">
@@ -420,16 +424,20 @@ export function ComputerOverlay({
                 />
               ) : null}
             </>
+          ) : computerScreenError ? (
+            <div className="grid h-full place-items-center text-meta text-muted-foreground/80">
+              {computerScreenError}
+            </div>
+          ) : connecting ? (
+            // Same black ground and pill as ScreenFrame, so the hand-off to the screen is seamless.
+            <div className="h-full bg-black">
+              <ScreenLinkOverlay view="connecting" />
+            </div>
           ) : (
             <div className="grid h-full place-items-center text-meta text-muted-foreground/80">
-              {computerScreenError ??
-                (computer?.state === "suspended" ? (
-                  t`Computer is asleep`
-                ) : opening ? (
-                  <ScreenLinkOverlay view="connecting" />
-                ) : (
-                  computerLabel(computer?.mode, active.name)
-                ))}
+              {computer?.state === "suspended"
+                ? t`Computer is asleep`
+                : computerLabel(computer?.mode, active.name)}
             </div>
           )}
         </div>

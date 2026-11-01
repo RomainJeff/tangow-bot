@@ -750,7 +750,7 @@ msgid "Booting live desktop…"
 msgstr "Iniciando a área de trabalho ao vivo..."
 
 #. placeholder {0}: active?.name
-#: src/pages/shell/side-panel.tsx:279
+#: src/pages/shell/side-panel.tsx:283
 msgid "Booting up {0}’s computer"
 msgstr "Inicializando o computador do {0}"
 
@@ -773,7 +773,7 @@ msgstr "Bot"
 msgid "Bot"
 msgstr "Bot"
 
-#: src/pages/shell/side-panel.tsx:408
+#: src/pages/shell/side-panel.tsx:412
 msgid "Bot screen"
 msgstr "Tela do bot"
 
@@ -994,7 +994,7 @@ msgstr ""
 msgid "Close"
 msgstr "Fechar"
 
-#: src/pages/shell/side-panel.tsx:385
+#: src/pages/shell/side-panel.tsx:389
 msgid "Close computer"
 msgstr "Fechar computador"
 
@@ -1093,7 +1093,7 @@ msgstr "Computador"
 msgid "Computer failed to boot"
 msgstr "Falha ao inicializar o computador"
 
-#: src/pages/shell/side-panel.tsx:427
+#: src/pages/shell/side-panel.tsx:439
 msgid "Computer is asleep"
 msgstr "O computador está dormindo"
 
@@ -2376,7 +2376,7 @@ msgstr "Como este bot deve se comportar"
 msgid "How to check"
 msgstr "Como verificar"
 
-#: src/pages/shell/side-panel.tsx:480
+#: src/pages/shell/side-panel.tsx:488
 msgid "I’m done"
 msgstr "Eu terminei."
 
@@ -2859,7 +2859,7 @@ msgstr "Dê um nome a esta rotina"
 msgid "Needs takeover"
 msgstr "Requer assumir o controle"
 
-#: src/pages/shell/side-panel.tsx:328
+#: src/pages/shell/side-panel.tsx:332
 msgid "Needs you"
 msgstr "Precisa de você"
 
@@ -3454,7 +3454,7 @@ msgstr "Atualizar a visualização"
 msgid "Refreshing…"
 msgstr "Atualizando…"
 
-#: src/pages/shell/side-panel.tsx:470
+#: src/pages/shell/side-panel.tsx:478
 msgid "Release"
 msgstr "Libere"
 
@@ -3992,7 +3992,7 @@ msgstr "Habilidades"
 
 #: src/components/ask/QuestionCard.tsx:194
 #: src/components/integrations/IntegrationSetup.tsx:359
-#: src/pages/shell/side-panel.tsx:477
+#: src/pages/shell/side-panel.tsx:485
 msgid "Skip"
 msgstr "Pular"
 
@@ -4072,8 +4072,8 @@ msgid "Steps"
 msgstr "Passos"
 
 #: src/pages/shell/composer.tsx:299
-#: src/pages/shell/side-panel.tsx:344
-#: src/pages/shell/side-panel.tsx:349
+#: src/pages/shell/side-panel.tsx:348
+#: src/pages/shell/side-panel.tsx:353
 msgid "Stop"
 msgstr "Parar"
 
@@ -4133,7 +4133,7 @@ msgstr "Alternando…"
 msgid "System"
 msgstr "Sistema"
 
-#: src/pages/shell/side-panel.tsx:455
+#: src/pages/shell/side-panel.tsx:463
 msgid "Take control"
 msgstr ""
 
@@ -4558,7 +4558,7 @@ msgid "You can close this window."
 msgstr "Você pode fechar esta janela."
 
 #: src/pages/ComputerSettingsPanel.tsx:109
-#: src/pages/shell/side-panel.tsx:332
+#: src/pages/shell/side-panel.tsx:336
 msgid "You have control"
 msgstr "Você tem o controle"
 
