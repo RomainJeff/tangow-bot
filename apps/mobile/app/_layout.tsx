@@ -1,4 +1,3 @@
-import { darkTokens } from "@rakazo/ui-tokens";
 import * as Notifications from "expo-notifications";
 import {
   DarkTheme,
@@ -18,6 +17,7 @@ import { ComputerUpdateProgress } from "../components/computer-update-progress";
 import { LaunchSplash } from "../components/launch-splash";
 import { currentApiBase, loadApiBase, loadSessionToken, selectedSpaceId } from "../lib/api";
 import { loadAppearancePreference, mobileTokens } from "../lib/appearance";
+import { useChatReducedMotion } from "../lib/chat-motion";
 import { loadDebugMode } from "../lib/debug-mode";
 import { bootstrapI18n, useI18n } from "../lib/i18n";
 import {
@@ -40,6 +40,7 @@ export default function Layout() {
   const [ready, setReady] = useState(false);
   const [splashDone, setSplashDone] = useState(false);
   const resolved = useResolvedAppearance();
+  const reducedMotion = useChatReducedMotion();
   const router = useRouter();
   const pathname = usePathname();
   const params = useGlobalSearchParams();
@@ -213,7 +214,8 @@ export default function Layout() {
                   options={{
                     presentation: "fullScreenModal",
                     headerShown: false,
-                    contentStyle: { backgroundColor: darkTokens.background },
+                    contentStyle: { backgroundColor: mobileTokens().mediaBackdrop },
+                    animation: reducedMotion ? "fade" : "default",
                   }}
                 />
                 <Stack.Screen name="bot-routine" />

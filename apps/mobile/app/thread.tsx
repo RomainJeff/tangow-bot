@@ -198,7 +198,11 @@ import { draftEdit, dropDraftEdit, syncDraftEdit } from "../lib/draft-edit";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
 import { commitHaptic, selectionHaptic, sendHaptic, successHaptic } from "../lib/haptics";
 import { dateLocaleForUi, t, useI18n } from "../lib/i18n";
-import { setImageViewerPayload } from "../lib/image-viewer";
+import {
+  IMAGE_VIEWER_HREF,
+  type ImageViewerPayload,
+  setImageViewerPayload,
+} from "../lib/image-viewer";
 import { unreadConversationCount } from "../lib/inbox-spaces";
 import { saveLastBotId } from "../lib/last-bot";
 import {
@@ -3504,6 +3508,7 @@ const MessageBubble = memo(function MessageBubble({
   imageArrival,
   imagePart,
   authorName,
+  openImageViewer,
   previewedUrl,
   onOpenSession,
 }: {
@@ -3531,6 +3536,8 @@ const MessageBubble = memo(function MessageBubble({
   imagePart?: "words" | "images";
   /** Who sent it, as assistive tech names the images. */
   authorName: string;
+  /** Opens the image viewer from inside a native modal, where a link would dismiss the modal. */
+  openImageViewer?: (payload: ImageViewerPayload) => void;
   /** The link its card shows: a line that is only this link is left out of the text drawn. */
   previewedUrl?: string;
   /** Opens the helper session a step ran. */
@@ -3786,7 +3793,7 @@ const MessageBubble = memo(function MessageBubble({
     };
     const quote = replyQuote(message, replyPreview);
     const openImage = () =>
-      setImageViewerPayload({
+      (openImageViewer ?? setImageViewerPayload)({
         images,
         startIndex: images.length - 1,
         author: authorName,
@@ -3834,6 +3841,7 @@ const MessageBubble = memo(function MessageBubble({
             author={authorName}
             arrival={imageArrival ?? false}
             onOpen={openImage}
+            zoom={!openImageViewer}
             onLongPress={(imageActionProps ?? actionProps).onLongPress}
             accessibilityActions={(imageActionProps ?? actionProps).accessibilityActions}
             onAccessibilityAction={(imageActionProps ?? actionProps).onAccessibilityAction}
@@ -4380,10 +4388,23 @@ function SessionSheet({
   onClose: () => void;
 }) {
   const tokens = mobileTokens();
+  const router = useRouter();
   const colorScheme = useResolvedAppearance();
   const { t } = useI18n();
   const showSteps = useDebugMode();
   const [entries, setEntries] = useState<SessionEntry[] | "failed" | null>(null);
+  // The sheet is a native modal: it closes first, and the viewer opens once it is gone. Only iOS
+  // reports the end of the dismissal.
+  const [viewing, setViewing] = useState<ImageViewerPayload | null>(null);
+  const openViewer = (payload: ImageViewerPayload) => {
+    if (Platform.OS === "ios") {
+      setViewing(payload);
+      return;
+    }
+    setImageViewerPayload(payload);
+    onClose();
+    router.push(IMAGE_VIEWER_HREF);
+  };
   useEffect(() => {
     let open = true;
     session.load().then(
@@ -4410,7 +4431,17 @@ function SessionSheet({
   const botNameOf = (id: string) =>
     members?.find((member) => member.botId === id)?.name ?? t("Bot");
   return (
-    <PreviewSheet title={session.title} onClose={onClose}>
+    <PreviewSheet
+      title={session.title}
+      onClose={onClose}
+      visible={!viewing}
+      onDismiss={() => {
+        if (!viewing) return;
+        setImageViewerPayload(viewing);
+        onClose();
+        router.push(IMAGE_VIEWER_HREF);
+      }}
+    >
       <View style={{ paddingTop: 16 }}>
         {entries === null ? <ActivityIndicator color={tokens.mutedForeground} /> : null}
         {entries === "failed" ? (
@@ -4435,6 +4466,7 @@ function SessionSheet({
                 actionProps={NO_ACTIONS}
                 isNew={false}
                 authorName={row.item.role === "bot" ? botNameOf(row.item.botId) : t("You")}
+                openImageViewer={openViewer}
               />
             ) : (
               <ItemRow

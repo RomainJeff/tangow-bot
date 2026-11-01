@@ -22,7 +22,7 @@ import {
   stackFrame,
   stackStepX,
 } from "../lib/image-stack";
-import { IMAGE_VIEWER_HREF } from "../lib/image-viewer";
+import { IMAGE_VIEWER_HREF, imageLabel, useImageZoom } from "../lib/image-viewer";
 import { linkCardWidth } from "../lib/link-preview";
 import { useMobileTokens } from "../lib/native";
 import { nativeTextStyle } from "../lib/typography";
@@ -48,8 +48,13 @@ export interface ImageStackProps {
   author: string;
   /** True only in the render pass a newer image joined this stack, never when it merely mounts. */
   arrival: boolean;
-  /** A tap hands the viewer its list; the link below does the navigating, so the zoom transition can attach. */
+  /**
+   * A tap hands the viewer its list. By default the stack is a link to the viewer, so the zoom
+   * transition can attach; `zoom={false}` makes it a plain press for a stack inside a native modal,
+   * which a link would dismiss.
+   */
   onOpen: () => void;
+  zoom?: boolean;
   /** The front message's long press: its action sheet. */
   onLongPress?: () => void;
   accessibilityActions?: ViewProps["accessibilityActions"];
@@ -69,13 +74,14 @@ export function ImageStack({
   author,
   arrival,
   onOpen,
+  zoom = true,
   onLongPress,
   accessibilityActions,
   onAccessibilityAction,
 }: ImageStackProps) {
   const tokens = useMobileTokens();
   const { t } = useI18n();
-  const reducedMotion = useChatReducedMotion();
+  const zoomAvailable = useImageZoom();
   const { width: windowWidth } = useWindowDimensions();
   const frame = stackFrame(
     linkCardWidth({
@@ -94,14 +100,7 @@ export function ImageStack({
   }, []);
   if (!front) return null;
 
-  const label =
-    images.length > 1
-      ? t("Image {n} of {total}, from {author}", {
-          n: images.length,
-          total: images.length,
-          author,
-        })
-      : t("Image, from {author}", { author });
+  const label = imageLabel(t, images.length, images.length, author);
 
   const frameView = (
     <View
@@ -141,41 +140,41 @@ export function ImageStack({
     </View>
   );
 
-  // The front frame is the zoom's source: the viewer opens out of it and closes back into it. When
-  // the list has unmounted this row, the source is gone and the system closes with a plain fade.
-  // Reduce Motion drops the source, so the viewer opens and closes without a zoom.
-  return (
-    <Link
-      href={IMAGE_VIEWER_HREF}
-      asChild
-      onPress={(event) => {
-        if (retryFront) {
-          event.preventDefault();
-          retryFront();
-        } else {
-          onOpen();
-        }
+  const tap = (event?: { preventDefault: () => void }) => {
+    if (retryFront) {
+      event?.preventDefault();
+      retryFront();
+    } else onOpen();
+  };
+  const stack = (
+    <Pressable
+      accessible
+      role="button"
+      accessibilityLabel={label}
+      accessibilityHint={retryFront ? t("Retry") : undefined}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
+      {...(zoom ? null : { onPress: tap })}
+      onLongPress={onLongPress}
+      // A thumb scrolling the thread past the stack does not press it.
+      unstable_pressDelay={130}
+      style={{
+        width: frame.width + STACK_ROOM,
+        height: frame.height,
+        alignSelf: align === "end" ? "flex-end" : "flex-start",
       }}
     >
-      <Pressable
-        accessible
-        role="button"
-        accessibilityLabel={label}
-        accessibilityHint={retryFront ? t("Retry") : undefined}
-        accessibilityActions={accessibilityActions}
-        onAccessibilityAction={onAccessibilityAction}
-        onLongPress={onLongPress}
-        // A thumb scrolling the thread past the stack does not press it.
-        unstable_pressDelay={130}
-        style={{
-          width: frame.width + STACK_ROOM,
-          height: frame.height,
-          alignSelf: align === "end" ? "flex-end" : "flex-start",
-        }}
-      >
-        {reducedMotion ? frameView : <Link.AppleZoom>{frameView}</Link.AppleZoom>}
-      </Pressable>
+      {zoom && zoomAvailable ? <Link.AppleZoom>{frameView}</Link.AppleZoom> : frameView}
+    </Pressable>
+  );
+  // The front frame is the zoom's source: the viewer opens out of it and closes back into it. When
+  // the list has unmounted this row, the source is gone and the system closes with a plain fade.
+  return zoom ? (
+    <Link href={IMAGE_VIEWER_HREF} asChild onPress={tap}>
+      {stack}
     </Link>
+  ) : (
+    stack
   );
 }
 

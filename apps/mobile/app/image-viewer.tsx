@@ -1,9 +1,9 @@
 import type { StackImage } from "@rakazo/core";
 import { threadTimeMarkerLabel } from "@rakazo/core";
-import { darkTokens, radii, sizes, space } from "@rakazo/ui-tokens";
-import { Link, Stack, useRouter } from "expo-router";
+import { motion, radii, sizes, space } from "@rakazo/ui-tokens";
+import { Link, Redirect, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import {
   Alert,
@@ -15,6 +15,13 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { THREAD_GUTTER } from "../components/bot-bubble";
 import { useArtifactImage } from "../components/link-preview-card";
@@ -24,11 +31,18 @@ import { useChatReducedMotion } from "../lib/chat-motion";
 import { dateLocaleForUi, t, useI18n } from "../lib/i18n";
 import { stackFrame } from "../lib/image-stack";
 import {
+  CLOSE_DISTANCE,
+  CLOSE_VELOCITY,
+  clearImageViewerPayload,
   containRect,
   type ImageViewerPayload,
+  imageKey,
+  imageLabel,
   imageViewerPayload,
   type Size,
+  useImageZoom,
 } from "../lib/image-viewer";
+import { useMobileTokens } from "../lib/native";
 import { nativeTextStyle } from "../lib/typography";
 
 const THUMB = sizes.mobileStack;
@@ -37,21 +51,16 @@ const BUTTON = sizes.composerTarget;
 const BAND_GAP = 12;
 
 /**
- * The stack's images full screen, on the dark surface of the app in both themes. The list is the one
- * it was opened with: an image that arrives afterwards does not change what is paged through.
+ * The stack's images full screen, on the media backdrop in both themes. The list is the one it was
+ * opened with: an image that arrives afterwards does not change what is paged through.
  */
 export default function ImageViewerScreen() {
-  const router = useRouter();
-  const reducedMotion = useChatReducedMotion();
   const [opened] = useState(imageViewerPayload);
-  useEffect(() => {
-    if (!opened) router.back();
-  }, [opened, router]);
+  useEffect(() => clearImageViewerPayload, []);
   return (
     <>
-      <Stack.Screen options={{ animation: reducedMotion ? "fade" : "default" }} />
       <StatusBar style="light" />
-      {opened ? <Viewer opened={opened} /> : null}
+      {opened ? <Viewer opened={opened} /> : <Redirect href="/" />}
     </>
   );
 }
@@ -60,7 +69,9 @@ function Viewer({ opened }: { opened: ImageViewerPayload }) {
   const { images, startIndex, author, target } = opened;
   const router = useRouter();
   const { t } = useI18n();
+  const tokens = useMobileTokens();
   const reducedMotion = useChatReducedMotion();
+  const zoom = useImageZoom();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const [index, setIndex] = useState(startIndex);
@@ -84,10 +95,7 @@ function Viewer({ opened }: { opened: ImageViewerPayload }) {
 
   if (!current) return null;
 
-  const label = (n: number) =>
-    total > 1
-      ? t("Image {n} of {total}, from {author}", { n, total, author })
-      : t("Image, from {author}", { author });
+  const label = (n: number) => imageLabel(t, n, total, author);
 
   const goTo = (next: number) => {
     setIndex(next);
@@ -111,12 +119,8 @@ function Viewer({ opened }: { opened: ImageViewerPayload }) {
   };
 
   const size = natural[current.artifactId];
-  const zoomRect = size
-    ? (() => {
-        const fit = containRect(area, size);
-        return { ...fit, top: topBand + fit.top };
-      })()
-    : { left: 0, top: topBand, ...area };
+  const fit = size ? containRect(area, size) : { left: 0, top: 0, ...area };
+  const zoomRect = { ...fit, top: topBand + fit.top };
   const when = threadTimeMarkerLabel(current.ts, {
     locale: dateLocaleForUi(),
     today: t("Today"),
@@ -124,95 +128,148 @@ function Viewer({ opened }: { opened: ImageViewerPayload }) {
   });
 
   return (
-    <View style={styles.screen}>
-      <Link.AppleZoomTarget>
-        <View collapsable={false} pointerEvents="none" style={[styles.zoomTarget, zoomRect]} />
-      </Link.AppleZoomTarget>
-      <FlatList
-        ref={pager}
-        data={images}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        keyExtractor={(image) => `${image.messageId}:${image.artifactId}`}
-        initialScrollIndex={startIndex}
-        getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
-        onMomentumScrollEnd={settle}
-        windowSize={3}
-        renderItem={({ item, index: i }) => (
-          <ViewerPage
-            image={item}
-            target={target}
-            label={label(i + 1)}
-            area={area}
-            top={topBand}
-            width={width}
-            near={Math.abs(i - index) <= 1}
-            current={i === index}
-            onNatural={(artifactId, next) => setNatural((all) => ({ ...all, [artifactId]: next }))}
-          />
-        )}
-      />
-      <View pointerEvents="box-none" style={[styles.header, { paddingTop: insets.top }]}>
-        <View pointerEvents="none" style={styles.who}>
-          <Text numberOfLines={1} style={[styles.author, nativeTextStyle("author")]}>
-            {author}
-          </Text>
-          <Text numberOfLines={1} style={[styles.when, nativeTextStyle("time")]}>
-            {when}
-          </Text>
+    <View style={[styles.screen, { backgroundColor: tokens.mediaBackdrop }]}>
+      <DragToClose enabled={!zoom} reducedMotion={reducedMotion} onClose={() => router.back()}>
+        <Link.AppleZoomTarget>
+          <View collapsable={false} pointerEvents="none" style={[styles.zoomTarget, zoomRect]} />
+        </Link.AppleZoomTarget>
+        <FlatList
+          ref={pager}
+          data={images}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={imageKey}
+          initialScrollIndex={startIndex}
+          getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
+          onMomentumScrollEnd={settle}
+          windowSize={3}
+          renderItem={({ item, index: i }) => (
+            <ViewerPage
+              image={item}
+              target={target}
+              label={label(i + 1)}
+              area={area}
+              top={topBand}
+              width={width}
+              near={Math.abs(i - index) <= 1}
+              current={i === index}
+              onNatural={(artifactId, next) =>
+                setNatural((all) => ({ ...all, [artifactId]: next }))
+              }
+            />
+          )}
+        />
+        <View pointerEvents="box-none" style={[styles.header, { paddingTop: insets.top }]}>
+          <View pointerEvents="none" style={styles.who}>
+            <Text
+              numberOfLines={1}
+              style={[{ color: tokens.mediaBackdropForeground }, nativeTextStyle("author")]}
+            >
+              {author}
+            </Text>
+            <Text
+              numberOfLines={1}
+              style={[{ color: tokens.mediaBackdropMuted }, nativeTextStyle("time")]}
+            >
+              {when}
+            </Text>
+          </View>
+          <View style={[styles.close, { top: insets.top + (space.header - BUTTON) / 2 }]}>
+            <RoundButton
+              label={t("Close")}
+              ios="xmark"
+              android="close"
+              onPress={() => router.back()}
+            />
+          </View>
         </View>
-        <View style={[styles.close, { top: insets.top + (space.header - BUTTON) / 2 }]}>
-          <RoundButton
-            label={t("Close")}
-            ios="xmark"
-            android="close"
-            onPress={() => router.back()}
-          />
+        <View
+          pointerEvents="box-none"
+          style={[styles.bottom, { paddingBottom: insets.bottom + BAND_GAP }]}
+        >
+          {total > 1 ? (
+            <FlatList
+              ref={strip}
+              data={images}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={imageKey}
+              getItemLayout={(_, i) => ({
+                length: THUMB + THUMB_GAP,
+                offset: (THUMB + THUMB_GAP) * i,
+                index: i,
+              })}
+              initialNumToRender={Math.ceil(width / (THUMB + THUMB_GAP))}
+              windowSize={3}
+              style={styles.strip}
+              contentContainerStyle={{ paddingHorizontal: THREAD_GUTTER, gap: THUMB_GAP }}
+              renderItem={({ item, index: i }) => (
+                <Thumb
+                  image={item}
+                  target={target}
+                  label={label(i + 1)}
+                  selected={i === index}
+                  onPress={() => goTo(i)}
+                />
+              )}
+            />
+          ) : null}
+          <View style={styles.actions}>
+            <RoundButton
+              label={t("Share")}
+              ios="square.and.arrow.up"
+              android="share-outline"
+              disabled={sharing}
+              onPress={share}
+            />
+          </View>
         </View>
-      </View>
-      <View
-        pointerEvents="box-none"
-        style={[styles.bottom, { paddingBottom: insets.bottom + BAND_GAP }]}
-      >
-        {total > 1 ? (
-          <FlatList
-            ref={strip}
-            data={images}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(image) => `${image.messageId}:${image.artifactId}`}
-            getItemLayout={(_, i) => ({
-              length: THUMB + THUMB_GAP,
-              offset: (THUMB + THUMB_GAP) * i,
-              index: i,
-            })}
-            initialNumToRender={12}
-            windowSize={5}
-            style={styles.strip}
-            contentContainerStyle={{ paddingHorizontal: THREAD_GUTTER, gap: THUMB_GAP }}
-            renderItem={({ item, index: i }) => (
-              <Thumb
-                image={item}
-                target={target}
-                label={label(i + 1)}
-                selected={i === index}
-                onPress={() => goTo(i)}
-              />
-            )}
-          />
-        ) : null}
-        <View style={styles.actions}>
-          <RoundButton
-            label={t("Share")}
-            ios="square.and.arrow.up"
-            android="share-outline"
-            disabled={sharing}
-            onPress={share}
-          />
-        </View>
-      </View>
+      </DragToClose>
     </View>
+  );
+}
+
+/**
+ * Without the system's zoom transition (Reduce Motion, iOS before 18) nothing else closes the
+ * viewer by dragging: pulling it down follows the finger and closes past a distance or a speed, and
+ * lets go back into place short of both. Under Reduce Motion it does not follow, it just closes.
+ */
+function DragToClose({
+  enabled,
+  reducedMotion,
+  onClose,
+  children,
+}: {
+  enabled: boolean;
+  reducedMotion: boolean;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const { height } = useWindowDimensions();
+  const drag = useSharedValue(0);
+  const pan = Gesture.Pan()
+    .enabled(enabled)
+    .activeOffsetY(12)
+    .failOffsetX([-12, 12])
+    .onUpdate((event) => {
+      if (!reducedMotion) drag.value = Math.max(0, event.translationY);
+    })
+    .onEnd((event) => {
+      if (event.translationY > CLOSE_DISTANCE || event.velocityY > CLOSE_VELOCITY) {
+        runOnJS(onClose)();
+      } else {
+        drag.value = withTiming(0, { duration: motion.press });
+      }
+    });
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateY: drag.value }],
+    opacity: 1 - Math.min(drag.value / height, 1) * 0.5,
+  }));
+  return (
+    <GestureDetector gesture={pan}>
+      <Animated.View style={[styles.drag, style]}>{children}</Animated.View>
+    </GestureDetector>
   );
 }
 
@@ -245,6 +302,7 @@ function ViewerPage({
     loads.current ? image.artifactId : undefined,
     image.mimeType,
   );
+  const tokens = useMobileTokens();
   const failed = picture.failed;
   const placeholder = stackFrame(width - THREAD_GUTTER * 2);
   return (
@@ -255,8 +313,7 @@ function ViewerPage({
       accessibilityHint={failed ? t("Retry") : undefined}
       accessibilityElementsHidden={!current}
       importantForAccessibility={current ? "yes" : "no-hide-descendants"}
-      disabled={!failed}
-      onPress={picture.retry}
+      onPress={failed ? picture.retry : undefined}
       style={{ width, paddingTop: top, height: top + area.height, justifyContent: "center" }}
     >
       {picture.uri && !failed ? (
@@ -275,7 +332,11 @@ function ViewerPage({
         <View
           style={[
             styles.placeholder,
-            { width: placeholder.width, height: placeholder.height, alignSelf: "center" },
+            {
+              width: placeholder.width,
+              height: placeholder.height,
+              backgroundColor: tokens.mediaBackdropControl,
+            },
           ]}
         >
           {failed ? (
@@ -283,7 +344,7 @@ function ViewerPage({
               ios="arrow.clockwise"
               android="refresh"
               size={24}
-              color={darkTokens.mutedForeground}
+              color={tokens.mediaBackdropMuted}
             />
           ) : null}
         </View>
@@ -305,6 +366,7 @@ function Thumb({
   selected: boolean;
   onPress: () => void;
 }) {
+  const tokens = useMobileTokens();
   const picture = useArtifactImage(target, image.artifactId, image.mimeType);
   return (
     <Pressable
@@ -314,7 +376,8 @@ function Thumb({
       onPress={onPress}
       style={[
         styles.thumb,
-        selected ? { borderColor: darkTokens.foreground, opacity: 1 } : styles.thumbIdle,
+        { backgroundColor: tokens.mediaBackdropControl },
+        selected ? { borderColor: tokens.mediaBackdropForeground } : styles.thumbIdle,
       ]}
     >
       {picture.uri && !picture.failed ? (
@@ -343,6 +406,7 @@ function RoundButton({
   disabled?: boolean;
   onPress: () => void;
 }) {
+  const tokens = useMobileTokens();
   return (
     <Pressable
       accessibilityRole="button"
@@ -351,14 +415,14 @@ function RoundButton({
       onPress={onPress}
       style={({ pressed }) => [
         styles.round,
-        { backgroundColor: pressed ? darkTokens.pressed : darkTokens.secondary },
+        { backgroundColor: tokens.mediaBackdropControl, opacity: pressed ? 0.6 : 1 },
       ]}
     >
       <NativeSymbol
         ios={ios}
         android={android}
         size={17}
-        color={darkTokens.secondaryForeground}
+        color={tokens.mediaBackdropForeground}
         weight="semibold"
       />
     </Pressable>
@@ -366,7 +430,8 @@ function RoundButton({
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: darkTokens.background },
+  screen: { flex: 1 },
+  drag: { flex: 1 },
   zoomTarget: { position: "absolute" },
   header: { position: "absolute", top: 0, left: 0, right: 0 },
   who: {
@@ -375,8 +440,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: BUTTON + THREAD_GUTTER * 2,
   },
-  author: { color: darkTokens.foreground },
-  when: { color: darkTokens.mutedForeground },
   close: { position: "absolute", right: THREAD_GUTTER },
   bottom: { position: "absolute", left: 0, right: 0, bottom: 0, gap: BAND_GAP },
   strip: { flexGrow: 0 },
@@ -390,7 +453,6 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     borderRadius: radii.bubble,
-    backgroundColor: darkTokens.muted,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -401,7 +463,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: sizes.selectedRing,
     borderColor: "transparent",
-    backgroundColor: darkTokens.muted,
   },
   thumbIdle: { opacity: 0.6 },
 });
