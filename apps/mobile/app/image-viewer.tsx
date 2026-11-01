@@ -35,6 +35,7 @@ import {
   CLOSE_VELOCITY,
   clearImageViewerPayload,
   containRect,
+  holdThreadForViewer,
   type ImageViewerPayload,
   imageKey,
   imageLabel,
