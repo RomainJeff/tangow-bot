@@ -3,7 +3,15 @@ import { motion, radii, sizes } from "@rakazo/ui-tokens";
 import { Link } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ViewProps } from "react-native";
-import { Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import {
+  Image,
+  Keyboard,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import Animated, {
   interpolate,
   useAnimatedStyle,
@@ -144,7 +152,12 @@ export function ImageStack({
     if (retryFront) {
       event?.preventDefault();
       retryFront();
-    } else onOpen();
+      return;
+    }
+    // Drop the keyboard before the viewer covers the thread: iOS would raise it again on close and
+    // shift the thread under the image flying back into its stack.
+    Keyboard.dismiss();
+    onOpen();
   };
   const stack = (
     <Pressable
