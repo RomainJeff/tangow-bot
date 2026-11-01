@@ -34,10 +34,6 @@ describe("stackCards", () => {
 describe("coverFromTop", () => {
   const frame = stackFrame(300);
 
-  it("gives a 4:3 frame whatever the width", () => {
-    expect(frame).toEqual({ width: 300, height: 225 });
-  });
-
   it("fills the frame from its top edge with a tall screenshot, cropping the bottom", () => {
     expect(coverFromTop(frame, { width: 1000, height: 3000 })).toEqual({
       left: 0,

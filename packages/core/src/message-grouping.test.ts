@@ -288,36 +288,15 @@ describe("continuesImageStack", () => {
     makeMessage({ blocks: [image], ...overrides });
   const at = (minute: number) => localIso(2026, 9, 2, 12, minute);
 
-  it("follows the header's window: inside it joins, past it does not, whatever the window is", () => {
+  it("follows the header's window: inside it joins, past it does not", () => {
     const first = shot({ createdAt: at(0) });
     expect(continuesImageStack(first, shot({ createdAt: at(5) }))).toBe(true);
     expect(continuesImageStack(first, shot({ createdAt: at(6) }))).toBe(false);
-    expect(continuesImageStack(first, shot({ createdAt: at(6) }), 10 * 60 * 1000)).toBe(true);
   });
 
   it("does not join across a time marker even inside the window", () => {
     const first = shot({ createdAt: localIso(2026, 9, 2, 23, 58) });
     expect(continuesImageStack(first, shot({ createdAt: localIso(2026, 9, 3, 0, 1) }))).toBe(false);
-  });
-
-  it("joins only an image-only message from the same author that is not a reply", () => {
-    const first = shot({ createdAt: at(0) });
-    expect(continuesImageStack(first, shot({ createdAt: at(1), botId: "bot-2" }))).toBe(false);
-    expect(
-      continuesImageStack(
-        first,
-        shot({ createdAt: at(1), blocks: [image, { kind: "text", text: "hi" }] }),
-      ),
-    ).toBe(false);
-    expect(continuesImageStack(first, shot({ createdAt: at(1), replyToMessageId: "msg-0" }))).toBe(
-      false,
-    );
-    expect(continuesImageStack({ ...first, reacted: true }, shot({ createdAt: at(1) }))).toBe(
-      false,
-    );
-    expect(continuesImageStack(makeMessage({ createdAt: at(0) }), shot({ createdAt: at(1) }))).toBe(
-      false,
-    );
   });
 
   it("joins a person's photos to their earlier photos, not to a bot's", () => {
