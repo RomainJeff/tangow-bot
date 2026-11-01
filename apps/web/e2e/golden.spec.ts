@@ -87,6 +87,7 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
   await sidePanel.getByTestId("computer-preview").hover();
   await sidePanel.getByTestId("computer-preview-open").click();
   await expect(page.getByRole("button", { name: "Close computer" })).toBeVisible();
+  await page.getByTestId("computer-take-control").click();
   await expect(page.getByRole("button", { name: "Skip", exact: true }).last()).toBeVisible();
   await expect(page.getByRole("button", { name: "I’m done", exact: true }).last()).toBeVisible();
   await captureScreenshot(page, testInfo, "09-computer-takeover-outcomes");

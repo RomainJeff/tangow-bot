@@ -38,6 +38,7 @@ export function useComputerControl({
   const { setComputerError, setComputerErrorFromScreen, refreshComputerScreen } = computerScreen;
   const { refreshThread, refreshThreadRef } = sync;
   const [booting, setBooting] = useState(false);
+  const [opening, setOpening] = useState(false);
   const [teachBusy, setTeachBusy] = useState(false);
   const autoBooted = useRef<string | null>(null);
 
@@ -139,19 +140,41 @@ export function useComputerControl({
     return () => window.clearInterval(timer);
   }, [panel, computerOpen, active?.id, computer?.state]);
 
-  async function openComputer() {
+  /**
+   * Opens the full window to watch, at once: it shows Connecting… while the computer boots and a
+   * fresh screen URL loads, so it never renders a cached one. `takeControl` (the Needs you card)
+   * also takes the mouse and keyboard, and opens the window once that has landed.
+   */
+  async function openComputer({ takeControl = false }: { takeControl?: boolean } = {}) {
     if (!active) return;
-    const needsTakeover = !userHoldsComputerControl(computer, active.id);
-    const blocked = computerTakeoverBlocked(computer, snapshot?.run?.status);
+    const takeover =
+      takeControl &&
+      !userHoldsComputerControl(computer, active.id) &&
+      !computerTakeoverBlocked(computer, snapshot?.run?.status);
+    setOpening(true);
+    if (!takeover) setComputerOpen(true);
     try {
       await bootComputer({
-        takeControl: needsTakeover && !blocked,
-        overlay: (needsTakeover && !blocked) || computer?.state !== "running",
+        takeControl: takeover,
+        overlay: takeover || computer?.state !== "running",
         force: computer?.state !== "running",
       });
-      // The full viewer opens a new connection, so it waits for a URL the proxy still accepts.
       await refreshComputerScreen(active.id, { visible: true });
-      setComputerOpen(true);
+      // Watching opened the window already; reopening here would undo a close made while it loaded.
+      if (takeover) setComputerOpen(true);
+    } catch {
+      // computerError already set in bootComputer
+    } finally {
+      setOpening(false);
+    }
+  }
+
+  async function takeComputerControl() {
+    if (!active) return;
+    try {
+      await bootComputer({ takeControl: true, overlay: false });
+      // The screen URL changes with control: wait for the interactive one before the button settles.
+      await refreshComputerScreen(active.id, { visible: true });
     } catch {
       // computerError already set in bootComputer
     }
@@ -206,7 +229,9 @@ export function useComputerControl({
 
   return {
     booting,
+    opening,
     openComputer,
+    takeComputerControl,
     releaseComputer,
     teachBusy,
     stopTeaching,

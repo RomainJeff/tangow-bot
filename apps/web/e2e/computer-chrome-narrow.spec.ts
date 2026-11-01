@@ -15,6 +15,7 @@ test("the bot screen's top bar fits a phone and offers Teach a task in the menu"
   await sidePanel.getByTestId("computer-preview-open").click();
 
   const chrome = page.getByTestId("computer-chrome");
+  await chrome.getByTestId("computer-take-control").click();
   const pill = chrome.getByText("You have control", { exact: true });
   const release = chrome.getByRole("button", { name: "Release", exact: true });
   await expect(pill).toBeVisible();

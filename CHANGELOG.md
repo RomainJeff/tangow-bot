@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
+- Opening a bot's screen on web, desktop and iPhone now lets you watch without taking control, and Take control gives you the mouse and keyboard when you want them.
 - The desktop, iOS and Android apps are named Tangow and use `com.romainjeff.tangow` as their application identifier.
 
 #### Fixed

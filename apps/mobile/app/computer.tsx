@@ -47,6 +47,7 @@ export default function Computer() {
   const booting = bootingCount > 0;
   const switching = switchingCount > 0;
   const [computerOpen, setComputerOpen] = useState(false);
+  const [opening, setOpening] = useState(false);
   const autoBooted = useRef<string | null>(null);
 
   const embeddedScreenUrl = embeddableScreenUrl(screenUrl, currentApiBase());
@@ -156,9 +157,11 @@ export default function Computer() {
     return () => clearInterval(timer);
   }, [botId, computer?.state]);
 
-  async function openComputer() {
+  async function openComputer({ takeControl = false }: { takeControl?: boolean } = {}) {
     if (!botId) return;
-    const needsTakeover = !(computer?.controlHolder === "user" && computer.controlBotId === botId);
+    const needsTakeover = takeControl && !hasControl;
+    setOpening(true);
+    if (!needsTakeover) setComputerOpen(true);
     try {
       const opened = await bootComputer({
         takeControl: needsTakeover,
@@ -166,10 +169,13 @@ export default function Computer() {
         force: computer?.state !== "running",
       });
       if (!opened || !refreshController.isActive()) return;
-      setComputerOpen(true);
+      // Watching opened the modal already; reopening here would undo a close made while it loaded.
+      if (needsTakeover) setComputerOpen(true);
       setScreenError(null);
     } catch {
       // error already set
+    } finally {
+      setOpening(false);
     }
   }
 
@@ -216,6 +222,7 @@ export default function Computer() {
     }
   }
 
+  const connecting = !error && !screenError && (opening || computer?.state === "booting");
   const placeholder =
     screenError ?? previewPlaceholder(computer?.state, booting, name, computer?.mode);
   const openPreview = (
@@ -280,9 +287,9 @@ export default function Computer() {
             takeoverRequested={computer?.takeoverRequested ?? false}
             onRelease={releaseComputer}
           />
-        ) : (
+        ) : computer?.busyBotName ? null : (
           <Pressable
-            onPress={() => void openComputer()}
+            onPress={() => void openComputer({ takeControl: true })}
             style={{
               backgroundColor: tokens.muted,
               paddingHorizontal: 14,
@@ -395,7 +402,7 @@ export default function Computer() {
                       takeoverRequested={computer?.takeoverRequested ?? false}
                       onRelease={releaseComputer}
                     />
-                  ) : (
+                  ) : computer?.busyBotName ? null : (
                     <Pressable
                       onPress={() =>
                         void bootComputer({ takeControl: true, overlay: false }).catch(
@@ -437,7 +444,9 @@ export default function Computer() {
                 </View>
               </SafeAreaView>
               <View style={{ flex: 1, backgroundColor: tokens.card }}>
-                {computer?.state === "running" && embeddedScreenUrl && !screenError ? (
+                {connecting ? (
+                  <ScreenLinkOverlay view="connecting" />
+                ) : computer?.state === "running" && embeddedScreenUrl && !screenError ? (
                   <ScreenWebView
                     url={embeddedScreenUrl}
                     interactive={hasControl}
@@ -449,7 +458,7 @@ export default function Computer() {
                     style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 16 }}
                   >
                     <Text style={{ color: tokens.mutedForeground, textAlign: "center" }}>
-                      {placeholder}
+                      {error ?? placeholder}
                     </Text>
                   </View>
                 )}

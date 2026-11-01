@@ -197,8 +197,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Confirm password": "Подтвердите пароль",
   "Computer failed to boot": "Компьютер не смог загрузиться",
   "Computer is asleep": "Компьютер спит",
-  "Computer is asleep. Take control to wake it.":
-    "Компьютер спит. Возьмите под свой контроль, чтобы разбудить его.",
+  "Computer is asleep. Open it to wake.": "Компьютер спит. Откройте его, чтобы разбудить.",
   "Computer is stopped": "Компьютер остановлен",
   "Configured by deployment": "Настроено развёртыванием",
   Connect: "Подключить",

@@ -193,7 +193,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Confirm password": "确认密码",
   "Computer failed to boot": "电脑启动失败",
   "Computer is asleep": "电脑已休眠",
-  "Computer is asleep. Take control to wake it.": "电脑已休眠。接管控制即可唤醒。",
+  "Computer is asleep. Open it to wake.": "电脑处于睡眠状态。打开以唤醒。",
   "Computer is stopped": "电脑已停止",
   "Configured by deployment": "由部署配置",
   Connect: "连接",

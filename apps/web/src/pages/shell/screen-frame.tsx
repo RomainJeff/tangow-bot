@@ -24,7 +24,7 @@ function screenIframeSandbox(url: string) {
   }
 }
 
-function ScreenLinkOverlay({ view }: { view: "connecting" | "reconnecting" }) {
+export function ScreenLinkOverlay({ view }: { view: "connecting" | "reconnecting" }) {
   const { t } = useLingui();
   return (
     <div
