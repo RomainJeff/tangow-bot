@@ -18,6 +18,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - When a bot's run ends well, its Docker computer keeps the browser open for a while, and reopens the bot's last tabs whenever it has to start again, so the next run, a helper's follow-up or your takeover finds the page it left instead of a blank tab; a bot that finishes with nothing left for anyone closes the tabs it opened.
 - On iPhone and Android, new messages no longer turn invisible and leave a blank gap in the conversation until it is reopened.
 
+#### Reverted
+
+- The iPhone app no longer asks permission to share data with AI services before sending a message, running a routine or using voice, and Account no longer has an AI data sharing screen.
+
 ### 2026-10-31
 
 #### Changed
