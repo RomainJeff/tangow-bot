@@ -246,7 +246,7 @@ Live evaluations of this behaviour are described in [agent verification](agent-v
 
 Bots can report problems with Rakazo itself, such as a tool that blocked them, something that
 malfunctioned or a task that took far too many steps, as issues in a GitHub repository you choose.
-The `feedback` tool is offered only once this is set up. A bot calls it on its own judgment; it does
+The `report_issue` tool is offered only once this is set up. A bot calls it on its own judgment; it does
 not pause the run or ask anyone for help.
 
 1. Create a **private** repository for the reports. A report describes what the bot saw, so it can
@@ -275,7 +275,7 @@ so they do not count agent steps, and the tool-call audit can miss calls. Issues
 transcripts, files, or raw tool arguments and results. Known secrets are masked in the text, but
 the bot writes it freely, so masking does not make a report anonymous.
 
-Each report is recorded in the database before delivery, as a `feedback` row in
+Each report is recorded in the database before delivery, as a `report_issue` row in
 `external_effects` that is deleted with its run. That row also stores the outcome: the issue URL,
 or why delivery failed. Delivery gives up after 15 seconds. A failed delivery never fails the bot's
 task, and the bot is told that the report was recorded but not delivered. Nothing retries it

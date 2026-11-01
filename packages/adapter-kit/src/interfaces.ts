@@ -471,14 +471,14 @@ export interface WebProvider extends WebSearchProvider, WebFetchProvider {
   describe(): AdapterDescriptor<WebSearchCapabilities & WebFetchCapabilities>;
 }
 
-/** An issue the builtin `feedback` tool files with the operator's tracker. */
+/** An issue the builtin `report_issue` tool files with the operator's tracker. */
 export interface FeedbackIssue {
   title: string;
   body: string;
   labels: string[];
 }
 
-/** Where the operator receives agent feedback. Builtin `feedback` routes here. */
+/** Where the operator receives agent feedback. Builtin `report_issue` routes here. */
 export interface FeedbackProvider {
   /** Resolves to the created issue's URL; throws when it was not created. */
   deliver(issue: FeedbackIssue, context: AdapterContext): Promise<{ url: string }>;

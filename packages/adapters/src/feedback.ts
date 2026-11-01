@@ -114,7 +114,7 @@ export function feedbackIssue(input: FeedbackInput, context: FeedbackContext): F
 }
 
 /**
- * Runs the builtin `feedback` tool. The executor's effect ledger already holds the call before
+ * Runs the builtin `report_issue` tool. The executor's effect ledger already holds the call before
  * this runs and keeps what it returns, so a failed delivery stays recorded and never fails the run.
  */
 export async function feedbackFromTool(

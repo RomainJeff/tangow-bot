@@ -718,7 +718,7 @@ describe("show_widget", () => {
   });
 });
 
-describe("feedback", () => {
+describe("report_issue", () => {
   const report = {
     kind: "malfunction",
     summary: "web_fetch returned an empty page for sk-live-123",
@@ -733,10 +733,10 @@ describe("feedback", () => {
       secrets: ["sk-live-123"],
       feedback,
       async *runtimeRun(request) {
-        offered = request.tools.some((tool) => tool.name === "feedback");
+        offered = request.tools.some((tool) => tool.name === "report_issue");
         if (offered) {
-          yield { type: "tool", name: "feedback", args: report, executionId: "feedback-1" };
-          result = await request.executeTool!("feedback", report, "feedback-1");
+          yield { type: "tool", name: "report_issue", args: report, executionId: "feedback-1" };
+          result = await request.executeTool!("report_issue", report, "feedback-1");
         }
         yield { type: "text", text: "Done." };
         yield { type: "done" };
@@ -765,7 +765,7 @@ describe("feedback", () => {
       url: "https://tracker.test/issues/1",
     });
     expect(f.effects).toEqual([
-      expect.objectContaining({ kind: "feedback", status: "completed", result }),
+      expect.objectContaining({ kind: "report_issue", status: "completed", result }),
     ]);
   });
 

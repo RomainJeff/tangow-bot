@@ -919,7 +919,7 @@ that merely narrate internal operations.`,
     },
   },
   {
-    name: "feedback",
+    name: "report_issue",
     description:
       "Report a problem with Rakazo itself to the team that runs it, when it happens: a tool or capability blocked you, something malfunctioned, or a task took far more steps than it should have. It files an issue for them; it does not get you help, pause the run, or reach the user, so keep using ask_user or ask_parent for that, and carry on with your task after it. Not a review to write at the end of every task. Describe what you observed, not the user's private content: the report leaves this conversation.",
     inputSchema: {

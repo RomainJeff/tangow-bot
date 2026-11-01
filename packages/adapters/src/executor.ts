@@ -809,7 +809,7 @@ export interface ExecutorDeps {
   listConnectedPluginSlugs?: (scope: ConnectionScope) => Promise<string[]>;
   /** Builtin web_search / web_fetch. Defaults to keyless HTTP when omitted. */
   web?: WebProvider;
-  /** Where builtin `feedback` files its issues. Omitted, the tool is not offered. */
+  /** Where builtin `report_issue` files its issues. Omitted, the tool is not offered. */
   feedback?: FeedbackProvider;
   /** The deployed Rakazo version, when the deployment knows it. */
   version?: string;
@@ -4408,7 +4408,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (name === "web_search") {
             return finish(await webSearchFromTool(web, context, args));
           }
-          if (name === "feedback") {
+          if (name === "report_issue") {
             if (!deps.feedback) return finish({ error: "Feedback is not set up on this server." });
             return finish(
               await feedbackFromTool(
@@ -7132,7 +7132,7 @@ export function selectBuiltinToolsForRun(options: {
       (tool.name !== "search_runs" || options.searchRunsExposed !== false) &&
       (tool.name !== "browser_run" || Boolean(options.browserRunAllowed)) &&
       (tool.name !== "message_user" || options.messageUserExposed !== false) &&
-      (tool.name !== "feedback" || Boolean(options.feedbackAvailable)) &&
+      (tool.name !== "report_issue" || Boolean(options.feedbackAvailable)) &&
       // Only a background helper has a parent free to answer: a sync one's waits on its result.
       (tool.name !== "ask_parent" || options.trigger === "helper") &&
       (!options.messagingChannelRun ||
@@ -7957,7 +7957,7 @@ const BOT_TEXT_ARGS: Record<string, readonly string[]> = {
   spawn_bot: ["name", "title", "instructions", "prompt"],
   update_bot: ["name", "title", "description"],
   schedule_create: ["name", "prompt", "question"],
-  feedback: ["summary", "expected", "tool", "reproduction"],
+  report_issue: ["summary", "expected", "tool", "reproduction"],
 };
 
 function redactBotToolArgs(
