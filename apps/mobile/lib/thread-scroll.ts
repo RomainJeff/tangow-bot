@@ -21,9 +21,9 @@ export class ThreadScrollBehavior {
     this.currentState = { detached: false, unread: false };
   }
 
-  onLayout(): ThreadScrollAction {
+  onLayout(dragging = false): ThreadScrollAction {
     this.laidOut = true;
-    return this.contentReady && !this.currentState.detached ? "jump" : null;
+    return this.contentReady && !this.currentState.detached && !dragging ? "jump" : null;
   }
 
   onContentChanged(blocked: boolean, latestMessageId: string | null): ThreadScrollAction {

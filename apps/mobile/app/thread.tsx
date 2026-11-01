@@ -187,6 +187,7 @@ import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt"
 import { commitHaptic, selectionHaptic, sendHaptic, successHaptic } from "../lib/haptics";
 import { dateLocaleForUi, t, useI18n } from "../lib/i18n";
 import { unreadConversationCount } from "../lib/inbox-spaces";
+import { useKeyboardSlide } from "../lib/keyboard-slide";
 import { saveLastBotId } from "../lib/last-bot";
 import {
   blocksWithoutPreviewedLinkLine,
@@ -345,6 +346,7 @@ function isActiveStatus(status: string | undefined): boolean {
 type NotificationRouteState = "loading" | "ready" | "failed";
 
 const KEEP_VISIBLE_POSITION = { minIndexForVisible: 0 };
+const AnimatedKeyboardAvoidingView = Animated.createAnimatedComponent(KeyboardAvoidingView);
 /** Between the thread and the composer row. The thread draws into it under a fade, so a question card's shadow dies out there instead of ending on the list's edge. */
 const COMPOSER_GAP = 16;
 /** The thread column's side margin. The thread draws into it too, for the same shadow. */
@@ -426,6 +428,9 @@ function Thread() {
   const keyboardVisible = useKeyboardState((state) => state.isVisible);
   const composerBottomInset = keyboardVisible ? 8 : Math.max(insets.bottom + 8, 20);
   const barTransparent = !useReduceTransparency();
+  // Under an opaque bar, iOS left a band painted over the thread after the slide: that case resizes.
+  const keyboardSlides = Platform.OS === "ios" && barTransparent;
+  const keyboardSlide = useKeyboardSlide(keyboardSlides);
   // What of the thread's top sits under the bar.
   const underBar = barTransparent ? headerHeight : 0;
   const { botId, groupId, name, messageId } = useLocalSearchParams<{
@@ -2404,13 +2409,11 @@ function Thread() {
   return (
     <TableActionsProvider value={tableActions}>
       <AmbientBackground />
-      <KeyboardAvoidingView
+      <AnimatedKeyboardAvoidingView
         behavior="height"
+        enabled={!keyboardSlides}
         keyboardVerticalOffset={headerHeight - underBar}
-        style={{
-          flex: 1,
-          paddingHorizontal: THREAD_GUTTER,
-        }}
+        style={[{ flex: 1, paddingHorizontal: THREAD_GUTTER }, keyboardSlide]}
       >
         <View style={{ flex: 1, position: "relative" }}>
           {showPinnedPage ? (
@@ -2475,7 +2478,7 @@ function Thread() {
                 userDragging.current = false;
               }}
               onMomentumScrollEnd={updateUserScroll}
-              onLayout={() => performScroll(scrollBehavior.current.onLayout())}
+              onLayout={() => performScroll(scrollBehavior.current.onLayout(userDragging.current))}
               onContentSizeChange={() => {
                 if (loadingOlderContent.current) {
                   loadingOlderContent.current = false;
@@ -3146,7 +3149,7 @@ function Thread() {
             onClose={() => setStepSession(null)}
           />
         ) : null}
-      </KeyboardAvoidingView>
+      </AnimatedKeyboardAvoidingView>
       {barTransparent ? <ThreadScrollEdge height={headerHeight + 40} /> : null}
       {error || runError ? (
         // Just below the transparent bar, over the thread and its edge.
