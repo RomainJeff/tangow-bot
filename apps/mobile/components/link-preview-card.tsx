@@ -1,7 +1,7 @@
 import type { LinkPreviewCard as LinkPreviewCardBlock } from "@rakazo/contracts";
 import { previewSiteInitial, previewSiteLabel } from "@rakazo/core";
 import { radii, sizes } from "@rakazo/ui-tokens";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ViewProps } from "react-native";
 import {
   Image,
@@ -49,8 +49,10 @@ type ImageState = { uri?: string; failed: boolean };
 export function useArtifactImage(
   target: MobileArtifactTarget,
   artifactId: string | undefined,
-): ImageState & { fail: () => void } {
+  mimeType = "image/webp",
+): ImageState & { fail: () => void; retry: () => void } {
   const [state, setState] = useState<ImageState>({ failed: false });
+  const [attempt, setAttempt] = useState(0);
   const targetRef = useRef(target);
   targetRef.current = target;
   const targetKey = "groupId" in target ? target.groupId : target.botId;
@@ -58,15 +60,16 @@ export function useArtifactImage(
     setState({ failed: false });
     if (!artifactId) return;
     let live = true;
-    mobileArtifactImageUri(targetRef.current, artifactId, "image/webp").then(
+    mobileArtifactImageUri(targetRef.current, artifactId, mimeType).then(
       (uri) => live && setState({ uri, failed: false }),
       () => live && setState({ failed: true }),
     );
     return () => {
       live = false;
     };
-  }, [artifactId, targetKey]);
-  return { ...state, fail: () => setState((current) => ({ ...current, failed: true })) };
+  }, [artifactId, mimeType, targetKey, attempt]);
+  const retry = useCallback(() => setAttempt((count) => count + 1), []);
+  return { ...state, fail: () => setState((current) => ({ ...current, failed: true })), retry };
 }
 
 /**
