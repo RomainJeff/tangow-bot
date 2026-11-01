@@ -23,7 +23,7 @@ import {
   expireComputerControl,
   hasActiveComputerControl,
 } from "./computer-control.js";
-import { toComputerRef } from "./computer-support.js";
+import { scheduleBotScreenSleep, toComputerRef } from "./computer-support.js";
 import {
   archiveDiscardedWorkspace,
   checkpointComputerWorkspace,
@@ -687,24 +687,41 @@ export async function releaseComputerExecutionLease(
  * Releasing a bot's desktop slot drops its view token, and the next slot gets a new one, so the
  * bot's screen generation moves on and URLs sealed for the old slot stop being reused. Open
  * screens only re-read on a status event, so the release announces one.
+ *
+ * A screen the provider keeps has neither: its token and viewers stay, and the bot's next run
+ * finds the page it left. Closing it is left to `computer.screen-sleep`.
  */
 export async function releaseBotScreen(
   deps: {
     prisma: Pick<PrismaClient, "bot">;
     sandbox: Pick<SandboxProvider, "releaseScreen">;
     events?: Pick<ThreadEvents, "append">;
+    jobs?: Pick<JobPublisher, "enqueue">;
   },
   computer: ComputerRef,
   context: AdapterContext,
+  release: "keep" | "teardown" = "teardown",
 ): Promise<boolean> {
   if (!deps.sandbox.releaseScreen) return false;
+  let released: "kept" | "refused" | void;
   try {
-    await deps.sandbox.releaseScreen(computer, context);
+    // Teardown is every provider's default, so only a keep request carries an argument.
+    released =
+      release === "keep"
+        ? await deps.sandbox.releaseScreen(computer, context, "keep")
+        : await deps.sandbox.releaseScreen(computer, context);
   } catch {
     // A failed release keeps the slot and its token.
     return false;
   }
+  // A newer run owns the screen: its token and viewers are not this release's to move on.
+  if (released === "refused") return true;
   const botId = context.botId;
+  if (released === "kept") {
+    // A screen nobody closes stays until its computer's own idle shutdown.
+    await scheduleKeptScreenSleep(deps, context).catch(() => undefined);
+    return true;
+  }
   if (!botId) return true;
   const bot = await deps.prisma.bot
     .update({
@@ -728,6 +745,21 @@ export async function releaseBotScreen(
     })
     .catch(() => undefined);
   return true;
+}
+
+async function scheduleKeptScreenSleep(
+  deps: { prisma: Pick<PrismaClient, "bot">; jobs?: Pick<JobPublisher, "enqueue"> },
+  context: AdapterContext,
+) {
+  const { botId, screenLeaseId } = context;
+  if (!deps.jobs || !botId || !screenLeaseId) return;
+  const bot = await deps.prisma.bot.findUnique({
+    where: { id: botId },
+    select: { computerId: true },
+  });
+  if (bot?.computerId) {
+    await scheduleBotScreenSleep(deps.jobs, { computerId: bot.computerId, botId, screenLeaseId });
+  }
 }
 
 function isUniqueConstraintError(error: unknown) {

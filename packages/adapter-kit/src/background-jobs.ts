@@ -14,6 +14,11 @@ const payloadSchemas = {
   }),
   "computer.update": z.object({ updateId: z.string().min(1) }),
   "computer.sleep": z.object({ computerId: z.string().min(1) }),
+  "computer.screen-sleep": z.object({
+    computerId: z.string().min(1),
+    botId: z.string().min(1),
+    screenLeaseId: z.string().min(1),
+  }),
   "computer.control-expire": z.object({
     computerId: z.string().min(1),
     leaseId: z.string().min(1),
@@ -59,6 +64,14 @@ export function computerSleepJobKey(computerId: string): string {
   return `computer.sleep:${computerId}`;
 }
 
+export function computerScreenSleepJobKey(
+  computerId: string,
+  botId: string,
+  screenLeaseId: string,
+): string {
+  return `computer.screen-sleep:${computerId}:${botId}:${screenLeaseId}`;
+}
+
 export function computerControlExpireJobKey(computerId: string, leaseId?: string): string {
   return leaseId
     ? `computer.control-expire:${computerId}:${leaseId}`
@@ -92,6 +105,18 @@ export function computerSleepJob(computerId: string, availableAt: Date): Backgro
     payload: { computerId },
     availableAt,
     replaceKey: computerSleepJobKey(computerId),
+  };
+}
+
+export function computerScreenSleepJob(
+  payload: BackgroundJobPayloads["computer.screen-sleep"],
+  availableAt: Date,
+): BackgroundJob {
+  return {
+    name: "computer.screen-sleep",
+    payload,
+    availableAt,
+    replaceKey: computerScreenSleepJobKey(payload.computerId, payload.botId, payload.screenLeaseId),
   };
 }
 

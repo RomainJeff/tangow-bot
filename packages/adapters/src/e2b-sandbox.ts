@@ -26,11 +26,11 @@ import {
 import { stopAllDesktopBrowsersCommand } from "@rakazo/core/node/desktop-runtime";
 import type { CommandHandle, CommandResult, ConnectionOpts } from "e2b";
 import { CommandExitError, ConnectionConfig, Sandbox, TimeoutError } from "e2b";
-import { sandboxIdleMs } from "./computer-idle.js";
 import { ComputerScreenUnavailableError } from "./computer-screens.js";
 import {
   linkWorkspaceCommand,
   normalizeWorkspacePath,
+  sandboxIdleMs,
   shellQuote,
   workspacePath,
 } from "./computer-support.js";
