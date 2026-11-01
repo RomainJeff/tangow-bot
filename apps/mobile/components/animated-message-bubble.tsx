@@ -34,6 +34,8 @@ export interface AnimatedMessageBubbleProps {
   /** 7g: swipe-to-reply. Bot narration bubbles in the main thread only. */
   enableSwipeReply?: boolean;
   onLongPress: () => void;
+  /** Keeps the entrance and drops the hold, for a child that handles its own long press. */
+  entranceOnly?: boolean;
   onSwipeReply?: () => void;
   accessibilityActions?: ViewProps["accessibilityActions"];
   onAccessibilityAction?: ViewProps["onAccessibilityAction"];
@@ -54,6 +56,7 @@ export function AnimatedMessageBubble({
   enterDelayMs = 0,
   enableSwipeReply = false,
   onLongPress,
+  entranceOnly = false,
   onSwipeReply,
   accessibilityActions,
   onAccessibilityAction,
@@ -135,6 +138,7 @@ export function AnimatedMessageBubble({
   }
 
   const longPress = Gesture.LongPress()
+    .enabled(!entranceOnly)
     .minDuration(350)
     .onBegin(() => {
       if (reducedMotion) return;

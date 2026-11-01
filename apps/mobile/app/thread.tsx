@@ -71,7 +71,16 @@ import * as Clipboard from "expo-clipboard";
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useHeaderHeight } from "expo-router/react-navigation";
 import type { ReactNode } from "react";
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  cloneElement,
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   AccessibilityInfo,
   ActivityIndicator,
@@ -2192,6 +2201,7 @@ function Thread() {
         onOpenSession={openStepSession}
       />
     );
+    const bubblePart = (imagePart: "words" | "images") => cloneElement(bubble, { imagePart });
     const previewNode = previewCard ? (
       <MessageArrival
         isNew={isNew}
@@ -2283,13 +2293,30 @@ function Thread() {
         ) : chrome === "row" ? (
           withPreview(
             stack ? (
-              // The bubble gesture would race the stack's own long press: here the caption's
-              // long press is the outer one and the stack's, being inner, wins.
-              <MessageArrival isNew={isNew}>
-                <Pressable accessible={false} onLongPress={actionProps.onLongPress}>
-                  {bubble}
-                </Pressable>
-              </MessageArrival>
+              // The bubble's hold would race the stack's own long press, so the words and the
+              // stack are two bubbles: the words keep the hold on the host's actions, the stack
+              // keeps the entrance and its own long press on the newest message's.
+              <View style={{ gap: 8, alignItems: "flex-end" }}>
+                {message.blocks.some((block) => block.kind !== "image") || replyTo ? (
+                  <AnimatedMessageBubble
+                    variant="user"
+                    isNew={isNew}
+                    onLongPress={actionProps.onLongPress}
+                    accessibilityActions={actionProps.accessibilityActions}
+                    onAccessibilityAction={actionProps.onAccessibilityAction}
+                  >
+                    {bubblePart("words")}
+                  </AnimatedMessageBubble>
+                ) : null}
+                <AnimatedMessageBubble
+                  variant="user"
+                  isNew={isNew}
+                  entranceOnly
+                  onLongPress={frontActionProps.onLongPress}
+                >
+                  {bubblePart("images")}
+                </AnimatedMessageBubble>
+              </View>
             ) : (
               <AnimatedMessageBubble
                 variant="user"
@@ -3474,6 +3501,7 @@ const MessageBubble = memo(function MessageBubble({
   imageStack,
   imageActionProps,
   imageArrival,
+  imagePart,
   authorName,
   previewedUrl,
   onOpenSession,
@@ -3498,6 +3526,8 @@ const MessageBubble = memo(function MessageBubble({
   imageActionProps?: MessageActionProps;
   /** A newer image joined the stack in this render. */
   imageArrival?: boolean;
+  /** Draws only the words and files, or only the images, when they sit in bubbles of their own. */
+  imagePart?: "words" | "images";
   /** Who sent it, as assistive tech names the images. */
   authorName: string;
   /** The link its card shows: a line that is only this link is left out of the text drawn. */
@@ -3792,8 +3822,10 @@ const MessageBubble = memo(function MessageBubble({
           alignItems: message.role === "user" ? "flex-end" : "flex-start",
         }}
       >
-        {images.length > 0 && words ? <Surface style={surfaceStyle}>{words}</Surface> : null}
-        {images.length > 0 ? (
+        {images.length > 0 && words && imagePart !== "images" ? (
+          <Surface style={surfaceStyle}>{words}</Surface>
+        ) : null}
+        {images.length > 0 && imagePart !== "words" ? (
           <ImageStack
             images={images}
             target={artifactTarget}
@@ -3807,7 +3839,9 @@ const MessageBubble = memo(function MessageBubble({
             onAccessibilityAction={(imageActionProps ?? actionProps).onAccessibilityAction}
           />
         ) : null}
-        {files.length > 0 || appConnectBlocks.length > 0 || (images.length === 0 && words) ? (
+        {imagePart === "images" ? null : files.length > 0 ||
+          appConnectBlocks.length > 0 ||
+          (images.length === 0 && words) ? (
           <Surface style={surfaceStyle}>
             {images.length === 0 ? words : null}
             {files.map((attachment, index) => (
