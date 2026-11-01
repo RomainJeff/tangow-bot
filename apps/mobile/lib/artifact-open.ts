@@ -29,9 +29,10 @@ export async function mobileArtifactImageUri(
   target: MobileArtifactTarget,
   artifactId: string,
   mimeType: string,
+  refetch = false,
 ): Promise<string> {
   const cached = new File(Paths.cache, artifactCacheFileName(artifactId, mimeType));
-  if (cached.exists && cached.size > 0) return cached.uri;
+  if (!refetch && cached.exists && cached.size > 0) return cached.uri;
   return (await cacheMobileArtifact(target, artifactId, mimeType)).uri;
 }
 

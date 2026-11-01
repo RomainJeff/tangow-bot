@@ -60,7 +60,7 @@ export function useArtifactImage(
     setState({ failed: false });
     if (!artifactId) return;
     let live = true;
-    mobileArtifactImageUri(targetRef.current, artifactId, mimeType).then(
+    mobileArtifactImageUri(targetRef.current, artifactId, mimeType, attempt > 0).then(
       (uri) => live && setState({ uri, failed: false }),
       () => live && setState({ failed: true }),
     );
