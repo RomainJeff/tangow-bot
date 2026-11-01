@@ -3535,7 +3535,7 @@ const MessageBubble = memo(function MessageBubble({
   /** Opens the helper session a step ran. */
   onOpenSession?: (sessionId: SessionId, title: string) => void;
 }) {
-  const tokens = mobileTokens();
+  const tokens = useMobileTokens();
   const { t } = useI18n();
   const showSteps = useDebugMode();
   const artifactTarget: MobileArtifactTarget = groupId ? { groupId } : { botId };
