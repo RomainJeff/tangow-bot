@@ -111,22 +111,31 @@ function continuesGroup(
   return withinGroupWindow(previous.createdAt, message.createdAt, windowMs);
 }
 
+/** What a message that hosts an image stack may hold: any other block draws a card of its own. */
+const STACK_HOST_BLOCK_KINDS: ReadonlySet<string> = new Set(["image", "text", "file"]);
+
 /**
  * Whether an image-only message joins the image stack of the message before it. Stacks follow the
  * header's time rule, so moving `windowMs` moves both. The caller checks adjacency in the thread
- * and passes whether `previous` carries a reaction, which ends its stack.
+ * and that `previous` has no reaction, which ends its stack.
  */
 export function continuesImageStack(
-  previous: (GroupableMessage & { reacted?: boolean }) | undefined,
+  previous: GroupableMessage | undefined,
   message: GroupableMessage,
   windowMs: number = MESSAGE_GROUP_WINDOW_MS,
 ): boolean {
-  if (previous == null || previous.reacted) return false;
+  if (previous == null) return false;
   if (previous.createdAt == null || message.createdAt == null) return false;
   if (message.replyToMessageId != null) return false;
   if (message.blocks.length === 0 || !message.blocks.every((block) => block.kind === "image"))
     return false;
-  if (!previous.blocks.some((block) => block.kind === "image")) return false;
+  if (
+    !previous.blocks.some((block) => block.kind === "image") ||
+    !previous.blocks.every(
+      (block) => STACK_HOST_BLOCK_KINDS.has(block.kind) || LINK_BLOCK_KINDS.has(block.kind),
+    )
+  )
+    return false;
   const sameAuthor =
     message.role === "bot"
       ? previous.role === "bot" && message.botId != null && message.botId === previous.botId

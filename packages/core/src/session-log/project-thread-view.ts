@@ -209,10 +209,8 @@ function stackImages(
     if (
       open &&
       previous &&
-      continuesImageStack(
-        { ...groupableItem(previous), reacted: (reactions.get(previous.id)?.length ?? 0) > 0 },
-        groupableItem(item),
-      )
+      !reactions.get(previous.id)?.length &&
+      continuesImageStack(groupableItem(previous), groupableItem(item))
     ) {
       open.stack.images.push(...images);
       open.stack.front = { item, messageId };
@@ -225,7 +223,7 @@ function stackImages(
   return { stacks, absorbed };
 }
 
-function imagesOf(item: MessageItem, messageId: EntryId): StackImage[] {
+export function imagesOf(item: MessageItem, messageId: EntryId): StackImage[] {
   return item.blocks.flatMap((block) =>
     block.kind === "image"
       ? [

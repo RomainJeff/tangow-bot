@@ -294,6 +294,12 @@ describe("continuesImageStack", () => {
     expect(continuesImageStack(first, shot({ createdAt: at(6) }))).toBe(false);
   });
 
+  it("does not extend a message that also draws a card", () => {
+    const card = { kind: "computer" } as unknown as ThreadMessage["blocks"][number];
+    const first = shot({ createdAt: at(0), blocks: [image, card] });
+    expect(continuesImageStack(first, shot({ createdAt: at(1) }))).toBe(false);
+  });
+
   it("does not join across a time marker even inside the window", () => {
     const first = shot({ createdAt: localIso(2026, 9, 2, 23, 58) });
     expect(continuesImageStack(first, shot({ createdAt: localIso(2026, 9, 3, 0, 1) }))).toBe(false);
