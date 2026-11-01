@@ -141,14 +141,3 @@ export function routeModel(
     credential: defaultCredential,
   };
 }
-
-/** The consent API still consumes this projection; execution uses routeModel directly. */
-export function selectConfiguredModel(input: Omit<ModelRouteInput, "routing">) {
-  const selected = routeModel({ ...input, routing: { mode: "fixed" } });
-  return {
-    provider: selected?.decision.provider,
-    id: selected?.decision.modelId,
-    credential: selected?.credential ?? null,
-    thinkingLevel: selected?.decision.thinkingLevel ?? null,
-  };
-}
