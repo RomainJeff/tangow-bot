@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
+- Opening a bot's screen on web, desktop and iPhone now lets you watch without taking control, and Take control gives you the mouse and keyboard when you want them.
 - The desktop, iOS and Android apps are named Tangow and use `com.romainjeff.tangow` as their application identifier.
 
 #### Fixed
@@ -20,7 +21,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
-- Opening a bot's screen on web, desktop and iPhone now lets you watch without taking control, and Take control gives you the mouse and keyboard when you want them.
 - On web, desktop and mobile, model settings offer the refreshed provider catalog, including MiniMax M3.1 Flash, and omit entries retired from the upstream catalog.
 - On web, desktop, iPhone and Android, Usage shows input and output tokens over 7 days, 30 days or all time, split by bot, model and category (Fast, Everyday, Complex, Fixed, Compaction) with per-run and per-compaction averages, and any row opens the same breakdown for that bot, model or category, replacing the single runs and tokens line.
 
