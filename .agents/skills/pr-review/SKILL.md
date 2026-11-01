@@ -8,7 +8,7 @@ argument-hint: "[<pr number>...] [--routine]"
 
 Arguments: $ARGUMENTS
 
-You are the PR reviewer for the GitHub repository `RomainJeff/rakazo-bot` (Rakazo). You review a PR, rework its blocking findings on its branch, and merge it or hand it to a human, at most 3 rounds per PR.
+You are the PR reviewer for the GitHub repository `RomainJeff/tangow-bot` (Rakazo). You review a PR, rework its blocking findings on its branch, and merge it or hand it to a human, at most 3 rounds per PR.
 
 Modes, from the arguments:
 - **PR numbers given** (`/pr-review 123 124`): process exactly those PRs, in that order. Skip the eligibility rules of section 3 except the classification; a PR labelled `auto-review:done` or `auto-review:needs-human` is processed anyway because the user named it.
@@ -43,11 +43,11 @@ Create these labels if missing (`gh label create ... --force` is fine):
 - `auto-review:done` — merged or handed off; never touch again.
 - `auto-review:needs-human` — waiting on `@romainjeff` / `@wooznext`; never touch again unless a maintainer removes the label.
 
-A `auto-review:running` label older than 3 hours (label event timestamp via `gh api repos/RomainJeff/rakazo-bot/issues/<n>/events`) is stale: remove it and treat the PR as resumable. A fresh one means another run owns the PR: skip it, even when named in the arguments, and say so.
+A `auto-review:running` label older than 3 hours (label event timestamp via `gh api repos/RomainJeff/tangow-bot/issues/<n>/events`) is stale: remove it and treat the PR as resumable. A fresh one means another run owns the PR: skip it, even when named in the arguments, and say so.
 
 ## 3. Select PRs
 
-`gh pr list --repo RomainJeff/rakazo-bot --state open --json number,title,author,createdAt,isDraft,labels,reviews,headRefName,headRepositoryOwner,maintainerCanModify,baseRefName`
+`gh pr list --repo RomainJeff/tangow-bot --state open --json number,title,author,createdAt,isDraft,labels,reviews,headRefName,headRepositoryOwner,maintainerCanModify,baseRefName`
 
 Eligible PR (no-argument mode only):
 - not a draft,
@@ -57,7 +57,7 @@ Eligible PR (no-argument mode only):
 
 "Not reviewed yet" means BOTH:
 - no submitted review from a human other than the PR author, and
-- no review, review comment or issue comment from an LLM review agent (CodeRabbit, Cursor Bugbot, GitHub Copilot, Codex, Claude, Greptile, Sourcery, Gemini Code Assist, or any `[bot]` account whose comments are code-review findings). Check `gh api repos/RomainJeff/rakazo-bot/pulls/<n>/reviews`, `.../pulls/<n>/comments` and `.../issues/<n>/comments`. CI/deploy bots (status, preview links, EAS builds) do not count. Comments carrying the marker are ours and are handled by the round labels.
+- no review, review comment or issue comment from an LLM review agent (CodeRabbit, Cursor Bugbot, GitHub Copilot, Codex, Claude, Greptile, Sourcery, Gemini Code Assist, or any `[bot]` account whose comments are code-review findings). Check `gh api repos/RomainJeff/tangow-bot/pulls/<n>/reviews`, `.../pulls/<n>/comments` and `.../issues/<n>/comments`. CI/deploy bots (status, preview links, EAS builds) do not count. Comments carrying the marker are ours and are handled by the round labels.
 
 Classify each PR by its branches (feature branch rules in AGENTS.md):
 - **Slice PR**: `baseRefName` starts with `feature/`. Its merge target is that feature branch, not `main`.
@@ -81,7 +81,7 @@ Then give the PR number, base and head SHAs, the area it owns and the hard rules
 Classify each finding as `blocking` (bug, security, data loss, broken contract, AGENTS.md violation, missing tests for new behaviour, missing CHANGELOG for user-visible change) or `nit` (style, naming, optional simplification). For a slice PR, a missing CHANGELOG entry is NOT a finding (it lands once in the feature PR). For a feature PR, a missing CHANGELOG entry for user-visible changes is blocking.
 
 Publish ONE review with line-by-line comments:
-`gh api repos/RomainJeff/rakazo-bot/pulls/<n>/reviews -X POST --input review.json`
+`gh api repos/RomainJeff/tangow-bot/pulls/<n>/reviews -X POST --input review.json`
 with `commit_id` = PR head SHA, `event` = `REQUEST_CHANGES` when there are blocking findings (fall back to `COMMENT` if GitHub rejects it, e.g. on a PR authored by the token's own account), else `COMMENT`; a short summary `body` starting with the marker and `Round N/3`; one entry in `comments` per finding (`path`, `line`, `side: "RIGHT"`, body starting with the marker, then `**blocking:**` or `**nit:**`). Comment only on lines that are part of the diff. Write `review.json` outside the repo.
 
 Then add label `auto-review:round-N`.
