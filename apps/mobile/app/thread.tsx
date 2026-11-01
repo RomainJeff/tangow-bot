@@ -859,12 +859,14 @@ function Thread() {
                 size={34}
                 status={currentBotStatus}
                 muted={!currentBot.notifyOnFinish}
+                still
               />
             ) : null}
             {inGroup && groupAvatarItems.length > 0 ? (
               <StackedAvatars
                 items={groupAvatarItems}
                 size={28}
+                still
                 pillOverflow
                 label={groupMemberNames || undefined}
               />

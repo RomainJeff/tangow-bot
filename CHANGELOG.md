@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
+- On iPhone and Android, scrolling a conversation no longer stutters: bot avatars in the inbox and the conversation header rest while their bot is idle and move only while it works.
 - When a bot's run ends well, its Docker computer keeps the browser open for a while, and reopens the bot's last tabs whenever it has to start again, so the next run, a helper's follow-up or your takeover finds the page it left instead of a blank tab; a bot that finishes with nothing left for anyone closes the tabs it opened.
 
 ### 2026-10-31
