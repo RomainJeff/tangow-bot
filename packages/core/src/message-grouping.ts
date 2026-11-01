@@ -111,6 +111,29 @@ function continuesGroup(
   return withinGroupWindow(previous.createdAt, message.createdAt, windowMs);
 }
 
+/**
+ * Whether an image-only message joins the image stack of the message before it. Stacks follow the
+ * header's time rule, so moving `windowMs` moves both. The caller checks adjacency in the thread
+ * and passes whether `previous` carries a reaction, which ends its stack.
+ */
+export function continuesImageStack(
+  previous: (GroupableMessage & { reacted?: boolean }) | undefined,
+  message: GroupableMessage,
+  windowMs: number = MESSAGE_GROUP_WINDOW_MS,
+): boolean {
+  if (previous == null || previous.reacted) return false;
+  if (previous.createdAt == null || message.createdAt == null) return false;
+  if (message.replyToMessageId != null) return false;
+  if (message.blocks.length === 0 || !message.blocks.every((block) => block.kind === "image"))
+    return false;
+  if (!previous.blocks.some((block) => block.kind === "image")) return false;
+  const sameAuthor =
+    message.role === "bot"
+      ? previous.role === "bot" && message.botId != null && message.botId === previous.botId
+      : previous.role === "user";
+  return sameAuthor && withinGroupWindow(previous.createdAt, message.createdAt, windowMs);
+}
+
 export function computeMessageGroups(
   messages: readonly GroupableMessage[],
   windowMs: number = MESSAGE_GROUP_WINDOW_MS,
@@ -124,20 +147,20 @@ export function computeMessageGroups(
   }));
 }
 
+export function groupableItem(item: ThreadItem): GroupableMessage {
+  if (item.kind !== "message") return { role: "bot", blocks: [], createdAt: item.ts };
+  return item.role === "user"
+    ? {
+        role: "user",
+        blocks: item.blocks,
+        createdAt: item.ts,
+        replyToMessageId: item.replyTo?.entryId,
+      }
+    : { role: "bot", blocks: item.blocks, createdAt: item.ts, botId: item.botId };
+}
+
 export function computeItemGroups(
   items: readonly ThreadItem[],
 ): { isFirstOfGroup: boolean; isLastOfGroup: boolean }[] {
-  return computeMessageGroups(
-    items.map((item): GroupableMessage => {
-      if (item.kind !== "message") return { role: "bot", blocks: [], createdAt: item.ts };
-      return item.role === "user"
-        ? {
-            role: "user",
-            blocks: item.blocks,
-            createdAt: item.ts,
-            replyToMessageId: item.replyTo?.entryId,
-          }
-        : { role: "bot", blocks: item.blocks, createdAt: item.ts, botId: item.botId };
-    }),
-  );
+  return computeMessageGroups(items.map(groupableItem));
 }

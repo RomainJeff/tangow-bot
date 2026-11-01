@@ -14,7 +14,7 @@ import {
   ThreadEntrySchema,
 } from "@rakazo/contracts";
 import { isRunTerminalEvent, progressMessageId, reduceLiveMessageBlocks } from "../events.js";
-import { computeItemGroups } from "../message-grouping.js";
+import { computeItemGroups, continuesImageStack, groupableItem } from "../message-grouping.js";
 import type { ItemReactions } from "../message-reactions.js";
 import { foldItemReactions } from "../message-reactions.js";
 import type { RoutineRole } from "../routine-roles.js";
@@ -23,6 +23,22 @@ import { isSameLocalDay, showsTimeMarker } from "../thread-time-markers.js";
 import { latestActivityLabel } from "../tool-activity.js";
 import type { WaitingCard } from "./project-ui.js";
 import { projectThread } from "./project-ui.js";
+
+type MessageItem = Extract<ThreadItem, { kind: "message" }>;
+
+export type StackImage = {
+  messageId: EntryId;
+  artifactId: string;
+  mimeType: string;
+  name: string;
+  ts: string;
+};
+
+/** Every image of a run of messages the image rule joins, oldest first, and the message of the newest. */
+export type ImageStack = {
+  images: StackImage[];
+  front: { item: MessageItem; messageId: EntryId };
+};
 
 export type ThreadRow = {
   item: ThreadItem;
@@ -34,6 +50,8 @@ export type ThreadRow = {
   marker?: { at: string; withTime: boolean };
   messageId?: EntryId;
   previewMessageId?: EntryId;
+  /** On the message that opens a stack of images, which rows of the messages that join it do not draw. */
+  imageStack?: ImageStack;
 };
 
 export type ThreadView = {
@@ -52,6 +70,8 @@ export type ProgressLayer = ReadonlyMap<
 export type ThreadViewOptions = {
   rendersNothing?: (item: ThreadItem) => boolean;
   progress?: ProgressLayer;
+  /** Joins the image-only messages that follow a message with images into its row. */
+  imageStacks?: boolean;
 };
 
 const SHOWN_NOTES: ReadonlySet<string> = new Set(["skill.learnt", "system.note"]);
@@ -112,9 +132,17 @@ export function projectThreadView(
     hidden.size === 0 ? folded.items : folded.items.filter((item) => !hidden.has(item.id));
   const groups = computeItemGroups(items);
   const hostOf = new Map<string, EntryId>(folded.parentOf);
+  const stacks = options.imageStacks
+    ? stackImages(items, folded.reactions, projected.messageIds)
+    : { stacks: new Map<EntryId, ImageStack>(), absorbed: new Map<EntryId, EntryId>() };
+  for (const [absorbedId, hostId] of stacks.absorbed) hostOf.set(absorbedId, hostId);
   const rows: ThreadRow[] = [];
   let previous: { ts: string; line: boolean } | undefined;
   for (const [index, item] of items.entries()) {
+    if (stacks.absorbed.has(item.id)) {
+      previous = { ts: item.ts, line: false };
+      continue;
+    }
     const routine = roles.get(item.id);
     const line = routine?.kind === "failures";
     if (line) for (const id of routine.folded) hostOf.set(id, item.id);
@@ -123,13 +151,14 @@ export function projectThreadView(
       ? !isSameLocalDay(lineAbove.ts, item.ts)
       : showsTimeMarker(previous?.ts, item.ts);
     const messageId = projected.messageIds.get(item.id);
+    const imageStack = stacks.stacks.get(item.id);
     const previewMessageId =
       projected.previewHosts.get(item.id) ?? inlinePreviewHost(item, messageId);
     rows.push({
       item,
       firstOfGroup: groups[index]?.isFirstOfGroup ?? true,
       lastOfGroup: groups[index]?.isLastOfGroup ?? true,
-      reactions: folded.reactions.get(item.id) ?? [],
+      reactions: folded.reactions.get((imageStack?.front.item ?? item).id) ?? [],
       ...(routine ? { routine } : {}),
       ...(shows
         ? { marker: { at: item.ts, withTime: !line } }
@@ -138,13 +167,15 @@ export function projectThreadView(
           : {}),
       ...(messageId ? { messageId } : {}),
       ...(previewMessageId ? { previewMessageId } : {}),
+      ...(imageStack ? { imageStack } : {}),
     });
     previous = { ts: item.ts, line };
   }
   const shown = new Set<string>(rows.map((row) => row.item.id));
   const rowOf = new Map<string, EntryId>();
   for (const [entryId, itemId] of projected.shownBy) {
-    const rowId = hostOf.get(itemId) ?? itemId;
+    let rowId = itemId;
+    for (let host = hostOf.get(rowId); host !== undefined; host = hostOf.get(rowId)) rowId = host;
     if (shown.has(rowId)) rowOf.set(entryId, rowId);
   }
   return {
@@ -153,6 +184,61 @@ export function projectThreadView(
     waiting: projected.waiting,
     rowOf,
   };
+}
+
+/**
+ * One stack per message with images, hosted by the first message of the run the image rule joins
+ * (`continuesImageStack`). A message that joins one is `absorbed` into its host and draws no row.
+ */
+function stackImages(
+  items: readonly ThreadItem[],
+  reactions: ReadonlyMap<EntryId, ItemReactions>,
+  messageIds: ReadonlyMap<EntryId, EntryId>,
+): { stacks: Map<EntryId, ImageStack>; absorbed: Map<EntryId, EntryId> } {
+  const stacks = new Map<EntryId, ImageStack>();
+  const absorbed = new Map<EntryId, EntryId>();
+  let open: { hostId: EntryId; stack: ImageStack } | undefined;
+  for (const item of items) {
+    const messageId = messageIds.get(item.id) ?? item.id;
+    const images = item.kind === "message" ? imagesOf(item, messageId) : [];
+    if (item.kind !== "message" || images.length === 0) {
+      open = undefined;
+      continue;
+    }
+    const previous = open?.stack.front.item;
+    if (
+      open &&
+      previous &&
+      continuesImageStack(
+        { ...groupableItem(previous), reacted: (reactions.get(previous.id)?.length ?? 0) > 0 },
+        groupableItem(item),
+      )
+    ) {
+      open.stack.images.push(...images);
+      open.stack.front = { item, messageId };
+      absorbed.set(item.id, open.hostId);
+    } else {
+      open = { hostId: item.id, stack: { images, front: { item, messageId } } };
+      stacks.set(item.id, open.stack);
+    }
+  }
+  return { stacks, absorbed };
+}
+
+function imagesOf(item: MessageItem, messageId: EntryId): StackImage[] {
+  return item.blocks.flatMap((block) =>
+    block.kind === "image"
+      ? [
+          {
+            messageId,
+            artifactId: block.artifactId,
+            mimeType: block.mimeType,
+            name: block.name,
+            ts: item.ts,
+          },
+        ]
+      : [],
+  );
 }
 
 /** A card stored in the message's own blocks, not added by a `link.preview` entry. */

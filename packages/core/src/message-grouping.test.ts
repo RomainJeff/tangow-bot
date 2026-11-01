@@ -2,6 +2,7 @@ import type { ThreadMessage } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import {
   computeMessageGroups,
+  continuesImageStack,
   isNarrationMessage,
   isUserNarrationMessage,
 } from "./message-grouping.js";
@@ -273,5 +274,60 @@ describe("computeMessageGroups", () => {
       { isFirstOfGroup: true, isLastOfGroup: true },
       { isFirstOfGroup: true, isLastOfGroup: true },
     ]);
+  });
+});
+
+describe("continuesImageStack", () => {
+  const image = {
+    kind: "image",
+    artifactId: "art_1",
+    mimeType: "image/png",
+    name: "a.png",
+  } as const;
+  const shot = (overrides: Partial<ThreadMessage> = {}) =>
+    makeMessage({ blocks: [image], ...overrides });
+  const at = (minute: number) => localIso(2026, 9, 2, 12, minute);
+
+  it("follows the header's window: inside it joins, past it does not, whatever the window is", () => {
+    const first = shot({ createdAt: at(0) });
+    expect(continuesImageStack(first, shot({ createdAt: at(5) }))).toBe(true);
+    expect(continuesImageStack(first, shot({ createdAt: at(6) }))).toBe(false);
+    expect(continuesImageStack(first, shot({ createdAt: at(6) }), 10 * 60 * 1000)).toBe(true);
+  });
+
+  it("does not join across a time marker even inside the window", () => {
+    const first = shot({ createdAt: localIso(2026, 9, 2, 23, 58) });
+    expect(continuesImageStack(first, shot({ createdAt: localIso(2026, 9, 3, 0, 1) }))).toBe(false);
+  });
+
+  it("joins only an image-only message from the same author that is not a reply", () => {
+    const first = shot({ createdAt: at(0) });
+    expect(continuesImageStack(first, shot({ createdAt: at(1), botId: "bot-2" }))).toBe(false);
+    expect(
+      continuesImageStack(
+        first,
+        shot({ createdAt: at(1), blocks: [image, { kind: "text", text: "hi" }] }),
+      ),
+    ).toBe(false);
+    expect(continuesImageStack(first, shot({ createdAt: at(1), replyToMessageId: "msg-0" }))).toBe(
+      false,
+    );
+    expect(continuesImageStack({ ...first, reacted: true }, shot({ createdAt: at(1) }))).toBe(
+      false,
+    );
+    expect(continuesImageStack(makeMessage({ createdAt: at(0) }), shot({ createdAt: at(1) }))).toBe(
+      false,
+    );
+  });
+
+  it("joins a person's photos to their earlier photos, not to a bot's", () => {
+    const photo = (overrides: Partial<ThreadMessage> = {}) =>
+      shot({ role: "user", botId: undefined, ...overrides });
+    expect(continuesImageStack(photo({ createdAt: at(0) }), photo({ createdAt: at(1) }))).toBe(
+      true,
+    );
+    expect(continuesImageStack(shot({ createdAt: at(0) }), photo({ createdAt: at(1) }))).toBe(
+      false,
+    );
   });
 });
