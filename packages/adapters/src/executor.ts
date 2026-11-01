@@ -13,6 +13,7 @@ import type {
   ConnectorCall,
   ConnectorProvider,
   ConnectorTool,
+  FeedbackProvider,
   HarnessTranscriptEntry,
   JobPublisher,
   ManagedConnectorProvider,
@@ -323,6 +324,7 @@ import type { DecisionProviderResolver } from "./decision-provider-factory.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
 import { endedDraftOutcomes } from "./draft-outcome.js";
 import { prepareDraft } from "./draft-preparation.js";
+import { feedbackFromTool } from "./feedback.js";
 import { FILE_TOOL_NAMES, runFileTool } from "./file-tools.js";
 import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
 import {
@@ -807,6 +809,10 @@ export interface ExecutorDeps {
   listConnectedPluginSlugs?: (scope: ConnectionScope) => Promise<string[]>;
   /** Builtin web_search / web_fetch. Defaults to keyless HTTP when omitted. */
   web?: WebProvider;
+  /** Where builtin `feedback` files its issues. Omitted, the tool is not offered. */
+  feedback?: FeedbackProvider;
+  /** The deployed Rakazo version, when the deployment knows it. */
+  version?: string;
   /**
    * Runs every non-scripted product run in a worker of its own. Composition always provides it
    * outside tests.
@@ -2369,6 +2375,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             searchRunsExposed: archiveHistory,
             browserRunAllowed: Boolean(decisionProvider),
             messageUserExposed,
+            feedbackAvailable: Boolean(deps.feedback),
           }),
           // Cross-owner agent connections only exist for chat-linked bots.
           ...(hasMessagingIdentity ? agentConnectionTools : []),
@@ -4400,6 +4407,28 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }
           if (name === "web_search") {
             return finish(await webSearchFromTool(web, context, args));
+          }
+          if (name === "feedback") {
+            if (!deps.feedback) return finish({ error: "Feedback is not set up on this server." });
+            return finish(
+              await feedbackFromTool(
+                { prisma: deps.prisma, feedback: deps.feedback },
+                {
+                  args,
+                  runId,
+                  threadId: thread.id,
+                  botId: bot.id,
+                  model:
+                    runModelProvider && runModelId
+                      ? `${runModelProvider}/${runModelId}`
+                      : undefined,
+                  harness: runtime.describe().id,
+                  version: deps.version,
+                  secrets: runSecrets,
+                },
+                context,
+              ),
+            );
           }
           if (name === "web_fetch") {
             return finish(await webFetchFromTool(web, context, args));
@@ -7083,6 +7112,8 @@ export function selectBuiltinToolsForRun(options: {
   browserRunAllowed?: boolean;
   /** The run can address the person through message_user. */
   messageUserExposed?: boolean;
+  /** The deployment has somewhere to file feedback. */
+  feedbackAvailable?: boolean;
 }) {
   const selected = selectMemoryTools(
     filterBuiltinToolsForRun(
@@ -7101,6 +7132,7 @@ export function selectBuiltinToolsForRun(options: {
       (tool.name !== "search_runs" || options.searchRunsExposed !== false) &&
       (tool.name !== "browser_run" || Boolean(options.browserRunAllowed)) &&
       (tool.name !== "message_user" || options.messageUserExposed !== false) &&
+      (tool.name !== "feedback" || Boolean(options.feedbackAvailable)) &&
       // Only a background helper has a parent free to answer: a sync one's waits on its result.
       (tool.name !== "ask_parent" || options.trigger === "helper") &&
       (!options.messagingChannelRun ||
@@ -7925,6 +7957,7 @@ const BOT_TEXT_ARGS: Record<string, readonly string[]> = {
   spawn_bot: ["name", "title", "instructions", "prompt"],
   update_bot: ["name", "title", "description"],
   schedule_create: ["name", "prompt", "question"],
+  feedback: ["summary", "expected", "tool", "reproduction"],
 };
 
 function redactBotToolArgs(

@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-11-01
 
+#### Added
+
+- **Bots can report problems with Rakazo itself as GitHub issues.** When the server operator connects a feedback repository, a bot that gets blocked, hits a malfunction or needs far too many steps can file an issue with its report and the run's model, ids and counters, and carries on with its task. See [Agent feedback](docs/self-host.md#agent-feedback).
+
 #### Changed
 
 - The desktop, iOS and Android apps are named Tangow and use `com.romainjeff.tangow` as their application identifier.

@@ -471,6 +471,19 @@ export interface WebProvider extends WebSearchProvider, WebFetchProvider {
   describe(): AdapterDescriptor<WebSearchCapabilities & WebFetchCapabilities>;
 }
 
+/** An issue the builtin `feedback` tool files with the operator's tracker. */
+export interface FeedbackIssue {
+  title: string;
+  body: string;
+  labels: string[];
+}
+
+/** Where the operator receives agent feedback. Builtin `feedback` routes here. */
+export interface FeedbackProvider {
+  /** Resolves to the created issue's URL; throws when it was not created. */
+  deliver(issue: FeedbackIssue, context: AdapterContext): Promise<{ url: string }>;
+}
+
 /**
  * Provider-neutral page browser on the bot computer. Builtin browser_* tools
  * route here so backends (in-process page session, CDP against the computer's

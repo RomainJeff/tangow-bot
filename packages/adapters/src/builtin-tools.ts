@@ -919,6 +919,38 @@ that merely narrate internal operations.`,
     },
   },
   {
+    name: "feedback",
+    description:
+      "Report a problem with Rakazo itself to the team that runs it, when it happens: a tool or capability blocked you, something malfunctioned, or a task took far more steps than it should have. It files an issue for them; it does not get you help, pause the run, or reach the user, so keep using ask_user or ask_parent for that, and carry on with your task after it. Not a review to write at the end of every task. Describe what you observed, not the user's private content: the report leaves this conversation.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        kind: { type: "string", enum: ["blocked", "malfunction", "excessive_steps", "other"] },
+        summary: {
+          type: "string",
+          minLength: 1,
+          maxLength: 500,
+          description: "What went wrong, in one or two sentences. Its first line is the title.",
+        },
+        expected: {
+          type: "string",
+          minLength: 1,
+          maxLength: 1000,
+          description: "What should have happened instead.",
+        },
+        impact: { type: "string", enum: ["blocked", "workaround", "completed_with_difficulty"] },
+        tool: { type: "string", maxLength: 120, description: "The tool involved, if one was." },
+        reproduction: {
+          type: "string",
+          maxLength: 2000,
+          description: "Short steps or the error text that reproduce it, if useful.",
+        },
+      },
+      required: ["kind", "summary", "expected", "impact"],
+      additionalProperties: false,
+    },
+  },
+  {
     name: "create_space",
     description:
       "Propose a new space in the current organization when the user asks for a separate data boundary. A space can contain many bots and groups, but its chats, files, memory, tools, and integrations stay isolated from other spaces. This always shows the user a confirmation card before creation. Creating the space is the whole action; do not create bots in it unless the user asks later.",
