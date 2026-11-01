@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Button,
   Platform,
   Pressable,
   ScrollView,
@@ -238,11 +237,6 @@ export default function Account() {
   return (
     <SafeAreaView edges={["bottom"]} style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Button
-          color={mobileTokens().primary}
-          title="AI data sharing"
-          onPress={() => router.push("/ai-data-sharing")}
-        />
         <View style={styles.profile}>
           <Text style={styles.name}>{me?.name || t("Your account")}</Text>
           {me?.email ? <Text style={styles.email}>{me.email}</Text> : null}
