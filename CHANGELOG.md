@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-11-01
+
+#### Changed
+
+- The desktop, iOS and Android apps are named Tangow and use `com.romainjeff.tangow` as their application identifier.
+
 ### 2026-10-31
 
 #### Changed
