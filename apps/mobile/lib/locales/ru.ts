@@ -37,8 +37,6 @@ export const RU_MESSAGES: Record<string, string> = {
   "Updates queued: {count}": "Обновлений в очереди: {count}",
   "Updates unavailable": "Обновления недоступны",
   "Content lives on the shared volume.": "Содержимое хранится на общем томе.",
-  "Update your server to use AI data sharing in this mobile version.":
-    "Обновите сервер, чтобы использовать обмен данными с ИИ в этой версии мобильного приложения.",
   "Ask the server owner to configure this provider.":
     "Попросите владельца сервера настроить этого провайдера.",
   "Client ID": "ID клиента",
