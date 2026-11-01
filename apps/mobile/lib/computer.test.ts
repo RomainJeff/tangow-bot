@@ -70,7 +70,7 @@ describe("computer copy", () => {
   it("matches the web pane while booting, asleep, or in control", () => {
     expect(previewPlaceholder("stopped", false, "Chief")).toBe("Computer is stopped");
     expect(previewPlaceholder("suspended", false, "Chief")).toBe(
-      "Computer is asleep. Take control to wake it.",
+      "Computer is asleep. Open it to wake.",
     );
     expect(previewPlaceholder("running", true, "Chief")).toBe("Booting live desktop…");
     expect(
