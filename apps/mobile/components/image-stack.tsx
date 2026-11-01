@@ -1,5 +1,6 @@
 import type { StackImage } from "@rakazo/core";
 import { motion, radii, sizes } from "@rakazo/ui-tokens";
+import { Link } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ViewProps } from "react-native";
 import { Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
@@ -21,6 +22,7 @@ import {
   stackFrame,
   stackStepX,
 } from "../lib/image-stack";
+import { IMAGE_VIEWER_HREF } from "../lib/image-viewer";
 import { linkCardWidth } from "../lib/link-preview";
 import { useMobileTokens } from "../lib/native";
 import { nativeTextStyle } from "../lib/typography";
@@ -46,7 +48,8 @@ export interface ImageStackProps {
   author: string;
   /** True only in the render pass a newer image joined this stack, never when it merely mounts. */
   arrival: boolean;
-  onOpen: (front: StackImage) => void;
+  /** A tap hands the viewer its list; the link below does the navigating, so the zoom transition can attach. */
+  onOpen: () => void;
   /** The front message's long press: its action sheet. */
   onLongPress?: () => void;
   accessibilityActions?: ViewProps["accessibilityActions"];
@@ -72,6 +75,7 @@ export function ImageStack({
 }: ImageStackProps) {
   const tokens = useMobileTokens();
   const { t } = useI18n();
+  const reducedMotion = useChatReducedMotion();
   const { width: windowWidth } = useWindowDimensions();
   const frame = stackFrame(
     linkCardWidth({
@@ -99,61 +103,79 @@ export function ImageStack({
         })
       : t("Image, from {author}", { author });
 
-  return (
-    <Pressable
-      accessible
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityHint={retryFront ? t("Retry") : undefined}
-      accessibilityActions={accessibilityActions}
-      onAccessibilityAction={onAccessibilityAction}
-      onPress={() => (retryFront ? retryFront() : onOpen(front))}
-      onLongPress={onLongPress}
-      // A thumb scrolling the thread past the stack does not press it.
-      unstable_pressDelay={130}
+  const frameView = (
+    <View
+      collapsable={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
       style={{
-        width: frame.width + STACK_ROOM,
+        width: frame.width,
         height: frame.height,
-        alignSelf: align === "end" ? "flex-end" : "flex-start",
+        marginStart: align === "end" ? STACK_ROOM : 0,
       }}
     >
-      <View
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
+      {stackCards(images).map((card) => (
+        <StackCard
+          key={card.key}
+          card={card}
+          frame={frame}
+          direction={direction}
+          target={target}
+          arrival={arrival}
+          onFront={card.depth === 0 ? reportFront : undefined}
+        />
+      ))}
+      {images.length >= COUNT_FROM ? (
+        <View style={[styles.count, { backgroundColor: tokens.overlay, borderRadius: radii.pill }]}>
+          <NativeSymbol
+            ios="square.stack"
+            android="layers-outline"
+            size={14}
+            color={tokens.chatUserForeground}
+          />
+          <Text style={{ color: tokens.chatUserForeground, ...nativeTextStyle("meta") }}>
+            {images.length}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+
+  // The front frame is the zoom's source: the viewer opens out of it and closes back into it. When
+  // the list has unmounted this row, the source is gone and the system closes with a plain fade.
+  // Reduce Motion drops the source, so the viewer opens and closes without a zoom.
+  return (
+    <Link
+      href={IMAGE_VIEWER_HREF}
+      asChild
+      onPress={(event) => {
+        if (retryFront) {
+          event.preventDefault();
+          retryFront();
+        } else {
+          onOpen();
+        }
+      }}
+    >
+      <Pressable
+        accessible
+        role="button"
+        accessibilityLabel={label}
+        accessibilityHint={retryFront ? t("Retry") : undefined}
+        accessibilityActions={accessibilityActions}
+        onAccessibilityAction={onAccessibilityAction}
+        onLongPress={onLongPress}
+        // A thumb scrolling the thread past the stack does not press it.
+        unstable_pressDelay={130}
         style={{
-          width: frame.width,
+          width: frame.width + STACK_ROOM,
           height: frame.height,
-          marginStart: align === "end" ? STACK_ROOM : 0,
+          alignSelf: align === "end" ? "flex-end" : "flex-start",
         }}
       >
-        {stackCards(images).map((card) => (
-          <StackCard
-            key={card.key}
-            card={card}
-            frame={frame}
-            direction={direction}
-            target={target}
-            arrival={arrival}
-            onFront={card.depth === 0 ? reportFront : undefined}
-          />
-        ))}
-        {images.length >= COUNT_FROM ? (
-          <View
-            style={[styles.count, { backgroundColor: tokens.overlay, borderRadius: radii.pill }]}
-          >
-            <NativeSymbol
-              ios="square.stack"
-              android="layers-outline"
-              size={14}
-              color={tokens.chatUserForeground}
-            />
-            <Text style={{ color: tokens.chatUserForeground, ...nativeTextStyle("meta") }}>
-              {images.length}
-            </Text>
-          </View>
-        ) : null}
-      </View>
-    </Pressable>
+        {reducedMotion ? frameView : <Link.AppleZoom>{frameView}</Link.AppleZoom>}
+      </Pressable>
+    </Link>
   );
 }
 

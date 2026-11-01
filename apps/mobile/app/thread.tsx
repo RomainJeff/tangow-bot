@@ -23,7 +23,7 @@ import {
   MESSAGE_REACTIONS,
   type MessageReaction,
 } from "@rakazo/contracts";
-import type { ImageStack as ImageStackModel, StackImage } from "@rakazo/core";
+import type { ImageStack as ImageStackModel } from "@rakazo/core";
 import {
   ACTIVE_RUN_STATUSES,
   abortableDelay,
@@ -198,6 +198,7 @@ import { draftEdit, dropDraftEdit, syncDraftEdit } from "../lib/draft-edit";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
 import { commitHaptic, selectionHaptic, sendHaptic, successHaptic } from "../lib/haptics";
 import { dateLocaleForUi, t, useI18n } from "../lib/i18n";
+import { setImageViewerPayload } from "../lib/image-viewer";
 import { unreadConversationCount } from "../lib/inbox-spaces";
 import { saveLastBotId } from "../lib/last-bot";
 import {
@@ -3784,14 +3785,13 @@ const MessageBubble = memo(function MessageBubble({
       ...(message.role === "user" ? { backgroundColor: tokens.chatUser } : null),
     };
     const quote = replyQuote(message, replyPreview);
-    const openImage = (image: StackImage) =>
-      void openMobileArtifact(artifactTarget, image.artifactId, image.name, image.mimeType).catch(
-        (err) =>
-          Alert.alert(
-            t("Could not open image"),
-            err instanceof Error ? err.message : t("Try again."),
-          ),
-      );
+    const openImage = () =>
+      setImageViewerPayload({
+        images,
+        startIndex: images.length - 1,
+        author: authorName,
+        target: artifactTarget,
+      });
     const words =
       quote || caption ? (
         <>

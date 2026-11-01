@@ -1,3 +1,4 @@
+import { darkTokens } from "@rakazo/ui-tokens";
 import * as Notifications from "expo-notifications";
 import {
   DarkTheme,
@@ -206,6 +207,14 @@ export default function Layout() {
                 <Stack.Screen
                   name="bot-text"
                   options={{ presentation: "fullScreenModal", gestureEnabled: false }}
+                />
+                <Stack.Screen
+                  name="image-viewer"
+                  options={{
+                    presentation: "fullScreenModal",
+                    headerShown: false,
+                    contentStyle: { backgroundColor: darkTokens.background },
+                  }}
                 />
                 <Stack.Screen name="bot-routine" />
                 <Stack.Screen name="bot-routine-new" options={{ title: t("New routine") }} />
