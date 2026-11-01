@@ -13,7 +13,11 @@ import { messagingDeliverJob } from "@rakazo/adapter-kit";
 import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { expireComputerControl } from "./computer-control.js";
-import { scheduleComputerSleep, sleepComputerIfIdle } from "./computer-idle.js";
+import {
+  scheduleComputerSleep,
+  sleepBotScreenIfIdle,
+  sleepComputerIfIdle,
+} from "./computer-idle.js";
 import { performComputerUpdate } from "./computer-update.js";
 import { moveIdleDockerHomes } from "./docker-home-migration.js";
 import type { createRunExecutor } from "./executor.js";
@@ -103,6 +107,9 @@ export function createBackgroundJobHandlers(deps: {
           getLogger().error("docker home move failed", error, { computerId: payload.computerId }),
         );
       }
+    },
+    "computer.screen-sleep": async (payload) => {
+      await sleepBotScreenIfIdle(deps, payload);
     },
     "computer.control-expire": async (payload) => {
       if (await expireComputerControl(deps, payload.computerId, payload.leaseId)) {

@@ -76,6 +76,7 @@ import {
   hasValidBearerToken,
   interactiveScreenCommand,
   isComputerControlUnavailable,
+  keepReleasedScreen,
   nextScreenIndex,
   normalizeWorkspaceRelative,
   parseObservation,
@@ -767,9 +768,30 @@ app.delete("/computers/:id/screen", async (c) => {
     const screenId = c.req.header("x-rakazo-screen-id") || c.req.header("x-rakazo-bot-id") || id;
     const cancelRunWork = c.req.header("x-rakazo-cancel-run-work") === "1";
     const screenLeaseId = c.req.header("x-rakazo-screen-lease-id");
+    // Only a leased release can be kept: a bot's deletion or archive has none and must close it.
+    const preserve =
+      c.req.header("x-rakazo-preserve-screen") === "1" && !cancelRunWork && Boolean(screenLeaseId);
+    let kept = false;
+    let refused = false;
     await withComputerScreenLock(id, async () => {
       const assigned = computerScreens.get(id);
       const index = assigned ? releaseAssignedScreen(assigned, screenId, screenLeaseId) : undefined;
+      // A newer run owns the slot: the caller must not treat its screen as released.
+      refused = Boolean(screenLeaseId && assigned?.has(screenId) && index === undefined);
+      if (preserve && assigned && index !== undefined) {
+        // Revoking control disconnects the run's input while the display and browser stay up.
+        // A revoke that fails or throws falls through to the normal teardown.
+        const revoked = await runContainerCommand(container, [
+          "bash",
+          "-c",
+          interactiveScreenCommand(false, undefined, screenPorts(index)),
+        ]).catch(() => undefined);
+        if (revoked?.code === 0) {
+          keepReleasedScreen(assigned, screenId, index);
+          kept = true;
+          return;
+        }
+      }
       const stop = screenReleaseStopCommand(index, {
         hasRegistry: Boolean(assigned),
         cancelRunWork,
@@ -787,7 +809,8 @@ app.delete("/computers/:id/screen", async (c) => {
       }
       if (assigned?.size === 0) computerScreens.delete(id);
     });
-    return c.json({ ok: true });
+    if (kept) return c.json({ ok: true, kept });
+    return c.json(refused ? { ok: true, released: false } : { ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return c.json({ error: message }, 404);

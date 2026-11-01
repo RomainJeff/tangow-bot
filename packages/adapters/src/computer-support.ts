@@ -2,14 +2,32 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import type {
   AdapterContext,
+  BackgroundJobPayloads,
   ComputerAction,
   ComputerObservation,
   ComputerRef,
+  JobPublisher,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
+import { computerScreenSleepJob } from "@rakazo/adapter-kit";
 import type { ComputerMode } from "@rakazo/contracts";
 import { WORKSPACE_ROOT } from "@rakazo/core";
 import { shellQuote } from "@rakazo/core/node/desktop-runtime";
+
+export const DEFAULT_SANDBOX_IDLE_MS = 10 * 60 * 1000;
+
+export function sandboxIdleMs(): number {
+  const raw = Number(process.env.SANDBOX_IDLE_MS ?? DEFAULT_SANDBOX_IDLE_MS);
+  return Number.isFinite(raw) && raw >= 30_000 ? raw : DEFAULT_SANDBOX_IDLE_MS;
+}
+
+/** Closes a kept bot screen after the idle delay, unless a run or a person still needs it. */
+export function scheduleBotScreenSleep(
+  jobs: Pick<JobPublisher, "enqueue">,
+  screen: BackgroundJobPayloads["computer.screen-sleep"],
+): Promise<void> {
+  return jobs.enqueue(computerScreenSleepJob(screen, new Date(Date.now() + sandboxIdleMs())));
+}
 
 export function toComputerRef(computer: {
   homeKey: string;
