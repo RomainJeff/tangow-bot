@@ -28,7 +28,7 @@
     "vitest": "4.1.11"
   },
   "build": {
-    "appId": "dev.tangow.desktop",
+    "appId": "com.romainjeff.tangow",
     "directories": {
       "output": "out",
       "buildResources": "assets"

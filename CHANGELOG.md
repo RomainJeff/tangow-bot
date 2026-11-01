@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-11-01
+
+#### Changed
+
+- The desktop, iOS and Android apps are named Tangow and use `com.romainjeff.tangow` as their application identifier.
+
+#### Fixed
+
+- When a bot's run ends well, its Docker computer keeps the browser open for a while, and reopens the bot's last tabs whenever it has to start again, so the next run, a helper's follow-up or your takeover finds the page it left instead of a blank tab; a bot that finishes with nothing left for anyone closes the tabs it opened.
+
 ### 2026-10-31
 
 #### Changed

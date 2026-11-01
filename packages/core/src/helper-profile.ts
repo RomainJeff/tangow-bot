@@ -15,6 +15,21 @@ export interface HelperProfile {
   instructions: string;
 }
 
+/**
+ * A bot's browser outlives its runs, so whoever uses it decides what stays open: tabs left for
+ * the next one, or none. Chrome's debug port is 9221 + the display number, as in rakazo-browser.
+ */
+export function browserTabsInstruction(execTool: string): string[] {
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: shell parameter expansion
+  const port = "127.0.0.1:$((9221+${DISPLAY#:}))";
+  return [
+    "The browser keeps its tabs between runs, and this bot's other runs and helpers use it too.",
+    `Before your first page task, check the current page. If it belongs to other work, open your own tab with ${execTool}: curl -s -X PUT "${port}/json/new?<url>". Keep the returned id; the browser tools then act on that tab.`,
+    `When you are done and nobody, another bot, the user or a later run of yours, needs to continue on a page, close your tabs: curl -s "${port}/json/close/<id>". Never close the last tab, which quits the browser: open about:blank with json/new first.`,
+    "When someone must continue on a page, leave it open and in front, and give its URL and the next step.",
+  ];
+}
+
 export const HELPER_PROFILES: readonly HelperProfile[] = [
   {
     name: "computer-use",
@@ -40,6 +55,9 @@ export const HELPER_PROFILES: readonly HelperProfile[] = [
       "- Take facts from the page only, and stop as soon as the pages you read answer the brief: a fact a page states needs no second check.",
       "- After each act, check the page shows the change you expected; if not, read why once, and never repeat the same step.",
       "- If the site cannot answer the brief, or the next step needs a login, a payment or a choice the brief leaves open, stop. As a background helper, ask your parent with ask_parent; otherwise report blocked. Never invent an answer.",
+      "",
+      "Tabs:",
+      ...browserTabsInstruction("computer_exec").map((line) => `- ${line}`),
       "",
       "Report, short:",
       "Status: done or blocked.",

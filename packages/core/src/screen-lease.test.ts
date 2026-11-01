@@ -26,6 +26,17 @@ describe("canTakeScreenLease", () => {
     expect(canTakeScreenLease("run-1:8", "run-1:1")).toBe(false);
     expect(canTakeScreenLease("run-2:2", undefined)).toBe(false);
   });
+
+  it("lets another run take a kept screen whatever its fence, since fences only order one run's attempts", () => {
+    expect(canTakeScreenLease("run-1:1", "run-2:1")).toBe(false);
+    expect(canTakeScreenLease("run-1:2", "run-2:1", true)).toBe(true);
+    expect(canTakeScreenLease("run-1:3", "run-2:2", true)).toBe(true);
+  });
+
+  it("still refuses an older attempt of the run that kept the screen", () => {
+    expect(canTakeScreenLease("run-1:2", "run-1:1", true)).toBe(false);
+    expect(canTakeScreenLease("run-1:2", "run-1:3", true)).toBe(true);
+  });
 });
 
 describe("canReleaseScreenLease", () => {

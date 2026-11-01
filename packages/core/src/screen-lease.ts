@@ -10,13 +10,18 @@ export function parseScreenLeaseId(leaseId: string): { ownerId: string; fence: n
   return { ownerId: leaseId.slice(0, separator), fence };
 }
 
+/** Fences only order one run's attempts, so a kept screen, which no run owns, goes to any other run. */
 export function canTakeScreenLease(
   existing: string | undefined,
   incoming: string | undefined,
+  kept = false,
 ): boolean {
   if (!incoming) return false;
   if (!existing || existing === incoming) return true;
-  return parseScreenLeaseId(incoming).fence > parseScreenLeaseId(existing).fence;
+  const next = parseScreenLeaseId(incoming);
+  const current = parseScreenLeaseId(existing);
+  if (kept && next.ownerId !== current.ownerId) return true;
+  return kept ? next.fence >= current.fence : next.fence > current.fence;
 }
 
 export function canReleaseScreenLease(
