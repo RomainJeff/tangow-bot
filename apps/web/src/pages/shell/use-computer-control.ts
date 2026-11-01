@@ -160,7 +160,8 @@ export function useComputerControl({
         force: computer?.state !== "running",
       });
       await refreshComputerScreen(active.id, { visible: true });
-      setComputerOpen(true);
+      // Watching opened the window already; reopening here would undo a close made while it loaded.
+      if (takeover) setComputerOpen(true);
     } catch {
       // computerError already set in bootComputer
     } finally {

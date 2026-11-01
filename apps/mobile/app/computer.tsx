@@ -169,7 +169,8 @@ export default function Computer() {
         force: computer?.state !== "running",
       });
       if (!opened || !refreshController.isActive()) return;
-      setComputerOpen(true);
+      // Watching opened the modal already; reopening here would undo a close made while it loaded.
+      if (needsTakeover) setComputerOpen(true);
       setScreenError(null);
     } catch {
       // error already set
@@ -221,12 +222,7 @@ export default function Computer() {
     }
   }
 
-  const connecting =
-    !error &&
-    !screenError &&
-    (opening ||
-      computer?.state === "booting" ||
-      (computer?.state === "running" && !embeddedScreenUrl));
+  const connecting = !error && !screenError && (opening || computer?.state === "booting");
   const placeholder =
     screenError ?? previewPlaceholder(computer?.state, booting, name, computer?.mode);
   const openPreview = (

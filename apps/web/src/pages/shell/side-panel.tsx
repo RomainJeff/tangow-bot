@@ -273,10 +273,7 @@ export function ComputerOverlay({
   sendError: string | null;
 }) {
   const { t } = useLingui();
-  const connecting =
-    opening ||
-    computer?.state === "booting" ||
-    (computer?.state === "running" && !embeddedScreenUrl);
+  const connecting = opening || computer?.state === "booting";
   return booting ? (
     <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-[22px] bg-background/95">
       <div className="text-title font-medium text-foreground">

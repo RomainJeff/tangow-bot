@@ -268,11 +268,14 @@ test("opening the bot's screen responds at once while a fresh screen URL loads",
       body: "<!doctype html><title>Test desktop</title><p>Desktop connected</p>",
     }),
   );
+  // A slow read answers with a distinct URL, so the window can be shown to use the fresh one.
+  const freshUrl = `${screenUrl}?fresh=1`;
   await page.route("**/rpc/computer/screenUrl", async (route) => {
+    const slow = delayMs > 0;
     await new Promise((resolve) => setTimeout(resolve, delayMs));
     await route.fulfill({
       contentType: "application/json",
-      body: JSON.stringify({ json: { url: screenUrl } }),
+      body: JSON.stringify({ json: { url: slow ? freshUrl : screenUrl } }),
     });
   });
 
@@ -284,16 +287,24 @@ test("opening the bot's screen responds at once while a fresh screen URL loads",
   await page.clock.fastForward(55 * 60_000);
   delayMs = 3_000;
   await preview.hover();
+  const slowRead = page.waitForResponse("**/rpc/computer/screenUrl");
   await preview.getByTestId("computer-preview-open").click();
   const viewport = page.getByTestId("computer-viewport");
-  await expect(page.getByRole("button", { name: "Close computer" })).toBeVisible({
-    timeout: 1_000,
-  });
+  const closeButton = page.getByRole("button", { name: "Close computer" });
+  await expect(closeButton).toBeVisible({ timeout: 1_000 });
   await expect(viewport.getByRole("status")).toHaveText("Connecting…");
   await expect(viewport.locator("iframe")).toHaveCount(0);
   await captureScreenshot(page, testInfo, "50-team-computer-open-connecting");
 
-  await expect(viewport.locator("iframe")).toHaveAttribute("src", screenUrl);
+  // Closing while it loads keeps it closed once the slow read lands.
+  await closeButton.click();
+  await slowRead;
+  await expect(closeButton).toHaveCount(0);
+
+  // Reopened, the window shows the fresh URL, not the one the preview held before.
+  await preview.hover();
+  await preview.getByTestId("computer-preview-open").click();
+  await expect(viewport.locator("iframe")).toHaveAttribute("src", freshUrl);
 });
 
 async function createBot(page: Page, name: string, mode: "team" | "dedicated") {
