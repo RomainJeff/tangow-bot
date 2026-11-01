@@ -61,6 +61,10 @@ way: `sheet`, then its `group`s.
 | `optionRing` | `#DADADD` | `#636366` | the ring of an answer at rest: option tile, quick reply |
 | `optionRingHover` | `#C7C7CC` | `#77777B` | option tile under the pointer, open answer field |
 | `pressed` | `#E8E8EA` (`secondary`) | `#4A4A4D` | a control being pressed; 40% under the pointer |
+| `mediaBackdrop` | `#000000` | `#000000` | the black behind a picture shown on its own, in both themes |
+| `mediaBackdropForeground` | `#F5F5F7` | `#F5F5F7` | text and icons on `mediaBackdrop` |
+| `mediaBackdropMuted` | `#AEAEB2` | `#AEAEB2` | secondary text on `mediaBackdrop` |
+| `mediaBackdropControl` | `#2C2C2E` | `#2C2C2E` | a round control, or a picture's placeholder, on `mediaBackdrop` |
 
 `botColors` is user data and never changes with the skin. `botAccentOn`
 judges a bot colour against `card`, the composer's opaque plane, where the

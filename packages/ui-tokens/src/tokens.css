@@ -47,6 +47,10 @@
   --option-ring: #636366;
   --option-ring-hover: #77777b;
   --pressed: #4a4a4d;
+  --media-backdrop: #000000;
+  --media-backdrop-foreground: #f5f5f7;
+  --media-backdrop-muted: #aeaeb2;
+  --media-backdrop-control: #2c2c2e;
   --radius: 0.75rem;
   --elevation-row: none;
   --elevation-bubble: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 0 0 1px rgba(255, 255, 255, 0.05);
@@ -133,6 +137,10 @@
   --option-ring: #dadadd;
   --option-ring-hover: #c7c7cc;
   --pressed: #e8e8ea;
+  --media-backdrop: #000000;
+  --media-backdrop-foreground: #f5f5f7;
+  --media-backdrop-muted: #aeaeb2;
+  --media-backdrop-control: #2c2c2e;
   --radius: 0.75rem;
   --elevation-row: none;
   --elevation-bubble: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.05);
