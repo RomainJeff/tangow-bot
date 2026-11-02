@@ -288,10 +288,13 @@ describe("link preview in the thread", () => {
 
   it("renders the picture from the thread's artifact, never from a remote URL", async () => {
     await renderMessage(
-      message("user", [text(`hi ${URL_A}`), card({ format: "large", image: IMAGE })]),
+      message("user", [
+        text(`hi ${URL_A}`),
+        card({ format: "large", image: { ...IMAGE, artifactId: "art-large" } }),
+      ]),
     );
 
-    expect(api.artifactsGet).toHaveBeenCalledWith({ botId: "bot1", artifactId: "art1" });
+    expect(api.artifactsGet).toHaveBeenCalledWith({ botId: "bot1", artifactId: "art-large" });
     const link = cards()[0]!;
     const images = [...link.querySelectorAll("img")];
     expect(images).toHaveLength(1);
@@ -306,7 +309,9 @@ describe("link preview in the thread", () => {
 
   it("falls back to a tile with the image glyph when the artifact cannot be read", async () => {
     api.artifactsGet.mockRejectedValue(new Error("gone"));
-    await renderMessage(message("user", [text(`hi ${URL_A}`), card({ image: IMAGE })]));
+    await renderMessage(
+      message("user", [text(`hi ${URL_A}`), card({ image: { ...IMAGE, artifactId: "art-gone" } })]),
+    );
 
     const link = cards()[0]!;
     expect(link.querySelector("img")).toBeNull();

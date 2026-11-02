@@ -1,4 +1,5 @@
-import type { StackImage } from "@rakazo/core";
+import type { StackCardModel, StackImage } from "@rakazo/core";
+import { IMAGE_STACK, STACK_ROOM, stackCards, stackStepX } from "@rakazo/core";
 import { motion, radii, sizes } from "@rakazo/ui-tokens";
 import { Link } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -21,15 +22,7 @@ import Animated, {
 import type { MobileArtifactTarget } from "../lib/artifact-open";
 import { CHAT_MOTION, SPRING_TIMING, useChatReducedMotion } from "../lib/chat-motion";
 import { useI18n } from "../lib/i18n";
-import type { StackCardModel } from "../lib/image-stack";
-import {
-  coverFromTop,
-  IMAGE_STACK,
-  STACK_ROOM,
-  stackCards,
-  stackFrame,
-  stackStepX,
-} from "../lib/image-stack";
+import { coverFromTop, stackFrame } from "../lib/image-stack";
 import { IMAGE_VIEWER_HREF, imageLabel, useImageZoom } from "../lib/image-viewer";
 import { linkCardWidth } from "../lib/link-preview";
 import { useMobileTokens } from "../lib/native";
@@ -37,9 +30,6 @@ import { nativeTextStyle } from "../lib/typography";
 import { AVATAR_GAP, THREAD_GUTTER } from "./bot-bubble";
 import { useArtifactImage } from "./link-preview-card";
 import { NativeSymbol } from "./native-symbol";
-
-/** The count shows from this many images: a pile of three reads at a glance. */
-const COUNT_FROM = 4;
 
 /** Pictures already drawn once this session come back at full opacity, so a row the list re-mounts does not fade in again. */
 const drawn = new Set<string>();
@@ -132,7 +122,7 @@ export function ImageStack({
           onFront={card.depth === 0 ? reportFront : undefined}
         />
       ))}
-      {images.length >= COUNT_FROM ? (
+      {images.length >= IMAGE_STACK.countFrom ? (
         <View style={[styles.count, { backgroundColor: tokens.overlay, borderRadius: radii.pill }]}>
           <NativeSymbol
             ios="square.stack"

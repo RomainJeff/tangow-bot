@@ -14,7 +14,8 @@ const LONG_PRESS_SQUASH_MS = 150;
 /** More than this many px of movement during the hold cancels it — a scroll, not a press. */
 const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
 /** A long press starts on the bubble itself, not its controls (a link still starts one — B3). */
-const LONG_PRESS_BUBBLE_SELECTOR = '[data-slot="message-row-bubble"],[data-slot="user-bubble"]';
+const LONG_PRESS_BUBBLE_SELECTOR =
+  '[data-slot="message-row-bubble"],[data-slot="user-bubble"],[data-slot="image-stack"]';
 const LONG_PRESS_EXCLUDED_SELECTOR =
   'button,[role="button"],[role="menuitem"],input,textarea,[contenteditable="true"],select';
 
@@ -59,7 +60,9 @@ export function useBubbleLongPress(scrollRef: RefObject<HTMLDivElement | null>) 
       // A message still being written has no actions yet (as on hover).
       if (isLiveItem(message)) return;
       const target = event.target as HTMLElement | null;
-      if (target?.closest(LONG_PRESS_EXCLUDED_SELECTOR)) return;
+      // A stack of images is a button, and the message's actions still start from it.
+      const control = target?.closest(LONG_PRESS_EXCLUDED_SELECTOR);
+      if (control && control.getAttribute("data-slot") !== "image-stack") return;
       if (!target?.closest(LONG_PRESS_BUBBLE_SELECTOR)) return;
       clearPressTimers();
       pressStart.current = {
