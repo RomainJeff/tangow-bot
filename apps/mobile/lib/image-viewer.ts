@@ -10,9 +10,8 @@ export const IMAGE_VIEWER_HREF = "/image-viewer";
 
 /** What a tap on a stack hands the viewer. The list is the stack as it was when opened; a later arrival never changes it. */
 export type ImageViewerPayload = {
-  /** Oldest to newest. */
+  /** Newest to oldest, as the stack is piled: the viewer opens on the first. */
   images: readonly StackImage[];
-  startIndex: number;
   author: string;
   target: MobileArtifactTarget;
   /**

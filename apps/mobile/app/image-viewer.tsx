@@ -72,14 +72,14 @@ export default function ImageViewerScreen() {
 }
 
 function Viewer({ opened }: { opened: ImageViewerPayload }) {
-  const { images, startIndex, author, target } = opened;
+  const { images, author, target } = opened;
   const router = useRouter();
   const { t } = useI18n();
   const tokens = useMobileTokens();
   const reducedMotion = useChatReducedMotion();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
-  const [index, setIndex] = useState(startIndex);
+  const [index, setIndex] = useState(0);
   const [natural, setNatural] = useState<Record<string, Size>>({});
   const [sharing, setSharing] = useState(false);
   const pager = useRef<FlatList<StackImage>>(null);
@@ -151,7 +151,6 @@ function Viewer({ opened }: { opened: ImageViewerPayload }) {
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           keyExtractor={imageKey}
-          initialScrollIndex={startIndex}
           getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
           onMomentumScrollEnd={settle}
           windowSize={3}

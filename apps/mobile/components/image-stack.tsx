@@ -108,7 +108,7 @@ export function ImageStack({
   }, []);
   if (!front) return null;
 
-  const label = imageLabel(t, images.length, images.length, author);
+  const label = imageLabel(t, 1, images.length, author);
 
   const frameView = (
     <View
