@@ -111,6 +111,18 @@ test("consecutive images gather in one stack that opens in a viewer you step thr
     await captureScreenshot(page, testInfo, `image-viewer-${scheme}`);
   }
 
+  // Clicking down to the first image leaves Previous disabled under focus; the arrow keys still work.
+  const previous = viewer.getByRole("button", { name: "Previous image" });
+  for (const n of [3, 2, 1]) {
+    await previous.click();
+    await expect(page.getByRole("dialog", { name: `Image ${n} of 5, from Pixel` })).toBeVisible();
+  }
+  await expect(previous).toBeDisabled();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("dialog", { name: "Image 2 of 5, from Pixel" })).toBeVisible();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("dialog", { name: "Image 3 of 5, from Pixel" })).toBeVisible();
+
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(bot).toBeFocused();

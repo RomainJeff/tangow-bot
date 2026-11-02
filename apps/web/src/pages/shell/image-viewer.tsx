@@ -1,7 +1,7 @@
 import { i18n } from "@lingui/core";
 import { useLingui } from "@lingui/react/macro";
 import type { StackImage } from "@rakazo/core";
-import { threadTimeMarkerLabel } from "@rakazo/core";
+import { IMAGE_STACK, threadTimeMarkerLabel } from "@rakazo/core";
 import { Button, cn, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
 import { ChevronLeft, ChevronRight, RotateCw, X } from "lucide-react";
 import type { KeyboardEvent } from "react";
@@ -9,7 +9,7 @@ import type { ArtifactTarget } from "../../lib/artifact-open";
 import { useArtifactImageSrc } from "./use-artifact-image-src";
 
 const roundControl =
-  "absolute top-1/2 -translate-y-1/2 rounded-full bg-media-backdrop-control text-media-backdrop-foreground hover:bg-media-backdrop-control/80 hover:text-media-backdrop-foreground disabled:opacity-40";
+  "absolute top-1/2 -translate-y-1/2 rounded-full bg-media-backdrop-control text-media-backdrop-foreground hover:bg-media-backdrop-control/80 hover:text-media-backdrop-foreground data-disabled:opacity-40";
 
 /** The enlarged picture of one image, read from the thread's artifacts as the stack's cards are. */
 function ViewerPicture({
@@ -45,7 +45,12 @@ function ViewerPicture({
           onError={onImageError}
           className="max-h-full max-w-full rounded-card object-contain"
         />
-      ) : null}
+      ) : (
+        <div
+          className="h-full max-w-full rounded-card bg-media-backdrop-control"
+          style={{ aspectRatio: 1 / IMAGE_STACK.frameRatio }}
+        />
+      )}
     </div>
   );
 }
@@ -133,6 +138,7 @@ export function ImageViewer({
                 size="icon"
                 aria-label={t`Previous image`}
                 disabled={index === 0}
+                focusableWhenDisabled
                 onClick={() => step(-1)}
                 className={cn(roundControl, "start-2")}
               >
@@ -143,6 +149,7 @@ export function ImageViewer({
                 size="icon"
                 aria-label={t`Next image`}
                 disabled={index === images.length - 1}
+                focusableWhenDisabled
                 onClick={() => step(1)}
                 className={cn(roundControl, "end-2")}
               >
