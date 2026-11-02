@@ -5,7 +5,7 @@ import { IMAGE_STACK, threadTimeMarkerLabel } from "@rakazo/core";
 import { Button, cn, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
 import { ChevronLeft, ChevronRight, RotateCw, X } from "lucide-react";
 import type { KeyboardEvent } from "react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { ArtifactTarget } from "../../lib/artifact-open";
 import { useArtifactImageSrc } from "./use-artifact-image-src";
 
@@ -74,13 +74,16 @@ function ViewerThumb({
     target,
     image.artifactId,
   );
+  const opening = useRef(true);
   useEffect(() => {
+    const instant =
+      opening.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    opening.current = false;
     if (!current) return;
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     container.current?.scrollIntoView({
       block: "nearest",
       inline: "center",
-      behavior: reduced ? "instant" : "smooth",
+      behavior: instant ? "instant" : "smooth",
     });
   }, [current]);
   return (
