@@ -6,12 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### 2026-11-01
+### 2026-11-02
 
 #### Added
 
 - **Images now show in the iPhone conversation, and consecutive ones from the same sender gather in a stack.** Each image appears in a fixed frame instead of a file name, with the earlier ones peeking behind it, a count from four images up, and a long press that opens the actions of the newest one.
 - **Tap an image on iPhone to see it full screen, swipe through the whole stack and share it.** The image opens out of the stack, a strip of thumbnails at the bottom jumps to any image, and dragging down closes it back into the stack.
+
+### 2026-11-01
 
 #### Changed
 
