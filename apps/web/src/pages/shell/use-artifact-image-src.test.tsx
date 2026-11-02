@@ -4,7 +4,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-type Read = { artifactId: string; settle: (ok: boolean) => void };
+type Outcome = "read" | "unreadable" | "undecodable";
+type Read = { artifactId: string; settle: (outcome: Outcome) => void };
 const reads: Read[] = [];
 
 vi.mock("../../lib/rpc", () => ({
@@ -14,10 +15,13 @@ vi.mock("../../lib/rpc", () => ({
         new Promise((resolve, reject) => {
           reads.push({
             artifactId,
-            settle: (ok) =>
-              ok
-                ? resolve({ mimeType: "image/png", contentBase64: btoa(artifactId) })
-                : reject(new Error("unreadable")),
+            settle: (outcome) =>
+              outcome === "unreadable"
+                ? reject(new Error("unreadable"))
+                : resolve({
+                    mimeType: "image/png",
+                    contentBase64: outcome === "read" ? btoa(artifactId) : "not base64!",
+                  }),
           });
         }),
     },
@@ -43,13 +47,13 @@ beforeEach(() => {
   root = createRoot(document.createElement("div"));
 });
 
-const settleAll = (ok: boolean) =>
+const settleAll = (outcome: Outcome) =>
   act(async () => {
-    for (const read of reads.splice(0)) read.settle(ok);
+    for (const read of reads.splice(0)) read.settle(outcome);
   });
 
 afterEach(async () => {
-  await settleAll(true);
+  await settleAll("read");
   act(() => root.unmount());
 });
 
@@ -69,7 +73,7 @@ describe("useArtifactImageSrc", () => {
     );
     expect(reads.map((read) => read.artifactId)).toEqual(["a1", "a2", "a3", "a4"]);
 
-    await settleAll(true);
+    await settleAll("read");
     expect(reads.map((read) => read.artifactId)).toEqual(["a5", "a6"]);
     expect(shown.card?.src).toMatch(/^blob:/);
     expect(shown.viewer?.src).toBe(shown.card?.src);
@@ -84,13 +88,35 @@ describe("useArtifactImageSrc", () => {
         </>,
       ),
     );
-    await settleAll(false);
+    await settleAll("unreadable");
     expect([shown.card?.failed, shown.viewer?.failed]).toEqual([true, true]);
 
     act(() => shown.viewer?.retry());
     expect(reads.map((read) => read.artifactId)).toEqual(["b1"]);
-    await settleAll(true);
+    await settleAll("read");
     expect([shown.card?.failed, shown.viewer?.failed]).toEqual([false, false]);
     expect(shown.card?.src).toMatch(/^blob:/);
+  });
+
+  it("shows a picture whose bytes cannot be decoded as failed until a retry reads it again", async () => {
+    act(() => root.render(<Picture id="c1" slot="card" />));
+    await settleAll("undecodable");
+    expect(shown.card?.failed).toBe(true);
+
+    act(() => shown.card?.retry());
+    expect(reads.map((read) => read.artifactId)).toEqual(["c1"]);
+    await settleAll("read");
+    expect(shown.card?.src).toMatch(/^blob:/);
+  });
+
+  it("skips a queued read once nothing shows its picture, and reads it when shown again", async () => {
+    const ids = ["d1", "d2", "d3", "d4", "d5"];
+    act(() => root.render(ids.map((id) => <Picture key={id} id={id} slot={id} />)));
+    act(() => root.render(ids.slice(0, 4).map((id) => <Picture key={id} id={id} slot={id} />)));
+    await settleAll("read");
+    expect(reads).toEqual([]);
+
+    act(() => root.render(<Picture id="d5" slot="d5" />));
+    expect(reads.map((read) => read.artifactId)).toEqual(["d5"]);
   });
 });
