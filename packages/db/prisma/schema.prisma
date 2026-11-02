@@ -1001,6 +1001,7 @@ model Computer {
   homeStorage             String                   @default("snapshot")
   kind                    String
   providerRef             String?
+  releaseRef              String?
   state                   String                   @default("stopped")
   controlHolder           String                   @default("none")
   controlLeaseId          String?

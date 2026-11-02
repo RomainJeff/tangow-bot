@@ -23,6 +23,22 @@ describe("Docker sandbox", () => {
     vi.unstubAllGlobals();
   });
 
+  it("reports the actual provisioned image separately from the desired image", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url.endsWith("/computers/release")
+          ? Response.json({ releaseRef: "sha256:new-image" })
+          : Response.json({ id: "machine", resumed: true, releaseRef: "sha256:old-image" }),
+      ),
+    );
+    const provider = new DockerSandboxProvider("http://supervisor.test", "test-token");
+    expect(await provider.currentRelease(context)).toBe("sha256:new-image");
+    expect(await provider.provision({ botId: "bot", homePath: "/tmp/bot" }, context)).toMatchObject(
+      { releaseRef: "sha256:old-image", fresh: false },
+    );
+  });
+
   it("sends the bounded timeout to the supervisor and preserves its honest result", async () => {
     const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) =>
       Response.json({

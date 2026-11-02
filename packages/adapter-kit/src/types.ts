@@ -69,6 +69,8 @@ export interface ComputerRef {
   botId: string;
   kind: SandboxKind;
   providerRef: string;
+  /** Immutable environment release, preserved when reconnecting. */
+  releaseRef?: string | null;
   /** True when the provider created an empty replacement rather than reconnecting existing state. */
   fresh?: boolean;
   /**

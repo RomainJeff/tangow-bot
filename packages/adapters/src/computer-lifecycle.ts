@@ -356,6 +356,7 @@ export async function provisionComputer(
         homePath,
         providerRef: existing.providerRef ?? undefined,
         providerKind: existing.kind as ComputerRef["kind"],
+        releaseRef: existing.releaseRef,
         ...(existing.homeStorage === "volumes"
           ? {
               volumeHome: {
@@ -406,6 +407,7 @@ export async function provisionComputer(
       data: {
         state: "running",
         providerRef: ref.providerRef,
+        releaseRef: ref.releaseRef ?? (replacement ? null : existing.releaseRef),
         kind: ref.kind,
         ...(!reconnecting
           ? {

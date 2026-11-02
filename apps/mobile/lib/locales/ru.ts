@@ -1,4 +1,5 @@
 export const RU_MESSAGES: Record<string, string> = {
+  "Update available": "Доступно обновление",
   Fast: "Быстро",
   Everyday: "Повседневно",
   Complex: "Сложно",

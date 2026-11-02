@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-11-02
+
+#### Added
+
+- **Computer update notices on web, desktop and mobile.** Settings and the computer view show when an existing computer has an update available, with a manual update action. Unrelated application commits no longer count as computer updates.
+
 ### 2026-10-30
 
 #### Added

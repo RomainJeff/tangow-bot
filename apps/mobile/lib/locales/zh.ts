@@ -1,4 +1,5 @@
 export const ZH_MESSAGES: Record<string, string> = {
+  "Update available": "有可用更新",
   Fast: "快速",
   Everyday: "日常",
   Complex: "复杂",

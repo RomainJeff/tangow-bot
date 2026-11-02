@@ -25,7 +25,7 @@ import {
 } from "@rakazo/core";
 import { stopAllDesktopBrowsersCommand } from "@rakazo/core/node/desktop-runtime";
 import type { CommandHandle, CommandResult, ConnectionOpts } from "e2b";
-import { CommandExitError, ConnectionConfig, Sandbox, TimeoutError } from "e2b";
+import { CommandExitError, ConnectionConfig, Sandbox, Template, TimeoutError } from "e2b";
 import { sandboxIdleMs } from "./computer-idle.js";
 import { ComputerScreenUnavailableError } from "./computer-screens.js";
 import {
@@ -88,6 +88,7 @@ const RESTORE_BROWSER_PROFILES = [
 ].join("\n");
 
 export interface E2BSandboxSdk {
+  currentRelease?(signal: AbortSignal): Promise<string | null>;
   create(
     options: ReturnType<typeof e2bCreateOptions> & { metadata: Record<string, string> },
   ): Promise<Sandbox>;
@@ -99,8 +100,24 @@ export function e2bComputerSdk(
   connection: ConnectionOpts = {},
   template = "desktop",
 ): E2BSandboxSdk {
+  async function currentRelease(signal?: AbortSignal): Promise<string | null> {
+    const tags = await Template.getTags(template, { ...connection, signal });
+    const latest = tags.find((tag) => tag.tag === "latest");
+    return (
+      tags.find((tag) => tag.buildId === latest?.buildId && /^computer-[a-f0-9]{64}$/.test(tag.tag))
+        ?.tag ?? null
+    );
+  }
   return {
-    create: (options) => Sandbox.create(template, { ...connection, ...options }),
+    currentRelease,
+    create: async (options) => {
+      const releaseRef = options.metadata.releaseRef;
+      return Sandbox.create(releaseRef ? `${template}:${releaseRef}` : template, {
+        ...connection,
+        ...options,
+        metadata: { ...options.metadata, ...(releaseRef ? { releaseRef } : {}) },
+      });
+    },
     connect: (id, options) => Sandbox.connect(id, { ...connection, ...options }),
     pause: async (id, options) => {
       await Sandbox.pause(id, { ...connection, ...options });
@@ -210,6 +227,10 @@ export class E2BSandboxProvider implements SandboxProvider {
     private readonly sdk: E2BSandboxSdk = e2bComputerSdk({ apiKey }),
   ) {}
 
+  async currentRelease(context: AdapterContext): Promise<string | null> {
+    return this.sdk.currentRelease?.(context.signal) ?? null;
+  }
+
   describe() {
     return {
       id: "e2b",
@@ -286,6 +307,7 @@ export class E2BSandboxProvider implements SandboxProvider {
             botId: request.botId,
             kind: "e2b",
             providerRef: desktop.sandboxId,
+            releaseRef: metadata.releaseRef ?? request.releaseRef ?? null,
             fresh: false,
             ...onVolumes,
           };
@@ -309,7 +331,12 @@ export class E2BSandboxProvider implements SandboxProvider {
         if (!isSandboxGoneError(error)) throw error;
       }
     }
-    const desktop = await this.sdk.create(e2bCreateOptions(request.botId, this.apiKey, volumeHome));
+    const releaseRef = await this.currentRelease(context);
+    const options = e2bCreateOptions(request.botId, this.apiKey, volumeHome);
+    const desktop = await this.sdk.create({
+      ...options,
+      metadata: { ...options.metadata, ...(releaseRef ? { releaseRef } : {}) },
+    });
     if (volumeHome) {
       // The workspace is the volumes' own root, so a file has the same path here as in a worker.
       const linked = await this.runSetupCommand(
@@ -333,6 +360,7 @@ export class E2BSandboxProvider implements SandboxProvider {
       botId: request.botId,
       kind: "e2b",
       providerRef: desktop.sandboxId,
+      releaseRef,
       fresh: true,
       ...onVolumes,
     };

@@ -4,7 +4,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Sandbox, SandboxNotFoundError, TimeoutError } from "@e2b/desktop";
-import { CommandExitError, Sandbox as RawSandbox } from "e2b";
+import { CommandExitError, Sandbox as RawSandbox, Template } from "e2b";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { linkWorkspaceCommand } from "./computer-support.js";
 import { fakeE2BMachine } from "./e2b-machine.test-support.js";
@@ -73,18 +73,44 @@ describe("E2B computer backend", () => {
   });
 
   it("creates the canonical computer without starting a second SDK desktop", async () => {
-    const machine = fakeE2BMachine("canonical-computer");
+    const releaseRef = `computer-${"a".repeat(64)}`;
+    const tags = vi.spyOn(Template, "getTags").mockResolvedValue([
+      { tag: "latest", buildId: "rebuilt-template", createdAt: new Date() },
+      { tag: releaseRef, buildId: "rebuilt-template", createdAt: new Date() },
+    ]);
+    onTestFinished(() => tags.mockRestore());
+    const machine = fakeE2BMachine("canonical-computer", {}, { releaseRef });
     const create = vi.spyOn(RawSandbox, "create").mockResolvedValue(machine.sandbox);
     onTestFinished(() => create.mockRestore());
-    const computer = await new E2BSandboxProvider("test-key").provision(
+    const provider = new E2BSandboxProvider("test-key");
+    const computer = await provider.provision(
       { botId: "bot", homePath: "/tmp/test-home" },
       context,
     );
-    expect(computer.providerRef).toBe("canonical-computer");
+    expect(computer).toMatchObject({ providerRef: "canonical-computer", releaseRef });
     expect(machine.killed).toBe(false);
+    tags.mockResolvedValue([
+      { tag: "latest", buildId: "new-build", createdAt: new Date() },
+      { tag: `computer-${"b".repeat(64)}`, buildId: "new-build", createdAt: new Date() },
+    ]);
+    expect(
+      await provider.provision(
+        {
+          botId: "bot",
+          homePath: "/tmp/test-home",
+          providerRef: computer.providerRef,
+          providerKind: "e2b",
+          releaseRef,
+        },
+        context,
+      ),
+    ).toMatchObject({ releaseRef, fresh: false });
+
     expect(create).toHaveBeenCalledWith(
-      "desktop",
-      expect.objectContaining({ metadata: expect.objectContaining({ rakazo: "computer" }) }),
+      `desktop:${releaseRef}`,
+      expect.objectContaining({
+        metadata: expect.objectContaining({ rakazo: "computer", releaseRef }),
+      }),
     );
   });
 

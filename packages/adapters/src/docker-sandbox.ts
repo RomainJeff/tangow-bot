@@ -18,6 +18,7 @@ import type {
 } from "@rakazo/adapter-kit";
 import { boundedSandboxCommandTimeoutMs, resolveSupervisorToken } from "@rakazo/core";
 import { outgoingCorrelationHeaders } from "@rakazo/logging";
+import { z } from "zod";
 import {
   boundedComputerActions,
   clampRounded,
@@ -134,6 +135,17 @@ export class DockerSandboxProvider implements SandboxProvider {
     };
   }
 
+  async currentRelease(context: AdapterContext): Promise<string | null> {
+    const response = await fetch(this.url("/computers/release"), {
+      headers: this.headers(context),
+      signal: context.signal,
+    });
+    if (!response.ok) throw new Error(`computer release lookup failed: ${response.status}`);
+    return z
+      .object({ releaseRef: z.string().min(1) })
+      .parse(await readSandboxJson(response, context.signal)).releaseRef;
+  }
+
   /**
    * A home on volumes keeps `/home/rakazo` on its home directory for dotfiles and browser profiles,
    * and mounts its volumes at the paths workers use. The supervisor replaces a computer created
@@ -174,12 +186,19 @@ export class DockerSandboxProvider implements SandboxProvider {
       }
       throw new Error(`sandbox provision failed: ${res.status} ${detail}`.trim());
     }
-    const body = await readSandboxJson<{ id: string; resumed?: boolean }>(res, context.signal);
+    const body = z
+      .object({
+        id: z.string().min(1),
+        resumed: z.boolean().optional(),
+        releaseRef: z.string().min(1).optional(),
+      })
+      .parse(await readSandboxJson(res, context.signal));
     const computer: ComputerRef = {
       id: body.id,
       botId: request.botId,
       kind: "docker",
       providerRef: body.id,
+      releaseRef: body.releaseRef ?? null,
       fresh: body.resumed !== true,
     };
     if (volumeHome) {

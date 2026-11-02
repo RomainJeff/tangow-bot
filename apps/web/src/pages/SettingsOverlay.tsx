@@ -1,5 +1,5 @@
 import { useLingui } from "@lingui/react/macro";
-import type { AvatarStyle, SpaceMemoryConfig } from "@rakazo/contracts";
+import type { AvatarStyle, ComputerListItem, SpaceMemoryConfig } from "@rakazo/contracts";
 import { Button, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
 import {
   Brain,
@@ -13,6 +13,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { type ComponentType, useEffect, useRef, useState } from "react";
+import { rpc } from "../lib/rpc";
 import {
   GeneralSettingsPanels,
   UpdatesSettingsPanel,
@@ -78,6 +79,19 @@ export function SettingsOverlay({
   const [memoryBusy, setMemoryBusy] = useState(false);
   const [decisionModelBusy, setDecisionModelBusy] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState(false);
+  const [computerUpdateAvailable, setComputerUpdateAvailable] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void rpc.computer
+      .list()
+      .then((items: ComputerListItem[]) => {
+        if (active) setComputerUpdateAvailable(items.some((item) => item.status.updateAvailable));
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [section]);
   const panelBusy = memoryBusy || decisionModelBusy || voiceBusy;
 
   useEffect(() => {
@@ -182,6 +196,11 @@ export function SettingsOverlay({
                 >
                   <Icon className="size-4 shrink-0" strokeWidth={1.75} />
                   <span className="whitespace-nowrap">{item.label}</span>
+                  {item.id === "computer" && computerUpdateAvailable ? (
+                    <span role="img" aria-label={t`Update available`} title={t`Update available`}>
+                      <CloudDownload className="size-4 shrink-0" aria-hidden />
+                    </span>
+                  ) : null}
                 </button>
               );
             })}
@@ -228,7 +247,9 @@ export function SettingsOverlay({
               {section === "usage" ? (
                 <UsageSettingsPanel usage={usage} panelRef={usageRef} />
               ) : null}
-              {section === "computer" ? <ComputerSettingsPanel /> : null}
+              {section === "computer" ? (
+                <ComputerSettingsPanel onUpdateAvailableChange={setComputerUpdateAvailable} />
+              ) : null}
               {section === "updates" ? (
                 <UpdatesSettingsPanel isDeploymentOwner={isDeploymentOwner} />
               ) : null}

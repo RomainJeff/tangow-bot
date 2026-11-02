@@ -111,6 +111,11 @@ export function ComputerMaintenanceActions({
     <>
       {computer ? (
         <div className="flex flex-col gap-2">
+          {computer.updateAvailable ? (
+            <p role="status" className="text-meta text-muted-foreground">
+              <Trans>Update available</Trans>
+            </p>
+          ) : null}
           <div className="flex flex-wrap gap-2">
             {computer.canUpdate ? (
               <Button

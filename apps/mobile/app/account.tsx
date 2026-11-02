@@ -1,4 +1,4 @@
-import type { AvatarStyle } from "@rakazo/contracts";
+import type { AvatarStyle, ComputerListItem } from "@rakazo/contracts";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -19,6 +19,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAvatarStyle } from "../components/avatar-style";
 import { BotAvatar } from "../components/bot-avatar";
+import { useFocusedRead } from "../components/bot-page/kit";
 import { NativeMenu } from "../components/native-menu";
 import { ServerSheet } from "../components/server-sheet";
 import { UserAvatar } from "../components/user-avatar";
@@ -68,6 +69,9 @@ import { ACCOUNT_UI_LOCALES, UI_LOCALE_LABELS } from "../lib/ui-locale";
 /** Render account settings, including the entry point for voice configuration. */
 export default function Account() {
   const { t, locale } = useI18n();
+  const { read: computers } = useFocusedRead(() => rpc<ComputerListItem[]>("computer/list"), []);
+  const computerUpdateAvailable =
+    computers.kind === "ready" && computers.value.some((item) => item.status.updateAvailable);
   const router = useRouter();
   const { focus } = useLocalSearchParams<{ focus?: string }>();
   const [me, setMe] = useState<MobileMe | null>(null);
@@ -452,6 +456,9 @@ export default function Account() {
           style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
         >
           <Text style={styles.settingsTitle}>{t("Computer")}</Text>
+          {computerUpdateAvailable ? (
+            <Text style={styles.email}>{t("Update available")}</Text>
+          ) : null}
           <Text style={styles.chevron}>›</Text>
         </Pressable>
 
