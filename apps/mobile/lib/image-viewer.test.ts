@@ -52,12 +52,11 @@ describe("image viewer payload", () => {
   it("is handed over once and gone after clearing", () => {
     setImageViewerPayload({
       images: [],
-      startIndex: 2,
       author: "Ada",
       target: { botId: "bot-1" },
       zoomed: true,
     });
-    expect(imageViewerPayload()?.startIndex).toBe(2);
+    expect(imageViewerPayload()?.author).toBe("Ada");
     expect(imageViewerPayload()?.zoomed).toBe(true);
 
     clearImageViewerPayload();

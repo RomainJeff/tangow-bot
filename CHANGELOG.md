@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Bots can report problems with Rakazo itself as GitHub issues.** When the server operator connects a feedback repository, a bot that gets blocked, hits a malfunction or needs far too many steps can call `report_issue` to file an issue with its report and the run's model, ids and counters, and carries on with its task. See [Agent feedback](docs/self-host.md#agent-feedback).
 - **Images now show in the iPhone conversation, and consecutive ones from the same sender gather in a stack.** Each image appears in a fixed frame instead of a file name, with the earlier ones peeking behind it, a count from four images up, and a long press that opens the actions of the newest one.
-- **Tap an image on iPhone to see it full screen, swipe through the whole stack and share it.** The image opens out of the stack, a strip of thumbnails at the bottom jumps to any image, and dragging down closes it back into the stack.
+- **Tap an image on iPhone to see it full screen, swipe through the whole stack and share it.** The image opens out of the stack on its newest picture with the older ones after it, a strip of thumbnails at the bottom jumps to any image, and dragging down closes it back into the stack.
 - **Images in web and desktop conversations now gather in stacks and open in a viewer you can step through.** Consecutive images from the same sender sit in one fixed frame with the earlier ones peeking behind it and a count from four images up, and opening one lets you move through the stack with the arrow keys, the previous and next buttons, or a strip of thumbnails under the image.
 
 ### 2026-11-01

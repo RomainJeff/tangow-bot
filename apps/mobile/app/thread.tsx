@@ -3804,8 +3804,7 @@ const MessageBubble = memo(function MessageBubble({
     const quote = replyQuote(message, replyPreview);
     const openImage = (zoomed: boolean) => {
       const payload = {
-        images,
-        startIndex: images.length - 1,
+        images: [...images].reverse(),
         author: authorName,
         target: artifactTarget,
         zoomed,

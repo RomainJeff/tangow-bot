@@ -72,14 +72,14 @@ export default function ImageViewerScreen() {
 }
 
 function Viewer({ opened }: { opened: ImageViewerPayload }) {
-  const { images, startIndex, author, target } = opened;
+  const { images, author, target } = opened;
   const router = useRouter();
   const { t } = useI18n();
   const tokens = useMobileTokens();
   const reducedMotion = useChatReducedMotion();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
-  const [index, setIndex] = useState(startIndex);
+  const [index, setIndex] = useState(0);
   const [natural, setNatural] = useState<Record<string, Size>>({});
   const [sharing, setSharing] = useState(false);
   const pager = useRef<FlatList<StackImage>>(null);
@@ -94,9 +94,13 @@ function Viewer({ opened }: { opened: ImageViewerPayload }) {
 
   useEffect(() => {
     if (total > 1) {
-      strip.current?.scrollToIndex({ index, viewPosition: 0.5, animated: !reducedMotion });
+      // Centre the current thumbnail, never scrolling past either end of the strip.
+      const offset = THREAD_GUTTER + (THUMB + THUMB_GAP) * index - (width - THUMB) / 2;
+      const end = 2 * THREAD_GUTTER + total * THUMB + (total - 1) * THUMB_GAP - width;
+      const clamped = Math.min(Math.max(0, offset), Math.max(0, end));
+      strip.current?.scrollToOffset({ offset: clamped, animated: !reducedMotion });
     }
-  }, [index, total, reducedMotion]);
+  }, [index, total, reducedMotion, width]);
 
   if (!current) return null;
 
@@ -151,7 +155,6 @@ function Viewer({ opened }: { opened: ImageViewerPayload }) {
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           keyExtractor={imageKey}
-          initialScrollIndex={startIndex}
           getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
           onMomentumScrollEnd={settle}
           windowSize={3}
@@ -208,7 +211,7 @@ function Viewer({ opened }: { opened: ImageViewerPayload }) {
               keyExtractor={imageKey}
               getItemLayout={(_, i) => ({
                 length: THUMB + THUMB_GAP,
-                offset: (THUMB + THUMB_GAP) * i,
+                offset: THREAD_GUTTER + (THUMB + THUMB_GAP) * i,
                 index: i,
               })}
               initialNumToRender={Math.ceil(width / (THUMB + THUMB_GAP))}
