@@ -15,6 +15,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Tap an image on iPhone to see it full screen, swipe through the whole stack and share it.** The image opens out of the stack on its newest picture with the older ones after it, a strip of thumbnails at the bottom jumps to any image, and dragging down closes it back into the stack.
 - **Images in web and desktop conversations now gather in stacks and open in a viewer you can step through.** Consecutive images from the same sender sit in one fixed frame with the earlier ones peeking behind it and a count from four images up, and opening one lets you move through the stack with the arrow keys, the previous and next buttons, or a strip of thumbnails under the image.
 
+#### Fixed
+
+- On iPhone, dragging a conversation with the keyboard open no longer stutters: the thread and the keyboard follow your finger smoothly, and the composer no longer bounces when the keyboard closes.
+
 ### 2026-11-01
 
 #### Changed
