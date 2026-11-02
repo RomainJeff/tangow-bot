@@ -12,11 +12,11 @@ import Animated, {
 import type { MobileArtifactTarget } from "../lib/artifact-open";
 import { CHAT_MOTION, SPRING_TIMING, useChatReducedMotion } from "../lib/chat-motion";
 import { useI18n } from "../lib/i18n";
+import type { StackCardModel } from "../lib/image-stack";
 import {
   coverFromTop,
   IMAGE_STACK,
   STACK_ROOM,
-  type StackCardModel,
   stackCards,
   stackFrame,
   stackStepX,
