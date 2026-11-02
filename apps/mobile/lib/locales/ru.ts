@@ -37,8 +37,6 @@ export const RU_MESSAGES: Record<string, string> = {
   "Updates queued: {count}": "Обновлений в очереди: {count}",
   "Updates unavailable": "Обновления недоступны",
   "Content lives on the shared volume.": "Содержимое хранится на общем томе.",
-  "Update your server to use AI data sharing in this mobile version.":
-    "Обновите сервер, чтобы использовать обмен данными с ИИ в этой версии мобильного приложения.",
   "Ask the server owner to configure this provider.":
     "Попросите владельца сервера настроить этого провайдера.",
   "Client ID": "ID клиента",
@@ -554,6 +552,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Working…": "Выполняется…",
   "Work stopped, but the thread could not refresh: {detail}":
     "Работа остановлена, но диалог не удалось обновить: {detail}",
+  You: "Вы",
   "You have control": "Вы управляете",
   "Your account": "Ваш аккаунт",
   "Your key or subscription token is stored securely and is never shown here.":
@@ -602,6 +601,8 @@ export const RU_MESSAGES: Record<string, string> = {
   "https://example.com/openapi.json": "https://example.com/openapi.json",
   "https://executor.example/mcp": "https://executor.example/mcp",
   Image: "Изображение",
+  "Image {n} of {total}, from {author}": "Изображение {n} из {total}, от {author}",
+  "Image, from {author}": "Изображение, от {author}",
   "Markdown file": "Файл Markdown",
   "Message from {peer}": "Сообщение от {peer}",
   "Messaged {peer}": "Отправлено сообщение {peer}",

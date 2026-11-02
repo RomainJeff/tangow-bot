@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-11-02
+
+#### Added
+
+- **Bots can report problems with Rakazo itself as GitHub issues.** When the server operator connects a feedback repository, a bot that gets blocked, hits a malfunction or needs far too many steps can call `report_issue` to file an issue with its report and the run's model, ids and counters, and carries on with its task. See [Agent feedback](docs/self-host.md#agent-feedback).
+- **Images now show in the iPhone conversation, and consecutive ones from the same sender gather in a stack.** Each image appears in a fixed frame instead of a file name, with the earlier ones peeking behind it, a count from four images up, and a long press that opens the actions of the newest one.
+- **Tap an image on iPhone to see it full screen, swipe through the whole stack and share it.** The image opens out of the stack, a strip of thumbnails at the bottom jumps to any image, and dragging down closes it back into the stack.
+
 ### 2026-11-01
 
 #### Changed
@@ -17,6 +25,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - On iPhone and Android, scrolling a conversation no longer stutters: bot avatars in the inbox and the conversation header rest while their bot is idle and move only while it works.
 - When a bot's run ends well, its Docker computer keeps the browser open for a while, and reopens the bot's last tabs whenever it has to start again, so the next run, a helper's follow-up or your takeover finds the page it left instead of a blank tab; a bot that finishes with nothing left for anyone closes the tabs it opened.
+- On iPhone and Android, new messages no longer turn invisible and leave a blank gap in the conversation until it is reopened.
+
+#### Reverted
+
+- The iPhone app no longer asks permission to share data with AI services before sending a message, running a routine or using voice, and Account no longer has an AI data sharing screen.
 
 ### 2026-10-31
 

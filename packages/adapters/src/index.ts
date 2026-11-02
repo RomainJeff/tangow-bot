@@ -1,6 +1,5 @@
 export * from "./agent-connections.js";
 export * from "./agent-environment.js";
-export * from "./ai-consent.js";
 export * from "./artifacts.js";
 export * from "./auto-review.js";
 export * from "./background-job-handlers.js";
@@ -48,6 +47,7 @@ export * from "./fake-sandbox.js";
 export * from "./fake-volume-files.js";
 export * from "./fake-web.js";
 export * from "./fake-worker-provider.js";
+export * from "./feedback.js";
 export * from "./fish-audio-voice.js";
 export * from "./github-webhook-emulator.js";
 export * from "./graphql-connectors.js";

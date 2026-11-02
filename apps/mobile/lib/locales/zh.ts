@@ -36,8 +36,6 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Updates queued: {count}": "已排队的更新：{count}",
   "Updates unavailable": "更新不可用",
   "Content lives on the shared volume.": "内容存放在共享卷上。",
-  "Update your server to use AI data sharing in this mobile version.":
-    "请更新服务器，以便在此移动版本中使用 AI 数据共享功能。",
   "Release computer": "释放电脑",
   "Release interrupted computer?": "释放中断的电脑？",
   "Make sure nothing is still running on this computer.": "请确认这台电脑上没有仍在运行的任务。",
@@ -567,6 +565,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Working…": "处理中…",
   "Work stopped, but the thread could not refresh: {detail}":
     "工作已停止，但线程无法刷新：{detail}",
+  You: "你",
   "You have control": "你已接管控制",
   "Your account": "你的账户",
   "Stored securely. Never shown here.": "已安全存储。不会显示在这里。",
@@ -613,6 +612,8 @@ export const ZH_MESSAGES: Record<string, string> = {
   "https://example.com/openapi.json": "https://example.com/openapi.json",
   "https://executor.example/mcp": "https://executor.example/mcp",
   Image: "图片",
+  "Image {n} of {total}, from {author}": "第 {n} 张，共 {total} 张，来自 {author}",
+  "Image, from {author}": "图片，来自 {author}",
   "Markdown file": "Markdown 文件",
   "Message from {peer}": "来自 {peer} 的消息",
   "Messaged {peer}": "已给 {peer} 发消息",
