@@ -242,6 +242,46 @@ deploy with.
 
 Live evaluations of this behaviour are described in [agent verification](agent-verification.md).
 
+### Agent feedback
+
+Bots can report problems with Rakazo itself, such as a tool that blocked them, something that
+malfunctioned or a task that took far too many steps, as issues in a GitHub repository you choose.
+The `report_issue` tool is offered only once this is set up. A bot calls it on its own judgment; it does
+not pause the run or ask anyone for help.
+
+1. Create a **private** repository for the reports. A report describes what the bot saw, so it can
+   quote conversation content.
+2. Create the labels `agent-feedback`, `blocked`, `bug` and `friction` in it. Every issue gets
+   `agent-feedback`, plus `blocked`, `bug` or `friction` depending on the kind of report. If a
+   label is missing, GitHub may create it the first time it is used, when the token allows that.
+3. Create a fine-grained personal access token for that repository only, with the **Issues: Read
+   and write** repository permission.
+4. Set these in `.env`, then recreate the `api` and `worker` services:
+
+   ```sh
+   FEEDBACK_PROVIDER=github
+   FEEDBACK_GITHUB_REPOSITORY=your-org/your-feedback-repo
+   FEEDBACK_GITHUB_TOKEN=
+   ```
+
+   An incomplete setup stops both services at start. The token stays on the server: bots never see
+   it, and it is masked like the deployment's other keys.
+
+An issue has two parts. The bot's report: the problem, what it expected, the impact, and the tool
+and a short reproduction when it gives them. What Rakazo observed: run, thread and bot ids, the
+model, the runtime, the deployed version (`GIT_SHA`) when known, the time, and counters read while
+the run is still going. The counters are not final totals. Model calls include compaction calls,
+so they do not count agent steps, and the tool-call audit can miss calls. Issues contain no
+transcripts, files, or raw tool arguments and results. Known secrets are masked in the text, but
+the bot writes it freely, so masking does not make a report anonymous.
+
+Each report is recorded in the database before delivery, as a `report_issue` row in
+`external_effects` that is deleted with its run. That row also stores the outcome: the issue URL,
+or why delivery failed. Delivery gives up after 15 seconds. A failed delivery never fails the bot's
+task, and the bot is told that the report was recorded but not delivered. Nothing retries it
+automatically, including after a restart in the middle of a delivery, so an undelivered report
+stays only in that row.
+
 ## Choosing a computer provider
 
 The Electron desktop app is a client of the same API, with the same Docker or E2B computers.
