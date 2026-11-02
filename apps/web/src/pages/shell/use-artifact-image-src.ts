@@ -13,7 +13,7 @@ const KEPT = 64;
 /** One read per artifact for the page's life, whoever shows it. Least recently asked for first. */
 const entries = new Map<string, ImageEntry>();
 const listeners = new Map<string, Set<() => void>>();
-const waiting: (() => Promise<void>)[] = [];
+const waiting: { artifactId: string; read: () => Promise<void> }[] = [];
 let inFlight = 0;
 
 function settle(artifactId: string, entry: ImageEntry | undefined) {
@@ -33,7 +33,12 @@ function evictUnseen() {
 
 function drain() {
   while (inFlight < MAX_IN_FLIGHT && waiting.length > 0) {
-    const read = waiting.shift()!;
+    const { artifactId, read } = waiting.shift()!;
+    // Nothing shows it any more: drop it so what is on screen goes first, and a later mount asks again.
+    if (!listeners.has(artifactId)) {
+      entries.delete(artifactId);
+      continue;
+    }
     inFlight += 1;
     void read().finally(() => {
       inFlight -= 1;
@@ -50,16 +55,18 @@ function load(target: ArtifactTarget, artifactId: string) {
     return;
   }
   settle(artifactId, { status: "loading" });
-  waiting.push(() =>
-    rpc.artifacts.get({ ...target, artifactId }).then(
-      (artifact) => {
-        const bytes = decodeArtifactBase64(artifact.contentBase64);
-        const blob = new Blob([new Uint8Array(bytes)], { type: artifact.mimeType });
-        settle(artifactId, { status: "ready", url: URL.createObjectURL(blob) });
-      },
-      () => settle(artifactId, { status: "failed" }),
-    ),
-  );
+  waiting.push({
+    artifactId,
+    read: () =>
+      rpc.artifacts
+        .get({ ...target, artifactId })
+        .then((artifact) => {
+          const bytes = decodeArtifactBase64(artifact.contentBase64);
+          const blob = new Blob([new Uint8Array(bytes)], { type: artifact.mimeType });
+          settle(artifactId, { status: "ready", url: URL.createObjectURL(blob) });
+        })
+        .catch(() => settle(artifactId, { status: "failed" })),
+  });
   evictUnseen();
   drain();
 }
