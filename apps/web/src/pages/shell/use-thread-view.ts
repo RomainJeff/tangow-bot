@@ -32,8 +32,13 @@ export function isWorking(
   );
 }
 
+/** The entry a message is stored as. A stack of images acts on its newest message, which draws no row of its own. */
 export function messageIdOf(view: ThreadView, message: MessageItem): string | undefined {
-  return view.rows.find((row) => row.item.id === message.id)?.messageId;
+  for (const row of view.rows) {
+    if (row.imageStack?.front.item.id === message.id) return row.imageStack.front.messageId;
+    if (row.item.id === message.id) return row.messageId;
+  }
+  return undefined;
 }
 
 /** The card the thread waits on, and the run and entry its answer goes to: the one that asked last. */
@@ -66,13 +71,21 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
         rendersNothing: (item) =>
           drawsNothing(item, (blocks) => hasRenderableBlock(blocks, showSteps)),
         progress: activeLayer,
+        imageStacks: true,
       }),
     [activeEntries, activeLayer, showSteps],
   );
   const viewRef = useRef(view);
   viewRef.current = view;
+  // A stack's newest message draws no row: it stands at its host's.
   const rowIndexOf = useMemo(
-    () => new Map(view.rows.map((row, index) => [row.item.id as string, index])),
+    () =>
+      new Map(
+        view.rows.flatMap((row, index) => [
+          [row.item.id as string, index] as const,
+          ...(row.imageStack ? [[row.imageStack.front.item.id as string, index] as const] : []),
+        ]),
+      ),
     [view.rows],
   );
   const currentRuns = useMemo(() => activeThreadRuns(activeSnapshot), [activeSnapshot]);

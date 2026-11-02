@@ -2,17 +2,8 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { LinkMentionGlyph } from "@rakazo/chat-ui/web";
 import type { MessageBlock } from "@rakazo/contracts";
 import { abortableDelay } from "@rakazo/core";
-import {
-  Button,
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogTitle,
-  FramedBlock,
-  LinkPreviewPicture,
-  Surface,
-} from "@rakazo/ui-web";
-import { ImageIcon, X } from "lucide-react";
+import { Button, FramedBlock, LinkPreviewPicture, Surface } from "@rakazo/ui-web";
+import { ImageIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { SuccessPop } from "../../components/ai/primitives";
 import type { ArtifactTarget } from "../../lib/artifact-open";
@@ -350,56 +341,5 @@ export function LinkMentionIcon({
   if (failed) return <LinkMentionGlyph />;
   return (
     <span ref={container}>{src ? <img src={src} alt="" onError={onImageError} /> : null}</span>
-  );
-}
-
-export function ArtifactImage({
-  target,
-  artifactId,
-  name,
-}: {
-  target: ArtifactTarget;
-  artifactId: string;
-  name: string;
-}) {
-  const { t } = useLingui();
-  const [open, setOpen] = useState(false);
-  const { container, src } = useArtifactImageSrc(target, artifactId);
-
-  return (
-    <div ref={container}>
-      {src ? (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="max-w-[240px] overflow-hidden rounded-card"
-        >
-          <img src={src} alt={name} className="max-h-48 w-full object-cover" />
-        </button>
-      ) : (
-        <Surface className="px-4 py-3 text-meta text-muted-foreground">{name}</Surface>
-      )}
-      {src ? (
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogContent
-            showCloseButton={false}
-            className="w-auto max-w-none bg-transparent p-0 shadow-none sm:max-w-none"
-          >
-            <DialogTitle className="sr-only">{name}</DialogTitle>
-            <DialogClose
-              aria-label={t`Close image preview`}
-              render={<Button variant="ghost" size="icon-sm" className="absolute end-2 top-2" />}
-            >
-              <X />
-            </DialogClose>
-            <img
-              src={src}
-              alt={name}
-              className="max-h-[85vh] max-w-[90vw] rounded-card object-contain"
-            />
-          </DialogContent>
-        </Dialog>
-      ) : null}
-    </div>
   );
 }

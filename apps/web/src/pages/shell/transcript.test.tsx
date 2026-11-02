@@ -20,8 +20,10 @@ vi.mock("@lingui/react/macro", () => ({
     (value === 1 ? one : other).replace("#", String(value)),
 }));
 
-const api = vi.hoisted(() => ({ sessionEntries: vi.fn() }));
-vi.mock("../../lib/rpc", () => ({ rpc: { sessions: { entries: api.sessionEntries } } }));
+const api = vi.hoisted(() => ({ sessionEntries: vi.fn(), artifactGet: vi.fn() }));
+vi.mock("../../lib/rpc", () => ({
+  rpc: { sessions: { entries: api.sessionEntries }, artifacts: { get: api.artifactGet } },
+}));
 
 import streamedReply from "../../../../../packages/core/src/session-log/fixtures/streamed-reply.jsonl?raw";
 import { setDebugMode } from "../../lib/debug-mode";
@@ -67,6 +69,7 @@ beforeEach(() => {
     removeEventListener: () => undefined,
   }));
   api.sessionEntries.mockReset().mockResolvedValue({ entries: helperSession });
+  api.artifactGet.mockReset().mockReturnValue(new Promise(() => undefined));
   Element.prototype.scrollTo = () => undefined;
   container = document.createElement("div");
   document.body.append(container);
@@ -349,6 +352,45 @@ describe("the transcript", () => {
     expect(onReply.mock.calls.map(([message]) => [message.id, message.blocks])).toEqual([
       ["fx-02", [{ kind: "ask", text: "Send the summary to Acme?" }]],
     ]);
+  });
+
+  it("draws three screenshots sent as three messages as one stack that acts on the newest", async () => {
+    const onReply = vi.fn();
+    const shots = ["a", "b", "c"].map((name, seq) =>
+      SessionEntrySchema.parse({
+        id: `shot-${seq}`,
+        sessionId: "ses_shots",
+        seq,
+        parentId: seq === 0 ? null : `shot-${seq - 1}`,
+        ts: `2026-10-10T09:00:0${seq}.000Z`,
+        botId: "bot_ada",
+        type: "bot.text",
+        payload: {
+          blocks: [
+            {
+              kind: "image",
+              artifactId: `art_${name}`,
+              mimeType: "image/png",
+              name: `${name}.png`,
+            },
+          ],
+        },
+      }),
+    );
+    const view = projectThreadView(shots, { imageStacks: true });
+    await renderThread(shots, { view, peerBot: () => ({ color: "#000", name: "Pixel" }), onReply });
+
+    expect(text('[data-slot="image-stack"]')).toEqual([""]);
+    expect(
+      [...document.querySelectorAll('[data-slot="image-stack"]')].map((stack) =>
+        stack.getAttribute("aria-label"),
+      ),
+    ).toEqual(["Image 3 of 3, from Pixel"]);
+    expect(document.querySelectorAll("[data-message-id]")).toHaveLength(1);
+
+    const pill = document.querySelector('[data-testid="message-hover-rail"]');
+    await act(async () => pill?.querySelector<HTMLButtonElement>('[aria-label="Reply"]')?.click());
+    expect(onReply.mock.calls.map(([message]) => message.id)).toEqual(["shot-2"]);
   });
 
   it("opens a finished helper's own session from its step in debug mode, read-only", async () => {

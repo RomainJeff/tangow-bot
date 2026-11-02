@@ -154,7 +154,9 @@ export const Transcript = memo(function Transcript({
     [rows],
   );
   const rewindFromIndex =
-    rewindFromItemId === null ? -1 : rows.findIndex((row) => row.item.id === rewindFromItemId);
+    rewindFromItemId === null
+      ? -1
+      : rows.findIndex((row) => (row.imageStack?.front.item ?? row.item).id === rewindFromItemId);
   const context = useMemo<RowContext>(() => {
     const messageById = new Map(messages.map((message) => [message.id as string, message]));
     return {
@@ -251,7 +253,8 @@ export const Transcript = memo(function Transcript({
         {rows.map((row, index) => {
           const { item } = row;
           const chrome = rowChrome(item, showSteps);
-          const message = actionTarget(item);
+          // A stack of images acts on its newest message, which draws no row of its own.
+          const message = actionTarget(row.imageStack?.front.item ?? item);
           const acts = message !== null && chrome === "row";
           const rewound = rewindFromIndex >= 0 && index >= rewindFromIndex;
           const previous = rows[index - 1];
@@ -276,7 +279,7 @@ export const Transcript = memo(function Transcript({
               <div
                 data-message-id={item.id}
                 data-rewound={rewound ? "true" : undefined}
-                data-long-pressing={acts && pressingMessageId === item.id ? "true" : undefined}
+                data-long-pressing={acts && pressingMessageId === message.id ? "true" : undefined}
                 onPointerEnter={acts ? (event) => placeHoverPill(event.currentTarget) : undefined}
                 onPointerDown={
                   acts && message ? (event) => onBubblePointerDown(event, message) : undefined
@@ -284,7 +287,7 @@ export const Transcript = memo(function Transcript({
                 onPointerMove={acts ? onBubblePointerMove : undefined}
                 onPointerUp={acts ? onBubblePointerEnd : undefined}
                 onPointerCancel={acts ? onBubblePointerEnd : undefined}
-                onClickCapture={acts ? (event) => onRowClickCapture(event, item.id) : undefined}
+                onClickCapture={acts ? (event) => onRowClickCapture(event, message.id) : undefined}
                 className={`${
                   acts ? "group group/message relative hover:z-20" : "relative py-0.5"
                 }${rewound ? " opacity-40" : ""}${arrives ? " animate-arrive" : ""}${spacingClass}`}
