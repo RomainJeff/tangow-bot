@@ -6,15 +6,18 @@ import { rpc } from "../../lib/rpc";
 /**
  * Loads an image artifact of the thread as an object URL, once its container nears the viewport.
  * `failed` turns true when the artifact cannot be read, or when an image given `onImageError`
- * cannot decode it, so a caller can draw its fallback.
+ * cannot decode it, so a caller can draw its fallback; `retry` loads it again. While `enabled` is
+ * false nothing is fetched.
  */
 export function useArtifactImageSrc<Container extends HTMLElement = HTMLDivElement>(
   target: ArtifactTarget,
   artifactId: string,
+  enabled = true,
 ) {
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [visible, setVisible] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const container = useRef<Container>(null);
   const targetBotId = "botId" in target ? target.botId : undefined;
   const targetGroupId = "groupId" in target ? target.groupId : undefined;
@@ -39,7 +42,7 @@ export function useArtifactImageSrc<Container extends HTMLElement = HTMLDivEleme
   }, []);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || !enabled) return;
     let cancelled = false;
     let objectUrl: string | null = null;
     setSrc(null);
@@ -65,9 +68,15 @@ export function useArtifactImageSrc<Container extends HTMLElement = HTMLDivEleme
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [artifactId, targetBotId, targetGroupId, visible]);
+  }, [artifactId, targetBotId, targetGroupId, visible, enabled, attempt]);
 
-  return { container, src, failed, onImageError: () => setFailed(true) };
+  return {
+    container,
+    src,
+    failed,
+    onImageError: () => setFailed(true),
+    retry: () => setAttempt((count) => count + 1),
+  };
 }
 
 /**

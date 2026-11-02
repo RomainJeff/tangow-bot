@@ -56,6 +56,10 @@
   --color-option-ring: var(--option-ring);
   --color-option-ring-hover: var(--option-ring-hover);
   --color-pressed: var(--pressed);
+  --color-media-backdrop: var(--media-backdrop);
+  --color-media-backdrop-foreground: var(--media-backdrop-foreground);
+  --color-media-backdrop-muted: var(--media-backdrop-muted);
+  --color-media-backdrop-control: var(--media-backdrop-control);
   --ring-width-selected: var(--size-selected-ring);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
