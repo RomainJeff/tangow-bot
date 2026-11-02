@@ -109,8 +109,8 @@ function ViewerThumb({
 
 /**
  * A stack's images, one at a time, on the media backdrop. The list is the stack as it was when
- * opened (oldest to newest): an image arriving meanwhile never changes it. With more than one, a
- * strip of thumbnails under the image jumps to any of them. Escape and the focus returning to the
+ * opened, from its front down (newest to oldest): an image arriving meanwhile never changes it.
+ * With more than one, a strip of thumbnails under the image jumps to any of them. Escape and the focus returning to the
  * stack come from `Dialog`.
  */
 export function ImageViewer({

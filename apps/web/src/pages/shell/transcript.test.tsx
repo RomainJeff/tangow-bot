@@ -385,7 +385,7 @@ describe("the transcript", () => {
       [...document.querySelectorAll('[data-slot="image-stack"]')].map((stack) =>
         stack.getAttribute("aria-label"),
       ),
-    ).toEqual(["Image 3 of 3, from Pixel"]);
+    ).toEqual(["Image 1 of 3, from Pixel"]);
     expect(document.querySelectorAll("[data-message-id]")).toHaveLength(1);
 
     const pill = document.querySelector('[data-testid="message-hover-rail"]');

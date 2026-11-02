@@ -55,9 +55,9 @@ test("consecutive images gather in one stack that opens in a viewer you step thr
   await expect(stacks).toHaveCount(2);
   const people = stacks.first();
   const bot = stacks.last();
-  await expect(people).toHaveAccessibleName("Image 5 of 5, from You");
+  await expect(people).toHaveAccessibleName("Image 1 of 5, from You");
   await expect(people).toContainText("5");
-  await expect(bot).toHaveAccessibleName("Image 3 of 3, from Pixel");
+  await expect(bot).toHaveAccessibleName("Image 1 of 3, from Pixel");
   await expect(bot).not.toContainText(/\d/);
   await expect(bot.locator("img").first()).toHaveAttribute("src", /^blob:/);
 
@@ -78,7 +78,7 @@ test("consecutive images gather in one stack that opens in a viewer you step thr
 
   // A fourth image lands on top: the stack keeps its size, shows the count, and the card springs in.
   await page.evaluate(() => window.dispatchEvent(new Event("add-image")));
-  await expect(bot).toHaveAccessibleName("Image 4 of 4, from Pixel");
+  await expect(bot).toHaveAccessibleName("Image 1 of 4, from Pixel");
   await expect(bot).toContainText("4");
   expect(await bot.boundingBox()).toEqual(before);
   const landing = await bot.locator('[data-depth="0"]').evaluate(arrivalKeys);
@@ -90,48 +90,55 @@ test("consecutive images gather in one stack that opens in a viewer you step thr
   );
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.evaluate(() => window.dispatchEvent(new Event("add-image")));
-  await expect(bot).toHaveAccessibleName("Image 5 of 5, from Pixel");
+  await expect(bot).toHaveAccessibleName("Image 1 of 5, from Pixel");
   const faded = await bot.locator('[data-depth="0"]').evaluate(arrivalKeys);
   expect(faded).toContain("opacity");
   expect(faded).not.toContain("translate");
   await page.emulateMedia({ reducedMotion: "no-preference" });
 
-  // A click opens the viewer on the newest image; the arrow keys step back and forward.
+  // A click opens the viewer on the front, the newest image, as image 1.
+  const srcAt = (depth: number) => bot.locator(`[data-depth="${depth}"] img`).getAttribute("src");
   await bot.click();
-  await expect(page.getByRole("dialog", { name: "Image 5 of 5, from Pixel" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Image 1 of 5, from Pixel" })).toBeVisible();
   const viewer = page.getByRole("dialog");
   await expect(viewer).toContainText("Pixel");
-  await expect(viewer.getByRole("img", { name: "Image 5 of 5, from Pixel" })).toHaveAttribute(
-    "src",
-    /^blob:/,
-  );
-  await expect(viewer.getByRole("button", { name: "Next image" })).toBeDisabled();
-  // A strip of thumbnails, one per image, marks the one shown.
+  const shown = viewer.getByRole("img", { name: /^Image \d of 5, from Pixel$/ });
+  await expect(shown).toHaveAttribute("src", (await srcAt(0))!);
+  const previous = viewer.getByRole("button", { name: "Previous image" });
+  const next = viewer.getByRole("button", { name: "Next image" });
+  await expect(previous).toBeDisabled();
+  // A strip of thumbnails, one per image in the same order, marks the one shown.
   const thumbs = viewer.getByRole("button", { name: /^Image \d of 5, from Pixel$/ });
   await expect(thumbs).toHaveCount(5);
   await expect(thumbs.locator("img")).toHaveCount(5);
-  await expect(thumbs.last()).toHaveAttribute("aria-current", "true");
-  await page.keyboard.press("ArrowLeft");
-  await expect(page.getByRole("dialog", { name: "Image 4 of 5, from Pixel" })).toBeVisible();
-  await viewer.getByRole("button", { name: "Previous image" }).click();
-  await expect(page.getByRole("dialog", { name: "Image 3 of 5, from Pixel" })).toBeVisible();
+  await expect(thumbs.first()).toHaveAttribute("aria-current", "true");
+  await expect(thumbs.nth(0).locator("img")).toHaveAttribute("src", (await srcAt(0))!);
+  await expect(thumbs.nth(1).locator("img")).toHaveAttribute("src", (await srcAt(1))!);
+
+  // Next and the right arrow go down the stack to the older image; the left arrow comes back up.
   await page.keyboard.press("ArrowRight");
-  await expect(page.getByRole("dialog", { name: "Image 4 of 5, from Pixel" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Image 2 of 5, from Pixel" })).toBeVisible();
+  await expect(shown).toHaveAttribute("src", (await srcAt(1))!);
+  await next.click();
+  await expect(page.getByRole("dialog", { name: "Image 3 of 5, from Pixel" })).toBeVisible();
+  await expect(shown).toHaveAttribute("src", (await srcAt(2))!);
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.getByRole("dialog", { name: "Image 2 of 5, from Pixel" })).toBeVisible();
   for (const scheme of ["light", "dark"] as const) {
     await theme(page, scheme);
     await captureScreenshot(page, testInfo, `image-viewer-${scheme}`);
   }
 
-  // Clicking down to the first image leaves Previous disabled under focus; the arrow keys still work.
-  const previous = viewer.getByRole("button", { name: "Previous image" });
-  for (const n of [3, 2, 1]) {
-    await previous.click();
+  // Clicking down to the oldest image leaves Next disabled under focus; the arrow keys still work.
+  for (const n of [3, 4, 5]) {
+    await next.click();
     await expect(page.getByRole("dialog", { name: `Image ${n} of 5, from Pixel` })).toBeVisible();
   }
-  await expect(previous).toBeDisabled();
-  await page.keyboard.press("ArrowRight");
-  await expect(page.getByRole("dialog", { name: "Image 2 of 5, from Pixel" })).toBeVisible();
-  await page.keyboard.press("ArrowRight");
+  await expect(next).toBeDisabled();
+  await expect(thumbs.last()).toHaveAttribute("aria-current", "true");
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.getByRole("dialog", { name: "Image 4 of 5, from Pixel" })).toBeVisible();
+  await page.keyboard.press("ArrowLeft");
   await expect(page.getByRole("dialog", { name: "Image 3 of 5, from Pixel" })).toBeVisible();
 
   // A thumbnail jumps straight to its image.
@@ -139,6 +146,7 @@ test("consecutive images gather in one stack that opens in a viewer you step thr
   await expect(page.getByRole("dialog", { name: "Image 1 of 5, from Pixel" })).toBeVisible();
   await expect(thumbs.first()).toHaveAttribute("aria-current", "true");
   await expect(thumbs.nth(2)).not.toHaveAttribute("aria-current");
+  await expect(previous).toBeDisabled();
 
   // The stack, the viewer and the strip share what they read: no image is read twice.
   expect(reads).toHaveLength(new Set(reads).size);
@@ -160,7 +168,7 @@ test("a stack keeps its frame at phone width", async ({ page }, testInfo) => {
     await captureScreenshot(page, testInfo, `image-stack-phone-${scheme}`);
   }
   await bot.click();
-  await expect(page.getByRole("dialog", { name: "Image 3 of 3, from Pixel" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Image 1 of 3, from Pixel" })).toBeVisible();
   await expect(
     page
       .getByRole("dialog")

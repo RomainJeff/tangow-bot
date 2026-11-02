@@ -100,7 +100,7 @@ function StackCard({
  * A message's images, and those that follow it, as one pile: the newest in a fixed 4:3 frame, up to
  * two earlier ones peeking out toward the thread's centre. The frame and the room for the peeking
  * cards are kept whatever the count, so loading or adding an image never moves the rows around it.
- * A click opens the viewer on the newest; a front that failed to load is retried instead.
+ * A click opens the viewer on the front, the newest; a front that failed to load is retried instead.
  */
 export function ImageStack({
   target,
@@ -152,11 +152,11 @@ export function ImageStack({
       <button
         type="button"
         data-slot="image-stack"
-        aria-label={label(images.length, images.length)}
+        aria-label={label(1, images.length)}
         aria-description={retryFront ? t`Retry` : undefined}
         onClick={() => {
           if (retryFront) retryFront();
-          else setViewer({ open: true, images, index: images.length - 1 });
+          else setViewer({ open: true, images: images.toReversed(), index: 0 });
         }}
         className={cn(
           "block w-link-card max-w-full rounded-bubble focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
