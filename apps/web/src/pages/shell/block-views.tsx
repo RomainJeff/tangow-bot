@@ -160,12 +160,12 @@ export function ComputerCard({
   );
 }
 
-/** A preview card under the bubble it stands for, aligned to its edge and capped to its width. */
 /** The width cap of the bubble a card or a stack of images stands for, so the side still says who sent it. */
 export function sideWidthCap(side: "user" | "bot", inGroup: boolean): string {
   return side === "user" ? "max-w-39/50" : inGroup ? "max-w-22/25" : "max-w-41/50";
 }
 
+/** A preview card under the bubble it stands for, aligned to its edge and capped to its width. */
 export function LinkPreviewRow({
   card,
   artifactTarget,
