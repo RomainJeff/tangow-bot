@@ -16,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
-- The iPhone image viewer now opens on the newest image, and you swipe right through the older ones.
+- The iPhone image viewer now opens on the newest image of a stack, with the older ones following it in the viewer and its thumbnail strip.
 
 ### 2026-11-01
 
