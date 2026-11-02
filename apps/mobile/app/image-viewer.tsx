@@ -94,9 +94,11 @@ function Viewer({ opened }: { opened: ImageViewerPayload }) {
 
   useEffect(() => {
     if (total > 1) {
-      // Centre the current thumbnail, never scrolling past the start of the strip.
+      // Centre the current thumbnail, never scrolling past either end of the strip.
       const offset = THREAD_GUTTER + (THUMB + THUMB_GAP) * index - (width - THUMB) / 2;
-      strip.current?.scrollToOffset({ offset: Math.max(0, offset), animated: !reducedMotion });
+      const end = 2 * THREAD_GUTTER + total * THUMB + (total - 1) * THUMB_GAP - width;
+      const clamped = Math.min(Math.max(0, offset), Math.max(0, end));
+      strip.current?.scrollToOffset({ offset: clamped, animated: !reducedMotion });
     }
   }, [index, total, reducedMotion, width]);
 
