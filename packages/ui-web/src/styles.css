@@ -304,7 +304,8 @@
      message bubble so it does not fight the action sheet opening under it —
      touch-only, so a mouse's own text selection is unaffected. */
   [data-slot="message-row-bubble"],
-  [data-slot="user-bubble"] {
+  [data-slot="user-bubble"],
+  [data-slot="image-stack"] {
     -webkit-touch-callout: none;
   }
 
@@ -313,7 +314,8 @@
      the hold, and only its own bubble — `MessageBubble` or `UserBubble` —
      settles, matching the mobile app's long-press feel (scale 0.96). */
   [data-long-pressing="true"] [data-slot="message-row-bubble"],
-  [data-long-pressing="true"] [data-slot="user-bubble"] {
+  [data-long-pressing="true"] [data-slot="user-bubble"],
+  [data-long-pressing="true"] [data-slot="image-stack"] {
     transform: scale(0.96);
     transition: transform var(--duration-press) var(--motion-ease);
   }
@@ -599,7 +601,8 @@
   }
 
   [data-long-pressing="true"] [data-slot="message-row-bubble"],
-  [data-long-pressing="true"] [data-slot="user-bubble"] {
+  [data-long-pressing="true"] [data-slot="user-bubble"],
+  [data-long-pressing="true"] [data-slot="image-stack"] {
     transform: none;
     transition: none;
   }
