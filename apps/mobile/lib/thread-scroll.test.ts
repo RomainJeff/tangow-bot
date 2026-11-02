@@ -37,6 +37,15 @@ describe("mobile thread initial scroll", () => {
     expect(behavior.onLayout()).toBe("jump");
   });
 
+  it("leaves the thread under a dragging finger when the viewport resizes", () => {
+    const behavior = new ThreadScrollBehavior();
+    behavior.openThread("thread-1");
+    behavior.onContentChanged(false, "m1");
+
+    expect(behavior.onLayout(true)).toBe(null);
+    expect(behavior.onLayout()).toBe("jump");
+  });
+
   it("keeps the initial jump pending while another scroll target blocks it", () => {
     const behavior = new ThreadScrollBehavior();
     behavior.openThread("thread-1");

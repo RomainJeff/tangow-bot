@@ -48,6 +48,7 @@ export * from "./field-save.js";
 export * from "./group-mentions.js";
 export * from "./helper-profile.js";
 export * from "./http-response.js";
+export * from "./image-stack.js";
 export * from "./launch-choreography.js";
 export * from "./link-preview.js";
 export * from "./mcp.js";

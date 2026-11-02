@@ -38,6 +38,8 @@ export type StackImage = {
 export type ImageStack = {
   images: StackImage[];
   front: { item: MessageItem; messageId: EntryId };
+  /** The entry each of the stack's messages is stored as, by message id: its host, its newest and those between. */
+  messageIds: Map<EntryId, EntryId>;
 };
 
 export type ThreadRow = {
@@ -214,9 +216,13 @@ function stackImages(
     ) {
       open.stack.images.push(...images);
       open.stack.front = { item, messageId };
+      open.stack.messageIds.set(item.id, messageId);
       absorbed.set(item.id, open.hostId);
     } else {
-      open = { hostId: item.id, stack: { images, front: { item, messageId } } };
+      open = {
+        hostId: item.id,
+        stack: { images, front: { item, messageId }, messageIds: new Map([[item.id, messageId]]) },
+      };
       stacks.set(item.id, open.stack);
     }
   }
