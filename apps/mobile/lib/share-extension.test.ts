@@ -20,7 +20,7 @@ describe("iOS share extension", () => {
       ["lib/api.ts", "rakazo.api_base"],
       ["lib/api.ts", "rakazo.space_id"],
       ["lib/access-store.ts", "rakazo.cf_access"],
-    ]) {
+    ] as const) {
       expect(read(file)).toContain(`"${key}"`);
       expect(client).toContain(`"${key}"`);
     }
