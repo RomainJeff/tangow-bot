@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
+- **Bots can report problems with Rakazo itself as GitHub issues.** When the server operator connects a feedback repository, a bot that gets blocked, hits a malfunction or needs far too many steps can call `report_issue` to file an issue with its report and the run's model, ids and counters, and carries on with its task. See [Agent feedback](docs/self-host.md#agent-feedback).
 - **Share a link to a bot or group from any iPhone app.** Pick Tangow in the share sheet and the link goes to the last bot or group you shared with, with an optional message, without leaving the app you were reading; tap To to pick another.
 
 ### 2026-11-01
