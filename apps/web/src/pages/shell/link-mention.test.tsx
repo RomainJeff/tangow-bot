@@ -167,7 +167,7 @@ describe("link mentions in the thread", () => {
   it("falls back to the glyph when the icon cannot be read, and to the host alone as its name", async () => {
     api.artifactsGet.mockRejectedValue(new Error("gone"));
     await renderMessage(
-      message("bot", [text(`see ${DOC}`), mention(DOC, { icon: { artifactId: "icon-doc" } })]),
+      message("bot", [text(`see ${DOC}`), mention(DOC, { icon: { artifactId: "icon-gone" } })]),
     );
 
     expect(mentions()).toMatchObject([

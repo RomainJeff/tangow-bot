@@ -205,6 +205,7 @@ import {
   useThreadHeldByImageViewer,
 } from "../lib/image-viewer";
 import { unreadConversationCount } from "../lib/inbox-spaces";
+import { useKeyboardSlide } from "../lib/keyboard-slide";
 import { saveLastBotId } from "../lib/last-bot";
 import {
   blocksWithoutPreviewedLinkLine,
@@ -363,6 +364,7 @@ function isActiveStatus(status: string | undefined): boolean {
 type NotificationRouteState = "loading" | "ready" | "failed";
 
 const KEEP_VISIBLE_POSITION = { minIndexForVisible: 0 };
+const AnimatedKeyboardAvoidingView = Animated.createAnimatedComponent(KeyboardAvoidingView);
 /** Between the thread and the composer row. The thread draws into it under a fade, so a question card's shadow dies out there instead of ending on the list's edge. */
 const COMPOSER_GAP = 16;
 /** The thread column's side margin. The thread draws into it too, for the same shadow. */
@@ -442,8 +444,14 @@ function Thread() {
   // The composer floats over the thread's end; the thread keeps its last message above it.
   const [composerHeight, setComposerHeight] = useState(COMPOSER_ROW_ESTIMATE);
   const keyboardVisible = useKeyboardState((state) => state.isVisible);
-  const composerBottomInset = keyboardVisible ? 8 : Math.max(insets.bottom + 8, 20);
   const barTransparent = !useReduceTransparency();
+  // Under an opaque bar, iOS left a band painted over the thread after the slide: that case resizes.
+  const keyboardSlides = Platform.OS === "ios" && barTransparent;
+  const closedBottomInset = Math.max(insets.bottom + 8, 20);
+  // The slide keeps the closed inset and stops 12 pt above the keyboard: swapping the inset only
+  // once the keyboard had hidden dropped the composer to the bottom, then bumped it back up.
+  const composerBottomInset = keyboardVisible && !keyboardSlides ? 8 : closedBottomInset;
+  const keyboardSlide = useKeyboardSlide(keyboardSlides, closedBottomInset - 12);
   // What of the thread's top sits under the bar.
   const underBar = barTransparent ? headerHeight : 0;
   const { botId, groupId, name, messageId } = useLocalSearchParams<{
@@ -2486,13 +2494,11 @@ function Thread() {
   return (
     <TableActionsProvider value={tableActions}>
       <AmbientBackground />
-      <KeyboardAvoidingView
+      <AnimatedKeyboardAvoidingView
         behavior="height"
+        enabled={!keyboardSlides}
         keyboardVerticalOffset={headerHeight - underBar}
-        style={{
-          flex: 1,
-          paddingHorizontal: THREAD_GUTTER,
-        }}
+        style={[{ flex: 1, paddingHorizontal: THREAD_GUTTER }, keyboardSlide]}
       >
         <View style={{ flex: 1, position: "relative" }}>
           {showPinnedPage ? (
@@ -2557,7 +2563,7 @@ function Thread() {
                 userDragging.current = false;
               }}
               onMomentumScrollEnd={updateUserScroll}
-              onLayout={() => performScroll(scrollBehavior.current.onLayout())}
+              onLayout={() => performScroll(scrollBehavior.current.onLayout(userDragging.current))}
               onContentSizeChange={() => {
                 if (loadingOlderContent.current) {
                   loadingOlderContent.current = false;
@@ -2626,11 +2632,10 @@ function Thread() {
             left: THREAD_GUTTER,
             right: THREAD_GUTTER,
             bottom: 0,
-            // Keyboard covers the nav bar / home indicator, so the safe-area
-            // inset would render as dead space between composer and keyboard.
-            // 8 px above the keyboard when it's open, 8 px above the
-            // safe area otherwise (floored so devices without a safe-area inset,
-            // e.g. Android's 3-button nav, still keep a little breathing room).
+            // 8 px above the safe area (floored so devices without a safe-area
+            // inset, e.g. Android's 3-button nav, still keep a little breathing
+            // room). Where the keyboard resizes the thread instead of sliding it,
+            // the inset drops to 8 px above an open keyboard.
             paddingBottom: composerBottomInset,
           }}
         >
@@ -3228,7 +3233,7 @@ function Thread() {
             onClose={() => setStepSession(null)}
           />
         ) : null}
-      </KeyboardAvoidingView>
+      </AnimatedKeyboardAvoidingView>
       {barTransparent ? <ThreadScrollEdge height={headerHeight + 40} /> : null}
       {error || runError ? (
         // Just below the transparent bar, over the thread and its edge.
@@ -3804,8 +3809,7 @@ const MessageBubble = memo(function MessageBubble({
     const quote = replyQuote(message, replyPreview);
     const openImage = (zoomed: boolean) => {
       const payload = {
-        images,
-        startIndex: images.length - 1,
+        images: [...images].reverse(),
         author: authorName,
         target: artifactTarget,
         zoomed,

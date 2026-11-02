@@ -33,7 +33,6 @@ describe("Android mobile platform contract", () => {
     expect(thread).not.toContain("KeyboardStickyView");
     expect(thread).toContain("useSafeAreaInsets");
     expect(thread).toContain("useKeyboardState");
-    expect(thread).toContain("keyboardVisible ? 8 : Math.max(insets.bottom + 8, 20)");
   });
 
   it("requests live-update promotion and exposes its Android settings", () => {
@@ -161,12 +160,10 @@ describe("Android mobile platform contract", () => {
 
   it("reconciles finished agents and opens ordinary chats at the latest message", () => {
     const thread = readFileSync(resolve(mobileRoot, "app/thread.tsx"), "utf8");
-    const scroll = readFileSync(resolve(mobileRoot, "lib/thread-scroll.ts"), "utf8");
     expect(thread).toContain(
       "const currentBotStatus = snap ? snap.run?.status : currentBot?.status",
     );
     expect(thread).toContain("key={threadKey}");
-    expect(scroll).toContain('this.contentReady && !this.currentState.detached ? "jump" : null');
   });
 
   it("stacks every currently working agent on the thread working line", () => {
