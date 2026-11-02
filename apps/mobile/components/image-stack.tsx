@@ -1,8 +1,17 @@
 import type { StackImage } from "@rakazo/core";
 import { motion, radii, sizes } from "@rakazo/ui-tokens";
+import { Link } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ViewProps } from "react-native";
-import { Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import {
+  Image,
+  Keyboard,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import Animated, {
   interpolate,
   useAnimatedStyle,
@@ -21,6 +30,7 @@ import {
   stackFrame,
   stackStepX,
 } from "../lib/image-stack";
+import { IMAGE_VIEWER_HREF, imageLabel, useImageZoom } from "../lib/image-viewer";
 import { linkCardWidth } from "../lib/link-preview";
 import { useMobileTokens } from "../lib/native";
 import { nativeTextStyle } from "../lib/typography";
@@ -46,7 +56,13 @@ export interface ImageStackProps {
   author: string;
   /** True only in the render pass a newer image joined this stack, never when it merely mounts. */
   arrival: boolean;
-  onOpen: (front: StackImage) => void;
+  /**
+   * A tap hands the viewer its list. By default the stack is a link to the viewer, so the zoom
+   * transition can attach; `zoom={false}` makes it a plain press for a stack inside a native modal,
+   * which a link would dismiss. `onOpen` says whether the zoom link is rendered.
+   */
+  onOpen: (zoomed: boolean) => void;
+  zoom?: boolean;
   /** The front message's long press: its action sheet. */
   onLongPress?: () => void;
   accessibilityActions?: ViewProps["accessibilityActions"];
@@ -66,12 +82,14 @@ export function ImageStack({
   author,
   arrival,
   onOpen,
+  zoom = true,
   onLongPress,
   accessibilityActions,
   onAccessibilityAction,
 }: ImageStackProps) {
   const tokens = useMobileTokens();
   const { t } = useI18n();
+  const zoomAvailable = useImageZoom();
   const { width: windowWidth } = useWindowDimensions();
   const frame = stackFrame(
     linkCardWidth({
@@ -90,24 +108,66 @@ export function ImageStack({
   }, []);
   if (!front) return null;
 
-  const label =
-    images.length > 1
-      ? t("Image {n} of {total}, from {author}", {
-          n: images.length,
-          total: images.length,
-          author,
-        })
-      : t("Image, from {author}", { author });
+  const label = imageLabel(t, images.length, images.length, author);
 
-  return (
+  const frameView = (
+    <View
+      collapsable={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={{
+        width: frame.width,
+        height: frame.height,
+        marginStart: align === "end" ? STACK_ROOM : 0,
+      }}
+    >
+      {stackCards(images).map((card) => (
+        <StackCard
+          key={card.key}
+          card={card}
+          frame={frame}
+          direction={direction}
+          target={target}
+          arrival={arrival}
+          onFront={card.depth === 0 ? reportFront : undefined}
+        />
+      ))}
+      {images.length >= COUNT_FROM ? (
+        <View style={[styles.count, { backgroundColor: tokens.overlay, borderRadius: radii.pill }]}>
+          <NativeSymbol
+            ios="square.stack"
+            android="layers-outline"
+            size={14}
+            color={tokens.chatUserForeground}
+          />
+          <Text style={{ color: tokens.chatUserForeground, ...nativeTextStyle("meta") }}>
+            {images.length}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+
+  const tap = (event?: { preventDefault: () => void }) => {
+    if (retryFront) {
+      event?.preventDefault();
+      retryFront();
+      return;
+    }
+    // Drop the keyboard before the viewer covers the thread: iOS would raise it again on close and
+    // shift the thread under the image flying back into its stack.
+    Keyboard.dismiss();
+    onOpen(zoom && zoomAvailable);
+  };
+  const stack = (
     <Pressable
       accessible
-      accessibilityRole="button"
+      role="button"
       accessibilityLabel={label}
       accessibilityHint={retryFront ? t("Retry") : undefined}
       accessibilityActions={accessibilityActions}
       onAccessibilityAction={onAccessibilityAction}
-      onPress={() => (retryFront ? retryFront() : onOpen(front))}
+      {...(zoom ? null : { onPress: tap })}
       onLongPress={onLongPress}
       // A thumb scrolling the thread past the stack does not press it.
       unstable_pressDelay={130}
@@ -117,43 +177,17 @@ export function ImageStack({
         alignSelf: align === "end" ? "flex-end" : "flex-start",
       }}
     >
-      <View
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        style={{
-          width: frame.width,
-          height: frame.height,
-          marginStart: align === "end" ? STACK_ROOM : 0,
-        }}
-      >
-        {stackCards(images).map((card) => (
-          <StackCard
-            key={card.key}
-            card={card}
-            frame={frame}
-            direction={direction}
-            target={target}
-            arrival={arrival}
-            onFront={card.depth === 0 ? reportFront : undefined}
-          />
-        ))}
-        {images.length >= COUNT_FROM ? (
-          <View
-            style={[styles.count, { backgroundColor: tokens.overlay, borderRadius: radii.pill }]}
-          >
-            <NativeSymbol
-              ios="square.stack"
-              android="layers-outline"
-              size={14}
-              color={tokens.chatUserForeground}
-            />
-            <Text style={{ color: tokens.chatUserForeground, ...nativeTextStyle("meta") }}>
-              {images.length}
-            </Text>
-          </View>
-        ) : null}
-      </View>
+      {zoom && zoomAvailable ? <Link.AppleZoom>{frameView}</Link.AppleZoom> : frameView}
     </Pressable>
+  );
+  // The front frame is the zoom's source: the viewer opens out of it and closes back into it. When
+  // the list has unmounted this row, the source is gone and the system closes with a plain fade.
+  return zoom ? (
+    <Link href={IMAGE_VIEWER_HREF} asChild onPress={tap}>
+      {stack}
+    </Link>
+  ) : (
+    stack
   );
 }
 

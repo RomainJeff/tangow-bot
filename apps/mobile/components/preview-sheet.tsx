@@ -12,16 +12,28 @@ import { NativeSymbol } from "./native-symbol";
 export function PreviewSheet({
   title,
   onClose,
+  visible,
+  onDismiss,
   children,
 }: {
   title: string;
   onClose: () => void;
+  /** Hides the sheet while the opener stays mounted. */
+  visible?: boolean;
+  /** The sheet has finished leaving the screen (iOS). */
+  onDismiss?: () => void;
   children: ReactNode;
 }) {
   const { t } = useI18n();
   const tokens = mobileTokens();
   return (
-    <Modal animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal
+      animationType="slide"
+      presentationStyle="pageSheet"
+      visible={visible}
+      onDismiss={onDismiss}
+      onRequestClose={onClose}
+    >
       <SafeAreaView style={{ flex: 1, backgroundColor: tokens.background }}>
         <View
           style={{
