@@ -33,7 +33,6 @@ describe("Android mobile platform contract", () => {
     expect(thread).not.toContain("KeyboardStickyView");
     expect(thread).toContain("useSafeAreaInsets");
     expect(thread).toContain("useKeyboardState");
-    expect(thread).toContain("keyboardVisible ? 8 : Math.max(insets.bottom + 8, 20)");
   });
 
   it("requests live-update promotion and exposes its Android settings", () => {

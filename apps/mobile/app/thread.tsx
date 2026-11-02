@@ -426,11 +426,14 @@ function Thread() {
   // The composer floats over the thread's end; the thread keeps its last message above it.
   const [composerHeight, setComposerHeight] = useState(COMPOSER_ROW_ESTIMATE);
   const keyboardVisible = useKeyboardState((state) => state.isVisible);
-  const composerBottomInset = keyboardVisible ? 8 : Math.max(insets.bottom + 8, 20);
   const barTransparent = !useReduceTransparency();
   // Under an opaque bar, iOS left a band painted over the thread after the slide: that case resizes.
   const keyboardSlides = Platform.OS === "ios" && barTransparent;
-  const keyboardSlide = useKeyboardSlide(keyboardSlides);
+  const closedBottomInset = Math.max(insets.bottom + 8, 20);
+  // The slide keeps the closed inset and stops 12 pt above the keyboard: swapping the inset only
+  // once the keyboard had hidden dropped the composer to the bottom, then bumped it back up.
+  const composerBottomInset = keyboardVisible && !keyboardSlides ? 8 : closedBottomInset;
+  const keyboardSlide = useKeyboardSlide(keyboardSlides, closedBottomInset - 12);
   // What of the thread's top sits under the bar.
   const underBar = barTransparent ? headerHeight : 0;
   const { botId, groupId, name, messageId } = useLocalSearchParams<{
