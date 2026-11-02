@@ -15,6 +15,7 @@ import {
   composeWorkers,
   createBackgroundJobHandlers,
   createConnectorStack,
+  createFeedbackProvider,
   createJobReconciler,
   createLinkPreviewPurge,
   createMessagingContextLoader,
@@ -193,6 +194,7 @@ async function main() {
   const skillLock = createPostgresSkillLock(skillLockPool);
   const skillLearning = parseSkillLearningMode(process.env.SKILL_LEARNING);
   const sessionLog = new PostgresSessionLog(prisma);
+  const feedback = createFeedbackProvider();
   const executor = createRunExecutor({
     prisma,
     sessionLog,
@@ -218,7 +220,11 @@ async function main() {
         signal: AbortSignal.timeout(15_000),
       });
     },
-    secrets: [deploymentModelKey ?? "", process.env.COMPOSIO_API_KEY ?? ""].filter(Boolean),
+    secrets: [
+      deploymentModelKey ?? "",
+      process.env.COMPOSIO_API_KEY ?? "",
+      feedback?.secret ?? "",
+    ].filter(Boolean),
     secretStore: secrets,
     deploymentModelKey,
     dataDir,
@@ -227,6 +233,8 @@ async function main() {
     events,
     messaging: messaging ? createMessagingContextLoader(prisma) : undefined,
     web: createWebProvider(),
+    feedback: feedback?.provider,
+    version: process.env.GIT_SHA?.trim() || undefined,
     skillLearning,
   });
 

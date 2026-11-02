@@ -1,6 +1,6 @@
 import { useAskCard } from "@rakazo/chat-ui/ask-card";
 import type { AskCardBlock, AskForm, AskSettledView, Presenter, ViewChange } from "@rakazo/core";
-import { motion, radii, sizes, springAt } from "@rakazo/ui-tokens";
+import { motion, radii, sizes } from "@rakazo/ui-tokens";
 import { useEffect, useRef, useState } from "react";
 import type { LayoutChangeEvent, TextProps } from "react-native";
 import { AccessibilityInfo, AppState, Pressable, StyleSheet, Text, View } from "react-native";
@@ -16,7 +16,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { answerLines, interruptWhenAway, optionDetail } from "../lib/ask-card";
-import { CHAT_MOTION, useChatReducedMotion } from "../lib/chat-motion";
+import { CHAT_MOTION, SPRING_TIMING, useChatReducedMotion } from "../lib/chat-motion";
 import { commitHaptic, selectionHaptic } from "../lib/haptics";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens, useThemedStyles } from "../lib/native";
@@ -27,21 +27,6 @@ import { AnswerField, BLEED, BLEED_TOP, createStyles, Tile } from "./question-ca
 import { UserBubble } from "./user-bubble";
 
 const FREE = 1e5;
-const STEPS = 60;
-const CURVE = Array.from({ length: STEPS + 1 }, (_, i) =>
-  i === STEPS ? 1 : springAt((motion.flight * i) / STEPS),
-);
-/** `motion.spring` over `motion.flight`, the curve the web flight runs on, so both end on time. */
-const FLIGHT = {
-  duration: motion.flight,
-  easing: (t: number) => {
-    "worklet";
-    const at = Math.min(t * STEPS, STEPS - 1e-6);
-    const i = Math.floor(at);
-    const from = CURVE[i] ?? 1;
-    return from + ((CURVE[i + 1] ?? 1) - from) * (at - i);
-  },
-};
 const fade = (ms: number) => FadeIn.duration(ms).reduceMotion(ReduceMotion.Never);
 
 /** A rect in the card's overlay, measured from its foot, which the inverted thread keeps still. */
@@ -85,7 +70,7 @@ function useFold() {
     hidden.value = false;
   };
   const fly = () => {
-    progress.value = withTiming(1, FLIGHT, (done) => {
+    progress.value = withTiming(1, SPRING_TIMING, (done) => {
       if (!done) return;
       bound.value = false;
       clear();

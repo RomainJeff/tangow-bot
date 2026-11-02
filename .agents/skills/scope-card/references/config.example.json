@@ -4,10 +4,10 @@
     "toolPrefix": "mcp__notion__"
   },
   "github": {
-    "repos": ["RomainJeff/rakazo-bot"]
+    "repos": ["RomainJeff/tangow-bot"]
   },
   "base": "main",
-  "permalinkRepo": "RomainJeff/rakazo-bot",
+  "permalinkRepo": "RomainJeff/tangow-bot",
   "scoutWorktree": "~/dev/rakazo-scout-wt",
   "refsDir": "~/dev/refs",
   "referenceRepos": [],

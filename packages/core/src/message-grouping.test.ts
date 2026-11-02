@@ -2,6 +2,7 @@ import type { ThreadMessage } from "@rakazo/contracts";
 import { describe, expect, it } from "vitest";
 import {
   computeMessageGroups,
+  continuesImageStack,
   isNarrationMessage,
   isUserNarrationMessage,
 } from "./message-grouping.js";
@@ -273,5 +274,45 @@ describe("computeMessageGroups", () => {
       { isFirstOfGroup: true, isLastOfGroup: true },
       { isFirstOfGroup: true, isLastOfGroup: true },
     ]);
+  });
+});
+
+describe("continuesImageStack", () => {
+  const image = {
+    kind: "image",
+    artifactId: "art_1",
+    mimeType: "image/png",
+    name: "a.png",
+  } as const;
+  const shot = (overrides: Partial<ThreadMessage> = {}) =>
+    makeMessage({ blocks: [image], ...overrides });
+  const at = (minute: number) => localIso(2026, 9, 2, 12, minute);
+
+  it("follows the header's window: inside it joins, past it does not", () => {
+    const first = shot({ createdAt: at(0) });
+    expect(continuesImageStack(first, shot({ createdAt: at(5) }))).toBe(true);
+    expect(continuesImageStack(first, shot({ createdAt: at(6) }))).toBe(false);
+  });
+
+  it("does not extend a message that also draws a card", () => {
+    const card = { kind: "computer" } as unknown as ThreadMessage["blocks"][number];
+    const first = shot({ createdAt: at(0), blocks: [image, card] });
+    expect(continuesImageStack(first, shot({ createdAt: at(1) }))).toBe(false);
+  });
+
+  it("does not join across a time marker even inside the window", () => {
+    const first = shot({ createdAt: localIso(2026, 9, 2, 23, 58) });
+    expect(continuesImageStack(first, shot({ createdAt: localIso(2026, 9, 3, 0, 1) }))).toBe(false);
+  });
+
+  it("joins a person's photos to their earlier photos, not to a bot's", () => {
+    const photo = (overrides: Partial<ThreadMessage> = {}) =>
+      shot({ role: "user", botId: undefined, ...overrides });
+    expect(continuesImageStack(photo({ createdAt: at(0) }), photo({ createdAt: at(1) }))).toBe(
+      true,
+    );
+    expect(continuesImageStack(shot({ createdAt: at(0) }), photo({ createdAt: at(1) }))).toBe(
+      false,
+    );
   });
 });

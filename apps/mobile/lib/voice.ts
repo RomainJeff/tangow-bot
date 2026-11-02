@@ -1,6 +1,5 @@
-import { ensureAiDataConsent, readBoundedResponseBytes } from "@rakazo/core";
+import { readBoundedResponseBytes } from "@rakazo/core";
 import { File, Paths } from "expo-file-system";
-import { promptAiConsent } from "./ai-consent";
 import type { ApiRequestContext } from "./api";
 import { captureApiRequestContext, rpc } from "./api";
 import { t } from "./i18n";
@@ -29,12 +28,6 @@ export async function speakUtterance(
   opts: SpeechOptions & { requestContext?: ApiRequestContext } = {},
 ): Promise<Uint8Array> {
   const requestContext = opts.requestContext ?? (await captureApiRequestContext());
-  await ensureAiDataConsent({
-    uses: ["voice"],
-    status: () => rpc("aiConsent/status", { uses: ["voice"] }, { requestContext }),
-    prompt: promptAiConsent,
-    allow: (input) => rpc("aiConsent/allow", input, { requestContext }),
-  });
   return renderUtterance(text, opts, requestContext);
 }
 

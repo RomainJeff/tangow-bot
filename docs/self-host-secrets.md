@@ -55,6 +55,7 @@ intentionally wipe encrypted material.
 | `E2B_API_KEY` | Remote computers and run workers when `SANDBOX_PROVIDER=e2b` ([E2B workers](./self-host-e2b-workers.md)) |
 | `SMTP_URL` / `EMAIL_FROM` | Password-recovery email |
 | Messaging tokens (Slack, Telegram, …) | Only if you enable those surfaces |
+| `FEEDBACK_GITHUB_TOKEN` | Agent feedback issues ([setup](./self-host.md#agent-feedback)) |
 
 If `sandbox` in `/health` is `"none"` or the supervisor never becomes healthy,
 check that `SANDBOX_SUPERVISOR_TOKEN` is set and non-empty for the Docker
