@@ -298,6 +298,11 @@ export function McpApprovalCard({
   );
 }
 
+/**
+ * The picture of a link preview card, read from the thread's artifacts like an attached image:
+ * never a remote URL. Fills the card's frame; a tile with the image glyph stands in when the
+ * artifact cannot be read.
+ */
 export function LinkPreviewImage({
   target,
   artifactId,

@@ -7,7 +7,7 @@ import { Layers, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ArtifactTarget } from "../../lib/artifact-open";
 import { ImageViewer } from "./image-viewer";
-import { useArtifactImageSrc } from "./use-artifact-image-src";
+import { useArtifactImage, useArtifactImageSrc } from "./use-artifact-image-src";
 
 /** How far a card `depth` levels back sits from the front, toward the thread's centre. */
 function cardTransform(depth: number): string {
@@ -18,22 +18,21 @@ function cardTransform(depth: number): string {
 function StackCard({
   target,
   card,
+  loads,
   entering,
   onFront,
 }: {
   target: ArtifactTarget;
   card: StackCardModel;
+  loads: boolean;
   entering: boolean;
   onFront?: (retry: (() => void) | undefined) => void;
 }) {
   const { image, depth } = card;
-  // Only the front and the cards peeking behind it load; one that moved on keeps what it loaded.
-  const loads = useRef(false);
-  if (depth <= IMAGE_STACK.peekLevels) loads.current = true;
   const { container, src, failed, onImageError, retry } = useArtifactImageSrc<HTMLSpanElement>(
     target,
     image.artifactId,
-    loads.current,
+    loads,
   );
   const [shown, setShown] = useState(false);
 
@@ -125,6 +124,8 @@ export function ImageStack({
 }) {
   const { t } = useLingui();
   const cards = stackCards(images);
+  // The front is read first; the cards peeking behind it wait for it. One that moved on keeps what it read.
+  const frontRead = useArtifactImage(images.at(-1)?.artifactId ?? "")?.status === "ready";
   const known = useRef<Set<string> | null>(null);
   known.current ??= new Set(cards.map((card) => card.key));
   useEffect(() => {
@@ -170,6 +171,7 @@ export function ImageStack({
               key={card.key}
               target={target}
               card={card}
+              loads={card.depth === 0 || (frontRead && card.depth <= IMAGE_STACK.peekLevels)}
               entering={card.depth === 0 && !known.current?.has(card.key)}
               onFront={card.depth === 0 ? reportFront : undefined}
             />
