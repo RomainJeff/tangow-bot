@@ -40,6 +40,20 @@ function actionTarget(item: ThreadItem): MessageItem | null {
   };
 }
 
+/**
+ * What a row's actions act on. A stack of images acts on its newest message, which draws no row of
+ * its own, unless its host draws more than images: then the words keep the host's actions.
+ */
+function rowTarget(row: ThreadView["rows"][number]): MessageItem | null {
+  const { item, imageStack } = row;
+  const imagesOnly =
+    item.kind === "message" &&
+    item.blocks.every((block) => block.kind === "image") &&
+    !(item.role === "user" && item.replyTo) &&
+    row.previewMessageId === undefined;
+  return actionTarget(imagesOnly && imageStack ? imageStack.front.item : item);
+}
+
 export const Transcript = memo(function Transcript({
   scrollRef,
   followingRef,
@@ -156,7 +170,7 @@ export const Transcript = memo(function Transcript({
   const rewindFromIndex =
     rewindFromItemId === null
       ? -1
-      : rows.findIndex((row) => (row.imageStack?.front.item ?? row.item).id === rewindFromItemId);
+      : rows.findIndex((row) => rowTarget(row)?.id === rewindFromItemId);
   const context = useMemo<RowContext>(() => {
     const messageById = new Map(messages.map((message) => [message.id as string, message]));
     return {
@@ -253,8 +267,7 @@ export const Transcript = memo(function Transcript({
         {rows.map((row, index) => {
           const { item } = row;
           const chrome = rowChrome(item, showSteps);
-          // A stack of images acts on its newest message, which draws no row of its own.
-          const message = actionTarget(row.imageStack?.front.item ?? item);
+          const message = rowTarget(row);
           const acts = message !== null && chrome === "row";
           const rewound = rewindFromIndex >= 0 && index >= rewindFromIndex;
           const previous = rows[index - 1];

@@ -32,13 +32,11 @@ export function isWorking(
   );
 }
 
-/** The entry a message is stored as. A stack of images acts on its newest message, which draws no row of its own. */
+/** The entry a message is stored as, whether it draws a row or sits in a stack of images behind its host's. */
 export function messageIdOf(view: ThreadView, message: MessageItem): string | undefined {
-  for (const row of view.rows) {
-    if (row.imageStack?.front.item.id === message.id) return row.imageStack.front.messageId;
-    if (row.item.id === message.id) return row.messageId;
-  }
-  return undefined;
+  const rowId = view.rowOf.get(message.id) ?? message.id;
+  const row = view.rows.find((candidate) => candidate.item.id === rowId);
+  return row?.item.id === message.id ? row.messageId : row?.imageStack?.messageIds.get(message.id);
 }
 
 /** The card the thread waits on, and the run and entry its answer goes to: the one that asked last. */
@@ -77,17 +75,16 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
   );
   const viewRef = useRef(view);
   viewRef.current = view;
-  // A stack's newest message draws no row: it stands at its host's.
-  const rowIndexOf = useMemo(
-    () =>
-      new Map(
-        view.rows.flatMap((row, index) => [
-          [row.item.id as string, index] as const,
-          ...(row.imageStack ? [[row.imageStack.front.item.id as string, index] as const] : []),
-        ]),
-      ),
-    [view.rows],
-  );
+  // A message that joins a stack of images draws no row: it stands at its host's.
+  const rowIndexOf = useMemo(() => {
+    const indexOfRow = new Map(view.rows.map((row, index) => [row.item.id as string, index]));
+    const indexes = new Map(indexOfRow);
+    for (const [entryId, rowId] of view.rowOf) {
+      const index = indexOfRow.get(rowId);
+      if (index !== undefined && !indexes.has(entryId)) indexes.set(entryId, index);
+    }
+    return indexes;
+  }, [view.rows, view.rowOf]);
   const currentRuns = useMemo(() => activeThreadRuns(activeSnapshot), [activeSnapshot]);
   const takeoverItemId = useMemo(
     () =>

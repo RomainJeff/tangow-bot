@@ -393,6 +393,42 @@ describe("the transcript", () => {
     expect(onReply.mock.calls.map(([message]) => message.id)).toEqual(["shot-2"]);
   });
 
+  it("keeps a captioned host's actions when image-only messages join its stack", async () => {
+    const onReply = vi.fn();
+    const image = (name: string) => ({
+      kind: "image",
+      artifactId: `art_${name}`,
+      mimeType: "image/png",
+      name: `${name}.png`,
+    });
+    const entries = [
+      [{ kind: "text", text: "Here are the results" }, image("a")],
+      [image("b")],
+    ].map((blocks, seq) =>
+      SessionEntrySchema.parse({
+        id: `cap-${seq}`,
+        sessionId: "ses_caption",
+        seq,
+        parentId: seq === 0 ? null : `cap-${seq - 1}`,
+        ts: `2026-10-10T09:00:0${seq}.000Z`,
+        botId: "bot_ada",
+        type: "bot.text",
+        payload: { blocks },
+      }),
+    );
+    const view = projectThreadView(entries, { imageStacks: true });
+    await renderThread(entries, {
+      view,
+      peerBot: () => ({ color: "#000", name: "Pixel" }),
+      onReply,
+    });
+
+    expect(document.querySelectorAll("[data-message-id]")).toHaveLength(1);
+    const pill = document.querySelector('[data-testid="message-hover-rail"]');
+    await act(async () => pill?.querySelector<HTMLButtonElement>('[aria-label="Reply"]')?.click());
+    expect(onReply.mock.calls.map(([message]) => message.id)).toEqual(["cap-0"]);
+  });
+
   it("opens a finished helper's own session from its step in debug mode, read-only", async () => {
     setDebugMode(true);
     await renderThread(9);
