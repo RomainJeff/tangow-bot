@@ -59,9 +59,9 @@ export interface ImageStackProps {
   /**
    * A tap hands the viewer its list. By default the stack is a link to the viewer, so the zoom
    * transition can attach; `zoom={false}` makes it a plain press for a stack inside a native modal,
-   * which a link would dismiss.
+   * which a link would dismiss. `onOpen` says whether the zoom link is rendered.
    */
-  onOpen: () => void;
+  onOpen: (zoomed: boolean) => void;
   zoom?: boolean;
   /** The front message's long press: its action sheet. */
   onLongPress?: () => void;
@@ -157,7 +157,7 @@ export function ImageStack({
     // Drop the keyboard before the viewer covers the thread: iOS would raise it again on close and
     // shift the thread under the image flying back into its stack.
     Keyboard.dismiss();
-    onOpen();
+    onOpen(zoom && zoomAvailable);
   };
   const stack = (
     <Pressable

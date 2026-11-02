@@ -3802,15 +3802,16 @@ const MessageBubble = memo(function MessageBubble({
       ...(message.role === "user" ? { backgroundColor: tokens.chatUser } : null),
     };
     const quote = replyQuote(message, replyPreview);
-    const openImage = () => {
+    const openImage = (zoomed: boolean) => {
       const payload = {
         images,
         startIndex: images.length - 1,
         author: authorName,
         target: artifactTarget,
+        zoomed,
       };
       if (openImageViewer) openImageViewer(payload);
-      else setImageViewerPayload({ ...payload, holdThread: true });
+      else setImageViewerPayload(payload);
     };
     const words =
       quote || caption ? (

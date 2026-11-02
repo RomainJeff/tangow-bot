@@ -41,7 +41,6 @@ import {
   imageLabel,
   imageViewerPayload,
   type Size,
-  useImageZoom,
 } from "../lib/image-viewer";
 import { useMobileTokens } from "../lib/native";
 import { nativeTextStyle } from "../lib/typography";
@@ -58,7 +57,7 @@ const BAND_GAP = 12;
 export default function ImageViewerScreen() {
   const [opened] = useState(imageViewerPayload);
   useEffect(() => {
-    const release = opened?.holdThread ? holdThreadForViewer() : undefined;
+    const release = opened?.zoomed ? holdThreadForViewer() : undefined;
     return () => {
       release?.();
       clearImageViewerPayload();
@@ -78,7 +77,6 @@ function Viewer({ opened }: { opened: ImageViewerPayload }) {
   const { t } = useI18n();
   const tokens = useMobileTokens();
   const reducedMotion = useChatReducedMotion();
-  const zoom = useImageZoom();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const [index, setIndex] = useState(startIndex);
@@ -136,10 +134,16 @@ function Viewer({ opened }: { opened: ImageViewerPayload }) {
 
   return (
     <View style={[styles.screen, { backgroundColor: tokens.mediaBackdrop }]}>
-      <DragToClose enabled={!zoom} reducedMotion={reducedMotion} onClose={() => router.back()}>
-        <Link.AppleZoomTarget>
-          <View collapsable={false} pointerEvents="none" style={[styles.zoomTarget, zoomRect]} />
-        </Link.AppleZoomTarget>
+      <DragToClose
+        enabled={!opened.zoomed}
+        reducedMotion={reducedMotion}
+        onClose={() => router.back()}
+      >
+        {opened.zoomed ? (
+          <Link.AppleZoomTarget>
+            <View collapsable={false} pointerEvents="none" style={[styles.zoomTarget, zoomRect]} />
+          </Link.AppleZoomTarget>
+        ) : null}
         <FlatList
           ref={pager}
           data={images}

@@ -15,8 +15,12 @@ export type ImageViewerPayload = {
   startIndex: number;
   author: string;
   target: MobileArtifactTarget;
-  /** The viewer opened out of a stack in the thread: it holds the thread's rows while it is on screen. */
-  holdThread?: boolean;
+  /**
+   * The viewer opened through the stack's zoom link, so the system's transition (and its drag
+   * down) closes it, and it holds the thread's rows while it is on screen. Otherwise it closes by
+   * its own drag.
+   */
+  zoomed?: boolean;
 };
 
 let payload: ImageViewerPayload | null = null;
