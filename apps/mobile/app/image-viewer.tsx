@@ -45,7 +45,7 @@ import {
 import { useMobileTokens } from "../lib/native";
 import { nativeTextStyle } from "../lib/typography";
 
-const THUMB = sizes.mobileStack;
+const THUMB = sizes.viewerThumb;
 const THUMB_GAP = 8;
 const BUTTON = sizes.composerTarget;
 const BAND_GAP = 12;

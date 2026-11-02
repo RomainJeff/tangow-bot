@@ -413,6 +413,8 @@ export const sizes = {
   linkCard: 360,
   /** The square thumbnail of a compact link preview. */
   linkThumb: 56,
+  /** A thumbnail in the image viewer's strip (web and iOS). */
+  viewerThumb: 44,
   /** Space kept around a site icon inside its link preview thumbnail (web and iOS). */
   linkIconInset: 8,
   /** Max height of a link preview shown as a photo. */

@@ -56,6 +56,10 @@
   --color-option-ring: var(--option-ring);
   --color-option-ring-hover: var(--option-ring-hover);
   --color-pressed: var(--pressed);
+  --color-media-backdrop: var(--media-backdrop);
+  --color-media-backdrop-foreground: var(--media-backdrop-foreground);
+  --color-media-backdrop-muted: var(--media-backdrop-muted);
+  --color-media-backdrop-control: var(--media-backdrop-control);
   --ring-width-selected: var(--size-selected-ring);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -100,6 +104,7 @@
   --spacing-composer-attachment-thumb: var(--size-composer-attachment-thumb);
   --spacing-link-card: var(--size-link-card);
   --spacing-link-thumb: var(--size-link-thumb);
+  --spacing-viewer-thumb: var(--size-viewer-thumb);
   --spacing-link-icon-inset: var(--size-link-icon-inset);
   --spacing-link-photo-max: var(--size-link-photo-max);
   --spacing-composer-attachment-tile: var(--size-composer-attachment-tile);
@@ -300,7 +305,8 @@
      message bubble so it does not fight the action sheet opening under it —
      touch-only, so a mouse's own text selection is unaffected. */
   [data-slot="message-row-bubble"],
-  [data-slot="user-bubble"] {
+  [data-slot="user-bubble"],
+  [data-slot="image-stack"] {
     -webkit-touch-callout: none;
   }
 
@@ -309,7 +315,8 @@
      the hold, and only its own bubble — `MessageBubble` or `UserBubble` —
      settles, matching the mobile app's long-press feel (scale 0.96). */
   [data-long-pressing="true"] [data-slot="message-row-bubble"],
-  [data-long-pressing="true"] [data-slot="user-bubble"] {
+  [data-long-pressing="true"] [data-slot="user-bubble"],
+  [data-long-pressing="true"] [data-slot="image-stack"] {
     transform: scale(0.96);
     transition: transform var(--duration-press) var(--motion-ease);
   }
@@ -595,7 +602,8 @@
   }
 
   [data-long-pressing="true"] [data-slot="message-row-bubble"],
-  [data-long-pressing="true"] [data-slot="user-bubble"] {
+  [data-long-pressing="true"] [data-slot="user-bubble"],
+  [data-long-pressing="true"] [data-slot="image-stack"] {
     transform: none;
     transition: none;
   }

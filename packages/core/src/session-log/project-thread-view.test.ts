@@ -1122,6 +1122,11 @@ describe("projectThreadView image stacks", () => {
       ],
       front: { item: { id: "stk-2" }, messageId: "stk-2" },
     });
+    expect([...(view.rows[0]?.imageStack?.messageIds ?? [])]).toEqual([
+      ["stk-0", "stk-0"],
+      ["stk-1", "stk-1"],
+      ["stk-2", "stk-2"],
+    ]);
     expect(["stk-0", "stk-1", "stk-2"].map((id) => view.rowOf.get(id))).toEqual([
       "stk-0",
       "stk-0",
