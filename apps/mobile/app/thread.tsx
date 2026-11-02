@@ -2632,11 +2632,10 @@ function Thread() {
             left: THREAD_GUTTER,
             right: THREAD_GUTTER,
             bottom: 0,
-            // Keyboard covers the nav bar / home indicator, so the safe-area
-            // inset would render as dead space between composer and keyboard.
-            // 8 px above the keyboard when it's open, 8 px above the
-            // safe area otherwise (floored so devices without a safe-area inset,
-            // e.g. Android's 3-button nav, still keep a little breathing room).
+            // 8 px above the safe area (floored so devices without a safe-area
+            // inset, e.g. Android's 3-button nav, still keep a little breathing
+            // room). Where the keyboard resizes the thread instead of sliding it,
+            // the inset drops to 8 px above an open keyboard.
             paddingBottom: composerBottomInset,
           }}
         >

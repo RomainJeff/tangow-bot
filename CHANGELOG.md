@@ -14,6 +14,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Images now show in the iPhone conversation, and consecutive ones from the same sender gather in a stack.** Each image appears in a fixed frame instead of a file name, with the earlier ones peeking behind it, a count from four images up, and a long press that opens the actions of the newest one.
 - **Tap an image on iPhone to see it full screen, swipe through the whole stack and share it.** The image opens out of the stack, a strip of thumbnails at the bottom jumps to any image, and dragging down closes it back into the stack.
 
+#### Fixed
+
+- On iPhone, dragging a conversation with the keyboard open no longer stutters: the thread and the keyboard follow your finger smoothly, and the composer no longer bounces when the keyboard closes.
+
 ### 2026-11-01
 
 #### Changed
@@ -23,7 +27,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
-- On iPhone, dragging a conversation with the keyboard open no longer stutters: the thread and the keyboard follow your finger smoothly, and the composer no longer bounces when the keyboard closes.
 - When a bot's run ends well, its Docker computer keeps the browser open for a while, and reopens the bot's last tabs whenever it has to start again, so the next run, a helper's follow-up or your takeover finds the page it left instead of a blank tab; a bot that finishes with nothing left for anyone closes the tabs it opened.
 - On iPhone and Android, new messages no longer turn invisible and leave a blank gap in the conversation until it is reopened.
 
