@@ -23,6 +23,7 @@ import {
   MESSAGE_REACTIONS,
   type MessageReaction,
 } from "@rakazo/contracts";
+import type { ImageStack as ImageStackModel, StackImage } from "@rakazo/core";
 import {
   ACTIVE_RUN_STATUSES,
   abortableDelay,
@@ -36,6 +37,7 @@ import {
   drawsNothing,
   editedWaitingDraft,
   failureSinceLabel,
+  imagesOf,
   isApprovalAskBlock,
   isAsideOnlyMessage,
   isRunTerminalEvent,
@@ -69,7 +71,16 @@ import * as Clipboard from "expo-clipboard";
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useHeaderHeight } from "expo-router/react-navigation";
 import type { ReactNode } from "react";
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  cloneElement,
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   AccessibilityInfo,
   ActivityIndicator,
@@ -120,6 +131,7 @@ import { DraftCard } from "../components/draft-card";
 import { FramedBlock } from "../components/framed-block";
 import { useReduceTransparency } from "../components/glass";
 import { GroupAvatar } from "../components/group-avatar";
+import { ImageStack } from "../components/image-stack";
 import { HandoffDivider, Interstitial } from "../components/interstitial";
 import { LinkMentionIcon } from "../components/link-mention-icon";
 import { LinkPreviewCard } from "../components/link-preview-card";
@@ -538,6 +550,7 @@ function Thread() {
       rendersNothing: (item) =>
         drawsNothing(item, (blocks) => hasVisibleMessagePresentation(blocks, showSteps)),
       progress: snap?.layer,
+      imageStacks: true,
     });
     const rows = keepUnchangedRows(drawnRows.current, projected.rows);
     drawnRows.current = new Map(rows.map((row) => [row.item.id, row]));
@@ -547,9 +560,13 @@ function Thread() {
   const waiting = view.waiting;
   const waitingRef = useRef(waiting);
   waitingRef.current = waiting;
-  const latestMessageId = rows.at(-1)?.item.id ?? null;
+  const lastRow = rows.at(-1);
+  // An image joining the last stack is the thread's newest message, though it draws no row.
+  const latestMessageId = lastRow ? (lastRow.imageStack?.front.item.id ?? lastRow.item.id) : null;
   const rowIndex = useMemo(() => new Map(rows.map((row, index) => [row.item.id, index])), [rows]);
-  const rewindIndex = rewindTarget ? (rowIndex.get(rewindTarget.id) ?? -1) : -1;
+  const rewindIndex = rewindTarget
+    ? (rowIndex.get(view.rowOf.get(rewindTarget.id) ?? rewindTarget.id) ?? -1)
+    : -1;
   const rewindRemovedCount = rewindIndex >= 0 ? rows.length - rewindIndex - 1 : 0;
   const activePendingAttachments = attachmentsForThread(pendingAttachments, threadKey);
   const composerMentionTargets = useMemo(
@@ -1762,13 +1779,19 @@ function Thread() {
   // every message already there play its entrance.
   const arrivals = useMemo(
     () =>
-      rows.map(({ item }) => ({
-        id: item.id,
-        createdAt: item.ts,
-        ...(item.kind === "message" && item.role === "bot" && item.runId
-          ? { runId: item.runId }
-          : {}),
-      })),
+      rows.flatMap(({ item, imageStack }) => [
+        {
+          id: item.id,
+          createdAt: item.ts,
+          ...(item.kind === "message" && item.role === "bot" && item.runId
+            ? { runId: item.runId }
+            : {}),
+        },
+        // An image joining a stack draws no row of its own: its arrival is the stack's.
+        ...(imageStack && imageStack.front.item.id !== item.id
+          ? [{ id: imageStack.front.item.id, createdAt: imageStack.front.item.ts }]
+          : []),
+      ]),
     [rows],
   );
   const newMessageIds = useMessageArrivals(snap?.threadId, arrivals, {
@@ -2035,7 +2058,9 @@ function Thread() {
 
   function repliedMessage(entryId: EntryId): MobileMessage | undefined {
     const rowId = view.rowOf.get(entryId);
-    const item = rowId === undefined ? undefined : rows[rowIndex.get(rowId) ?? -1]?.item;
+    const row = rowId === undefined ? undefined : rows[rowIndex.get(rowId) ?? -1];
+    const item =
+      row?.imageStack?.front.messageId === entryId ? row.imageStack.front.item : row?.item;
     return item?.kind === "message" ? item : undefined;
   }
 
@@ -2118,6 +2143,11 @@ function Thread() {
     enableJump: boolean | undefined,
   ) {
     const actionProps = messageActionProps(message, row.messageId);
+    const stack = row.imageStack;
+    // An image stack acts on its newest message, the rest of the row on the message that opens it.
+    const frontActionProps = stack
+      ? messageActionProps(stack.front.item, stack.front.messageId)
+      : actionProps;
     const messageReactions = row.reactions;
     const drawnBlocks = visibleMessageBlocks(message.blocks, showSteps);
     const chrome: MessageChrome = isAsideOnlyMessage(drawnBlocks) ? "aside" : "row";
@@ -2157,11 +2187,21 @@ function Thread() {
         onPreviewMarkdown={setMarkdownPreview}
         actionProps={actionProps}
         isNew={isNew}
+        imageStack={stack}
+        imageActionProps={frontActionProps}
+        imageArrival={Boolean(
+          stack &&
+            !enableJump &&
+            stack.front.item.id !== message.id &&
+            newMessageIds.has(stack.front.item.id),
+        )}
+        authorName={message.role === "user" ? t("You") : author.name}
         // The card shows the link, so the bubble does not repeat the line that is only that link.
         previewedUrl={previewCard && !cardReplacesBubbleView ? previewCard.url : undefined}
         onOpenSession={openStepSession}
       />
     );
+    const bubblePart = (imagePart: "words" | "images") => cloneElement(bubble, { imagePart });
     const previewNode = previewCard ? (
       <MessageArrival
         isNew={isNew}
@@ -2252,15 +2292,42 @@ function Thread() {
           </MessageRow>
         ) : chrome === "row" ? (
           withPreview(
-            <AnimatedMessageBubble
-              variant="user"
-              isNew={isNew}
-              onLongPress={actionProps.onLongPress}
-              accessibilityActions={actionProps.accessibilityActions}
-              onAccessibilityAction={actionProps.onAccessibilityAction}
-            >
-              {bubble}
-            </AnimatedMessageBubble>,
+            stack ? (
+              // The bubble's hold would race the stack's own long press, so the words and the
+              // stack are two bubbles: the words keep the hold on the host's actions, the stack
+              // keeps the entrance and its own long press on the newest message's.
+              <View style={{ gap: 8, alignItems: "flex-end" }}>
+                {message.blocks.some((block) => block.kind !== "image") || replyTo ? (
+                  <AnimatedMessageBubble
+                    variant="user"
+                    isNew={isNew}
+                    onLongPress={actionProps.onLongPress}
+                    accessibilityActions={actionProps.accessibilityActions}
+                    onAccessibilityAction={actionProps.onAccessibilityAction}
+                  >
+                    {bubblePart("words")}
+                  </AnimatedMessageBubble>
+                ) : null}
+                <AnimatedMessageBubble
+                  variant="user"
+                  isNew={isNew}
+                  entranceOnly
+                  onLongPress={frontActionProps.onLongPress}
+                >
+                  {bubblePart("images")}
+                </AnimatedMessageBubble>
+              </View>
+            ) : (
+              <AnimatedMessageBubble
+                variant="user"
+                isNew={isNew}
+                onLongPress={actionProps.onLongPress}
+                accessibilityActions={actionProps.accessibilityActions}
+                onAccessibilityAction={actionProps.onAccessibilityAction}
+              >
+                {bubble}
+              </AnimatedMessageBubble>
+            ),
           )
         ) : (
           <View>{bubble}</View>
@@ -3431,6 +3498,11 @@ const MessageBubble = memo(function MessageBubble({
   onPreviewMarkdown,
   actionProps,
   isNew,
+  imageStack,
+  imageActionProps,
+  imageArrival,
+  imagePart,
+  authorName,
   previewedUrl,
   onOpenSession,
 }: {
@@ -3448,12 +3520,22 @@ const MessageBubble = memo(function MessageBubble({
   onPreviewMarkdown: (target: MarkdownArtifactPreviewTarget) => void;
   actionProps: MessageActionProps;
   isNew: boolean;
+  /** The images of the stack this message opens, when the thread joins consecutive image messages. */
+  imageStack?: ImageStackModel;
+  /** What a long press on its images does: the actions of the stack's newest message. */
+  imageActionProps?: MessageActionProps;
+  /** A newer image joined the stack in this render. */
+  imageArrival?: boolean;
+  /** Draws only the words and files, or only the images, when they sit in bubbles of their own. */
+  imagePart?: "words" | "images";
+  /** Who sent it, as assistive tech names the images. */
+  authorName: string;
   /** The link its card shows: a line that is only this link is left out of the text drawn. */
   previewedUrl?: string;
   /** Opens the helper session a step ran. */
   onOpenSession?: (sessionId: SessionId, title: string) => void;
 }) {
-  const tokens = mobileTokens();
+  const tokens = useMobileTokens();
   const { t } = useI18n();
   const showSteps = useDebugMode();
   const artifactTarget: MobileArtifactTarget = groupId ? { groupId } : { botId };
@@ -3692,130 +3774,136 @@ const MessageBubble = memo(function MessageBubble({
     })
     .join("\n");
   if (attachments.length > 0) {
-    // The author now lives in the row above (`MessageRow`), so the card only
-    // carries what was attached.
+    const images = imageStack?.images ?? imagesOf(message, message.id);
+    const files = attachments.filter((attachment) => attachment.kind === "file");
+    const ink = message.role === "user" ? tokens.chatUserForeground : tokens.foreground;
+    const surfaceStyle = {
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      gap: 8,
+      ...(message.role === "user" ? { backgroundColor: tokens.chatUser } : null),
+    };
+    const quote = replyQuote(message, replyPreview);
+    const openImage = (image: StackImage) =>
+      void openMobileArtifact(artifactTarget, image.artifactId, image.name, image.mimeType).catch(
+        (err) =>
+          Alert.alert(
+            t("Could not open image"),
+            err instanceof Error ? err.message : t("Try again."),
+          ),
+      );
+    const words =
+      quote || caption ? (
+        <>
+          {quote ? (
+            <Text
+              style={{
+                color: message.role === "user" ? tokens.chatUserForeground : tokens.mutedForeground,
+                ...nativeTextStyle("meta"),
+              }}
+              numberOfLines={2}
+            >
+              {quote}
+            </Text>
+          ) : null}
+          {caption ? (
+            <Text style={{ color: ink, ...nativeTextStyle("body") }}>{caption}</Text>
+          ) : null}
+        </>
+      ) : null;
+    // The author now lives in the row above (`MessageRow`). With images, the words are a bubble and
+    // the images a stack outside it; the files and cards stay in a bubble of their own.
     return (
-      <Surface
+      <View
         style={{
           maxWidth: "100%",
-          alignSelf: message.role === "user" ? "flex-end" : "flex-start",
-          paddingHorizontal: 14,
-          paddingVertical: 12,
           gap: 8,
-          ...(message.role === "user" ? { backgroundColor: tokens.chatUser } : null),
+          alignSelf: message.role === "user" ? "flex-end" : "flex-start",
+          alignItems: message.role === "user" ? "flex-end" : "flex-start",
         }}
       >
-        {replyQuote(message, replyPreview) ? (
-          <Text
-            style={{
-              color: message.role === "user" ? tokens.chatUserForeground : tokens.mutedForeground,
-              ...nativeTextStyle("meta"),
-            }}
-            numberOfLines={2}
-          >
-            {replyQuote(message, replyPreview)}
-          </Text>
+        {images.length > 0 && words && imagePart !== "images" ? (
+          <Surface style={surfaceStyle}>{words}</Surface>
         ) : null}
-        {caption ? (
-          <Text
-            style={{
-              color: message.role === "user" ? tokens.chatUserForeground : tokens.foreground,
-              ...nativeTextStyle("body"),
-            }}
-          >
-            {caption}
-          </Text>
-        ) : null}
-        {attachments.map((attachment, index) =>
-          attachment.kind === "image" ? (
-            <Pressable
-              {...actionProps}
-              key={`${attachment.artifactId ?? attachment.name ?? "image"}-${index}`}
-              onPress={() =>
-                attachment.artifactId
-                  ? void openMobileArtifact(
-                      artifactTarget,
-                      attachment.artifactId,
-                      attachment.name ?? t("Image"),
-                      attachment.mimeType ?? "image/png",
-                    ).catch((err) =>
-                      Alert.alert(
-                        t("Could not open image"),
-                        err instanceof Error ? err.message : t("Try again."),
-                      ),
-                    )
-                  : undefined
-              }
-            >
-              <Text
-                style={{
-                  color: message.role === "user" ? tokens.chatUserForeground : tokens.foreground,
-                  ...nativeTextStyle("body"),
-                }}
-              >
-                🖼 {attachment.name ?? t("Image")}
-              </Text>
-            </Pressable>
-          ) : (
-            <Pressable
-              {...actionProps}
-              key={`${attachment.artifactId ?? attachment.name ?? "file"}-${index}`}
-              onPress={() =>
-                attachment.artifactId
-                  ? attachment.mimeType === "text/markdown"
-                    ? onPreviewMarkdown({
-                        artifactId: attachment.artifactId,
-                        name: attachment.name ?? t("Markdown file"),
-                        mimeType: attachment.mimeType,
-                      })
-                    : void openMobileArtifact(
-                        artifactTarget,
-                        attachment.artifactId,
-                        attachment.name ?? t("File"),
-                        attachment.mimeType ?? "text/plain",
-                      ).catch((err) =>
-                        Alert.alert(
-                          t("Could not open file"),
-                          err instanceof Error ? err.message : t("Try again."),
-                        ),
-                      )
-                  : undefined
-              }
-            >
-              <Text
-                style={{
-                  color: message.role === "user" ? tokens.chatUserForeground : tokens.foreground,
-                  ...nativeTextStyle("body"),
-                }}
-              >
-                📎 {attachment.name ?? t("File")}
-              </Text>
-              {attachment.size ? (
-                <Text
-                  style={{
-                    color:
-                      message.role === "user" ? tokens.chatUserForeground : tokens.mutedForeground,
-                    marginTop: 4,
-                    ...nativeTextStyle("meta"),
-                  }}
-                >
-                  {attachment.mimeType ?? "file"} · {attachment.size} bytes
-                </Text>
-              ) : null}
-            </Pressable>
-          ),
-        )}
-        {appConnectBlocks.map((block, index) => (
-          <AppConnectCard
-            key={`${block.provider}-${index}`}
-            botId={cardBotId}
-            block={block}
-            accessibilityActions={actionProps.accessibilityActions}
-            onAccessibilityAction={actionProps.onAccessibilityAction}
+        {images.length > 0 && imagePart !== "words" ? (
+          <ImageStack
+            images={images}
+            target={artifactTarget}
+            align={message.role === "user" ? "end" : "start"}
+            mono={mono || message.role === "user"}
+            author={authorName}
+            arrival={imageArrival ?? false}
+            onOpen={openImage}
+            onLongPress={(imageActionProps ?? actionProps).onLongPress}
+            accessibilityActions={(imageActionProps ?? actionProps).accessibilityActions}
+            onAccessibilityAction={(imageActionProps ?? actionProps).onAccessibilityAction}
           />
-        ))}
-        {metaLines.length > 0 ? <BubbleMeta lines={metaLines} /> : null}
-      </Surface>
+        ) : null}
+        {imagePart === "images" ? null : files.length > 0 ||
+          appConnectBlocks.length > 0 ||
+          (images.length === 0 && words) ? (
+          <Surface style={surfaceStyle}>
+            {images.length === 0 ? words : null}
+            {files.map((attachment, index) => (
+              <Pressable
+                {...actionProps}
+                key={`${attachment.artifactId ?? attachment.name ?? "file"}-${index}`}
+                onPress={() =>
+                  attachment.artifactId
+                    ? attachment.mimeType === "text/markdown"
+                      ? onPreviewMarkdown({
+                          artifactId: attachment.artifactId,
+                          name: attachment.name ?? t("Markdown file"),
+                          mimeType: attachment.mimeType,
+                        })
+                      : void openMobileArtifact(
+                          artifactTarget,
+                          attachment.artifactId,
+                          attachment.name ?? t("File"),
+                          attachment.mimeType ?? "text/plain",
+                        ).catch((err) =>
+                          Alert.alert(
+                            t("Could not open file"),
+                            err instanceof Error ? err.message : t("Try again."),
+                          ),
+                        )
+                    : undefined
+                }
+              >
+                <Text style={{ color: ink, ...nativeTextStyle("body") }}>
+                  📎 {attachment.name ?? t("File")}
+                </Text>
+                {attachment.kind === "file" && attachment.size ? (
+                  <Text
+                    style={{
+                      color:
+                        message.role === "user"
+                          ? tokens.chatUserForeground
+                          : tokens.mutedForeground,
+                      marginTop: 4,
+                      ...nativeTextStyle("meta"),
+                    }}
+                  >
+                    {attachment.mimeType ?? "file"} · {attachment.size} bytes
+                  </Text>
+                ) : null}
+              </Pressable>
+            ))}
+            {appConnectBlocks.map((block, index) => (
+              <AppConnectCard
+                key={`${block.provider}-${index}`}
+                botId={cardBotId}
+                block={block}
+                accessibilityActions={actionProps.accessibilityActions}
+                onAccessibilityAction={actionProps.onAccessibilityAction}
+              />
+            ))}
+            {metaLines.length > 0 ? <BubbleMeta lines={metaLines} /> : null}
+          </Surface>
+        ) : metaLines.length > 0 ? (
+          <BubbleMeta lines={metaLines} standalone />
+        ) : null}
+      </View>
     );
   }
   const segments = messagePresentationSegments(shownBlocks, showSteps);
@@ -4319,6 +4407,8 @@ function SessionSheet({
   );
   const report =
     Array.isArray(entries) && session.runId ? unshownRunReport(entries, session.runId) : undefined;
+  const botNameOf = (id: string) =>
+    members?.find((member) => member.botId === id)?.name ?? t("Bot");
   return (
     <PreviewSheet title={session.title} onClose={onClose}>
       <View style={{ paddingTop: 16 }}>
@@ -4344,6 +4434,7 @@ function SessionSheet({
                 onPreviewMarkdown={() => {}}
                 actionProps={NO_ACTIONS}
                 isNew={false}
+                authorName={row.item.role === "bot" ? botNameOf(row.item.botId) : t("You")}
               />
             ) : (
               <ItemRow

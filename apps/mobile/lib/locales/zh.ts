@@ -565,6 +565,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Working…": "处理中…",
   "Work stopped, but the thread could not refresh: {detail}":
     "工作已停止，但线程无法刷新：{detail}",
+  You: "你",
   "You have control": "你已接管控制",
   "Your account": "你的账户",
   "Stored securely. Never shown here.": "已安全存储。不会显示在这里。",
@@ -611,6 +612,8 @@ export const ZH_MESSAGES: Record<string, string> = {
   "https://example.com/openapi.json": "https://example.com/openapi.json",
   "https://executor.example/mcp": "https://executor.example/mcp",
   Image: "图片",
+  "Image {n} of {total}, from {author}": "第 {n} 张，共 {total} 张，来自 {author}",
+  "Image, from {author}": "图片，来自 {author}",
   "Markdown file": "Markdown 文件",
   "Message from {peer}": "来自 {peer} 的消息",
   "Messaged {peer}": "已给 {peer} 发消息",

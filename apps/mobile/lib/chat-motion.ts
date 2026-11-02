@@ -1,3 +1,4 @@
+import { motion, springAt } from "@rakazo/ui-tokens";
 import {
   Easing,
   useAnimatedStyle,
@@ -83,3 +84,20 @@ export function usePressScaleStyle() {
   const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   return { scale, style };
 }
+
+const SPRING_STEPS = 60;
+const SPRING_CURVE = Array.from({ length: SPRING_STEPS + 1 }, (_, i) =>
+  i === SPRING_STEPS ? 1 : springAt((motion.flight * i) / SPRING_STEPS),
+);
+
+/** `motion.spring` over `motion.flight`, the curve the web flight runs on, so both end on time. */
+export const SPRING_TIMING = {
+  duration: motion.flight,
+  easing: (t: number) => {
+    "worklet";
+    const at = Math.min(t * SPRING_STEPS, SPRING_STEPS - 1e-6);
+    const i = Math.floor(at);
+    const from = SPRING_CURVE[i] ?? 1;
+    return from + ((SPRING_CURVE[i + 1] ?? 1) - from) * (at - i);
+  },
+};
