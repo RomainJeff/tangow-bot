@@ -18,9 +18,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Fixed
 
 - On iPhone, dragging a conversation with the keyboard open no longer stutters: the thread and the keyboard follow your finger smoothly, and the composer no longer bounces when the keyboard closes.
-
-#### Fixed
-
 - On iPhone and Android, the conversation stays smoother while a bot works: its typing dots and the glow around the Stop button no longer make the app redo work on every frame.
 
 ### 2026-11-01
