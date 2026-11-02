@@ -14,9 +14,12 @@ function picture(artifactId: string): string {
   return Buffer.from(svg).toString("base64");
 }
 
+/** Opens the fixture and returns the artifacts it reads, in order. */
 async function open(page: Page) {
+  const reads: string[] = [];
   await page.route("**/rpc/artifacts/get", (route) => {
     const artifactId: string = route.request().postDataJSON()?.json?.artifactId ?? "";
+    reads.push(artifactId);
     return route.fulfill({
       json: {
         json: {
@@ -29,6 +32,7 @@ async function open(page: Page) {
     });
   });
   await page.goto("/e2e/fixtures/image-stack.html");
+  return reads;
 }
 
 /** What a stack's arrival animates: the cards' own web animations, not the CSS transitions that move them. */
@@ -45,7 +49,7 @@ const theme = (page: Page, value: "light" | "dark") =>
 test("consecutive images gather in one stack that opens in a viewer you step through", async ({
   page,
 }, testInfo) => {
-  await open(page);
+  const reads = await open(page);
 
   const stacks = page.locator('[data-slot="image-stack"]');
   await expect(stacks).toHaveCount(2);
@@ -59,6 +63,8 @@ test("consecutive images gather in one stack that opens in a viewer you step thr
 
   // A thread opened with its images already in place plays no arrival.
   expect(await bot.evaluate(arrivalKeys)).toEqual([]);
+  // Each stack reads its front before the cards peeking behind it.
+  expect(reads.slice(0, 2).sort()).toEqual(["art_c", "art_p5"]);
 
   const front = bot.locator('[data-depth="0"]');
   const frame = await front.boundingBox();
@@ -100,6 +106,11 @@ test("consecutive images gather in one stack that opens in a viewer you step thr
     /^blob:/,
   );
   await expect(viewer.getByRole("button", { name: "Next image" })).toBeDisabled();
+  // A strip of thumbnails, one per image, marks the one shown.
+  const thumbs = viewer.getByRole("button", { name: /^Image \d of 5, from Pixel$/ });
+  await expect(thumbs).toHaveCount(5);
+  await expect(thumbs.locator("img")).toHaveCount(5);
+  await expect(thumbs.last()).toHaveAttribute("aria-current", "true");
   await page.keyboard.press("ArrowLeft");
   await expect(page.getByRole("dialog", { name: "Image 4 of 5, from Pixel" })).toBeVisible();
   await viewer.getByRole("button", { name: "Previous image" }).click();
@@ -123,6 +134,15 @@ test("consecutive images gather in one stack that opens in a viewer you step thr
   await page.keyboard.press("ArrowRight");
   await expect(page.getByRole("dialog", { name: "Image 3 of 5, from Pixel" })).toBeVisible();
 
+  // A thumbnail jumps straight to its image.
+  await thumbs.first().click();
+  await expect(page.getByRole("dialog", { name: "Image 1 of 5, from Pixel" })).toBeVisible();
+  await expect(thumbs.first()).toHaveAttribute("aria-current", "true");
+  await expect(thumbs.nth(2)).not.toHaveAttribute("aria-current");
+
+  // The stack, the viewer and the strip share what they read: no image is read twice.
+  expect(reads).toHaveLength(new Set(reads).size);
+
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(bot).toBeFocused();
@@ -141,6 +161,12 @@ test("a stack keeps its frame at phone width", async ({ page }, testInfo) => {
   }
   await bot.click();
   await expect(page.getByRole("dialog", { name: "Image 3 of 3, from Pixel" })).toBeVisible();
+  await expect(
+    page
+      .getByRole("dialog")
+      .getByRole("button", { name: /^Image \d of 3/ })
+      .locator("img"),
+  ).toHaveCount(3);
   await captureScreenshot(page, testInfo, "image-viewer-phone-dark");
   await theme(page, "light");
   await captureScreenshot(page, testInfo, "image-viewer-phone-light");

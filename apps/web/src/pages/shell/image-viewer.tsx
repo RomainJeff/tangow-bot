@@ -5,6 +5,7 @@ import { IMAGE_STACK, threadTimeMarkerLabel } from "@rakazo/core";
 import { Button, cn, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
 import { ChevronLeft, ChevronRight, RotateCw, X } from "lucide-react";
 import type { KeyboardEvent } from "react";
+import { useEffect } from "react";
 import type { ArtifactTarget } from "../../lib/artifact-open";
 import { useArtifactImageSrc } from "./use-artifact-image-src";
 
@@ -55,10 +56,62 @@ function ViewerPicture({
   );
 }
 
+/** One image in the viewer's strip: a click shows it, the current one is ringed and kept in view. */
+function ViewerThumb({
+  target,
+  image,
+  label,
+  current,
+  onSelect,
+}: {
+  target: ArtifactTarget;
+  image: StackImage;
+  label: string;
+  current: boolean;
+  onSelect: () => void;
+}) {
+  const { container, src, onImageError } = useArtifactImageSrc<HTMLButtonElement>(
+    target,
+    image.artifactId,
+  );
+  useEffect(() => {
+    if (!current) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    container.current?.scrollIntoView({
+      block: "nearest",
+      inline: "center",
+      behavior: reduced ? "instant" : "smooth",
+    });
+  }, [current]);
+  return (
+    <button
+      ref={container}
+      type="button"
+      aria-label={label}
+      aria-current={current || undefined}
+      onClick={onSelect}
+      className={cn(
+        "size-viewer-thumb shrink-0 overflow-hidden rounded-row bg-media-backdrop-control transition-opacity duration-(--duration-hover) ease-quiet focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-media-backdrop-foreground",
+        current ? "ring-selected ring-media-backdrop-foreground" : "opacity-60 hover:opacity-100",
+      )}
+    >
+      {src ? (
+        <img
+          src={src}
+          alt=""
+          onError={onImageError}
+          className="size-full object-cover object-top"
+        />
+      ) : null}
+    </button>
+  );
+}
+
 /**
  * A stack's images, one at a time, on the media backdrop. The list is the stack as it was when
- * opened (oldest to newest): an image arriving meanwhile never changes it. Escape and the focus
- * returning to the stack come from `Dialog`.
+ * opened (oldest to newest): an image arriving meanwhile never changes it. With more than one, a
+ * strip of thumbnails under the image jumps to any of them. Escape and the focus returning to the
+ * stack come from `Dialog`.
  */
 export function ImageViewer({
   open,
@@ -158,6 +211,20 @@ export function ImageViewer({
             </>
           ) : null}
         </div>
+        {images.length > 1 ? (
+          <div className="mx-auto flex w-fit max-w-full gap-2 overflow-x-auto p-1">
+            {images.map((item, i) => (
+              <ViewerThumb
+                key={`${item.messageId}:${item.artifactId}`}
+                target={target}
+                image={item}
+                label={label(i + 1, images.length)}
+                current={i === index}
+                onSelect={() => onIndexChange(i)}
+              />
+            ))}
+          </div>
+        ) : null}
       </DialogContent>
     </Dialog>
   );

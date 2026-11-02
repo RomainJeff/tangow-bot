@@ -104,6 +104,7 @@
   --spacing-composer-attachment-thumb: var(--size-composer-attachment-thumb);
   --spacing-link-card: var(--size-link-card);
   --spacing-link-thumb: var(--size-link-thumb);
+  --spacing-viewer-thumb: var(--size-viewer-thumb);
   --spacing-link-icon-inset: var(--size-link-icon-inset);
   --spacing-link-photo-max: var(--size-link-photo-max);
   --spacing-composer-attachment-tile: var(--size-composer-attachment-tile);
