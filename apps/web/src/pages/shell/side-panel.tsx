@@ -13,7 +13,7 @@ import type {
 import { BotAvatar, Button } from "@rakazo/ui-web";
 import { X } from "lucide-react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { ComputerMaintenanceActions } from "../../components/ComputerMaintenanceActions";
 import { TeachCaptureOverlay } from "../../components/teach/TeachCaptureOverlay";
 import { TeachComputerOverlayControl } from "../../components/teach/TeachComputerOverlay";
@@ -30,7 +30,7 @@ import type { BotPageView, Panel, PanelSize } from "./layout";
 import { firstThreadRoute, panelIsOpen } from "./layout";
 import { usePanelEscape } from "./panel-escape";
 import type { ScreenLinkHandlers } from "./screen-frame";
-import { ScreenFrame } from "./screen-frame";
+import { ScreenFrame, ScreenLinkOverlay } from "./screen-frame";
 
 export function SidePanel({
   panel,
@@ -223,6 +223,7 @@ export function SidePanel({
 
 export function ComputerOverlay({
   booting,
+  opening,
   active,
   computer,
   computerOpen,
@@ -239,11 +240,15 @@ export function ComputerOverlay({
   composerRunning,
   sending,
   stopRun,
+  canTakeControl,
+  takeComputerControl,
   releaseComputer,
   refreshThread,
   sendError,
 }: {
   booting: boolean;
+  /** An open is loading a fresh screen URL: the window shows Connecting… until it lands. */
+  opening: boolean;
   active: Bot | undefined;
   computer: ComputerStatus | null;
   computerOpen: boolean;
@@ -260,11 +265,15 @@ export function ComputerOverlay({
   composerRunning: boolean;
   sending: boolean;
   stopRun: () => Promise<void>;
+  /** False while a run is active or another bot holds the computer, except when a run waits for the user to take over. */
+  canTakeControl: boolean;
+  takeComputerControl: () => Promise<void>;
   releaseComputer: (reason?: ComputerReleaseReason) => Promise<void>;
   refreshThread: (id: string, signal?: AbortSignal) => Promise<ThreadSnapshot>;
   sendError: string | null;
 }) {
   const { t } = useLingui();
+  const connecting = opening || computer?.state === "booting";
   return booting ? (
     <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-[22px] bg-background/95">
       <div className="text-title font-medium text-foreground">
@@ -348,6 +357,8 @@ export function ComputerOverlay({
                 takeoverRequested={Boolean(computer?.takeoverRequested)}
                 onRelease={releaseComputer}
               />
+            ) : canTakeControl ? (
+              <TakeControlButton onTake={takeComputerControl} />
             ) : null}
             {active && !recordingSkill ? (
               <TeachComputerOverlayControl
@@ -388,7 +399,10 @@ export function ComputerOverlay({
           </div>
         ) : null}
         <div className="relative min-h-0 flex-1 bg-background">
-          {computer?.state === "running" && embeddedScreenUrl && !computerScreenError ? (
+          {computer?.state === "running" &&
+          embeddedScreenUrl &&
+          !computerScreenError &&
+          !opening ? (
             <>
               <ScreenFrame
                 url={embeddedScreenUrl}
@@ -407,18 +421,45 @@ export function ComputerOverlay({
                 />
               ) : null}
             </>
+          ) : computerScreenError ? (
+            <div className="grid h-full place-items-center text-meta text-muted-foreground/80">
+              {computerScreenError}
+            </div>
+          ) : connecting ? (
+            // Same black ground and pill as ScreenFrame, so the hand-off to the screen is seamless.
+            <div className="h-full bg-black">
+              <ScreenLinkOverlay view="connecting" />
+            </div>
           ) : (
             <div className="grid h-full place-items-center text-meta text-muted-foreground/80">
-              {computerScreenError ??
-                (computer?.state === "suspended"
-                  ? t`Computer is asleep`
-                  : computerLabel(computer?.mode, active.name))}
+              {computer?.state === "suspended"
+                ? t`Computer is asleep`
+                : computerLabel(computer?.mode, active.name)}
             </div>
           )}
         </div>
       </div>
     </div>
   ) : null;
+}
+
+function TakeControlButton({ onTake }: { onTake: () => Promise<void> }) {
+  const [pending, setPending] = useState(false);
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      data-testid="computer-take-control"
+      disabled={pending}
+      onClick={() => {
+        setPending(true);
+        void onTake().finally(() => setPending(false));
+      }}
+    >
+      <Trans>Take control</Trans>
+    </Button>
+  );
 }
 
 function ComputerReleaseActions({

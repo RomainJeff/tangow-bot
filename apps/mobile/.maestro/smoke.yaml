@@ -1,4 +1,4 @@
-appId: com.rakazo.app
+appId: com.romainjeff.tangow
 name: Rakazo mobile smoke
 ---
 - launchApp:
@@ -41,6 +41,11 @@ name: Rakazo mobile smoke
     visible: "Open computer"
     timeout: 30000
 - tapOn: "Open computer"
+- extendedWaitUntil:
+    visible: "Close computer"
+    timeout: 90000
+- assertNotVisible: "You have control"
+- tapOn: "Take control"
 - extendedWaitUntil:
     visible: "You have control"
     timeout: 90000

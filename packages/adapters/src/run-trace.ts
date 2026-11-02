@@ -1,13 +1,25 @@
 import type {
   AttributeValue,
+  RecordedTelemetryLink,
   SpanAttributes,
+  SpanLink,
   SpanOptions,
   SpanStatus,
+  TelemetryCarrier,
   TelemetryContext,
   TelemetrySpan,
 } from "@earendil-works/pi-telemetry";
 import { NOOP_TELEMETRY_CONTEXT } from "@earendil-works/pi-telemetry";
 import { generateTraceId } from "@rakazo/logging";
+
+const INERT_TELEMETRY_SPAN: TelemetrySpan = {
+  ...NOOP_TELEMETRY_CONTEXT,
+  metrics: undefined,
+  propagation: undefined,
+  async startSpan(_options, callback) {
+    return callback(INERT_TELEMETRY_SPAN);
+  },
+};
 
 /** One recorded point-in-time event attached to a span. */
 export interface RecordedSpanEvent {
@@ -26,6 +38,9 @@ export interface RecordedSpan {
   /** Trace-local sequence number, matching the telemetry contract's reference adapter. */
   readonly id: number;
   readonly parentId: number | null;
+  readonly context: Readonly<TelemetryCarrier>;
+  readonly parentContext: Readonly<TelemetryCarrier> | null;
+  readonly links: readonly RecordedTelemetryLink[];
   readonly name: string;
   readonly attributes: SpanAttributes;
   readonly events: readonly RecordedSpanEvent[];
@@ -87,6 +102,8 @@ function normalizeStatus(input: SpanStatus): SpanStatus {
 class RunTraceSpanImpl implements TelemetrySpan {
   readonly attributes: Record<string, AttributeValue> = {};
   readonly events: RecordedSpanEvent[] = [];
+  readonly links: RecordedTelemetryLink[] = [];
+  readonly context: Readonly<TelemetryCarrier>;
   status: SpanStatus = { status: "ok" };
   settled = false;
   endSequence?: number;
@@ -97,10 +114,12 @@ class RunTraceSpanImpl implements TelemetrySpan {
     private readonly trace: RunTrace,
     readonly id: number,
     readonly parentId: number | null,
+    readonly parentContext: Readonly<TelemetryCarrier> | null,
     readonly name: string,
     attributes: SpanAttributes,
     readonly startedAt: number,
   ) {
+    this.context = { traceId: trace.traceId, spanId: String(id) };
     Object.assign(this.attributes, attributes);
   }
 
@@ -113,6 +132,18 @@ class RunTraceSpanImpl implements TelemetrySpan {
       return;
     }
     Object.assign(this.attributes, normalized);
+  }
+
+  addLink(link: SpanLink): void {
+    if (this.settled || !(link.context instanceof RunTraceSpanImpl)) return;
+    try {
+      this.links.push({
+        context: { ...link.context.context },
+        attributes: normalizeAttributes(link.attributes),
+      });
+    } catch {
+      return;
+    }
   }
 
   addEvent(name: string, attributes?: SpanAttributes): void {
@@ -166,7 +197,7 @@ export type RunTraceSpan = RunTraceSpanImpl;
  * Records the spans of a single agent run in memory.
  *
  * Implements the vendor-neutral telemetry contract so it can be handed to pi as
- * a `telemetryContext`, and additionally exposes {@link openSpan} for the
+ * a telemetry context, and additionally exposes {@link openSpan} for the
  * event-driven call sites that open and close a span from two different
  * callbacks and cannot wrap their work in `startSpan`.
  */
@@ -224,7 +255,7 @@ export class RunTrace implements TelemetryContext {
   ): Promise<T> {
     const span = parent?.settled === true ? undefined : this.open(options, parent);
     // A span that could not be recorded still admits its callback exactly once.
-    if (!span) return NOOP_TELEMETRY_CONTEXT.startSpan(options, callback);
+    if (!span) return INERT_TELEMETRY_SPAN.startSpan(options, callback);
     let result: T | Promise<T>;
     try {
       result = callback(span);
@@ -260,10 +291,12 @@ export class RunTrace implements TelemetryContext {
       this,
       this.nextSpanId(),
       parent?.id ?? null,
+      parent ? { ...parent.context } : null,
       name,
       attributes,
       this.now(),
     );
+    for (const link of options.links ?? []) span.addLink(link);
     this.spans.push(span);
     return span;
   }

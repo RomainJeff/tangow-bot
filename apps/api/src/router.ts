@@ -164,11 +164,11 @@ import {
   setModelCategory,
   threadEventSeq,
   touchGroupUpdatedAt,
+  usageBreakdown,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { deleteAgentSecret, listAgentSecrets, putAgentSecret } from "./agent-secrets.js";
 import { createAgentSkillsService } from "./agent-skills.js";
-import { aiConsentStatus, allowAiConsent } from "./ai-consent.js";
 import {
   buildFollowUpBlocks,
   createOwnedArtifact,
@@ -536,7 +536,6 @@ export interface RouterDeps {
     defaultModel: string;
     deploymentModelKey?: string;
     webOrigin: string;
-    privacyPolicyUrl?: string;
     screenProxySecret: string;
     sandboxProvider: string;
     gitSha?: string;
@@ -599,22 +598,7 @@ export function createRouter(deps: RouterDeps) {
 
   return os.router({
     aiConsent: {
-      status: authed.aiConsent.status.handler(({ context, input }) =>
-        aiConsentStatus(deps, context.actor, input),
-      ),
-      allow: authed.aiConsent.allow.handler(({ context, input }) =>
-        allowAiConsent(deps, context.actor, input),
-      ),
-      revoke: authed.aiConsent.revoke.handler(async ({ context, input }) => {
-        await deps.prisma.aiDataConsent.deleteMany({
-          where: {
-            userId: context.actor.userId,
-            spaceId: context.actor.spaceId,
-            recipientKey: input.key ?? undefined,
-          },
-        });
-        return aiConsentStatus(deps, context.actor);
-      }),
+      status: authed.aiConsent.status.handler(() => ({ recipients: [] as [] })),
     },
     health: os.health.handler(async () => ({ ok: true as const, version: "0.1.0" })),
     me: authed.me.handler(async ({ context }): Promise<Me> => meDto(deps, context.actor)),
@@ -4692,35 +4676,9 @@ export function createRouter(deps: RouterDeps) {
       }),
     },
     usage: {
-      list: authed.usage.list.handler(async ({ context }) => {
-        const rows = await deps.prisma.usageRecord.findMany({
-          where: { spaceId: context.actor.spaceId, userId: context.actor.userId },
-          orderBy: { createdAt: "desc" },
-          take: 100,
-        });
-        return rows.map((row) => ({
-          id: row.id,
-          botId: row.botId,
-          runId: row.runId,
-          provider: row.provider,
-          model: row.model,
-          inputTokens: row.inputTokens,
-          outputTokens: row.outputTokens,
-          createdAt: row.createdAt.toISOString(),
-        }));
-      }),
-      summary: authed.usage.summary.handler(async ({ context }) => {
-        const result = await deps.prisma.usageRecord.aggregate({
-          where: { spaceId: context.actor.spaceId, userId: context.actor.userId },
-          _sum: { inputTokens: true, outputTokens: true },
-          _count: { _all: true },
-        });
-        return {
-          inputTokens: result._sum.inputTokens ?? 0,
-          outputTokens: result._sum.outputTokens ?? 0,
-          runs: result._count._all,
-        };
-      }),
+      breakdown: authed.usage.breakdown.handler(({ context, input }) =>
+        usageBreakdown(deps.prisma, context.actor, input.period),
+      ),
     },
     export: {
       bot: authed.export.bot.handler(async ({ context, input }) => {

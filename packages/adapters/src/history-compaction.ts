@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type {
   AdapterContext,
   AgentRunRequest,
@@ -360,12 +361,13 @@ type CompactionThread = {
   spaceId: string;
   userId: string;
   sessionId: string;
+  /** One per pass: its summary chunks and fact extractions count as one compaction. */
+  compactionId: string;
 };
 
 /**
  * Compaction reads the whole backlog, so it is often the most expensive call in a thread.
  * Recording that spend must never be able to fail the compaction that produced it.
- * Both of its runs record the same shape: `UsageRecord` has no column to tell them apart.
  */
 async function recordCompactionUsage(
   deps: CompactHistoryDeps,
@@ -391,6 +393,8 @@ async function recordCompactionUsage(
         userId: thread.userId,
         // No `runId`: compaction has no `Run` row (it runs under `compact:<threadId>`) and the
         // column is a real foreign key onto `Run`.
+        category: "compaction",
+        compactionId: thread.compactionId,
         provider: event.provider,
         model: event.model,
         inputTokens: event.inputTokens,
@@ -688,6 +692,7 @@ export async function compactHistory(
     spaceId: thread.spaceId,
     userId: thread.userId,
     sessionId: thread.sessionId,
+    compactionId: randomUUID(),
   };
   const sessionId = thread.sessionId as SessionId;
   let tail = await deps.sessionLog.readTail(sessionId);

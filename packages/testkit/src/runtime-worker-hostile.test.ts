@@ -97,21 +97,32 @@ function manualLauncher(harness = HAND_WRITTEN) {
   const fence: { standing: "executing" | "paused" | "lost"; lookup?: Promise<void> } = {
     standing: "executing",
   };
-  const launched = new Map<string, { capability: string; connect(): FrameChannel }>();
+  const launched = new Map<
+    string,
+    { capability: string; connect(): FrameChannel; disconnect(): void }
+  >();
   const waiting = new Map<string, () => void>();
   return {
     fence,
     launcher: {
       async launch(worker: WorkerIdentity, capability: string): Promise<LaunchedGuest> {
         const queue: FrameChannel[] = [];
+        const connected: FrameChannel[] = [];
+        let disconnected = false;
         let wake = () => {};
         launched.set(worker.runId, {
           capability,
           connect() {
             const pair = memoryChannelPair();
+            connected.push(pair.controller);
             queue.push(pair.controller);
             wake();
             return pair.guest;
+          },
+          disconnect() {
+            disconnected = true;
+            for (const channel of connected) channel.close();
+            wake();
           },
         });
         waiting.get(worker.runId)?.();
@@ -125,7 +136,7 @@ function manualLauncher(harness = HAND_WRITTEN) {
             computer: "none",
           },
           connections: (async function* () {
-            while (true) {
+            while (!disconnected) {
               const next = queue.shift();
               if (next) yield next;
               else await new Promise<void>((resume) => (wake = resume));
@@ -591,6 +602,50 @@ async function pauseOnTool(ask: (body: GuestBody) => Promise<ReplyBody | undefin
 }
 
 describe("the controller's pause guard, against a hostile harness", () => {
+  it.each([false, true])(
+    "ends a disconnected pause according to its saved snapshot, saved=%s",
+    async (saved) => {
+      const harness: HarnessDeclaration = { name: "hand-written", capabilities: ["resume"] };
+      const { runtime, launchedFor } = setup(stillClock, harness);
+      const runId = `disconnected-pause-${saved}`;
+      const { run, ask } = await startGuest(
+        runtime,
+        launchedFor,
+        runId,
+        {
+          executeTool: async () => PAUSED,
+          persistence: {
+            start: { mode: "fresh" },
+            begin: async () => {},
+            save: async () => {},
+            receipt: async () => {},
+            resolve: async () => [],
+          },
+        },
+        harness,
+      );
+      await pauseOnTool(ask);
+      if (saved) {
+        expect(
+          await ask({
+            type: "snapshot.save",
+            snapshot: {
+              version: 1,
+              revision: 1,
+              harness: { name: harness.name, format: "fixture-v1" },
+              state: "fixture-session",
+              pendingCallIds: [],
+              deliveredEvents: [],
+            },
+          }),
+        ).toEqual({ type: "recorded" });
+      }
+      (await launchedFor(runId)).disconnect();
+      if (saved) await expect(run.done).resolves.toBeUndefined();
+      else await expect(run.done).rejects.toThrow("The pause ended without a saved agent snapshot");
+    },
+  );
+
   it("answers every call after a pause without running it, and drops what the harness still says", async () => {
     const executeTool = vi.fn(async (name: string) => (name === "send_email" ? PAUSED : "saved"));
     const claimSteering = vi.fn(async () => [{ id: "s1", messageId: "m1", text: "Also this." }]);

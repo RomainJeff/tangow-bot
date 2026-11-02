@@ -143,9 +143,6 @@ export type SidebarFooterProps = {
   userImage: string | null;
   userName: string;
   openSettings: (section?: SettingsSection) => void;
-  setUsage: Dispatch<
-    SetStateAction<{ inputTokens: number; outputTokens: number; runs: number } | null>
-  >;
   navigate: (path: string) => void;
 };
 
@@ -157,7 +154,6 @@ export function SidebarFooter({
   userImage,
   userName,
   openSettings,
-  setUsage,
   navigate,
 }: SidebarFooterProps) {
   const { t } = useLingui();
@@ -211,10 +207,6 @@ export function SidebarFooter({
               aria-label={t`Usage`}
               onClick={() => {
                 setMenuOpen(false);
-                void rpc.usage
-                  .summary()
-                  .then(setUsage)
-                  .catch(() => undefined);
                 openSettings("usage");
               }}
             >

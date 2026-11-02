@@ -1,12 +1,11 @@
 import type { AvatarStyle, ComputerListItem } from "@rakazo/contracts";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Button,
   Platform,
   Pressable,
   ScrollView,
@@ -73,7 +72,6 @@ export default function Account() {
   const computerUpdateAvailable =
     computers.kind === "ready" && computers.value.some((item) => item.status.updateAvailable);
   const router = useRouter();
-  const { focus } = useLocalSearchParams<{ focus?: string }>();
   const [me, setMe] = useState<MobileMe | null>(null);
   const [password, setPassword] = useState("");
   const [localeSaving, setLocaleSaving] = useState(false);
@@ -91,11 +89,6 @@ export default function Account() {
   const [apiBase, setApiBase] = useState(() => currentApiBase());
   const [serverOpen, setServerOpen] = useState(false);
   const [archivedBots, setArchivedBots] = useState<MobileBot[]>([]);
-  const [usage, setUsage] = useState<{
-    runs: number;
-    inputTokens: number;
-    outputTokens: number;
-  } | null>(null);
   const { avatarStyle, updateAvatarStyle } = useAvatarStyle();
   const appearance = getCachedAppearancePreference();
   const debug = useDebugMode();
@@ -111,9 +104,6 @@ export default function Account() {
     void rpc<MobileBot[]>("bots/listArchived")
       .then(setArchivedBots)
       .catch(() => undefined);
-    void rpc<{ runs: number; inputTokens: number; outputTokens: number }>("usage/summary")
-      .then(setUsage)
-      .catch(() => undefined);
     if (Platform.OS === "android") {
       void getLiveNotificationSettings()
         .then(setNotifications)
@@ -122,18 +112,15 @@ export default function Account() {
     }
   }, []);
 
-  const usageBlock = (
-    <View accessibilityLabel={t("Usage")} style={styles.profile}>
+  const usageLink = (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => router.push("/usage")}
+      style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
+    >
       <Text style={styles.settingsTitle}>{t("Usage")}</Text>
-      {usage ? (
-        <Text style={styles.email}>
-          {t("{runs} runs · {tokens} tokens", {
-            runs: usage.runs,
-            tokens: usage.inputTokens + usage.outputTokens,
-          })}
-        </Text>
-      ) : null}
-    </View>
+      <Text style={styles.chevron}>›</Text>
+    </Pressable>
   );
 
   async function restoreBot(botId: string) {
@@ -254,18 +241,12 @@ export default function Account() {
   return (
     <SafeAreaView edges={["bottom"]} style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Button
-          color={mobileTokens().primary}
-          title="AI data sharing"
-          onPress={() => router.push("/ai-data-sharing")}
-        />
-        {focus === "usage" ? usageBlock : null}
         <View style={styles.profile}>
           <Text style={styles.name}>{me?.name || t("Your account")}</Text>
           {me?.email ? <Text style={styles.email}>{me.email}</Text> : null}
           <ProfilePhoto initials={userInitials(me?.name ?? "")} />
         </View>
-        {focus !== "usage" ? usageBlock : null}
+        {usageLink}
 
         <Pressable
           accessibilityRole="button"

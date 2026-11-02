@@ -1,4 +1,4 @@
-appId: com.rakazo.app
+appId: com.romainjeff.tangow
 name: Rakazo mobile screenshots
 tags:
   - screenshots
@@ -79,6 +79,12 @@ tags:
 - tapOn: "Change password"
 - assertVisible: "Current password"
 - takeScreenshot: "10b-change-password"
+- back
+- tapOn: "Usage"
+- extendedWaitUntil:
+    visible: "Model spend uses your provider keys."
+    timeout: 10000
+- takeScreenshot: "10d-usage"
 - back
 
 - scrollUntilVisible:

@@ -1,6 +1,5 @@
 import { eventIterator, oc } from "@orpc/contract";
 import * as z from "zod";
-import { AiConsentQuerySchema, AiConsentStatusSchema } from "./ai-consent.js";
 import { ATTACHMENT_MAX_BASE64_LENGTH, ATTACHMENT_MAX_COUNT } from "./attachments.js";
 import {
   ActionApprovalRuleSchema,
@@ -72,7 +71,8 @@ import {
   UpdateBotInput,
   UpdateExternalConversationPolicyInput,
   UpdateGroupInput,
-  UsageRecordSchema,
+  UsageCellSchema,
+  UsagePeriodSchema,
   VoiceCatalogEntrySchema,
   VoiceCredentialSchema,
   VoiceInfoSchema,
@@ -179,18 +179,9 @@ const threadSendInput = threadTarget
   });
 
 export const appContract = {
+  // Mobile 2026.11.0 and earlier ask this before every send and block on a 404. Remove once they are gone.
   aiConsent: {
-    status: oc.input(AiConsentQuerySchema).output(AiConsentStatusSchema),
-    allow: oc
-      .input(
-        z.object({
-          scope: z.string(),
-          version: z.string(),
-          keys: z.array(z.string()).min(1).max(200),
-        }),
-      )
-      .output(AiConsentStatusSchema),
-    revoke: oc.input(z.object({ key: z.string().nullable() })).output(AiConsentStatusSchema),
+    status: oc.input(z.unknown()).output(z.object({ recipients: z.tuple([]) })),
   },
   health: oc.output(z.object({ ok: z.literal(true), version: z.string() })),
   me: oc.output(MeSchema),
@@ -834,14 +825,7 @@ export const appContract = {
     get: oc.input(threadTarget.and(z.object({ artifactId: Id }))).output(ArtifactWithContentSchema),
   },
   usage: {
-    list: oc.output(z.array(UsageRecordSchema)),
-    summary: oc.output(
-      z.object({
-        inputTokens: z.number(),
-        outputTokens: z.number(),
-        runs: z.number(),
-      }),
-    ),
+    breakdown: oc.input(z.object({ period: UsagePeriodSchema })).output(z.array(UsageCellSchema)),
   },
   export: {
     bot: oc.input(botId).output(ExportManifestSchema),

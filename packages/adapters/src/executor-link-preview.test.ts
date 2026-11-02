@@ -1,4 +1,9 @@
-import type { AgentRunRequest, AgentRuntimeEvent, ArtifactPut } from "@rakazo/adapter-kit";
+import type {
+  AgentRunRequest,
+  AgentRuntimeEvent,
+  ArtifactPut,
+  FeedbackProvider,
+} from "@rakazo/adapter-kit";
 import type { MessageBlock } from "@rakazo/contracts";
 import { describe, expect, it, vi } from "vitest";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
@@ -45,6 +50,7 @@ function fixture({
   status = "queued",
   steering = [] as Array<{ id: string; messageId: string; text: string; blocks: MessageBlock[] }>,
   web,
+  feedback,
   runtimeRun,
 }: {
   trigger?: string;
@@ -63,6 +69,7 @@ function fixture({
   /** User messages waiting to be steered into the run: handed out by the first claim. */
   steering?: Array<{ id: string; messageId: string; text: string; blocks: MessageBlock[] }>;
   web?: FakeWebProvider;
+  feedback?: FeedbackProvider;
   runtimeRun: (request: AgentRunRequest) => AsyncGenerator<AgentRuntimeEvent>;
 }) {
   const run = {
@@ -237,7 +244,8 @@ function fixture({
       })),
     },
     chatGroupMember: { findMany: vi.fn(async () => []) },
-    event: { create: vi.fn(async () => ({ id: "event-1" })) },
+    event: { create: vi.fn(async () => ({ id: "event-1" })), count: vi.fn(async () => 0) },
+    usageRecord: { count: vi.fn(async () => 0) },
     task: { findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: "Help the user" })) },
     connection: { findMany: vi.fn(async () => []) },
     spaceMember: { findUnique: async () => ({ modelAuto: false }) },
@@ -299,9 +307,11 @@ function fixture({
     notifications: { send },
     secrets,
     web,
+    feedback,
   } as unknown as Parameters<typeof createRunExecutor>[0]);
 
   return {
+    effects,
     widgetArtifacts,
     widgetBytes,
     readFile,
@@ -705,5 +715,73 @@ describe("show_widget", () => {
     expect(f.widgetArtifacts).toEqual([]);
     expect(f.widgetBytes.size).toBe(0);
     expect(f.drafts.filter((draft) => draft.type === "assistant.text")).toEqual([]);
+  });
+});
+
+describe("report_issue", () => {
+  const report = {
+    kind: "malfunction",
+    summary: "web_fetch returned an empty page for sk-live-123",
+    expected: "The page text",
+    impact: "workaround",
+  };
+
+  async function reportOnce(feedback?: FeedbackProvider) {
+    let offered = false;
+    let result: unknown;
+    const f = fixture({
+      secrets: ["sk-live-123"],
+      feedback,
+      async *runtimeRun(request) {
+        offered = request.tools.some((tool) => tool.name === "report_issue");
+        if (offered) {
+          yield { type: "tool", name: "report_issue", args: report, executionId: "feedback-1" };
+          result = await request.executeTool!("report_issue", report, "feedback-1");
+        }
+        yield { type: "text", text: "Done." };
+        yield { type: "done" };
+      },
+    });
+    await f.run();
+    return { f, offered, result };
+  }
+
+  it("is offered only when the deployment has somewhere to file it", async () => {
+    expect((await reportOnce()).offered).toBe(false);
+  });
+
+  it("files a masked issue and keeps the outcome on the call's effect", async () => {
+    const deliver = vi.fn<FeedbackProvider["deliver"]>(async () => ({
+      url: "https://tracker.test/issues/1",
+    }));
+    const { f, result } = await reportOnce({ deliver });
+
+    const [issue] = deliver.mock.calls[0]!;
+    expect(issue.title).toBe("web_fetch returned an empty page for [redacted]");
+    expect(issue.body).not.toContain("sk-live-123");
+    expect(result).toMatchObject({
+      recorded: true,
+      delivered: true,
+      url: "https://tracker.test/issues/1",
+    });
+    expect(f.effects).toEqual([
+      expect.objectContaining({ kind: "report_issue", status: "completed", result }),
+    ]);
+  });
+
+  it("reports a failed delivery as recorded but not delivered, and the run still completes", async () => {
+    const { f, result } = await reportOnce({
+      deliver: async () => {
+        throw new Error("HTTP 502 for sk-live-123");
+      },
+    });
+
+    expect(result).toMatchObject({
+      recorded: true,
+      delivered: false,
+      reason: "HTTP 502 for [redacted]",
+    });
+    expect(f.effects).toEqual([expect.objectContaining({ status: "completed", result })]);
+    expect(f.finalizeRun).toHaveBeenCalledWith(expect.objectContaining({ outcome: "completed" }));
   });
 });

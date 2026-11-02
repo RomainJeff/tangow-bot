@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "Rakazo",
+    "name": "Tangow",
     "slug": "rakazo",
     "owner": "tangow",
     "scheme": "rakazo",
-    "version": "1.1.0",
+    "version": "2026.11.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
@@ -28,7 +28,7 @@
         "expo-audio",
         {
           "enableBackgroundPlayback": false,
-          "microphonePermission": "Rakazo uses the microphone to turn your voice into text in the message field."
+          "microphonePermission": "Tangow uses the microphone to turn your voice into text in the message field."
         }
       ],
       "expo-localization",
@@ -44,9 +44,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Rakazo uses your photo library so you can attach images to a bot message.",
-          "cameraPermission": "Rakazo uses the camera so you can attach photos to a bot message.",
-          "microphonePermission": "Rakazo uses the microphone to turn your voice into text in the message field."
+          "photosPermission": "Tangow uses your photo library so you can attach images to a bot message.",
+          "cameraPermission": "Tangow uses the camera so you can attach photos to a bot message.",
+          "microphonePermission": "Tangow uses the microphone to turn your voice into text in the message field."
         }
       ],
       "expo-sharing",
@@ -55,14 +55,14 @@
       [
         "expo-speech-recognition",
         {
-          "microphonePermission": "Rakazo uses the microphone to turn your voice into text in the message field.",
-          "speechRecognitionPermission": "Rakazo turns your voice into text on this device."
+          "microphonePermission": "Tangow uses the microphone to turn your voice into text in the message field.",
+          "speechRecognitionPermission": "Tangow turns your voice into text on this device."
         }
       ],
       "@bacons/apple-targets"
     ],
     "ios": {
-      "bundleIdentifier": "com.romainjeff.rakazo",
+      "bundleIdentifier": "com.romainjeff.tangow",
       "buildNumber": "1",
       "supportsTablet": false,
       "icon": "../../packages/ui-tokens/assets/Rakazo.icon",
@@ -70,9 +70,9 @@
         "usesNonExemptEncryption": false
       },
       "infoPlist": {
-        "NSCameraUsageDescription": "Rakazo uses the camera so you can attach photos to a bot message.",
-        "NSPhotoLibraryUsageDescription": "Rakazo uses your photo library so you can attach images to a bot message.",
-        "NSLocalNetworkUsageDescription": "Rakazo connects to a self-hosted Rakazo server on your local network.",
+        "NSCameraUsageDescription": "Tangow uses the camera so you can attach photos to a bot message.",
+        "NSPhotoLibraryUsageDescription": "Tangow uses your photo library so you can attach images to a bot message.",
+        "NSLocalNetworkUsageDescription": "Tangow connects to a self-hosted Rakazo server on your local network.",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
         },
@@ -83,7 +83,7 @@
       }
     },
     "android": {
-      "package": "com.rakazo.app",
+      "package": "com.romainjeff.tangow",
       "versionCode": 10,
       "softwareKeyboardLayoutMode": "resize",
       "icon": "./assets/icon.png",

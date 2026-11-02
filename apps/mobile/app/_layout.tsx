@@ -123,7 +123,6 @@ export default function Layout() {
                   name="integration-setup"
                   options={{ title: t("Server integrations") }}
                 />
-                <Stack.Screen name="ai-data-sharing" options={{ title: "AI data sharing" }} />
                 <Stack.Screen name="account" options={{ title: t("Account") }} />
                 <Stack.Screen
                   name="change-password"
@@ -162,6 +161,7 @@ export default function Layout() {
                   }}
                 />
                 <Stack.Screen name="models" options={{ title: t("Models") }} />
+                <Stack.Screen name="usage" options={{ title: t("Usage") }} />
                 <Stack.Screen name="computer-settings" options={{ title: t("Computer") }} />
                 <Stack.Screen name="voice" options={{ title: t("Voice") }} />
                 <Stack.Screen name="integrations" options={{ title: t("Integrations") }} />

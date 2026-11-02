@@ -305,7 +305,6 @@ it("runs native Pi helpers in separate persisted sessions and resumes the parent
           arguments: { question: "Which city?", options: ["Paris", "Lyon"] },
         },
       },
-      { expect() {}, response: { type: "text", text: "Waiting privately." } },
       {
         expect(request) {
           expect(JSON.stringify(request.messages)).toContain("Paris");

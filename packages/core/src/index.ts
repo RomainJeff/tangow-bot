@@ -1,7 +1,6 @@
 export * from "./action-approval.js";
 export * from "./activity-rows.js";
 export * from "./agent-skill.js";
-export * from "./ai-consent.js";
 export * from "./answer-order.js";
 export * from "./answerable-ask.js";
 export * from "./app-marks.js";
@@ -96,6 +95,7 @@ export * from "./text-direction.js";
 export * from "./thread-subscription.js";
 export * from "./thread-time-markers.js";
 export * from "./tool-activity.js";
+export * from "./usage-breakdown.js";
 export * from "./waiting-ask.js";
 export * from "./worker-plan.js";
 export * from "./worker-stop.js";

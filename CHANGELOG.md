@@ -11,6 +11,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Added
 
 - **Computer update notices on web, desktop and mobile.** Settings and the computer view show when an existing computer has an update available, with a manual update action. Unrelated application commits no longer count as computer updates.
+- **Bots can report problems with Rakazo itself as GitHub issues.** When the server operator connects a feedback repository, a bot that gets blocked, hits a malfunction or needs far too many steps can call `report_issue` to file an issue with its report and the run's model, ids and counters, and carries on with its task. See [Agent feedback](docs/self-host.md#agent-feedback).
+
+### 2026-11-01
+
+#### Changed
+
+- Opening a bot's screen on web, desktop and iPhone now lets you watch without taking control, and Take control gives you the mouse and keyboard when you want them.
+- The desktop, iOS and Android apps are named Tangow and use `com.romainjeff.tangow` as their application identifier.
+
+#### Fixed
+
+- When a bot's run ends well, its Docker computer keeps the browser open for a while, and reopens the bot's last tabs whenever it has to start again, so the next run, a helper's follow-up or your takeover finds the page it left instead of a blank tab; a bot that finishes with nothing left for anyone closes the tabs it opened.
+- On iPhone and Android, new messages no longer turn invisible and leave a blank gap in the conversation until it is reopened.
+
+#### Reverted
+
+- The iPhone app no longer asks permission to share data with AI services before sending a message, running a routine or using voice, and Account no longer has an AI data sharing screen.
+
+### 2026-10-31
+
+#### Changed
+
+- On web, desktop and mobile, model settings offer the refreshed provider catalog, including MiniMax M3.1 Flash, and omit entries retired from the upstream catalog.
+- On web, desktop, iPhone and Android, Usage shows input and output tokens over 7 days, 30 days or all time, split by bot, model and category (Fast, Everyday, Complex, Fixed, Compaction) with per-run and per-compaction averages, and any row opens the same breakdown for that bot, model or category, replacing the single runs and tokens line.
+
+#### Fixed
+
+- On web, desktop and mobile, answering a bot's question reliably resumes its saved session instead of failing when its paused worker is cleaned up too early.
+- On web, desktop and iPhone, a bot message posted right after another one now shows its link previews, which used to land on the earlier message and stay hidden.
 
 ### 2026-10-30
 
@@ -20,6 +49,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
+- On web and desktop, debug mode folds a run's details into one line that opens on everything the run recorded.
 - On web, desktop and mobile, approval rules, automatic review and protected webhook runs can use the configured Decision Model to assess connected-app and MCP calls without a read-only hint, while keeping the existing name-based fallback.
 
 #### Fixed

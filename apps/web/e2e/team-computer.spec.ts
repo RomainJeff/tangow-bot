@@ -98,6 +98,8 @@ test("user control leaves another Team bot's screen available", async ({ page },
   await page.getByTestId("computer-preview").hover();
   await page.getByTestId("computer-preview-open").click();
   await expect(page.getByRole("button", { name: "Close computer" })).toBeVisible();
+  await page.getByTestId("computer-take-control").click();
+  await expect(page.getByTestId("computer-chrome").getByText("You have control")).toBeVisible();
   await page.getByRole("button", { name: "Close computer" }).click();
 
   await openBot(page, "Worker");
@@ -135,6 +137,7 @@ test("a failed control release keeps the computer open for retry", async ({ page
   await page.getByTestId("computer-preview").hover();
   await page.getByTestId("computer-preview-open").click();
   const chrome = page.getByTestId("computer-chrome");
+  await page.getByTestId("computer-take-control").click();
   const release = chrome.getByRole("button", { name: "Release", exact: true });
   await expect(release).toBeVisible();
   await page.route("**/rpc/computer/release", (route) =>
@@ -220,17 +223,88 @@ test("an active Team bot must be stopped before user takeover", async ({ page },
     )
     .toBeNull();
 
-  // After stop, Open via hover is the takeover path (no Take control button).
+  // After stop, Open only watches. Take control is the one way to get the mouse and keyboard.
+  const takeovers: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/rpc/computer/takeover")) takeovers.push(request.url());
+  });
   await page.getByTestId("computer-preview").hover();
   await page.getByTestId("computer-preview-open").click();
   await expect(page.getByRole("button", { name: "Close computer" })).toBeVisible();
+  const takeControl = chrome.getByRole("button", { name: "Take control", exact: true });
+  await expect(takeControl).toBeVisible();
+  await expect(chrome.getByText("You have control", { exact: true })).toHaveCount(0);
+  await expect(chrome.getByRole("button", { name: "Release", exact: true })).toHaveCount(0);
+  expect(takeovers).toHaveLength(0);
+  await captureScreenshot(page, testInfo, "49-team-computer-open-view-only");
+  await takeControl.click();
   await expect(chrome.getByText("You have control", { exact: true })).toBeVisible();
-  await expect(chrome.getByRole("button", { name: /Take control/i })).toHaveCount(0);
+  await expect(takeControl).toHaveCount(0);
+  expect(takeovers).toHaveLength(1);
   await expect(chrome.getByRole("button", { name: "Release", exact: true })).toBeVisible();
-  await captureScreenshot(page, testInfo, "49-team-computer-open-after-stop");
+  await captureScreenshot(page, testInfo, "49b-team-computer-take-control");
   await chrome.getByRole("button", { name: "Release", exact: true }).click();
   // Release closes the overlay and clears control without a DB edit.
   await expect(page.getByRole("button", { name: "Close computer" })).toHaveCount(0);
+});
+
+test("opening the bot's screen responds at once while a fresh screen URL loads", async ({
+  page,
+}, testInfo) => {
+  await page.clock.install();
+  await signup(page, `screen-open-${Date.now()}@rakazo.test`, "password12", "Screen Open");
+  await completeOnboarding(page);
+  const botId = activeBotId(page);
+  await rpc(page, "computer/boot", { botId });
+  await expect(rpc<{ state: string }>(page, "computer/status", { botId })).resolves.toMatchObject({
+    state: "running",
+  });
+
+  const screenUrl = "https://screen.example/vnc.html";
+  let delayMs = 0;
+  await page.route("https://screen.example/**", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: "<!doctype html><title>Test desktop</title><p>Desktop connected</p>",
+    }),
+  );
+  // A slow read answers with a distinct URL, so the window can be shown to use the fresh one.
+  const freshUrl = `${screenUrl}?fresh=1`;
+  await page.route("**/rpc/computer/screenUrl", async (route) => {
+    const slow = delayMs > 0;
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ json: { url: slow ? freshUrl : screenUrl } }),
+    });
+  });
+
+  await page.getByTestId("open-computer-panel").click();
+  const preview = page.getByTestId("computer-preview");
+  await expect(preview.locator("iframe")).toHaveAttribute("src", screenUrl);
+
+  // Past the renew age the held URL is stale, so Open must read a new one, slowly.
+  await page.clock.fastForward(55 * 60_000);
+  delayMs = 3_000;
+  await preview.hover();
+  const slowRead = page.waitForResponse("**/rpc/computer/screenUrl");
+  await preview.getByTestId("computer-preview-open").click();
+  const viewport = page.getByTestId("computer-viewport");
+  const closeButton = page.getByRole("button", { name: "Close computer" });
+  await expect(closeButton).toBeVisible({ timeout: 1_000 });
+  await expect(viewport.getByRole("status")).toHaveText("Connecting…");
+  await expect(viewport.locator("iframe")).toHaveCount(0);
+  await captureScreenshot(page, testInfo, "50-team-computer-open-connecting");
+
+  // Closing while it loads keeps it closed once the slow read lands.
+  await closeButton.click();
+  await slowRead;
+  await expect(closeButton).toHaveCount(0);
+
+  // Reopened, the window shows the fresh URL, not the one the preview held before.
+  await preview.hover();
+  await preview.getByTestId("computer-preview-open").click();
+  await expect(viewport.locator("iframe")).toHaveAttribute("src", freshUrl);
 });
 
 async function createBot(page: Page, name: string, mode: "team" | "dedicated") {

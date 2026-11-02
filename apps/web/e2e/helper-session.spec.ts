@@ -93,20 +93,22 @@ test("a helper stays out of the thread, and debug mode opens its session", async
   await botPage.getByTestId("activity-run").first().click();
 
   const session = page.getByTestId("session-view");
-  await expect(session.getByTestId("run-details")).toContainText("example/parent-v1");
-  await expect(session.getByTestId("run-details")).toContainText(
-    "Routing: auto · everyday · no_decision_provider",
-  );
+  const details = session.getByTestId("run-details");
+  await expect(details).toContainText("example/parent-v1");
+  await details.getByTestId("run-details-toggle").click();
+  await expect(details).toContainText("Fallbackno_decision_provider");
   await session.getByTestId("agent-steps-toggle").first().click();
   await captureScreenshot(page, testInfo, "helper-run-debug");
   await session.getByRole("button", { name: "helper", exact: true }).click();
   await expect(session.getByRole("heading")).toHaveText("helper");
-  await expect(session.getByTestId("run-details")).toContainText("example/helper-v2");
-  await expect(session.getByTestId("run-details")).toContainText("subagent");
-  await expect(session.getByTestId("run-details")).toContainText(
-    "Routing: category · complex → everyday · category_unassigned",
-  );
-  await expect(session.getByTestId("run-details")).not.toContainText("parent-v1");
+  await expect(details).toContainText("example/helper-v2");
+  await details.getByTestId("run-details-toggle").click();
+  await expect(details).toContainText("Triggersubagent");
+  await expect(details).toContainText("Routingcategory");
+  await expect(details).toContainText("Requestedcomplex");
+  await expect(details).toContainText("Categoryeveryday");
+  await expect(details).toContainText("Fallbackcategory_unassigned");
+  await expect(details).not.toContainText("parent-v1");
   await expect(session.getByText(result)).toBeVisible();
   await captureScreenshot(page, testInfo, "helper-session-debug");
   await page.setViewportSize(phone);
@@ -116,6 +118,8 @@ test("a helper stays out of the thread, and debug mode opens its session", async
   await session.getByRole("button", { name: "Close", exact: true }).click();
   includeRouting = false;
   await botPage.getByTestId("activity-run").first().click();
-  await expect(session.getByTestId("run-details")).toContainText("scripted/scripted");
-  await expect(session.getByTestId("run-details")).not.toContainText("Routing");
+  await expect(details).toContainText("scripted/scripted");
+  await details.getByTestId("run-details-toggle").click();
+  await expect(details).toContainText("Effort");
+  await expect(details).not.toContainText("Routing");
 });

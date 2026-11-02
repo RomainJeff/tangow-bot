@@ -8,10 +8,9 @@ import {
   BACKGROUND_WORK_PROBE,
   CANCEL_COMPUTER_RUN_WORK,
   CANCEL_PRIMARY_BROWSER_WORK,
-  DEFAULT_SANDBOX_IDLE_MS,
-  sandboxIdleMs,
   sleepComputerIfIdle,
 } from "./computer-idle.js";
+import { DEFAULT_SANDBOX_IDLE_MS, sandboxIdleMs } from "./computer-support.js";
 import { e2bCreateOptions } from "./e2b-sandbox.js";
 
 describe("sandbox idle", () => {

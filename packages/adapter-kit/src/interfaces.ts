@@ -162,8 +162,17 @@ export interface SandboxProvider {
   ): Promise<void>;
   snapshot(computer: ComputerRef, context: AdapterContext): Promise<SnapshotRef>;
   keepAlive?(computer: ComputerRef): Promise<void>;
-  /** Drop a single-screen graphical claim for this bot so another Team bot can use the display. */
-  releaseScreen?(computer: ComputerRef, context: AdapterContext): Promise<void>;
+  /**
+   * Drop a single-screen graphical claim for this bot so another Team bot can use the display.
+   * `keep` asks the provider to leave the display and browser running and only revoke control,
+   * and answers `"kept"` when it did. Providers that ignore it tear down. `"refused"` means a
+   * newer run owns the screen, so nothing was released.
+   */
+  releaseScreen?(
+    computer: ComputerRef,
+    context: AdapterContext,
+    release?: "keep" | "teardown",
+  ): Promise<"kept" | "refused" | void>;
   /** Keep what lives only on the machine's own disk before a replacement destroys it. */
   preserveBeforeReplace?(computer: ComputerRef, context: AdapterContext): Promise<void>;
   stop(computer: ComputerRef, context: AdapterContext): Promise<void>;
@@ -463,6 +472,19 @@ export interface WebFetchProvider {
 /** Convenience when one adapter owns both search and fetch. */
 export interface WebProvider extends WebSearchProvider, WebFetchProvider {
   describe(): AdapterDescriptor<WebSearchCapabilities & WebFetchCapabilities>;
+}
+
+/** An issue the builtin `report_issue` tool files with the operator's tracker. */
+export interface FeedbackIssue {
+  title: string;
+  body: string;
+  labels: string[];
+}
+
+/** Where the operator receives agent feedback. Builtin `report_issue` routes here. */
+export interface FeedbackProvider {
+  /** Resolves to the created issue's URL; throws when it was not created. */
+  deliver(issue: FeedbackIssue, context: AdapterContext): Promise<{ url: string }>;
 }
 
 /**
