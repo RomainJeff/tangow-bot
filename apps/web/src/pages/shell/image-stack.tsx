@@ -1,5 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
-import type { StackImage } from "@rakazo/core";
+import type { StackCardModel, StackImage } from "@rakazo/core";
+import { IMAGE_STACK, STACK_ROOM, STACK_STEP, stackCards } from "@rakazo/core";
 import { motion, springEasing } from "@rakazo/ui-tokens";
 import { cn } from "@rakazo/ui-web";
 import { Layers, RotateCw } from "lucide-react";
@@ -8,37 +9,9 @@ import type { ArtifactTarget } from "../../lib/artifact-open";
 import { ImageViewer } from "./image-viewer";
 import { useArtifactImageSrc } from "./use-artifact-image-src";
 
-/** Where a stack's size and look come from: nothing here depends on how many images it holds. */
-const IMAGE_STACK = {
-  /** Cards drawn behind the front one, toward the thread's centre. Their room is always kept. */
-  peekLevels: 2,
-  /** How far each level shows beyond the front frame's edge, in px. */
-  peek: 8,
-  /** How much smaller than the front each level is, as a share of its size. */
-  shrink: 0.06,
-  /** How far above its place a card sits as it starts to land, in px. */
-  drop: 12,
-  /** The count shows from this many images: a pile of three reads at a glance. */
-  countFrom: 4,
-} as const;
-
-const STACK_ROOM = IMAGE_STACK.peekLevels * IMAGE_STACK.peek;
-
-type StackCardModel = { key: string; image: StackImage; depth: number };
-
-/** The cards worth mounting, deepest first so the front paints last: the front, those peeking behind it and the one fading out past them. */
-function stackCards(images: readonly StackImage[]): StackCardModel[] {
-  const cards: StackCardModel[] = [];
-  for (let depth = 0; depth <= IMAGE_STACK.peekLevels + 1; depth += 1) {
-    const image = images[images.length - 1 - depth];
-    if (image) cards.unshift({ key: `${image.messageId}:${image.artifactId}`, image, depth });
-  }
-  return cards;
-}
-
-/** How far a card `depth` levels back sits from the front: its shrink pulls the edge in, `peek` pushes it out. */
+/** How far a card `depth` levels back sits from the front, toward the thread's centre. */
 function cardTransform(depth: number): string {
-  const sideways = `${((depth * IMAGE_STACK.shrink) / 2) * 100}% + ${depth * IMAGE_STACK.peek}px`;
+  const sideways = `${depth * STACK_STEP.widthShare * 100}% + ${depth * STACK_STEP.px}px`;
   return `translateX(calc(var(--stack-dir) * (${sideways}))) scale(${1 - depth * IMAGE_STACK.shrink})`;
 }
 
@@ -191,7 +164,7 @@ export function ImageStack({
         )}
         style={user ? { paddingInlineStart: STACK_ROOM } : { paddingInlineEnd: STACK_ROOM }}
       >
-        <span className="relative block aspect-4/3">
+        <span className="relative block" style={{ aspectRatio: 1 / IMAGE_STACK.frameRatio }}>
           {cards.map((card) => (
             <StackCard
               key={card.key}
