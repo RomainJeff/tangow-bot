@@ -27,7 +27,7 @@ function ViewerPicture({
     image.artifactId,
   );
   return (
-    <div ref={container} className="grid size-full place-items-center">
+    <div ref={container} className="flex size-full items-center justify-center">
       {failed ? (
         <Button
           variant="ghost"
