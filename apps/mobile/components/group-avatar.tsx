@@ -17,9 +17,12 @@ export const GroupAvatar = memo(function GroupAvatar({
   size = 54,
   userInitials,
   userImage,
+  still,
 }: {
   members: GroupAvatarMember[];
   size?: number;
+  /** See `BotAvatar`'s `still`. */
+  still?: boolean;
   /** When set, a one-bot group pairs the bot with the user's initials. */
   userInitials?: string;
   /** Profile photo shown instead of the initials tile, initials on failure. */
@@ -52,6 +55,7 @@ export const GroupAvatar = memo(function GroupAvatar({
         shapeSeed={firstMember.shapeSeed}
         size={size}
         status={firstMember.status}
+        still={still}
       />
     );
   }
@@ -88,6 +92,7 @@ export const GroupAvatar = memo(function GroupAvatar({
             shapeSeed={member.shapeSeed}
             size={miniSize}
             status={member.status}
+            still={still}
           />
         </View>
       ))}

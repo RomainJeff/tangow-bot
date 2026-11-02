@@ -18,6 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Fixed
 
 - On iPhone, dragging a conversation with the keyboard open no longer stutters: the thread and the keyboard follow your finger smoothly, and the composer no longer bounces when the keyboard closes.
+- On iPhone and Android, scrolling a conversation no longer stutters: bot avatars in the inbox and the conversation header rest while their bot is idle and move only while it works.
 
 ### 2026-11-01
 
