@@ -61,7 +61,8 @@
       "react-dom": "19.2.3"
     },
     "patchedDependencies": {
-      "app-builder-lib@26.15.3": "patches/app-builder-lib@26.15.3.patch"
+      "app-builder-lib@26.15.3": "patches/app-builder-lib@26.15.3.patch",
+      "react-native-keyboard-controller@1.21.9": "patches/react-native-keyboard-controller@1.21.9.patch"
     }
   }
 }
