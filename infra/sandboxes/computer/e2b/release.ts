@@ -11,7 +11,7 @@ export async function computerReleaseRef(
   contextPath: string,
 ): Promise<string> {
   const hash = createHash("sha256");
-  hash.update(JSON.stringify([await Template.toJSON(template), profile]));
+  hash.update(JSON.stringify([await Template.toJSON(template, false), profile]));
   async function visit(relative: string): Promise<void> {
     const absolute = path.join(contextPath, relative);
     const stat = await lstat(absolute);

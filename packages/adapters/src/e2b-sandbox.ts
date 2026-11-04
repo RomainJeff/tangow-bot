@@ -331,7 +331,7 @@ export class E2BSandboxProvider implements SandboxProvider {
         if (!isSandboxGoneError(error)) throw error;
       }
     }
-    const releaseRef = await this.currentRelease(context);
+    const releaseRef = await this.currentRelease(context).catch(() => null);
     const options = e2bCreateOptions(request.botId, this.apiKey, volumeHome);
     const desktop = await this.sdk.create({
       ...options,

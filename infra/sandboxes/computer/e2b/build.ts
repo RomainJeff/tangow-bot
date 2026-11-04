@@ -15,7 +15,7 @@ const built = await Template.build(template, releaseName, {
   ...COMPUTER_PROFILE,
   onBuildLogs: defaultBuildLogger(),
 });
-await Template.assignTags(releaseName, "latest");
+await Template.assignTags(releaseName, ["latest", "default"]);
 console.log(
   `Built the computer template ${built.name} (${built.templateId}, build ${built.buildId})`,
 );

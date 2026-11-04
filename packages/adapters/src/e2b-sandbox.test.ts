@@ -114,6 +114,31 @@ describe("E2B computer backend", () => {
     );
   });
 
+  it("creates a computer when release inspection is unavailable", async () => {
+    const tags = vi.spyOn(Template, "getTags").mockRejectedValue(new Error("tags unavailable"));
+    const machine = fakeE2BMachine("fallback-computer");
+    const create = vi.spyOn(RawSandbox, "create").mockResolvedValue(machine.sandbox);
+    onTestFinished(() => {
+      tags.mockRestore();
+      create.mockRestore();
+    });
+    const computer = await new E2BSandboxProvider("test-key").provision(
+      { botId: "bot", homePath: "/tmp/test-home" },
+      context,
+    );
+    expect(computer).toMatchObject({
+      providerRef: "fallback-computer",
+      releaseRef: null,
+      fresh: true,
+    });
+    expect(create).toHaveBeenCalledWith(
+      "desktop",
+      expect.objectContaining({
+        metadata: expect.not.objectContaining({ releaseRef: expect.anything() }),
+      }),
+    );
+  });
+
   it("revokes an extra display's control without starting or waiting for its view", async () => {
     const command = vi.fn(async (value: string) => {
       if (value.includes("RAKAZO_SCREEN_INDEX=")) {
