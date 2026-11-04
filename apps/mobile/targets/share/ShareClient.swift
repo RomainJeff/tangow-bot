@@ -8,8 +8,12 @@ struct ShareTarget: Identifiable, Hashable {
   let kind: Kind
   let targetId: String
   let name: String
-  /// The bot's identity color; groups have none.
+  /// The bot's identity color and picked bloub; groups have neither.
   let color: String?
+  let shapeSeed: Int?
+  let spaceId: String
+  /// Shown only when the person belongs to more than one space.
+  let spaceName: String?
   let updatedAt: String
 
   var id: String { "\(kind.rawValue):\(targetId)" }
@@ -107,22 +111,29 @@ struct ShareError: LocalizedError {
   let errorDescription: String?
 }
 
-/// The three procedures the extension calls, over the app's oRPC endpoint.
+/// The two procedures the extension calls, over the app's oRPC endpoint.
 struct ShareClient {
   let session: ShareSession
 
+  /// Every active bot and group across the person's spaces, most recent first.
   func targets() async throws -> [ShareTarget] {
-    async let bots: [Listed] = call("bots/list", [:])
-    async let groups: [Listed] = call("groups/list", [:])
-    let listed = try await bots.map { ($0, ShareTarget.Kind.bot) }
-      + groups.map { ($0, ShareTarget.Kind.group) }
-    return listed.filter { item, _ in item.archivedAt == nil }
-      .map { item, kind in
+    let spaces = try await call("spaces/list", [:]) as Navigation
+    let named = spaces.spaces.count > 1
+    return spaces.spaces.flatMap { space in
+      let label = named ? space.name : nil
+      let bots = space.bots.map { bot in
         ShareTarget(
-          kind: kind, targetId: item.id, name: item.name,
-          color: kind == .bot ? item.color : nil, updatedAt: item.updatedAt)
+          kind: .bot, targetId: bot.id, name: bot.name, color: bot.color,
+          shapeSeed: bot.shapeSeed, spaceId: space.id, spaceName: label, updatedAt: bot.updatedAt)
       }
-      .sorted { $0.updatedAt > $1.updatedAt }
+      let groups = space.groups.map { group in
+        ShareTarget(
+          kind: .group, targetId: group.id, name: group.name, color: nil, shapeSeed: nil,
+          spaceId: space.id, spaceName: label, updatedAt: group.updatedAt)
+      }
+      return bots + groups
+    }
+    .sorted { $0.updatedAt > $1.updatedAt }
   }
 
   func send(_ text: String, to target: ShareTarget) async throws {
@@ -132,14 +143,25 @@ struct ShareClient {
         target.kind == .bot ? "botId" : "groupId": target.targetId,
         "clientNonce": UUID().uuidString,
         "text": text,
-      ])
+      ], spaceId: target.spaceId)
   }
 
+  private struct Navigation: Decodable {
+    struct Space: Decodable {
+      let id: String
+      let name: String
+      let bots: [Listed]
+      let groups: [Listed]
+    }
+    let spaces: [Space]
+  }
+
+  /// The navigation lists hold active bots and groups only.
   private struct Listed: Decodable {
     let id: String
     let name: String
     let color: String?
-    let archivedAt: String?
+    let shapeSeed: Int?
     let updatedAt: String
   }
 
@@ -149,13 +171,17 @@ struct ShareClient {
     try JSONDecoder().decode(Envelope<T>.self, from: await post(procedure, input)).json
   }
 
-  private func post(_ procedure: String, _ input: [String: Any]) async throws -> Data {
+  /// `spaceId` overrides the app's selected space for a target that lives in another one.
+  private func post(_ procedure: String, _ input: [String: Any], spaceId: String? = nil)
+    async throws -> Data
+  {
     guard let url = URL(string: "\(session.base)/rpc/\(procedure)") else {
       throw ShareError(errorDescription: session.base)
     }
     var request = URLRequest(url: url, timeoutInterval: 20)
     request.httpMethod = "POST"
     session.headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+    if let spaceId { request.setValue(spaceId, forHTTPHeaderField: "x-rakazo-space-id") }
     request.httpBody = try JSONSerialization.data(withJSONObject: ["json": input])
     let (data, response) = try await URLSession.shared.data(for: request)
     let status = (response as? HTTPURLResponse)?.statusCode ?? 0

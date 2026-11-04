@@ -16,7 +16,7 @@ Aujourd'hui, pour envoyer un article à un bot, il faut copier le lien, ouvrir T
 | Besoin | Existant |
 | --- | --- |
 | Envoyer | `threads/send` `{ botId \| groupId, clientNonce, text }`. Le serveur ajoute l'aperçu du lien tout seul (`apps/mobile/app/thread.tsx:1508`). Aucun changement serveur pour les lots 1 et 2. |
-| Lister les cibles | `bots/list`, `groups/list` (avec `color`, `members`, `updatedAt`, `archivedAt`). |
+| Lister les cibles | `spaces/list` : bots et groupes actifs de chaque espace (avec `color`, `shapeSeed`, `updatedAt`). |
 | Session | Items SecureStore : `rakazo.session_token`, `rakazo.api_base`, `rakazo.space_id`, `rakazo.cf_access`. |
 | Targets natives | `@bacons/apple-targets` (déjà utilisé pour la notification service). |
 
@@ -41,7 +41,7 @@ Pourquoi native : une extension de partage a une limite mémoire stricte, et y e
 
 **Client Swift minimal** (`ShareClient.swift`) :
 - `POST {base}/rpc/{proc}` avec le corps `{ json: input }` et les en-têtes `authorization: Bearer`, `x-rakazo-space-id`, `origin: rakazo://` et Access ;
-- `bots/list` + `groups/list` pour l'espace sélectionné : sans les archivés, triés par `updatedAt` ;
+- `spaces/list` : les bots et groupes actifs de tous les espaces, triés par `updatedAt`, avec le nom de l'espace quand il y en a plusieurs ; l'envoi passe l'espace de la cible dans `x-rakazo-space-id` ;
 - `threads/send` avec `text = note.isEmpty ? url : "\(note)\n\n\(url)"`.
 
 **« À » par défaut.** L'extension garde sa propre dernière cible de partage `{ kind, id }` (UserDefaults de l'extension). Si cette cible est dans la liste, on la prend. Sinon, notamment au tout premier partage, « À » reste vide : Envoyer est désactivé tant qu'on n'a pas choisi. `last-bot.ts` reste tel quel.

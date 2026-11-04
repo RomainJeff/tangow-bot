@@ -147,7 +147,7 @@ private struct ToRow: View {
       Text("To").foregroundStyle(Tokens.mutedForeground)
       if let target {
         TargetAvatar(target: target, size: 28)
-        Text(target.name).foregroundStyle(Tokens.foreground).lineLimit(1)
+        TargetName(target: target)
       }
       Spacer(minLength: 0)
       Image(systemName: "chevron.right").font(.footnote.weight(.semibold))
@@ -181,7 +181,7 @@ private struct TargetPicker: View {
             } label: {
               HStack(spacing: 12) {
                 TargetAvatar(target: target, size: 32)
-                Text(target.name).foregroundStyle(Tokens.foreground).lineLimit(1)
+                TargetName(target: target)
                 Spacer(minLength: 0)
                 if target.id == selection?.id {
                   Image(systemName: "checkmark").fontWeight(.semibold)
@@ -205,14 +205,33 @@ private struct TargetPicker: View {
   }
 }
 
-/// A bot carries its identity color; a group gets a neutral glyph.
+/// The target's name, over its space when the person has several.
+private struct TargetName: View {
+  let target: ShareTarget
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 1) {
+      Text(target.name).foregroundStyle(Tokens.foreground).lineLimit(1)
+      if let space = target.spaceName {
+        Text(space).font(.footnote).foregroundStyle(Tokens.mutedForeground).lineLimit(1)
+      }
+    }
+  }
+}
+
+/// A bot wears its bloub, as in the app; a group gets a neutral glyph.
 private struct TargetAvatar: View {
   let target: ShareTarget
   let size: CGFloat
 
   var body: some View {
-    if let hex = target.color.flatMap(Color.init(hex:)) {
-      Circle().fill(hex).frame(width: size, height: size)
+    if target.kind == .bot, let color = target.color.flatMap(UIColor.init(hex:)) {
+      Image(
+        uiImage: AvatarRenderer.image(
+          shape: AvatarRenderer.shape(seed: target.shapeSeed, botId: target.targetId),
+          color: color, side: size, bodyShare: 0.45, background: nil)
+      )
+      .frame(width: size, height: size)
     } else {
       Circle().fill(Tokens.well).frame(width: size, height: size)
         .overlay(
@@ -276,12 +295,6 @@ extension Color {
       UIColor { traits in
         UIColor(rgb: traits.userInterfaceStyle == .dark ? dark : light)
       })
-  }
-
-  init?(hex: String) {
-    let digits = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
-    guard digits.count == 6, let value = UInt32(digits, radix: 16) else { return nil }
-    self.init(UIColor(rgb: value))
   }
 }
 
