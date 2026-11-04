@@ -83,7 +83,7 @@ msgid "{0} <0>out</0>"
 msgstr ""
 
 #. placeholder {0}: block.name
-#: src/pages/shell/message-cards.tsx:173
+#: src/pages/shell/message-cards.tsx:164
 msgid "{0} connection"
 msgstr "{0}-Verbindung"
 
@@ -172,8 +172,8 @@ msgstr "vor {days} T."
 msgid "{failures, plural, one {# failure since {since}} other {# failures since {since}}}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:340
-#: src/pages/shell/thread-row.tsx:343
+#: src/pages/shell/message-view.tsx:345
+#: src/pages/shell/thread-row.tsx:348
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -233,7 +233,7 @@ msgstr ""
 msgid "{what} · paused"
 msgstr "{what} · pausiert"
 
-#: src/pages/shell/transcript.tsx:208
+#: src/pages/shell/transcript.tsx:210
 msgid "{workingBotName} is working"
 msgstr "{workingBotName} arbeitet"
 
@@ -537,7 +537,7 @@ msgid "Answered"
 msgstr "Beantwortet"
 
 #. placeholder {0}: answeredOption?.label ?? block.answerId
-#: src/pages/shell/message-cards.tsx:77
+#: src/pages/shell/message-cards.tsx:68
 msgid "Answered: {0}"
 msgstr "Beantwortet: {0}"
 
@@ -579,7 +579,7 @@ msgstr "Bestätigungsgrenzen"
 
 #: src/pages/MessagingSettingsOverlay.tsx:224
 #: src/pages/MessagingSettingsOverlay.tsx:297
-#: src/pages/shell/message-cards.tsx:284
+#: src/pages/shell/message-cards.tsx:275
 msgid "Approve"
 msgstr "Genehmigen"
 
@@ -588,7 +588,7 @@ msgstr "Genehmigen"
 msgid "Approve it in the chat, or say no to cancel."
 msgstr "Bestätige es im Chat oder sag Nein, um abzubrechen."
 
-#: src/pages/shell/message-cards.tsx:275
+#: src/pages/shell/message-cards.tsx:266
 msgid "Approve this server to let your agent use its tools."
 msgstr "Genehmige diesen Server, damit dein Agent seine Tools verwenden kann."
 
@@ -666,7 +666,7 @@ msgstr "um {timeSelect}"
 msgid "Attach file"
 msgstr "Datei anhängen"
 
-#: src/pages/shell/message-view.tsx:88
+#: src/pages/shell/message-view.tsx:89
 msgid "Attachment"
 msgstr "Anhang"
 
@@ -675,16 +675,16 @@ msgstr "Anhang"
 msgid "Authorization code or callback URL"
 msgstr "Autorisierungscode oder Callback-URL"
 
-#: src/pages/shell/message-cards.tsx:158
+#: src/pages/shell/message-cards.tsx:149
 msgid "Authorization timed out. Please try again."
 msgstr "Zeitüberschreitung bei der Autorisierung. Versuche es erneut."
 
-#: src/pages/shell/message-cards.tsx:203
-#: src/pages/shell/message-cards.tsx:284
+#: src/pages/shell/message-cards.tsx:194
+#: src/pages/shell/message-cards.tsx:275
 msgid "Authorize"
 msgstr "Autorisieren"
 
-#: src/pages/shell/message-cards.tsx:274
+#: src/pages/shell/message-cards.tsx:265
 msgid "Authorize this server so agents can use its tools. A popup opens."
 msgstr "Autorisiere diesen Server, damit Agents seine Tools nutzen können. Ein Pop-up öffnet sich."
 
@@ -754,16 +754,17 @@ msgstr "Live-Desktop wird gestartet…"
 msgid "Booting up {0}’s computer"
 msgstr "Computer von {0} wird gestartet"
 
-#: src/pages/shell/message-view.tsx:328
-#: src/pages/shell/message-view.tsx:329
-#: src/pages/shell/thread-row.tsx:334
-#: src/pages/shell/thread-row.tsx:335
+#: src/pages/shell/message-view.tsx:333
+#: src/pages/shell/message-view.tsx:334
+#: src/pages/shell/thread-row.tsx:339
+#: src/pages/shell/thread-row.tsx:340
 msgid "bot"
 msgstr "Bot"
 
 #: src/pages/IntegrationSetup.tsx:51
-#: src/pages/shell/message-view.tsx:226
-#: src/pages/shell/thread-row.tsx:302
+#: src/pages/shell/message-view.tsx:230
+#: src/pages/shell/message-view.tsx:437
+#: src/pages/shell/thread-row.tsx:307
 #: src/pages/shell/use-composer-draft.ts:53
 msgid "Bot"
 msgstr "Bot"
@@ -800,7 +801,7 @@ msgstr ""
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "Bots handeln standardmäßig ohne Nachfrage. Füge nur dann eine Ausnahme hinzu, wenn du eine Aktionsart zuerst prüfen möchtest."
 
-#: src/pages/shell/transcript.tsx:209
+#: src/pages/shell/transcript.tsx:211
 msgid "Bots are working"
 msgstr "Bots arbeiten"
 
@@ -998,7 +999,7 @@ msgstr "Schließen"
 msgid "Close computer"
 msgstr "Computer schließen"
 
-#: src/pages/shell/message-cards.tsx:390
+#: src/pages/shell/image-viewer.tsx:110
 msgid "Close image preview"
 msgstr "Bildvorschau schließen"
 
@@ -1154,7 +1155,7 @@ msgstr "API-Schlüssel verbinden"
 msgid "Connect Executor"
 msgstr "Executor verbinden"
 
-#: src/pages/shell/message-cards.tsx:266
+#: src/pages/shell/message-cards.tsx:257
 msgid "Connect MCP server “{name}”"
 msgstr "MCP-Server „{name}“ verbinden"
 
@@ -1176,7 +1177,7 @@ msgstr "Treg verbinden"
 #: src/pages/McpOAuthCallback.tsx:54
 #: src/pages/MemorySettingsOverlay.tsx:191
 #: src/pages/ModelSettingsOverlay.tsx:114
-#: src/pages/shell/message-cards.tsx:195
+#: src/pages/shell/message-cards.tsx:186
 #: src/pages/VoiceSettingsOverlay.tsx:226
 msgid "Connected"
 msgstr "Verbunden"
@@ -1198,7 +1199,7 @@ msgstr "{0} verbunden."
 msgid "Connected and using {0}."
 msgstr "Verbunden, {0} wird verwendet."
 
-#: src/pages/shell/message-cards.tsx:298
+#: src/pages/shell/message-cards.tsx:289
 msgid "Connected. Its tools are available from your next message."
 msgstr "Verbunden. Die Tools sind ab deiner nächsten Nachricht verfügbar."
 
@@ -1208,7 +1209,7 @@ msgstr "Verbunden. Die Tools sind ab deiner nächsten Nachricht verfügbar."
 #: src/pages/McpServersOverlay.tsx:38
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
-#: src/pages/shell/message-cards.tsx:284
+#: src/pages/shell/message-cards.tsx:275
 #: src/pages/shell/screen-frame.tsx:44
 #: src/pages/VoiceSettingsOverlay.tsx:265
 msgid "Connecting…"
@@ -1241,7 +1242,7 @@ msgstr ""
 msgid "Continue with email"
 msgstr "Mit E-Mail fortfahren"
 
-#: src/pages/shell/thread-row.tsx:420
+#: src/pages/shell/thread-row.tsx:425
 msgid "Conversation cleared"
 msgstr ""
 
@@ -1268,11 +1269,11 @@ msgstr "Hinzufügen fehlgeschlagen"
 msgid "Could not add MCP server"
 msgstr "MCP-Server konnte nicht hinzugefügt werden"
 
-#: src/pages/shell/message-cards.tsx:253
+#: src/pages/shell/message-cards.tsx:244
 msgid "Could not approve this server"
 msgstr "Server konnte nicht genehmigt werden"
 
-#: src/pages/shell/message-cards.tsx:161
+#: src/pages/shell/message-cards.tsx:152
 msgid "Could not authorize this app"
 msgstr "App konnte nicht autorisiert werden"
 
@@ -1397,7 +1398,7 @@ msgstr ""
 msgid "Could not disconnect this voice provider"
 msgstr ""
 
-#: src/pages/shell/message-cards.tsx:61
+#: src/pages/shell/message-cards.tsx:52
 msgid "Could not dismiss"
 msgstr "Konnte nicht ausgeblendet werden"
 
@@ -1583,7 +1584,7 @@ msgstr "Skill konnte nicht gespeichert werden"
 msgid "Could not save that voice"
 msgstr "Stimme konnte nicht gespeichert werden"
 
-#: src/pages/shell/message-cards.tsx:47
+#: src/pages/shell/message-cards.tsx:38
 msgid "Could not save this choice"
 msgstr "Diese Auswahl konnte nicht gespeichert werden"
 
@@ -1942,7 +1943,7 @@ msgstr "Verbindung wird getrennt…"
 
 #: src/components/ComputerUpdateProgress.tsx:215
 #: src/components/teach/TeachComputerOverlay.tsx:285
-#: src/pages/shell/message-cards.tsx:88
+#: src/pages/shell/message-cards.tsx:79
 msgid "Dismiss"
 msgstr "Ausblenden"
 
@@ -1950,7 +1951,7 @@ msgstr "Ausblenden"
 msgid "Dismiss error"
 msgstr "Fehler ausblenden"
 
-#: src/pages/shell/message-cards.tsx:303
+#: src/pages/shell/message-cards.tsx:294
 msgid "Dismissed. Reconnect anytime from MCP settings."
 msgstr "Verworfen. Du kannst die Verbindung jederzeit in den MCP-Einstellungen wiederherstellen."
 
@@ -2010,11 +2011,11 @@ msgstr "Skill-Entwurf"
 msgid "Duplicate"
 msgstr "Duplizieren"
 
-#: src/pages/shell/message-view.tsx:201
+#: src/pages/shell/message-view.tsx:205
 msgid "Earlier message"
 msgstr "Frühere Nachricht"
 
-#: src/pages/shell/thread-row.tsx:417
+#: src/pages/shell/thread-row.tsx:422
 msgid "Earlier messages summarized"
 msgstr ""
 
@@ -2254,7 +2255,7 @@ msgstr ""
 msgid "Fullscreen"
 msgstr "Vollbild"
 
-#: src/pages/shell/thread-row.tsx:369
+#: src/pages/shell/thread-row.tsx:374
 msgid "FYI"
 msgstr ""
 
@@ -2388,6 +2389,14 @@ msgstr "Wenn du das gehört hast, ist die Stimme einsatzbereit."
 msgid "Ignore"
 msgstr ""
 
+#: src/pages/shell/message-view.tsx:447
+msgid "Image {n} of {total}, from {sender}"
+msgstr ""
+
+#: src/pages/shell/message-view.tsx:447
+msgid "Image, from {sender}"
+msgstr ""
+
 #: src/pages/KnowledgeSection.tsx:427
 msgid "Import"
 msgstr "Importieren"
@@ -2470,7 +2479,7 @@ msgstr "Seine Unterhaltung, Dateien und Routinen werden dauerhaft gelöscht. Von
 msgid "Jump to latest"
 msgstr "Zur neuesten Nachricht springen"
 
-#: src/pages/shell/message-view.tsx:196
+#: src/pages/shell/message-view.tsx:200
 msgid "Jump to replied message"
 msgstr "Zur beantworteten Nachricht springen"
 
@@ -2532,7 +2541,7 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:248
+#: src/pages/shell/transcript.tsx:250
 msgid "Load earlier messages"
 msgstr "Frühere Nachrichten laden"
 
@@ -2574,7 +2583,7 @@ msgstr "Stimmanbieter werden geladen…"
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
 #: src/pages/shell/session-view.tsx:129
-#: src/pages/shell/transcript.tsx:248
+#: src/pages/shell/transcript.tsx:250
 msgid "Loading…"
 msgstr "Wird geladen…"
 
@@ -2684,7 +2693,7 @@ msgstr ""
 
 #: src/pages/bot-page/BotActivity.tsx:358
 #: src/pages/shell/composer.tsx:293
-#: src/pages/shell/message-view.tsx:90
+#: src/pages/shell/message-view.tsx:91
 msgid "Message"
 msgstr "Nachricht"
 
@@ -2705,7 +2714,7 @@ msgstr ""
 msgid "Message composer"
 msgstr "Nachrichteneditor"
 
-#: src/pages/shell/thread-row.tsx:419
+#: src/pages/shell/thread-row.tsx:424
 msgid "Message edited"
 msgstr ""
 
@@ -2713,8 +2722,8 @@ msgstr ""
 msgid "Message event"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:371
-#: src/pages/shell/thread-row.tsx:410
+#: src/pages/shell/thread-row.tsx:376
+#: src/pages/shell/thread-row.tsx:415
 msgid "Message from {peer}"
 msgstr "Nachricht von {peer}"
 
@@ -2722,8 +2731,8 @@ msgstr "Nachricht von {peer}"
 msgid "Message…"
 msgstr "Nachricht…"
 
-#: src/pages/shell/thread-row.tsx:371
-#: src/pages/shell/thread-row.tsx:410
+#: src/pages/shell/thread-row.tsx:376
+#: src/pages/shell/thread-row.tsx:415
 msgid "Messaged {peer}"
 msgstr "Nachricht an {peer} gesendet"
 
@@ -2908,6 +2917,10 @@ msgstr "Neuer Space"
 msgid "Next"
 msgstr ""
 
+#: src/pages/shell/image-viewer.tsx:144
+msgid "Next image"
+msgstr ""
+
 #: src/pages/bot-page/BotActivity.tsx:239
 msgid "No activity yet"
 msgstr "Noch keine Aktivität"
@@ -3049,7 +3062,7 @@ msgstr "Nicht im Plugin-Katalog"
 
 #: src/components/AskCard.tsx:63
 #: src/lib/approval-labels.ts:18
-#: src/pages/shell/message-cards.tsx:291
+#: src/pages/shell/message-cards.tsx:282
 msgid "Not now"
 msgstr "Jetzt nicht"
 
@@ -3298,6 +3311,10 @@ msgstr "POST an"
 msgid "Preview {0}"
 msgstr "Vorschau von {0}"
 
+#: src/pages/shell/image-viewer.tsx:134
+msgid "Previous image"
+msgstr ""
+
 #: src/pages/bot-page/SettingsTab.tsx:122
 #: src/pages/shell/bot-panel.tsx:42
 msgid "Private"
@@ -3330,7 +3347,7 @@ msgstr "Anbieter"
 msgid "Providers"
 msgstr "Anbieter"
 
-#: src/pages/shell/thread-row.tsx:367
+#: src/pages/shell/thread-row.tsx:372
 msgid "Question"
 msgstr ""
 
@@ -3570,7 +3587,7 @@ msgstr "In mehreren kurzen Nachrichten antworten"
 msgid "Replying to {replyName}"
 msgstr "Antwort an {replyName}"
 
-#: src/pages/shell/thread-row.tsx:365
+#: src/pages/shell/thread-row.tsx:370
 msgid "Request"
 msgstr ""
 
@@ -3626,13 +3643,15 @@ msgstr "Ungespeicherten Text wiederherstellen"
 msgid "Restoring your workspace"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:366
+#: src/pages/shell/thread-row.tsx:371
 msgid "Result"
 msgstr ""
 
 #: src/pages/bot-page/page-kit.tsx:52
 #: src/pages/bot-page/page-kit.tsx:88
 #: src/pages/ComputerSettingsPanel.tsx:84
+#: src/pages/shell/image-stack.tsx:182
+#: src/pages/shell/image-viewer.tsx:35
 msgid "Retry"
 msgstr "Erneut versuchen"
 
@@ -3972,15 +3991,15 @@ msgstr "Registrieren"
 msgid "Skill {0}"
 msgstr "Skill {0}"
 
-#: src/pages/shell/message-view.tsx:105
+#: src/pages/shell/message-view.tsx:106
 msgid "Skill deleted · {name}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:102
+#: src/pages/shell/message-view.tsx:103
 msgid "Skill learned · {name}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:104
+#: src/pages/shell/message-view.tsx:105
 msgid "Skill updated · {name}"
 msgstr ""
 
@@ -4063,7 +4082,7 @@ msgstr "Startet"
 msgid "Starting…"
 msgstr "Wird gestartet…"
 
-#: src/pages/shell/thread-row.tsx:368
+#: src/pages/shell/thread-row.tsx:373
 msgid "Status"
 msgstr ""
 
@@ -4219,7 +4238,7 @@ msgstr "Dies entfernt dauerhaft alle Nachrichten und stoppt die laufende Arbeit.
 msgid "This reset link is invalid or expired"
 msgstr "Dieser Link zum Zurücksetzen ist ungültig oder abgelaufen"
 
-#: src/pages/shell/message-cards.tsx:237
+#: src/pages/shell/message-cards.tsx:228
 msgid "This server cannot be assigned without a bot."
 msgstr "Dieser Server kann ohne Bot nicht zugewiesen werden."
 
@@ -4262,6 +4281,7 @@ msgstr "An:"
 
 #: src/pages/bot-page/BotActivity.tsx:256
 #: src/pages/PeerMessagesOverlay.tsx:180
+#: src/pages/shell/image-viewer.tsx:103
 #: src/pages/shell/thread-row.tsx:107
 msgid "Today"
 msgstr "Heute"
@@ -4458,7 +4478,7 @@ msgstr "Warten auf die Rückkehr der API …"
 msgid "Waiting for you"
 msgstr ""
 
-#: src/pages/shell/message-cards.tsx:203
+#: src/pages/shell/message-cards.tsx:194
 msgid "Waiting…"
 msgstr "Warten…"
 
@@ -4539,12 +4559,14 @@ msgstr "Jährlich am {date} um {time}"
 
 #: src/pages/bot-page/BotActivity.tsx:257
 #: src/pages/PeerMessagesOverlay.tsx:181
+#: src/pages/shell/image-viewer.tsx:104
 #: src/pages/shell/thread-row.tsx:108
 msgid "Yesterday"
 msgstr "Gestern"
 
 #: src/components/DraftCard.tsx:53
 #: src/pages/Shell.tsx:138
+#: src/pages/shell/message-view.tsx:437
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"
 msgstr "Du"

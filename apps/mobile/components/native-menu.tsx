@@ -52,7 +52,8 @@ function IosMenu(props: NativeMenuProps) {
   const colorScheme = useResolvedAppearance();
   const style = typeof props.style === "function" ? props.style({ pressed: false }) : props.style;
   return (
-    <Host colorScheme={colorScheme} matchContents={matchContents}>
+    // React Native lays the menu out: SwiftUI must not lift its label away from the keyboard too.
+    <Host colorScheme={colorScheme} matchContents={matchContents} ignoreSafeArea="keyboard">
       <Menu
         label={
           <RNHostView matchContents={matchContents}>

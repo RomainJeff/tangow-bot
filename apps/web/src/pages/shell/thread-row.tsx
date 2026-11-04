@@ -161,7 +161,9 @@ function itemBody(
 ): ReactNode {
   switch (item.kind) {
     case "message":
-      return <MessageRowView item={item} context={context} {...frame} />;
+      return (
+        <MessageRowView item={item} imageStack={row.imageStack} context={context} {...frame} />
+      );
     case "routine":
       if (row.routine?.kind === "message")
         return <RoutineMessage item={item} text={row.routine.text} context={context} />;
@@ -194,6 +196,7 @@ function itemBody(
 
 function MessageRowView({
   item,
+  imageStack,
   context,
   chrome,
   showAuthor,
@@ -201,6 +204,7 @@ function MessageRowView({
   arrivesLive,
 }: {
   item: MessageItem;
+  imageStack?: ThreadRow["imageStack"];
   context: RowContext;
   chrome: "row" | "aside";
   showAuthor: boolean;
@@ -248,6 +252,7 @@ function MessageRowView({
       onOpenSkill={context.onOpenSkill}
       onOpenSession={context.onOpenSession}
       arrivesLive={arrivesLive}
+      imageStack={imageStack}
     />
   );
 }

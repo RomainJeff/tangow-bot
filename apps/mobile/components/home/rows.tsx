@@ -98,6 +98,7 @@ function ActivityRow({
           color={bot?.color ?? FALLBACK_COLOR}
           status={run.status}
           size={sizes.mobileStack}
+          still
         />
       }
     />
@@ -232,6 +233,7 @@ export function BotRow({
           status={bot.status}
           muted={!bot.notifyOnFinish}
           size={sizes.mobileStack}
+          still
         />
       }
     />
@@ -273,6 +275,7 @@ export function GroupRow({
           size={sizes.mobileStack}
           userInitials={userInitials}
           userImage={userImage}
+          still
         />
       }
     />

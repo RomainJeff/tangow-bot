@@ -1,14 +1,7 @@
 import { motion } from "@rakazo/ui-tokens";
-import { useEffect } from "react";
-import Animated, {
-  cancelAnimation,
-  Easing,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-} from "react-native-reanimated";
+import { useEffect, useRef } from "react";
+import { Animated, Easing } from "react-native";
+import { useReducedMotion } from "react-native-reanimated";
 import Svg, { Circle } from "react-native-svg";
 import { stopContourSweepOpacities } from "../lib/stop-contour-math";
 
@@ -24,28 +17,29 @@ const RING_STROKE = 2;
  *
  * Draws short butting arcs whose opacity follows the sweep once (see
  * `stopContourSweepOpacities`), then rotates the whole `Svg` — cheaper than
- * recomputing 48 opacities every frame.
+ * recomputing 48 opacities every frame — on the native driver, which turns it
+ * without a commit per frame.
  */
 export function StopContour({ size, color }: { size: number; color: string }) {
   const reducedMotion = useReducedMotion();
-  const rotation = useSharedValue(0);
+  const turn = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    cancelAnimation(rotation);
-    if (reducedMotion) {
-      rotation.value = 0;
-      return;
-    }
-    rotation.value = withRepeat(
-      withTiming(360, { duration: motion.flow, easing: Easing.bezier(0.32, 0.72, 0, 1) }),
-      -1,
+    turn.setValue(0);
+    if (reducedMotion) return;
+    const spin = Animated.loop(
+      Animated.timing(turn, {
+        toValue: 1,
+        duration: motion.flow,
+        easing: Easing.bezier(0.32, 0.72, 0, 1),
+        useNativeDriver: true,
+      }),
     );
-    return () => cancelAnimation(rotation);
-  }, [reducedMotion, rotation]);
+    spin.start();
+    return () => spin.stop();
+  }, [reducedMotion, turn]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotation.value}deg` }],
-  }));
+  const rotate = turn.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
 
   const radius = size / 2 - RING_STROKE / 2;
   const circumference = 2 * Math.PI * radius;
@@ -63,7 +57,7 @@ export function StopContour({ size, color }: { size: number; color: string }) {
         // rather than by an inset, since the disc and its 44 pt touch target
         // aren't the same size.
         { position: "absolute", width: size, height: size },
-        animatedStyle,
+        { transform: [{ rotate }] },
       ]}
     >
       <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>

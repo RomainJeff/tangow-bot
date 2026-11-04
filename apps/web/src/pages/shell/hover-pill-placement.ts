@@ -88,11 +88,11 @@ export function placeHoverPill(row: HTMLElement): void {
     pill: { width: pill.offsetWidth, height: pill.offsetHeight },
     rtl,
     card: card?.getBoundingClientRect(),
-    // A message that is only a link has no bubble: the pill goes beside its card.
+    // A message that is only a link or images has no bubble: the pill goes beside its card or stack.
     bubble: union(
       row.querySelector('[data-slot="message-row-bubble"]')
         ? row.querySelectorAll('[data-slot="message-row-bubble"]')
-        : row.querySelectorAll('[data-slot="link-preview-card"]'),
+        : row.querySelectorAll('[data-slot="link-preview-card"],[data-slot="image-stack"]'),
     ),
   });
   if (!placement) {

@@ -1,0 +1,12 @@
+diff --git a/ios/observers/movement/observer/KeyboardMovementObserver+Listeners.swift b/ios/observers/movement/observer/KeyboardMovementObserver+Listeners.swift
+index 464eec73bb1450faec92a62e4e60a92fc15307e2..60ae5de6a3bbf8247d30106542c2f238658879dc 100644
+--- a/ios/observers/movement/observer/KeyboardMovementObserver+Listeners.swift
++++ b/ios/observers/movement/observer/KeyboardMovementObserver+Listeners.swift
+@@ -91,6 +91,7 @@ extension KeyboardMovementObserver {
+     onNotify("KeyboardController::keyboardDidHide", buildEventParams(0, duration, tag))
+ 
+     removeKeyboardWatcher()
++    prevKeyboardPosition = 0
+     animation = nil
+   }
+ 

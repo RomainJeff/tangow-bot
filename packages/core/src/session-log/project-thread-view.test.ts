@@ -1081,6 +1081,122 @@ describe("projectThreadView rows", () => {
   });
 });
 
+describe("projectThreadView image stacks", () => {
+  const shot = (name: string) => ({
+    kind: "image",
+    artifactId: `art_${name}`,
+    mimeType: "image/png",
+    name: `${name}.png`,
+  });
+  const botShot = (name: string, extra: object = {}) => ({
+    botId: "bot_ada",
+    type: "bot.text",
+    payload: { blocks: [shot(name)] },
+    ...extra,
+  });
+  const userPhotos = (names: string[], caption?: string) => ({
+    type: "user.message",
+    payload: {
+      blocks: [...(caption ? text(caption) : []), ...names.map(shot)],
+      source: "app",
+    },
+  });
+  const react = (target: string) => ({
+    type: "user.message",
+    payload: { blocks: text("👍"), replyTo: { entryId: target }, source: "app" },
+  });
+  const stackSizes = (chain: ThreadEntry[]) =>
+    projectThreadView(chain, { imageStacks: true }).rows.map(
+      (row) => row.imageStack?.images.length ?? null,
+    );
+
+  it("stacks three screenshots sent as three messages into one row", () => {
+    const chain = linkEntries("stk", [botShot("a"), botShot("b"), botShot("c")]);
+    const view = projectThreadView(chain, { imageStacks: true });
+    expect(view.rows.map((row) => row.item.id)).toEqual(["stk-0"]);
+    expect(view.rows[0]?.imageStack).toMatchObject({
+      images: [
+        { messageId: "stk-0", artifactId: "art_a", name: "a.png", mimeType: "image/png" },
+        { messageId: "stk-1", artifactId: "art_b" },
+        { messageId: "stk-2", artifactId: "art_c" },
+      ],
+      front: { item: { id: "stk-2" }, messageId: "stk-2" },
+    });
+    expect([...(view.rows[0]?.imageStack?.messageIds ?? [])]).toEqual([
+      ["stk-0", "stk-0"],
+      ["stk-1", "stk-1"],
+      ["stk-2", "stk-2"],
+    ]);
+    expect(["stk-0", "stk-1", "stk-2"].map((id) => view.rowOf.get(id))).toEqual([
+      "stk-0",
+      "stk-0",
+      "stk-0",
+    ]);
+  });
+
+  it("keeps a lone image, a different bot, text, a reply and a late image apart", () => {
+    const late = { ts: "2026-10-10T09:06:00.000Z" };
+    expect(stackSizes(linkEntries("one", [botShot("a")]))).toEqual([1]);
+    expect(
+      stackSizes(linkEntries("bot", [botShot("a"), botShot("b", { botId: "bot_bob" })])),
+    ).toEqual([1, 1]);
+    expect(
+      stackSizes(
+        linkEntries("txt", [
+          botShot("a"),
+          { botId: "bot_ada", type: "bot.text", payload: { blocks: text("Look") } },
+          botShot("b"),
+        ]),
+      ),
+    ).toEqual([1, null, 1]);
+    expect(
+      stackSizes(
+        linkEntries("rep", [
+          userPhotos(["a"]),
+          {
+            type: "user.message",
+            payload: { blocks: [shot("b")], replyTo: { entryId: "rep-0" }, source: "app" },
+          },
+        ]),
+      ),
+    ).toEqual([1, 1]);
+    expect(stackSizes(linkEntries("late", [botShot("a"), botShot("b", late)]))).toEqual([1, 1]);
+  });
+
+  it("ends a stack at an image that has a reaction, and shows the reaction under the front image", () => {
+    const chain = linkEntries("rct", [botShot("a"), botShot("b"), react("rct-1"), botShot("c")]);
+    const view = projectThreadView(chain, { imageStacks: true });
+    expect(view.rows.map((row) => [row.item.id, row.imageStack?.images.length])).toEqual([
+      ["rct-0", 2],
+      ["rct-3", 1],
+    ]);
+    expect(view.rows[0]?.reactions).toEqual([["👍", 1]]);
+    expect(view.rowOf.get("rct-2")).toBe("rct-0");
+  });
+
+  it("hosts a person's photos in the message that carries the caption", () => {
+    const chain = linkEntries("usr", [
+      userPhotos(["p1", "p2", "p3", "p4"], "Trip"),
+      userPhotos(["p5", "p6", "p7", "p8"]),
+    ]);
+    const view = projectThreadView(chain, { imageStacks: true });
+    expect(view.rows.map((row) => row.item.id)).toEqual(["usr-0"]);
+    expect(view.rows[0]?.imageStack?.images.map((image) => image.name)).toEqual(
+      ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"].map((name) => `${name}.png`),
+    );
+    expect(view.rows[0]?.imageStack?.front.messageId).toBe("usr-1");
+  });
+
+  it("draws a row per message and no stack without the option", () => {
+    const chain = linkEntries("off", [botShot("a"), botShot("b")]);
+    const rows = projectThreadView(chain).rows;
+    expect(rows.map((row) => [row.item.id, row.imageStack])).toEqual([
+      ["off-0", undefined],
+      ["off-1", undefined],
+    ]);
+  });
+});
+
 describe("visibleEntries", () => {
   const peer = { botId: "bot_sub", runId: "run_peer" };
   const chain = linkEntries("vis", [

@@ -63,6 +63,14 @@ export type ColorTokens = {
   optionRingHover: string;
   /** The fill of a control being pressed. */
   pressed: string;
+  /** The black behind a picture shown on its own, in both themes, like Photos. */
+  mediaBackdrop: string;
+  /** Text and icons on `mediaBackdrop`. */
+  mediaBackdropForeground: string;
+  /** Secondary text on `mediaBackdrop`. */
+  mediaBackdropMuted: string;
+  /** A round control, or a picture's placeholder, on `mediaBackdrop`. */
+  mediaBackdropControl: string;
 };
 
 // Alpha overlays from the design are flattened so every slot stays opaque
@@ -113,6 +121,10 @@ export const darkTokens = {
   optionRing: "#636366",
   optionRingHover: "#77777B",
   pressed: "#4A4A4D",
+  mediaBackdrop: "#000000",
+  mediaBackdropForeground: "#F5F5F7",
+  mediaBackdropMuted: "#AEAEB2",
+  mediaBackdropControl: "#2C2C2E",
 } as const satisfies ColorTokens;
 
 export const lightTokens = {
@@ -160,6 +172,10 @@ export const lightTokens = {
   optionRing: "#DADADD",
   optionRingHover: "#C7C7CC",
   pressed: "#E8E8EA",
+  mediaBackdrop: "#000000",
+  mediaBackdropForeground: "#F5F5F7",
+  mediaBackdropMuted: "#AEAEB2",
+  mediaBackdropControl: "#2C2C2E",
 } as const satisfies ColorTokens;
 
 /** Dark palette. Prefer `tokensForAppearance` when theme-aware. */
@@ -397,6 +413,8 @@ export const sizes = {
   linkCard: 360,
   /** The square thumbnail of a compact link preview. */
   linkThumb: 56,
+  /** A thumbnail in the image viewer's strip (web and iOS). */
+  viewerThumb: 44,
   /** Space kept around a site icon inside its link preview thumbnail (web and iOS). */
   linkIconInset: 8,
   /** Max height of a link preview shown as a photo. */
