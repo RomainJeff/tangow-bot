@@ -7,7 +7,7 @@ type Eye = { halfWidth: number; halfHeight: number; radius: number; matrix: numb
 
 export type NotificationAvatarShape = { start: Point; curves: Curve[]; eyes: Eye[] };
 
-export const NOTIFICATION_AVATAR_SWIFT_PATH = "targets/notification-service/AvatarShapes.swift";
+export const NOTIFICATION_AVATAR_SWIFT_PATH = "targets/_shared/AvatarShapes.swift";
 
 function numbers(source: string): number[] {
   return (source.match(/-?\d*\.?\d+(?:e-?\d+)?/gi) ?? []).map(Number);

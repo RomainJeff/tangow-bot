@@ -540,6 +540,18 @@ describe("mobile API authentication", () => {
     await resetApiBase();
   });
 
+  it("keeps a service token entered for the build-time server", async () => {
+    const access = { clientId: "id.access", clientSecret: "secret" };
+
+    await expect(saveApiBase("http://127.0.0.1:3100", access)).resolves.toMatchObject({ ok: true });
+
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+      "rakazo.cf_access",
+      JSON.stringify({ ...access, origin: "http://127.0.0.1:3100" }),
+    );
+    await resetApiBase();
+  });
+
   it("unregisters push on the previous server before switching endpoints", async () => {
     vi.mocked(SecureStore.getItemAsync).mockResolvedValue("session-token");
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ json: null }));

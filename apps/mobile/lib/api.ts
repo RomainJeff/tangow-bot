@@ -320,7 +320,7 @@ export async function saveApiBase(
 ): Promise<EndpointResult> {
   const parsed = normalizeApiBase(input);
   if (!parsed.ok) return parsed;
-  if (parsed.url === defaultApiBase()) return resetApiBase();
+  if (parsed.url === defaultApiBase()) return resetApiBase(access);
   const previous = currentApiBase();
   let cleared: { previousToken: string; previousSpace: string } | undefined;
   if (parsed.url !== previous) {
@@ -343,7 +343,10 @@ export async function saveApiBase(
   return parsed;
 }
 
-export async function resetApiBase(): Promise<EndpointResult> {
+/** Back to the build-time server. A token entered for it is kept: the probe's Access cookie expires, and the share extension never sees it. */
+export async function resetApiBase(
+  access: AccessCredentials | null = null,
+): Promise<EndpointResult> {
   const previous = currentApiBase();
   const url = defaultApiBase();
   let cleared: { previousToken: string; previousSpace: string } | undefined;
@@ -361,7 +364,7 @@ export async function resetApiBase(): Promise<EndpointResult> {
     }
   }
   cachedApiBase = url;
-  await saveAccess(url, null);
+  await saveAccess(url, access);
   await clearStoredValue(SPACE_ROLLBACK_KEY);
   return { ok: true, url };
 }

@@ -1,8 +1,8 @@
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
 export default ({ config }: ConfigContext): ExpoConfig => {
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL;
   if (process.env.EAS_BUILD_PROFILE === "production") {
-    const apiUrl = process.env.EXPO_PUBLIC_API_URL;
     if (!apiUrl) {
       throw new Error(
         "EXPO_PUBLIC_API_URL must be set in the EAS production environment before building for the App Store.",
@@ -30,5 +30,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     );
   }
 
-  return config as ExpoConfig;
+  // The share extension cannot read the JS bundle, so it gets the build-time server here.
+  const shareDefaults = {
+    ...(apiUrl ? { RakazoApiBase: new URL(apiUrl).origin } : {}),
+    ...(accessId && accessSecret
+      ? { RakazoAccessClientId: accessId.trim(), RakazoAccessClientSecret: accessSecret.trim() }
+      : {}),
+  };
+  return {
+    ...config,
+    ios: { ...config.ios, infoPlist: { ...config.ios?.infoPlist, ...shareDefaults } },
+  } as ExpoConfig;
 };

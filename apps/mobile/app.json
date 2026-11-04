@@ -79,7 +79,8 @@
         "NSUserActivityTypes": ["INSendMessageIntent"]
       },
       "entitlements": {
-        "com.apple.developer.usernotifications.communication": true
+        "com.apple.developer.usernotifications.communication": true,
+        "keychain-access-groups": ["$(AppIdentifierPrefix)com.romainjeff.tangow"]
       }
     },
     "android": {
