@@ -11,12 +11,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Added
 
 - **Computer update notices on web, desktop and mobile.** Settings and the computer view show when an existing computer has an update available, with a manual update action. Unrelated application commits no longer count as computer updates.
+- **Share a link to a bot or group from any iPhone app.** Pick Tangow in the share sheet and the link goes to the last bot or group you shared with, with an optional message, without leaving the app you were reading; tap To to pick another from any of your spaces.
+
+#### Fixed
+
+- On iPhone and Android, a Cloudflare Access service token entered for the app's built-in server is now kept, instead of working only until Access asks you to sign in again.
+
+### 2026-11-03
+
+#### Fixed
+
+- On iPhone, the conversation and composer now rise with the keyboard the first time you open it after coming back from another conversation, instead of freezing and jumping into place once it has settled.
 
 ### 2026-11-02
 
 #### Added
 
 - **Bots can report problems with Rakazo itself as GitHub issues.** When the server operator connects a feedback repository, a bot that gets blocked, hits a malfunction or needs far too many steps can call `report_issue` to file an issue with its report and the run's model, ids and counters, and carries on with its task. See [Agent feedback](docs/self-host.md#agent-feedback).
+- **Images now show in the iPhone conversation, and consecutive ones from the same sender gather in a stack.** Each image appears in a fixed frame instead of a file name, with the earlier ones peeking behind it, a count from four images up, and a long press that opens the actions of the newest one.
+- **Tap an image on iPhone to see it full screen, swipe through the whole stack and share it.** The image opens out of the stack on its newest picture with the older ones after it, a strip of thumbnails at the bottom jumps to any image, and dragging down closes it back into the stack.
+- **Images in web and desktop conversations now gather in stacks and open in a viewer you can step through.** Consecutive images from the same sender sit in one fixed frame with the earlier ones peeking behind it and a count from four images up, and opening one lets you move through the stack with the arrow keys, the previous and next buttons, or a strip of thumbnails under the image.
+
+#### Fixed
+
+- On iPhone, dragging a conversation with the keyboard open no longer stutters: the thread and the keyboard follow your finger smoothly, and the composer no longer bounces when the keyboard closes.
+- On iPhone and Android, scrolling a conversation no longer stutters: bot avatars in the inbox and the conversation header rest while their bot is idle and move only while it works.
+- On iPhone and Android, the conversation stays smoother while a bot works: its typing dots and the glow around the Stop button no longer make the app redo work on every frame.
 
 ### 2026-11-01
 

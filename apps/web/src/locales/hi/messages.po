@@ -83,7 +83,7 @@ msgid "{0} <0>out</0>"
 msgstr ""
 
 #. placeholder {0}: block.name
-#: src/pages/shell/message-cards.tsx:173
+#: src/pages/shell/message-cards.tsx:164
 msgid "{0} connection"
 msgstr "{0} कनेक्शन"
 
@@ -172,8 +172,8 @@ msgstr "{days} दिन पहले"
 msgid "{failures, plural, one {# failure since {since}} other {# failures since {since}}}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:340
-#: src/pages/shell/thread-row.tsx:343
+#: src/pages/shell/message-view.tsx:345
+#: src/pages/shell/thread-row.tsx:348
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -233,7 +233,7 @@ msgstr ""
 msgid "{what} · paused"
 msgstr "{what} · रोका गया"
 
-#: src/pages/shell/transcript.tsx:208
+#: src/pages/shell/transcript.tsx:210
 msgid "{workingBotName} is working"
 msgstr "{workingBotName} काम कर रहा है"
 
@@ -537,7 +537,7 @@ msgid "Answered"
 msgstr "उत्तर दिया गया"
 
 #. placeholder {0}: answeredOption?.label ?? block.answerId
-#: src/pages/shell/message-cards.tsx:77
+#: src/pages/shell/message-cards.tsx:68
 msgid "Answered: {0}"
 msgstr "उत्तर दिया: {0}"
 
@@ -579,7 +579,7 @@ msgstr "अनुमोदन सीमाएं"
 
 #: src/pages/MessagingSettingsOverlay.tsx:224
 #: src/pages/MessagingSettingsOverlay.tsx:297
-#: src/pages/shell/message-cards.tsx:284
+#: src/pages/shell/message-cards.tsx:275
 msgid "Approve"
 msgstr "अनुमोदित करें"
 
@@ -588,7 +588,7 @@ msgstr "अनुमोदित करें"
 msgid "Approve it in the chat, or say no to cancel."
 msgstr "इसे चैट में स्वीकृत करें, या रद्द करने के लिए ना कहें।"
 
-#: src/pages/shell/message-cards.tsx:275
+#: src/pages/shell/message-cards.tsx:266
 msgid "Approve this server to let your agent use its tools."
 msgstr "अपने एजेंट को इसके टूल उपयोग करने देने के लिए इस सर्वर को अनुमोदित करें।"
 
@@ -666,7 +666,7 @@ msgstr "{timeSelect} बजे"
 msgid "Attach file"
 msgstr "फ़ाइल संलग्न करें"
 
-#: src/pages/shell/message-view.tsx:88
+#: src/pages/shell/message-view.tsx:89
 msgid "Attachment"
 msgstr "अटैचमेंट"
 
@@ -675,16 +675,16 @@ msgstr "अटैचमेंट"
 msgid "Authorization code or callback URL"
 msgstr "ऑथराइज़ेशन कोड या कॉलबैक URL"
 
-#: src/pages/shell/message-cards.tsx:158
+#: src/pages/shell/message-cards.tsx:149
 msgid "Authorization timed out. Please try again."
 msgstr "ऑथराइज़ेशन का समय समाप्त हो गया। कृपया पुनः प्रयास करें।"
 
-#: src/pages/shell/message-cards.tsx:203
-#: src/pages/shell/message-cards.tsx:284
+#: src/pages/shell/message-cards.tsx:194
+#: src/pages/shell/message-cards.tsx:275
 msgid "Authorize"
 msgstr "ऑथराइज़ करें"
 
-#: src/pages/shell/message-cards.tsx:274
+#: src/pages/shell/message-cards.tsx:265
 msgid "Authorize this server so agents can use its tools. A popup opens."
 msgstr "एजेंटों को इसके टूल का उपयोग करने देने के लिए इस सर्वर को ऑथराइज़ करें। एक पॉपअप खुलता है।"
 
@@ -754,16 +754,17 @@ msgstr "लाइव डेस्कटॉप शुरू हो रहा ह�
 msgid "Booting up {0}’s computer"
 msgstr "{0} का कंप्यूटर शुरू हो रहा है"
 
-#: src/pages/shell/message-view.tsx:328
-#: src/pages/shell/message-view.tsx:329
-#: src/pages/shell/thread-row.tsx:334
-#: src/pages/shell/thread-row.tsx:335
+#: src/pages/shell/message-view.tsx:333
+#: src/pages/shell/message-view.tsx:334
+#: src/pages/shell/thread-row.tsx:339
+#: src/pages/shell/thread-row.tsx:340
 msgid "bot"
 msgstr "बॉट"
 
 #: src/pages/IntegrationSetup.tsx:51
-#: src/pages/shell/message-view.tsx:226
-#: src/pages/shell/thread-row.tsx:302
+#: src/pages/shell/message-view.tsx:230
+#: src/pages/shell/message-view.tsx:437
+#: src/pages/shell/thread-row.tsx:307
 #: src/pages/shell/use-composer-draft.ts:53
 msgid "Bot"
 msgstr "बॉट"
@@ -800,7 +801,7 @@ msgstr ""
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "बॉट डिफ़ॉल्ट रूप से बिना पूछे कार्रवाई करते हैं। अपवाद तभी जोड़ें जब आप किसी प्रकार की कार्रवाई की पहले समीक्षा करना चाहते हों।"
 
-#: src/pages/shell/transcript.tsx:209
+#: src/pages/shell/transcript.tsx:211
 msgid "Bots are working"
 msgstr "बॉट काम कर रहे हैं"
 
@@ -998,7 +999,7 @@ msgstr "बंद करें"
 msgid "Close computer"
 msgstr "कंप्यूटर बंद करें"
 
-#: src/pages/shell/message-cards.tsx:390
+#: src/pages/shell/image-viewer.tsx:110
 msgid "Close image preview"
 msgstr "छवि प्रीव्यू बंद करें"
 
@@ -1154,7 +1155,7 @@ msgstr "API कुंजी कनेक्ट करें"
 msgid "Connect Executor"
 msgstr "Executor कनेक्ट करें"
 
-#: src/pages/shell/message-cards.tsx:266
+#: src/pages/shell/message-cards.tsx:257
 msgid "Connect MCP server “{name}”"
 msgstr "MCP सर्वर “{name}” कनेक्ट करें"
 
@@ -1176,7 +1177,7 @@ msgstr "Treg कनेक्ट करें"
 #: src/pages/McpOAuthCallback.tsx:54
 #: src/pages/MemorySettingsOverlay.tsx:191
 #: src/pages/ModelSettingsOverlay.tsx:114
-#: src/pages/shell/message-cards.tsx:195
+#: src/pages/shell/message-cards.tsx:186
 #: src/pages/VoiceSettingsOverlay.tsx:226
 msgid "Connected"
 msgstr "कनेक्टेड"
@@ -1198,7 +1199,7 @@ msgstr "{0} कनेक्ट किया गया।"
 msgid "Connected and using {0}."
 msgstr "{0} कनेक्ट किया गया और उपयोग में है।"
 
-#: src/pages/shell/message-cards.tsx:298
+#: src/pages/shell/message-cards.tsx:289
 msgid "Connected. Its tools are available from your next message."
 msgstr "कनेक्टेड। इसके टूल आपके अगले संदेश से उपलब्ध हैं।"
 
@@ -1208,7 +1209,7 @@ msgstr "कनेक्टेड। इसके टूल आपके अग�
 #: src/pages/McpServersOverlay.tsx:38
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
-#: src/pages/shell/message-cards.tsx:284
+#: src/pages/shell/message-cards.tsx:275
 #: src/pages/shell/screen-frame.tsx:44
 #: src/pages/VoiceSettingsOverlay.tsx:265
 msgid "Connecting…"
@@ -1241,7 +1242,7 @@ msgstr ""
 msgid "Continue with email"
 msgstr "ईमेल से जारी रखें"
 
-#: src/pages/shell/thread-row.tsx:420
+#: src/pages/shell/thread-row.tsx:425
 msgid "Conversation cleared"
 msgstr ""
 
@@ -1268,11 +1269,11 @@ msgstr "जोड़ा नहीं जा सका"
 msgid "Could not add MCP server"
 msgstr "MCP सर्वर जोड़ा नहीं जा सका"
 
-#: src/pages/shell/message-cards.tsx:253
+#: src/pages/shell/message-cards.tsx:244
 msgid "Could not approve this server"
 msgstr "इस सर्वर को अनुमोदित नहीं किया जा सका"
 
-#: src/pages/shell/message-cards.tsx:161
+#: src/pages/shell/message-cards.tsx:152
 msgid "Could not authorize this app"
 msgstr "इस ऐप को ऑथराइज़ नहीं किया जा सका"
 
@@ -1397,7 +1398,7 @@ msgstr ""
 msgid "Could not disconnect this voice provider"
 msgstr ""
 
-#: src/pages/shell/message-cards.tsx:61
+#: src/pages/shell/message-cards.tsx:52
 msgid "Could not dismiss"
 msgstr "बंद नहीं किया जा सका"
 
@@ -1583,7 +1584,7 @@ msgstr "स्किल सहेजी नहीं जा सकी"
 msgid "Could not save that voice"
 msgstr "वह आवाज़ सहेजी नहीं जा सकी"
 
-#: src/pages/shell/message-cards.tsx:47
+#: src/pages/shell/message-cards.tsx:38
 msgid "Could not save this choice"
 msgstr "यह विकल्प सहेजा नहीं जा सका"
 
@@ -1942,7 +1943,7 @@ msgstr "डिस्कनेक्ट हो रहा है…"
 
 #: src/components/ComputerUpdateProgress.tsx:215
 #: src/components/teach/TeachComputerOverlay.tsx:285
-#: src/pages/shell/message-cards.tsx:88
+#: src/pages/shell/message-cards.tsx:79
 msgid "Dismiss"
 msgstr "बंद करें"
 
@@ -1950,7 +1951,7 @@ msgstr "बंद करें"
 msgid "Dismiss error"
 msgstr "त्रुटि बंद करें"
 
-#: src/pages/shell/message-cards.tsx:303
+#: src/pages/shell/message-cards.tsx:294
 msgid "Dismissed. Reconnect anytime from MCP settings."
 msgstr "खारिज किया गया। MCP सेटिंग्स से कभी भी पुनः कनेक्ट करें।"
 
@@ -2010,11 +2011,11 @@ msgstr "ड्राफ़्ट स्किल"
 msgid "Duplicate"
 msgstr "डुप्लिकेट"
 
-#: src/pages/shell/message-view.tsx:201
+#: src/pages/shell/message-view.tsx:205
 msgid "Earlier message"
 msgstr "पुराना संदेश"
 
-#: src/pages/shell/thread-row.tsx:417
+#: src/pages/shell/thread-row.tsx:422
 msgid "Earlier messages summarized"
 msgstr ""
 
@@ -2254,7 +2255,7 @@ msgstr ""
 msgid "Fullscreen"
 msgstr "फ़ुलस्क्रीन"
 
-#: src/pages/shell/thread-row.tsx:369
+#: src/pages/shell/thread-row.tsx:374
 msgid "FYI"
 msgstr ""
 
@@ -2388,6 +2389,14 @@ msgstr "अगर आपने वह सुना, तो आवाज़ त�
 msgid "Ignore"
 msgstr ""
 
+#: src/pages/shell/message-view.tsx:447
+msgid "Image {n} of {total}, from {sender}"
+msgstr ""
+
+#: src/pages/shell/message-view.tsx:447
+msgid "Image, from {sender}"
+msgstr ""
+
 #: src/pages/KnowledgeSection.tsx:427
 msgid "Import"
 msgstr "आयात करें"
@@ -2470,7 +2479,7 @@ msgstr "इसकी बातचीत, फ़ाइलें और रूट�
 msgid "Jump to latest"
 msgstr "नवीनतम संदेश पर जाएँ"
 
-#: src/pages/shell/message-view.tsx:196
+#: src/pages/shell/message-view.tsx:200
 msgid "Jump to replied message"
 msgstr "जिस संदेश का उत्तर दिया गया उस पर जाएं"
 
@@ -2532,7 +2541,7 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:248
+#: src/pages/shell/transcript.tsx:250
 msgid "Load earlier messages"
 msgstr "पुराने संदेश लोड करें"
 
@@ -2574,7 +2583,7 @@ msgstr "आवाज़ प्रोवाइडर्स लोड हो र�
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
 #: src/pages/shell/session-view.tsx:129
-#: src/pages/shell/transcript.tsx:248
+#: src/pages/shell/transcript.tsx:250
 msgid "Loading…"
 msgstr "लोड हो रहा है…"
 
@@ -2684,7 +2693,7 @@ msgstr ""
 
 #: src/pages/bot-page/BotActivity.tsx:358
 #: src/pages/shell/composer.tsx:293
-#: src/pages/shell/message-view.tsx:90
+#: src/pages/shell/message-view.tsx:91
 msgid "Message"
 msgstr "संदेश"
 
@@ -2705,7 +2714,7 @@ msgstr ""
 msgid "Message composer"
 msgstr "संदेश रचयिता"
 
-#: src/pages/shell/thread-row.tsx:419
+#: src/pages/shell/thread-row.tsx:424
 msgid "Message edited"
 msgstr ""
 
@@ -2713,8 +2722,8 @@ msgstr ""
 msgid "Message event"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:371
-#: src/pages/shell/thread-row.tsx:410
+#: src/pages/shell/thread-row.tsx:376
+#: src/pages/shell/thread-row.tsx:415
 msgid "Message from {peer}"
 msgstr "{peer} का संदेश"
 
@@ -2722,8 +2731,8 @@ msgstr "{peer} का संदेश"
 msgid "Message…"
 msgstr "संदेश…"
 
-#: src/pages/shell/thread-row.tsx:371
-#: src/pages/shell/thread-row.tsx:410
+#: src/pages/shell/thread-row.tsx:376
+#: src/pages/shell/thread-row.tsx:415
 msgid "Messaged {peer}"
 msgstr "{peer} को संदेश भेजा"
 
@@ -2908,6 +2917,10 @@ msgstr "नया स्पेस"
 msgid "Next"
 msgstr ""
 
+#: src/pages/shell/image-viewer.tsx:144
+msgid "Next image"
+msgstr ""
+
 #: src/pages/bot-page/BotActivity.tsx:239
 msgid "No activity yet"
 msgstr "अभी कोई गतिविधि नहीं"
@@ -3049,7 +3062,7 @@ msgstr "प्लगइन कैटलॉग में नहीं"
 
 #: src/components/AskCard.tsx:63
 #: src/lib/approval-labels.ts:18
-#: src/pages/shell/message-cards.tsx:291
+#: src/pages/shell/message-cards.tsx:282
 msgid "Not now"
 msgstr "अभी नहीं"
 
@@ -3298,6 +3311,10 @@ msgstr "यहाँ POST करें"
 msgid "Preview {0}"
 msgstr "{0} का प्रीव्यू"
 
+#: src/pages/shell/image-viewer.tsx:134
+msgid "Previous image"
+msgstr ""
+
 #: src/pages/bot-page/SettingsTab.tsx:122
 #: src/pages/shell/bot-panel.tsx:42
 msgid "Private"
@@ -3330,7 +3347,7 @@ msgstr "प्रोवाइडर"
 msgid "Providers"
 msgstr "प्रोवाइडर्स"
 
-#: src/pages/shell/thread-row.tsx:367
+#: src/pages/shell/thread-row.tsx:372
 msgid "Question"
 msgstr ""
 
@@ -3570,7 +3587,7 @@ msgstr "कई छोटे संदेशों में उत्तर द�
 msgid "Replying to {replyName}"
 msgstr "{replyName} को उत्तर दे रहे हैं"
 
-#: src/pages/shell/thread-row.tsx:365
+#: src/pages/shell/thread-row.tsx:370
 msgid "Request"
 msgstr ""
 
@@ -3626,13 +3643,15 @@ msgstr "बिना सहेजा टेक्स्ट बहाल कर�
 msgid "Restoring your workspace"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:366
+#: src/pages/shell/thread-row.tsx:371
 msgid "Result"
 msgstr ""
 
 #: src/pages/bot-page/page-kit.tsx:52
 #: src/pages/bot-page/page-kit.tsx:88
 #: src/pages/ComputerSettingsPanel.tsx:84
+#: src/pages/shell/image-stack.tsx:182
+#: src/pages/shell/image-viewer.tsx:35
 msgid "Retry"
 msgstr "फिर से कोशिश करें"
 
@@ -3972,15 +3991,15 @@ msgstr "साइन अप करें"
 msgid "Skill {0}"
 msgstr "स्किल {0}"
 
-#: src/pages/shell/message-view.tsx:105
+#: src/pages/shell/message-view.tsx:106
 msgid "Skill deleted · {name}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:102
+#: src/pages/shell/message-view.tsx:103
 msgid "Skill learned · {name}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:104
+#: src/pages/shell/message-view.tsx:105
 msgid "Skill updated · {name}"
 msgstr ""
 
@@ -4063,7 +4082,7 @@ msgstr "शुरू हो रहा है"
 msgid "Starting…"
 msgstr "शुरू हो रहा है…"
 
-#: src/pages/shell/thread-row.tsx:368
+#: src/pages/shell/thread-row.tsx:373
 msgid "Status"
 msgstr ""
 
@@ -4219,7 +4238,7 @@ msgstr "यह हर संदेश को स्थायी रूप से
 msgid "This reset link is invalid or expired"
 msgstr "यह रीसेट लिंक अमान्य है या इसकी समय-सीमा समाप्त हो गई है"
 
-#: src/pages/shell/message-cards.tsx:237
+#: src/pages/shell/message-cards.tsx:228
 msgid "This server cannot be assigned without a bot."
 msgstr "बॉट के बिना यह सर्वर असाइन नहीं किया जा सकता।"
 
@@ -4262,6 +4281,7 @@ msgstr "प्रति:"
 
 #: src/pages/bot-page/BotActivity.tsx:256
 #: src/pages/PeerMessagesOverlay.tsx:180
+#: src/pages/shell/image-viewer.tsx:103
 #: src/pages/shell/thread-row.tsx:107
 msgid "Today"
 msgstr "आज"
@@ -4458,7 +4478,7 @@ msgstr "API के वापस आने की प्रतीक्षा…"
 msgid "Waiting for you"
 msgstr ""
 
-#: src/pages/shell/message-cards.tsx:203
+#: src/pages/shell/message-cards.tsx:194
 msgid "Waiting…"
 msgstr "प्रतीक्षा…"
 
@@ -4539,12 +4559,14 @@ msgstr "हर साल {date} को {time} बजे"
 
 #: src/pages/bot-page/BotActivity.tsx:257
 #: src/pages/PeerMessagesOverlay.tsx:181
+#: src/pages/shell/image-viewer.tsx:104
 #: src/pages/shell/thread-row.tsx:108
 msgid "Yesterday"
 msgstr "कल"
 
 #: src/components/DraftCard.tsx:53
 #: src/pages/Shell.tsx:138
+#: src/pages/shell/message-view.tsx:437
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"
 msgstr "आप"

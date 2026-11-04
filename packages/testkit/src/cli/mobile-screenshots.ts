@@ -3,6 +3,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { crc32, deflateSync } from "node:zlib";
 import { serve } from "@hono/node-server";
 import type { SessionEntryDraft } from "@rakazo/adapter-kit";
 import {
@@ -13,6 +14,7 @@ import {
   ThirdPartyConnectorEmulator,
 } from "@rakazo/adapters";
 import type { EntryId, MessageBlock, SessionEntry, SessionId } from "@rakazo/contracts";
+import { messageBlockForArtifact } from "@rakazo/core";
 import {
   appendSessionEntryInTransaction,
   createBotMessageInTransaction,
@@ -256,6 +258,7 @@ async function seedFixture(app: App, prisma: PrismaClient) {
     reply: "The fixture launch plan is ready.",
     widget: true,
   });
+  await seedImageStacks(app, cookie, prisma, botThread, researcher.id);
 
   return { botId: researcher.id, groupId: group.id, routineId: routine.id };
 }
@@ -386,6 +389,131 @@ async function seedExchange(
     type: "run.finished",
     payload: { status: "completed", usage: { inputTokens: 1840, outputTokens: 212 } },
   });
+}
+
+/** Screenshots and a road trip's photos as the stacks the mobile thread draws, a few seconds apart. */
+async function seedImageStacks(
+  app: App,
+  cookie: string,
+  prisma: PrismaClient,
+  thread: FixtureThread,
+  botId: string,
+) {
+  const start = Date.now() - 40 * 60_000;
+  await prisma.sessionEntry.updateMany({
+    where: { sessionId: thread.sessionId },
+    data: { createdAt: new Date(start - 60_000) },
+  });
+  const stamp = (id: string, seconds: number) =>
+    prisma.sessionEntry.update({
+      where: { id },
+      data: { createdAt: new Date(start + seconds * 1000) },
+    });
+  const user = async (seconds: number, blocks: MessageBlock[]) => {
+    const entry = await createThreadMessage(prisma, {
+      threadId: thread.id,
+      role: "user",
+      feedBotId: botId,
+      blocks,
+    });
+    await stamp(entry.id, seconds);
+  };
+  const bot = async (seconds: number, blocks: MessageBlock[]) => {
+    const id = await prisma.$transaction((tx) =>
+      createBotMessageInTransaction(tx, { threadId: thread.id, botId, blocks }),
+    );
+    await stamp(id!, seconds);
+  };
+  const upload = async (name: string, bytes: Buffer) =>
+    messageBlockForArtifact(
+      await rpc<{ id: string; name: string; mimeType: string; size: number }>(
+        app,
+        cookie,
+        "artifacts/create",
+        { botId, name, mimeType: "image/png", contentBase64: bytes.toString("base64") },
+      ),
+    );
+  const screenshots = await Promise.all(
+    [0, 1, 2, 3].map((n) => upload(`screenshot-${n + 1}.png`, fakeScreenshot(n))),
+  );
+  const photos = await Promise.all(
+    Array.from({ length: 15 }, (_, n) => upload(`photo-${n + 1}.png`, fakePhoto(n))),
+  );
+
+  await user(0, [{ kind: "text", text: "Find me a good deal on an official MagSafe charger" }]);
+  await bot(5, [{ kind: "text", text: "Comparing prices at Apple and two retailers." }]);
+  for (const [n, block] of screenshots.slice(0, 3).entries()) await bot(15 + n * 7, [block]);
+  await bot(40, [{ kind: "text", text: "The cheapest is €26.81, instead of €49." }]);
+
+  await user(900, [
+    { kind: "text", text: "Our road trip, pick the 10 best" },
+    ...photos.slice(0, 4),
+  ]);
+  await user(908, photos.slice(4, 8));
+  await user(915, photos.slice(8, 12));
+  await user(922, photos.slice(12));
+
+  await bot(1800, [screenshots[3]!]);
+}
+
+/** A 1280x900 web page: grey bars and blocks on a neutral background, no brand. */
+function fakeScreenshot(n: number) {
+  const blocks = [
+    [0, 0, 1280, 72, 226],
+    [96, 140, 560, 520, 214],
+    [680, 140, 1184, 190, 200],
+    [680, 220, 1000, 262, 232],
+    [680, 330, 1184, 600, 238 - n * 6],
+    [96, 700, 1184, 760, 220],
+  ];
+  return png(1280, 900, (x, y) => {
+    const grey = blocks.find(([x0, y0, x1, y1]) => x >= x0! && x < x1! && y >= y0! && y < y1!);
+    const v = grey ? grey[4]! : 246;
+    return [v, v, v + 2];
+  });
+}
+
+/** A 1600x1200 landscape (a couple of portraits): a hue-shifted gradient with a simple sun. */
+function fakePhoto(n: number) {
+  const [width, height] = n === 3 || n === 9 ? [1200, 1600] : [1600, 1200];
+  const hue = (n * 47) % 360;
+  const channel = (offset: number, level: number) => {
+    const k = (offset + hue / 60) % 6;
+    return Math.round(255 * level * (1 - Math.max(0, Math.min(k, 4 - k, 1))));
+  };
+  return png(width, height, (x, y) => {
+    const t = y / height;
+    const sun = (x - width * 0.7) ** 2 + (y - height * 0.3) ** 2 < (width * 0.1) ** 2;
+    if (sun) return [255, 244, 214];
+    const level = 1 - 0.55 * t;
+    return [channel(5, level), channel(3, level), channel(1, level)];
+  });
+}
+
+function png(width: number, height: number, pixel: (x: number, y: number) => number[]) {
+  const stride = width * 3 + 1;
+  const rows = Buffer.alloc(stride * height);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) rows.set(pixel(x, y), y * stride + 1 + x * 3);
+  }
+  const chunk = (type: string, data: Buffer) => {
+    const body = Buffer.concat([Buffer.from(type), data]);
+    const out = Buffer.alloc(body.length + 8);
+    out.writeUInt32BE(data.length, 0);
+    body.copy(out, 4);
+    out.writeUInt32BE(crc32(body), body.length + 4);
+    return out;
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header.set([8, 2], 8);
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", header),
+    chunk("IDAT", deflateSync(rows)),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
 }
 
 async function signup(app: App) {

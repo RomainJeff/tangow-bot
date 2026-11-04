@@ -15,7 +15,7 @@ import {
 import { memo, useEffect, useId, useRef, useState } from "react";
 import { View } from "react-native";
 import { useReducedMotion } from "react-native-reanimated";
-import Svg, { ClipPath, Defs, G, Path } from "react-native-svg";
+import Svg, { ClipPath, Defs, G, Path, Use } from "react-native-svg";
 import { CHAT_MOTION } from "../lib/chat-motion";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
@@ -203,7 +203,9 @@ export function OrganicAvatar({
   const animate = !still || isWorking || Boolean(drive) || glancing;
   const seed = shapeSeed ?? avatarIdentitySeed(identity || color || "#8B5CF6");
   const shape = SHAPES[seed % SHAPES.length]!;
-  const clipId = `bloub-${useId().replace(/[^a-zA-Z0-9-_]/g, "")}`;
+  const id = useId().replace(/[^a-zA-Z0-9-_]/g, "");
+  const bodyId = `bloub-body-${id}`;
+  const clipId = `bloub-${id}`;
   const [engine] = useState(() => new BotEngine(RAYON, "idle", shape.radii));
   const clock = useRef(0);
   const [frame, setFrame] = useState<BotFrame>(() => engine.sample(0));
@@ -301,22 +303,24 @@ export function OrganicAvatar({
   return (
     <Svg width={size} height={size} viewBox={`${-VB} ${-VB} ${VB * 2} ${VB * 2}`}>
       <Defs>
+        {/* Drawn through `Use` below, so native parses the body path once per frame. */}
+        <Path id={bodyId} d={frame.bodyPath} />
         {/* The eyes are holes in the body, so the silhouette clips them. */}
         <ClipPath id={clipId}>
-          <Path d={frame.bodyPath} />
+          <Use href={`#${bodyId}`} />
         </ClipPath>
       </Defs>
       {/* ponytail: body and eyes only — the idle state the avatar stays in never
           emits the engine's particles, arcs or notification dot. */}
       <G opacity={frame.bodyAlpha}>
-        <Path d={frame.bodyPath} fill={fill} />
+        <Use href={`#${bodyId}`} fill={fill} />
         <G clipPath={`url(#${clipId})`}>
           {frame.eyes.map((eye, index) => (
             <Path key={index} d={eye.d} transform={eye.matrix} opacity={eye.alpha} fill={paper} />
           ))}
         </G>
         {outline ? (
-          <Path d={frame.bodyPath} fill="none" stroke={outline} strokeWidth={RAYON * 0.06} />
+          <Use href={`#${bodyId}`} fill="none" stroke={outline} strokeWidth={RAYON * 0.06} />
         ) : null}
       </G>
     </Svg>

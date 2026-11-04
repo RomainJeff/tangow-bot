@@ -1,6 +1,6 @@
 {
   "name": "@rakazo/mobile",
-  "version": "2026.11.0",
+  "version": "2026.11.1",
   "license": "Apache-2.0",
   "main": "expo-router/entry",
   "expo": {
@@ -24,7 +24,8 @@
     "submit:ios": "npx eas-cli@latest submit --platform ios --profile production --latest",
     "build:ios:preview": "mkdir -p builds && npx eas-cli@latest build --platform ios --profile preview --local --output builds/rakazo-preview.ipa",
     "release:ios": "mkdir -p builds && npx eas-cli@latest build --platform ios --profile production --local --output builds/rakazo-production.ipa && npx eas-cli@latest submit --platform ios --profile production --path builds/rakazo-production.ipa",
-    "generate:notification-avatars": "tsx scripts/generate-notification-avatars.ts"
+    "generate:notification-avatars": "tsx scripts/generate-notification-avatars.ts",
+    "generate:share-tokens": "tsx scripts/generate-share-tokens.ts"
   },
   "dependencies": {
     "@expo/metro-runtime": "57.0.17",

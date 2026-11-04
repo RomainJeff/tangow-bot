@@ -4,7 +4,7 @@
     "slug": "rakazo",
     "owner": "tangow",
     "scheme": "rakazo",
-    "version": "2026.11.0",
+    "version": "2026.11.1",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
@@ -79,7 +79,8 @@
         "NSUserActivityTypes": ["INSendMessageIntent"]
       },
       "entitlements": {
-        "com.apple.developer.usernotifications.communication": true
+        "com.apple.developer.usernotifications.communication": true,
+        "keychain-access-groups": ["$(AppIdentifierPrefix)com.romainjeff.tangow"]
       }
     },
     "android": {

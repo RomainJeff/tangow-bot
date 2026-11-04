@@ -2,8 +2,13 @@ import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown } from "@rakazo/chat-ui/web";
 import type { MessageBlock } from "@rakazo/contracts";
-import type { LinkMentionResolver, SkillSourceBlock } from "@rakazo/core";
+import type {
+  ImageStack as ImageStackModel,
+  LinkMentionResolver,
+  SkillSourceBlock,
+} from "@rakazo/core";
 import {
+  imagesOf,
   isLinkOnlyMessage,
   isNarrationMessage,
   linkMentionsKey,
@@ -44,17 +49,13 @@ import {
   ComputerCard,
   LinkPreviewRow,
   ResultLinesCard,
+  sideWidthCap,
   UserText,
 } from "./block-views";
+import { ImageStack } from "./image-stack";
 import { FALLBACK_BOT_COLOR } from "./layout";
 import { messageLinkPreview } from "./message-actions";
-import {
-  AppConnectCard,
-  ArtifactImage,
-  ChoiceCard,
-  LinkMentionIcon,
-  McpApprovalCard,
-} from "./message-cards";
+import { AppConnectCard, ChoiceCard, LinkMentionIcon, McpApprovalCard } from "./message-cards";
 
 /**
  * The mentions a message's links render as. The projection rebuilds the message on every event:
@@ -132,6 +133,7 @@ export const MessageView = memo(function MessageView({
   onOpenSkill,
   onOpenSession,
   arrivesLive = false,
+  imageStack,
 }: {
   artifactTarget: ArtifactTarget;
   /** How the transcript frames this message — derived once, from the same
@@ -172,6 +174,8 @@ export const MessageView = memo(function MessageView({
   onOpenSession?: (target: SessionViewTarget) => void;
   /** This message is new activity, not history: its skill line arrives with a beat. */
   arrivesLive?: boolean;
+  /** The images this message and the image-only messages that follow it show as one stack. */
+  imageStack?: ImageStackModel;
 }) {
   const { t } = useLingui();
   const skills = skillSourcesOf(message.blocks);
@@ -317,6 +321,7 @@ export const MessageView = memo(function MessageView({
         )
       : -1;
   const firstSkillBlock = message.blocks.findIndex((block) => block.kind === "skill_source");
+  const firstImageBlock = message.blocks.findIndex((block) => block.kind === "image");
   const rendered = message.blocks
     .map((block, i) => {
       if (isHiddenActivityBlock(block, showSteps)) return null;
@@ -427,17 +432,21 @@ export const MessageView = memo(function MessageView({
         );
       }
       if (block.kind === "image") {
+        if (i !== firstImageBlock) return null;
+        const side = message.role === "user" ? "user" : "bot";
+        const sender = side === "user" ? t`You` : (speakerName ?? author?.name ?? t`Bot`);
         return (
-          <div
+          <ImageStack
             key={i}
-            className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-          >
-            <ArtifactImage
-              target={artifactTarget}
-              artifactId={block.artifactId}
-              name={block.name}
-            />
-          </div>
+            target={artifactTarget}
+            images={imageStack?.images ?? imagesOf(message, message.id)}
+            side={side}
+            widthCap={sideWidthCap(side, inGroup)}
+            author={sender}
+            label={(n, total) =>
+              total > 1 ? t`Image ${n} of ${total}, from ${sender}` : t`Image, from ${sender}`
+            }
+          />
         );
       }
       if (block.kind === "file") {
