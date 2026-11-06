@@ -1,3 +1,4 @@
+import Intents
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -13,6 +14,8 @@ final class ShareViewController: UIViewController {
     super.viewDidLoad()
     view.backgroundColor = .clear
     let items = extensionContext?.inputItems as? [NSExtensionItem] ?? []
+    // Set when the person picked a suggested conversation in the share sheet.
+    let suggested = (extensionContext?.intent as? INSendMessageIntent)?.conversationIdentifier
     Task { @MainActor [weak self] in
       let link = await Self.link(in: items)
       guard let self else { return }
@@ -22,7 +25,7 @@ final class ShareViewController: UIViewController {
       }
       let context = extensionContext
       let root = ShareView(
-        model: ShareModel(link: link),
+        model: ShareModel(link: link, suggested: suggested),
         onCancel: { context?.cancelRequest(withError: CocoaError(.userCancelled)) },
         onDone: { context?.completeRequest(returningItems: nil) })
       let host = UIHostingController(rootView: root)
