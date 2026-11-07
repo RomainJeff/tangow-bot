@@ -49,7 +49,6 @@ final class NotificationService: UNNotificationServiceExtension {
 
 struct BotSender {
   let botId: String
-  let threadId: String
   let name: String
   let color: UIColor
   let shape: AvatarShape
@@ -58,7 +57,6 @@ struct BotSender {
     let data = BotSender.payload(content.userInfo)
     guard
       let botId = data["botId"] as? String,
-      let threadId = data["threadId"] as? String,
       let hex = data["avatarColor"] as? String,
       let color = UIColor(hex: hex),
       let index = (data["avatarShape"] as? NSNumber)?.intValue,
@@ -66,7 +64,6 @@ struct BotSender {
       !content.title.isEmpty
     else { return nil }
     self.botId = botId
-    self.threadId = threadId
     self.name = content.subtitle.isEmpty ? content.title : "\(content.title) · \(content.subtitle)"
     self.color = color
     self.shape = avatarShapes[index]
@@ -100,7 +97,8 @@ struct BotSender {
       outgoingMessageType: .outgoingMessageText,
       content: body,
       speakableGroupName: nil,
-      conversationIdentifier: threadId,
+      // The share extension's target id, so a bot that writes is also suggested in the share sheet.
+      conversationIdentifier: "bot:\(botId)",
       serviceName: nil,
       sender: person,
       attachments: nil

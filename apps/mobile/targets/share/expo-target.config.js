@@ -5,6 +5,7 @@ module.exports = (config) => ({
   displayName: config.name,
   bundleIdentifier: ".share",
   deploymentTarget: "16.4",
+  frameworks: ["Intents"],
   entitlements: {
     // Reads the app's session from the keychain; the app lists the same group.
     "keychain-access-groups": config.ios.entitlements["keychain-access-groups"],
