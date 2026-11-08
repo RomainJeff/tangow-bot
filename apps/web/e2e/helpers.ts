@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
+import type { SettingsSection } from "../src/pages/settings-sections";
 
 export function isRealSandboxProvider(provider = process.env.SANDBOX_PROVIDER) {
   return provider === "e2b";
@@ -229,15 +230,12 @@ export async function saveRoutineField(page: Page, field: Locator, value: string
 }
 
 /** Open the user Settings overlay, optionally switching to a sidebar section. */
-export async function openUserSettings(
-  page: Page,
-  section?: "general" | "models" | "memory" | "voice" | "usage" | "computer" | "updates",
-) {
+export async function openUserSettings(page: Page, section?: SettingsSection) {
   await page.getByTestId("user-menu-trigger").click();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   const settings = page.getByTestId("user-settings");
   await expect(settings).toBeVisible();
-  if (section && section !== "general") {
+  if (section && section !== "profile") {
     await settings.getByTestId(`settings-nav-${section}`).click();
   }
   return settings;

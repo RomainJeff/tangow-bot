@@ -13,7 +13,7 @@ import { Gauge, LogOut, Settings, SlidersHorizontal } from "lucide-react";
 import type { Dispatch, SetStateAction } from "react";
 import { authClient } from "../../lib/auth";
 import { clearSpaceSelection, rpc } from "../../lib/rpc";
-import type { SettingsSection } from "../SettingsOverlay";
+import type { SettingsSection } from "../settings-sections";
 
 export type SidebarArchivedProps = {
   archivedBots: Bot[];
@@ -195,7 +195,7 @@ export function SidebarFooter({
               aria-label={t`Settings`}
               onClick={() => {
                 setMenuOpen(false);
-                openSettings("general");
+                openSettings("profile");
               }}
             >
               <Settings className="text-muted-foreground" strokeWidth={1.75} />

@@ -29,6 +29,7 @@ test("actions run by default while optional confirmations live in advanced user 
   const settings = await openUserSettings(page);
   await expect(settings).toHaveAttribute("role", "dialog");
   await expect(settings).toBeFocused();
+  await settings.getByTestId("settings-nav-space").click();
   await expect(settings.getByText("Optional controls most people never need")).toBeVisible();
   await expect(settings.getByRole("heading", { name: "Action confirmations" })).not.toBeVisible();
   await captureScreenshot(page, testInfo, "51-user-settings-advanced-collapsed");

@@ -233,7 +233,7 @@ msgstr ""
 msgid "{what} · paused"
 msgstr "{what} · 일시 중지됨"
 
-#: src/pages/shell/transcript.tsx:210
+#: src/pages/shell/transcript.tsx:224
 msgid "{workingBotName} is working"
 msgstr "{workingBotName} 작업 중"
 
@@ -268,7 +268,7 @@ msgstr ""
 msgid "Access token (optional)"
 msgstr "액세스 토큰(선택 사항)"
 
-#: src/pages/AccountSettingsOverlay.tsx:84
+#: src/pages/AccountSettingsOverlay.tsx:79
 msgid "Account"
 msgstr "계정"
 
@@ -294,12 +294,12 @@ msgstr "작업 실행 전 확인"
 #. placeholder {0}: sectionMenu.section.name
 #: src/pages/bot-page/BotPage.tsx:346
 #: src/pages/BotContextMenu.tsx:86
-#: src/pages/shell/shell-overlays.tsx:350
+#: src/pages/shell/shell-overlays.tsx:355
 #: src/pages/shell/sidebar-roster.tsx:149
 msgid "Actions for {0}"
 msgstr "{0} 작업 메뉴"
 
-#: src/pages/shell/shell-overlays.tsx:224
+#: src/pages/shell/shell-overlays.tsx:229
 msgid "Actions for space"
 msgstr ""
 
@@ -431,7 +431,6 @@ msgstr ""
 msgid "Adding…"
 msgstr "추가 중…"
 
-#: src/pages/AccountSettingsOverlay.tsx:194
 #: src/pages/DecisionModelSettingsPanel.tsx:132
 #: src/pages/McpServersOverlay.tsx:343
 #: src/pages/model-settings/model-detail.tsx:168
@@ -439,6 +438,7 @@ msgstr "추가 중…"
 #: src/pages/Onboarding.tsx:496
 #: src/pages/plugins/advanced-integrations.tsx:77
 #: src/pages/RoutineSchedule.tsx:47
+#: src/pages/SpaceGeneralSettings.tsx:32
 msgid "Advanced"
 msgstr "고급 설정"
 
@@ -566,8 +566,8 @@ msgstr "API 키"
 msgid "API key header"
 msgstr "API 키 헤더"
 
-#: src/pages/AccountSettingsOverlay.tsx:109
-#: src/pages/AccountSettingsOverlay.tsx:241
+#: src/pages/AccountSettingsOverlay.tsx:90
+#: src/pages/AccountSettingsOverlay.tsx:203
 #: src/pages/bot-page/BotHero.tsx:123
 #: src/pages/bot-page/BotHero.tsx:144
 msgid "Appearance"
@@ -712,7 +712,7 @@ msgstr "자동 모양"
 msgid "Available when {0} is idle"
 msgstr "{0}이(가) 쉬고 있을 때 사용 가능"
 
-#: src/pages/AccountSettingsOverlay.tsx:151
+#: src/pages/AccountSettingsOverlay.tsx:132
 msgid "Avatars"
 msgstr "아바타"
 
@@ -783,7 +783,7 @@ msgid "Bot screen preview"
 msgstr "Bot 화면 미리보기"
 
 #: src/pages/shell/composer-pickers.tsx:296
-#: src/pages/shell/shell-overlays.tsx:161
+#: src/pages/shell/shell-overlays.tsx:166
 #: src/pages/shell/thread-header.tsx:171
 #: src/pages/shell/thread-header.tsx:172
 msgid "Bot settings"
@@ -801,7 +801,7 @@ msgstr ""
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "Bot은 기본적으로 묻지 않고 작업합니다. 먼저 확인하고 싶은 작업만 예외로 추가하세요."
 
-#: src/pages/shell/transcript.tsx:211
+#: src/pages/shell/transcript.tsx:225
 msgid "Bots are working"
 msgstr "봇 작업 중"
 
@@ -906,7 +906,7 @@ msgstr "채널"
 msgid "Chat apps"
 msgstr "채팅 앱"
 
-#: src/pages/AccountSettingsOverlay.tsx:99
+#: src/pages/SpaceGeneralSettings.tsx:20
 msgid "Chat apps, group channels, and agent connections."
 msgstr "채팅 앱, 그룹 채널 및 Agent 연결을 관리합니다."
 
@@ -999,7 +999,7 @@ msgstr "닫기"
 msgid "Close computer"
 msgstr "컴퓨터 닫기"
 
-#: src/pages/shell/image-viewer.tsx:110
+#: src/pages/shell/image-viewer.tsx:171
 msgid "Close image preview"
 msgstr "이미지 미리보기 닫기"
 
@@ -1012,7 +1012,7 @@ msgid "Close MCP servers"
 msgstr "MCP 서버 설정 닫기"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:107
+#: src/pages/SettingsOverlay.tsx:125
 msgid "Close memory settings"
 msgstr "기억 설정 닫기"
 
@@ -1021,7 +1021,7 @@ msgid "Close messaging settings"
 msgstr "메시징 설정 닫기"
 
 #: src/pages/ModelSettingsOverlay.tsx:63
-#: src/pages/SettingsOverlay.tsx:105
+#: src/pages/SettingsOverlay.tsx:123
 msgid "Close model settings"
 msgstr "AI 모델 설정 닫기"
 
@@ -1038,11 +1038,11 @@ msgstr "미리보기 닫기"
 msgid "Close skills"
 msgstr "스킬 닫기"
 
-#: src/pages/SettingsOverlay.tsx:110
+#: src/pages/SettingsOverlay.tsx:128
 msgid "Close user settings"
 msgstr "계정 설정 닫기"
 
-#: src/pages/SettingsOverlay.tsx:109
+#: src/pages/SettingsOverlay.tsx:127
 #: src/pages/VoiceSettingsOverlay.tsx:174
 msgid "Close voice settings"
 msgstr "음성 설정 닫기"
@@ -1084,7 +1084,7 @@ msgstr "복잡"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:95
+#: src/pages/SettingsOverlay.tsx:115
 #: src/pages/shell/block-views.tsx:131
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
@@ -1658,7 +1658,7 @@ msgstr "만들 수 없음"
 msgid "Couldn't load messaging settings"
 msgstr "메시징 설정을 불러올 수 없습니다"
 
-#: src/pages/AccountSettingsOverlay.tsx:74
+#: src/pages/AccountSettingsOverlay.tsx:69
 msgid "Couldn't update avatars"
 msgstr "아바타를 업데이트할 수 없습니다"
 
@@ -1771,7 +1771,7 @@ msgstr "고객 지원"
 msgid "Customize"
 msgstr "사용자 지정"
 
-#: src/pages/AccountSettingsOverlay.tsx:236
+#: src/pages/AccountSettingsOverlay.tsx:198
 msgid "Dark"
 msgstr "다크"
 
@@ -1783,12 +1783,12 @@ msgstr "일"
 msgid "days"
 msgstr "일"
 
-#: src/pages/AccountSettingsOverlay.tsx:124
-#: src/pages/AccountSettingsOverlay.tsx:132
+#: src/pages/AccountSettingsOverlay.tsx:105
+#: src/pages/AccountSettingsOverlay.tsx:113
 msgid "Debug mode"
 msgstr "디버그 모드"
 
-#: src/pages/SettingsOverlay.tsx:92
+#: src/pages/SettingsOverlay.tsx:114
 msgid "Decision Model"
 msgstr ""
 
@@ -1852,7 +1852,7 @@ msgstr "기억도 함께 삭제"
 msgid "Delete routine"
 msgstr "자동 실행 삭제"
 
-#: src/pages/shell/shell-overlays.tsx:238
+#: src/pages/shell/shell-overlays.tsx:243
 msgid "Delete space"
 msgstr ""
 
@@ -2032,7 +2032,7 @@ msgstr "편집 후 다시 보내기"
 msgid "Edit message"
 msgstr ""
 
-#: src/pages/shell/shell-overlays.tsx:161
+#: src/pages/shell/shell-overlays.tsx:166
 msgid "Edit Profile"
 msgstr "Bot 정보 수정"
 
@@ -2259,8 +2259,7 @@ msgstr "전체 화면"
 msgid "FYI"
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:89
-#: src/pages/SettingsOverlay.tsx:101
+#: src/pages/SettingsOverlay.tsx:110
 msgid "General"
 msgstr "일반"
 
@@ -2499,9 +2498,9 @@ msgstr "key"
 msgid "Knowledge"
 msgstr "지식"
 
-#: src/pages/AccountSettingsOverlay.tsx:144
-#: src/pages/AccountSettingsOverlay.tsx:357
-#: src/pages/AccountSettingsOverlay.tsx:374
+#: src/pages/AccountSettingsOverlay.tsx:125
+#: src/pages/AccountSettingsOverlay.tsx:319
+#: src/pages/AccountSettingsOverlay.tsx:336
 msgid "Language"
 msgstr "언어"
 
@@ -2525,7 +2524,7 @@ msgstr "나가기"
 msgid "Let bots complete multi-step web page tasks faster."
 msgstr ""
 
-#: src/pages/AccountSettingsOverlay.tsx:235
+#: src/pages/AccountSettingsOverlay.tsx:197
 msgid "Light"
 msgstr "라이트"
 
@@ -2541,7 +2540,7 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:250
+#: src/pages/shell/transcript.tsx:264
 msgid "Load earlier messages"
 msgstr "이전 메시지 불러오기"
 
@@ -2583,7 +2582,7 @@ msgstr "음성 서비스를 불러오는 중…"
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
 #: src/pages/shell/session-view.tsx:129
-#: src/pages/shell/transcript.tsx:250
+#: src/pages/shell/transcript.tsx:264
 msgid "Loading…"
 msgstr "불러오는 중…"
 
@@ -2609,7 +2608,7 @@ msgstr "이 컴퓨터에서 실행 중인 작업이 없는지 확인하세요."
 msgid "Manage MCP servers"
 msgstr "MCP 서버 관리"
 
-#: src/pages/AccountSettingsOverlay.tsx:102
+#: src/pages/SpaceGeneralSettings.tsx:23
 msgid "Manage messaging settings"
 msgstr "메시징 설정 관리"
 
@@ -2674,7 +2673,7 @@ msgstr "참여 Bot ({GROUP_MEMBER_MIN}~{GROUP_MEMBER_MAX}개 선택)"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:36
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:91
+#: src/pages/SettingsOverlay.tsx:113
 msgid "Memory"
 msgstr "기억"
 
@@ -2736,8 +2735,8 @@ msgstr "메시지를 입력하세요"
 msgid "Messaged {peer}"
 msgstr "{peer}에게 메시지 보냄"
 
-#: src/pages/AccountSettingsOverlay.tsx:96
 #: src/pages/MessagingSettingsOverlay.tsx:99
+#: src/pages/SpaceGeneralSettings.tsx:17
 msgid "Messaging"
 msgstr "메시징"
 
@@ -2803,7 +2802,7 @@ msgid "Model updated."
 msgstr "모델이 변경되었습니다."
 
 #: src/pages/ModelSettingsOverlay.tsx:56
-#: src/pages/SettingsOverlay.tsx:90
+#: src/pages/SettingsOverlay.tsx:111
 #: src/pages/usage-settings.tsx:69
 msgid "Models"
 msgstr "AI 모델"
@@ -2917,7 +2916,7 @@ msgstr "새 스페이스"
 msgid "Next"
 msgstr ""
 
-#: src/pages/shell/image-viewer.tsx:144
+#: src/pages/shell/image-viewer.tsx:206
 msgid "Next image"
 msgstr ""
 
@@ -3139,7 +3138,7 @@ msgstr "매월 1일 {0}에"
 msgid "One-time"
 msgstr "한 번"
 
-#: src/pages/shell/shell-overlays.tsx:276
+#: src/pages/shell/shell-overlays.tsx:281
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
 msgstr ""
 
@@ -3201,7 +3200,7 @@ msgstr ""
 msgid "Optional"
 msgstr "선택 사항"
 
-#: src/pages/AccountSettingsOverlay.tsx:197
+#: src/pages/SpaceGeneralSettings.tsx:35
 msgid "Optional controls most people never need"
 msgstr "필요할 때만 쓰는 세부 설정"
 
@@ -3217,7 +3216,7 @@ msgstr "또는 API 키 연결"
 msgid "Or paste an API key"
 msgstr "또는 API 키 붙여넣기"
 
-#: src/pages/AccountSettingsOverlay.tsx:169
+#: src/pages/AccountSettingsOverlay.tsx:150
 msgid "Organic"
 msgstr "자연스럽게"
 
@@ -3311,7 +3310,7 @@ msgstr "POST 대상"
 msgid "Preview {0}"
 msgstr "{0} 미리보기"
 
-#: src/pages/shell/image-viewer.tsx:134
+#: src/pages/shell/image-viewer.tsx:195
 msgid "Previous image"
 msgstr ""
 
@@ -3327,6 +3326,10 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx:137
 msgid "Private workspace with its own bots and groups."
 msgstr ""
+
+#: src/pages/SettingsOverlay.tsx:108
+msgid "Profile"
+msgstr "프로필"
 
 #: src/pages/AccountProfileSettings.tsx:86
 msgid "Profile photo"
@@ -3551,7 +3554,7 @@ msgstr "삭제 중…"
 
 #: src/pages/BotContextMenu.tsx:121
 #: src/pages/shell/dialogs.tsx:246
-#: src/pages/shell/shell-overlays.tsx:365
+#: src/pages/shell/shell-overlays.tsx:370
 msgid "Rename section"
 msgstr ""
 
@@ -3650,8 +3653,8 @@ msgstr ""
 #: src/pages/bot-page/page-kit.tsx:52
 #: src/pages/bot-page/page-kit.tsx:88
 #: src/pages/ComputerSettingsPanel.tsx:84
-#: src/pages/shell/image-stack.tsx:182
-#: src/pages/shell/image-viewer.tsx:35
+#: src/pages/shell/image-stack.tsx:156
+#: src/pages/shell/image-viewer.tsx:36
 msgid "Retry"
 msgstr "다시 시도"
 
@@ -3678,7 +3681,7 @@ msgstr "리비전 {0}"
 msgid "Revoke"
 msgstr "연결 해제"
 
-#: src/pages/AccountSettingsOverlay.tsx:169
+#: src/pages/AccountSettingsOverlay.tsx:150
 msgid "Robot"
 msgstr "로봇"
 
@@ -3879,7 +3882,7 @@ msgid "Sent"
 msgstr ""
 
 #: src/components/integrations/IntegrationSetup.tsx:129
-#: src/pages/AccountSettingsOverlay.tsx:185
+#: src/pages/AccountSettingsOverlay.tsx:166
 msgid "Server integrations"
 msgstr ""
 
@@ -3897,8 +3900,7 @@ msgstr "서버 URL"
 
 #: src/pages/bot-page/BotPage.tsx:101
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:101
-#: src/pages/SettingsOverlay.tsx:157
+#: src/pages/SettingsOverlay.tsx:177
 #: src/pages/shell/sidebar-footer.tsx:195
 #: src/pages/shell/sidebar-footer.tsx:202
 msgid "Settings"
@@ -3935,7 +3937,7 @@ msgstr ""
 msgid "Shared documents"
 msgstr "공유 문서"
 
-#: src/pages/AccountSettingsOverlay.tsx:127
+#: src/pages/AccountSettingsOverlay.tsx:108
 msgid "Show agent steps, and every run in a bot's activity."
 msgstr "에이전트 단계와 봇 활동의 모든 실행을 표시합니다."
 
@@ -4144,11 +4146,15 @@ msgstr "사고 모드 지원"
 msgid "Switch bot"
 msgstr "봇 전환"
 
+#: src/pages/SettingsOverlay.tsx:385
+msgid "Switch space"
+msgstr "스페이스 전환"
+
 #: src/pages/model-settings/model-detail.tsx:358
 msgid "Switching…"
 msgstr "전환 중…"
 
-#: src/pages/AccountSettingsOverlay.tsx:234
+#: src/pages/AccountSettingsOverlay.tsx:196
 msgid "System"
 msgstr "시스템"
 
@@ -4281,7 +4287,7 @@ msgstr "받는 사람:"
 
 #: src/pages/bot-page/BotActivity.tsx:256
 #: src/pages/PeerMessagesOverlay.tsx:180
-#: src/pages/shell/image-viewer.tsx:103
+#: src/pages/shell/image-viewer.tsx:164
 #: src/pages/shell/thread-row.tsx:107
 msgid "Today"
 msgstr "오늘"
@@ -4388,7 +4394,7 @@ msgstr ""
 msgid "Updated"
 msgstr "업데이트됨"
 
-#: src/pages/SettingsOverlay.tsx:96
+#: src/pages/SettingsOverlay.tsx:109
 msgid "Updates"
 msgstr "업데이트"
 
@@ -4416,7 +4422,7 @@ msgstr ""
 msgid "Updating…"
 msgstr "업데이트 중…"
 
-#: src/pages/SettingsOverlay.tsx:94
+#: src/pages/SettingsOverlay.tsx:116
 #: src/pages/shell/sidebar-footer.tsx:207
 #: src/pages/shell/sidebar-footer.tsx:214
 msgid "Usage"
@@ -4446,7 +4452,7 @@ msgstr "확인 중…"
 
 #: src/pages/bot-page/SettingDetails.tsx:185
 #: src/pages/bot-page/SettingDetails.tsx:189
-#: src/pages/SettingsOverlay.tsx:93
+#: src/pages/SettingsOverlay.tsx:112
 #: src/pages/shell/thread-header.tsx:139
 #: src/pages/shell/thread-header.tsx:140
 #: src/pages/VoiceSettingsOverlay.tsx:170
@@ -4559,7 +4565,7 @@ msgstr "매년 {date} {time}"
 
 #: src/pages/bot-page/BotActivity.tsx:257
 #: src/pages/PeerMessagesOverlay.tsx:181
-#: src/pages/shell/image-viewer.tsx:104
+#: src/pages/shell/image-viewer.tsx:165
 #: src/pages/shell/thread-row.tsx:108
 msgid "Yesterday"
 msgstr "어제"

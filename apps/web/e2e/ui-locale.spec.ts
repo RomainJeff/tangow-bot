@@ -9,7 +9,7 @@ test("account settings language picker includes Simplified Chinese and applies i
   await completeOnboarding(page, testInfo);
 
   const settings = await openUserSettings(page);
-  await expect(settings.getByRole("heading", { name: "General", exact: true })).toBeVisible();
+  await expect(settings.getByRole("heading", { name: "Profile", exact: true })).toBeVisible();
   await expect(settings.getByRole("heading", { name: "Language", exact: true })).toBeVisible();
 
   const picker = settings.getByTestId("ui-locale-select");
@@ -32,7 +32,7 @@ test("account settings language picker includes Korean and applies it", async ({
   await completeOnboarding(page, testInfo);
 
   const settings = await openUserSettings(page);
-  await expect(settings.getByRole("heading", { name: "General", exact: true })).toBeVisible();
+  await expect(settings.getByRole("heading", { name: "Profile", exact: true })).toBeVisible();
   await expect(settings.getByRole("heading", { name: "Language", exact: true })).toBeVisible();
 
   const picker = settings.getByTestId("ui-locale-select");
@@ -55,7 +55,7 @@ test("account settings language picker includes Spanish and applies it", async (
   await completeOnboarding(page, testInfo);
 
   const settings = await openUserSettings(page);
-  await expect(settings.getByRole("heading", { name: "General", exact: true })).toBeVisible();
+  await expect(settings.getByRole("heading", { name: "Profile", exact: true })).toBeVisible();
   await expect(settings.getByRole("heading", { name: "Language", exact: true })).toBeVisible();
 
   const picker = settings.getByTestId("ui-locale-select");
@@ -88,7 +88,7 @@ test("account settings language picker includes Russian and persists it", async 
   await captureScreenshot(page, testInfo, "ui-locale-picker-ru");
 
   await settings.getByRole("option", { name: "Русский", exact: true }).click();
-  await expect(settings.getByRole("heading", { name: "Общие", exact: true })).toBeVisible();
+  await expect(settings.getByRole("heading", { name: "Профиль", exact: true })).toBeVisible();
   await expect(settings.getByRole("heading", { name: "Язык", exact: true })).toBeVisible();
   await expect(picker).toHaveText("Русский");
   await expect(page.locator("html")).toHaveAttribute("lang", "ru");
