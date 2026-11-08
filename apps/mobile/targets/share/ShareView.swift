@@ -1,3 +1,4 @@
+import Intents
 import SwiftUI
 import UIKit
 
@@ -11,6 +12,8 @@ final class ShareModel: ObservableObject {
   }
 
   let link: SharedLink
+  /// The target id of the share sheet suggestion the person tapped, if any.
+  let suggested: String?
   @Published var phase = Phase.loading
   @Published var targets: [ShareTarget] = []
   @Published var target: ShareTarget?
@@ -22,8 +25,9 @@ final class ShareModel: ObservableObject {
   /// The extension's own memory of where the last link went; empty before the first share.
   private static let lastTargetKey = "lastShareTarget"
 
-  init(link: SharedLink) {
+  init(link: SharedLink, suggested: String?) {
     self.link = link
+    self.suggested = suggested
   }
 
   func load() async {
@@ -36,7 +40,7 @@ final class ShareModel: ObservableObject {
     do {
       targets = try await client.targets()
       let last = UserDefaults.standard.string(forKey: Self.lastTargetKey)
-      target = targets.first { $0.id == last }
+      target = targets.first { $0.id == suggested } ?? targets.first { $0.id == last }
       phase = .ready
     } catch {
       phase = .failed(error.localizedDescription)
@@ -53,11 +57,33 @@ final class ShareModel: ObservableObject {
     do {
       try await client.send(text, to: target)
       UserDefaults.standard.set(target.id, forKey: Self.lastTargetKey)
+      await Self.donate(target)
       return true
     } catch {
       sendError = error.localizedDescription
       return false
     }
+  }
+
+  /// Tells iOS the conversation was used, so the share sheet suggests it next time. The
+  /// conversation id is the target id the extension reads back when a suggestion is tapped.
+  private static func donate(_ target: ShareTarget) async {
+    let group = target.kind == .group
+    let image = target.color.flatMap(UIColor.init(hex:)).flatMap { color in
+      AvatarRenderer.png(
+        shape: AvatarRenderer.shape(seed: target.shapeSeed, botId: target.targetId), color: color)
+    }
+    let bot = INPerson(
+      personHandle: INPersonHandle(value: target.targetId, type: .unknown), nameComponents: nil,
+      displayName: target.name, image: image.map { INImage(imageData: $0) },
+      contactIdentifier: nil, customIdentifier: target.targetId)
+    let intent = INSendMessageIntent(
+      recipients: group ? nil : [bot], outgoingMessageType: .outgoingMessageText, content: nil,
+      speakableGroupName: group ? INSpeakableString(spokenPhrase: target.name) : nil,
+      conversationIdentifier: target.id, serviceName: nil, sender: nil, attachments: nil)
+    let interaction = INInteraction(intent: intent, response: nil)
+    interaction.direction = .outgoing
+    try? await interaction.donate()
   }
 }
 

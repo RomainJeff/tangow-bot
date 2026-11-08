@@ -1,4 +1,4 @@
-import { captureScreenshot, completeOnboarding, openUserSettings, signup } from "./helpers";
+import { captureScreenshot, completeOnboarding, openUserSettings, rpc, signup } from "./helpers";
 import { expect, test } from "./test";
 
 test("settings shell is two-pane and deep-links Models Memory Decision Model Voice Usage", async ({
@@ -20,13 +20,23 @@ test("settings shell is two-pane and deep-links Models Memory Decision Model Voi
 
   const settings = await openUserSettings(page);
   await expect(settings.getByTestId("settings-nav")).toBeVisible();
-  await expect(settings.getByTestId("settings-nav-general")).toHaveAttribute(
+  await expect(settings.getByTestId("settings-nav-profile")).toHaveAttribute(
     "aria-current",
     "page",
   );
-  await expect(settings.getByRole("heading", { name: "General", exact: true })).toBeVisible();
+  await expect(settings.getByRole("heading", { name: "Profile", exact: true })).toBeVisible();
   await expect(settings.getByRole("heading", { name: "Account", exact: true })).toBeVisible();
-  await captureScreenshot(page, testInfo, "settings-shell-general");
+  await expect(settings.getByTestId("advanced-settings")).toHaveCount(0);
+  // One space: its name labels the space group, with nothing to switch to.
+  await expect(settings.getByTestId("settings-space-label")).toBeVisible();
+  await expect(settings.getByTestId("settings-space-switcher")).toHaveCount(0);
+  await captureScreenshot(page, testInfo, "settings-shell-profile");
+
+  await settings.getByTestId("settings-nav-space").click();
+  await expect(settings).toHaveAttribute("data-settings-section", "space");
+  await expect(settings.getByRole("heading", { name: "General", exact: true })).toBeVisible();
+  await expect(settings.getByTestId("advanced-settings")).toBeVisible();
+  await captureScreenshot(page, testInfo, "settings-shell-space-general");
 
   await settings.getByTestId("settings-nav-models").click();
   await expect(settings).toHaveAttribute("data-settings-section", "models");
@@ -79,4 +89,41 @@ test("settings shell is two-pane and deep-links Models Memory Decision Model Voi
   await expect(page.getByTestId("user-settings")).toHaveAttribute("data-settings-section", "usage");
   await expect(page.getByTestId("usage-settings")).toBeVisible();
   await captureScreenshot(page, testInfo, "settings-shell-usage");
+});
+
+test("settings space switcher moves to another space and keeps the section", async ({
+  page,
+}, testInfo) => {
+  const stamp = Date.now();
+  await signup(page, `settings-switch-${stamp}@rakazo.test`, "password12", `Switch ${stamp}`);
+  await completeOnboarding(page);
+  await rpc(page, "spaces/create", { name: "Family" });
+  await page.reload();
+
+  const settings = await openUserSettings(page, "space");
+  const switcher = settings.getByTestId("settings-space-switcher");
+  const menu = page.getByTestId("settings-space-menu");
+  await expect(switcher).not.toContainText("Family");
+  await switcher.click();
+  await expect(menu.getByRole("menuitemradio")).toHaveCount(2);
+  await expect(menu.getByRole("menuitemradio", { checked: true })).not.toContainText("Family");
+  await captureScreenshot(page, testInfo, "settings-space-switcher-open");
+  await page.keyboard.press("Escape");
+
+  // At phone width the nav is a row of tabs; the switcher stays in it.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await settings.getByTestId("settings-nav-profile").click();
+  await expect(settings.getByRole("heading", { name: "Profile", exact: true })).toBeVisible();
+  await captureScreenshot(page, testInfo, "settings-phone-profile");
+  await settings.getByTestId("settings-nav-space").click();
+  await expect(settings.getByRole("heading", { name: "General", exact: true })).toBeVisible();
+  await captureScreenshot(page, testInfo, "settings-phone-space-general");
+  await switcher.click();
+  await expect(menu).toBeVisible();
+  await captureScreenshot(page, testInfo, "settings-phone-switcher-open");
+
+  await menu.getByRole("menuitemradio", { name: "Family" }).click();
+  const reopened = page.getByTestId("user-settings");
+  await expect(reopened).toHaveAttribute("data-settings-section", "space");
+  await expect(reopened.getByTestId("settings-space-switcher")).toContainText("Family");
 });

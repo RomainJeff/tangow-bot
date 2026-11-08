@@ -1,6 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { AvatarStyle } from "@rakazo/contracts";
-import { BotAvatar, Button, Switch, Toggle } from "@rakazo/ui-web";
+import { BotAvatar, Switch, Toggle } from "@rakazo/ui-web";
 import { ChevronDown } from "lucide-react";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
@@ -10,7 +10,6 @@ import {
   useState,
 } from "react";
 import { Link } from "react-router-dom";
-import { ApprovalRulesSettings } from "../components/ApprovalRulesSettings";
 import { DesktopUpdateSection } from "../components/DesktopUpdates";
 import { SoftwareUpdateSection } from "../components/SoftwareUpdateSection";
 import { getDebugMode, setDebugMode } from "../lib/debug-mode";
@@ -23,27 +22,23 @@ import {
 import { UI_LOCALE_LABELS, UI_LOCALES, type UiLocale } from "../lib/ui-locale";
 import { ChangePasswordSection, ProfilePhoto } from "./AccountProfileSettings";
 
-export type SettingsGeneralProps = {
+export type ProfileSettingsProps = {
   email?: string | null;
   name: string;
   initials: string;
   avatarStyle: AvatarStyle;
   onAvatarStyleChange: (style: AvatarStyle) => Promise<void>;
-  messagingEnabled?: boolean;
-  onOpenMessaging?: () => void;
   isDeploymentOwner?: boolean;
 };
 
-export function GeneralSettingsPanels({
+export function ProfileSettingsPanels({
   email,
   name,
   initials,
   avatarStyle,
   onAvatarStyleChange,
-  messagingEnabled = false,
-  onOpenMessaging,
   isDeploymentOwner = false,
-}: SettingsGeneralProps) {
+}: ProfileSettingsProps) {
   const { t } = useLingui();
   const [locale, setLocale] = useState<UiLocale>(() => getActiveUiLocale());
   const localeRequestRef = useRef(0);
@@ -89,20 +84,6 @@ export function GeneralSettingsPanels({
       </section>
 
       <ChangePasswordSection email={email} />
-
-      {messagingEnabled && onOpenMessaging ? (
-        <section className="rounded-card bg-group shadow-group px-4 py-4">
-          <h3 className="text-[15px] font-medium text-foreground">
-            <Trans>Messaging</Trans>
-          </h3>
-          <p className="mt-3 text-[13px] text-muted-foreground/70">
-            <Trans>Chat apps, group channels, and agent connections.</Trans>
-          </p>
-          <Button variant="secondary" className="mt-3 rounded-full" onClick={onOpenMessaging}>
-            <Trans>Manage messaging settings</Trans>
-          </Button>
-        </section>
-      ) : null}
 
       <section className="rounded-card bg-group shadow-group px-4 py-4">
         <h3 className="text-[15px] font-medium text-foreground">
@@ -186,25 +167,6 @@ export function GeneralSettingsPanels({
           <span aria-hidden="true">›</span>
         </Link>
       ) : null}
-
-      <details data-testid="advanced-settings" className="group rounded-card bg-group shadow-group">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 text-[14px] text-foreground/75">
-          <span>
-            <span className="block text-[15px] text-foreground">
-              <Trans>Advanced</Trans>
-            </span>
-            <span className="mt-1 block text-[12.5px] text-muted-foreground/80">
-              <Trans>Optional controls most people never need</Trans>
-            </span>
-          </span>
-          <span aria-hidden="true" className="transition-transform group-open:rotate-90">
-            ›
-          </span>
-        </summary>
-        <div className="border-t border-border px-4 pb-5">
-          <ApprovalRulesSettings />
-        </div>
-      </details>
     </div>
   );
 }

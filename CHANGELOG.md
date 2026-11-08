@@ -6,11 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### 2026-11-04
+### 2026-11-08
 
 #### Added
 
 - **Computer update notices on web, desktop and mobile.** Settings and the computer view show when an existing computer has an update available, with a manual update action. Unrelated application commits no longer count as computer updates.
+
+#### Changed
+
+- Settings on web, desktop, iPhone and Android now show your account first, then the current space with a switcher, so you can change space and edit that space's settings without leaving settings.
+
+### 2026-11-06
+
+#### Added
+
+- **Your bots show up among the suggestions at the top of the iPhone share sheet.** Bots and groups you share links with, and bots that write to you, appear there next to recent chats from other messaging apps, and tapping one opens Tangow's share screen with it already chosen.
+
+### 2026-11-04
+
+#### Added
+
 - **Share a link to a bot or group from any iPhone app.** Pick Tangow in the share sheet and the link goes to the last bot or group you shared with, with an optional message, without leaving the app you were reading; tap To to pick another from any of your spaces.
 
 #### Fixed

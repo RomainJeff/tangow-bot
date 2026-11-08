@@ -125,7 +125,8 @@ export default function Layout() {
                   name="integration-setup"
                   options={{ title: t("Server integrations") }}
                 />
-                <Stack.Screen name="account" options={{ title: t("Account") }} />
+                <Stack.Screen name="account" options={{ title: t("Settings") }} />
+                <Stack.Screen name="profile" options={{ title: t("Account") }} />
                 <Stack.Screen
                   name="change-password"
                   options={{

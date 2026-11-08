@@ -1,50 +1,22 @@
-import type { AvatarStyle, ComputerListItem } from "@rakazo/contracts";
-import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
-import * as ImagePicker from "expo-image-picker";
+import type { ComputerListItem } from "@rakazo/contracts";
+import type { Href } from "expo-router";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Fragment, useCallback, useEffect, useState } from "react";
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAvatarStyle } from "../components/avatar-style";
-import { BotAvatar } from "../components/bot-avatar";
 import { useFocusedRead } from "../components/bot-page/kit";
 import { NativeMenu } from "../components/native-menu";
-import { ServerSheet } from "../components/server-sheet";
+import { NativeSymbol } from "../components/native-symbol";
+import { SettingSwitch } from "../components/setting-switch";
 import { UserAvatar } from "../components/user-avatar";
-import type { MobileBot, MobileMe } from "../lib/api";
-import {
-  currentApiBase,
-  deleteAccount,
-  displayApiHost,
-  fetchProfileImage,
-  loadSessionToken,
-  rpc,
-  selectedSpaceId,
-  signOut,
-  updateProfileImage,
-} from "../lib/api";
+import type { MobileBot, MobileMe, MobileSpaceNavigation } from "../lib/api";
+import { currentApiBase, loadSessionToken, rpc, selectedSpaceId } from "../lib/api";
 import { formatUpdateLabel, getAppVersionInfo } from "../lib/app-version";
-import {
-  getCachedAppearancePreference,
-  mobileTokens,
-  setAppearancePreference,
-} from "../lib/appearance";
-import { explicitSignInRoute } from "../lib/auth-routing";
+import { mobileTokens } from "../lib/appearance";
 import { confirmDeleteBot } from "../lib/bot-lifecycle";
-import { setDebugMode, useDebugMode } from "../lib/debug-mode";
-import { setUiLocale, useI18n } from "../lib/i18n";
+import { useI18n } from "../lib/i18n";
 import { userInitials } from "../lib/inbox";
+import { selectInboxSpace } from "../lib/inbox-spaces";
 import type { LiveNotificationSettings } from "../lib/live-notifications";
 import {
   canPostPromotedNotifications,
@@ -55,73 +27,87 @@ import {
   setLiveNotificationSettings,
 } from "../lib/live-notifications";
 import { native, useThemedStyles } from "../lib/native";
-import {
-  PROFILE_PHOTO_SIZE,
-  profilePhotoDataUrl,
-  setProfilePhoto,
-  useProfilePhoto,
-} from "../lib/profile-photo";
+import { useProfilePhoto } from "../lib/profile-photo";
 import { registerPushToken } from "../lib/push";
-import type { AccountUiLocale } from "../lib/ui-locale";
-import { ACCOUNT_UI_LOCALES, UI_LOCALE_LABELS } from "../lib/ui-locale";
 
-/** Render account settings, including the entry point for voice configuration. */
+/** Settings: the account first, then what belongs to the current space. */
 export default function Account() {
-  const { t, locale } = useI18n();
-  const { read: computers } = useFocusedRead(() => rpc<ComputerListItem[]>("computer/list"), []);
-  const computerUpdateAvailable =
-    computers.kind === "ready" && computers.value.some((item) => item.status.updateAvailable);
+  const { t } = useI18n();
   const router = useRouter();
   const [me, setMe] = useState<MobileMe | null>(null);
-  const [password, setPassword] = useState("");
-  const [localeSaving, setLocaleSaving] = useState(false);
-  const [localeError, setLocaleError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-  const [avatarPending, setAvatarPending] = useState(false);
-  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [spaces, setSpaces] = useState<MobileSpaceNavigation["spaces"]>([]);
+  const [spaceId, setSpaceId] = useState<string | null>(null);
+  const [switching, setSwitching] = useState(false);
+  const { read: computers } = useFocusedRead(
+    () => rpc<ComputerListItem[]>("computer/list"),
+    [spaceId],
+  );
+  const computerUpdateAvailable =
+    computers.kind === "ready" && computers.value.some((item) => item.status.updateAvailable);
   const [notifications, setNotifications] = useState<LiveNotificationSettings>(
     DEFAULT_LIVE_NOTIFICATION_SETTINGS,
   );
   const [notificationsReady, setNotificationsReady] = useState(Platform.OS !== "android");
   const [notificationPending, setNotificationPending] = useState(false);
   const [notificationError, setNotificationError] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [apiBase, setApiBase] = useState(() => currentApiBase());
-  const [serverOpen, setServerOpen] = useState(false);
   const [archivedBots, setArchivedBots] = useState<MobileBot[]>([]);
-  const { avatarStyle, updateAvatarStyle } = useAvatarStyle();
-  const appearance = getCachedAppearancePreference();
-  const debug = useDebugMode();
+  const photo = useProfilePhoto();
   const styles = useThemedStyles(createAccountStyles);
   const versionInfo = getAppVersionInfo();
   const updateLabel = formatUpdateLabel(versionInfo.update, t);
   const versionAccessibility = [versionInfo.nativeLabel, updateLabel].filter(Boolean).join(". ");
+  const space = spaces.find((item) => item.id === spaceId);
+  const spaceRows: { label: string; href: Href }[] = [
+    { label: t("Models"), href: "/models" },
+    { label: t("Voice"), href: "/voice" },
+    { label: t("Computer"), href: "/computer-settings" },
+    { label: t("Integrations"), href: "/integrations" },
+    { label: t("Skills"), href: "/skills" },
+    { label: t("Usage"), href: "/usage" },
+  ];
 
-  useEffect(() => {
-    void rpc<MobileMe>("me")
-      .then(setMe)
-      .catch(() => undefined);
-    void rpc<MobileBot[]>("bots/listArchived")
-      .then(setArchivedBots)
-      .catch(() => undefined);
-    if (Platform.OS === "android") {
-      void getLiveNotificationSettings()
-        .then(setNotifications)
-        .catch(() => undefined)
-        .finally(() => setNotificationsReady(true));
-    }
+  // Everything below the profile belongs to the selected space, so a switch reloads it all.
+  const load = useCallback(async () => {
+    await Promise.all([
+      rpc<MobileMe>("me")
+        .then(setMe)
+        .catch(() => undefined),
+      rpc<MobileSpaceNavigation>("spaces/list")
+        .then((navigation) => {
+          setSpaces(navigation.spaces);
+          setSpaceId(navigation.current.id);
+        })
+        .catch(() => undefined),
+      rpc<MobileBot[]>("bots/listArchived")
+        .then(setArchivedBots)
+        .catch(() => undefined),
+      Platform.OS === "android"
+        ? getLiveNotificationSettings()
+            .then(setNotifications)
+            .catch(() => undefined)
+            .finally(() => setNotificationsReady(true))
+        : undefined,
+    ]);
   }, []);
 
-  const usageLink = (
-    <Pressable
-      accessibilityRole="button"
-      onPress={() => router.push("/usage")}
-      style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
-    >
-      <Text style={styles.settingsTitle}>{t("Usage")}</Text>
-      <Text style={styles.chevron}>›</Text>
-    </Pressable>
-  );
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function switchSpace(nextId: string) {
+    if (nextId === spaceId || switching) return;
+    setSwitching(true);
+    try {
+      if (!(await selectInboxSpace(nextId, load))) throw new Error(t("Could not switch spaces"));
+    } catch (err) {
+      Alert.alert(
+        err instanceof Error ? err.message : t("Could not switch spaces"),
+        t("Try again."),
+      );
+    } finally {
+      setSwitching(false);
+    }
+  }
 
   async function restoreBot(botId: string) {
     try {
@@ -132,32 +118,6 @@ export default function Account() {
         t("Could not restore bot"),
         restoreError instanceof Error ? restoreError.message : t("Try again."),
       );
-    }
-  }
-
-  async function selectAvatarStyle(next: AvatarStyle) {
-    if (next === avatarStyle) return;
-    setAvatarPending(true);
-    setAvatarError(null);
-    try {
-      await updateAvatarStyle(next);
-    } catch {
-      setAvatarError(t("Couldn't update avatars"));
-    } finally {
-      setAvatarPending(false);
-    }
-  }
-
-  async function handleSignOut() {
-    setPending(true);
-    setError(null);
-    try {
-      await signOut();
-      router.dismissAll();
-      router.replace(explicitSignInRoute);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("Could not sign out"));
-      setPending(false);
     }
   }
 
@@ -195,176 +155,97 @@ export default function Account() {
     }
   }
 
-  function confirmDeletion() {
-    setError(null);
-    Alert.alert(
-      t("Delete your account?"),
-      t(
-        "This permanently deletes your account, bots, conversations, memories, files, and saved connections. This cannot be undone.",
-      ),
-      [
-        { text: t("Cancel"), style: "cancel" },
-        {
-          text: t("Delete account"),
-          style: "destructive",
-          onPress: () => void handleDeletion(),
-        },
-      ],
-    );
-  }
-
-  function applyLocale(code: AccountUiLocale) {
-    if (code === locale || localeSaving) return;
-    setLocaleSaving(true);
-    setLocaleError(null);
-    void setUiLocale(code)
-      .catch(() => {
-        setLocaleError(t("Could not change language"));
-      })
-      .finally(() => setLocaleSaving(false));
-  }
-
-  async function handleDeletion() {
-    setPending(true);
-    setError(null);
-    try {
-      await deleteAccount(password);
-      router.dismissAll();
-      router.replace("/sign-in");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("Could not delete account"));
-    } finally {
-      setPending(false);
-    }
-  }
+  const spaceLabel = space ? (
+    <>
+      <View style={styles.spaceTile}>
+        <Text style={styles.spaceInitial}>
+          {Array.from(space.name.trim())[0]?.toUpperCase() ?? "?"}
+        </Text>
+      </View>
+      <Text numberOfLines={1} style={styles.spaceName}>
+        {space.name}
+      </Text>
+    </>
+  ) : null;
 
   return (
     <SafeAreaView edges={["bottom"]} style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.profile}>
-          <Text style={styles.name}>{me?.name || t("Your account")}</Text>
-          {me?.email ? <Text style={styles.email}>{me.email}</Text> : null}
-          <ProfilePhoto initials={userInitials(me?.name ?? "")} />
-        </View>
-        {usageLink}
-
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push("/change-password")}
-          style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
-        >
-          <Text style={styles.settingsTitle}>{t("Change password")}</Text>
-          <Text style={styles.chevron}>›</Text>
-        </Pressable>
-
-        <View accessibilityLabel={t("Appearance")} style={styles.avatarSection}>
-          <Text style={styles.settingsTitle}>{t("Appearance")}</Text>
-          <View style={styles.appearanceOptions}>
-            {(
-              [
-                ["system", "System"],
-                ["light", "Light"],
-                ["dark", "Dark"],
-              ] as const
-            ).map(([value, label]) => {
-              const selected = appearance === value;
-              const translated = t(label);
-              return (
-                <Pressable
-                  key={value}
-                  accessibilityLabel={translated}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  onPress={() => void setAppearancePreference(value)}
-                  style={({ pressed }) => [
-                    styles.appearanceOption,
-                    selected && styles.appearanceOptionSelected,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Text style={styles.appearanceLabel}>{translated}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
+        <View style={styles.group}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/profile")}
+            style={({ pressed }) => [styles.profileRow, pressed && styles.pressed]}
+          >
+            <UserAvatar
+              initials={userInitials(me?.name ?? "")}
+              image={photo}
+              size={56}
+              fontSize={20}
+            />
+            <View style={styles.profileText}>
+              <Text numberOfLines={1} style={styles.name}>
+                {me?.name || t("Your account")}
+              </Text>
+              {me?.email ? (
+                <Text numberOfLines={1} style={styles.email}>
+                  {me.email}
+                </Text>
+              ) : null}
+            </View>
+            <Chevron />
+          </Pressable>
         </View>
 
-        <View accessibilityLabel={t("Debug mode")} style={styles.profile}>
-          <SettingSwitch
-            label={t("Debug mode")}
-            detail={t("Show agent steps, and every run in a bot's activity.")}
-            value={debug}
-            disabled={false}
-            onChange={(next) => void setDebugMode(next)}
-          />
+        <View style={styles.group}>
+          {space && spaces.length > 1 ? (
+            <NativeMenu
+              title={t("Switch space")}
+              accessibilityLabel={t("Switch space")}
+              accessibilityValue={space.name}
+              disabled={switching}
+              options={spaces.map((item) => ({ value: item.id, label: item.name }))}
+              selected={space.id}
+              onSelect={(value) => void switchSpace(value)}
+              style={({ pressed }) => [
+                styles.row,
+                styles.spaceRow,
+                pressed && styles.pressed,
+                switching && styles.disabled,
+              ]}
+            >
+              {spaceLabel}
+              <NativeSymbol
+                ios="chevron.up.chevron.down"
+                android="chevron-expand"
+                size={15}
+                color={native.secondaryLabel}
+              />
+            </NativeMenu>
+          ) : space ? (
+            <View style={[styles.row, styles.spaceRow]}>{spaceLabel}</View>
+          ) : null}
+          {spaceRows.map((row, index) => (
+            <Fragment key={row.label}>
+              {space || index > 0 ? <View style={styles.separator} /> : null}
+              <Pressable
+                accessibilityRole="button"
+                disabled={switching}
+                onPress={() => router.push(row.href)}
+                style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+              >
+                <Text style={styles.rowLabel}>{row.label}</Text>
+                {row.href === "/computer-settings" && computerUpdateAvailable ? (
+                  <Text style={styles.email}>{t("Update available")}</Text>
+                ) : null}
+                <Chevron />
+              </Pressable>
+            </Fragment>
+          ))}
         </View>
-
-        <View accessibilityLabel={t("Avatar style")} style={styles.avatarSection}>
-          <Text style={styles.settingsTitle}>{t("Avatars")}</Text>
-          <View style={styles.avatarOptions}>
-            {(["robot", "organic"] as const).map((style) => {
-              const selected = avatarStyle === style;
-              const styleLabel = style === "robot" ? t("Robot") : t("Organic");
-              return (
-                <Pressable
-                  key={style}
-                  accessibilityLabel={t("{style} avatars", {
-                    style: styleLabel,
-                  })}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected, disabled: avatarPending }}
-                  disabled={avatarPending}
-                  onPress={() => void selectAvatarStyle(style)}
-                  style={({ pressed }) => [
-                    styles.avatarOption,
-                    selected && styles.avatarOptionSelected,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <BotAvatar
-                    color={style === "robot" ? "#8B5CF6" : "#D62F8B"}
-                    identity="avatar-preview"
-                    size={42}
-                    variant={style}
-                  />
-                  <Text style={styles.avatarLabel}>{styleLabel}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          {avatarError ? <Text style={styles.error}>{avatarError}</Text> : null}
-        </View>
-
-        <NativeMenu
-          title={t("Language")}
-          accessibilityLabel={t("Language")}
-          accessibilityValue={UI_LOCALE_LABELS[locale]}
-          disabled={localeSaving}
-          options={ACCOUNT_UI_LOCALES.map((code) => ({
-            value: code,
-            label: UI_LOCALE_LABELS[code],
-          }))}
-          selected={locale}
-          onSelect={(value) => {
-            const code = ACCOUNT_UI_LOCALES.find((locale) => locale === value);
-            if (code) applyLocale(code);
-          }}
-          style={({ pressed }) => [
-            styles.settingsButton,
-            pressed && styles.pressed,
-            localeSaving && { opacity: 0.6 },
-          ]}
-        >
-          <Text style={styles.settingsTitle}>{t("Language")}</Text>
-          <View style={styles.settingsTrailing}>
-            <Text style={styles.settingsValue}>{UI_LOCALE_LABELS[locale]}</Text>
-            <Text style={styles.chevron}>›</Text>
-          </View>
-        </NativeMenu>
-        {localeError ? <Text style={styles.error}>{localeError}</Text> : null}
 
         {Platform.OS === "android" ? (
-          <View accessibilityLabel={t("Notifications")} style={styles.profile}>
+          <View accessibilityLabel={t("Notifications")} style={styles.card}>
             <Text style={styles.settingsTitle}>{t("Notifications")}</Text>
             <SettingSwitch
               label={t("Live working status")}
@@ -420,93 +301,6 @@ export default function Account() {
           </View>
         ) : null}
 
-        <Pressable
-          accessibilityRole="button"
-          disabled={pending}
-          onPress={() => router.push("/models")}
-          style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
-        >
-          <Text style={styles.settingsTitle}>{t("Models")}</Text>
-          <Text style={styles.chevron}>›</Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          disabled={pending}
-          onPress={() => router.push("/computer-settings")}
-          style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
-        >
-          <Text style={styles.settingsTitle}>{t("Computer")}</Text>
-          {computerUpdateAvailable ? (
-            <Text style={styles.email}>{t("Update available")}</Text>
-          ) : null}
-          <Text style={styles.chevron}>›</Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          disabled={pending}
-          onPress={() => router.push("/voice")}
-          style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
-        >
-          <Text style={styles.settingsTitle}>{t("Voice")}</Text>
-          <Text style={styles.chevron}>›</Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          disabled={pending}
-          onPress={() => router.push("/integrations")}
-          style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
-        >
-          <Text style={styles.settingsTitle}>{t("Integrations")}</Text>
-          <Text style={styles.chevron}>›</Text>
-        </Pressable>
-
-        {me?.isDeploymentOwner ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push("/integration-setup")}
-            style={styles.settingsButton}
-          >
-            <Text style={styles.settingsTitle}>{t("Server integrations")}</Text>
-          </Pressable>
-        ) : null}
-
-        <Pressable
-          accessibilityRole="button"
-          disabled={pending}
-          onPress={() => router.push("/skills")}
-          style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
-        >
-          <Text style={styles.settingsTitle}>{t("Skills")}</Text>
-          <Text style={styles.chevron}>›</Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          disabled={pending}
-          onPress={() => setServerOpen(true)}
-          style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}
-        >
-          <Text style={styles.settingsTitle}>{t("Server")}</Text>
-          <View style={styles.settingsTrailing}>
-            <Text numberOfLines={1} style={styles.settingsValue}>
-              {displayApiHost(apiBase)}
-            </Text>
-            <Text style={styles.chevron}>›</Text>
-          </View>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          disabled={pending}
-          onPress={() => void handleSignOut()}
-          style={({ pressed }) => [styles.button, pressed && styles.pressed]}
-        >
-          <Text style={styles.buttonLabel}>{t("Sign out")}</Text>
-        </Pressable>
-
         {archivedBots.length > 0 ? (
           <View style={styles.archivedSection}>
             <Text style={styles.sectionTitle}>{t("Archived bots")}</Text>
@@ -545,205 +339,19 @@ export default function Account() {
             {updateLabel ? <Text style={styles.versionLine}>{updateLabel}</Text> : null}
           </View>
         ) : null}
-
-        <View style={styles.dangerZone}>
-          <Text style={styles.dangerTitle}>{t("Delete account")}</Text>
-          <TextInput
-            accessibilityLabel={t("Current password")}
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!pending}
-            onChangeText={(value) => {
-              setPassword(value);
-              setError(null);
-            }}
-            placeholder={t("Current password")}
-            placeholderTextColor={native.tertiaryLabel}
-            secureTextEntry
-            style={styles.password}
-            textContentType="password"
-            value={password}
-          />
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Pressable
-            accessibilityRole="button"
-            disabled={pending || !password}
-            onPress={confirmDeletion}
-            style={({ pressed }) => [
-              styles.deleteButton,
-              (pending || !password) && styles.disabled,
-              pressed && styles.pressed,
-            ]}
-          >
-            {pending ? (
-              <ActivityIndicator color={mobileTokens().destructiveForeground} />
-            ) : (
-              <Text style={styles.deleteLabel}>{t("Delete account")}</Text>
-            )}
-          </Pressable>
-        </View>
       </ScrollView>
-      <ServerSheet
-        visible={serverOpen}
-        current={apiBase}
-        onClose={() => setServerOpen(false)}
-        onSaved={(url) => {
-          setServerOpen(false);
-          if (url === apiBase) return;
-          // A new origin drops the session with the old one.
-          setApiBase(url);
-          router.dismissAll();
-          router.replace(explicitSignInRoute);
-        }}
-      />
     </SafeAreaView>
   );
 }
 
-/** Square WebP data URL small enough to live on the session user, or null when cancelled. */
-async function encodeProfilePhoto(): Promise<string | null> {
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ["images"],
-    // The square editor is the crop: React Native has no canvas to centre-crop on.
-    allowsEditing: true,
-    aspect: [1, 1],
-    quality: 1,
-  });
-  const asset = result.canceled ? undefined : result.assets[0];
-  if (!asset) return null;
-  const context = ImageManipulator.manipulate(asset.uri);
-  context.resize({ width: PROFILE_PHOTO_SIZE, height: PROFILE_PHOTO_SIZE });
-  const image = await context.renderAsync();
-  const saved = await image.saveAsync({
-    format: SaveFormat.WEBP,
-    compress: 0.8,
-    base64: true,
-  });
-  context.release();
-  image.release();
-  return saved.base64 ?? null;
-}
-
-function ProfilePhoto({ initials }: { initials: string }) {
-  const { t } = useI18n();
-  const styles = useThemedStyles(createAccountStyles);
-  const photo = useProfilePhoto();
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    void fetchProfileImage()
-      .then(setProfilePhoto)
-      .catch(() => undefined);
-  }, []);
-
-  async function save(image: string | null) {
-    setPending(true);
-    setError(null);
-    try {
-      await updateProfileImage(image);
-      setProfilePhoto(image);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t("Could not update your photo"));
-    } finally {
-      setPending(false);
-    }
-  }
-
-  async function pick() {
-    setError(null);
-    let base64: string | null;
-    try {
-      base64 = await encodeProfilePhoto();
-    } catch {
-      setError(t("That image could not be read"));
-      return;
-    }
-    if (base64 === null) return;
-    const encoded = profilePhotoDataUrl(base64);
-    if (!encoded.ok) {
-      setError(
-        encoded.reason === "too-large"
-          ? t("That image is too detailed to store, try a simpler one")
-          : t("That image could not be read"),
-      );
-      return;
-    }
-    await save(encoded.dataUrl);
-  }
-
+function Chevron() {
   return (
-    <View accessibilityLabel={t("Profile photo")} style={styles.photoSection}>
-      <Text style={styles.sectionTitle}>{t("Profile photo")}</Text>
-      <View style={styles.photoRow}>
-        <UserAvatar initials={initials} image={photo} size={56} fontSize={18} />
-        {pending ? <ActivityIndicator color={native.secondaryLabel} /> : null}
-        <Pressable
-          accessibilityRole="button"
-          disabled={pending}
-          onPress={() => void pick()}
-          style={({ pressed }) => [
-            styles.photoAction,
-            pending && styles.disabled,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Text style={styles.restoreLabel}>{photo ? t("Change photo") : t("Add photo")}</Text>
-        </Pressable>
-        {photo ? (
-          <Pressable
-            accessibilityRole="button"
-            disabled={pending}
-            onPress={() => void save(null)}
-            style={({ pressed }) => [
-              styles.photoAction,
-              pending && styles.disabled,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={styles.archivedDeleteLabel}>{t("Remove")}</Text>
-          </Pressable>
-        ) : null}
-      </View>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-    </View>
-  );
-}
-
-function SettingSwitch({
-  label,
-  detail,
-  value,
-  disabled,
-  onChange,
-}: {
-  label: string;
-  detail: string;
-  value: boolean;
-  disabled: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <View
-      style={{
-        minHeight: 54,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-      }}
-    >
-      <View style={{ flex: 1 }}>
-        <Text style={{ color: native.label, fontSize: 15 }}>{label}</Text>
-        <Text style={{ color: native.secondaryLabel, fontSize: 12.5, marginTop: 2 }}>{detail}</Text>
-      </View>
-      <Switch
-        accessibilityLabel={label}
-        accessibilityHint={detail}
-        disabled={disabled}
-        value={value}
-        onValueChange={onChange}
-      />
-    </View>
+    <NativeSymbol
+      ios="chevron.right"
+      android="chevron-forward"
+      size={13}
+      color={native.tertiaryLabel}
+    />
   );
 }
 
@@ -759,11 +367,38 @@ function createAccountStyles() {
       padding: 20,
       gap: 20,
     },
-    profile: {
+    group: {
       borderRadius: 16,
       backgroundColor: native.fill,
-      padding: 18,
-      gap: 4,
+      overflow: "hidden",
+    },
+    row: {
+      minHeight: 50,
+      paddingHorizontal: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    rowLabel: {
+      flex: 1,
+      color: native.label,
+      fontSize: 17,
+    },
+    separator: {
+      height: StyleSheet.hairlineWidth,
+      marginLeft: 16,
+      backgroundColor: native.tertiaryLabel,
+    },
+    profileRow: {
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    profileText: {
+      flex: 1,
+      minWidth: 0,
     },
     name: {
       color: native.label,
@@ -774,17 +409,33 @@ function createAccountStyles() {
       color: native.secondaryLabel,
       fontSize: 15,
     },
-    button: {
-      minHeight: 50,
-      borderRadius: 14,
+    spaceRow: {
+      minHeight: 56,
+    },
+    spaceTile: {
+      width: 32,
+      height: 32,
+      borderRadius: 8,
+      backgroundColor: tokens.primary,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: native.fill,
     },
-    buttonLabel: {
+    spaceInitial: {
+      color: tokens.primaryForeground,
+      fontSize: 15,
+      fontWeight: "600",
+    },
+    spaceName: {
+      flex: 1,
       color: native.label,
       fontSize: 17,
       fontWeight: "600",
+    },
+    card: {
+      borderRadius: 16,
+      backgroundColor: native.fill,
+      padding: 18,
+      gap: 4,
     },
     archivedSection: {
       borderRadius: 16,
@@ -816,103 +467,10 @@ function createAccountStyles() {
       color: tokens.destructive,
       fontSize: 14,
     },
-    photoSection: {
-      marginTop: 14,
-      gap: 12,
-    },
-    photoRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-    },
-    photoAction: {
-      minHeight: 40,
-      borderRadius: 12,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: native.tertiaryLabel,
-      paddingHorizontal: 14,
-      justifyContent: "center",
-    },
-    settingsButton: {
-      minHeight: 62,
-      borderRadius: 14,
-      backgroundColor: native.fill,
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
-    avatarSection: {
-      borderRadius: 16,
-      backgroundColor: native.fill,
-      padding: 18,
-      gap: 14,
-    },
-    appearanceOptions: {
-      flexDirection: "row",
-      gap: 8,
-    },
-    appearanceOption: {
-      flex: 1,
-      minHeight: 44,
-      borderRadius: 12,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: native.tertiaryLabel,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    appearanceOptionSelected: {
-      borderColor: native.label,
-      backgroundColor: native.fillPressed,
-    },
-    appearanceLabel: {
-      color: native.label,
-      fontSize: 14,
-      fontWeight: "600",
-    },
-    avatarOptions: {
-      flexDirection: "row",
-      gap: 12,
-    },
-    avatarOption: {
-      flex: 1,
-      minHeight: 86,
-      borderRadius: 14,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: native.tertiaryLabel,
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 8,
-    },
-    avatarOptionSelected: {
-      borderColor: native.label,
-      backgroundColor: native.fillPressed,
-    },
-    avatarLabel: {
-      color: native.label,
-      fontSize: 14,
-      fontWeight: "600",
-    },
     settingsTitle: {
       color: native.label,
       fontSize: 17,
       fontWeight: "600",
-    },
-    settingsTrailing: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      minWidth: 0,
-    },
-    settingsValue: {
-      color: native.secondaryLabel,
-      fontSize: 15,
-    },
-    chevron: {
-      color: native.secondaryLabel,
-      fontSize: 28,
-      fontWeight: "300",
     },
     versionFooter: {
       marginTop: 4,
@@ -924,44 +482,10 @@ function createAccountStyles() {
       fontSize: 12,
       textAlign: "center",
     },
-    dangerZone: {
-      marginTop: 12,
-      borderRadius: 16,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: tokens.destructive,
-      padding: 18,
-    },
-    dangerTitle: {
-      color: tokens.destructive,
-      fontSize: 17,
-      fontWeight: "600",
-    },
-    password: {
-      height: 48,
-      borderRadius: 12,
-      backgroundColor: native.fill,
-      color: native.label,
-      paddingHorizontal: 14,
-      marginTop: 16,
-      fontSize: 16,
-    },
     error: {
       color: tokens.destructive,
       fontSize: 14,
       marginTop: 10,
-    },
-    deleteButton: {
-      minHeight: 50,
-      borderRadius: 12,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: tokens.destructive,
-      marginTop: 14,
-    },
-    deleteLabel: {
-      color: tokens.destructiveForeground,
-      fontSize: 16,
-      fontWeight: "700",
     },
     disabled: {
       opacity: 0.45,
