@@ -830,7 +830,7 @@ msgstr ""
 msgid "Busy. Try again when idle."
 msgstr ""
 
-#: src/App.tsx:161
+#: src/App.tsx:184
 msgid "Can't reach the server."
 msgstr "无法连接服务器。"
 
@@ -1238,6 +1238,7 @@ msgid "Context limit"
 msgstr "上下文限制"
 
 #: src/components/integrations/IntegrationSetup.tsx:356
+#: src/pages/Invite.tsx:82
 #: src/pages/Onboarding.tsx:664
 msgid "Continue"
 msgstr "继续"
@@ -2499,6 +2500,11 @@ msgstr "间隔数量"
 msgid "Interval unit"
 msgstr "间隔单位"
 
+#. placeholder {0}: state.inviterName
+#: src/pages/Invite.tsx:60
+msgid "Invited by {0}"
+msgstr ""
+
 #: src/pages/bot-page/KnowledgeTab.tsx:106
 #: src/pages/MemorySettingsOverlay.tsx:49
 msgid "Isolated"
@@ -2507,6 +2513,15 @@ msgstr "隔离"
 #: src/pages/shell/dialogs.tsx:349
 msgid "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
 msgstr "它的对话、文件和例行任务将被永久删除。它创建的 Bot 仍留在列表中。"
+
+#: src/pages/Invite.tsx:68
+msgid "Join"
+msgstr ""
+
+#. placeholder {0}: state.spaceName
+#: src/pages/Invite.tsx:57
+msgid "Join {0}"
+msgstr ""
 
 #: src/pages/shell/jump-to-latest.tsx:20
 msgid "Jump to latest"
@@ -2615,7 +2630,7 @@ msgstr ""
 msgid "Loading voice providers…"
 msgstr "正在加载语音提供方…"
 
-#: src/App.tsx:67
+#: src/App.tsx:71
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
@@ -3232,7 +3247,7 @@ msgstr "已打开其对话。"
 msgid "Opening chat…"
 msgstr "正在打开聊天…"
 
-#: src/App.tsx:203
+#: src/App.tsx:226
 msgid "Opening your Space…"
 msgstr "正在打开工作区…"
 
@@ -3459,7 +3474,7 @@ msgstr ""
 msgid "Reconnect OAuth"
 msgstr "重新连接 OAuth"
 
-#: src/App.tsx:159
+#: src/App.tsx:182
 #: src/components/ComputerUpdateProgress.tsx:58
 #: src/pages/shell/screen-frame.tsx:44
 msgid "Reconnecting"
@@ -3708,7 +3723,7 @@ msgstr "结果"
 msgid "Retry"
 msgstr "重试"
 
-#: src/App.tsx:173
+#: src/App.tsx:196
 #: src/pages/PeerMessagesOverlay.tsx:153
 #: src/pages/shell/session-view.tsx:124
 msgid "Retry now"
@@ -4288,6 +4303,10 @@ msgstr "此对话为只读"
 #: src/components/ArtifactFileCard.tsx:132
 msgid "This file is not valid UTF-8 Markdown."
 msgstr "此文件不是有效的 UTF-8 Markdown。"
+
+#: src/pages/Invite.tsx:75
+msgid "This invite link has expired or was already used."
+msgstr ""
 
 #: src/pages/shell/dialogs.tsx:296
 msgid "This permanently removes every message and stops current work. The chat remains available."

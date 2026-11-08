@@ -830,7 +830,7 @@ msgstr ""
 msgid "Busy. Try again when idle."
 msgstr ""
 
-#: src/App.tsx:161
+#: src/App.tsx:184
 msgid "Can't reach the server."
 msgstr "Não é possível acessar o servidor."
 
@@ -1238,6 +1238,7 @@ msgid "Context limit"
 msgstr "Limite de contexto"
 
 #: src/components/integrations/IntegrationSetup.tsx:356
+#: src/pages/Invite.tsx:82
 #: src/pages/Onboarding.tsx:664
 msgid "Continue"
 msgstr "Continuar"
@@ -2499,6 +2500,11 @@ msgstr "Quantidade Intervalo"
 msgid "Interval unit"
 msgstr "Unidade do intervalo:"
 
+#. placeholder {0}: state.inviterName
+#: src/pages/Invite.tsx:60
+msgid "Invited by {0}"
+msgstr ""
+
 #: src/pages/bot-page/KnowledgeTab.tsx:106
 #: src/pages/MemorySettingsOverlay.tsx:49
 msgid "Isolated"
@@ -2507,6 +2513,15 @@ msgstr "Isolado"
 #: src/pages/shell/dialogs.tsx:349
 msgid "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
 msgstr "Suas conversas, arquivos e rotinas serão excluídos permanentemente. Os bots criados ficam na sua lista."
+
+#: src/pages/Invite.tsx:68
+msgid "Join"
+msgstr ""
+
+#. placeholder {0}: state.spaceName
+#: src/pages/Invite.tsx:57
+msgid "Join {0}"
+msgstr ""
 
 #: src/pages/shell/jump-to-latest.tsx:20
 msgid "Jump to latest"
@@ -2615,7 +2630,7 @@ msgstr ""
 msgid "Loading voice providers…"
 msgstr "Carregando provedores de voz..."
 
-#: src/App.tsx:67
+#: src/App.tsx:71
 #: src/pages/IntegrationSetup.tsx:72
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
@@ -3232,7 +3247,7 @@ msgstr "Abriu a conversa."
 msgid "Opening chat…"
 msgstr "Abrindo o chat…"
 
-#: src/App.tsx:203
+#: src/App.tsx:226
 msgid "Opening your Space…"
 msgstr "Abrindo seu espaço de trabalho..."
 
@@ -3459,7 +3474,7 @@ msgstr ""
 msgid "Reconnect OAuth"
 msgstr "Reconectar OAuth"
 
-#: src/App.tsx:159
+#: src/App.tsx:182
 #: src/components/ComputerUpdateProgress.tsx:58
 #: src/pages/shell/screen-frame.tsx:44
 msgid "Reconnecting"
@@ -3708,7 +3723,7 @@ msgstr ""
 msgid "Retry"
 msgstr "Tentar novamente"
 
-#: src/App.tsx:173
+#: src/App.tsx:196
 #: src/pages/PeerMessagesOverlay.tsx:153
 #: src/pages/shell/session-view.tsx:124
 msgid "Retry now"
@@ -4288,6 +4303,10 @@ msgstr "Este chat é somente leitura"
 #: src/components/ArtifactFileCard.tsx:132
 msgid "This file is not valid UTF-8 Markdown."
 msgstr "Este arquivo não é válido UTF-8 Markdown."
+
+#: src/pages/Invite.tsx:75
+msgid "This invite link has expired or was already used."
+msgstr ""
 
 #: src/pages/shell/dialogs.tsx:296
 msgid "This permanently removes every message and stops current work. The chat remains available."

@@ -1,9 +1,10 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Button, Skeleton } from "@rakazo/ui-web";
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
+import { Navigate, Route, Routes, useParams, useSearchParams } from "react-router-dom";
 import { LoadingState } from "./components/ai/primitives";
 import { authClient } from "./lib/auth";
+import { holdInvite, invitePath, pendingInvite } from "./lib/pending-invite";
 import { markAfterPaint, markOnce } from "./lib/performance";
 import { saveStore } from "./lib/save-store";
 import {
@@ -24,6 +25,9 @@ const PasswordResetPage = lazy(() =>
 );
 const OnboardingPage = lazy(() =>
   import("./pages/Onboarding").then((module) => ({ default: module.OnboardingPage })),
+);
+const InvitePage = lazy(() =>
+  import("./pages/Invite").then((module) => ({ default: module.InvitePage })),
 );
 const WelcomePage = lazy(() =>
   import("./pages/Welcome").then((module) => ({ default: module.WelcomePage })),
@@ -70,6 +74,8 @@ export function App() {
   }
 
   const user = session.data?.user;
+  const invite = user ? pendingInvite() : null;
+  const afterAuth = (destination: string) => (invite ? invitePath(invite) : destination);
   return (
     <div className="h-full" data-rakazo-app-state="ready">
       <Suspense fallback={<div className="h-full bg-background" />}>
@@ -78,12 +84,22 @@ export function App() {
           <Route
             path="/sign-in"
             element={
-              user ? <Navigate to={signInDestination} replace /> : <AuthPage key="in" mode="in" />
+              user ? (
+                <Navigate to={afterAuth(signInDestination)} replace />
+              ) : (
+                <AuthPage key="in" mode="in" />
+              )
             }
           />
           <Route
             path="/sign-up"
-            element={user ? <Navigate to="/onboarding" replace /> : <AuthPage key="up" mode="up" />}
+            element={
+              user ? (
+                <Navigate to={afterAuth("/onboarding")} replace />
+              ) : (
+                <AuthPage key="up" mode="up" />
+              )
+            }
           />
           <Route
             path="/forgot-password"
@@ -92,6 +108,7 @@ export function App() {
             }
           />
           <Route path="/reset-password" element={<PasswordResetPage />} />
+          <Route path="/invite/:token" element={user ? <InvitePage /> : <HoldInvite />} />
           <Route
             path="/onboarding"
             element={user ? <OnboardingPage /> : <Navigate to="/sign-in" replace />}
@@ -123,6 +140,12 @@ export function App() {
       </Suspense>
     </div>
   );
+}
+
+function HoldInvite() {
+  const { token = "" } = useParams();
+  holdInvite(token);
+  return <Navigate to="/sign-in" replace />;
 }
 
 /**
