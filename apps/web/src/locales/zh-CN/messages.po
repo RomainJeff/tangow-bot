@@ -233,7 +233,7 @@ msgstr ""
 msgid "{what} · paused"
 msgstr "{what} · 已暂停"
 
-#: src/pages/shell/transcript.tsx:210
+#: src/pages/shell/transcript.tsx:224
 msgid "{workingBotName} is working"
 msgstr "{workingBotName} 正在工作"
 
@@ -268,7 +268,7 @@ msgstr ""
 msgid "Access token (optional)"
 msgstr "访问令牌（可选）"
 
-#: src/pages/AccountSettingsOverlay.tsx:84
+#: src/pages/AccountSettingsOverlay.tsx:79
 msgid "Account"
 msgstr "账户"
 
@@ -294,12 +294,12 @@ msgstr "操作确认"
 #. placeholder {0}: sectionMenu.section.name
 #: src/pages/bot-page/BotPage.tsx:346
 #: src/pages/BotContextMenu.tsx:86
-#: src/pages/shell/shell-overlays.tsx:350
+#: src/pages/shell/shell-overlays.tsx:355
 #: src/pages/shell/sidebar-roster.tsx:149
 msgid "Actions for {0}"
 msgstr "{0} 的操作"
 
-#: src/pages/shell/shell-overlays.tsx:224
+#: src/pages/shell/shell-overlays.tsx:229
 msgid "Actions for space"
 msgstr ""
 
@@ -431,7 +431,6 @@ msgstr ""
 msgid "Adding…"
 msgstr "正在添加…"
 
-#: src/pages/AccountSettingsOverlay.tsx:194
 #: src/pages/DecisionModelSettingsPanel.tsx:132
 #: src/pages/McpServersOverlay.tsx:343
 #: src/pages/model-settings/model-detail.tsx:168
@@ -439,6 +438,7 @@ msgstr "正在添加…"
 #: src/pages/Onboarding.tsx:496
 #: src/pages/plugins/advanced-integrations.tsx:77
 #: src/pages/RoutineSchedule.tsx:47
+#: src/pages/SpaceGeneralSettings.tsx:32
 msgid "Advanced"
 msgstr "高级"
 
@@ -566,8 +566,8 @@ msgstr "API 密钥"
 msgid "API key header"
 msgstr "API 密钥请求头"
 
-#: src/pages/AccountSettingsOverlay.tsx:109
-#: src/pages/AccountSettingsOverlay.tsx:241
+#: src/pages/AccountSettingsOverlay.tsx:90
+#: src/pages/AccountSettingsOverlay.tsx:203
 #: src/pages/bot-page/BotHero.tsx:123
 #: src/pages/bot-page/BotHero.tsx:144
 msgid "Appearance"
@@ -712,7 +712,7 @@ msgstr "自动形状"
 msgid "Available when {0} is idle"
 msgstr "{0} 空闲时可用"
 
-#: src/pages/AccountSettingsOverlay.tsx:151
+#: src/pages/AccountSettingsOverlay.tsx:132
 msgid "Avatars"
 msgstr "头像"
 
@@ -783,7 +783,7 @@ msgid "Bot screen preview"
 msgstr "Bot 屏幕预览"
 
 #: src/pages/shell/composer-pickers.tsx:296
-#: src/pages/shell/shell-overlays.tsx:161
+#: src/pages/shell/shell-overlays.tsx:166
 #: src/pages/shell/thread-header.tsx:171
 #: src/pages/shell/thread-header.tsx:172
 msgid "Bot settings"
@@ -801,7 +801,7 @@ msgstr ""
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "默认情况下 Bot 会直接执行。只有当你想先审核某类操作时，才添加例外。"
 
-#: src/pages/shell/transcript.tsx:211
+#: src/pages/shell/transcript.tsx:225
 msgid "Bots are working"
 msgstr "Bot 正在工作"
 
@@ -906,7 +906,7 @@ msgstr "频道"
 msgid "Chat apps"
 msgstr "聊天应用"
 
-#: src/pages/AccountSettingsOverlay.tsx:99
+#: src/pages/SpaceGeneralSettings.tsx:20
 msgid "Chat apps, group channels, and agent connections."
 msgstr "聊天应用、群组频道和 Agent 连接。"
 
@@ -999,7 +999,7 @@ msgstr "关闭"
 msgid "Close computer"
 msgstr "关闭电脑"
 
-#: src/pages/shell/image-viewer.tsx:110
+#: src/pages/shell/image-viewer.tsx:171
 msgid "Close image preview"
 msgstr "关闭图片预览"
 
@@ -1012,7 +1012,7 @@ msgid "Close MCP servers"
 msgstr "关闭 MCP 服务器"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:107
+#: src/pages/SettingsOverlay.tsx:125
 msgid "Close memory settings"
 msgstr "关闭记忆设置"
 
@@ -1021,7 +1021,7 @@ msgid "Close messaging settings"
 msgstr "关闭消息设置"
 
 #: src/pages/ModelSettingsOverlay.tsx:63
-#: src/pages/SettingsOverlay.tsx:105
+#: src/pages/SettingsOverlay.tsx:123
 msgid "Close model settings"
 msgstr "关闭模型设置"
 
@@ -1038,11 +1038,11 @@ msgstr "关闭预览"
 msgid "Close skills"
 msgstr "关闭技能"
 
-#: src/pages/SettingsOverlay.tsx:110
+#: src/pages/SettingsOverlay.tsx:128
 msgid "Close user settings"
 msgstr "关闭用户设置"
 
-#: src/pages/SettingsOverlay.tsx:109
+#: src/pages/SettingsOverlay.tsx:127
 #: src/pages/VoiceSettingsOverlay.tsx:174
 msgid "Close voice settings"
 msgstr "关闭语音设置"
@@ -1084,7 +1084,7 @@ msgstr "复杂"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:95
+#: src/pages/SettingsOverlay.tsx:115
 #: src/pages/shell/block-views.tsx:131
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
@@ -1658,7 +1658,7 @@ msgstr "无法创建"
 msgid "Couldn't load messaging settings"
 msgstr "无法加载消息设置"
 
-#: src/pages/AccountSettingsOverlay.tsx:74
+#: src/pages/AccountSettingsOverlay.tsx:69
 msgid "Couldn't update avatars"
 msgstr "无法更新头像"
 
@@ -1771,7 +1771,7 @@ msgstr "客户支持"
 msgid "Customize"
 msgstr "自定义"
 
-#: src/pages/AccountSettingsOverlay.tsx:236
+#: src/pages/AccountSettingsOverlay.tsx:198
 msgid "Dark"
 msgstr "深色"
 
@@ -1783,12 +1783,12 @@ msgstr "天"
 msgid "days"
 msgstr "天"
 
-#: src/pages/AccountSettingsOverlay.tsx:124
-#: src/pages/AccountSettingsOverlay.tsx:132
+#: src/pages/AccountSettingsOverlay.tsx:105
+#: src/pages/AccountSettingsOverlay.tsx:113
 msgid "Debug mode"
 msgstr "调试模式"
 
-#: src/pages/SettingsOverlay.tsx:92
+#: src/pages/SettingsOverlay.tsx:114
 msgid "Decision Model"
 msgstr ""
 
@@ -1852,7 +1852,7 @@ msgstr "同时删除记忆"
 msgid "Delete routine"
 msgstr "删除例行任务"
 
-#: src/pages/shell/shell-overlays.tsx:238
+#: src/pages/shell/shell-overlays.tsx:243
 msgid "Delete space"
 msgstr ""
 
@@ -2032,7 +2032,7 @@ msgstr "编辑并重新发送"
 msgid "Edit message"
 msgstr ""
 
-#: src/pages/shell/shell-overlays.tsx:161
+#: src/pages/shell/shell-overlays.tsx:166
 msgid "Edit Profile"
 msgstr "编辑资料"
 
@@ -2259,8 +2259,7 @@ msgstr "全屏"
 msgid "FYI"
 msgstr "供参考"
 
-#: src/pages/SettingsOverlay.tsx:89
-#: src/pages/SettingsOverlay.tsx:101
+#: src/pages/SettingsOverlay.tsx:110
 msgid "General"
 msgstr "通用"
 
@@ -2499,9 +2498,9 @@ msgstr "密钥"
 msgid "Knowledge"
 msgstr "知识"
 
-#: src/pages/AccountSettingsOverlay.tsx:144
-#: src/pages/AccountSettingsOverlay.tsx:357
-#: src/pages/AccountSettingsOverlay.tsx:374
+#: src/pages/AccountSettingsOverlay.tsx:125
+#: src/pages/AccountSettingsOverlay.tsx:319
+#: src/pages/AccountSettingsOverlay.tsx:336
 msgid "Language"
 msgstr "语言"
 
@@ -2525,7 +2524,7 @@ msgstr "退出"
 msgid "Let bots complete multi-step web page tasks faster."
 msgstr ""
 
-#: src/pages/AccountSettingsOverlay.tsx:235
+#: src/pages/AccountSettingsOverlay.tsx:197
 msgid "Light"
 msgstr "浅色"
 
@@ -2541,7 +2540,7 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:250
+#: src/pages/shell/transcript.tsx:264
 msgid "Load earlier messages"
 msgstr "加载更早的消息"
 
@@ -2583,7 +2582,7 @@ msgstr "正在加载语音提供方…"
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
 #: src/pages/shell/session-view.tsx:129
-#: src/pages/shell/transcript.tsx:250
+#: src/pages/shell/transcript.tsx:264
 msgid "Loading…"
 msgstr "加载中…"
 
@@ -2609,7 +2608,7 @@ msgstr "请确认这台电脑上没有仍在运行的任务。"
 msgid "Manage MCP servers"
 msgstr "管理 MCP 服务器"
 
-#: src/pages/AccountSettingsOverlay.tsx:102
+#: src/pages/SpaceGeneralSettings.tsx:23
 msgid "Manage messaging settings"
 msgstr "管理消息设置"
 
@@ -2674,7 +2673,7 @@ msgstr "成员（选择 {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX} 个）"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:36
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:91
+#: src/pages/SettingsOverlay.tsx:113
 msgid "Memory"
 msgstr "记忆"
 
@@ -2736,8 +2735,8 @@ msgstr "消息…"
 msgid "Messaged {peer}"
 msgstr "已发给 {peer}"
 
-#: src/pages/AccountSettingsOverlay.tsx:96
 #: src/pages/MessagingSettingsOverlay.tsx:99
+#: src/pages/SpaceGeneralSettings.tsx:17
 msgid "Messaging"
 msgstr "消息"
 
@@ -2803,7 +2802,7 @@ msgid "Model updated."
 msgstr "模型已更新。"
 
 #: src/pages/ModelSettingsOverlay.tsx:56
-#: src/pages/SettingsOverlay.tsx:90
+#: src/pages/SettingsOverlay.tsx:111
 #: src/pages/usage-settings.tsx:69
 msgid "Models"
 msgstr "模型"
@@ -2917,7 +2916,7 @@ msgstr "新建工作区"
 msgid "Next"
 msgstr ""
 
-#: src/pages/shell/image-viewer.tsx:144
+#: src/pages/shell/image-viewer.tsx:206
 msgid "Next image"
 msgstr "下一张图片"
 
@@ -3139,7 +3138,7 @@ msgstr "每月 1 日 {0}"
 msgid "One-time"
 msgstr "一次性"
 
-#: src/pages/shell/shell-overlays.tsx:276
+#: src/pages/shell/shell-overlays.tsx:281
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
 msgstr ""
 
@@ -3201,7 +3200,7 @@ msgstr ""
 msgid "Optional"
 msgstr "可选"
 
-#: src/pages/AccountSettingsOverlay.tsx:197
+#: src/pages/SpaceGeneralSettings.tsx:35
 msgid "Optional controls most people never need"
 msgstr "多数人用不到的可选项"
 
@@ -3217,7 +3216,7 @@ msgstr "或连接 API 密钥"
 msgid "Or paste an API key"
 msgstr "或粘贴 API 密钥"
 
-#: src/pages/AccountSettingsOverlay.tsx:169
+#: src/pages/AccountSettingsOverlay.tsx:150
 msgid "Organic"
 msgstr "自然"
 
@@ -3311,7 +3310,7 @@ msgstr "POST 到"
 msgid "Preview {0}"
 msgstr "预览 {0}"
 
-#: src/pages/shell/image-viewer.tsx:134
+#: src/pages/shell/image-viewer.tsx:195
 msgid "Previous image"
 msgstr "上一张图片"
 
@@ -3327,6 +3326,10 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx:137
 msgid "Private workspace with its own bots and groups."
 msgstr ""
+
+#: src/pages/SettingsOverlay.tsx:108
+msgid "Profile"
+msgstr "个人资料"
 
 #: src/pages/AccountProfileSettings.tsx:86
 msgid "Profile photo"
@@ -3551,7 +3554,7 @@ msgstr "正在移除…"
 
 #: src/pages/BotContextMenu.tsx:121
 #: src/pages/shell/dialogs.tsx:246
-#: src/pages/shell/shell-overlays.tsx:365
+#: src/pages/shell/shell-overlays.tsx:370
 msgid "Rename section"
 msgstr ""
 
@@ -3650,8 +3653,8 @@ msgstr "结果"
 #: src/pages/bot-page/page-kit.tsx:52
 #: src/pages/bot-page/page-kit.tsx:88
 #: src/pages/ComputerSettingsPanel.tsx:84
-#: src/pages/shell/image-stack.tsx:182
-#: src/pages/shell/image-viewer.tsx:35
+#: src/pages/shell/image-stack.tsx:156
+#: src/pages/shell/image-viewer.tsx:36
 msgid "Retry"
 msgstr "重试"
 
@@ -3678,7 +3681,7 @@ msgstr "版本 {0}"
 msgid "Revoke"
 msgstr "撤销"
 
-#: src/pages/AccountSettingsOverlay.tsx:169
+#: src/pages/AccountSettingsOverlay.tsx:150
 msgid "Robot"
 msgstr "机器人"
 
@@ -3879,7 +3882,7 @@ msgid "Sent"
 msgstr ""
 
 #: src/components/integrations/IntegrationSetup.tsx:129
-#: src/pages/AccountSettingsOverlay.tsx:185
+#: src/pages/AccountSettingsOverlay.tsx:166
 msgid "Server integrations"
 msgstr ""
 
@@ -3897,8 +3900,7 @@ msgstr "服务器 URL"
 
 #: src/pages/bot-page/BotPage.tsx:101
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:101
-#: src/pages/SettingsOverlay.tsx:157
+#: src/pages/SettingsOverlay.tsx:177
 #: src/pages/shell/sidebar-footer.tsx:195
 #: src/pages/shell/sidebar-footer.tsx:202
 msgid "Settings"
@@ -3935,7 +3937,7 @@ msgstr ""
 msgid "Shared documents"
 msgstr "共享文档"
 
-#: src/pages/AccountSettingsOverlay.tsx:127
+#: src/pages/AccountSettingsOverlay.tsx:108
 msgid "Show agent steps, and every run in a bot's activity."
 msgstr "显示智能体步骤，以及机器人动态中的每次运行。"
 
@@ -4144,11 +4146,15 @@ msgstr "支持思考"
 msgid "Switch bot"
 msgstr "切换机器人"
 
+#: src/pages/SettingsOverlay.tsx:385
+msgid "Switch space"
+msgstr "切换空间"
+
 #: src/pages/model-settings/model-detail.tsx:358
 msgid "Switching…"
 msgstr "正在切换…"
 
-#: src/pages/AccountSettingsOverlay.tsx:234
+#: src/pages/AccountSettingsOverlay.tsx:196
 msgid "System"
 msgstr "系统"
 
@@ -4281,7 +4287,7 @@ msgstr "至:"
 
 #: src/pages/bot-page/BotActivity.tsx:256
 #: src/pages/PeerMessagesOverlay.tsx:180
-#: src/pages/shell/image-viewer.tsx:103
+#: src/pages/shell/image-viewer.tsx:164
 #: src/pages/shell/thread-row.tsx:107
 msgid "Today"
 msgstr "今天"
@@ -4388,7 +4394,7 @@ msgstr ""
 msgid "Updated"
 msgstr "已更新"
 
-#: src/pages/SettingsOverlay.tsx:96
+#: src/pages/SettingsOverlay.tsx:109
 msgid "Updates"
 msgstr "更新"
 
@@ -4416,7 +4422,7 @@ msgstr ""
 msgid "Updating…"
 msgstr "正在更新…"
 
-#: src/pages/SettingsOverlay.tsx:94
+#: src/pages/SettingsOverlay.tsx:116
 #: src/pages/shell/sidebar-footer.tsx:207
 #: src/pages/shell/sidebar-footer.tsx:214
 msgid "Usage"
@@ -4446,7 +4452,7 @@ msgstr "正在校验…"
 
 #: src/pages/bot-page/SettingDetails.tsx:185
 #: src/pages/bot-page/SettingDetails.tsx:189
-#: src/pages/SettingsOverlay.tsx:93
+#: src/pages/SettingsOverlay.tsx:112
 #: src/pages/shell/thread-header.tsx:139
 #: src/pages/shell/thread-header.tsx:140
 #: src/pages/VoiceSettingsOverlay.tsx:170
@@ -4559,7 +4565,7 @@ msgstr "每年{date} {time}"
 
 #: src/pages/bot-page/BotActivity.tsx:257
 #: src/pages/PeerMessagesOverlay.tsx:181
-#: src/pages/shell/image-viewer.tsx:104
+#: src/pages/shell/image-viewer.tsx:165
 #: src/pages/shell/thread-row.tsx:108
 msgid "Yesterday"
 msgstr "昨天"

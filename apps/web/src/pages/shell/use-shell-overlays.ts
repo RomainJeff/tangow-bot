@@ -2,7 +2,7 @@ import type { Bot, BotSection, Group, Space, SpaceMemoryConfig } from "@rakazo/c
 import { useCallback, useEffect, useRef, useState } from "react";
 import { rpc } from "../../lib/rpc";
 import type { ContextMenuPosition } from "../BotContextMenu";
-import type { SettingsSection } from "../SettingsOverlay";
+import { type SettingsSection, takeSettingsSectionToReopen } from "../settings-sections";
 import type { RunView } from "./bot-commands";
 import { isCommandPaletteHotkey } from "./command-palette";
 
@@ -16,7 +16,7 @@ export function useShellOverlays(sessionUser: unknown) {
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [mcpOpen, setMcpOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("profile");
   const [messagingSettingsOpen, setMessagingSettingsOpen] = useState(false);
   const [messagingSurfaceEnabled, setMessagingSurfaceEnabled] = useState(false);
   const [messagingProviders, setMessagingProviders] = useState<string[]>([]);
@@ -126,10 +126,17 @@ export function useShellOverlays(sessionUser: unknown) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  function openSettings(section: SettingsSection = "general") {
+  function openSettings(section: SettingsSection = "profile") {
     setSettingsSection(section);
     setSettingsOpen(true);
   }
+
+  useEffect(() => {
+    const section = takeSettingsSectionToReopen();
+    if (!section) return;
+    setSettingsSection(section);
+    setSettingsOpen(true);
+  }, []);
 
   function changeMemoryConfig(config: SpaceMemoryConfig | null) {
     memoryProviderConfigRevision.current += 1;

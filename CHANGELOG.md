@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
-- Settings on iPhone and Android now list your account first, then the current space with a switcher, so you can change space and edit that space's models, voice, computer, integrations, skills and usage without going back to the inbox.
+- Settings on web, desktop, iPhone and Android now show your account first, then the current space with a switcher, so you can change space and edit that space's settings without leaving settings.
 
 ### 2026-11-06
 

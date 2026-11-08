@@ -9,6 +9,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { lazy, Suspense } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import { rpc, selectedSpaceId, selectSpace } from "../../lib/rpc";
+import { reopenSettingsAfterReload } from "../settings-sections";
 import type { BotAction } from "./bot-commands";
 import { CommandPalette } from "./command-palette";
 import {
@@ -60,8 +61,10 @@ export function ShellOverlays({
   navigate,
   runBotAction,
   refreshAgentSkills,
+  openSpaceChat,
   userName,
   initials,
+  userImage,
   email,
 }: {
   overlays: ShellOverlayState;
@@ -73,8 +76,10 @@ export function ShellOverlays({
   navigate: NavigateFunction;
   runBotAction: (botId: string, action: BotAction) => void;
   refreshAgentSkills: () => void;
+  openSpaceChat: (spaceId: string, path: string) => void;
   userName: string;
   initials: string;
+  userImage: string | null;
   email: string | undefined;
 }) {
   const { t } = useLingui();
@@ -445,6 +450,7 @@ export function ShellOverlays({
           <SettingsOverlay
             name={userName}
             initials={initials}
+            image={userImage}
             email={email}
             initialSection={overlays.settingsSection}
             avatarStyle={bootstrapMe?.avatarStyle ?? "organic"}
@@ -460,10 +466,16 @@ export function ShellOverlays({
             }}
             memoryConfig={overlays.memoryProviderConfig}
             onMemoryConfigChange={overlays.changeMemoryConfig}
+            spaces={spaces}
+            currentSpaceId={bootstrapMe?.spaceId}
+            onSwitchSpace={(spaceId, section) => {
+              reopenSettingsAfterReload(section);
+              openSpaceChat(spaceId, "/app");
+            }}
             onVoiceStatusMaybeChanged={voice.refreshVoiceStatus}
             onClose={() => {
               overlays.setSettingsOpen(false);
-              overlays.setSettingsSection("general");
+              overlays.setSettingsSection("profile");
             }}
           />
         ) : null}
