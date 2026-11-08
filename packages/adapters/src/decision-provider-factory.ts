@@ -10,8 +10,11 @@ import {
 import type { EncryptedSecretStore } from "./secrets.js";
 
 export interface DecisionProviderResolver {
-  /** Null when the Space has no usable decision connection; the run carries on without one. */
-  resolve(spaceId: string): Promise<DecisionProvider | null>;
+  /**
+   * Null when the Space has no usable decision connection, or `userId` did not set it up; the
+   * run carries on without one.
+   */
+  resolve(spaceId: string, userId: string): Promise<DecisionProvider | null>;
 }
 
 interface DecisionProviderAdapter {
@@ -77,12 +80,14 @@ export class SpaceDecisionProviderResolver implements DecisionProviderResolver {
     private readonly secrets: EncryptedSecretStore,
   ) {}
 
-  async resolve(spaceId: string): Promise<DecisionProvider | null> {
+  async resolve(spaceId: string, userId: string): Promise<DecisionProvider | null> {
     const config = await this.prisma.spaceDecisionConfig.findUnique({
       where: { spaceId },
       include: { secret: true },
     });
-    if (!config || !DECISION_PROVIDER_ADAPTERS.has(config.provider)) return null;
+    if (!config || config.userId !== userId || !DECISION_PROVIDER_ADAPTERS.has(config.provider)) {
+      return null;
+    }
     const settings = toStringRecord(config.settings);
     if (decisionProviderRequiresDeploymentOwner(config.provider, settings)) {
       const deployment = await this.prisma.deploymentSettings.findUnique({

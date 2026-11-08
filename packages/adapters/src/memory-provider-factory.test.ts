@@ -44,13 +44,19 @@ describe("SpaceMemoryProviderResolver", () => {
         ownerUserId,
       });
 
-      await expect(resolver.resolve("workspace-1")).resolves.toBeNull();
+      await expect(resolver.resolve("workspace-1", "config-author")).resolves.toBeNull();
       expect(secrets.load).not.toHaveBeenCalled();
       expect(fetchMock).not.toHaveBeenCalled();
     },
   );
 
-  it("retains deployment-owner-configured local memory for Space members", async () => {
+  it("gives no memory to a Space member who did not set it up", async () => {
+    const { resolver, secrets } = resolverFor("sm_fake_key");
+    await expect(resolver.resolve("workspace-1", "space-member")).resolves.toBeNull();
+    expect(secrets.load).not.toHaveBeenCalled();
+  });
+
+  it("retains deployment-owner-configured local memory for its author", async () => {
     const fetchMock = vi.fn().mockResolvedValue(Response.json({ results: [] }));
     vi.stubGlobal("fetch", fetchMock);
     const { resolver } = resolverFor("sm_fake_key", {
@@ -58,7 +64,7 @@ describe("SpaceMemoryProviderResolver", () => {
       baseUrl: "http://localhost:6767/memory/",
       ownerUserId: "config-author",
     });
-    const configured = await resolver.resolve("workspace-1");
+    const configured = await resolver.resolve("workspace-1", "config-author");
     await configured!.provider.recall(
       { query: "project", scope: "isolated", botId: "bot-1", limit: 1 },
       {
@@ -80,14 +86,14 @@ describe("SpaceMemoryProviderResolver", () => {
       baseUrl: "http://127.0.0.1:8123/internal-action#",
       ownerUserId: "config-author",
     });
-    await expect(resolver.resolve("workspace-1")).rejects.toThrow(/base URL/);
+    await expect(resolver.resolve("workspace-1", "config-author")).rejects.toThrow(/base URL/);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("loads generic JSON credential payloads", async () => {
     const { resolver, prisma } = resolverFor(JSON.stringify({ apiKey: "sm_json_key" }));
 
-    const configured = await resolver.resolve("workspace-1");
+    const configured = await resolver.resolve("workspace-1", "config-author");
 
     expect(configured?.provider.describe().id).toBe("supermemory");
     expect(configured?.defaultScope).toBe("shared");
@@ -97,7 +103,7 @@ describe("SpaceMemoryProviderResolver", () => {
   it("keeps legacy raw Supermemory credentials usable after the schema migration", async () => {
     const { resolver } = resolverFor("sm_legacy_key");
 
-    const configured = await resolver.resolve("workspace-1");
+    const configured = await resolver.resolve("workspace-1", "config-author");
 
     expect(configured?.provider.describe().id).toBe("supermemory");
   });

@@ -39,7 +39,8 @@ export interface ConfiguredMemoryProvider {
 }
 
 export interface MemoryProviderResolver {
-  resolve(spaceId: string): Promise<ConfiguredMemoryProvider | null>;
+  /** Null unless `userId` set up the Space's memory: it holds that person's memories only. */
+  resolve(spaceId: string, userId: string): Promise<ConfiguredMemoryProvider | null>;
 }
 
 interface MemoryProviderAdapter {
@@ -155,12 +156,12 @@ export class SpaceMemoryProviderResolver implements MemoryProviderResolver {
     private readonly secrets: EncryptedSecretStore,
   ) {}
 
-  async resolve(spaceId: string): Promise<ConfiguredMemoryProvider | null> {
+  async resolve(spaceId: string, userId: string): Promise<ConfiguredMemoryProvider | null> {
     const config = await this.prisma.spaceMemoryConfig.findUnique({
       where: { spaceId },
       include: { secret: true },
     });
-    if (!config) return null;
+    if (!config || config.userId !== userId) return null;
     const settings = toStringRecord(config.settings);
     if (memoryProviderRequiresDeploymentOwner(config.provider, settings)) {
       const deployment = await this.prisma.deploymentSettings.findUnique({

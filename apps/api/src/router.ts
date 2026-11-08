@@ -401,10 +401,12 @@ async function purgeCompactedHistoryMemory(
   reason: string,
 ): Promise<void> {
   if (target.kind !== "bot") return;
-  const configuredMemory = await deps.memoryProviders.resolve(actor.spaceId).catch((error) => {
-    getLogger().error(`semantic memory resolution after ${reason} failed`, error);
-    return null;
-  });
+  const configuredMemory = await deps.memoryProviders
+    .resolve(actor.spaceId, actor.userId)
+    .catch((error) => {
+      getLogger().error(`semantic memory resolution after ${reason} failed`, error);
+      return null;
+    });
   if (!configuredMemory) return;
   // Best effort: the conversation rows are already deleted, so failing the request here would
   // help nothing — a failed purge only leaves stale summaries recallable.
