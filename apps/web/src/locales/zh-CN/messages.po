@@ -438,7 +438,7 @@ msgstr "正在添加…"
 #: src/pages/Onboarding.tsx:496
 #: src/pages/plugins/advanced-integrations.tsx:77
 #: src/pages/RoutineSchedule.tsx:47
-#: src/pages/SpaceGeneralSettings.tsx:32
+#: src/pages/SpaceGeneralSettings.tsx:42
 msgid "Advanced"
 msgstr "高级"
 
@@ -906,7 +906,7 @@ msgstr "频道"
 msgid "Chat apps"
 msgstr "聊天应用"
 
-#: src/pages/SpaceGeneralSettings.tsx:20
+#: src/pages/SpaceGeneralSettings.tsx:30
 msgid "Chat apps, group channels, and agent connections."
 msgstr "聊天应用、群组频道和 Agent 连接。"
 
@@ -1012,7 +1012,7 @@ msgid "Close MCP servers"
 msgstr "关闭 MCP 服务器"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:125
+#: src/pages/SettingsOverlay.tsx:127
 msgid "Close memory settings"
 msgstr "关闭记忆设置"
 
@@ -1021,7 +1021,7 @@ msgid "Close messaging settings"
 msgstr "关闭消息设置"
 
 #: src/pages/ModelSettingsOverlay.tsx:63
-#: src/pages/SettingsOverlay.tsx:123
+#: src/pages/SettingsOverlay.tsx:125
 msgid "Close model settings"
 msgstr "关闭模型设置"
 
@@ -1038,11 +1038,11 @@ msgstr "关闭预览"
 msgid "Close skills"
 msgstr "关闭技能"
 
-#: src/pages/SettingsOverlay.tsx:128
+#: src/pages/SettingsOverlay.tsx:130
 msgid "Close user settings"
 msgstr "关闭用户设置"
 
-#: src/pages/SettingsOverlay.tsx:127
+#: src/pages/SettingsOverlay.tsx:129
 #: src/pages/VoiceSettingsOverlay.tsx:174
 msgid "Close voice settings"
 msgstr "关闭语音设置"
@@ -1084,7 +1084,7 @@ msgstr "复杂"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:115
+#: src/pages/SettingsOverlay.tsx:117
 #: src/pages/shell/block-views.tsx:131
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
@@ -1658,6 +1658,10 @@ msgstr "无法创建"
 msgid "Couldn't load messaging settings"
 msgstr "无法加载消息设置"
 
+#: src/pages/SpaceGeneralSettings.tsx:92
+msgid "Couldn't rename the space"
+msgstr "无法重命名空间"
+
 #: src/pages/AccountSettingsOverlay.tsx:69
 msgid "Couldn't update avatars"
 msgstr "无法更新头像"
@@ -1788,7 +1792,7 @@ msgstr "天"
 msgid "Debug mode"
 msgstr "调试模式"
 
-#: src/pages/SettingsOverlay.tsx:114
+#: src/pages/SettingsOverlay.tsx:116
 msgid "Decision Model"
 msgstr ""
 
@@ -2259,7 +2263,7 @@ msgstr "全屏"
 msgid "FYI"
 msgstr "供参考"
 
-#: src/pages/SettingsOverlay.tsx:110
+#: src/pages/SettingsOverlay.tsx:112
 msgid "General"
 msgstr "通用"
 
@@ -2608,7 +2612,7 @@ msgstr "请确认这台电脑上没有仍在运行的任务。"
 msgid "Manage MCP servers"
 msgstr "管理 MCP 服务器"
 
-#: src/pages/SpaceGeneralSettings.tsx:23
+#: src/pages/SpaceGeneralSettings.tsx:33
 msgid "Manage messaging settings"
 msgstr "管理消息设置"
 
@@ -2673,7 +2677,7 @@ msgstr "成员（选择 {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX} 个）"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:36
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:113
+#: src/pages/SettingsOverlay.tsx:115
 msgid "Memory"
 msgstr "记忆"
 
@@ -2736,7 +2740,7 @@ msgid "Messaged {peer}"
 msgstr "已发给 {peer}"
 
 #: src/pages/MessagingSettingsOverlay.tsx:99
-#: src/pages/SpaceGeneralSettings.tsx:17
+#: src/pages/SpaceGeneralSettings.tsx:27
 msgid "Messaging"
 msgstr "消息"
 
@@ -2802,7 +2806,7 @@ msgid "Model updated."
 msgstr "模型已更新。"
 
 #: src/pages/ModelSettingsOverlay.tsx:56
-#: src/pages/SettingsOverlay.tsx:111
+#: src/pages/SettingsOverlay.tsx:113
 #: src/pages/usage-settings.tsx:69
 msgid "Models"
 msgstr "模型"
@@ -2848,6 +2852,7 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx:72
 #: src/pages/shell/dialogs.tsx:187
 #: src/pages/shell/dialogs.tsx:250
+#: src/pages/SpaceGeneralSettings.tsx:105
 msgid "Name"
 msgstr "名称"
 
@@ -3200,7 +3205,7 @@ msgstr ""
 msgid "Optional"
 msgstr "可选"
 
-#: src/pages/SpaceGeneralSettings.tsx:35
+#: src/pages/SpaceGeneralSettings.tsx:45
 msgid "Optional controls most people never need"
 msgstr "多数人用不到的可选项"
 
@@ -3327,7 +3332,7 @@ msgstr ""
 msgid "Private workspace with its own bots and groups."
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:108
+#: src/pages/SettingsOverlay.tsx:110
 msgid "Profile"
 msgstr "个人资料"
 
@@ -3900,7 +3905,7 @@ msgstr "服务器 URL"
 
 #: src/pages/bot-page/BotPage.tsx:101
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:177
+#: src/pages/SettingsOverlay.tsx:179
 #: src/pages/shell/sidebar-footer.tsx:195
 #: src/pages/shell/sidebar-footer.tsx:202
 msgid "Settings"
@@ -4146,7 +4151,7 @@ msgstr "支持思考"
 msgid "Switch bot"
 msgstr "切换机器人"
 
-#: src/pages/SettingsOverlay.tsx:385
+#: src/pages/SettingsOverlay.tsx:388
 msgid "Switch space"
 msgstr "切换空间"
 
@@ -4394,7 +4399,7 @@ msgstr ""
 msgid "Updated"
 msgstr "已更新"
 
-#: src/pages/SettingsOverlay.tsx:109
+#: src/pages/SettingsOverlay.tsx:111
 msgid "Updates"
 msgstr "更新"
 
@@ -4422,7 +4427,7 @@ msgstr ""
 msgid "Updating…"
 msgstr "正在更新…"
 
-#: src/pages/SettingsOverlay.tsx:116
+#: src/pages/SettingsOverlay.tsx:118
 #: src/pages/shell/sidebar-footer.tsx:207
 #: src/pages/shell/sidebar-footer.tsx:214
 msgid "Usage"
@@ -4452,7 +4457,7 @@ msgstr "正在校验…"
 
 #: src/pages/bot-page/SettingDetails.tsx:185
 #: src/pages/bot-page/SettingDetails.tsx:189
-#: src/pages/SettingsOverlay.tsx:112
+#: src/pages/SettingsOverlay.tsx:114
 #: src/pages/shell/thread-header.tsx:139
 #: src/pages/shell/thread-header.tsx:140
 #: src/pages/VoiceSettingsOverlay.tsx:170

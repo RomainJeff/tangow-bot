@@ -36,7 +36,13 @@ type NativeMenuProps = {
   accessibilityValue?: string;
 } & (
   | { actions: MenuAction[] }
-  | { options: MenuOption[]; selected: string; onSelect: (value: string) => void }
+  | {
+      options: MenuOption[];
+      selected: string;
+      onSelect: (value: string) => void;
+      /** Follow the options, set apart by a divider on iOS. */
+      actions?: MenuAction[];
+    }
 );
 
 /**
@@ -72,7 +78,15 @@ function IosMenu(props: NativeMenuProps) {
         onPrimaryAction={onPrimaryAction}
         modifiers={[disabledWhen(!!disabled)]}
       >
-        {"options" in props ? <ValueItems {...props} /> : <ActionItems actions={props.actions} />}
+        {"options" in props ? (
+          <>
+            {props.options.length ? <ValueItems {...props} /> : null}
+            {props.options.length && props.actions?.length ? <Divider /> : null}
+            {props.actions?.length ? <ActionItems actions={props.actions} /> : null}
+          </>
+        ) : (
+          <ActionItems actions={props.actions} />
+        )}
       </Menu>
     </Host>
   );
@@ -134,10 +148,13 @@ function AndroidMenu(props: NativeMenuProps) {
   const present = useActionSheet(title);
   const actions: MenuAction[] =
     "options" in props
-      ? props.options.map((option) => ({
-          label: option.label,
-          onPress: () => props.onSelect(option.value),
-        }))
+      ? [
+          ...props.options.map((option) => ({
+            label: option.label,
+            onPress: () => props.onSelect(option.value),
+          })),
+          ...(props.actions ?? []),
+        ]
       : props.actions;
   const open = onAndroidOpen ?? (() => present(actions));
   return (

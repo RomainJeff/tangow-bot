@@ -438,7 +438,7 @@ msgstr "Добавление…"
 #: src/pages/Onboarding.tsx:496
 #: src/pages/plugins/advanced-integrations.tsx:77
 #: src/pages/RoutineSchedule.tsx:47
-#: src/pages/SpaceGeneralSettings.tsx:32
+#: src/pages/SpaceGeneralSettings.tsx:42
 msgid "Advanced"
 msgstr "Расширенные"
 
@@ -906,7 +906,7 @@ msgstr "Каналы"
 msgid "Chat apps"
 msgstr "Приложения для чата"
 
-#: src/pages/SpaceGeneralSettings.tsx:20
+#: src/pages/SpaceGeneralSettings.tsx:30
 msgid "Chat apps, group channels, and agent connections."
 msgstr "Приложения чата, групповые каналы и подключения агентов."
 
@@ -1012,7 +1012,7 @@ msgid "Close MCP servers"
 msgstr "Закрыть серверы MCP"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:125
+#: src/pages/SettingsOverlay.tsx:127
 msgid "Close memory settings"
 msgstr "Закрыть настройки памяти"
 
@@ -1021,7 +1021,7 @@ msgid "Close messaging settings"
 msgstr "Закрыть настройки обмена сообщениями"
 
 #: src/pages/ModelSettingsOverlay.tsx:63
-#: src/pages/SettingsOverlay.tsx:123
+#: src/pages/SettingsOverlay.tsx:125
 msgid "Close model settings"
 msgstr "Закрыть настройки модели"
 
@@ -1038,11 +1038,11 @@ msgstr "Закрыть предварительный просмотр"
 msgid "Close skills"
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:128
+#: src/pages/SettingsOverlay.tsx:130
 msgid "Close user settings"
 msgstr "Закрыть настройки пользователя"
 
-#: src/pages/SettingsOverlay.tsx:127
+#: src/pages/SettingsOverlay.tsx:129
 #: src/pages/VoiceSettingsOverlay.tsx:174
 msgid "Close voice settings"
 msgstr "Закрыть настройки голоса"
@@ -1084,7 +1084,7 @@ msgstr "Сложно"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:115
+#: src/pages/SettingsOverlay.tsx:117
 #: src/pages/shell/block-views.tsx:131
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
@@ -1658,6 +1658,10 @@ msgstr "Не удалось создать"
 msgid "Couldn't load messaging settings"
 msgstr "Не удалось загрузить настройки обмена сообщениями."
 
+#: src/pages/SpaceGeneralSettings.tsx:92
+msgid "Couldn't rename the space"
+msgstr "Не удалось переименовать пространство"
+
 #: src/pages/AccountSettingsOverlay.tsx:69
 msgid "Couldn't update avatars"
 msgstr "Не удалось обновить аватары"
@@ -1788,7 +1792,7 @@ msgstr "дни"
 msgid "Debug mode"
 msgstr "Режим отладки"
 
-#: src/pages/SettingsOverlay.tsx:114
+#: src/pages/SettingsOverlay.tsx:116
 msgid "Decision Model"
 msgstr ""
 
@@ -2259,7 +2263,7 @@ msgstr "Полноэкранный"
 msgid "FYI"
 msgstr "К сведению"
 
-#: src/pages/SettingsOverlay.tsx:110
+#: src/pages/SettingsOverlay.tsx:112
 msgid "General"
 msgstr "Общие"
 
@@ -2608,7 +2612,7 @@ msgstr ""
 msgid "Manage MCP servers"
 msgstr "Управление серверами MCP"
 
-#: src/pages/SpaceGeneralSettings.tsx:23
+#: src/pages/SpaceGeneralSettings.tsx:33
 msgid "Manage messaging settings"
 msgstr "Управление настройками обмена сообщениями"
 
@@ -2673,7 +2677,7 @@ msgstr "Участники (выберите {GROUP_MEMBER_MIN}–{GROUP_MEMBER_
 
 #: src/pages/bot-page/KnowledgeTab.tsx:36
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:113
+#: src/pages/SettingsOverlay.tsx:115
 msgid "Memory"
 msgstr "Память"
 
@@ -2736,7 +2740,7 @@ msgid "Messaged {peer}"
 msgstr "Отправлено сообщение {peer}"
 
 #: src/pages/MessagingSettingsOverlay.tsx:99
-#: src/pages/SpaceGeneralSettings.tsx:17
+#: src/pages/SpaceGeneralSettings.tsx:27
 msgid "Messaging"
 msgstr "Обмен сообщениями"
 
@@ -2802,7 +2806,7 @@ msgid "Model updated."
 msgstr "Модель обновлена."
 
 #: src/pages/ModelSettingsOverlay.tsx:56
-#: src/pages/SettingsOverlay.tsx:111
+#: src/pages/SettingsOverlay.tsx:113
 #: src/pages/usage-settings.tsx:69
 msgid "Models"
 msgstr "Модели"
@@ -2848,6 +2852,7 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx:72
 #: src/pages/shell/dialogs.tsx:187
 #: src/pages/shell/dialogs.tsx:250
+#: src/pages/SpaceGeneralSettings.tsx:105
 msgid "Name"
 msgstr "Имя"
 
@@ -3200,7 +3205,7 @@ msgstr ""
 msgid "Optional"
 msgstr "Необязательно"
 
-#: src/pages/SpaceGeneralSettings.tsx:35
+#: src/pages/SpaceGeneralSettings.tsx:45
 msgid "Optional controls most people never need"
 msgstr "Дополнительные элементы управления, которые большинству людей никогда не понадобятся"
 
@@ -3327,7 +3332,7 @@ msgstr ""
 msgid "Private workspace with its own bots and groups."
 msgstr "Приватное пространство со своими ботами и группами."
 
-#: src/pages/SettingsOverlay.tsx:108
+#: src/pages/SettingsOverlay.tsx:110
 msgid "Profile"
 msgstr "Профиль"
 
@@ -3900,7 +3905,7 @@ msgstr "URL-адрес сервера"
 
 #: src/pages/bot-page/BotPage.tsx:101
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:177
+#: src/pages/SettingsOverlay.tsx:179
 #: src/pages/shell/sidebar-footer.tsx:195
 #: src/pages/shell/sidebar-footer.tsx:202
 msgid "Settings"
@@ -4146,7 +4151,7 @@ msgstr "Поддерживает рассуждения"
 msgid "Switch bot"
 msgstr "Сменить бота"
 
-#: src/pages/SettingsOverlay.tsx:385
+#: src/pages/SettingsOverlay.tsx:388
 msgid "Switch space"
 msgstr "Сменить пространство"
 
@@ -4394,7 +4399,7 @@ msgstr "Ход обновления"
 msgid "Updated"
 msgstr "Обновлено"
 
-#: src/pages/SettingsOverlay.tsx:109
+#: src/pages/SettingsOverlay.tsx:111
 msgid "Updates"
 msgstr "Обновления"
 
@@ -4422,7 +4427,7 @@ msgstr "Обновление компьютера команды"
 msgid "Updating…"
 msgstr "Обновление…"
 
-#: src/pages/SettingsOverlay.tsx:116
+#: src/pages/SettingsOverlay.tsx:118
 #: src/pages/shell/sidebar-footer.tsx:207
 #: src/pages/shell/sidebar-footer.tsx:214
 msgid "Usage"
@@ -4452,7 +4457,7 @@ msgstr "Проверка…"
 
 #: src/pages/bot-page/SettingDetails.tsx:185
 #: src/pages/bot-page/SettingDetails.tsx:189
-#: src/pages/SettingsOverlay.tsx:112
+#: src/pages/SettingsOverlay.tsx:114
 #: src/pages/shell/thread-header.tsx:139
 #: src/pages/shell/thread-header.tsx:140
 #: src/pages/VoiceSettingsOverlay.tsx:170

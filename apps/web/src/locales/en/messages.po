@@ -438,7 +438,7 @@ msgstr "Adding…"
 #: src/pages/Onboarding.tsx:496
 #: src/pages/plugins/advanced-integrations.tsx:77
 #: src/pages/RoutineSchedule.tsx:47
-#: src/pages/SpaceGeneralSettings.tsx:32
+#: src/pages/SpaceGeneralSettings.tsx:42
 msgid "Advanced"
 msgstr "Advanced"
 
@@ -906,7 +906,7 @@ msgstr "Channels"
 msgid "Chat apps"
 msgstr "Chat apps"
 
-#: src/pages/SpaceGeneralSettings.tsx:20
+#: src/pages/SpaceGeneralSettings.tsx:30
 msgid "Chat apps, group channels, and agent connections."
 msgstr "Chat apps, group channels, and agent connections."
 
@@ -1012,7 +1012,7 @@ msgid "Close MCP servers"
 msgstr "Close MCP servers"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:125
+#: src/pages/SettingsOverlay.tsx:127
 msgid "Close memory settings"
 msgstr "Close memory settings"
 
@@ -1021,7 +1021,7 @@ msgid "Close messaging settings"
 msgstr "Close messaging settings"
 
 #: src/pages/ModelSettingsOverlay.tsx:63
-#: src/pages/SettingsOverlay.tsx:123
+#: src/pages/SettingsOverlay.tsx:125
 msgid "Close model settings"
 msgstr "Close model settings"
 
@@ -1038,11 +1038,11 @@ msgstr "Close preview"
 msgid "Close skills"
 msgstr "Close skills"
 
-#: src/pages/SettingsOverlay.tsx:128
+#: src/pages/SettingsOverlay.tsx:130
 msgid "Close user settings"
 msgstr "Close user settings"
 
-#: src/pages/SettingsOverlay.tsx:127
+#: src/pages/SettingsOverlay.tsx:129
 #: src/pages/VoiceSettingsOverlay.tsx:174
 msgid "Close voice settings"
 msgstr "Close voice settings"
@@ -1084,7 +1084,7 @@ msgstr "Complex"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:115
+#: src/pages/SettingsOverlay.tsx:117
 #: src/pages/shell/block-views.tsx:131
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
@@ -1658,6 +1658,10 @@ msgstr "Couldn't create"
 msgid "Couldn't load messaging settings"
 msgstr "Couldn't load messaging settings"
 
+#: src/pages/SpaceGeneralSettings.tsx:92
+msgid "Couldn't rename the space"
+msgstr "Couldn't rename the space"
+
 #: src/pages/AccountSettingsOverlay.tsx:69
 msgid "Couldn't update avatars"
 msgstr "Couldn't update avatars"
@@ -1788,7 +1792,7 @@ msgstr "days"
 msgid "Debug mode"
 msgstr "Debug mode"
 
-#: src/pages/SettingsOverlay.tsx:114
+#: src/pages/SettingsOverlay.tsx:116
 msgid "Decision Model"
 msgstr "Decision Model"
 
@@ -2259,7 +2263,7 @@ msgstr "Fullscreen"
 msgid "FYI"
 msgstr "FYI"
 
-#: src/pages/SettingsOverlay.tsx:110
+#: src/pages/SettingsOverlay.tsx:112
 msgid "General"
 msgstr "General"
 
@@ -2608,7 +2612,7 @@ msgstr "Make sure nothing is still running on this computer."
 msgid "Manage MCP servers"
 msgstr "Manage MCP servers"
 
-#: src/pages/SpaceGeneralSettings.tsx:23
+#: src/pages/SpaceGeneralSettings.tsx:33
 msgid "Manage messaging settings"
 msgstr "Manage messaging settings"
 
@@ -2673,7 +2677,7 @@ msgstr "Members (pick {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:36
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:113
+#: src/pages/SettingsOverlay.tsx:115
 msgid "Memory"
 msgstr "Memory"
 
@@ -2736,7 +2740,7 @@ msgid "Messaged {peer}"
 msgstr "Messaged {peer}"
 
 #: src/pages/MessagingSettingsOverlay.tsx:99
-#: src/pages/SpaceGeneralSettings.tsx:17
+#: src/pages/SpaceGeneralSettings.tsx:27
 msgid "Messaging"
 msgstr "Messaging"
 
@@ -2802,7 +2806,7 @@ msgid "Model updated."
 msgstr "Model updated."
 
 #: src/pages/ModelSettingsOverlay.tsx:56
-#: src/pages/SettingsOverlay.tsx:111
+#: src/pages/SettingsOverlay.tsx:113
 #: src/pages/usage-settings.tsx:69
 msgid "Models"
 msgstr "Models"
@@ -2848,6 +2852,7 @@ msgstr "Mute"
 #: src/pages/shell/dialogs.tsx:72
 #: src/pages/shell/dialogs.tsx:187
 #: src/pages/shell/dialogs.tsx:250
+#: src/pages/SpaceGeneralSettings.tsx:105
 msgid "Name"
 msgstr "Name"
 
@@ -3200,7 +3205,7 @@ msgstr "OpenRouter API key"
 msgid "Optional"
 msgstr "Optional"
 
-#: src/pages/SpaceGeneralSettings.tsx:35
+#: src/pages/SpaceGeneralSettings.tsx:45
 msgid "Optional controls most people never need"
 msgstr "Optional controls most people never need"
 
@@ -3327,7 +3332,7 @@ msgstr "Private Computer"
 msgid "Private workspace with its own bots and groups."
 msgstr "Private workspace with its own bots and groups."
 
-#: src/pages/SettingsOverlay.tsx:108
+#: src/pages/SettingsOverlay.tsx:110
 msgid "Profile"
 msgstr "Profile"
 
@@ -3900,7 +3905,7 @@ msgstr "Server URL"
 
 #: src/pages/bot-page/BotPage.tsx:101
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:177
+#: src/pages/SettingsOverlay.tsx:179
 #: src/pages/shell/sidebar-footer.tsx:195
 #: src/pages/shell/sidebar-footer.tsx:202
 msgid "Settings"
@@ -4146,7 +4151,7 @@ msgstr "Supports thinking"
 msgid "Switch bot"
 msgstr "Switch bot"
 
-#: src/pages/SettingsOverlay.tsx:385
+#: src/pages/SettingsOverlay.tsx:388
 msgid "Switch space"
 msgstr "Switch space"
 
@@ -4394,7 +4399,7 @@ msgstr "Update progress"
 msgid "Updated"
 msgstr "Updated"
 
-#: src/pages/SettingsOverlay.tsx:109
+#: src/pages/SettingsOverlay.tsx:111
 msgid "Updates"
 msgstr "Updates"
 
@@ -4422,7 +4427,7 @@ msgstr "Updating Team Computer"
 msgid "Updating…"
 msgstr "Updating…"
 
-#: src/pages/SettingsOverlay.tsx:116
+#: src/pages/SettingsOverlay.tsx:118
 #: src/pages/shell/sidebar-footer.tsx:207
 #: src/pages/shell/sidebar-footer.tsx:214
 msgid "Usage"
@@ -4452,7 +4457,7 @@ msgstr "Verifying…"
 
 #: src/pages/bot-page/SettingDetails.tsx:185
 #: src/pages/bot-page/SettingDetails.tsx:189
-#: src/pages/SettingsOverlay.tsx:112
+#: src/pages/SettingsOverlay.tsx:114
 #: src/pages/shell/thread-header.tsx:139
 #: src/pages/shell/thread-header.tsx:140
 #: src/pages/VoiceSettingsOverlay.tsx:170

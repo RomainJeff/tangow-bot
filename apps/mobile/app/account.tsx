@@ -1,7 +1,17 @@
 import type { Href } from "expo-router";
 import { useRouter } from "expo-router";
 import { Fragment, useCallback, useEffect, useState } from "react";
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Alert,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { NativeMenu } from "../components/native-menu";
 import { NativeSymbol } from "../components/native-symbol";
@@ -24,7 +34,7 @@ import {
   openPromotedNotificationSettings,
   setLiveNotificationSettings,
 } from "../lib/live-notifications";
-import { native, useThemedStyles } from "../lib/native";
+import { native, useMobileTokens, useThemedStyles } from "../lib/native";
 import { useProfilePhoto } from "../lib/profile-photo";
 import { registerPushToken } from "../lib/push";
 
@@ -36,6 +46,7 @@ export default function Account() {
   const [spaces, setSpaces] = useState<MobileSpaceNavigation["spaces"]>([]);
   const [spaceId, setSpaceId] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const [notifications, setNotifications] = useState<LiveNotificationSettings>(
     DEFAULT_LIVE_NOTIFICATION_SETTINGS,
   );
@@ -98,6 +109,38 @@ export default function Account() {
       );
     } finally {
       setSwitching(false);
+    }
+  }
+
+  function promptRename() {
+    if (!space) return;
+    if (Platform.OS !== "ios") {
+      setRenaming(true);
+      return;
+    }
+    Alert.prompt(
+      t("Rename space"),
+      undefined,
+      [
+        { text: t("Cancel"), style: "cancel" },
+        { text: t("Save"), onPress: (value?: string) => void renameSpace(value ?? "") },
+      ],
+      "plain-text",
+      space.name,
+    );
+  }
+
+  async function renameSpace(value: string) {
+    const name = value.trim();
+    if (!space || !name || name === space.name) return;
+    try {
+      await rpc("spaces/rename", { spaceId: space.id, name });
+      await load();
+    } catch (renameError) {
+      Alert.alert(
+        t("Could not rename space"),
+        renameError instanceof Error ? renameError.message : t("Try again."),
+      );
     }
   }
 
@@ -190,15 +233,24 @@ export default function Account() {
         </View>
 
         <View style={styles.group}>
-          {space && spaces.length > 1 ? (
+          {space && (spaces.length > 1 || space.canRename) ? (
             <NativeMenu
-              title={t("Switch space")}
-              accessibilityLabel={t("Switch space")}
-              accessibilityValue={space.name}
+              title={spaces.length > 1 ? t("Switch space") : space.name}
+              accessibilityLabel={spaces.length > 1 ? t("Switch space") : space.name}
+              accessibilityValue={spaces.length > 1 ? space.name : undefined}
               disabled={switching}
-              options={spaces.map((item) => ({ value: item.id, label: item.name }))}
+              options={
+                spaces.length > 1
+                  ? spaces.map((item) => ({ value: item.id, label: item.name }))
+                  : []
+              }
               selected={space.id}
               onSelect={(value) => void switchSpace(value)}
+              actions={
+                space.canRename
+                  ? [{ label: t("Rename space…"), systemImage: "pencil", onPress: promptRename }]
+                  : []
+              }
               style={({ pressed }) => [
                 styles.row,
                 styles.spaceRow,
@@ -216,6 +268,17 @@ export default function Account() {
             </NativeMenu>
           ) : space ? (
             <View style={[styles.row, styles.spaceRow]}>{spaceLabel}</View>
+          ) : null}
+          {space && renaming ? (
+            <NamePrompt
+              title={t("Rename space")}
+              initialValue={space.name}
+              onCancel={() => setRenaming(false)}
+              onSave={(name) => {
+                setRenaming(false);
+                void renameSpace(name);
+              }}
+            />
           ) : null}
           {spaceRows.map((row, index) => (
             <Fragment key={row.label}>
@@ -332,6 +395,61 @@ export default function Account() {
     </SafeAreaView>
   );
 }
+
+/** Android has no text prompt: a small native dialog stands in for iOS's Alert.prompt. */
+function NamePrompt({
+  title,
+  initialValue,
+  onCancel,
+  onSave,
+}: {
+  title: string;
+  initialValue: string;
+  onCancel: () => void;
+  onSave: (value: string) => void;
+}) {
+  const { t } = useI18n();
+  const tokens = useMobileTokens();
+  const [value, setValue] = useState(initialValue);
+  return (
+    <Modal transparent animationType="fade" onRequestClose={onCancel}>
+      <View style={[promptStyles.backdrop, { backgroundColor: tokens.overlay }]}>
+        <View style={[promptStyles.card, { backgroundColor: tokens.card }]}>
+          <Text style={[promptStyles.title, { color: tokens.foreground }]}>{title}</Text>
+          <TextInput
+            autoFocus
+            selectTextOnFocus
+            value={value}
+            maxLength={60}
+            onChangeText={setValue}
+            onSubmitEditing={() => onSave(value)}
+            returnKeyType="done"
+            style={[promptStyles.input, { color: tokens.foreground, borderColor: tokens.border }]}
+          />
+          <View style={promptStyles.actions}>
+            <Pressable accessibilityRole="button" hitSlop={8} onPress={onCancel}>
+              <Text style={[promptStyles.action, { color: tokens.mutedForeground }]}>
+                {t("Cancel")}
+              </Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" hitSlop={8} onPress={() => onSave(value)}>
+              <Text style={[promptStyles.action, { color: tokens.foreground }]}>{t("Save")}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const promptStyles = StyleSheet.create({
+  backdrop: { flex: 1, justifyContent: "center", padding: 32 },
+  card: { borderRadius: 16, padding: 20, gap: 16 },
+  title: { fontSize: 18, fontWeight: "600" },
+  input: { borderBottomWidth: StyleSheet.hairlineWidth * 2, paddingVertical: 8, fontSize: 16 },
+  actions: { flexDirection: "row", justifyContent: "flex-end", gap: 24 },
+  action: { fontSize: 15, fontWeight: "600" },
+});
 
 function Chevron() {
   return (

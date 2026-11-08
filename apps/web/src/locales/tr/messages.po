@@ -438,7 +438,7 @@ msgstr "Ekleniyor…"
 #: src/pages/Onboarding.tsx:496
 #: src/pages/plugins/advanced-integrations.tsx:77
 #: src/pages/RoutineSchedule.tsx:47
-#: src/pages/SpaceGeneralSettings.tsx:32
+#: src/pages/SpaceGeneralSettings.tsx:42
 msgid "Advanced"
 msgstr "Gelişmiş"
 
@@ -906,7 +906,7 @@ msgstr "Kanallar"
 msgid "Chat apps"
 msgstr "Sohbet uygulamaları"
 
-#: src/pages/SpaceGeneralSettings.tsx:20
+#: src/pages/SpaceGeneralSettings.tsx:30
 msgid "Chat apps, group channels, and agent connections."
 msgstr "Sohbet uygulamaları, grup kanalları ve ajan bağlantıları."
 
@@ -1012,7 +1012,7 @@ msgid "Close MCP servers"
 msgstr "MCP sunucularını kapat"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:125
+#: src/pages/SettingsOverlay.tsx:127
 msgid "Close memory settings"
 msgstr "Hafıza ayarlarını kapat"
 
@@ -1021,7 +1021,7 @@ msgid "Close messaging settings"
 msgstr "Mesajlaşma ayarlarını kapat"
 
 #: src/pages/ModelSettingsOverlay.tsx:63
-#: src/pages/SettingsOverlay.tsx:123
+#: src/pages/SettingsOverlay.tsx:125
 msgid "Close model settings"
 msgstr "Model ayarlarını kapat"
 
@@ -1038,11 +1038,11 @@ msgstr "Önizlemeyi kapat"
 msgid "Close skills"
 msgstr "Yetenekleri kapat"
 
-#: src/pages/SettingsOverlay.tsx:128
+#: src/pages/SettingsOverlay.tsx:130
 msgid "Close user settings"
 msgstr "Kullanıcı ayarlarını kapat"
 
-#: src/pages/SettingsOverlay.tsx:127
+#: src/pages/SettingsOverlay.tsx:129
 #: src/pages/VoiceSettingsOverlay.tsx:174
 msgid "Close voice settings"
 msgstr "Ses ayarlarını kapat"
@@ -1084,7 +1084,7 @@ msgstr "Karmaşık"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:115
+#: src/pages/SettingsOverlay.tsx:117
 #: src/pages/shell/block-views.tsx:131
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
@@ -1658,6 +1658,10 @@ msgstr "Oluşturulamadı"
 msgid "Couldn't load messaging settings"
 msgstr "Mesajlaşma ayarları yüklenemedi"
 
+#: src/pages/SpaceGeneralSettings.tsx:92
+msgid "Couldn't rename the space"
+msgstr "Alan yeniden adlandırılamadı"
+
 #: src/pages/AccountSettingsOverlay.tsx:69
 msgid "Couldn't update avatars"
 msgstr "Avatarlar güncellenemedi"
@@ -1788,7 +1792,7 @@ msgstr "gün"
 msgid "Debug mode"
 msgstr "Hata ayıklama modu"
 
-#: src/pages/SettingsOverlay.tsx:114
+#: src/pages/SettingsOverlay.tsx:116
 msgid "Decision Model"
 msgstr ""
 
@@ -2259,7 +2263,7 @@ msgstr "Tam ekran"
 msgid "FYI"
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:110
+#: src/pages/SettingsOverlay.tsx:112
 msgid "General"
 msgstr "Genel"
 
@@ -2608,7 +2612,7 @@ msgstr "Bu bilgisayarda hâlâ çalışan bir şey olmadığından emin ol."
 msgid "Manage MCP servers"
 msgstr "MCP sunucularını yönet"
 
-#: src/pages/SpaceGeneralSettings.tsx:23
+#: src/pages/SpaceGeneralSettings.tsx:33
 msgid "Manage messaging settings"
 msgstr "Mesajlaşma ayarlarını yönet"
 
@@ -2673,7 +2677,7 @@ msgstr "Üyeler ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX} seç)"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:36
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:113
+#: src/pages/SettingsOverlay.tsx:115
 msgid "Memory"
 msgstr "Hafıza"
 
@@ -2736,7 +2740,7 @@ msgid "Messaged {peer}"
 msgstr "{peer} botuna mesaj gönderildi"
 
 #: src/pages/MessagingSettingsOverlay.tsx:99
-#: src/pages/SpaceGeneralSettings.tsx:17
+#: src/pages/SpaceGeneralSettings.tsx:27
 msgid "Messaging"
 msgstr "Mesajlaşma"
 
@@ -2802,7 +2806,7 @@ msgid "Model updated."
 msgstr "Model güncellendi."
 
 #: src/pages/ModelSettingsOverlay.tsx:56
-#: src/pages/SettingsOverlay.tsx:111
+#: src/pages/SettingsOverlay.tsx:113
 #: src/pages/usage-settings.tsx:69
 msgid "Models"
 msgstr "Modeller"
@@ -2848,6 +2852,7 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx:72
 #: src/pages/shell/dialogs.tsx:187
 #: src/pages/shell/dialogs.tsx:250
+#: src/pages/SpaceGeneralSettings.tsx:105
 msgid "Name"
 msgstr "Ad"
 
@@ -3200,7 +3205,7 @@ msgstr ""
 msgid "Optional"
 msgstr "İsteğe bağlı"
 
-#: src/pages/SpaceGeneralSettings.tsx:35
+#: src/pages/SpaceGeneralSettings.tsx:45
 msgid "Optional controls most people never need"
 msgstr "Çoğu kişinin hiç ihtiyaç duymadığı isteğe bağlı ayarlar"
 
@@ -3327,7 +3332,7 @@ msgstr ""
 msgid "Private workspace with its own bots and groups."
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:108
+#: src/pages/SettingsOverlay.tsx:110
 msgid "Profile"
 msgstr "Profil"
 
@@ -3900,7 +3905,7 @@ msgstr "Sunucu URL'si"
 
 #: src/pages/bot-page/BotPage.tsx:101
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:177
+#: src/pages/SettingsOverlay.tsx:179
 #: src/pages/shell/sidebar-footer.tsx:195
 #: src/pages/shell/sidebar-footer.tsx:202
 msgid "Settings"
@@ -4146,7 +4151,7 @@ msgstr "Düşünmeyi destekler"
 msgid "Switch bot"
 msgstr "Bot değiştir"
 
-#: src/pages/SettingsOverlay.tsx:385
+#: src/pages/SettingsOverlay.tsx:388
 msgid "Switch space"
 msgstr "Alan değiştir"
 
@@ -4394,7 +4399,7 @@ msgstr ""
 msgid "Updated"
 msgstr "Güncellendi"
 
-#: src/pages/SettingsOverlay.tsx:109
+#: src/pages/SettingsOverlay.tsx:111
 msgid "Updates"
 msgstr "Güncellemeler"
 
@@ -4422,7 +4427,7 @@ msgstr ""
 msgid "Updating…"
 msgstr "Güncelleniyor…"
 
-#: src/pages/SettingsOverlay.tsx:116
+#: src/pages/SettingsOverlay.tsx:118
 #: src/pages/shell/sidebar-footer.tsx:207
 #: src/pages/shell/sidebar-footer.tsx:214
 msgid "Usage"
@@ -4452,7 +4457,7 @@ msgstr "Doğrulanıyor…"
 
 #: src/pages/bot-page/SettingDetails.tsx:185
 #: src/pages/bot-page/SettingDetails.tsx:189
-#: src/pages/SettingsOverlay.tsx:112
+#: src/pages/SettingsOverlay.tsx:114
 #: src/pages/shell/thread-header.tsx:139
 #: src/pages/shell/thread-header.tsx:140
 #: src/pages/VoiceSettingsOverlay.tsx:170

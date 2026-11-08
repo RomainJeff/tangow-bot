@@ -472,6 +472,7 @@ export function ShellOverlays({
               reopenSettingsAfterReload(section);
               openSpaceChat(spaceId, "/app");
             }}
+            onSpaceRenamed={() => refreshBots()}
             onVoiceStatusMaybeChanged={voice.refreshVoiceStatus}
             onClose={() => {
               overlays.setSettingsOpen(false);
