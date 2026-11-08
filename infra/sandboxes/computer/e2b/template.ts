@@ -74,7 +74,7 @@ PY_ACCOUNT
 mkdir -p /workspace`;
 
 /** Repository root, the build context for the managed skills. */
-const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "../../../..");
+export const REPOSITORY_ROOT = path.resolve(import.meta.dirname, "../../../..");
 
 /**
  * The canonical computer image (../Dockerfile), adapted to E2B. The SDK cannot build a

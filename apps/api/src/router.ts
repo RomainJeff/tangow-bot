@@ -178,6 +178,7 @@ import {
 import { listBotActivity, readRunEntries, readRunRecap } from "./bot-activity.js";
 import { botProfileLabelsChanged, commitBotUpdate } from "./bot-update.js";
 import {
+  currentComputerRelease,
   executionBlocksUserTakeover,
   resolveBusyBotName,
   toComputerStatus,
@@ -1840,7 +1841,10 @@ export function createRouter(deps: RouterDeps) {
       updateAll: authed.computer.updateAll.handler(async ({ context }) => {
         const computers = await listAccessibleComputers(deps.prisma, context.actor);
         const result: ComputerUpdateAllResult = { queued: [], skipped: [] };
+        const currentRelease = await currentComputerRelease(deps.sandbox, context.actor);
         for (const computer of computers) {
+          if (currentRelease && (!computer.providerRef || computer.releaseRef === currentRelease))
+            continue;
           const bot = computer.bots[0];
           if (!bot) continue;
           try {
@@ -5146,6 +5150,8 @@ function listAccessibleComputers(prisma: PrismaClient, actor: Actor) {
     select: {
       id: true,
       kind: true,
+      providerRef: true,
+      releaseRef: true,
       bots: {
         where: ownedActiveBot,
         select: { id: true, name: true },
@@ -5171,7 +5177,13 @@ async function computerStatus(
     botId,
     botName: bot.name,
   });
-  return toComputerStatus(botId, bot.screenGeneration, bot.computer, busyBotName);
+  return toComputerStatus(
+    botId,
+    bot.screenGeneration,
+    bot.computer,
+    busyBotName,
+    await currentComputerRelease(deps.sandbox, actor),
+  );
 }
 
 async function runComputerReplace(

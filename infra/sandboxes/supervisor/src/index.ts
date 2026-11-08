@@ -164,6 +164,11 @@ app.use("/computers/*", async (c, next) => {
 app.use("/computers", limitSupervisorRequestBody);
 app.use("/computers/*", limitSupervisorRequestBody);
 
+app.get("/computers/release", async (c) => {
+  const image = await docker.getImage(COMPUTER_IMAGE).inspect();
+  return c.json({ releaseRef: image.Id });
+});
+
 const PathSegment = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
 
 /** Computers and workers write the same volumes, so both run as this user. */
@@ -253,6 +258,7 @@ app.post("/computers", async (c) => {
           return c.json({
             id: existing.id,
             image: COMPUTER_IMAGE,
+            releaseRef: info.Image,
             resumed: true,
           });
         }
@@ -321,6 +327,7 @@ app.post("/computers", async (c) => {
         return c.json({
           id: container.id,
           image: COMPUTER_IMAGE,
+          releaseRef: (await container.inspect()).Image,
           resumed: false,
         });
       };

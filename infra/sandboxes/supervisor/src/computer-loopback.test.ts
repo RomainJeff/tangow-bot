@@ -59,6 +59,17 @@ afterEach(async () => {
 });
 
 describe("computer loopback provision lifecycle", () => {
+  it("requires authentication to read the desired immutable computer release", async () => {
+    const { supervisorApp } = await import("./index.js");
+    mocks.docker.getImage.mockReturnValue({ inspect: async () => ({ Id: "sha256:published" }) });
+    expect((await supervisorApp.request("/computers/release")).status).toBe(401);
+    const response = await supervisorApp.request("/computers/release", {
+      headers: { authorization: `Bearer ${resolveSupervisorToken(process.env)}` },
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ releaseRef: "sha256:published" });
+  });
+
   it.each([
     { error: new Error("daemon unavailable"), status: 500 },
     { error: Object.assign(new Error("permission denied"), { statusCode: 403 }), status: 500 },
@@ -268,6 +279,7 @@ describe("provisioning network rollback", () => {
     const network = { remove: vi.fn().mockResolvedValue(undefined) };
     const container = {
       id: "new-computer",
+      inspect: vi.fn().mockResolvedValue({ Image: "image" }),
       start: vi.fn().mockResolvedValue(undefined),
       remove: vi.fn().mockResolvedValue(undefined),
     };

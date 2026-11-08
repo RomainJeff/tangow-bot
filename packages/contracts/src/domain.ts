@@ -833,6 +833,7 @@ export const ComputerStatusSchema = z.object({
   screenStamp: z.string(),
   busyBotName: z.string().nullable(),
   canUpdate: z.boolean(),
+  updateAvailable: z.boolean().optional(),
 });
 export type ComputerStatus = z.infer<typeof ComputerStatusSchema>;
 

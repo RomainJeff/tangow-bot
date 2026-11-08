@@ -59,7 +59,7 @@ import {
   resolveSendAttachments,
 } from "./artifacts.js";
 import { readCappedRun } from "./bot-activity.js";
-import { resolveBusyBotName, toComputerStatus } from "./computer-status.js";
+import { currentComputerRelease, resolveBusyBotName, toComputerStatus } from "./computer-status.js";
 import { withSerializableRetry } from "./serializable-retry.js";
 import { loadEntryPage, threadSessionId, withoutHiddenPeerRuns } from "./thread-message-pages.js";
 
@@ -467,6 +467,7 @@ export async function threadSnapshot(
   deps: {
     prisma: PrismaClient;
     sessionLog: Pick<SessionLog<Prisma.TransactionClient>, "readPage" | "readAround">;
+    sandbox?: SandboxProvider;
   },
   target: ThreadTarget,
 ): Promise<ThreadSnapshot> {
@@ -567,6 +568,7 @@ export async function threadSnapshot(
         target.bot.screenGeneration,
         target.bot.computer,
         busyBotName,
+        await currentComputerRelease(deps.sandbox, target.bot),
       ),
     };
   }
