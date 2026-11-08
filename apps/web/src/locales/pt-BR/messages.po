@@ -36,7 +36,7 @@ msgid "{0, plural, one {# compaction} other {# compactions}} · {1} in · {2} ou
 msgstr ""
 
 #. placeholder {0}: group.entries.length
-#: src/pages/ModelSettingsOverlay.tsx:107
+#: src/pages/ProvidersSettings.tsx:138
 msgid "{0, plural, one {# model} other {# models}}"
 msgstr "{0, plural, one {# modelo} other {# modelos}}"
 
@@ -558,7 +558,7 @@ msgstr "A API voltou, mas a atualização não terminou. Verifique os logs do ho
 #: src/pages/Onboarding.tsx:630
 #: src/pages/Onboarding.tsx:633
 #: src/pages/Onboarding.tsx:647
-#: src/pages/VoiceSettingsOverlay.tsx:247
+#: src/pages/ProvidersSettings.tsx:217
 msgid "API key"
 msgstr "Chave de API"
 
@@ -945,7 +945,7 @@ msgstr "Escolha um bot…"
 msgid "Choose a new password"
 msgstr "Escolha uma nova senha"
 
-#: src/pages/ModelSettingsOverlay.tsx:47
+#: src/pages/ModelSettingsOverlay.tsx:35
 msgid "Choose which connected model Rakazo uses."
 msgstr "Escolha qual modelo conectado a Rakazo usa."
 
@@ -1012,7 +1012,7 @@ msgid "Close MCP servers"
 msgstr "Fechar servidores MCP"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:125
+#: src/pages/SettingsOverlay.tsx:129
 msgid "Close memory settings"
 msgstr "Fechar configurações de memória"
 
@@ -1020,8 +1020,8 @@ msgstr "Fechar configurações de memória"
 msgid "Close messaging settings"
 msgstr "Fechar as configurações de mensagens"
 
-#: src/pages/ModelSettingsOverlay.tsx:63
-#: src/pages/SettingsOverlay.tsx:123
+#: src/pages/ModelSettingsOverlay.tsx:51
+#: src/pages/SettingsOverlay.tsx:127
 msgid "Close model settings"
 msgstr "Fechar configurações do modelo"
 
@@ -1038,12 +1038,12 @@ msgstr "Fechar pré-visualização"
 msgid "Close skills"
 msgstr "Fechar skills"
 
-#: src/pages/SettingsOverlay.tsx:128
+#: src/pages/SettingsOverlay.tsx:132
 msgid "Close user settings"
 msgstr "Fechar configurações do usuário"
 
-#: src/pages/SettingsOverlay.tsx:127
-#: src/pages/VoiceSettingsOverlay.tsx:174
+#: src/pages/SettingsOverlay.tsx:131
+#: src/pages/VoiceSettingsOverlay.tsx:141
 msgid "Close voice settings"
 msgstr "Fechar configurações de voz"
 
@@ -1084,7 +1084,7 @@ msgstr "Complexo"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:115
+#: src/pages/SettingsOverlay.tsx:119
 #: src/pages/shell/block-views.tsx:131
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
@@ -1139,13 +1139,17 @@ msgstr "Confirmar senha"
 #: src/pages/DecisionModelSettingsPanel.tsx:176
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
-#: src/pages/VoiceSettingsOverlay.tsx:269
+#: src/pages/ProvidersSettings.tsx:239
 msgid "Connect"
 msgstr "Conectar"
 
 #: src/pages/Onboarding.tsx:384
 msgid "Connect a model"
 msgstr "Conectar um modelo"
+
+#: src/pages/VoiceSettingsOverlay.tsx:205
+msgid "Connect a voice provider"
+msgstr ""
 
 #: src/pages/model-settings/model-detail.tsx:333
 msgid "Connect API key"
@@ -1176,9 +1180,9 @@ msgstr "Conectar Treg"
 #: src/pages/DecisionModelSettingsPanel.tsx:98
 #: src/pages/McpOAuthCallback.tsx:54
 #: src/pages/MemorySettingsOverlay.tsx:191
-#: src/pages/ModelSettingsOverlay.tsx:114
+#: src/pages/ProvidersSettings.tsx:145
+#: src/pages/ProvidersSettings.tsx:195
 #: src/pages/shell/message-cards.tsx:186
-#: src/pages/VoiceSettingsOverlay.tsx:226
 msgid "Connected"
 msgstr "Conectado"
 
@@ -1187,8 +1191,8 @@ msgstr "Conectado"
 msgid "Connected · {0}"
 msgstr "Conectado · {0}"
 
-#. placeholder {0}: selected.name
-#: src/pages/VoiceSettingsOverlay.tsx:106
+#. placeholder {0}: selectedVoice.name
+#: src/pages/ProvidersSettings.tsx:68
 msgid "Connected {0}."
 msgstr "Conectado {0}."
 
@@ -1209,9 +1213,9 @@ msgstr "Conectado. Suas ferramentas estão disponíveis na sua próxima mensagem
 #: src/pages/McpServersOverlay.tsx:38
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
+#: src/pages/ProvidersSettings.tsx:235
 #: src/pages/shell/message-cards.tsx:275
 #: src/pages/shell/screen-frame.tsx:44
-#: src/pages/VoiceSettingsOverlay.tsx:265
 msgid "Connecting…"
 msgstr "Conectando…"
 
@@ -1324,7 +1328,7 @@ msgstr ""
 msgid "Could not connect this provider"
 msgstr "Não foi possível conectar este provedor"
 
-#: src/pages/VoiceSettingsOverlay.tsx:108
+#: src/pages/ProvidersSettings.tsx:70
 msgid "Could not connect this voice provider"
 msgstr "Não foi possível conectar este provedor de voz"
 
@@ -1394,7 +1398,7 @@ msgstr "Não foi possível desconectar o OAuth"
 msgid "Could not disconnect OpenRouter"
 msgstr ""
 
-#: src/pages/VoiceSettingsOverlay.tsx:124
+#: src/pages/ProvidersSettings.tsx:86
 msgid "Could not disconnect this voice provider"
 msgstr ""
 
@@ -1487,12 +1491,13 @@ msgstr "Não foi possível carregar este arquivo."
 msgid "Could not load update status"
 msgstr "Não foi possível carregar o status da atualização"
 
-#: src/pages/VoiceSettingsOverlay.tsx:81
-#: src/pages/VoiceSettingsOverlay.tsx:205
+#: src/pages/ProvidersSettings.tsx:48
+#: src/pages/VoiceSettingsOverlay.tsx:82
+#: src/pages/VoiceSettingsOverlay.tsx:170
 msgid "Could not load voice settings"
 msgstr "Não foi possível carregar as configurações de voz"
 
-#: src/pages/VoiceSettingsOverlay.tsx:158
+#: src/pages/VoiceSettingsOverlay.tsx:125
 msgid "Could not play a test clip"
 msgstr "Não foi possível reproduzir um clipe de teste"
 
@@ -1580,7 +1585,7 @@ msgstr "Não foi possível salvar"
 msgid "Could not save skill"
 msgstr "Não foi possível salvar a habilidade"
 
-#: src/pages/VoiceSettingsOverlay.tsx:139
+#: src/pages/VoiceSettingsOverlay.tsx:106
 msgid "Could not save that voice"
 msgstr "Não foi possível salvar essa voz"
 
@@ -1788,7 +1793,7 @@ msgstr "dias"
 msgid "Debug mode"
 msgstr "Modo de depuração"
 
-#: src/pages/SettingsOverlay.tsx:114
+#: src/pages/SettingsOverlay.tsx:118
 msgid "Decision Model"
 msgstr ""
 
@@ -1931,13 +1936,13 @@ msgstr ""
 #: src/pages/DecisionModelSettingsPanel.tsx:111
 #: src/pages/McpServersOverlay.tsx:494
 #: src/pages/MemorySettingsOverlay.tsx:211
-#: src/pages/VoiceSettingsOverlay.tsx:284
+#: src/pages/ProvidersSettings.tsx:252
 msgid "Disconnect"
 msgstr "Desconectar"
 
 #: src/pages/DecisionModelSettingsPanel.tsx:111
 #: src/pages/MemorySettingsOverlay.tsx:211
-#: src/pages/VoiceSettingsOverlay.tsx:282
+#: src/pages/ProvidersSettings.tsx:250
 msgid "Disconnecting…"
 msgstr "Desconectando…"
 
@@ -2259,7 +2264,7 @@ msgstr "Tela Cheia"
 msgid "FYI"
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:110
+#: src/pages/SettingsOverlay.tsx:114
 msgid "General"
 msgstr "Geral"
 
@@ -2321,11 +2326,11 @@ msgstr "Nome do Cabeçalho"
 msgid "Header value"
 msgstr "Valor do cabeçalho"
 
-#: src/pages/VoiceSettingsOverlay.tsx:317
+#: src/pages/VoiceSettingsOverlay.tsx:236
 msgid "Hear a sample"
 msgstr "Ouvir uma amostra"
 
-#: src/pages/VoiceSettingsOverlay.tsx:151
+#: src/pages/VoiceSettingsOverlay.tsx:118
 msgid "Hi, this is how I'll sound when I read replies out loud."
 msgstr "Olá, é assim que vou soar quando ler as respostas em voz alta."
 
@@ -2380,7 +2385,7 @@ msgstr "Como verificar"
 msgid "I’m done"
 msgstr "Eu terminei."
 
-#: src/pages/VoiceSettingsOverlay.tsx:156
+#: src/pages/VoiceSettingsOverlay.tsx:123
 msgid "If you heard that, voice is ready."
 msgstr "Se você ouviu isso, a voz está pronta."
 
@@ -2556,8 +2561,8 @@ msgstr "Carregando integrações…"
 msgid "Loading memory settings…"
 msgstr "Carregando configurações de memória..."
 
-#: src/pages/model-settings/model-detail.tsx:365
-#: src/pages/ModelSettingsOverlay.tsx:45
+#: src/pages/model-settings/model-detail.tsx:366
+#: src/pages/ModelSettingsOverlay.tsx:33
 msgid "Loading model catalog…"
 msgstr "Carregando catálogo de modelos..."
 
@@ -2573,7 +2578,7 @@ msgstr "Carregando regras…"
 msgid "Loading tools…"
 msgstr ""
 
-#: src/pages/VoiceSettingsOverlay.tsx:238
+#: src/pages/VoiceSettingsOverlay.tsx:198
 msgid "Loading voice providers…"
 msgstr "Carregando provedores de voz..."
 
@@ -2673,7 +2678,7 @@ msgstr "Membros (escolha {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:36
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:113
+#: src/pages/SettingsOverlay.tsx:117
 msgid "Memory"
 msgstr "Memória"
 
@@ -2801,8 +2806,10 @@ msgstr "O modelo de gasto usa suas chaves de provedor."
 msgid "Model updated."
 msgstr "Modelo Atualizado"
 
-#: src/pages/ModelSettingsOverlay.tsx:56
-#: src/pages/SettingsOverlay.tsx:111
+#: src/pages/ModelSettingsOverlay.tsx:44
+#: src/pages/ProvidersSettings.tsx:114
+#: src/pages/ProvidersSettings.tsx:116
+#: src/pages/SettingsOverlay.tsx:115
 #: src/pages/usage-settings.tsx:69
 msgid "Models"
 msgstr "Modelos"
@@ -2998,7 +3005,7 @@ msgstr "Ainda não há servidores MCP."
 msgid "No messages with {peerBotName} yet."
 msgstr "Ainda sem mensagens com {peerBotName}."
 
-#: src/pages/model-settings/model-detail.tsx:369
+#: src/pages/model-settings/model-detail.tsx:370
 msgid "No model catalog is available."
 msgstr "Nenhum catálogo de modelos está disponível."
 
@@ -3006,7 +3013,7 @@ msgstr "Nenhum catálogo de modelos está disponível."
 msgid "No model connected"
 msgstr "Nenhum modelo conectado"
 
-#: src/pages/ModelSettingsOverlay.tsx:122
+#: src/pages/ProvidersSettings.tsx:153
 msgid "No providers found."
 msgstr "Nenhum provedor encontrado"
 
@@ -3269,7 +3276,7 @@ msgstr "Senha atualizada"
 msgid "Passwords do not match"
 msgstr "As senhas não coincidem"
 
-#: src/pages/VoiceSettingsOverlay.tsx:255
+#: src/pages/ProvidersSettings.tsx:225
 msgid "Paste a replacement key"
 msgstr "Cole uma chave de substituição"
 
@@ -3277,7 +3284,7 @@ msgstr "Cole uma chave de substituição"
 msgid "Paste the OpenAI-compatible address from your server. Rakazo adds /v1 if needed."
 msgstr "Cole o endereço compatível com OpenAI do seu servidor. Rakazo adiciona /v1 se necessário."
 
-#: src/pages/VoiceSettingsOverlay.tsx:255
+#: src/pages/ProvidersSettings.tsx:225
 msgid "Paste your API key"
 msgstr "Cole sua chave API"
 
@@ -3297,7 +3304,7 @@ msgstr "Senha Pessoal"
 msgid "Pin"
 msgstr "Fixar"
 
-#: src/pages/VoiceSettingsOverlay.tsx:317
+#: src/pages/VoiceSettingsOverlay.tsx:236
 msgid "Playing…"
 msgstr "Reproduzindo"
 
@@ -3327,7 +3334,7 @@ msgstr ""
 msgid "Private workspace with its own bots and groups."
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:108
+#: src/pages/SettingsOverlay.tsx:111
 msgid "Profile"
 msgstr "Perfil"
 
@@ -3345,8 +3352,8 @@ msgstr ""
 msgid "Provider"
 msgstr "Provedor"
 
-#: src/pages/ModelSettingsOverlay.tsx:77
-#: src/pages/VoiceSettingsOverlay.tsx:186
+#: src/pages/SettingsOverlay.tsx:112
+#: src/pages/VoiceSettingsOverlay.tsx:154
 msgid "Providers"
 msgstr "Provedores"
 
@@ -3568,7 +3575,7 @@ msgstr "Reabrir"
 msgid "Replace API key"
 msgstr "Substituir chave de API"
 
-#: src/pages/VoiceSettingsOverlay.tsx:267
+#: src/pages/ProvidersSettings.tsx:237
 msgid "Replace key"
 msgstr "Substituir chave"
 
@@ -3838,8 +3845,8 @@ msgstr ""
 msgid "Search models"
 msgstr "Buscar modelos"
 
-#: src/pages/ModelSettingsOverlay.tsx:80
-#: src/pages/ModelSettingsOverlay.tsx:86
+#: src/pages/ProvidersSettings.tsx:104
+#: src/pages/ProvidersSettings.tsx:110
 msgid "Search providers"
 msgstr "Pesquisar provedores"
 
@@ -3900,7 +3907,7 @@ msgstr "URL do servidor"
 
 #: src/pages/bot-page/BotPage.tsx:101
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:177
+#: src/pages/SettingsOverlay.tsx:181
 #: src/pages/shell/sidebar-footer.tsx:195
 #: src/pages/shell/sidebar-footer.tsx:202
 msgid "Settings"
@@ -4049,11 +4056,13 @@ msgstr "Padrão do espaço"
 msgid "Spaces"
 msgstr ""
 
-#: src/pages/VoiceSettingsOverlay.tsx:218
+#: src/pages/ProvidersSettings.tsx:187
+#: src/pages/VoiceSettingsOverlay.tsx:183
 msgid "Speak + transcribe"
 msgstr "Falar + transcrever"
 
-#: src/pages/VoiceSettingsOverlay.tsx:220
+#: src/pages/ProvidersSettings.tsx:189
+#: src/pages/VoiceSettingsOverlay.tsx:185
 msgid "Speak only"
 msgstr "Falar apenas"
 
@@ -4146,11 +4155,11 @@ msgstr "Suporta raciocínio"
 msgid "Switch bot"
 msgstr "Trocar de bot"
 
-#: src/pages/SettingsOverlay.tsx:385
+#: src/pages/SettingsOverlay.tsx:397
 msgid "Switch space"
 msgstr "Trocar de espaço"
 
-#: src/pages/model-settings/model-detail.tsx:358
+#: src/pages/model-settings/model-detail.tsx:359
 msgid "Switching…"
 msgstr "Alternando…"
 
@@ -4394,7 +4403,7 @@ msgstr ""
 msgid "Updated"
 msgstr "Atualizado"
 
-#: src/pages/SettingsOverlay.tsx:109
+#: src/pages/SettingsOverlay.tsx:113
 msgid "Updates"
 msgstr "Atualizações"
 
@@ -4422,7 +4431,7 @@ msgstr ""
 msgid "Updating…"
 msgstr "Atualizando…"
 
-#: src/pages/SettingsOverlay.tsx:116
+#: src/pages/SettingsOverlay.tsx:120
 #: src/pages/shell/sidebar-footer.tsx:207
 #: src/pages/shell/sidebar-footer.tsx:214
 msgid "Usage"
@@ -4438,7 +4447,7 @@ msgstr "Usar um modelo encontrado"
 msgid "Use default guidance"
 msgstr ""
 
-#: src/pages/model-settings/model-detail.tsx:358
+#: src/pages/model-settings/model-detail.tsx:359
 msgid "Use this model"
 msgstr "Use este modelo"
 
@@ -4452,11 +4461,13 @@ msgstr "Verificando…"
 
 #: src/pages/bot-page/SettingDetails.tsx:185
 #: src/pages/bot-page/SettingDetails.tsx:189
-#: src/pages/SettingsOverlay.tsx:112
+#: src/pages/ProvidersSettings.tsx:159
+#: src/pages/ProvidersSettings.tsx:161
+#: src/pages/SettingsOverlay.tsx:116
 #: src/pages/shell/thread-header.tsx:139
 #: src/pages/shell/thread-header.tsx:140
-#: src/pages/VoiceSettingsOverlay.tsx:170
-#: src/pages/VoiceSettingsOverlay.tsx:293
+#: src/pages/VoiceSettingsOverlay.tsx:137
+#: src/pages/VoiceSettingsOverlay.tsx:212
 msgid "Voice"
 msgstr "Voz"
 

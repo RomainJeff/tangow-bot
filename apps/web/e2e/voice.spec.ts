@@ -1,7 +1,9 @@
 import { captureScreenshot, completeOnboarding, openUserSettings, rpc, signup } from "./helpers";
 import { expect, test } from "./test";
 
-test("voice settings connect a key, speak a reply, and open a call", async ({ page }, testInfo) => {
+test("Providers connect a voice key, space Voice speaks a reply, and opens a call", async ({
+  page,
+}, testInfo) => {
   const stamp = Date.now();
   const userName = `Voice ${stamp}`;
   await signup(page, `voice-${stamp}@rakazo.test`, "password12", userName);
@@ -11,29 +13,39 @@ test("voice settings connect a key, speak a reply, and open a call", async ({ pa
   // The call moved to the thread header; the composer's mic is dictation now.
   await expect(page.getByTestId("open-voice-call")).toHaveCount(1);
   await captureScreenshot(page, testInfo, "voice-header");
+  // With no voice key yet, the call opens the account Providers section.
   await page.getByTestId("open-voice-call").click();
-  await expect(page.getByTestId("voice-settings")).toBeVisible();
-  await expect(page.getByLabel("API key", { exact: true })).toBeVisible();
-  await captureScreenshot(page, testInfo, "voice-settings");
-  await page.getByRole("button", { name: "Close voice settings" }).click();
-  await expect(page.getByTestId("voice-settings")).toHaveCount(0);
+  await expect(page.getByTestId("providers-settings")).toBeVisible();
+  await page.getByRole("button", { name: "Close user settings" }).click();
+  await expect(page.getByTestId("providers-settings")).toHaveCount(0);
 
   const preparedOff = await rpc<{ ready: boolean }>(page, "voice/prepare", {
     text: "Hello there.",
   });
   expect(preparedOff.ready).toBe(false);
 
-  await openUserSettings(page, "voice");
-  await expect(page.getByTestId("voice-settings")).toBeVisible();
-  await page.getByRole("button", { name: /Scripted/ }).click();
-  const apiKeyInput = page.getByPlaceholder(/Paste your API key/);
+  const settings = await openUserSettings(page, "providers");
+  const providers = settings.getByTestId("providers-settings");
+  const voiceProviders = providers.getByRole("region", { name: "Voice", exact: true });
+  await voiceProviders.getByRole("button", { name: /Scripted/ }).click();
+  const apiKeyInput = providers.getByPlaceholder(/Paste your API key/);
   await expect(apiKeyInput).toHaveAttribute("autocomplete", "new-password");
   await apiKeyInput.fill("fake-scripted-voice-key");
-  await page.getByRole("button", { name: "Connect", exact: true }).click();
-  await expect(page.getByText("Connected", { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Replace key" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Disconnect", exact: true })).toBeVisible();
-  await captureScreenshot(page, testInfo, "voice-settings-connected");
+  await providers.getByRole("button", { name: "Connect", exact: true }).click();
+  await expect(voiceProviders.getByText("Connected", { exact: true })).toBeVisible();
+  await expect(providers.getByRole("button", { name: "Replace key" })).toBeVisible();
+  await expect(providers.getByRole("button", { name: "Disconnect", exact: true })).toBeVisible();
+  await captureScreenshot(page, testInfo, "providers-voice-connected");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await captureScreenshot(page, testInfo, "providers-voice-connected-phone");
+
+  await settings.getByTestId("settings-nav-voice").click();
+  const voiceSettings = settings.getByTestId("voice-settings");
+  await expect(voiceSettings.getByLabel("Voice", { exact: true })).toBeVisible();
+  await expect(voiceSettings.getByLabel("API key", { exact: true })).toHaveCount(0);
+  await captureScreenshot(page, testInfo, "voice-settings-phone");
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await captureScreenshot(page, testInfo, "voice-settings");
 
   const spoken = page.waitForResponse(
     (response) => response.url().includes("/api/voice/speak") && response.ok(),
@@ -74,8 +86,7 @@ test("voice settings connect a key, speak a reply, and open a call", async ({ pa
   await replySpoken;
 
   await openUserSettings(page, "voice");
-  await expect(page.getByRole("button", { name: "Replace key" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Disconnect", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Hear a sample" })).toBeEnabled();
   await page.getByRole("button", { name: "Close voice settings" }).click();
 
   // The screen panel sits above the call view; starting a call
@@ -99,13 +110,13 @@ test("voice settings connect a key, speak a reply, and open a call", async ({ pa
   await page.getByRole("button", { name: "End call" }).click();
   await expect(page.getByTestId("call-view")).toHaveCount(0);
 
-  await openUserSettings(page, "voice");
-  const settings = page.getByTestId("voice-settings");
-  await settings.getByPlaceholder(/Paste a replacement key/).fill("leftover-voice-key");
-  await settings.getByRole("button", { name: "Disconnect", exact: true }).click();
-  await expect(settings.getByRole("button", { name: "Disconnect", exact: true })).toHaveCount(0);
-  await expect(settings.getByRole("button", { name: "Connect", exact: true })).toBeVisible();
-  await expect(settings.getByLabel("API key", { exact: true })).toHaveValue("");
+  await openUserSettings(page, "providers");
+  await voiceProviders.getByRole("button", { name: /Scripted/ }).click();
+  await providers.getByPlaceholder(/Paste a replacement key/).fill("leftover-voice-key");
+  await providers.getByRole("button", { name: "Disconnect", exact: true }).click();
+  await expect(providers.getByRole("button", { name: "Disconnect", exact: true })).toHaveCount(0);
+  await expect(providers.getByRole("button", { name: "Connect", exact: true })).toBeVisible();
+  await expect(providers.getByLabel("API key", { exact: true })).toHaveValue("");
   await expect(rpc<Array<{ provider: string }>>(page, "voice/credentials", {})).resolves.toEqual(
     [],
   );

@@ -1,5 +1,5 @@
 /** Settings that follow the person across spaces. */
-export const ACCOUNT_SETTINGS_SECTIONS = ["profile", "updates"] as const;
+export const ACCOUNT_SETTINGS_SECTIONS = ["profile", "providers", "updates"] as const;
 
 /** Settings that belong to the active space. */
 export const SPACE_SETTINGS_SECTIONS = [

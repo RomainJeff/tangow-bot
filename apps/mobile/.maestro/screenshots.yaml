@@ -112,10 +112,17 @@ tags:
 - takeScreenshot: "11-auto-models"
 - tapOn: "Active model"
 - tapOn: "Scripted.*"
+- takeScreenshot: "11-models"
+
+- openLink: "rakazo:///account"
+- tapOn: "Providers"
+- extendedWaitUntil:
+    visible: "Models"
+    timeout: 10000
+- takeScreenshot: "11c-providers"
 - scrollUntilVisible:
     element: "Show more"
     direction: DOWN
-- takeScreenshot: "11-models"
 - tapOn: "Show more"
 - scrollUntilVisible:
     element: "Show less"
@@ -124,7 +131,7 @@ tags:
 
 - openLink: "rakazo:///voice"
 - extendedWaitUntil:
-    visible: "Scripted"
+    visible: "Connect a voice provider"
     timeout: 10000
 - takeScreenshot: "12-voice"
 

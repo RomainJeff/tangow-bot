@@ -187,6 +187,15 @@ export default function Account() {
             </View>
             <Chevron />
           </Pressable>
+          <View style={styles.separator} />
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/providers")}
+            style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+          >
+            <Text style={styles.rowLabel}>{t("Providers")}</Text>
+            <Chevron />
+          </Pressable>
         </View>
 
         <View style={styles.group}>

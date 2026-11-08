@@ -8,7 +8,6 @@ import {
   DialogTitle,
   Field,
   FieldLabel,
-  Input,
   NativeSelect,
   NativeSelectOption,
 } from "@rakazo/ui-web";
@@ -20,24 +19,25 @@ export function VoiceSettingsOverlay({
   onClose,
   embedded = false,
   onBusyChange,
+  onOpenProviders,
 }: {
   onClose: () => void;
   /** Render panel body only for the shared Settings shell. */
   embedded?: boolean;
   onBusyChange?: (busy: boolean) => void;
+  /** Keys are connected in the account Providers section. */
+  onOpenProviders?: () => void;
 }) {
   const { t } = useLingui();
-  const apiKeyId = useId();
   const voiceSelectId = useId();
   const [catalog, setCatalog] = useState<VoiceCatalogEntry[]>([]);
   const [credentials, setCredentials] = useState<VoiceCredential[]>([]);
   const [status, setStatus] = useState<VoiceStatus | null>(null);
   const [voices, setVoices] = useState<VoiceInfo[]>([]);
   const [provider, setProvider] = useState("");
-  const [apiKey, setApiKey] = useState("");
   const [voiceId, setVoiceId] = useState("");
   const [loading, setLoading] = useState(true);
-  const [pending, setPending] = useState<"connect" | "disconnect" | "voice" | "test" | null>(null);
+  const [pending, setPending] = useState<"voice" | "test" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -47,7 +47,7 @@ export function VoiceSettingsOverlay({
     return () => onBusyChange?.(false);
   }, [onBusyChange]);
 
-  function markPending(next: "connect" | "disconnect" | "voice" | "test" | null) {
+  function markPending(next: "voice" | "test" | null) {
     setPending(next);
     onBusyChange?.(next !== null);
   }
@@ -58,7 +58,8 @@ export function VoiceSettingsOverlay({
       rpc.voice.credentials(),
       rpc.voice.status(),
     ]);
-    const selected = nextProvider || provider || nextStatus.provider || nextCatalog[0]?.id || "";
+    const selected =
+      nextProvider || provider || nextStatus.provider || nextCredentials[0]?.provider || "";
     setCatalog(nextCatalog);
     setCredentials(nextCredentials);
     setStatus(nextStatus);
@@ -83,49 +84,15 @@ export function VoiceSettingsOverlay({
       .finally(() => setLoading(false));
   }, []);
 
-  const selected = catalog.find((entry) => entry.id === provider) ?? catalog[0];
+  const connectedCatalog = catalog.filter((entry) =>
+    credentials.some((cred) => cred.provider === entry.id),
+  );
+  const selected = catalog.find((entry) => entry.id === provider);
   const credential = credentials.find((entry) => entry.provider === provider);
   const voiceOptions = useMemo(
     () => (voices.length ? voices : voiceId ? [{ id: voiceId, label: voiceId }] : []),
     [voices, voiceId],
   );
-
-  async function connectKey() {
-    if (!selected || !apiKey.trim()) return;
-    setError(null);
-    setNotice(null);
-    markPending("connect");
-    try {
-      await rpc.voice.connect({
-        provider: selected.id,
-        apiKey: apiKey.trim(),
-        voiceId: voiceId || undefined,
-      });
-      setApiKey("");
-      await refresh(selected.id);
-      setNotice(t`Connected ${selected.name}.`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t`Could not connect this voice provider`);
-    } finally {
-      markPending(null);
-    }
-  }
-
-  async function disconnectProvider() {
-    if (!credential) return;
-    setError(null);
-    setNotice(null);
-    markPending("disconnect");
-    try {
-      await rpc.voice.disconnect({ provider: credential.provider });
-      setApiKey("");
-      await refresh(credential.provider);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t`Could not disconnect this voice provider`);
-    } finally {
-      markPending(null);
-    }
-  }
 
   async function chooseVoice(nextVoiceId: string) {
     setVoiceId(nextVoiceId);
@@ -181,21 +148,19 @@ export function VoiceSettingsOverlay({
       ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden px-6 py-6 sm:px-8 md:flex-row">
-        <div className="flex min-h-0 shrink-0 flex-col md:w-[280px]">
-          <div className="mb-3 text-[13.5px] text-muted-foreground">
-            <Trans>Providers</Trans>
-          </div>
-          <div className="rk-scroll overflow-y-auto rounded-card bg-group shadow-group">
-            {catalog.map((entry) => {
-              const connected = credentials.some((cred) => cred.provider === entry.id);
-              return (
+        {connectedCatalog.length > 1 ? (
+          <div className="flex min-h-0 shrink-0 flex-col md:w-[280px]">
+            <div className="mb-3 text-[13.5px] text-muted-foreground">
+              <Trans>Providers</Trans>
+            </div>
+            <div className="rk-scroll overflow-y-auto rounded-card bg-group shadow-group">
+              {connectedCatalog.map((entry) => (
                 <button
                   key={entry.id}
                   type="button"
                   disabled={busy}
                   onClick={() => {
                     setProvider(entry.id);
-                    setApiKey("");
                     setError(null);
                     setNotice(null);
                     markPending("voice");
@@ -221,16 +186,11 @@ export function VoiceSettingsOverlay({
                       )}
                     </span>
                   </span>
-                  {connected ? (
-                    <span className="text-[12px] text-success">
-                      <Trans>Connected</Trans>
-                    </span>
-                  ) : null}
                 </button>
-              );
-            })}
+              ))}
+            </div>
           </div>
-        </div>
+        ) : null}
 
         <div className="rk-scroll min-h-0 min-w-0 flex-1 overflow-y-auto">
           {loading ? (
@@ -240,84 +200,41 @@ export function VoiceSettingsOverlay({
           ) : null}
           {error ? <p className="mb-4 text-sm text-destructive">{error}</p> : null}
           {notice ? <p className="mb-4 text-sm text-success">{notice}</p> : null}
-          {selected ? (
+          {!loading && !credentials.length && onOpenProviders ? (
+            <Button type="button" variant="secondary" onClick={onOpenProviders}>
+              <Trans>Connect a voice provider</Trans>
+            </Button>
+          ) : null}
+          {selected && credential ? (
             <>
-              <Field className="mt-5">
-                <FieldLabel htmlFor={apiKeyId}>
-                  <Trans>API key</Trans>
+              <Field>
+                <FieldLabel htmlFor={voiceSelectId}>
+                  <Trans>Voice</Trans>
                 </FieldLabel>
-                <Input
-                  id={apiKeyId}
-                  type="password"
-                  autoComplete="new-password"
-                  value={apiKey}
-                  onChange={(event) => setApiKey(event.target.value)}
-                  placeholder={credential ? t`Paste a replacement key` : t`Paste your API key`}
-                />
+                <NativeSelect
+                  id={voiceSelectId}
+                  className="w-full"
+                  value={voiceId}
+                  disabled={busy}
+                  onChange={(event) => void chooseVoice(event.target.value)}
+                >
+                  {voiceOptions.map((voice) => (
+                    <NativeSelectOption key={voice.id} value={voice.id}>
+                      {voice.label}
+                      {voice.description ? ` · ${voice.description}` : ""}
+                    </NativeSelectOption>
+                  ))}
+                </NativeSelect>
               </Field>
               <Button
                 type="button"
-                className="mt-3"
-                disabled={busy || apiKey.trim().length < 8}
-                onClick={() => void connectKey()}
+                variant="secondary"
+                className="mt-4 rounded-full"
+                disabled={busy || !status?.ready}
+                onClick={() => void testVoice()}
               >
-                {pending === "connect" ? (
-                  <Trans>Connecting…</Trans>
-                ) : credential ? (
-                  <Trans>Replace key</Trans>
-                ) : (
-                  <Trans>Connect</Trans>
-                )}
+                {pending === "test" ? <Trans>Playing…</Trans> : <Trans>Hear a sample</Trans>}
               </Button>
-              {credential ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="mt-3"
-                  disabled={busy}
-                  onClick={() => void disconnectProvider()}
-                >
-                  {pending === "disconnect" ? (
-                    <Trans>Disconnecting…</Trans>
-                  ) : (
-                    <Trans>Disconnect</Trans>
-                  )}
-                </Button>
-              ) : null}
-
-              {credential ? (
-                <>
-                  <Field className="mt-6">
-                    <FieldLabel htmlFor={voiceSelectId}>
-                      <Trans>Voice</Trans>
-                    </FieldLabel>
-                    <NativeSelect
-                      id={voiceSelectId}
-                      className="w-full"
-                      value={voiceId}
-                      disabled={busy}
-                      onChange={(event) => void chooseVoice(event.target.value)}
-                    >
-                      {voiceOptions.map((voice) => (
-                        <NativeSelectOption key={voice.id} value={voice.id}>
-                          {voice.label}
-                          {voice.description ? ` · ${voice.description}` : ""}
-                        </NativeSelectOption>
-                      ))}
-                    </NativeSelect>
-                  </Field>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="mt-4 rounded-full"
-                    disabled={busy || !status?.ready}
-                    onClick={() => void testVoice()}
-                  >
-                    {pending === "test" ? <Trans>Playing…</Trans> : <Trans>Hear a sample</Trans>}
-                  </Button>
-                </>
-              ) : null}
             </>
           ) : null}
         </div>

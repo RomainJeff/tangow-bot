@@ -1,7 +1,7 @@
 import { captureScreenshot, completeOnboarding, openUserSettings, rpc, signup } from "./helpers";
 import { expect, test } from "./test";
 
-test("settings shell is two-pane and deep-links Models Memory Decision Model Voice Usage", async ({
+test("settings shell is two-pane and deep-links Providers Models Memory Decision Model Voice Usage", async ({
   page,
 }, testInfo) => {
   const stamp = Date.now();
@@ -32,6 +32,15 @@ test("settings shell is two-pane and deep-links Models Memory Decision Model Voi
   await expect(settings.getByTestId("settings-space-switcher")).toHaveCount(0);
   await captureScreenshot(page, testInfo, "settings-shell-profile");
 
+  // Keys belong to the account; each space keeps only its model and voice choice.
+  await settings.getByTestId("settings-nav-providers").click();
+  await expect(settings).toHaveAttribute("data-settings-section", "providers");
+  await expect(settings.getByRole("heading", { name: "Providers", exact: true })).toBeVisible();
+  const providers = settings.getByTestId("providers-settings");
+  await expect(providers.getByRole("region", { name: "Models", exact: true })).toBeVisible();
+  await expect(providers.getByRole("region", { name: "Voice", exact: true })).toBeVisible();
+  await captureScreenshot(page, testInfo, "settings-shell-providers");
+
   await settings.getByTestId("settings-nav-space").click();
   await expect(settings).toHaveAttribute("data-settings-section", "space");
   await expect(settings.getByRole("heading", { name: "General", exact: true })).toBeVisible();
@@ -42,6 +51,8 @@ test("settings shell is two-pane and deep-links Models Memory Decision Model Voi
   await expect(settings).toHaveAttribute("data-settings-section", "models");
   await expect(settings.getByRole("heading", { name: "Models", exact: true })).toBeVisible();
   await expect(settings.getByTestId("model-settings")).toBeVisible();
+  await expect(settings.getByLabel("Active model", { exact: true })).toBeVisible();
+  await expect(settings.getByPlaceholder("Search providers")).toHaveCount(0);
   await captureScreenshot(page, testInfo, "settings-shell-models");
 
   await settings.getByTestId("settings-nav-memory").click();
@@ -80,9 +91,12 @@ test("settings shell is two-pane and deep-links Models Memory Decision Model Voi
   await expect(settings).toHaveAttribute("data-settings-section", "voice");
   await expect(settings.getByRole("heading", { name: "Voice", exact: true })).toBeVisible();
   await expect(settings.getByTestId("voice-settings")).toBeVisible();
+  await expect(settings.getByLabel("API key", { exact: true })).toHaveCount(0);
   await captureScreenshot(page, testInfo, "settings-shell-voice");
+  await settings.getByRole("button", { name: "Connect a voice provider" }).click();
+  await expect(settings).toHaveAttribute("data-settings-section", "providers");
 
-  await page.getByRole("button", { name: "Close voice settings" }).click();
+  await page.getByRole("button", { name: "Close user settings" }).click();
   await expect(page.getByTestId("user-settings")).toHaveCount(0);
 
   await openUserSettings(page, "usage");

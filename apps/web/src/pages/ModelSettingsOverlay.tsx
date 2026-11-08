@@ -1,4 +1,4 @@
-import { Plural, Trans, useLingui } from "@lingui/react/macro";
+import { Trans, useLingui } from "@lingui/react/macro";
 import {
   Button,
   Dialog,
@@ -7,11 +7,8 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  Input,
 } from "@rakazo/ui-web";
 import { X } from "lucide-react";
-import { localizedProviderHint } from "../lib/localized-provider-hint";
-import { ModelDetail } from "./model-settings/model-detail";
 import { RoutingSettings } from "./model-settings/routing-settings";
 import { useModelSettings } from "./model-settings/use-model-settings";
 
@@ -25,16 +22,7 @@ export function ModelSettingsOverlay({
 }) {
   const { t } = useLingui();
   const settings = useModelSettings();
-  const {
-    loading,
-    providerQuery,
-    setProviderQuery,
-    filteredGroups,
-    credentials,
-    provider,
-    chooseProvider,
-    cancelOAuthAttempt,
-  } = settings;
+  const { loading, cancelOAuthAttempt } = settings;
 
   function handleClose() {
     cancelOAuthAttempt(false);
@@ -71,62 +59,9 @@ export function ModelSettingsOverlay({
 
       <RoutingSettings settings={settings} />
 
-      <div className="flex shrink-0 flex-col gap-6 px-6 py-6 sm:px-8 md:flex-row">
-        <div className="flex min-h-0 shrink-0 flex-col md:w-[310px]">
-          <div className="mb-3 text-[13.5px] text-muted-foreground">
-            <Trans>Providers</Trans>
-          </div>
-          <label className="sr-only" htmlFor="model-provider-search">
-            <Trans>Search providers</Trans>
-          </label>
-          <Input
-            id="model-provider-search"
-            value={providerQuery}
-            onChange={(event) => setProviderQuery(event.target.value)}
-            placeholder={t`Search providers`}
-            className="h-10 rounded-xl px-3.5"
-          />
-          <div className="rk-scroll mt-3 max-h-[240px] overflow-y-auto rounded-card bg-group shadow-group md:min-h-0 md:max-h-64 md:flex-1">
-            {filteredGroups.length ? (
-              filteredGroups.map((group) => {
-                const connected = credentials.some((entry) => entry.provider === group.id);
-                return (
-                  <button
-                    key={group.id}
-                    type="button"
-                    onClick={() => chooseProvider(group.id)}
-                    className={`flex w-full items-center gap-3 border-b border-border px-3.5 py-3 text-start last:border-0 ${
-                      group.id === provider ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/60"
-                    }`}
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[15px] text-foreground">
-                        {group.name}
-                      </span>
-                      <span className="mt-0.5 block text-[12px] text-muted-foreground/80">
-                        <Plural value={group.entries.length} one="# model" other="# models" />
-                        {" · "}
-                        {localizedProviderHint(group.entries[0]!)}
-                      </span>
-                    </span>
-                    {connected ? (
-                      <span className="text-[12px] text-success">
-                        <Trans>Connected</Trans>
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })
-            ) : (
-              <p className="px-3.5 py-4 text-[13px] text-muted-foreground">
-                <Trans>No providers found.</Trans>
-              </p>
-            )}
-          </div>
-        </div>
-
-        <ModelDetail settings={settings} />
-      </div>
+      {settings.error ? (
+        <p className="mx-6 mt-4 text-sm text-destructive sm:mx-8">{settings.error}</p>
+      ) : null}
     </>
   );
 

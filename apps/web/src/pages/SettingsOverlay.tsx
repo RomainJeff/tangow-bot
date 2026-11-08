@@ -19,6 +19,7 @@ import {
   CloudDownload,
   Cpu,
   Gauge,
+  KeyRound,
   Monitor,
   Signpost,
   SlidersHorizontal,
@@ -32,6 +33,7 @@ import { ComputerSettingsPanel } from "./ComputerSettingsPanel";
 import { DecisionModelSettingsPanel } from "./DecisionModelSettingsPanel";
 import { MemorySettingsOverlay } from "./MemorySettingsOverlay";
 import { ModelSettingsOverlay } from "./ModelSettingsOverlay";
+import { ProvidersSettings } from "./ProvidersSettings";
 import { SpaceGeneralSettings } from "./SpaceGeneralSettings";
 import {
   ACCOUNT_SETTINGS_SECTIONS,
@@ -92,7 +94,8 @@ export function SettingsOverlay({
   const [memoryBusy, setMemoryBusy] = useState(false);
   const [decisionModelBusy, setDecisionModelBusy] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState(false);
-  const panelBusy = memoryBusy || decisionModelBusy || voiceBusy;
+  const [providersBusy, setProvidersBusy] = useState(false);
+  const panelBusy = memoryBusy || decisionModelBusy || voiceBusy || providersBusy;
 
   useEffect(() => {
     setSection(initialSection);
@@ -106,6 +109,7 @@ export function SettingsOverlay({
 
   const navItems: Record<SettingsSection, NavItem> = {
     profile: { label: t`Profile`, icon: UserRound },
+    providers: { label: t`Providers`, icon: KeyRound },
     updates: { label: t`Updates`, icon: CloudDownload },
     space: { label: t`General`, icon: SlidersHorizontal },
     models: { label: t`Models`, icon: Cpu },
@@ -140,7 +144,7 @@ export function SettingsOverlay({
     leaveSettings(onClose);
   }
 
-  const widePane = section === "models" || section === "voice";
+  const widePane = section === "providers" || section === "models" || section === "voice";
   const spaceLabelId = useId();
   const currentSpace = spaces.find((space) => space.id === currentSpaceId);
 
@@ -239,6 +243,7 @@ export function SettingsOverlay({
 
             <div
               className={`min-h-0 flex-1 ${
+                section === "providers" ||
                 section === "models" ||
                 section === "voice" ||
                 section === "memory" ||
@@ -256,6 +261,9 @@ export function SettingsOverlay({
                   onAvatarStyleChange={onAvatarStyleChange}
                   isDeploymentOwner={isDeploymentOwner}
                 />
+              ) : null}
+              {section === "providers" ? (
+                <ProvidersSettings onBusyChange={setProvidersBusy} />
               ) : null}
               {section === "space" ? (
                 <SpaceGeneralSettings
@@ -286,7 +294,12 @@ export function SettingsOverlay({
                 <DecisionModelSettingsPanel onBusyChange={setDecisionModelBusy} />
               ) : null}
               {section === "voice" ? (
-                <VoiceSettingsOverlay embedded onClose={requestClose} onBusyChange={setVoiceBusy} />
+                <VoiceSettingsOverlay
+                  embedded
+                  onClose={requestClose}
+                  onBusyChange={setVoiceBusy}
+                  onOpenProviders={() => setSection("providers")}
+                />
               ) : null}
             </div>
           </div>

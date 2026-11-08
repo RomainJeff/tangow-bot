@@ -36,7 +36,7 @@ msgid "{0, plural, one {# compaction} other {# compactions}} · {1} in · {2} ou
 msgstr ""
 
 #. placeholder {0}: group.entries.length
-#: src/pages/ModelSettingsOverlay.tsx:107
+#: src/pages/ProvidersSettings.tsx:138
 msgid "{0, plural, one {# model} other {# models}}"
 msgstr "{0, plural, one {모델 #개} other {모델 #개}}"
 
@@ -558,7 +558,7 @@ msgstr "API가 다시 작동하지만 업데이트가 완료되지 않았습니�
 #: src/pages/Onboarding.tsx:630
 #: src/pages/Onboarding.tsx:633
 #: src/pages/Onboarding.tsx:647
-#: src/pages/VoiceSettingsOverlay.tsx:247
+#: src/pages/ProvidersSettings.tsx:217
 msgid "API key"
 msgstr "API 키"
 
@@ -945,7 +945,7 @@ msgstr "Bot 선택…"
 msgid "Choose a new password"
 msgstr "새 비밀번호 선택"
 
-#: src/pages/ModelSettingsOverlay.tsx:47
+#: src/pages/ModelSettingsOverlay.tsx:35
 msgid "Choose which connected model Rakazo uses."
 msgstr "Rakazo에서 기본으로 사용할 연결된 모델을 선택하세요."
 
@@ -1012,7 +1012,7 @@ msgid "Close MCP servers"
 msgstr "MCP 서버 설정 닫기"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:125
+#: src/pages/SettingsOverlay.tsx:129
 msgid "Close memory settings"
 msgstr "기억 설정 닫기"
 
@@ -1020,8 +1020,8 @@ msgstr "기억 설정 닫기"
 msgid "Close messaging settings"
 msgstr "메시징 설정 닫기"
 
-#: src/pages/ModelSettingsOverlay.tsx:63
-#: src/pages/SettingsOverlay.tsx:123
+#: src/pages/ModelSettingsOverlay.tsx:51
+#: src/pages/SettingsOverlay.tsx:127
 msgid "Close model settings"
 msgstr "AI 모델 설정 닫기"
 
@@ -1038,12 +1038,12 @@ msgstr "미리보기 닫기"
 msgid "Close skills"
 msgstr "스킬 닫기"
 
-#: src/pages/SettingsOverlay.tsx:128
+#: src/pages/SettingsOverlay.tsx:132
 msgid "Close user settings"
 msgstr "계정 설정 닫기"
 
-#: src/pages/SettingsOverlay.tsx:127
-#: src/pages/VoiceSettingsOverlay.tsx:174
+#: src/pages/SettingsOverlay.tsx:131
+#: src/pages/VoiceSettingsOverlay.tsx:141
 msgid "Close voice settings"
 msgstr "음성 설정 닫기"
 
@@ -1084,7 +1084,7 @@ msgstr "복잡"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:115
+#: src/pages/SettingsOverlay.tsx:119
 #: src/pages/shell/block-views.tsx:131
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
@@ -1139,13 +1139,17 @@ msgstr "비밀번호 확인"
 #: src/pages/DecisionModelSettingsPanel.tsx:176
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
-#: src/pages/VoiceSettingsOverlay.tsx:269
+#: src/pages/ProvidersSettings.tsx:239
 msgid "Connect"
 msgstr "연결"
 
 #: src/pages/Onboarding.tsx:384
 msgid "Connect a model"
 msgstr "AI 모델 연결"
+
+#: src/pages/VoiceSettingsOverlay.tsx:205
+msgid "Connect a voice provider"
+msgstr ""
 
 #: src/pages/model-settings/model-detail.tsx:333
 msgid "Connect API key"
@@ -1176,9 +1180,9 @@ msgstr "Treg 연결"
 #: src/pages/DecisionModelSettingsPanel.tsx:98
 #: src/pages/McpOAuthCallback.tsx:54
 #: src/pages/MemorySettingsOverlay.tsx:191
-#: src/pages/ModelSettingsOverlay.tsx:114
+#: src/pages/ProvidersSettings.tsx:145
+#: src/pages/ProvidersSettings.tsx:195
 #: src/pages/shell/message-cards.tsx:186
-#: src/pages/VoiceSettingsOverlay.tsx:226
 msgid "Connected"
 msgstr "연결됨"
 
@@ -1187,8 +1191,8 @@ msgstr "연결됨"
 msgid "Connected · {0}"
 msgstr "연결됨 · {0}"
 
-#. placeholder {0}: selected.name
-#: src/pages/VoiceSettingsOverlay.tsx:106
+#. placeholder {0}: selectedVoice.name
+#: src/pages/ProvidersSettings.tsx:68
 msgid "Connected {0}."
 msgstr "{0}에 연결했습니다."
 
@@ -1209,9 +1213,9 @@ msgstr "연결되었습니다. 다음 메시지부터 이 도구를 사용할 �
 #: src/pages/McpServersOverlay.tsx:38
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
+#: src/pages/ProvidersSettings.tsx:235
 #: src/pages/shell/message-cards.tsx:275
 #: src/pages/shell/screen-frame.tsx:44
-#: src/pages/VoiceSettingsOverlay.tsx:265
 msgid "Connecting…"
 msgstr "연결 중…"
 
@@ -1324,7 +1328,7 @@ msgstr ""
 msgid "Could not connect this provider"
 msgstr "AI 서비스에 연결하지 못했습니다."
 
-#: src/pages/VoiceSettingsOverlay.tsx:108
+#: src/pages/ProvidersSettings.tsx:70
 msgid "Could not connect this voice provider"
 msgstr "음성 서비스에 연결하지 못했습니다."
 
@@ -1394,7 +1398,7 @@ msgstr "OAuth 연결을 해제하지 못했습니다."
 msgid "Could not disconnect OpenRouter"
 msgstr ""
 
-#: src/pages/VoiceSettingsOverlay.tsx:124
+#: src/pages/ProvidersSettings.tsx:86
 msgid "Could not disconnect this voice provider"
 msgstr ""
 
@@ -1487,12 +1491,13 @@ msgstr "파일을 불러오지 못했습니다."
 msgid "Could not load update status"
 msgstr "업데이트 상태를 불러올 수 없습니다"
 
-#: src/pages/VoiceSettingsOverlay.tsx:81
-#: src/pages/VoiceSettingsOverlay.tsx:205
+#: src/pages/ProvidersSettings.tsx:48
+#: src/pages/VoiceSettingsOverlay.tsx:82
+#: src/pages/VoiceSettingsOverlay.tsx:170
 msgid "Could not load voice settings"
 msgstr "음성 설정을 불러오지 못했습니다."
 
-#: src/pages/VoiceSettingsOverlay.tsx:158
+#: src/pages/VoiceSettingsOverlay.tsx:125
 msgid "Could not play a test clip"
 msgstr "샘플 음성을 재생하지 못했습니다."
 
@@ -1580,7 +1585,7 @@ msgstr "확인 규칙을 저장하지 못했습니다."
 msgid "Could not save skill"
 msgstr "스킬을 저장하지 못했습니다"
 
-#: src/pages/VoiceSettingsOverlay.tsx:139
+#: src/pages/VoiceSettingsOverlay.tsx:106
 msgid "Could not save that voice"
 msgstr "목소리를 저장하지 못했습니다."
 
@@ -1788,7 +1793,7 @@ msgstr "일"
 msgid "Debug mode"
 msgstr "디버그 모드"
 
-#: src/pages/SettingsOverlay.tsx:114
+#: src/pages/SettingsOverlay.tsx:118
 msgid "Decision Model"
 msgstr ""
 
@@ -1931,13 +1936,13 @@ msgstr ""
 #: src/pages/DecisionModelSettingsPanel.tsx:111
 #: src/pages/McpServersOverlay.tsx:494
 #: src/pages/MemorySettingsOverlay.tsx:211
-#: src/pages/VoiceSettingsOverlay.tsx:284
+#: src/pages/ProvidersSettings.tsx:252
 msgid "Disconnect"
 msgstr "연결 해제"
 
 #: src/pages/DecisionModelSettingsPanel.tsx:111
 #: src/pages/MemorySettingsOverlay.tsx:211
-#: src/pages/VoiceSettingsOverlay.tsx:282
+#: src/pages/ProvidersSettings.tsx:250
 msgid "Disconnecting…"
 msgstr "연결 해제 중…"
 
@@ -2259,7 +2264,7 @@ msgstr "전체 화면"
 msgid "FYI"
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:110
+#: src/pages/SettingsOverlay.tsx:114
 msgid "General"
 msgstr "일반"
 
@@ -2321,11 +2326,11 @@ msgstr "헤더 이름"
 msgid "Header value"
 msgstr "헤더 값"
 
-#: src/pages/VoiceSettingsOverlay.tsx:317
+#: src/pages/VoiceSettingsOverlay.tsx:236
 msgid "Hear a sample"
 msgstr "샘플 듣기"
 
-#: src/pages/VoiceSettingsOverlay.tsx:151
+#: src/pages/VoiceSettingsOverlay.tsx:118
 msgid "Hi, this is how I'll sound when I read replies out loud."
 msgstr "안녕하세요. 답변을 소리 내어 읽을 때 이런 목소리로 들립니다."
 
@@ -2380,7 +2385,7 @@ msgstr "완료 확인 방법"
 msgid "I’m done"
 msgstr "조작 끝내기"
 
-#: src/pages/VoiceSettingsOverlay.tsx:156
+#: src/pages/VoiceSettingsOverlay.tsx:123
 msgid "If you heard that, voice is ready."
 msgstr "샘플이 들렸다면 음성 설정이 완료되었습니다."
 
@@ -2556,8 +2561,8 @@ msgstr "연동 목록을 불러오는 중…"
 msgid "Loading memory settings…"
 msgstr "기억 설정을 불러오는 중…"
 
-#: src/pages/model-settings/model-detail.tsx:365
-#: src/pages/ModelSettingsOverlay.tsx:45
+#: src/pages/model-settings/model-detail.tsx:366
+#: src/pages/ModelSettingsOverlay.tsx:33
 msgid "Loading model catalog…"
 msgstr "모델 목록을 불러오는 중…"
 
@@ -2573,7 +2578,7 @@ msgstr "확인 규칙을 불러오는 중…"
 msgid "Loading tools…"
 msgstr ""
 
-#: src/pages/VoiceSettingsOverlay.tsx:238
+#: src/pages/VoiceSettingsOverlay.tsx:198
 msgid "Loading voice providers…"
 msgstr "음성 서비스를 불러오는 중…"
 
@@ -2673,7 +2678,7 @@ msgstr "참여 Bot ({GROUP_MEMBER_MIN}~{GROUP_MEMBER_MAX}개 선택)"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:36
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:113
+#: src/pages/SettingsOverlay.tsx:117
 msgid "Memory"
 msgstr "기억"
 
@@ -2801,8 +2806,10 @@ msgstr "모델 사용 비용은 연결한 서비스의 API 키로 청구됩니�
 msgid "Model updated."
 msgstr "모델이 변경되었습니다."
 
-#: src/pages/ModelSettingsOverlay.tsx:56
-#: src/pages/SettingsOverlay.tsx:111
+#: src/pages/ModelSettingsOverlay.tsx:44
+#: src/pages/ProvidersSettings.tsx:114
+#: src/pages/ProvidersSettings.tsx:116
+#: src/pages/SettingsOverlay.tsx:115
 #: src/pages/usage-settings.tsx:69
 msgid "Models"
 msgstr "AI 모델"
@@ -2998,7 +3005,7 @@ msgstr "아직 연결된 MCP 서버가 없습니다."
 msgid "No messages with {peerBotName} yet."
 msgstr "{peerBotName}와의 메시지가 아직 없습니다."
 
-#: src/pages/model-settings/model-detail.tsx:369
+#: src/pages/model-settings/model-detail.tsx:370
 msgid "No model catalog is available."
 msgstr "사용 가능한 모델 목록이 없습니다."
 
@@ -3006,7 +3013,7 @@ msgstr "사용 가능한 모델 목록이 없습니다."
 msgid "No model connected"
 msgstr "연결된 모델 없음"
 
-#: src/pages/ModelSettingsOverlay.tsx:122
+#: src/pages/ProvidersSettings.tsx:153
 msgid "No providers found."
 msgstr "검색된 AI 서비스가 없습니다."
 
@@ -3269,7 +3276,7 @@ msgstr "비밀번호가 업데이트되었습니다"
 msgid "Passwords do not match"
 msgstr "비밀번호가 일치하지 않습니다"
 
-#: src/pages/VoiceSettingsOverlay.tsx:255
+#: src/pages/ProvidersSettings.tsx:225
 msgid "Paste a replacement key"
 msgstr "새 API 키를 붙여넣으세요"
 
@@ -3277,7 +3284,7 @@ msgstr "새 API 키를 붙여넣으세요"
 msgid "Paste the OpenAI-compatible address from your server. Rakazo adds /v1 if needed."
 msgstr "서버의 OpenAI 호환 주소를 붙여넣으세요. 필요하면 Rakazo가 /v1을 추가합니다."
 
-#: src/pages/VoiceSettingsOverlay.tsx:255
+#: src/pages/ProvidersSettings.tsx:225
 msgid "Paste your API key"
 msgstr "API 키를 붙여넣으세요"
 
@@ -3297,7 +3304,7 @@ msgstr "내 인증 정보"
 msgid "Pin"
 msgstr "고정"
 
-#: src/pages/VoiceSettingsOverlay.tsx:317
+#: src/pages/VoiceSettingsOverlay.tsx:236
 msgid "Playing…"
 msgstr "재생 중…"
 
@@ -3327,7 +3334,7 @@ msgstr ""
 msgid "Private workspace with its own bots and groups."
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:108
+#: src/pages/SettingsOverlay.tsx:111
 msgid "Profile"
 msgstr "프로필"
 
@@ -3345,8 +3352,8 @@ msgstr ""
 msgid "Provider"
 msgstr "서비스"
 
-#: src/pages/ModelSettingsOverlay.tsx:77
-#: src/pages/VoiceSettingsOverlay.tsx:186
+#: src/pages/SettingsOverlay.tsx:112
+#: src/pages/VoiceSettingsOverlay.tsx:154
 msgid "Providers"
 msgstr "서비스"
 
@@ -3568,7 +3575,7 @@ msgstr "다시 열기"
 msgid "Replace API key"
 msgstr "API 키 교체"
 
-#: src/pages/VoiceSettingsOverlay.tsx:267
+#: src/pages/ProvidersSettings.tsx:237
 msgid "Replace key"
 msgstr "키 교체"
 
@@ -3838,8 +3845,8 @@ msgstr ""
 msgid "Search models"
 msgstr "모델 검색"
 
-#: src/pages/ModelSettingsOverlay.tsx:80
-#: src/pages/ModelSettingsOverlay.tsx:86
+#: src/pages/ProvidersSettings.tsx:104
+#: src/pages/ProvidersSettings.tsx:110
 msgid "Search providers"
 msgstr "AI 서비스 검색"
 
@@ -3900,7 +3907,7 @@ msgstr "서버 URL"
 
 #: src/pages/bot-page/BotPage.tsx:101
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:177
+#: src/pages/SettingsOverlay.tsx:181
 #: src/pages/shell/sidebar-footer.tsx:195
 #: src/pages/shell/sidebar-footer.tsx:202
 msgid "Settings"
@@ -4049,11 +4056,13 @@ msgstr "스페이스 기본값"
 msgid "Spaces"
 msgstr ""
 
-#: src/pages/VoiceSettingsOverlay.tsx:218
+#: src/pages/ProvidersSettings.tsx:187
+#: src/pages/VoiceSettingsOverlay.tsx:183
 msgid "Speak + transcribe"
 msgstr "음성 출력·받아쓰기"
 
-#: src/pages/VoiceSettingsOverlay.tsx:220
+#: src/pages/ProvidersSettings.tsx:189
+#: src/pages/VoiceSettingsOverlay.tsx:185
 msgid "Speak only"
 msgstr "음성 출력만"
 
@@ -4146,11 +4155,11 @@ msgstr "사고 모드 지원"
 msgid "Switch bot"
 msgstr "봇 전환"
 
-#: src/pages/SettingsOverlay.tsx:385
+#: src/pages/SettingsOverlay.tsx:397
 msgid "Switch space"
 msgstr "스페이스 전환"
 
-#: src/pages/model-settings/model-detail.tsx:358
+#: src/pages/model-settings/model-detail.tsx:359
 msgid "Switching…"
 msgstr "전환 중…"
 
@@ -4394,7 +4403,7 @@ msgstr ""
 msgid "Updated"
 msgstr "업데이트됨"
 
-#: src/pages/SettingsOverlay.tsx:109
+#: src/pages/SettingsOverlay.tsx:113
 msgid "Updates"
 msgstr "업데이트"
 
@@ -4422,7 +4431,7 @@ msgstr ""
 msgid "Updating…"
 msgstr "업데이트 중…"
 
-#: src/pages/SettingsOverlay.tsx:116
+#: src/pages/SettingsOverlay.tsx:120
 #: src/pages/shell/sidebar-footer.tsx:207
 #: src/pages/shell/sidebar-footer.tsx:214
 msgid "Usage"
@@ -4438,7 +4447,7 @@ msgstr "찾은 모델 중에서 선택"
 msgid "Use default guidance"
 msgstr ""
 
-#: src/pages/model-settings/model-detail.tsx:358
+#: src/pages/model-settings/model-detail.tsx:359
 msgid "Use this model"
 msgstr "이 모델 사용"
 
@@ -4452,11 +4461,13 @@ msgstr "확인 중…"
 
 #: src/pages/bot-page/SettingDetails.tsx:185
 #: src/pages/bot-page/SettingDetails.tsx:189
-#: src/pages/SettingsOverlay.tsx:112
+#: src/pages/ProvidersSettings.tsx:159
+#: src/pages/ProvidersSettings.tsx:161
+#: src/pages/SettingsOverlay.tsx:116
 #: src/pages/shell/thread-header.tsx:139
 #: src/pages/shell/thread-header.tsx:140
-#: src/pages/VoiceSettingsOverlay.tsx:170
-#: src/pages/VoiceSettingsOverlay.tsx:293
+#: src/pages/VoiceSettingsOverlay.tsx:137
+#: src/pages/VoiceSettingsOverlay.tsx:212
 msgid "Voice"
 msgstr "음성"
 
