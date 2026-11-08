@@ -153,7 +153,10 @@ async function computerBlocker(
   return idle ? null : "computer_active";
 }
 
-/** All workers in the home's scope, including finished runs and superseded attempts. */
+/**
+ * All workers in the home's scope, including finished runs and superseded attempts. A team home
+ * spans every bot of its person, since they share one volume.
+ */
 async function homeWorkers(
   db: Db,
   computerId: string,
@@ -162,11 +165,9 @@ async function homeWorkers(
   const [counts] = await db.$queryRaw<{ live: number; total: number }[]>`
     SELECT count(*) FILTER (WHERE a."workerState" IN (${RELEASABLE}))::int AS live,
       count(a."workerState")::int AS total
-    FROM attempts a JOIN runs r ON r.id = a."runId"
-    WHERE r."spaceId" = ${computer.spaceId}
-      AND (${computer.scope === "team"} OR r."botId" IN (
-        SELECT id FROM bots WHERE "computerId" = ${computerId}
-      ))`;
+    FROM attempts a JOIN runs r ON r.id = a."runId" JOIN bots b ON b.id = r."botId"
+    WHERE r."spaceId" = ${computer.spaceId} AND b."userId" = ${computer.userId}
+      AND (${computer.scope === "team"} OR b."computerId" = ${computerId})`;
   return counts ?? { live: 0, total: 0 };
 }
 
@@ -202,7 +203,7 @@ async function inspectHomeMove(db: Db, computerId: string, lock: boolean) {
   const computers = await db.$queryRaw<Array<HomeComputer & { id: string }>>`
     SELECT id, kind, scope, "spaceId", "userId", "homeStorage", "homeRevision", state,
       "controlHolder", "maintenanceId", "updatedAt" FROM computers
-    WHERE "spaceId" = ${source.spaceId} ORDER BY id ${lock ? Prisma.sql`FOR UPDATE` : Prisma.empty}`;
+    WHERE "spaceId" = ${source.spaceId} AND "userId" = ${source.userId} ORDER BY id ${lock ? Prisma.sql`FOR UPDATE` : Prisma.empty}`;
   const computer = computers.find((row) => row.id === computerId);
   if (!computer) throw new Error("Computer not found");
   const workers = await homeWorkers(db, computerId, computer);
@@ -358,7 +359,7 @@ export function createWorkerLifecycle(deps: {
         SELECT r.id AS "runId", r."botId", r."spaceId", b."userId", a.fence, r."leaseFence", r.status,
           c.id AS "computerId", c."homeStorage",
           EXISTS (SELECT 1 FROM computers moving WHERE moving."spaceId" = r."spaceId"
-            AND moving."maintenanceId" LIKE 'home-move:%'
+            AND moving."userId" = b."userId" AND moving."maintenanceId" LIKE 'home-move:%'
             AND (moving.scope = 'team' OR moving.id = b."computerId")) AS "homeMoving",
           (SELECT v.id FROM volumes v WHERE v.kind = 'bot_private' AND v."botId" = r."botId")
             AS "privateVolumeId",
@@ -394,9 +395,10 @@ export function createWorkerLifecycle(deps: {
       const { id: providerKind, capabilities } = provider.describe();
       const { mounts, ensureAt } = await prisma.$transaction(async (tx) => {
         const computers = await tx.$queryRaw<{ maintenanceId: string | null }[]>`
-          SELECT "maintenanceId" FROM computers WHERE "spaceId" = ${launch.spaceId}
-            AND (scope = 'team' OR id = (SELECT "computerId" FROM bots WHERE id = ${launch.botId}))
-          ORDER BY id FOR UPDATE`;
+          SELECT c."maintenanceId" FROM computers c JOIN bots b ON b.id = ${launch.botId}
+          WHERE c."spaceId" = ${launch.spaceId} AND c."userId" = b."userId"
+            AND (c.scope = 'team' OR c.id = b."computerId")
+          ORDER BY c.id FOR UPDATE OF c`;
         if (computers.some((computer) => computer.maintenanceId?.startsWith("home-move:"))) {
           throw new AgentRuntimeBusyError("Computer home is moving");
         }
@@ -651,7 +653,7 @@ export function createWorkerLifecycle(deps: {
       }
     },
 
-    /** Reserves the source, or the space for a team home that also copies its shared volume. */
+    /** Reserves the source, or its person's computers for a team home that also copies their shared volume. */
     async reserveHomeMove(
       computerId: string,
     ): Promise<{ marker: string } | { blocker: HomeMoveBlocker }> {
@@ -662,7 +664,8 @@ export function createWorkerLifecycle(deps: {
         await tx.$executeRaw`
           UPDATE computers SET "maintenanceId" = ${marker}, "updatedAt" = ${HOME_MOVE_NOW},
             "homeMoveExpiresAt" = ${HOME_MOVE_NOW} + ${HOME_MOVE_TTL_MS} * interval '1 millisecond'
-          WHERE "spaceId" = ${computer.spaceId} AND (${computer.scope === "team"} OR id = ${computerId})`;
+          WHERE "spaceId" = ${computer.spaceId} AND "userId" = ${computer.userId}
+            AND (${computer.scope === "team"} OR id = ${computerId})`;
         return { marker };
       });
     },

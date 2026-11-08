@@ -94,6 +94,28 @@ describe("volume provisioning and home adoption", () => {
     expect(await homeStorage()).toBe("volumes");
   });
 
+  it("moves one person's team home while another person's bot runs in the Space", async () => {
+    const other = workerFixture(prisma);
+    await other.seedOwner();
+    const space = await fixture.seedSpace();
+    const computer = await fixture.seedComputer(space);
+    const bot = await fixture.seedBot(space, computer.id);
+    await fixture.seedVolume("bot_private", space, bot.id);
+    await fixture.seedVolume("space_shared", space, null);
+    const theirs = await fixture.seedAttempt(
+      (await fixture.seedRun(await fixture.seedBot(space, null, other.userId))).id,
+    );
+    const { start } = await workers.inspectHomeMove(computer.id);
+    const reservation = await workers.reserveHomeMove(computer.id);
+    if (!("marker" in reservation)) throw new Error(reservation.blocker);
+
+    await workers.start(await fixture.launchFor(workers, theirs.id, mcpOnly), fixture.context);
+    expect(await workers.adoptVolumeHome(computer.id, start, reservation.marker)).toBe("adopted");
+
+    await workers.releaseHomeMove(reservation.marker);
+    await workers.release(theirs.id, fixture.context);
+  });
+
   it("waits for every dedicated worker to be destroyed and rejects a copy made before they ran", async () => {
     const space = await fixture.seedSpace();
     const computer = await fixture.seedComputer(space, { scope: "dedicated" });
