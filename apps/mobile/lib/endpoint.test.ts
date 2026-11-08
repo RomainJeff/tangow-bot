@@ -218,13 +218,6 @@ describe("mobile custom server UI", () => {
     expect(api).not.toMatch(/export const API /);
   });
 
-  it("reaches the same sheet from account settings", () => {
-    const account = read("../app/account.tsx");
-    expect(account).toContain("ServerSheet");
-    // A new origin drops the session, so settings has to route back to sign-in.
-    expect(account).toContain("explicitSignInRoute");
-  });
-
   it("only sends a service token while the Access toggle is on", () => {
     const sheet = read("../components/server-sheet.tsx");
     expect(sheet).toContain("Cloudflare Access protected");

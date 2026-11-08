@@ -374,7 +374,7 @@ export default function Home() {
           {/* The avatar covers a CircleButton's fill, so it dims on press instead. */}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={t("Account")}
+            accessibilityLabel={t("Settings")}
             onPress={() => router.push("/account")}
             hitSlop={4}
             style={({ pressed }) => pressed && styles.avatarPressed}
