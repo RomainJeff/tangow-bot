@@ -85,14 +85,15 @@ function SpaceNameRow({
     setError(null);
     try {
       await rpc.spaces.rename({ spaceId: space.id, name });
-      setValue(name);
-      await onRenamed?.();
     } catch {
       setValue(space.name);
       setError(t`Couldn't rename the space`);
+      return;
     } finally {
       setPending(false);
     }
+    setValue(name);
+    await onRenamed?.();
   }
 
   return (

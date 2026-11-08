@@ -1658,7 +1658,7 @@ msgstr "Не удалось создать"
 msgid "Couldn't load messaging settings"
 msgstr "Не удалось загрузить настройки обмена сообщениями."
 
-#: src/pages/SpaceGeneralSettings.tsx:92
+#: src/pages/SpaceGeneralSettings.tsx:90
 msgid "Couldn't rename the space"
 msgstr "Не удалось переименовать пространство"
 
@@ -2852,7 +2852,7 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx:72
 #: src/pages/shell/dialogs.tsx:187
 #: src/pages/shell/dialogs.tsx:250
-#: src/pages/SpaceGeneralSettings.tsx:105
+#: src/pages/SpaceGeneralSettings.tsx:106
 msgid "Name"
 msgstr "Имя"
 
