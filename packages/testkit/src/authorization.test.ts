@@ -75,6 +75,7 @@ describeWithDatabase("API authorization and resource isolation", () => {
       ["models/setDefault", { provider: "test", modelId: "test/model" }],
       ["spaces/list"],
       ["spaces/create", { name: "Nope" }],
+      ["spaces/rename", { spaceId: "missing-space", name: "Nope" }],
       ["spaces/remove", { spaceId: "missing-space" }],
       ["bots/list"],
       ["bots/listArchived"],
@@ -972,6 +973,78 @@ describeWithDatabase("API authorization and resource isolation", () => {
     );
     expect(ownerRemoved.ok).toBe(true);
     await expect(handles.prisma.space.findUnique({ where: { id: shared.id } })).resolves.toBeNull();
+  });
+
+  it("renames a space only for its owner", async () => {
+    const cookie = await signup(app, `space-rename-${stamp}@rakazo.test`, "Space Rename");
+    const actor = await rpc<Actor>(app, cookie, "me");
+    const renamedDefault = await rpc<Space>(app, cookie, "spaces/rename", {
+      spaceId: actor.spaceId,
+      name: "  Home  ",
+    });
+    expect(renamedDefault).toMatchObject({ id: actor.spaceId, name: "Home", canRename: true });
+    for (const name of ["   ", "x".repeat(61)]) {
+      await expect(
+        raw(app, cookie, "spaces/rename", { spaceId: actor.spaceId, name }),
+      ).resolves.toMatchObject({ status: 400 });
+    }
+
+    const shared = await rpc<Space>(app, cookie, "spaces/create", { name: "Shared" });
+    const { organizationId } = await handles.prisma.space.findUniqueOrThrow({
+      where: { id: shared.id },
+      select: { organizationId: true },
+    });
+    const memberCookie = await signup(app, `space-rename-member-${stamp}@rakazo.test`, "Member");
+    const member = await rpc<Actor>(app, memberCookie, "me");
+    await handles.prisma.member.deleteMany({ where: { userId: member.userId } });
+    await handles.prisma.member.create({
+      data: {
+        id: `space-rename-org-member-${stamp}`,
+        organizationId,
+        userId: member.userId,
+        role: "member",
+        createdAt: new Date(),
+      },
+    });
+    await handles.prisma.spaceMember.create({
+      data: {
+        id: `space-rename-space-member-${stamp}`,
+        spaceId: shared.id,
+        organizationId,
+        userId: member.userId,
+        role: "member",
+        createdAt: new Date(),
+      },
+    });
+    const memberNavigation = await rpc<SpaceNavigation>(
+      app,
+      memberCookie,
+      "spaces/list",
+      {},
+      shared.id,
+    );
+    expect(memberNavigation.spaces.find((space) => space.id === shared.id)?.canRename).toBe(false);
+    await expect(
+      raw(app, memberCookie, "spaces/rename", { spaceId: shared.id, name: "Taken" }, shared.id),
+    ).resolves.toMatchObject({ status: 403 });
+
+    const intruder = await signup(app, `space-rename-intruder-${stamp}@rakazo.test`, "Intruder");
+    await expect(
+      raw(app, intruder, "spaces/rename", { spaceId: shared.id, name: "Taken" }),
+    ).resolves.toMatchObject({ status: 404 });
+
+    await handles.prisma.space.update({
+      where: { id: shared.id },
+      data: { deletingAt: new Date() },
+    });
+    await expect(
+      raw(app, cookie, "spaces/rename", { spaceId: shared.id, name: "Late" }),
+    ).resolves.toMatchObject({ status: 409 });
+    await handles.prisma.space.update({ where: { id: shared.id }, data: { deletingAt: null } });
+
+    await expect(
+      rpc<Space>(app, cookie, "spaces/rename", { spaceId: shared.id, name: "Team" }),
+    ).resolves.toMatchObject({ id: shared.id, name: "Team", canRename: true });
   });
 
   it("blocks bot creation after empty space deletion is claimed", async () => {

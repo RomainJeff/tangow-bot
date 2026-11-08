@@ -85,7 +85,18 @@ it("lists each owned active computer once and queues only idle computers in the 
     botId: executingBot.id,
     runId: "active-computer-settings-turn",
   });
-  const sandbox = new FakeSandboxProvider();
+  const current = await fixture.seedComputer(spaceId);
+  const currentBot = await fixture.seedBot(spaceId, current.id);
+  const neverStarted = await fixture.seedComputer(spaceId);
+  const neverStartedBot = await fixture.seedBot(spaceId, neverStarted.id);
+  await prisma.computer.updateMany({
+    where: { id: { in: [idle.id, controlled.id, executing.id, current.id] } },
+    data: { providerRef: "existing-machine" },
+  });
+  await prisma.computer.update({ where: { id: current.id }, data: { releaseRef: "release-new" } });
+  const sandbox = Object.assign(new FakeSandboxProvider(), {
+    currentRelease: async () => "release-new",
+  });
   const handler = new RPCHandler(
     createRouter({
       prisma,
@@ -118,18 +129,28 @@ it("lists each owned active computer once and queues only idle computers in the 
     const listed = ComputerListItemSchema.array().parse(await call("list"));
     const representative = firstBot.id < secondBot.id ? firstBot : secondBot;
     expect(listed.map((item) => item.botId).sort()).toEqual(
-      [representative.id, controlledBot.id, executingRepresentative.id].sort(),
+      [
+        representative.id,
+        controlledBot.id,
+        executingRepresentative.id,
+        currentBot.id,
+        neverStartedBot.id,
+      ].sort(),
     );
     expect(listed.find((item) => item.botId === representative.id)).toMatchObject({
       name: representative.name,
       bots: [firstBot, secondBot]
         .sort((a, b) => a.id.localeCompare(b.id))
         .map(({ id, name }) => ({ id, name })),
-      status: { state: "stopped", controlHolder: "none" },
+      status: { state: "stopped", controlHolder: "none", updateAvailable: true },
     });
     expect(
       listed.find((item) => item.botId === executingRepresentative.id)?.status.busyBotName,
     ).toBe(executingBot.name);
+    expect(listed.find((item) => item.botId === currentBot.id)?.status.updateAvailable).toBe(false);
+    expect(listed.find((item) => item.botId === neverStartedBot.id)?.status.updateAvailable).toBe(
+      false,
+    );
     expect(sandbox.boxes.size).toBe(0);
     expect(await prisma.computer.findUniqueOrThrow({ where: { id: controlled.id } })).toMatchObject(
       {

@@ -178,6 +178,7 @@ import {
 import { listBotActivity, readRunEntries, readRunRecap } from "./bot-activity.js";
 import { botProfileLabelsChanged, commitBotUpdate } from "./bot-update.js";
 import {
+  currentComputerRelease,
   executionBlocksUserTakeover,
   resolveBusyBotName,
   toComputerStatus,
@@ -634,11 +635,48 @@ export function createRouter(deps: RouterDeps) {
           isDefault: false,
           hasContent: false,
           canDelete: true,
+          canRename: true,
           bots: [],
           groups: [],
           externalConversations: [],
           botSections: [],
         };
+      }),
+      rename: authed.spaces.rename.handler(async ({ context, input }) => {
+        const { actor } = context;
+        const [currentSpace, membership] = await Promise.all([
+          deps.prisma.space.findUnique({
+            where: { id: actor.spaceId },
+            select: { organizationId: true },
+          }),
+          deps.prisma.spaceMember.findUnique({
+            where: { spaceId_userId: { spaceId: input.spaceId, userId: actor.userId } },
+            select: { organizationId: true, role: true },
+          }),
+        ]);
+        if (!currentSpace) throw new IsolationError();
+        if (!membership || membership.organizationId !== currentSpace.organizationId) {
+          throw new ORPCError("NOT_FOUND", { message: new SpaceNotFoundError().message });
+        }
+        if (membership.role !== "owner") {
+          throw new ORPCError("FORBIDDEN", { message: "Only the space owner can rename it" });
+        }
+        const staleClaimBefore = new Date(Date.now() - SPACE_DELETION_CLAIM_TIMEOUT_MS);
+        const renamed = await deps.prisma.space.updateMany({
+          where: {
+            id: input.spaceId,
+            memberships: { some: { userId: actor.userId, role: "owner" } },
+            OR: [{ deletingAt: null }, { deletingAt: { lt: staleClaimBefore } }],
+          },
+          data: { name: input.name },
+        });
+        if (renamed.count === 0) {
+          throw new ORPCError("CONFLICT", { message: new SpaceDeletionInProgressError().message });
+        }
+        const navigation = await spaceNavigationDto(deps, actor, repos, groupRepos);
+        const space = navigation.spaces.find((item) => item.id === input.spaceId);
+        if (!space) throw new ORPCError("NOT_FOUND", { message: new SpaceNotFoundError().message });
+        return space;
       }),
       remove: authed.spaces.remove.handler(async ({ context, input }) => {
         let claimId: string | null = null;
@@ -1840,7 +1878,10 @@ export function createRouter(deps: RouterDeps) {
       updateAll: authed.computer.updateAll.handler(async ({ context }) => {
         const computers = await listAccessibleComputers(deps.prisma, context.actor);
         const result: ComputerUpdateAllResult = { queued: [], skipped: [] };
+        const currentRelease = await currentComputerRelease(deps.sandbox, context.actor);
         for (const computer of computers) {
+          if (currentRelease && (!computer.providerRef || computer.releaseRef === currentRelease))
+            continue;
           const bot = computer.bots[0];
           if (!bot) continue;
           try {
@@ -5032,6 +5073,7 @@ async function spaceNavigationDto(
           memberships.length > 1 &&
           !spacesWithContent.has(membership.spaceId) &&
           (membership.space.deletingAt === null || membership.space.deletingAt < staleClaimBefore),
+        canRename: membership.role === "owner",
         bots: spaceBots.map((bot) => ({
           id: bot.id,
           spaceId: bot.spaceId,
@@ -5146,6 +5188,8 @@ function listAccessibleComputers(prisma: PrismaClient, actor: Actor) {
     select: {
       id: true,
       kind: true,
+      providerRef: true,
+      releaseRef: true,
       bots: {
         where: ownedActiveBot,
         select: { id: true, name: true },
@@ -5171,7 +5215,13 @@ async function computerStatus(
     botId,
     botName: bot.name,
   });
-  return toComputerStatus(botId, bot.screenGeneration, bot.computer, busyBotName);
+  return toComputerStatus(
+    botId,
+    bot.screenGeneration,
+    bot.computer,
+    busyBotName,
+    await currentComputerRelease(deps.sandbox, actor),
+  );
 }
 
 async function runComputerReplace(

@@ -146,7 +146,21 @@ show the last 100 lines unless followed; they are operator output and may contai
 a clean checkout matching the running API and worker revision; use `update` for a new revision.
 
 New workers and computers use the new builds. To replace existing computers, open
-**Settings > Computer > Update all computers**. Busy computers are skipped and reported for retry.
+**Settings > Computer > Update all computers**. The batch action appears when updates are available;
+current computers are skipped, and busy computers are reported for retry.
+
+Computer releases follow the environment, independently of the application commit. Docker compares
+immutable image IDs; its managed skills update through their live mount without replacement. E2B
+publishes a content tag derived from the canonical image digest, effective template instructions,
+VM profile and embedded skills. Rebuilding an unchanged template retains its release reference even
+when E2B assigns another build ID. Cold Docker rebuilds can produce another image ID, especially when
+upstream packages change; this is artifact identity, not a guarantee of reproducible builds.
+
+Existing computers retain their original release reference when resumed. After the first release-aware
+deployment, an existing computer with no recorded reference is offered one manual update. Computers
+never started receive the current release at first boot and show no update notice. If a provider cannot
+report its published release, version notices are unavailable; opening the computer and manual
+maintenance remain available. Release checks are cached for up to one minute.
 Tangow does not interrupt them.
 
 Cleanup removes unused build cache and images. It never prunes containers or volumes. Run it after checking the deployment. `--dry-run` on any

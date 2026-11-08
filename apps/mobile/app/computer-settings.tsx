@@ -85,13 +85,15 @@ export default function ComputerSettings() {
             <QuietLine>{t("No computers")}</QuietLine>
           ) : (
             <>
-              <Group>
-                <Row
-                  label={pending ? t("Updating…") : t("Update all computers")}
-                  disabled={pending || !read.value.some((computer) => computer.status.canUpdate)}
-                  onPress={() => void updateAll()}
-                />
-              </Group>
+              {read.value.some((item) => item.status.updateAvailable) ? (
+                <Group>
+                  <Row
+                    label={pending ? t("Updating…") : t("Update all computers")}
+                    disabled={pending || !read.value.some((computer) => computer.status.canUpdate)}
+                    onPress={() => void updateAll()}
+                  />
+                </Group>
+              ) : null}
               {read.value.map((computer) => (
                 <Group
                   key={computer.botId}

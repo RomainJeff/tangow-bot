@@ -1,7 +1,34 @@
-import { createHash } from "node:crypto";
-import { type ComputerStatus, SandboxKind } from "@rakazo/contracts";
+import { createHash, randomUUID } from "node:crypto";
+import type { AdapterContext, SandboxProvider } from "@rakazo/adapter-kit";
+import type { ComputerStatus } from "@rakazo/contracts";
+import { SandboxKind } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, DEFAULT_COMPUTER_SCREEN } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
+
+const releases = new WeakMap<
+  SandboxProvider,
+  { expiresAt: number; value: Promise<string | null> }
+>();
+
+/** A provider outage must not prevent opening a conversation or a computer. */
+export function currentComputerRelease(
+  sandbox: SandboxProvider | undefined,
+  actor: Pick<AdapterContext, "spaceId" | "userId">,
+): Promise<string | null> {
+  if (!sandbox?.currentRelease) return Promise.resolve(null);
+  const cached = releases.get(sandbox);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+  const value = sandbox
+    .currentRelease({
+      ...actor,
+      operationId: "computer-release",
+      traceId: randomUUID(),
+      signal: AbortSignal.timeout(3_000),
+    })
+    .catch(() => null);
+  releases.set(sandbox, { value, expiresAt: Date.now() + 60_000 });
+  return value;
+}
 
 /** Mirrors computer.takeover: an execution lease blocks user control unless a takeover is pending. */
 export function executionBlocksUserTakeover(input: {
@@ -78,8 +105,11 @@ export function toComputerStatus(
     controlRunId?: string | null;
     homeRevision: string;
     maintenanceId?: string | null;
+    providerRef?: string | null;
+    releaseRef?: string | null;
   } | null,
   busyBotName: string | null = null,
+  currentRelease: string | null = null,
 ): ComputerStatus {
   const state = computer?.maintenanceId
     ? "booting"
@@ -109,5 +139,8 @@ export function toComputerStatus(
     screenStamp: screenStamp(botScreenGeneration, computer),
     busyBotName,
     canUpdate: true,
+    updateAvailable: Boolean(
+      computer?.providerRef && currentRelease && computer.releaseRef !== currentRelease,
+    ),
   };
 }

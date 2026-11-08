@@ -1,5 +1,5 @@
 import { useLingui } from "@lingui/react/macro";
-import type { AvatarStyle, SpaceMemoryConfig } from "@rakazo/contracts";
+import type { AvatarStyle, ComputerListItem, SpaceMemoryConfig } from "@rakazo/contracts";
 import {
   Button,
   Dialog,
@@ -28,6 +28,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { type ComponentType, useEffect, useId, useRef, useState } from "react";
+import { rpc } from "../lib/rpc";
 import { ProfileSettingsPanels, UpdatesSettingsPanel } from "./AccountSettingsOverlay";
 import { ComputerSettingsPanel } from "./ComputerSettingsPanel";
 import { DecisionModelSettingsPanel } from "./DecisionModelSettingsPanel";
@@ -44,11 +45,12 @@ import { UsageSettingsPanel } from "./usage-settings";
 import { VoiceSettingsOverlay } from "./VoiceSettingsOverlay";
 
 type NavItem = {
+  updateAvailable?: boolean;
   label: string;
   icon: ComponentType<{ className?: string; strokeWidth?: number }>;
 };
 
-type SettingsSpace = { id: string; name: string };
+type SettingsSpace = { id: string; name: string; canRename?: boolean };
 
 export function SettingsOverlay({
   email,
@@ -66,6 +68,7 @@ export function SettingsOverlay({
   spaces,
   currentSpaceId,
   onSwitchSpace,
+  onSpaceRenamed,
   onClose,
   onVoiceStatusMaybeChanged,
 }: {
@@ -84,6 +87,7 @@ export function SettingsOverlay({
   spaces: SettingsSpace[];
   currentSpaceId: string | undefined;
   onSwitchSpace: (spaceId: string, section: SettingsSection) => void;
+  onSpaceRenamed?: () => void | Promise<void>;
   onClose: () => void;
   onVoiceStatusMaybeChanged?: () => void | Promise<void>;
 }) {
@@ -95,6 +99,19 @@ export function SettingsOverlay({
   const [decisionModelBusy, setDecisionModelBusy] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState(false);
   const [providersBusy, setProvidersBusy] = useState(false);
+  const [computerUpdateAvailable, setComputerUpdateAvailable] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void rpc.computer
+      .list()
+      .then((items: ComputerListItem[]) => {
+        if (active) setComputerUpdateAvailable(items.some((item) => item.status.updateAvailable));
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [section, currentSpaceId]);
   const panelBusy = memoryBusy || decisionModelBusy || voiceBusy || providersBusy;
 
   useEffect(() => {
@@ -116,7 +133,7 @@ export function SettingsOverlay({
     voice: { label: t`Voice`, icon: Volume2 },
     memory: { label: t`Memory`, icon: Brain },
     "decision-model": { label: t`Decision Model`, icon: Signpost },
-    computer: { label: t`Computer`, icon: Monitor },
+    computer: { label: t`Computer`, icon: Monitor, updateAvailable: computerUpdateAvailable },
     usage: { label: t`Usage`, icon: Gauge },
   };
 
@@ -267,6 +284,8 @@ export function SettingsOverlay({
               ) : null}
               {section === "space" ? (
                 <SpaceGeneralSettings
+                  space={currentSpace}
+                  onSpaceRenamed={onSpaceRenamed}
                   messagingEnabled={messagingEnabled}
                   onOpenMessaging={
                     onOpenMessaging ? () => leaveSettings(onOpenMessaging) : undefined
@@ -274,7 +293,9 @@ export function SettingsOverlay({
                 />
               ) : null}
               {section === "usage" ? <UsageSettingsPanel panelRef={usageRef} /> : null}
-              {section === "computer" ? <ComputerSettingsPanel /> : null}
+              {section === "computer" ? (
+                <ComputerSettingsPanel onUpdateAvailableChange={setComputerUpdateAvailable} />
+              ) : null}
               {section === "updates" ? (
                 <UpdatesSettingsPanel isDeploymentOwner={isDeploymentOwner} />
               ) : null}
@@ -322,6 +343,7 @@ function SettingsNavButton({
   disabled: boolean;
   onSelect: (section: SettingsSection) => void;
 }) {
+  const { t } = useLingui();
   const Icon = item.icon;
   return (
     <button
@@ -338,6 +360,11 @@ function SettingsNavButton({
     >
       <Icon className="size-4 shrink-0" strokeWidth={1.75} />
       <span className="whitespace-nowrap">{item.label}</span>
+      {item.updateAvailable ? (
+        <span role="img" aria-label={t`Update available`} title={t`Update available`}>
+          <CloudDownload className="size-4 shrink-0" aria-hidden />
+        </span>
+      ) : null}
     </button>
   );
 }

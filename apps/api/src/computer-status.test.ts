@@ -14,6 +14,21 @@ const baseComputer = {
 };
 
 describe("toComputerStatus", () => {
+  it.each([
+    { providerRef: "machine", releaseRef: "old", desired: "new", available: true },
+    { providerRef: "machine", releaseRef: "new", desired: "new", available: false },
+    { providerRef: "machine", releaseRef: null, desired: "new", available: true },
+    { providerRef: null, releaseRef: null, desired: "new", available: false },
+    { providerRef: "machine", releaseRef: "old", desired: null, available: false },
+  ])(
+    "compares the existing computer release: %j",
+    ({ providerRef, releaseRef, desired, available }) => {
+      expect(
+        toComputerStatus("bot-1", 0, { ...baseComputer, providerRef, releaseRef }, null, desired)
+          .updateAvailable,
+      ).toBe(available);
+    },
+  );
   it("only marks control that is bound to a waiting run as a requested takeover", () => {
     const computer = {
       ...baseComputer,

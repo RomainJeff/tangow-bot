@@ -70,6 +70,11 @@ export function ComputerPreview({
           </button>
         ) : null}
       </div>
+      {computer?.updateAvailable ? (
+        <p role="status" className="mt-2 text-meta text-muted-foreground">
+          <Trans>Update available</Trans>
+        </p>
+      ) : null}
       <p className="mt-2 truncate text-reasoning text-muted-foreground" dir="auto">
         {t`${bot.name}'s screen`}
       </p>

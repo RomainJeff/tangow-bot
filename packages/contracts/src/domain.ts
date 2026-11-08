@@ -264,6 +264,8 @@ export const SpaceSchema = z.object({
   hasContent: z.boolean(),
   /** True only when the current member may delete this non-default space. */
   canDelete: z.boolean().optional(),
+  /** True only when the current member owns this space. */
+  canRename: z.boolean().optional(),
   bots: z.array(SpaceBotSchema),
   groups: z.array(SpaceGroupSchema),
   externalConversations: z.array(ExternalConversationSchema),
@@ -833,6 +835,7 @@ export const ComputerStatusSchema = z.object({
   screenStamp: z.string(),
   busyBotName: z.string().nullable(),
   canUpdate: z.boolean(),
+  updateAvailable: z.boolean().optional(),
 });
 export type ComputerStatus = z.infer<typeof ComputerStatusSchema>;
 

@@ -110,7 +110,7 @@ msgid "{0} in · {1} out"
 msgstr "输入 {0} · 输出 {1}"
 
 #. placeholder {0}: item.status.busyBotName
-#: src/pages/ComputerSettingsPanel.tsx:112
+#: src/pages/ComputerSettingsPanel.tsx:124
 msgid "{0} is using it"
 msgstr ""
 
@@ -140,7 +140,7 @@ msgid "{0} will still respond to direct mentions."
 msgstr ""
 
 #. placeholder {0}: bot.name
-#: src/pages/shell/computer-preview.tsx:74
+#: src/pages/shell/computer-preview.tsx:79
 msgid "{0}'s screen"
 msgstr "{0} 的屏幕"
 
@@ -152,7 +152,7 @@ msgstr ""
 msgid "{botName} is speaking"
 msgstr ""
 
-#: src/pages/shell/computer-preview.tsx:93
+#: src/pages/shell/computer-preview.tsx:98
 msgid "{botName}’s computer"
 msgstr "{botName} 的电脑"
 
@@ -438,7 +438,7 @@ msgstr "正在添加…"
 #: src/pages/Onboarding.tsx:496
 #: src/pages/plugins/advanced-integrations.tsx:77
 #: src/pages/RoutineSchedule.tsx:47
-#: src/pages/SpaceGeneralSettings.tsx:32
+#: src/pages/SpaceGeneralSettings.tsx:42
 msgid "Advanced"
 msgstr "高级"
 
@@ -745,7 +745,7 @@ msgstr ""
 msgid "Bearer token"
 msgstr "Bearer token"
 
-#: src/pages/shell/computer-preview.tsx:85
+#: src/pages/shell/computer-preview.tsx:90
 msgid "Booting live desktop…"
 msgstr "正在启动实时桌面…"
 
@@ -806,7 +806,7 @@ msgid "Bots are working"
 msgstr "Bot 正在工作"
 
 #. placeholder {0}: item.bots.map((bot) => bot.name).join(", ")
-#: src/pages/ComputerSettingsPanel.tsx:104
+#: src/pages/ComputerSettingsPanel.tsx:116
 msgid "Bots: {0}"
 msgstr ""
 
@@ -822,7 +822,7 @@ msgstr ""
 msgid "Browse MCP servers"
 msgstr ""
 
-#: src/pages/ComputerSettingsPanel.tsx:68
+#: src/pages/ComputerSettingsPanel.tsx:80
 msgid "Busy. Try again when idle."
 msgstr ""
 
@@ -906,7 +906,7 @@ msgstr "频道"
 msgid "Chat apps"
 msgstr "聊天应用"
 
-#: src/pages/SpaceGeneralSettings.tsx:20
+#: src/pages/SpaceGeneralSettings.tsx:30
 msgid "Chat apps, group channels, and agent connections."
 msgstr "聊天应用、群组频道和 Agent 连接。"
 
@@ -1012,7 +1012,7 @@ msgid "Close MCP servers"
 msgstr "关闭 MCP 服务器"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:129
+#: src/pages/SettingsOverlay.tsx:146
 msgid "Close memory settings"
 msgstr "关闭记忆设置"
 
@@ -1021,7 +1021,7 @@ msgid "Close messaging settings"
 msgstr "关闭消息设置"
 
 #: src/pages/ModelSettingsOverlay.tsx:51
-#: src/pages/SettingsOverlay.tsx:127
+#: src/pages/SettingsOverlay.tsx:144
 msgid "Close model settings"
 msgstr "关闭模型设置"
 
@@ -1038,11 +1038,11 @@ msgstr "关闭预览"
 msgid "Close skills"
 msgstr "关闭技能"
 
-#: src/pages/SettingsOverlay.tsx:132
+#: src/pages/SettingsOverlay.tsx:149
 msgid "Close user settings"
 msgstr "关闭用户设置"
 
-#: src/pages/SettingsOverlay.tsx:131
+#: src/pages/SettingsOverlay.tsx:148
 #: src/pages/VoiceSettingsOverlay.tsx:141
 msgid "Close voice settings"
 msgstr "关闭语音设置"
@@ -1084,13 +1084,13 @@ msgstr "复杂"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:119
+#: src/pages/SettingsOverlay.tsx:136
 #: src/pages/shell/block-views.tsx:131
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
 msgstr "电脑"
 
-#: src/pages/shell/computer-preview.tsx:88
+#: src/pages/shell/computer-preview.tsx:93
 msgid "Computer failed to boot"
 msgstr "电脑启动失败"
 
@@ -1098,11 +1098,11 @@ msgstr "电脑启动失败"
 msgid "Computer is asleep"
 msgstr "电脑已休眠"
 
-#: src/pages/shell/computer-preview.tsx:87
+#: src/pages/shell/computer-preview.tsx:92
 msgid "Computer is asleep. Open it to wake."
 msgstr "电脑处于睡眠状态。打开以唤醒。"
 
-#: src/pages/shell/computer-preview.tsx:89
+#: src/pages/shell/computer-preview.tsx:94
 msgid "Computer is stopped"
 msgstr "电脑已停止"
 
@@ -1446,7 +1446,7 @@ msgstr "无法加载审批规则"
 msgid "Could not load bots. Reload to try again."
 msgstr ""
 
-#: src/pages/ComputerSettingsPanel.tsx:79
+#: src/pages/ComputerSettingsPanel.tsx:91
 msgid "Could not load computers"
 msgstr ""
 
@@ -1634,11 +1634,11 @@ msgid "Could not update agent access"
 msgstr "无法更新 Agent 权限"
 
 #: src/components/ComputerMaintenanceActions.tsx:67
-#: src/pages/ComputerSettingsPanel.tsx:71
+#: src/pages/ComputerSettingsPanel.tsx:83
 msgid "Could not update computer"
 msgstr "无法更新电脑"
 
-#: src/pages/ComputerSettingsPanel.tsx:81
+#: src/pages/ComputerSettingsPanel.tsx:93
 msgid "Could not update computers"
 msgstr ""
 
@@ -1662,6 +1662,10 @@ msgstr "无法创建"
 #: src/pages/MessagingSettingsOverlay.tsx:53
 msgid "Couldn't load messaging settings"
 msgstr "无法加载消息设置"
+
+#: src/pages/SpaceGeneralSettings.tsx:90
+msgid "Couldn't rename the space"
+msgstr "无法重命名空间"
 
 #: src/pages/AccountSettingsOverlay.tsx:69
 msgid "Couldn't update avatars"
@@ -1793,7 +1797,7 @@ msgstr "天"
 msgid "Debug mode"
 msgstr "调试模式"
 
-#: src/pages/SettingsOverlay.tsx:118
+#: src/pages/SettingsOverlay.tsx:135
 msgid "Decision Model"
 msgstr ""
 
@@ -2264,7 +2268,7 @@ msgstr "全屏"
 msgid "FYI"
 msgstr "供参考"
 
-#: src/pages/SettingsOverlay.tsx:114
+#: src/pages/SettingsOverlay.tsx:131
 msgid "General"
 msgstr "通用"
 
@@ -2613,7 +2617,7 @@ msgstr "请确认这台电脑上没有仍在运行的任务。"
 msgid "Manage MCP servers"
 msgstr "管理 MCP 服务器"
 
-#: src/pages/SpaceGeneralSettings.tsx:23
+#: src/pages/SpaceGeneralSettings.tsx:33
 msgid "Manage messaging settings"
 msgstr "管理消息设置"
 
@@ -2678,7 +2682,7 @@ msgstr "成员（选择 {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX} 个）"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:36
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:117
+#: src/pages/SettingsOverlay.tsx:134
 msgid "Memory"
 msgstr "记忆"
 
@@ -2741,7 +2745,7 @@ msgid "Messaged {peer}"
 msgstr "已发给 {peer}"
 
 #: src/pages/MessagingSettingsOverlay.tsx:99
-#: src/pages/SpaceGeneralSettings.tsx:17
+#: src/pages/SpaceGeneralSettings.tsx:27
 msgid "Messaging"
 msgstr "消息"
 
@@ -2809,7 +2813,7 @@ msgstr "模型已更新。"
 #: src/pages/ModelSettingsOverlay.tsx:44
 #: src/pages/ProvidersSettings.tsx:114
 #: src/pages/ProvidersSettings.tsx:116
-#: src/pages/SettingsOverlay.tsx:115
+#: src/pages/SettingsOverlay.tsx:132
 #: src/pages/usage-settings.tsx:69
 msgid "Models"
 msgstr "模型"
@@ -2827,7 +2831,7 @@ msgstr "每月"
 msgid "Monthly on day {day} at {time}"
 msgstr "每月 {day} 日 {time}"
 
-#: src/components/ComputerMaintenanceActions.tsx:152
+#: src/components/ComputerMaintenanceActions.tsx:157
 msgid "More computer actions"
 msgstr "更多电脑操作"
 
@@ -2855,6 +2859,7 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx:72
 #: src/pages/shell/dialogs.tsx:187
 #: src/pages/shell/dialogs.tsx:250
+#: src/pages/SpaceGeneralSettings.tsx:106
 msgid "Name"
 msgstr "名称"
 
@@ -2959,7 +2964,7 @@ msgstr "没有匹配的机器人"
 msgid "No chat apps linked yet."
 msgstr "还没有关联聊天应用。"
 
-#: src/pages/ComputerSettingsPanel.tsx:91
+#: src/pages/ComputerSettingsPanel.tsx:103
 msgid "No computers"
 msgstr ""
 
@@ -3207,7 +3212,7 @@ msgstr ""
 msgid "Optional"
 msgstr "可选"
 
-#: src/pages/SpaceGeneralSettings.tsx:35
+#: src/pages/SpaceGeneralSettings.tsx:45
 msgid "Optional controls most people never need"
 msgstr "多数人用不到的可选项"
 
@@ -3326,7 +3331,7 @@ msgstr "上一张图片"
 msgid "Private"
 msgstr "私有"
 
-#: src/pages/ComputerSettingsPanel.tsx:103
+#: src/pages/ComputerSettingsPanel.tsx:115
 msgid "Private Computer"
 msgstr ""
 
@@ -3334,7 +3339,7 @@ msgstr ""
 msgid "Private workspace with its own bots and groups."
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:111
+#: src/pages/SettingsOverlay.tsx:128
 msgid "Profile"
 msgstr "个人资料"
 
@@ -3352,7 +3357,7 @@ msgstr ""
 msgid "Provider"
 msgstr "提供方"
 
-#: src/pages/SettingsOverlay.tsx:112
+#: src/pages/SettingsOverlay.tsx:129
 #: src/pages/VoiceSettingsOverlay.tsx:154
 msgid "Providers"
 msgstr "提供方"
@@ -3439,7 +3444,7 @@ msgstr "录制已开始。请刷新视图以继续。"
 msgid "Recording: {0}"
 msgstr "录制中：{0}"
 
-#: src/components/ComputerMaintenanceActions.tsx:131
+#: src/components/ComputerMaintenanceActions.tsx:136
 #: src/components/ComputerUpdateProgress.tsx:234
 msgid "Recover computer"
 msgstr "恢复电脑"
@@ -3453,7 +3458,7 @@ msgstr ""
 msgid "Recovering Team Computer"
 msgstr ""
 
-#: src/components/ComputerMaintenanceActions.tsx:131
+#: src/components/ComputerMaintenanceActions.tsx:136
 msgid "Recovering…"
 msgstr "正在恢复…"
 
@@ -3609,7 +3614,7 @@ msgstr "请求"
 msgid "Reset"
 msgstr "重置"
 
-#: src/components/ComputerMaintenanceActions.tsx:139
+#: src/components/ComputerMaintenanceActions.tsx:144
 msgid "Reset computer"
 msgstr "重置电脑"
 
@@ -3626,7 +3631,7 @@ msgid "Reset your password"
 msgstr "重置你的密码"
 
 #: src/components/ComputerMaintenanceActions.tsx:103
-#: src/components/ComputerMaintenanceActions.tsx:139
+#: src/components/ComputerMaintenanceActions.tsx:144
 msgid "Resetting…"
 msgstr "正在重置…"
 
@@ -3659,7 +3664,7 @@ msgstr "结果"
 
 #: src/pages/bot-page/page-kit.tsx:52
 #: src/pages/bot-page/page-kit.tsx:88
-#: src/pages/ComputerSettingsPanel.tsx:84
+#: src/pages/ComputerSettingsPanel.tsx:96
 #: src/pages/shell/image-stack.tsx:156
 #: src/pages/shell/image-viewer.tsx:36
 msgid "Retry"
@@ -3907,7 +3912,7 @@ msgstr "服务器 URL"
 
 #: src/pages/bot-page/BotPage.tsx:101
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:181
+#: src/pages/SettingsOverlay.tsx:198
 #: src/pages/shell/sidebar-footer.tsx:195
 #: src/pages/shell/sidebar-footer.tsx:202
 msgid "Settings"
@@ -4155,7 +4160,7 @@ msgstr "支持思考"
 msgid "Switch bot"
 msgstr "切换机器人"
 
-#: src/pages/SettingsOverlay.tsx:397
+#: src/pages/SettingsOverlay.tsx:424
 msgid "Switch space"
 msgstr "切换空间"
 
@@ -4171,7 +4176,7 @@ msgstr "系统"
 msgid "Take control"
 msgstr ""
 
-#: src/components/ComputerMaintenanceActions.tsx:160
+#: src/components/ComputerMaintenanceActions.tsx:165
 #: src/components/teach/TeachComputerOverlay.tsx:213
 #: src/components/teach/TeachComputerOverlay.tsx:224
 msgid "Teach a task"
@@ -4187,8 +4192,8 @@ msgid "Team"
 msgstr "团队"
 
 #: src/components/ComputerUpdateProgress.tsx:61
-#: src/pages/ComputerSettingsPanel.tsx:103
-#: src/pages/shell/computer-preview.tsx:93
+#: src/pages/ComputerSettingsPanel.tsx:115
+#: src/pages/shell/computer-preview.tsx:98
 msgid "Team Computer"
 msgstr "团队电脑"
 
@@ -4372,15 +4377,19 @@ msgstr "已是最新"
 msgid "Update"
 msgstr "更新"
 
-#: src/pages/ComputerSettingsPanel.tsx:58
+#: src/pages/ComputerSettingsPanel.tsx:65
 msgid "Update all computers"
 msgstr ""
 
+#: src/components/ComputerMaintenanceActions.tsx:116
 #: src/components/SoftwareUpdateSection.tsx:260
+#: src/pages/SettingsOverlay.tsx:364
+#: src/pages/SettingsOverlay.tsx:364
+#: src/pages/shell/computer-preview.tsx:75
 msgid "Update available"
 msgstr "有可用更新"
 
-#: src/components/ComputerMaintenanceActions.tsx:122
+#: src/components/ComputerMaintenanceActions.tsx:127
 msgid "Update computer"
 msgstr "更新电脑"
 
@@ -4403,16 +4412,16 @@ msgstr ""
 msgid "Updated"
 msgstr "已更新"
 
-#: src/pages/SettingsOverlay.tsx:113
+#: src/pages/SettingsOverlay.tsx:130
 msgid "Updates"
 msgstr "更新"
 
-#: src/pages/ComputerSettingsPanel.tsx:70
+#: src/pages/ComputerSettingsPanel.tsx:82
 msgid "Updates are unavailable on this device"
 msgstr ""
 
 #. placeholder {0}: result.queued.length
-#: src/pages/ComputerSettingsPanel.tsx:62
+#: src/pages/ComputerSettingsPanel.tsx:74
 msgid "Updates queued: {0}"
 msgstr ""
 
@@ -4425,13 +4434,13 @@ msgstr ""
 msgid "Updating Team Computer"
 msgstr ""
 
-#: src/components/ComputerMaintenanceActions.tsx:122
+#: src/components/ComputerMaintenanceActions.tsx:127
 #: src/components/SoftwareUpdateSection.tsx:81
-#: src/pages/ComputerSettingsPanel.tsx:58
+#: src/pages/ComputerSettingsPanel.tsx:65
 msgid "Updating…"
 msgstr "正在更新…"
 
-#: src/pages/SettingsOverlay.tsx:120
+#: src/pages/SettingsOverlay.tsx:137
 #: src/pages/shell/sidebar-footer.tsx:207
 #: src/pages/shell/sidebar-footer.tsx:214
 msgid "Usage"
@@ -4463,7 +4472,7 @@ msgstr "正在校验…"
 #: src/pages/bot-page/SettingDetails.tsx:189
 #: src/pages/ProvidersSettings.tsx:159
 #: src/pages/ProvidersSettings.tsx:161
-#: src/pages/SettingsOverlay.tsx:116
+#: src/pages/SettingsOverlay.tsx:133
 #: src/pages/shell/thread-header.tsx:139
 #: src/pages/shell/thread-header.tsx:140
 #: src/pages/VoiceSettingsOverlay.tsx:137
@@ -4596,7 +4605,7 @@ msgstr "如果没有自动跳转，可以关闭此标签页。"
 msgid "You can close this window."
 msgstr "可以关闭此窗口。"
 
-#: src/pages/ComputerSettingsPanel.tsx:109
+#: src/pages/ComputerSettingsPanel.tsx:121
 #: src/pages/shell/side-panel.tsx:333
 msgid "You have control"
 msgstr "你已接管"

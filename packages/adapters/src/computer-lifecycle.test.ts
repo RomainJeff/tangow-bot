@@ -959,6 +959,7 @@ describe("computer provisioning", () => {
       const ref = {
         ...(await sandbox.provision({ botId: "bot-1", homePath: dataDir }, context)),
         ...next,
+        releaseRef: "release-new",
       };
       vi.spyOn(sandbox, "provision").mockResolvedValue(ref);
       const prepare = vi.spyOn(sandbox, "prepare");
@@ -1015,7 +1016,12 @@ describe("computer provisioning", () => {
             updatedAt: expect.any(Date),
             bots: { some: { id: "bot-1", archivedAt: null } },
           },
-          data: { state: "running", providerRef: next.providerRef, kind: next.kind },
+          data: {
+            state: "running",
+            providerRef: next.providerRef,
+            releaseRef: "release-new",
+            kind: next.kind,
+          },
         });
         expect(destroy).not.toHaveBeenCalled();
         expect(stop).not.toHaveBeenCalled();

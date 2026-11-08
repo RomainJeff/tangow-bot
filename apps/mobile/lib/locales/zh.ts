@@ -1,4 +1,5 @@
 export const ZH_MESSAGES: Record<string, string> = {
+  "Update available": "有可用更新",
   "30d": "30 天",
   "7d": "7 天",
   Breakdown: "细分",
@@ -229,6 +230,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Could not delete bot": "无法删除 Bot",
   "Could not delete group": "无法删除群组",
   "Could not delete space": "无法删除空间",
+  "Could not rename space": "无法重命名空间",
   "Could not finish sign-in": "无法完成登录",
   "Could not get a push token: {reason}": "无法获取推送令牌：{reason}",
   "Could not load bots": "无法加载 Bot 列表",
@@ -394,6 +396,8 @@ export const ZH_MESSAGES: Record<string, string> = {
   "New bot": "新建 Bot",
   "New group": "新建群组",
   "New section": "新建分组",
+  "Rename space": "重命名空间",
+  "Rename space…": "重命名空间…",
   "Rename section": "重命名分组",
   "Save section name": "保存分组名称",
   "New space": "新建空间",

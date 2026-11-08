@@ -64,6 +64,7 @@ export function ComputerMaintenanceActions({
 
   return (
     <Separated>
+      {computer.updateAvailable ? <Row label={t("Update available")} /> : null}
       <Row
         label={pending === "recover" ? t("Recovering…") : t("Recover computer")}
         disabled={busy || pending !== null}

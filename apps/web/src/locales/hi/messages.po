@@ -110,7 +110,7 @@ msgid "{0} in · {1} out"
 msgstr "{0} इनपुट · {1} आउटपुट"
 
 #. placeholder {0}: item.status.busyBotName
-#: src/pages/ComputerSettingsPanel.tsx:112
+#: src/pages/ComputerSettingsPanel.tsx:124
 msgid "{0} is using it"
 msgstr ""
 
@@ -140,7 +140,7 @@ msgid "{0} will still respond to direct mentions."
 msgstr ""
 
 #. placeholder {0}: bot.name
-#: src/pages/shell/computer-preview.tsx:74
+#: src/pages/shell/computer-preview.tsx:79
 msgid "{0}'s screen"
 msgstr "{0} की स्क्रीन"
 
@@ -152,7 +152,7 @@ msgstr ""
 msgid "{botName} is speaking"
 msgstr ""
 
-#: src/pages/shell/computer-preview.tsx:93
+#: src/pages/shell/computer-preview.tsx:98
 msgid "{botName}’s computer"
 msgstr "{botName} का कंप्यूटर"
 
@@ -438,7 +438,7 @@ msgstr "जोड़ा जा रहा है…"
 #: src/pages/Onboarding.tsx:496
 #: src/pages/plugins/advanced-integrations.tsx:77
 #: src/pages/RoutineSchedule.tsx:47
-#: src/pages/SpaceGeneralSettings.tsx:32
+#: src/pages/SpaceGeneralSettings.tsx:42
 msgid "Advanced"
 msgstr "उन्नत"
 
@@ -745,7 +745,7 @@ msgstr ""
 msgid "Bearer token"
 msgstr "बियरर टोकन"
 
-#: src/pages/shell/computer-preview.tsx:85
+#: src/pages/shell/computer-preview.tsx:90
 msgid "Booting live desktop…"
 msgstr "लाइव डेस्कटॉप शुरू हो रहा है…"
 
@@ -806,7 +806,7 @@ msgid "Bots are working"
 msgstr "बॉट काम कर रहे हैं"
 
 #. placeholder {0}: item.bots.map((bot) => bot.name).join(", ")
-#: src/pages/ComputerSettingsPanel.tsx:104
+#: src/pages/ComputerSettingsPanel.tsx:116
 msgid "Bots: {0}"
 msgstr ""
 
@@ -822,7 +822,7 @@ msgstr ""
 msgid "Browse MCP servers"
 msgstr ""
 
-#: src/pages/ComputerSettingsPanel.tsx:68
+#: src/pages/ComputerSettingsPanel.tsx:80
 msgid "Busy. Try again when idle."
 msgstr ""
 
@@ -906,7 +906,7 @@ msgstr "चैनल"
 msgid "Chat apps"
 msgstr "चैट ऐप्स"
 
-#: src/pages/SpaceGeneralSettings.tsx:20
+#: src/pages/SpaceGeneralSettings.tsx:30
 msgid "Chat apps, group channels, and agent connections."
 msgstr "चैट ऐप्स, ग्रुप चैनल और एजेंट कनेक्शन।"
 
@@ -1012,7 +1012,7 @@ msgid "Close MCP servers"
 msgstr "MCP सर्वर बंद करें"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:129
+#: src/pages/SettingsOverlay.tsx:146
 msgid "Close memory settings"
 msgstr "मेमोरी सेटिंग्स बंद करें"
 
@@ -1021,7 +1021,7 @@ msgid "Close messaging settings"
 msgstr "मैसेजिंग सेटिंग्स बंद करें"
 
 #: src/pages/ModelSettingsOverlay.tsx:51
-#: src/pages/SettingsOverlay.tsx:127
+#: src/pages/SettingsOverlay.tsx:144
 msgid "Close model settings"
 msgstr "मॉडल सेटिंग्स बंद करें"
 
@@ -1038,11 +1038,11 @@ msgstr "प्रीव्यू बंद करें"
 msgid "Close skills"
 msgstr "स्किल्स बंद करें"
 
-#: src/pages/SettingsOverlay.tsx:132
+#: src/pages/SettingsOverlay.tsx:149
 msgid "Close user settings"
 msgstr "उपयोगकर्ता सेटिंग्स बंद करें"
 
-#: src/pages/SettingsOverlay.tsx:131
+#: src/pages/SettingsOverlay.tsx:148
 #: src/pages/VoiceSettingsOverlay.tsx:141
 msgid "Close voice settings"
 msgstr "आवाज़ सेटिंग्स बंद करें"
@@ -1084,13 +1084,13 @@ msgstr "जटिल"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:119
+#: src/pages/SettingsOverlay.tsx:136
 #: src/pages/shell/block-views.tsx:131
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
 msgstr "कंप्यूटर"
 
-#: src/pages/shell/computer-preview.tsx:88
+#: src/pages/shell/computer-preview.tsx:93
 msgid "Computer failed to boot"
 msgstr "कंप्यूटर शुरू नहीं हो सका"
 
@@ -1098,11 +1098,11 @@ msgstr "कंप्यूटर शुरू नहीं हो सका"
 msgid "Computer is asleep"
 msgstr "कंप्यूटर निष्क्रिय है"
 
-#: src/pages/shell/computer-preview.tsx:87
+#: src/pages/shell/computer-preview.tsx:92
 msgid "Computer is asleep. Open it to wake."
 msgstr "कंप्यूटर निष्क्रिय है। जगाने के लिए इसे खोलें।"
 
-#: src/pages/shell/computer-preview.tsx:89
+#: src/pages/shell/computer-preview.tsx:94
 msgid "Computer is stopped"
 msgstr "कंप्यूटर रुका हुआ है"
 
@@ -1446,7 +1446,7 @@ msgstr "अनुमोदन नियम लोड नहीं हो सक�
 msgid "Could not load bots. Reload to try again."
 msgstr ""
 
-#: src/pages/ComputerSettingsPanel.tsx:79
+#: src/pages/ComputerSettingsPanel.tsx:91
 msgid "Could not load computers"
 msgstr ""
 
@@ -1634,11 +1634,11 @@ msgid "Could not update agent access"
 msgstr "एजेंट एक्सेस अपडेट नहीं हो सका"
 
 #: src/components/ComputerMaintenanceActions.tsx:67
-#: src/pages/ComputerSettingsPanel.tsx:71
+#: src/pages/ComputerSettingsPanel.tsx:83
 msgid "Could not update computer"
 msgstr "कंप्यूटर अपडेट नहीं हो सका"
 
-#: src/pages/ComputerSettingsPanel.tsx:81
+#: src/pages/ComputerSettingsPanel.tsx:93
 msgid "Could not update computers"
 msgstr ""
 
@@ -1662,6 +1662,10 @@ msgstr "नहीं बनाया जा सका"
 #: src/pages/MessagingSettingsOverlay.tsx:53
 msgid "Couldn't load messaging settings"
 msgstr "मैसेजिंग सेटिंग्स लोड नहीं हो सकीं"
+
+#: src/pages/SpaceGeneralSettings.tsx:90
+msgid "Couldn't rename the space"
+msgstr "स्पेस का नाम नहीं बदला जा सका"
 
 #: src/pages/AccountSettingsOverlay.tsx:69
 msgid "Couldn't update avatars"
@@ -1793,7 +1797,7 @@ msgstr "दिन"
 msgid "Debug mode"
 msgstr "डीबग मोड"
 
-#: src/pages/SettingsOverlay.tsx:118
+#: src/pages/SettingsOverlay.tsx:135
 msgid "Decision Model"
 msgstr ""
 
@@ -2264,7 +2268,7 @@ msgstr "फ़ुलस्क्रीन"
 msgid "FYI"
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:114
+#: src/pages/SettingsOverlay.tsx:131
 msgid "General"
 msgstr "सामान्य"
 
@@ -2613,7 +2617,7 @@ msgstr "सुनिश्चित करें कि इस कंप्य�
 msgid "Manage MCP servers"
 msgstr "MCP सर्वर प्रबंधित करें"
 
-#: src/pages/SpaceGeneralSettings.tsx:23
+#: src/pages/SpaceGeneralSettings.tsx:33
 msgid "Manage messaging settings"
 msgstr "मैसेजिंग सेटिंग्स प्रबंधित करें"
 
@@ -2678,7 +2682,7 @@ msgstr "सदस्य ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX} चुनें
 
 #: src/pages/bot-page/KnowledgeTab.tsx:36
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:117
+#: src/pages/SettingsOverlay.tsx:134
 msgid "Memory"
 msgstr "मेमोरी"
 
@@ -2741,7 +2745,7 @@ msgid "Messaged {peer}"
 msgstr "{peer} को संदेश भेजा"
 
 #: src/pages/MessagingSettingsOverlay.tsx:99
-#: src/pages/SpaceGeneralSettings.tsx:17
+#: src/pages/SpaceGeneralSettings.tsx:27
 msgid "Messaging"
 msgstr "मैसेजिंग"
 
@@ -2809,7 +2813,7 @@ msgstr "मॉडल अपडेट किया गया।"
 #: src/pages/ModelSettingsOverlay.tsx:44
 #: src/pages/ProvidersSettings.tsx:114
 #: src/pages/ProvidersSettings.tsx:116
-#: src/pages/SettingsOverlay.tsx:115
+#: src/pages/SettingsOverlay.tsx:132
 #: src/pages/usage-settings.tsx:69
 msgid "Models"
 msgstr "मॉडल्स"
@@ -2827,7 +2831,7 @@ msgstr "मासिक"
 msgid "Monthly on day {day} at {time}"
 msgstr "हर महीने की {day} तारीख को {time} बजे"
 
-#: src/components/ComputerMaintenanceActions.tsx:152
+#: src/components/ComputerMaintenanceActions.tsx:157
 msgid "More computer actions"
 msgstr "और कंप्यूटर क्रियाएँ"
 
@@ -2855,6 +2859,7 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx:72
 #: src/pages/shell/dialogs.tsx:187
 #: src/pages/shell/dialogs.tsx:250
+#: src/pages/SpaceGeneralSettings.tsx:106
 msgid "Name"
 msgstr "नाम"
 
@@ -2959,7 +2964,7 @@ msgstr "कोई मेल खाता बॉट नहीं"
 msgid "No chat apps linked yet."
 msgstr "अभी कोई चैट ऐप नहीं जुड़ा।"
 
-#: src/pages/ComputerSettingsPanel.tsx:91
+#: src/pages/ComputerSettingsPanel.tsx:103
 msgid "No computers"
 msgstr ""
 
@@ -3207,7 +3212,7 @@ msgstr ""
 msgid "Optional"
 msgstr "वैकल्पिक"
 
-#: src/pages/SpaceGeneralSettings.tsx:35
+#: src/pages/SpaceGeneralSettings.tsx:45
 msgid "Optional controls most people never need"
 msgstr "वैकल्पिक नियंत्रण जिनकी अधिकांश लोगों को कभी ज़रूरत नहीं होती"
 
@@ -3326,7 +3331,7 @@ msgstr ""
 msgid "Private"
 msgstr "निजी"
 
-#: src/pages/ComputerSettingsPanel.tsx:103
+#: src/pages/ComputerSettingsPanel.tsx:115
 msgid "Private Computer"
 msgstr ""
 
@@ -3334,7 +3339,7 @@ msgstr ""
 msgid "Private workspace with its own bots and groups."
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:111
+#: src/pages/SettingsOverlay.tsx:128
 msgid "Profile"
 msgstr "प्रोफ़ाइल"
 
@@ -3352,7 +3357,7 @@ msgstr ""
 msgid "Provider"
 msgstr "प्रोवाइडर"
 
-#: src/pages/SettingsOverlay.tsx:112
+#: src/pages/SettingsOverlay.tsx:129
 #: src/pages/VoiceSettingsOverlay.tsx:154
 msgid "Providers"
 msgstr "प्रोवाइडर्स"
@@ -3439,7 +3444,7 @@ msgstr "रिकॉर्डिंग शुरू हुई। जारी �
 msgid "Recording: {0}"
 msgstr "रिकॉर्डिंग: {0}"
 
-#: src/components/ComputerMaintenanceActions.tsx:131
+#: src/components/ComputerMaintenanceActions.tsx:136
 #: src/components/ComputerUpdateProgress.tsx:234
 msgid "Recover computer"
 msgstr "कंप्यूटर रिकवर करें"
@@ -3453,7 +3458,7 @@ msgstr ""
 msgid "Recovering Team Computer"
 msgstr ""
 
-#: src/components/ComputerMaintenanceActions.tsx:131
+#: src/components/ComputerMaintenanceActions.tsx:136
 msgid "Recovering…"
 msgstr "रिकवर हो रहा है…"
 
@@ -3609,7 +3614,7 @@ msgstr "अनुरोधित"
 msgid "Reset"
 msgstr "रीसेट करें"
 
-#: src/components/ComputerMaintenanceActions.tsx:139
+#: src/components/ComputerMaintenanceActions.tsx:144
 msgid "Reset computer"
 msgstr "कंप्यूटर रीसेट करें"
 
@@ -3626,7 +3631,7 @@ msgid "Reset your password"
 msgstr "अपना पासवर्ड रीसेट करें"
 
 #: src/components/ComputerMaintenanceActions.tsx:103
-#: src/components/ComputerMaintenanceActions.tsx:139
+#: src/components/ComputerMaintenanceActions.tsx:144
 msgid "Resetting…"
 msgstr "रीसेट हो रहा है…"
 
@@ -3659,7 +3664,7 @@ msgstr ""
 
 #: src/pages/bot-page/page-kit.tsx:52
 #: src/pages/bot-page/page-kit.tsx:88
-#: src/pages/ComputerSettingsPanel.tsx:84
+#: src/pages/ComputerSettingsPanel.tsx:96
 #: src/pages/shell/image-stack.tsx:156
 #: src/pages/shell/image-viewer.tsx:36
 msgid "Retry"
@@ -3907,7 +3912,7 @@ msgstr "सर्वर URL"
 
 #: src/pages/bot-page/BotPage.tsx:101
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:181
+#: src/pages/SettingsOverlay.tsx:198
 #: src/pages/shell/sidebar-footer.tsx:195
 #: src/pages/shell/sidebar-footer.tsx:202
 msgid "Settings"
@@ -4155,7 +4160,7 @@ msgstr "सोचने की क्षमता का समर्थन क�
 msgid "Switch bot"
 msgstr "बॉट बदलें"
 
-#: src/pages/SettingsOverlay.tsx:397
+#: src/pages/SettingsOverlay.tsx:424
 msgid "Switch space"
 msgstr "स्पेस बदलें"
 
@@ -4171,7 +4176,7 @@ msgstr "सिस्टम"
 msgid "Take control"
 msgstr ""
 
-#: src/components/ComputerMaintenanceActions.tsx:160
+#: src/components/ComputerMaintenanceActions.tsx:165
 #: src/components/teach/TeachComputerOverlay.tsx:213
 #: src/components/teach/TeachComputerOverlay.tsx:224
 msgid "Teach a task"
@@ -4187,8 +4192,8 @@ msgid "Team"
 msgstr "टीम"
 
 #: src/components/ComputerUpdateProgress.tsx:61
-#: src/pages/ComputerSettingsPanel.tsx:103
-#: src/pages/shell/computer-preview.tsx:93
+#: src/pages/ComputerSettingsPanel.tsx:115
+#: src/pages/shell/computer-preview.tsx:98
 msgid "Team Computer"
 msgstr "टीम कंप्यूटर"
 
@@ -4372,15 +4377,19 @@ msgstr "अद्यतन"
 msgid "Update"
 msgstr "अपडेट करें"
 
-#: src/pages/ComputerSettingsPanel.tsx:58
+#: src/pages/ComputerSettingsPanel.tsx:65
 msgid "Update all computers"
 msgstr ""
 
+#: src/components/ComputerMaintenanceActions.tsx:116
 #: src/components/SoftwareUpdateSection.tsx:260
+#: src/pages/SettingsOverlay.tsx:364
+#: src/pages/SettingsOverlay.tsx:364
+#: src/pages/shell/computer-preview.tsx:75
 msgid "Update available"
 msgstr "अपडेट उपलब्ध"
 
-#: src/components/ComputerMaintenanceActions.tsx:122
+#: src/components/ComputerMaintenanceActions.tsx:127
 msgid "Update computer"
 msgstr "कंप्यूटर अपडेट करें"
 
@@ -4403,16 +4412,16 @@ msgstr ""
 msgid "Updated"
 msgstr "अपडेट किया गया"
 
-#: src/pages/SettingsOverlay.tsx:113
+#: src/pages/SettingsOverlay.tsx:130
 msgid "Updates"
 msgstr "अपडेट"
 
-#: src/pages/ComputerSettingsPanel.tsx:70
+#: src/pages/ComputerSettingsPanel.tsx:82
 msgid "Updates are unavailable on this device"
 msgstr ""
 
 #. placeholder {0}: result.queued.length
-#: src/pages/ComputerSettingsPanel.tsx:62
+#: src/pages/ComputerSettingsPanel.tsx:74
 msgid "Updates queued: {0}"
 msgstr ""
 
@@ -4425,13 +4434,13 @@ msgstr ""
 msgid "Updating Team Computer"
 msgstr ""
 
-#: src/components/ComputerMaintenanceActions.tsx:122
+#: src/components/ComputerMaintenanceActions.tsx:127
 #: src/components/SoftwareUpdateSection.tsx:81
-#: src/pages/ComputerSettingsPanel.tsx:58
+#: src/pages/ComputerSettingsPanel.tsx:65
 msgid "Updating…"
 msgstr "अपडेट हो रहा है…"
 
-#: src/pages/SettingsOverlay.tsx:120
+#: src/pages/SettingsOverlay.tsx:137
 #: src/pages/shell/sidebar-footer.tsx:207
 #: src/pages/shell/sidebar-footer.tsx:214
 msgid "Usage"
@@ -4463,7 +4472,7 @@ msgstr "पुष्टि की जा रही है…"
 #: src/pages/bot-page/SettingDetails.tsx:189
 #: src/pages/ProvidersSettings.tsx:159
 #: src/pages/ProvidersSettings.tsx:161
-#: src/pages/SettingsOverlay.tsx:116
+#: src/pages/SettingsOverlay.tsx:133
 #: src/pages/shell/thread-header.tsx:139
 #: src/pages/shell/thread-header.tsx:140
 #: src/pages/VoiceSettingsOverlay.tsx:137
@@ -4596,7 +4605,7 @@ msgstr "अगर यह अपने आप रीडायरेक्ट न 
 msgid "You can close this window."
 msgstr "आप यह विंडो बंद कर सकते हैं।"
 
-#: src/pages/ComputerSettingsPanel.tsx:109
+#: src/pages/ComputerSettingsPanel.tsx:121
 #: src/pages/shell/side-panel.tsx:333
 msgid "You have control"
 msgstr "नियंत्रण आपके पास है"
