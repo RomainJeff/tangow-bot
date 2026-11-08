@@ -63,6 +63,7 @@ describe("worker plan", () => {
       runId: run.id,
       botId: bot.id,
       spaceId: bot.spaceId,
+      userId: fixture.userId,
       attemptId: attempt.id,
       fence: 3,
       volumes: [
@@ -70,6 +71,40 @@ describe("worker plan", () => {
         { volumeId: sharedVolume.id, access: "rw" },
       ],
       computer: { mode: "on_use", computerId: computer.id },
+    });
+  });
+
+  it("mounts each person's own shared volume and refuses another member's", async () => {
+    const { computer, bot, sharedVolume } = await fixture.migratedBot();
+    const member = fixture.unique("member");
+    const memberComputer = await fixture.seedComputer(computer.spaceId, {
+      homeStorage: "volumes",
+      userId: member,
+    });
+    const memberBot = await fixture.seedBot(computer.spaceId, memberComputer.id, member);
+    await fixture.seedVolume("bot_private", computer.spaceId, memberBot.id);
+    const memberShared = await fixture.seedVolume(
+      "space_shared",
+      computer.spaceId,
+      null,
+      undefined,
+      member,
+    );
+    const sharedOf = async (runBot: typeof bot) => {
+      const attempt = await fixture.seedAttempt((await fixture.seedRun(runBot)).id);
+      return fixture.launchFor(workers, attempt.id, allFiles);
+    };
+
+    expect((await sharedOf(bot)).volumes[1]).toEqual({ volumeId: sharedVolume.id, access: "rw" });
+    const memberLaunch = await sharedOf(memberBot);
+    expect(memberLaunch.volumes[1]).toEqual({ volumeId: memberShared.id, access: "rw" });
+
+    const refused = workers.start(
+      { ...memberLaunch, volumes: [{ volumeId: sharedVolume.id, access: "rw" }] },
+      fixture.context,
+    );
+    await expect(refused).rejects.toMatchObject({
+      refusal: { code: "shared_volume_of_other_owner", volumeId: sharedVolume.id },
     });
   });
 
@@ -181,7 +216,7 @@ describe("worker start", () => {
 
   it.each([
     ["private_volume_of_other_bot", "bot_private"],
-    ["shared_volume_of_other_space", "space_shared"],
+    ["shared_volume_of_other_owner", "space_shared"],
   ] as const)("refuses %s before the provider", async (code, kind) => {
     const { bot } = await fixture.migratedBot();
     const other = await fixture.seedBot(spaceB, null);

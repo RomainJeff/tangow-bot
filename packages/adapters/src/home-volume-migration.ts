@@ -110,6 +110,7 @@ type HomeComputer = {
   id: string;
   scope: "team" | "dedicated";
   spaceId: string;
+  userId: string;
   homeKey: string;
   homeStorage: string;
   botIds: Set<string>;
@@ -501,6 +502,7 @@ async function readComputer(prisma: PrismaClient, computerId: string): Promise<H
       id: true,
       scope: true,
       spaceId: true,
+      userId: true,
       homeKey: true,
       homeStorage: true,
       bots: { select: { id: true } },
@@ -530,7 +532,7 @@ function destinationsOf(computer: HomeComputer, planned: HomeFile[]): HomeDestin
 
 function ownerOf(computer: HomeComputer, destination: HomeDestination): VolumeOwner {
   return destination.scope === "shared"
-    ? { kind: "space_shared", spaceId: computer.spaceId }
+    ? { kind: "space_shared", spaceId: computer.spaceId, userId: computer.userId }
     : { kind: "bot_private", spaceId: computer.spaceId, botId: destination.botId };
 }
 
@@ -542,7 +544,7 @@ async function existingVolume(
   const volume = await prisma.volume.findFirst({
     where:
       destination.scope === "shared"
-        ? { kind: "space_shared", spaceId: computer.spaceId }
+        ? { kind: "space_shared", spaceId: computer.spaceId, userId: computer.userId }
         : { kind: "bot_private", botId: destination.botId },
     select: { id: true, providerRef: true },
   });

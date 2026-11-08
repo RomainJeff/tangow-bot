@@ -74,7 +74,7 @@ export function ensureMayBeInFlight(
   );
 }
 
-/** What a run asks for, by slot: the run's own bot and space fill them, never a caller's id. */
+/** What a run asks for, by slot: the run's own bot and its owner fill them, never a caller's id. */
 export type RunNeeds = {
   files: { private: VolumeAccess | null; shared: VolumeAccess | null };
   computer: "none" | "on_use";
@@ -82,7 +82,7 @@ export type RunNeeds = {
 
 /**
  * What a run asks of a worker. Any tool the guest runs works on the bot's home, so it needs the
- * private slot and the space's shared slot, which also holds shared skills. A team home move
+ * private slot and its owner's shared slot in the space, which also holds shared skills. A team home move
  * fences starts across the space while it copies shared files.
  * Whether the home is on volumes at all is `planLaunch`'s call.
  */
@@ -105,6 +105,8 @@ export type WorkerLaunch = {
   runId: string;
   botId: string;
   spaceId: string;
+  /** The bot's owner, whose shared volume the run mounts. */
+  userId: string;
   attemptId: string;
   fence: number;
   volumes: VolumeGrant[];
@@ -126,6 +128,7 @@ export type LaunchInputs = {
   runId: string;
   botId: string;
   spaceId: string;
+  userId: string;
   attemptId: string;
   fence: number;
   computer: { id: string; homeStorage: HomeStorage } | null;
@@ -154,6 +157,7 @@ export function planLaunch(inputs: LaunchInputs, needs: RunNeeds): LaunchPlan {
     runId: inputs.runId,
     botId: inputs.botId,
     spaceId: inputs.spaceId,
+    userId: inputs.userId,
     attemptId: inputs.attemptId,
     fence: inputs.fence,
     volumes,
@@ -244,6 +248,7 @@ export type VolumeRow = {
   kind: VolumeKind;
   spaceId: string;
   botId: string | null;
+  userId: string | null;
   providerKind: string;
   providerRef: string | null;
 };
@@ -259,16 +264,19 @@ export type AuthorizedMount = {
 export type MountRefusalCode =
   | "volume_not_found"
   | "private_volume_of_other_bot"
-  | "shared_volume_of_other_space"
+  | "shared_volume_of_other_owner"
   | "volume_not_provisioned"
   | "provider_mismatch"
   | "read_only_unsupported";
 
 export type MountRefusal = { code: MountRefusalCode; volumeId: string };
 
-/** Checks every grant against the run's bot and space. The path comes from the row, never the grant. */
+/**
+ * Checks every grant against the run's bot, space and bot owner. The path comes from the row,
+ * never the grant.
+ */
 export function authorizeMounts(
-  scope: { botId: string; spaceId: string },
+  scope: { botId: string; spaceId: string; userId: string },
   grants: readonly VolumeGrant[],
   rows: readonly VolumeRow[],
   provider: { kind: string; readOnlyMounts: boolean },
@@ -282,8 +290,11 @@ export function authorizeMounts(
     if (row.kind === "bot_private" && row.botId !== scope.botId) {
       return refuse("private_volume_of_other_bot");
     }
-    if (row.kind === "space_shared" && row.spaceId !== scope.spaceId) {
-      return refuse("shared_volume_of_other_space");
+    if (
+      row.kind === "space_shared" &&
+      (row.spaceId !== scope.spaceId || row.userId !== scope.userId)
+    ) {
+      return refuse("shared_volume_of_other_owner");
     }
     if (!row.providerRef) return refuse("volume_not_provisioned");
     if (row.providerKind !== provider.kind) return refuse("provider_mismatch");

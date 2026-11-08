@@ -83,7 +83,7 @@ describe("people sharing a Space", () => {
 });
 
 describe("the per-person migration of an existing Space", () => {
-  it("keeps the one person's team computer", async () => {
+  it("keeps the one person's team computer and shared volume", async () => {
     const database = await openPgliteDatabase(async (pglite: PGlite) => {
       const names = await migrationNames();
       for (const name of names.filter((name) => name < MIGRATION)) {
@@ -96,14 +96,17 @@ describe("the per-person migration of an existing Space", () => {
           VALUES ('org_old', 'Old', 'old', '2026-11-01');
         INSERT INTO member (id, "organizationId", "userId", role, "createdAt")
           VALUES ('member_old', 'org_old', 'user_old', 'owner', '2026-11-01');
-        INSERT INTO spaces (id, "organizationId", name)
-          VALUES ('space_old', 'org_old', 'Old');
+        INSERT INTO spaces (id, "organizationId", name, "skillIndexReceivedAt")
+          VALUES ('space_old', 'org_old', 'Old', '2026-11-02');
         INSERT INTO space_members (id, "spaceId", "organizationId", "userId", role, "createdAt")
           VALUES ('space_member_old', 'space_old', 'org_old', 'user_old', 'owner', '2026-11-01');
         INSERT INTO computers (id, "spaceId", "userId", scope, "scopeKey", "homeKey", kind,
           "homeStorage", "updatedAt")
           VALUES ('computer_old', 'space_old', 'user_old', 'team', 'team:space_old',
             'team-space_old', 'docker', 'volumes', '2026-11-01');
+        INSERT INTO volumes (id, kind, "spaceId", "providerKind", "providerRef", "updatedAt")
+          VALUES ('volume_old', 'space_shared', 'space_old', 'docker', 'shared_files',
+            '2026-11-01');
       `);
       for (const name of names.filter((name) => name >= MIGRATION)) {
         await applyMigration(pglite, name);
@@ -122,6 +125,15 @@ describe("the per-person migration of an existing Space", () => {
         id: "computer_old",
         scopeKey: "team:space_old:user_old",
         homeKey: "team-space_old",
+      });
+      expect(
+        await prisma.volume.findFirst({
+          where: { kind: "space_shared", spaceId: "space_old", userId: "user_old" },
+        }),
+      ).toMatchObject({
+        id: "volume_old",
+        providerRef: "shared_files",
+        skillIndexReceivedAt: new Date("2026-11-02T00:00:00.000Z"),
       });
     } finally {
       await database.close();

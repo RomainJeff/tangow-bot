@@ -69,7 +69,7 @@ export type HomeAdoption =
 
 export type VolumeOwner =
   | { kind: "bot_private"; spaceId: string; botId: string }
-  | { kind: "space_shared"; spaceId: string };
+  | { kind: "space_shared"; spaceId: string; userId: string };
 
 export type EnsuredVolume = { volumeId: string; providerRef: string };
 
@@ -80,6 +80,7 @@ type PlanRow = {
   runId: string;
   botId: string;
   spaceId: string;
+  userId: string;
   fence: number;
   leaseFence: number;
   status: string;
@@ -102,6 +103,7 @@ type HomeComputer = {
   kind: string;
   scope: string;
   spaceId: string;
+  userId: string;
   homeStorage: HomeStorage;
   homeRevision: string;
   state: string;
@@ -168,24 +170,25 @@ async function homeWorkers(
   return counts ?? { live: 0, total: 0 };
 }
 
-/** Every bot on the computer, archived included, and the space for a team computer. */
+/** Every bot on the computer, archived included, and its owner's shared volume for a team computer. */
 async function homeVolumes(db: Db, computerId: string, computer: HomeComputer, lock: boolean) {
   const botIds = (await db.bot.findMany({ where: { computerId }, select: { id: true } })).map(
     (bot) => bot.id,
   );
   const team = computer.scope === "team";
   const volumes = await db.$queryRaw<VolumeRow[]>`
-    SELECT id, kind, "spaceId", "botId", "providerKind", "providerRef"
+    SELECT id, kind, "spaceId", "botId", "userId", "providerKind", "providerRef"
     FROM volumes
     WHERE (kind = 'bot_private' AND "botId" = ANY(${botIds}))
-      OR (${team} AND kind = 'space_shared' AND "spaceId" = ${computer.spaceId})
+      OR (${team} AND kind = 'space_shared' AND "spaceId" = ${computer.spaceId}
+        AND "userId" = ${computer.userId})
     ORDER BY id ${lock ? Prisma.sql`FOR UPDATE` : Prisma.empty}`;
   return { botIds, team, volumes };
 }
 
 async function readHomeComputer(db: Db, computerId: string, lock: boolean) {
   const [computer] = await db.$queryRaw<HomeComputer[]>`
-    SELECT kind, scope, "spaceId", "homeStorage", "homeRevision", state, "controlHolder",
+    SELECT kind, scope, "spaceId", "userId", "homeStorage", "homeRevision", state, "controlHolder",
       "maintenanceId", "updatedAt"
     FROM computers
     WHERE id = ${computerId} ${lock ? Prisma.sql`FOR UPDATE` : Prisma.empty}`;
@@ -197,7 +200,7 @@ async function readHomeComputer(db: Db, computerId: string, lock: boolean) {
 async function inspectHomeMove(db: Db, computerId: string, lock: boolean) {
   const source = await readHomeComputer(db, computerId, false);
   const computers = await db.$queryRaw<Array<HomeComputer & { id: string }>>`
-    SELECT id, kind, scope, "spaceId", "homeStorage", "homeRevision", state,
+    SELECT id, kind, scope, "spaceId", "userId", "homeStorage", "homeRevision", state,
       "controlHolder", "maintenanceId", "updatedAt" FROM computers
     WHERE "spaceId" = ${source.spaceId} ORDER BY id ${lock ? Prisma.sql`FOR UPDATE` : Prisma.empty}`;
   const computer = computers.find((row) => row.id === computerId);
@@ -335,16 +338,16 @@ export function createWorkerLifecycle(deps: {
 
   async function ensureVolume(owner: VolumeOwner, context: AdapterContext): Promise<EnsuredVolume> {
     const providerKind = requireProvider().describe().id;
-    const botId = owner.kind === "bot_private" ? owner.botId : null;
+    const key =
+      owner.kind === "bot_private"
+        ? { kind: owner.kind, botId: owner.botId }
+        : { kind: owner.kind, spaceId: owner.spaceId, userId: owner.userId };
     // The partial unique indexes on the owner make a concurrent duplicate a no-op.
     await prisma.volume.createMany({
-      data: [{ kind: owner.kind, spaceId: owner.spaceId, botId, providerKind }],
+      data: [{ ...key, spaceId: owner.spaceId, providerKind }],
       skipDuplicates: true,
     });
-    const { id } = await prisma.volume.findFirstOrThrow({
-      where: botId ? { kind: owner.kind, botId } : { kind: owner.kind, spaceId: owner.spaceId },
-      select: { id: true },
-    });
+    const { id } = await prisma.volume.findFirstOrThrow({ where: key, select: { id: true } });
     return { volumeId: id, providerRef: await provisionVolume(id, context) };
   }
 
@@ -352,15 +355,15 @@ export function createWorkerLifecycle(deps: {
     /** One indexed read. */
     async plan(input: { attemptId: string; needs: RunNeeds }): Promise<LaunchPlan> {
       const [row] = await prisma.$queryRaw<PlanRow[]>`
-        SELECT r.id AS "runId", r."botId", r."spaceId", a.fence, r."leaseFence", r.status,
+        SELECT r.id AS "runId", r."botId", r."spaceId", b."userId", a.fence, r."leaseFence", r.status,
           c.id AS "computerId", c."homeStorage",
           EXISTS (SELECT 1 FROM computers moving WHERE moving."spaceId" = r."spaceId"
             AND moving."maintenanceId" LIKE 'home-move:%'
             AND (moving.scope = 'team' OR moving.id = b."computerId")) AS "homeMoving",
           (SELECT v.id FROM volumes v WHERE v.kind = 'bot_private' AND v."botId" = r."botId")
             AS "privateVolumeId",
-          (SELECT v.id FROM volumes v WHERE v.kind = 'space_shared' AND v."spaceId" = r."spaceId")
-            AS "sharedVolumeId"
+          (SELECT v.id FROM volumes v WHERE v.kind = 'space_shared' AND v."spaceId" = r."spaceId"
+            AND v."userId" = b."userId") AS "sharedVolumeId"
         FROM attempts a
         JOIN runs r ON r.id = a."runId"
         JOIN bots b ON b.id = r."botId"
@@ -414,7 +417,7 @@ export function createWorkerLifecycle(deps: {
         const volumeIds = launch.volumes.map((grant) => grant.volumeId);
         const rows = volumeIds.length
           ? await tx.$queryRaw<VolumeRow[]>`
-              SELECT id, kind, "spaceId", "botId", "providerKind", "providerRef"
+              SELECT id, kind, "spaceId", "botId", "userId", "providerKind", "providerRef"
               FROM volumes WHERE id = ANY(${volumeIds}) ORDER BY id FOR UPDATE`
           : [];
         const authorized = authorizeMounts(launch, launch.volumes, rows, {
@@ -615,10 +618,18 @@ export function createWorkerLifecycle(deps: {
     async provisionHomeVolumes(computerId: string, context: AdapterContext): Promise<void> {
       const computer = await prisma.computer.findUniqueOrThrow({
         where: { id: computerId },
-        select: { spaceId: true, homeStorage: true, bots: { select: { id: true } } },
+        select: {
+          spaceId: true,
+          userId: true,
+          homeStorage: true,
+          bots: { select: { id: true } },
+        },
       });
       if (computer.homeStorage !== "volumes") return;
-      await ensureVolume({ kind: "space_shared", spaceId: computer.spaceId }, context);
+      await ensureVolume(
+        { kind: "space_shared", spaceId: computer.spaceId, userId: computer.userId },
+        context,
+      );
       const provisioned = new Set(
         (
           await prisma.volume.findMany({

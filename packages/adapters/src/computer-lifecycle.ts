@@ -157,14 +157,14 @@ export { toComputerRef } from "./computer-support.js";
 
 async function loadVolumeHome(
   prisma: PrismaClient,
-  computer: { id: string; scope: string; spaceId: string },
+  computer: { id: string; scope: string; spaceId: string; userId: string },
 ) {
   const scope = parseComputerMode(computer.scope);
   const volumes = await prisma.volume.findMany({
     where: {
       OR: [
         { kind: "bot_private", bot: { computerId: computer.id } },
-        { kind: "space_shared", spaceId: computer.spaceId },
+        { kind: "space_shared", spaceId: computer.spaceId, userId: computer.userId },
       ],
     },
     select: { kind: true, botId: true, providerRef: true },

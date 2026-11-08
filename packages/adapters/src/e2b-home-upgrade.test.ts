@@ -59,7 +59,10 @@ async function dockerTeamOnVolumes() {
     { kind: "bot_private", spaceId, botId: bot.id },
     fixture.context,
   );
-  const shared = await lifecycle.ensureVolume({ kind: "space_shared", spaceId }, fixture.context);
+  const shared = await lifecycle.ensureVolume(
+    { kind: "space_shared", spaceId, userId: fixture.userId },
+    fixture.context,
+  );
   return { computer, bot, own, shared };
 }
 
