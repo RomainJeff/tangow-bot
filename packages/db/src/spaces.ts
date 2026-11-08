@@ -692,6 +692,8 @@ export async function removeSpaceMember(
 ): Promise<void> {
   const { organizationId } = await requireSpaceOwner(prisma, input);
   await prisma.$transaction(async (tx) => {
+    // Bot creation holds this lock while it checks membership, so none can land after the archive.
+    await lockSpaceDeletion(tx, input.spaceId);
     const target = await tx.spaceMember.findUnique({
       where: {
         spaceId_userId: { spaceId: input.spaceId, userId: input.memberUserId },
