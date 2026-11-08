@@ -110,6 +110,13 @@ test("settings space switcher moves to another space and keeps the section", asy
   await captureScreenshot(page, testInfo, "settings-space-switcher-open");
   await page.keyboard.press("Escape");
 
+  // The owner renames the space in place; the switcher picks up the new name.
+  const nameInput = settings.getByRole("textbox", { name: "Name" });
+  await nameInput.fill("Home");
+  await nameInput.press("Enter");
+  await expect(switcher).toContainText("Home");
+  await captureScreenshot(page, testInfo, "settings-space-name");
+
   // At phone width the nav is a row of tabs; the switcher stays in it.
   await page.setViewportSize({ width: 390, height: 844 });
   await settings.getByTestId("settings-nav-profile").click();

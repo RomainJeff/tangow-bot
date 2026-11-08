@@ -178,6 +178,8 @@ const threadSendInput = threadTarget
     }
   });
 
+const SpaceNameSchema = z.string().trim().min(1).max(60);
+
 export const appContract = {
   // Mobile 2026.11.0 and earlier ask this before every send and block on a 404. Remove once they are gone.
   aiConsent: {
@@ -190,7 +192,8 @@ export const appContract = {
   },
   spaces: {
     list: oc.output(SpaceNavigationSchema),
-    create: oc.input(z.object({ name: z.string().trim().min(1).max(60) })).output(SpaceSchema),
+    create: oc.input(z.object({ name: SpaceNameSchema })).output(SpaceSchema),
+    rename: oc.input(z.object({ spaceId: Id, name: SpaceNameSchema })).output(SpaceSchema),
     remove: oc
       .input(z.object({ spaceId: Id }))
       .output(z.object({ ok: z.literal(true), activeSpaceId: Id })),

@@ -48,7 +48,7 @@ type NavItem = {
   icon: ComponentType<{ className?: string; strokeWidth?: number }>;
 };
 
-type SettingsSpace = { id: string; name: string };
+type SettingsSpace = { id: string; name: string; canRename?: boolean };
 
 export function SettingsOverlay({
   email,
@@ -66,6 +66,7 @@ export function SettingsOverlay({
   spaces,
   currentSpaceId,
   onSwitchSpace,
+  onSpaceRenamed,
   onClose,
   onVoiceStatusMaybeChanged,
 }: {
@@ -84,6 +85,7 @@ export function SettingsOverlay({
   spaces: SettingsSpace[];
   currentSpaceId: string | undefined;
   onSwitchSpace: (spaceId: string, section: SettingsSection) => void;
+  onSpaceRenamed?: () => void | Promise<void>;
   onClose: () => void;
   onVoiceStatusMaybeChanged?: () => void | Promise<void>;
 }) {
@@ -274,6 +276,8 @@ export function SettingsOverlay({
               ) : null}
               {section === "space" ? (
                 <SpaceGeneralSettings
+                  space={currentSpace}
+                  onSpaceRenamed={onSpaceRenamed}
                   messagingEnabled={messagingEnabled}
                   onOpenMessaging={
                     onOpenMessaging ? () => leaveSettings(onOpenMessaging) : undefined
