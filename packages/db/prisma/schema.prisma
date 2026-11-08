@@ -30,6 +30,7 @@ model User {
   createdSpaces               Space[]                      @relation("SpaceCreator")
   botSecrets BotSecret[]
   agentSecrets               AgentSecret[]
+  spaceInvitations           SpaceInvitation[]
 
   @@unique([email])
   @@map("user")
@@ -198,6 +199,7 @@ model Space {
   linkPreviewReads            LinkPreviewRead[]
   conversationSessions        ConversationSession[]
   volumes                     Volume[]
+  invitations                 SpaceInvitation[]
 
   @@unique([id, organizationId])
   @@index([organizationId, createdAt])
@@ -223,6 +225,21 @@ model SpaceMember {
   @@index([organizationId, userId])
   @@index([userId, createdAt])
   @@map("space_members")
+}
+
+/// A single-use invite link to a Space. Only the token's hash is stored; accepting or revoking deletes the row.
+model SpaceInvitation {
+  id              String   @id
+  spaceId         String
+  space           Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  createdByUserId String
+  createdByUser   User     @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+  tokenHash       String   @unique
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+
+  @@index([spaceId, expiresAt])
+  @@map("space_invitations")
 }
 
 model Invitation {

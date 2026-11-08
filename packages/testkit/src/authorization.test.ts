@@ -77,6 +77,12 @@ describeWithDatabase("API authorization and resource isolation", () => {
       ["spaces/create", { name: "Nope" }],
       ["spaces/rename", { spaceId: "missing-space", name: "Nope" }],
       ["spaces/remove", { spaceId: "missing-space" }],
+      ["spaces/members", { spaceId: "missing-space" }],
+      ["spaces/createInvite", { spaceId: "missing-space" }],
+      ["spaces/revokeInvite", { spaceId: "missing-space", invitationId: "missing-invite" }],
+      ["spaces/removeMember", { spaceId: "missing-space", userId: "missing-user" }],
+      ["spaces/invitation", { token: "missing-token" }],
+      ["spaces/acceptInvite", { token: "missing-token" }],
       ["bots/list"],
       ["bots/listArchived"],
       ["bots/get", { botId: "missing-bot" }],
@@ -482,6 +488,16 @@ describeWithDatabase("API authorization and resource isolation", () => {
     await handles.prisma.member.create({
       data: {
         id: `approval-member-${stamp}`,
+        organizationId: ownerActor.spaceId,
+        userId: memberActor.userId,
+        role: "member",
+        createdAt: new Date(),
+      },
+    });
+    await handles.prisma.spaceMember.create({
+      data: {
+        id: `approval-space-member-${stamp}`,
+        spaceId: ownerActor.spaceId,
         organizationId: ownerActor.spaceId,
         userId: memberActor.userId,
         role: "member",
@@ -973,6 +989,41 @@ describeWithDatabase("API authorization and resource isolation", () => {
     );
     expect(ownerRemoved.ok).toBe(true);
     await expect(handles.prisma.space.findUnique({ where: { id: shared.id } })).resolves.toBeNull();
+  });
+
+  it("lists a Space joined by invite link in the guest's switcher, owner-only management", async () => {
+    const owner = await signup(app, `space-invite-owner-${stamp}@rakazo.test`, "Ada");
+    const shared = await rpc<Space>(app, owner, "spaces/create", { name: "Family" });
+    const guest = await signup(app, `space-invite-guest-${stamp}@rakazo.test`, "Grace");
+    const guestActor = await rpc<Actor>(app, guest, "me");
+
+    const { url } = await rpc<{ url: string }>(app, owner, "spaces/createInvite", {
+      spaceId: shared.id,
+    });
+    const token = new URL(url).pathname.replace("/invite/", "");
+    await expect(rpc(app, guest, "spaces/invitation", { token })).resolves.toEqual({
+      spaceName: "Family",
+      inviterName: "Ada",
+    });
+    await expect(rpc(app, guest, "spaces/acceptInvite", { token })).resolves.toEqual({
+      spaceId: shared.id,
+    });
+
+    const navigation = await rpc<SpaceNavigation>(app, guest, "spaces/list");
+    expect(navigation.spaces.map((space) => [space.id, space.canRename, space.canDelete])).toEqual([
+      [guestActor.spaceId, true, false],
+      [shared.id, false, false],
+    ]);
+    await expect(
+      raw(app, guest, "spaces/createInvite", { spaceId: shared.id }, shared.id),
+    ).resolves.toMatchObject({ status: 403 });
+    await expect(raw(app, guest, "spaces/acceptInvite", { token })).resolves.toMatchObject({
+      status: 404,
+    });
+    const intruder = await signup(app, `space-invite-intruder-${stamp}@rakazo.test`, "Sam");
+    await expect(
+      raw(app, intruder, "spaces/members", { spaceId: shared.id }),
+    ).resolves.toMatchObject({ status: 404 });
   });
 
   it("renames a space only for its owner", async () => {
