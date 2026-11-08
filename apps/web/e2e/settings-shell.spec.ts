@@ -149,8 +149,13 @@ test("settings space switcher moves to another space and keeps the section", asy
   await expect(menu).toBeVisible();
   await captureScreenshot(page, testInfo, "settings-phone-switcher-open");
 
+  // The switch happens in place: settings stay open on the section and the page never reloads.
+  await page.evaluate(() => {
+    (window as { beforeSwitch?: boolean }).beforeSwitch = true;
+  });
   await menu.getByRole("menuitemradio", { name: "Family" }).click();
-  const reopened = page.getByTestId("user-settings");
-  await expect(reopened).toHaveAttribute("data-settings-section", "space");
-  await expect(reopened.getByTestId("settings-space-switcher")).toContainText("Family");
+  await expect(switcher).toContainText("Family");
+  await expect(settings).toHaveAttribute("data-settings-section", "space");
+  await expect(settings.getByRole("textbox", { name: "Name" })).toHaveValue("Family");
+  expect(await page.evaluate(() => (window as { beforeSwitch?: boolean }).beforeSwitch)).toBe(true);
 });

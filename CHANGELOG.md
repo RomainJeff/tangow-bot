@@ -21,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Fixed
 
 - On web and desktop, the settings window keeps the same size in every section, instead of widening on Providers, Models and Voice and narrowing again elsewhere.
+- On web and desktop, switching space from settings or by opening a chat in another space now happens in place, instead of reloading the whole app.
 
 ### 2026-11-06
 

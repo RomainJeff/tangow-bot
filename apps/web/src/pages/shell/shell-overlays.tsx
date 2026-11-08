@@ -9,7 +9,6 @@ import { Pencil, Trash2 } from "lucide-react";
 import { lazy, Suspense } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import { rpc, selectedSpaceId, selectSpace } from "../../lib/rpc";
-import { reopenSettingsAfterReload } from "../settings-sections";
 import type { BotAction } from "./bot-commands";
 import { CommandPalette } from "./command-palette";
 import {
@@ -288,7 +287,7 @@ export function ShellOverlays({
               setPanel(null);
               const effectiveSpaceId = selectedSpaceId() ?? bootstrapMe?.spaceId;
               if (effectiveSpaceId === targetId) {
-                // The auth boundary changed, so reload like a space switch.
+                // The open space is gone, so reload into the one the server picked.
                 if (selectSpace(result.activeSpaceId)) {
                   window.location.assign("/app");
                   return;
@@ -468,10 +467,7 @@ export function ShellOverlays({
             onMemoryConfigChange={overlays.changeMemoryConfig}
             spaces={spaces}
             currentSpaceId={bootstrapMe?.spaceId}
-            onSwitchSpace={(spaceId, section) => {
-              reopenSettingsAfterReload(section);
-              openSpaceChat(spaceId, "/app");
-            }}
+            onSwitchSpace={(spaceId) => openSpaceChat(spaceId, "/app")}
             onSpaceRenamed={() => refreshBots()}
             onVoiceStatusMaybeChanged={voice.refreshVoiceStatus}
             onClose={() => {

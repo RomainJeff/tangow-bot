@@ -40,7 +40,7 @@ export function useSidebarState({
   roster: Roster;
   navigate: NavigateFunction;
 }) {
-  const { bootstrapMe, botSections, bots, groups, spaces } = roster;
+  const { bootstrapMe, botSections, bots, groups, spaces, switchSpace } = roster;
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [collapsedSidebarSections, setCollapsedSidebarSections] = useState(() => new Set<string>());
   const [botsSidebarCollapsed, setBotsSidebarCollapsed] = useState(false);
@@ -144,20 +144,26 @@ export function useSidebarState({
       const selectionStored = selectSpace(spaceId);
       if (!selectionStored) return;
       const previousEffective = previousSpaceId ?? bootstrapMe?.spaceId;
-      const boundaryChanged = previousEffective !== spaceId;
-      // Soft-navigate within the same space; reload only when the auth boundary changes
-      // so bootstrapped bots/groups match the request header.
-      if (boundaryChanged) {
-        window.location.assign(path);
+      // Opened from the phone's bot list: the chat's Back returns to it by popping this entry.
+      const open = (target: string) =>
+        navigate(
+          target,
+          window.location.pathname === "/app" && target !== "/app"
+            ? { state: { fromList: true } }
+            : undefined,
+        );
+      if (previousEffective === spaceId) {
+        open(path);
         return;
       }
-      // Opened from the phone's bot list: the chat's Back returns to it by popping this entry.
-      navigate(
-        path,
-        window.location.pathname === "/app" ? { state: { fromList: true } } : undefined,
+      // The bare /app asks for the new space's home rather than a specific chat.
+      void switchSpace().then(
+        (home) => open(path === "/app" ? home : path),
+        // Fall back to a reload so the requests' space header and the UI never disagree.
+        () => window.location.assign(path),
       );
     },
-    [bootstrapMe?.spaceId, navigate],
+    [bootstrapMe?.spaceId, navigate, switchSpace],
   );
   const toggleSidebarSection = useCallback(
     (key: string) => {

@@ -2,7 +2,7 @@ import type { Bot, BotSection, Group, Space, SpaceMemoryConfig } from "@rakazo/c
 import { useCallback, useEffect, useRef, useState } from "react";
 import { rpc } from "../../lib/rpc";
 import type { ContextMenuPosition } from "../BotContextMenu";
-import { type SettingsSection, takeSettingsSectionToReopen } from "../settings-sections";
+import type { SettingsSection } from "../settings-sections";
 import type { RunView } from "./bot-commands";
 import { isCommandPaletteHotkey } from "./command-palette";
 
@@ -12,7 +12,7 @@ type ChatTarget = { kind: "bot"; chat: Bot } | { kind: "group"; chat: Group };
  * What opens over the shell: context menus, confirmations, the command palette
  * and the settings overlays, with the account data those overlays show.
  */
-export function useShellOverlays(sessionUser: unknown) {
+export function useShellOverlays(sessionUser: unknown, spaceId: string | undefined) {
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [mcpOpen, setMcpOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -114,7 +114,8 @@ export function useShellOverlays(sessionUser: unknown) {
     return () => {
       cancelled = true;
     };
-  }, []);
+    // The memory provider belongs to the space, so a space switch reloads it.
+  }, [spaceId]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -130,13 +131,6 @@ export function useShellOverlays(sessionUser: unknown) {
     setSettingsSection(section);
     setSettingsOpen(true);
   }
-
-  useEffect(() => {
-    const section = takeSettingsSectionToReopen();
-    if (!section) return;
-    setSettingsSection(section);
-    setSettingsOpen(true);
-  }, []);
 
   function changeMemoryConfig(config: SpaceMemoryConfig | null) {
     memoryProviderConfigRevision.current += 1;
