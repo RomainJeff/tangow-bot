@@ -86,7 +86,7 @@ export function SettingsOverlay({
   onMemoryConfigChange: (config: SpaceMemoryConfig | null) => void;
   spaces: SettingsSpace[];
   currentSpaceId: string | undefined;
-  onSwitchSpace: (spaceId: string, section: SettingsSection) => void;
+  onSwitchSpace: (spaceId: string) => void;
   onSpaceRenamed?: () => void | Promise<void>;
   onClose: () => void;
   onVoiceStatusMaybeChanged?: () => void | Promise<void>;
@@ -219,7 +219,7 @@ export function SettingsOverlay({
               disabled={panelBusy}
               onSwitch={(spaceId) => {
                 if (panelBusy) return;
-                onSwitchSpace(spaceId, section);
+                onSwitchSpace(spaceId);
               }}
             />
             <fieldset
@@ -254,6 +254,8 @@ export function SettingsOverlay({
             </div>
 
             <div
+              // Space panels load once on mount, so a space switch remounts them for the new space.
+              key={currentSpaceId}
               className={`min-h-0 flex-1 ${
                 section === "providers" ||
                 section === "models" ||

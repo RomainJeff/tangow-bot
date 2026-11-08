@@ -1,4 +1,13 @@
-import type { Bot, BotSection, Group, Me, Routine, Space, ThreadSnapshot } from "@rakazo/contracts";
+import type {
+  AppBootstrap,
+  Bot,
+  BotSection,
+  Group,
+  Me,
+  Routine,
+  Space,
+  ThreadSnapshot,
+} from "@rakazo/contracts";
 import { reorderBotTo } from "@rakazo/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { NavigateFunction } from "react-router-dom";
@@ -179,6 +188,31 @@ export function useRoster({
     [navigate],
   );
 
+  function applyBootstrapLists(bootstrap: AppBootstrap) {
+    setBots(bootstrap.bots);
+    setBotSections(bootstrap.botSections);
+    setArchivedBots(bootstrap.archivedBots);
+    setArchivedGroups(bootstrap.archivedGroups);
+    setGroups(bootstrap.groups);
+    setSpaces(bootstrap.spaces);
+    setInitialBotsLoaded(true);
+  }
+
+  /**
+   * Reloads the roster for the space just stored with `selectSpace`. Resolves to that
+   * space's home: its first chat, or the bot list at phone width.
+   */
+  const switchSpace = useCallback(async () => {
+    const bootstrap = await rpc.bootstrap({});
+    // Drop refreshes still in flight, some sent with the previous space's header, so none
+    // lands after this and swaps the lists or the route back.
+    botsRefreshEpoch.current += 1;
+    archivedBotsRefreshEpoch.current += 1;
+    setBootstrapMe(bootstrap.me);
+    applyBootstrapLists(bootstrap);
+    return phoneList() ? "/app" : firstThreadRoute(bootstrap.bots, bootstrap.groups);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     const appliedAtStart = botsRefreshApplied.current;
@@ -190,15 +224,7 @@ export function useRoster({
         // Skip list/route writes only if a later refreshBots() successfully
         // committed (failed refreshes bump epoch but not botsRefreshApplied).
         const applyBotLists = appliedAtStart === botsRefreshApplied.current;
-        if (applyBotLists) {
-          setBots(bootstrap.bots);
-          setBotSections(bootstrap.botSections);
-          setArchivedBots(bootstrap.archivedBots);
-          setArchivedGroups(bootstrap.archivedGroups);
-          setGroups(groupList);
-          setSpaces(bootstrap.spaces);
-          setInitialBotsLoaded(true);
-        }
+        if (applyBotLists) applyBootstrapLists(bootstrap);
         if (!groupId && bootstrap.thread) {
           onBootstrapThread(bootstrap.thread, bootstrap.routines);
         }
@@ -337,6 +363,7 @@ export function useRoster({
     markBotUnread,
     markBotReadIfVisible,
     refreshBots,
+    switchSpace,
     supersedeBotsRefresh,
     reorderRosterBot,
   };

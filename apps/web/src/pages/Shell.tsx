@@ -39,7 +39,6 @@ export function ShellPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const session = authClient.useSession();
   const userId = session.data?.user.id;
-  const overlays = useShellOverlays(session.data?.user);
   const store = useThreadStore();
   const roster = useRoster({
     botId,
@@ -48,6 +47,7 @@ export function ShellPage() {
     onBootstrapThread: store.primeFromBootstrap,
   });
   const { bots, archivedBots, active, activeGroup, inGroup, bootstrapMe, refreshBots } = roster;
+  const overlays = useShellOverlays(session.data?.user, bootstrapMe?.spaceId);
   const sidebar = useSidebarState({ userId, roster, navigate });
   const panels = usePanels(roster);
   const { panel, setPanel, pageBot, pickedBotId } = panels;
