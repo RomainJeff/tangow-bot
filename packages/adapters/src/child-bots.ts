@@ -12,9 +12,9 @@ import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
   cancelRunsInTransaction,
-  computerScopeKey,
   createRepos,
   createThreadMessageInTransaction,
+  dedicatedComputerScopeKey,
   deleteOwnerVolumes,
   expireComputerExecutionLeases,
   logCancelledRunsInTransaction,
@@ -267,7 +267,7 @@ export async function archiveBot(
 ) {
   const [dedicated, activeRuns, activeRoutines] = await Promise.all([
     deps.prisma.computer.findUnique({
-      where: { scopeKey: computerScopeKey("dedicated", bot.spaceId, bot.id) },
+      where: { scopeKey: dedicatedComputerScopeKey(bot.id) },
     }),
     deps.prisma.run.findMany({
       where: { botId: bot.id, status: { in: [...ACTIVE_RUN_STATUSES] } },
@@ -343,7 +343,7 @@ export async function destroyBot(
 ) {
   const [dedicated, routines] = await Promise.all([
     deps.prisma.computer.findUnique({
-      where: { scopeKey: computerScopeKey("dedicated", bot.spaceId, bot.id) },
+      where: { scopeKey: dedicatedComputerScopeKey(bot.id) },
     }),
     deps.prisma.routine.findMany({ where: { botId: bot.id }, select: { id: true } }),
   ]);
