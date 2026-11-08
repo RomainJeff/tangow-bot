@@ -200,6 +200,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Computer is stopped": "Компьютер остановлен",
   "Configured by deployment": "Настроено развёртыванием",
   Connect: "Подключить",
+  "Connect a voice provider": "Подключить провайдера голоса",
   "Connect a voice provider first.": "Сначала подключите провайдера голосовой связи.",
   "Connect API key": "Подключить API-ключ",
   "Connect Executor": "Подключить Executor",

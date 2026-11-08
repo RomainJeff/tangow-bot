@@ -345,14 +345,15 @@ export function ModelDetail({ settings }: { settings: ModelSettings }) {
             </p>
           ) : null}
 
-          {credential && !isActive ? (
+          {/* A compatible server's model lives only in the space preference, so it can be switched here. */}
+          {isOpenAiCompatible && credential && !isActive ? (
             <div className="mt-6">
               <Button
                 type="button"
                 variant="secondary"
                 className="rounded-full"
                 size="sm"
-                disabled={busy || (isOpenAiCompatible && !modelId.trim())}
+                disabled={busy || !modelId.trim()}
                 onClick={() => void setModelDefault()}
               >
                 {pending === "default" ? <Trans>Switching…</Trans> : <Trans>Use this model</Trans>}

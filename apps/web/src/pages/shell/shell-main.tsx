@@ -158,7 +158,7 @@ export function ShellMain({
                   // draft once it sees dictation get cut off from under it).
                   dictation.stop("cancel");
                   if (!voiceStatus?.ready) {
-                    openSettings("voice");
+                    openSettings(voiceStatus?.configured ? "voice" : "providers");
                     return;
                   }
                   setCallOpen(true);

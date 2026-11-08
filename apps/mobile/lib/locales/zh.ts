@@ -196,6 +196,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Computer is stopped": "电脑已停止",
   "Configured by deployment": "由部署配置",
   Connect: "连接",
+  "Connect a voice provider": "连接语音提供商",
   "Connect a voice provider first.": "请先连接语音提供商。",
   "Connect API key": "连接 API 密钥",
   "Connect Executor": "连接 Executor",

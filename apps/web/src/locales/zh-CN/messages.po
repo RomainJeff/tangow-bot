@@ -36,7 +36,7 @@ msgid "{0, plural, one {# compaction} other {# compactions}} · {1} in · {2} ou
 msgstr ""
 
 #. placeholder {0}: group.entries.length
-#: src/pages/ModelSettingsOverlay.tsx:107
+#: src/pages/ProvidersSettings.tsx:138
 msgid "{0, plural, one {# model} other {# models}}"
 msgstr "{0, plural, one {# 个模型} other {# 个模型}}"
 
@@ -110,7 +110,7 @@ msgid "{0} in · {1} out"
 msgstr "输入 {0} · 输出 {1}"
 
 #. placeholder {0}: item.status.busyBotName
-#: src/pages/ComputerSettingsPanel.tsx:112
+#: src/pages/ComputerSettingsPanel.tsx:124
 msgid "{0} is using it"
 msgstr ""
 
@@ -140,7 +140,7 @@ msgid "{0} will still respond to direct mentions."
 msgstr ""
 
 #. placeholder {0}: bot.name
-#: src/pages/shell/computer-preview.tsx:74
+#: src/pages/shell/computer-preview.tsx:79
 msgid "{0}'s screen"
 msgstr "{0} 的屏幕"
 
@@ -152,7 +152,7 @@ msgstr ""
 msgid "{botName} is speaking"
 msgstr ""
 
-#: src/pages/shell/computer-preview.tsx:93
+#: src/pages/shell/computer-preview.tsx:98
 msgid "{botName}’s computer"
 msgstr "{botName} 的电脑"
 
@@ -558,7 +558,7 @@ msgstr "API 已恢复，但更新未完成。请查看宿主日志。"
 #: src/pages/Onboarding.tsx:630
 #: src/pages/Onboarding.tsx:633
 #: src/pages/Onboarding.tsx:647
-#: src/pages/VoiceSettingsOverlay.tsx:247
+#: src/pages/ProvidersSettings.tsx:217
 msgid "API key"
 msgstr "API 密钥"
 
@@ -745,7 +745,7 @@ msgstr ""
 msgid "Bearer token"
 msgstr "Bearer token"
 
-#: src/pages/shell/computer-preview.tsx:85
+#: src/pages/shell/computer-preview.tsx:90
 msgid "Booting live desktop…"
 msgstr "正在启动实时桌面…"
 
@@ -806,7 +806,7 @@ msgid "Bots are working"
 msgstr "Bot 正在工作"
 
 #. placeholder {0}: item.bots.map((bot) => bot.name).join(", ")
-#: src/pages/ComputerSettingsPanel.tsx:104
+#: src/pages/ComputerSettingsPanel.tsx:116
 msgid "Bots: {0}"
 msgstr ""
 
@@ -822,7 +822,7 @@ msgstr ""
 msgid "Browse MCP servers"
 msgstr ""
 
-#: src/pages/ComputerSettingsPanel.tsx:68
+#: src/pages/ComputerSettingsPanel.tsx:80
 msgid "Busy. Try again when idle."
 msgstr ""
 
@@ -945,7 +945,7 @@ msgstr "选择 Bot…"
 msgid "Choose a new password"
 msgstr "设置新密码"
 
-#: src/pages/ModelSettingsOverlay.tsx:47
+#: src/pages/ModelSettingsOverlay.tsx:35
 msgid "Choose which connected model Rakazo uses."
 msgstr "选择 Rakazo 使用的已连接模型。"
 
@@ -1012,7 +1012,7 @@ msgid "Close MCP servers"
 msgstr "关闭 MCP 服务器"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:127
+#: src/pages/SettingsOverlay.tsx:146
 msgid "Close memory settings"
 msgstr "关闭记忆设置"
 
@@ -1020,8 +1020,8 @@ msgstr "关闭记忆设置"
 msgid "Close messaging settings"
 msgstr "关闭消息设置"
 
-#: src/pages/ModelSettingsOverlay.tsx:63
-#: src/pages/SettingsOverlay.tsx:125
+#: src/pages/ModelSettingsOverlay.tsx:51
+#: src/pages/SettingsOverlay.tsx:144
 msgid "Close model settings"
 msgstr "关闭模型设置"
 
@@ -1038,12 +1038,12 @@ msgstr "关闭预览"
 msgid "Close skills"
 msgstr "关闭技能"
 
-#: src/pages/SettingsOverlay.tsx:130
+#: src/pages/SettingsOverlay.tsx:149
 msgid "Close user settings"
 msgstr "关闭用户设置"
 
-#: src/pages/SettingsOverlay.tsx:129
-#: src/pages/VoiceSettingsOverlay.tsx:174
+#: src/pages/SettingsOverlay.tsx:148
+#: src/pages/VoiceSettingsOverlay.tsx:141
 msgid "Close voice settings"
 msgstr "关闭语音设置"
 
@@ -1084,13 +1084,13 @@ msgstr "复杂"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:117
+#: src/pages/SettingsOverlay.tsx:136
 #: src/pages/shell/block-views.tsx:131
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
 msgstr "电脑"
 
-#: src/pages/shell/computer-preview.tsx:88
+#: src/pages/shell/computer-preview.tsx:93
 msgid "Computer failed to boot"
 msgstr "电脑启动失败"
 
@@ -1098,11 +1098,11 @@ msgstr "电脑启动失败"
 msgid "Computer is asleep"
 msgstr "电脑已休眠"
 
-#: src/pages/shell/computer-preview.tsx:87
+#: src/pages/shell/computer-preview.tsx:92
 msgid "Computer is asleep. Open it to wake."
 msgstr "电脑处于睡眠状态。打开以唤醒。"
 
-#: src/pages/shell/computer-preview.tsx:89
+#: src/pages/shell/computer-preview.tsx:94
 msgid "Computer is stopped"
 msgstr "电脑已停止"
 
@@ -1139,13 +1139,17 @@ msgstr "确认密码"
 #: src/pages/DecisionModelSettingsPanel.tsx:176
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
-#: src/pages/VoiceSettingsOverlay.tsx:269
+#: src/pages/ProvidersSettings.tsx:239
 msgid "Connect"
 msgstr "连接"
 
 #: src/pages/Onboarding.tsx:384
 msgid "Connect a model"
 msgstr "连接模型"
+
+#: src/pages/VoiceSettingsOverlay.tsx:205
+msgid "Connect a voice provider"
+msgstr "连接语音提供商"
 
 #: src/pages/model-settings/model-detail.tsx:333
 msgid "Connect API key"
@@ -1176,9 +1180,9 @@ msgstr "连接 Treg"
 #: src/pages/DecisionModelSettingsPanel.tsx:98
 #: src/pages/McpOAuthCallback.tsx:54
 #: src/pages/MemorySettingsOverlay.tsx:191
-#: src/pages/ModelSettingsOverlay.tsx:114
+#: src/pages/ProvidersSettings.tsx:145
+#: src/pages/ProvidersSettings.tsx:195
 #: src/pages/shell/message-cards.tsx:186
-#: src/pages/VoiceSettingsOverlay.tsx:226
 msgid "Connected"
 msgstr "已连接"
 
@@ -1187,8 +1191,8 @@ msgstr "已连接"
 msgid "Connected · {0}"
 msgstr "已连接 · {0}"
 
-#. placeholder {0}: selected.name
-#: src/pages/VoiceSettingsOverlay.tsx:106
+#. placeholder {0}: selectedVoice.name
+#: src/pages/ProvidersSettings.tsx:68
 msgid "Connected {0}."
 msgstr "已连接 {0}。"
 
@@ -1209,9 +1213,9 @@ msgstr "已连接，下一条消息起即可使用其工具。"
 #: src/pages/McpServersOverlay.tsx:38
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
+#: src/pages/ProvidersSettings.tsx:235
 #: src/pages/shell/message-cards.tsx:275
 #: src/pages/shell/screen-frame.tsx:44
-#: src/pages/VoiceSettingsOverlay.tsx:265
 msgid "Connecting…"
 msgstr "正在连接…"
 
@@ -1324,7 +1328,7 @@ msgstr ""
 msgid "Could not connect this provider"
 msgstr "无法连接此提供方"
 
-#: src/pages/VoiceSettingsOverlay.tsx:108
+#: src/pages/ProvidersSettings.tsx:70
 msgid "Could not connect this voice provider"
 msgstr "无法连接此语音提供方"
 
@@ -1394,7 +1398,7 @@ msgstr "无法断开 OAuth"
 msgid "Could not disconnect OpenRouter"
 msgstr ""
 
-#: src/pages/VoiceSettingsOverlay.tsx:124
+#: src/pages/ProvidersSettings.tsx:86
 msgid "Could not disconnect this voice provider"
 msgstr ""
 
@@ -1442,7 +1446,7 @@ msgstr "无法加载审批规则"
 msgid "Could not load bots. Reload to try again."
 msgstr ""
 
-#: src/pages/ComputerSettingsPanel.tsx:79
+#: src/pages/ComputerSettingsPanel.tsx:91
 msgid "Could not load computers"
 msgstr ""
 
@@ -1487,12 +1491,13 @@ msgstr "无法加载此文件。"
 msgid "Could not load update status"
 msgstr "无法加载更新状态"
 
-#: src/pages/VoiceSettingsOverlay.tsx:81
-#: src/pages/VoiceSettingsOverlay.tsx:205
+#: src/pages/ProvidersSettings.tsx:48
+#: src/pages/VoiceSettingsOverlay.tsx:82
+#: src/pages/VoiceSettingsOverlay.tsx:170
 msgid "Could not load voice settings"
 msgstr "无法加载语音设置"
 
-#: src/pages/VoiceSettingsOverlay.tsx:158
+#: src/pages/VoiceSettingsOverlay.tsx:125
 msgid "Could not play a test clip"
 msgstr "无法播放测试片段"
 
@@ -1580,7 +1585,7 @@ msgstr "无法保存规则"
 msgid "Could not save skill"
 msgstr "无法保存技能"
 
-#: src/pages/VoiceSettingsOverlay.tsx:139
+#: src/pages/VoiceSettingsOverlay.tsx:106
 msgid "Could not save that voice"
 msgstr "无法保存该语音"
 
@@ -1629,11 +1634,11 @@ msgid "Could not update agent access"
 msgstr "无法更新 Agent 权限"
 
 #: src/components/ComputerMaintenanceActions.tsx:67
-#: src/pages/ComputerSettingsPanel.tsx:71
+#: src/pages/ComputerSettingsPanel.tsx:83
 msgid "Could not update computer"
 msgstr "无法更新电脑"
 
-#: src/pages/ComputerSettingsPanel.tsx:81
+#: src/pages/ComputerSettingsPanel.tsx:93
 msgid "Could not update computers"
 msgstr ""
 
@@ -1792,7 +1797,7 @@ msgstr "天"
 msgid "Debug mode"
 msgstr "调试模式"
 
-#: src/pages/SettingsOverlay.tsx:116
+#: src/pages/SettingsOverlay.tsx:135
 msgid "Decision Model"
 msgstr ""
 
@@ -1935,13 +1940,13 @@ msgstr ""
 #: src/pages/DecisionModelSettingsPanel.tsx:111
 #: src/pages/McpServersOverlay.tsx:494
 #: src/pages/MemorySettingsOverlay.tsx:211
-#: src/pages/VoiceSettingsOverlay.tsx:284
+#: src/pages/ProvidersSettings.tsx:252
 msgid "Disconnect"
 msgstr "断开"
 
 #: src/pages/DecisionModelSettingsPanel.tsx:111
 #: src/pages/MemorySettingsOverlay.tsx:211
-#: src/pages/VoiceSettingsOverlay.tsx:282
+#: src/pages/ProvidersSettings.tsx:250
 msgid "Disconnecting…"
 msgstr "正在断开…"
 
@@ -2263,7 +2268,7 @@ msgstr "全屏"
 msgid "FYI"
 msgstr "供参考"
 
-#: src/pages/SettingsOverlay.tsx:112
+#: src/pages/SettingsOverlay.tsx:131
 msgid "General"
 msgstr "通用"
 
@@ -2325,11 +2330,11 @@ msgstr "请求头名称"
 msgid "Header value"
 msgstr "请求头值"
 
-#: src/pages/VoiceSettingsOverlay.tsx:317
+#: src/pages/VoiceSettingsOverlay.tsx:236
 msgid "Hear a sample"
 msgstr "试听"
 
-#: src/pages/VoiceSettingsOverlay.tsx:151
+#: src/pages/VoiceSettingsOverlay.tsx:118
 msgid "Hi, this is how I'll sound when I read replies out loud."
 msgstr "你好，这是我朗读回复时的声音。"
 
@@ -2384,7 +2389,7 @@ msgstr "如何检查"
 msgid "I’m done"
 msgstr "我做完了"
 
-#: src/pages/VoiceSettingsOverlay.tsx:156
+#: src/pages/VoiceSettingsOverlay.tsx:123
 msgid "If you heard that, voice is ready."
 msgstr "如果听到了，说明语音已就绪。"
 
@@ -2560,8 +2565,8 @@ msgstr "正在加载集成…"
 msgid "Loading memory settings…"
 msgstr "正在加载记忆设置…"
 
-#: src/pages/model-settings/model-detail.tsx:365
-#: src/pages/ModelSettingsOverlay.tsx:45
+#: src/pages/model-settings/model-detail.tsx:366
+#: src/pages/ModelSettingsOverlay.tsx:33
 msgid "Loading model catalog…"
 msgstr "正在加载模型目录…"
 
@@ -2577,7 +2582,7 @@ msgstr "正在加载规则…"
 msgid "Loading tools…"
 msgstr ""
 
-#: src/pages/VoiceSettingsOverlay.tsx:238
+#: src/pages/VoiceSettingsOverlay.tsx:198
 msgid "Loading voice providers…"
 msgstr "正在加载语音提供方…"
 
@@ -2677,7 +2682,7 @@ msgstr "成员（选择 {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX} 个）"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:36
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:115
+#: src/pages/SettingsOverlay.tsx:134
 msgid "Memory"
 msgstr "记忆"
 
@@ -2805,8 +2810,10 @@ msgstr "模型费用使用你的提供方密钥。"
 msgid "Model updated."
 msgstr "模型已更新。"
 
-#: src/pages/ModelSettingsOverlay.tsx:56
-#: src/pages/SettingsOverlay.tsx:113
+#: src/pages/ModelSettingsOverlay.tsx:44
+#: src/pages/ProvidersSettings.tsx:114
+#: src/pages/ProvidersSettings.tsx:116
+#: src/pages/SettingsOverlay.tsx:132
 #: src/pages/usage-settings.tsx:69
 msgid "Models"
 msgstr "模型"
@@ -2824,7 +2831,7 @@ msgstr "每月"
 msgid "Monthly on day {day} at {time}"
 msgstr "每月 {day} 日 {time}"
 
-#: src/components/ComputerMaintenanceActions.tsx:152
+#: src/components/ComputerMaintenanceActions.tsx:157
 msgid "More computer actions"
 msgstr "更多电脑操作"
 
@@ -2957,7 +2964,7 @@ msgstr "没有匹配的机器人"
 msgid "No chat apps linked yet."
 msgstr "还没有关联聊天应用。"
 
-#: src/pages/ComputerSettingsPanel.tsx:91
+#: src/pages/ComputerSettingsPanel.tsx:103
 msgid "No computers"
 msgstr ""
 
@@ -3003,7 +3010,7 @@ msgstr "还没有 MCP 服务器。"
 msgid "No messages with {peerBotName} yet."
 msgstr "还没有与 {peerBotName} 的消息。"
 
-#: src/pages/model-settings/model-detail.tsx:369
+#: src/pages/model-settings/model-detail.tsx:370
 msgid "No model catalog is available."
 msgstr "没有可用的模型目录。"
 
@@ -3011,7 +3018,7 @@ msgstr "没有可用的模型目录。"
 msgid "No model connected"
 msgstr "未连接模型"
 
-#: src/pages/ModelSettingsOverlay.tsx:122
+#: src/pages/ProvidersSettings.tsx:153
 msgid "No providers found."
 msgstr "未找到提供方。"
 
@@ -3274,7 +3281,7 @@ msgstr "密码已更新"
 msgid "Passwords do not match"
 msgstr "两次密码不一致"
 
-#: src/pages/VoiceSettingsOverlay.tsx:255
+#: src/pages/ProvidersSettings.tsx:225
 msgid "Paste a replacement key"
 msgstr "粘贴替换密钥"
 
@@ -3282,7 +3289,7 @@ msgstr "粘贴替换密钥"
 msgid "Paste the OpenAI-compatible address from your server. Rakazo adds /v1 if needed."
 msgstr "粘贴服务器的 OpenAI 兼容地址。需要时 Rakazo 会补上 /v1。"
 
-#: src/pages/VoiceSettingsOverlay.tsx:255
+#: src/pages/ProvidersSettings.tsx:225
 msgid "Paste your API key"
 msgstr "粘贴你的 API 密钥"
 
@@ -3302,7 +3309,7 @@ msgstr "个人凭据"
 msgid "Pin"
 msgstr "置顶"
 
-#: src/pages/VoiceSettingsOverlay.tsx:317
+#: src/pages/VoiceSettingsOverlay.tsx:236
 msgid "Playing…"
 msgstr "播放中…"
 
@@ -3324,7 +3331,7 @@ msgstr "上一张图片"
 msgid "Private"
 msgstr "私有"
 
-#: src/pages/ComputerSettingsPanel.tsx:103
+#: src/pages/ComputerSettingsPanel.tsx:115
 msgid "Private Computer"
 msgstr ""
 
@@ -3332,7 +3339,7 @@ msgstr ""
 msgid "Private workspace with its own bots and groups."
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:110
+#: src/pages/SettingsOverlay.tsx:128
 msgid "Profile"
 msgstr "个人资料"
 
@@ -3350,8 +3357,8 @@ msgstr ""
 msgid "Provider"
 msgstr "提供方"
 
-#: src/pages/ModelSettingsOverlay.tsx:77
-#: src/pages/VoiceSettingsOverlay.tsx:186
+#: src/pages/SettingsOverlay.tsx:129
+#: src/pages/VoiceSettingsOverlay.tsx:154
 msgid "Providers"
 msgstr "提供方"
 
@@ -3437,7 +3444,7 @@ msgstr "录制已开始。请刷新视图以继续。"
 msgid "Recording: {0}"
 msgstr "录制中：{0}"
 
-#: src/components/ComputerMaintenanceActions.tsx:131
+#: src/components/ComputerMaintenanceActions.tsx:136
 #: src/components/ComputerUpdateProgress.tsx:234
 msgid "Recover computer"
 msgstr "恢复电脑"
@@ -3451,7 +3458,7 @@ msgstr ""
 msgid "Recovering Team Computer"
 msgstr ""
 
-#: src/components/ComputerMaintenanceActions.tsx:131
+#: src/components/ComputerMaintenanceActions.tsx:136
 msgid "Recovering…"
 msgstr "正在恢复…"
 
@@ -3573,7 +3580,7 @@ msgstr "重新打开"
 msgid "Replace API key"
 msgstr "替换 API 密钥"
 
-#: src/pages/VoiceSettingsOverlay.tsx:267
+#: src/pages/ProvidersSettings.tsx:237
 msgid "Replace key"
 msgstr "替换密钥"
 
@@ -3607,7 +3614,7 @@ msgstr "请求"
 msgid "Reset"
 msgstr "重置"
 
-#: src/components/ComputerMaintenanceActions.tsx:139
+#: src/components/ComputerMaintenanceActions.tsx:144
 msgid "Reset computer"
 msgstr "重置电脑"
 
@@ -3624,7 +3631,7 @@ msgid "Reset your password"
 msgstr "重置你的密码"
 
 #: src/components/ComputerMaintenanceActions.tsx:103
-#: src/components/ComputerMaintenanceActions.tsx:139
+#: src/components/ComputerMaintenanceActions.tsx:144
 msgid "Resetting…"
 msgstr "正在重置…"
 
@@ -3657,7 +3664,7 @@ msgstr "结果"
 
 #: src/pages/bot-page/page-kit.tsx:52
 #: src/pages/bot-page/page-kit.tsx:88
-#: src/pages/ComputerSettingsPanel.tsx:84
+#: src/pages/ComputerSettingsPanel.tsx:96
 #: src/pages/shell/image-stack.tsx:156
 #: src/pages/shell/image-viewer.tsx:36
 msgid "Retry"
@@ -3843,8 +3850,8 @@ msgstr ""
 msgid "Search models"
 msgstr "搜索模型"
 
-#: src/pages/ModelSettingsOverlay.tsx:80
-#: src/pages/ModelSettingsOverlay.tsx:86
+#: src/pages/ProvidersSettings.tsx:104
+#: src/pages/ProvidersSettings.tsx:110
 msgid "Search providers"
 msgstr "搜索提供方"
 
@@ -3905,7 +3912,7 @@ msgstr "服务器 URL"
 
 #: src/pages/bot-page/BotPage.tsx:101
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:179
+#: src/pages/SettingsOverlay.tsx:198
 #: src/pages/shell/sidebar-footer.tsx:195
 #: src/pages/shell/sidebar-footer.tsx:202
 msgid "Settings"
@@ -4054,11 +4061,13 @@ msgstr "工作区默认"
 msgid "Spaces"
 msgstr ""
 
-#: src/pages/VoiceSettingsOverlay.tsx:218
+#: src/pages/ProvidersSettings.tsx:187
+#: src/pages/VoiceSettingsOverlay.tsx:183
 msgid "Speak + transcribe"
 msgstr "朗读 + 转写"
 
-#: src/pages/VoiceSettingsOverlay.tsx:220
+#: src/pages/ProvidersSettings.tsx:189
+#: src/pages/VoiceSettingsOverlay.tsx:185
 msgid "Speak only"
 msgstr "仅朗读"
 
@@ -4151,11 +4160,11 @@ msgstr "支持思考"
 msgid "Switch bot"
 msgstr "切换机器人"
 
-#: src/pages/SettingsOverlay.tsx:388
+#: src/pages/SettingsOverlay.tsx:424
 msgid "Switch space"
 msgstr "切换空间"
 
-#: src/pages/model-settings/model-detail.tsx:358
+#: src/pages/model-settings/model-detail.tsx:359
 msgid "Switching…"
 msgstr "正在切换…"
 
@@ -4167,7 +4176,7 @@ msgstr "系统"
 msgid "Take control"
 msgstr ""
 
-#: src/components/ComputerMaintenanceActions.tsx:160
+#: src/components/ComputerMaintenanceActions.tsx:165
 #: src/components/teach/TeachComputerOverlay.tsx:213
 #: src/components/teach/TeachComputerOverlay.tsx:224
 msgid "Teach a task"
@@ -4183,8 +4192,8 @@ msgid "Team"
 msgstr "团队"
 
 #: src/components/ComputerUpdateProgress.tsx:61
-#: src/pages/ComputerSettingsPanel.tsx:103
-#: src/pages/shell/computer-preview.tsx:93
+#: src/pages/ComputerSettingsPanel.tsx:115
+#: src/pages/shell/computer-preview.tsx:98
 msgid "Team Computer"
 msgstr "团队电脑"
 
@@ -4368,15 +4377,19 @@ msgstr "已是最新"
 msgid "Update"
 msgstr "更新"
 
-#: src/pages/ComputerSettingsPanel.tsx:58
+#: src/pages/ComputerSettingsPanel.tsx:65
 msgid "Update all computers"
 msgstr ""
 
+#: src/components/ComputerMaintenanceActions.tsx:116
 #: src/components/SoftwareUpdateSection.tsx:260
+#: src/pages/SettingsOverlay.tsx:364
+#: src/pages/SettingsOverlay.tsx:364
+#: src/pages/shell/computer-preview.tsx:75
 msgid "Update available"
 msgstr "有可用更新"
 
-#: src/components/ComputerMaintenanceActions.tsx:122
+#: src/components/ComputerMaintenanceActions.tsx:127
 msgid "Update computer"
 msgstr "更新电脑"
 
@@ -4399,16 +4412,16 @@ msgstr ""
 msgid "Updated"
 msgstr "已更新"
 
-#: src/pages/SettingsOverlay.tsx:111
+#: src/pages/SettingsOverlay.tsx:130
 msgid "Updates"
 msgstr "更新"
 
-#: src/pages/ComputerSettingsPanel.tsx:70
+#: src/pages/ComputerSettingsPanel.tsx:82
 msgid "Updates are unavailable on this device"
 msgstr ""
 
 #. placeholder {0}: result.queued.length
-#: src/pages/ComputerSettingsPanel.tsx:62
+#: src/pages/ComputerSettingsPanel.tsx:74
 msgid "Updates queued: {0}"
 msgstr ""
 
@@ -4421,13 +4434,13 @@ msgstr ""
 msgid "Updating Team Computer"
 msgstr ""
 
-#: src/components/ComputerMaintenanceActions.tsx:122
+#: src/components/ComputerMaintenanceActions.tsx:127
 #: src/components/SoftwareUpdateSection.tsx:81
-#: src/pages/ComputerSettingsPanel.tsx:58
+#: src/pages/ComputerSettingsPanel.tsx:65
 msgid "Updating…"
 msgstr "正在更新…"
 
-#: src/pages/SettingsOverlay.tsx:118
+#: src/pages/SettingsOverlay.tsx:137
 #: src/pages/shell/sidebar-footer.tsx:207
 #: src/pages/shell/sidebar-footer.tsx:214
 msgid "Usage"
@@ -4443,7 +4456,7 @@ msgstr "使用找到的模型"
 msgid "Use default guidance"
 msgstr ""
 
-#: src/pages/model-settings/model-detail.tsx:358
+#: src/pages/model-settings/model-detail.tsx:359
 msgid "Use this model"
 msgstr "使用此模型"
 
@@ -4457,11 +4470,13 @@ msgstr "正在校验…"
 
 #: src/pages/bot-page/SettingDetails.tsx:185
 #: src/pages/bot-page/SettingDetails.tsx:189
-#: src/pages/SettingsOverlay.tsx:114
+#: src/pages/ProvidersSettings.tsx:159
+#: src/pages/ProvidersSettings.tsx:161
+#: src/pages/SettingsOverlay.tsx:133
 #: src/pages/shell/thread-header.tsx:139
 #: src/pages/shell/thread-header.tsx:140
-#: src/pages/VoiceSettingsOverlay.tsx:170
-#: src/pages/VoiceSettingsOverlay.tsx:293
+#: src/pages/VoiceSettingsOverlay.tsx:137
+#: src/pages/VoiceSettingsOverlay.tsx:212
 msgid "Voice"
 msgstr "语音"
 
@@ -4590,7 +4605,7 @@ msgstr "如果没有自动跳转，可以关闭此标签页。"
 msgid "You can close this window."
 msgstr "可以关闭此窗口。"
 
-#: src/pages/ComputerSettingsPanel.tsx:109
+#: src/pages/ComputerSettingsPanel.tsx:121
 #: src/pages/shell/side-panel.tsx:333
 msgid "You have control"
 msgstr "你已接管"

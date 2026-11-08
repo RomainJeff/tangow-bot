@@ -1,14 +1,6 @@
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { rpc } from "../lib/api";
 import { mobileTokens } from "../lib/appearance";
@@ -35,20 +27,20 @@ type VoiceStatus = {
 };
 type VoiceInfo = { id: string; label: string; description?: string };
 
+/** The space's voice choice; keys are connected once in Providers. */
 export default function VoiceSettings() {
   const styles = useThemedStyles(createVoiceStyles);
   const { t } = useI18n();
+  const router = useRouter();
   const [catalog, setCatalog] = useState<VoiceCatalogEntry[]>([]);
   const [credentials, setCredentials] = useState<VoiceCredential[]>([]);
   const [status, setStatus] = useState<VoiceStatus | null>(null);
   const [voices, setVoices] = useState<VoiceInfo[]>([]);
   const [provider, setProvider] = useState("");
-  const [apiKey, setApiKey] = useState("");
   const [voiceId, setVoiceId] = useState("");
   const [loading, setLoading] = useState(true);
-  const [pending, setPending] = useState<"connect" | "disconnect" | "voice" | "test" | null>(null);
+  const [pending, setPending] = useState<"voice" | "test" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async (nextProvider?: string) => {
     const [nextCatalog, nextCredentials, nextStatus] = await Promise.all([
@@ -56,7 +48,7 @@ export default function VoiceSettings() {
       rpc<VoiceCredential[]>("voice/credentials"),
       rpc<VoiceStatus>("voice/status"),
     ]);
-    const selected = nextProvider || nextStatus.provider || nextCatalog[0]?.id || "";
+    const selected = nextProvider || nextStatus.provider || nextCredentials[0]?.provider || "";
     setCatalog(nextCatalog);
     setCredentials(nextCredentials);
     setStatus(nextStatus);
@@ -81,44 +73,11 @@ export default function VoiceSettings() {
     }, [load]),
   );
 
+  const connectedCatalog = catalog.filter((entry) =>
+    credentials.some((cred) => cred.provider === entry.id),
+  );
   const selected = catalog.find((entry) => entry.id === provider);
   const credential = credentials.find((entry) => entry.provider === provider);
-
-  async function connect() {
-    if (!selected || apiKey.trim().length < 8) return;
-    setPending("connect");
-    setError(null);
-    try {
-      await rpc("voice/connect", {
-        provider: selected.id,
-        apiKey: apiKey.trim(),
-        voiceId: voiceId || undefined,
-      });
-      setApiKey("");
-      await load(selected.id);
-      setNotice(t("Connected {name}.", { name: selected.name }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("Could not connect"));
-    } finally {
-      setPending(null);
-    }
-  }
-
-  async function disconnect() {
-    if (!credential) return;
-    setPending("disconnect");
-    setError(null);
-    setNotice(null);
-    try {
-      await rpc("voice/disconnect", { provider: credential.provider });
-      setApiKey("");
-      await load(credential.provider);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("Could not disconnect"));
-    } finally {
-      setPending(null);
-    }
-  }
 
   async function chooseVoice(nextVoiceId: string) {
     setVoiceId(nextVoiceId);
@@ -153,78 +112,48 @@ export default function VoiceSettings() {
       <ScrollView contentContainerStyle={styles.content}>
         {loading ? <ActivityIndicator color={native.secondaryLabel} /> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        {notice ? <Text style={styles.notice}>{notice}</Text> : null}
-        {catalog.map((entry) => {
-          const connected = credentials.some((cred) => cred.provider === entry.id);
-          return (
-            <Pressable
-              key={entry.id}
-              disabled={pending !== null}
-              onPress={() => {
-                setProvider(entry.id);
-                setPending("voice");
-                void load(entry.id)
-                  .catch((err: unknown) =>
-                    setError(
-                      err instanceof Error ? err.message : t("Could not load voice settings"),
-                    ),
-                  )
-                  .finally(() => setPending(null));
-              }}
-              style={[
-                styles.card,
-                provider === entry.id && styles.cardActive,
-                pending !== null && styles.disabled,
-              ]}
-            >
-              <Text style={styles.cardTitle}>{entry.name}</Text>
-              <Text style={styles.cardMeta}>
-                {connected
-                  ? t("Connected")
-                  : entry.transcribe
-                    ? t("Speak + transcribe")
-                    : t("Speak only")}
-              </Text>
-            </Pressable>
-          );
-        })}
-        {selected ? (
-          <>
-            <TextInput
-              accessibilityLabel={t("API key")}
-              autoCapitalize="none"
-              autoComplete="off"
-              autoCorrect={false}
-              importantForAutofill="no"
-              value={apiKey}
-              onChangeText={setApiKey}
-              placeholder={credential ? t("Paste a replacement key") : t("Paste your API key")}
-              placeholderTextColor={native.tertiaryLabel}
-              secureTextEntry
-              style={styles.input}
-              textContentType="none"
-            />
-            <Pressable
-              disabled={pending !== null || apiKey.trim().length < 8}
-              onPress={() => void connect()}
-              style={[
-                styles.button,
-                (pending !== null || apiKey.trim().length < 8) && styles.disabled,
-              ]}
-            >
-              <Text style={styles.buttonLabel}>{credential ? t("Replace key") : t("Connect")}</Text>
-            </Pressable>
-            {credential ? (
+        {!loading && !credentials.length ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/providers")}
+            style={({ pressed }) => [styles.button, pressed && styles.pressed]}
+          >
+            <Text style={styles.buttonLabel}>{t("Connect a voice provider")}</Text>
+          </Pressable>
+        ) : null}
+        {connectedCatalog.length > 1
+          ? connectedCatalog.map((entry) => (
               <Pressable
+                key={entry.id}
+                accessibilityRole="button"
+                accessibilityState={{ selected: provider === entry.id }}
                 disabled={pending !== null}
-                onPress={() => void disconnect()}
-                style={[styles.secondary, pending !== null && styles.disabled]}
+                onPress={() => {
+                  setProvider(entry.id);
+                  setPending("voice");
+                  void load(entry.id)
+                    .catch((err: unknown) =>
+                      setError(
+                        err instanceof Error ? err.message : t("Could not load voice settings"),
+                      ),
+                    )
+                    .finally(() => setPending(null));
+                }}
+                style={[
+                  styles.card,
+                  provider === entry.id && styles.cardActive,
+                  pending !== null && styles.disabled,
+                ]}
               >
-                <Text style={styles.secondaryLabel}>
-                  {pending === "disconnect" ? t("Disconnecting…") : t("Disconnect")}
+                <Text style={styles.cardTitle}>{entry.name}</Text>
+                <Text style={styles.cardMeta}>
+                  {entry.transcribe ? t("Speak + transcribe") : t("Speak only")}
                 </Text>
               </Pressable>
-            ) : null}
+            ))
+          : null}
+        {selected && credential ? (
+          <>
             {voices.length ? (
               <View style={styles.voices}>
                 {voices.map((voice) => (
@@ -262,7 +191,6 @@ function createVoiceStyles() {
     screen: { flex: 1, backgroundColor: native.page },
     content: { padding: 20, gap: 10 },
     error: { color: tokens.destructive, marginBottom: 8 },
-    notice: { color: tokens.success, marginBottom: 8 },
     card: {
       borderRadius: 14,
       borderWidth: 1,
@@ -273,15 +201,6 @@ function createVoiceStyles() {
     cardActive: { borderColor: tokens.ring, backgroundColor: tokens.muted },
     cardTitle: { color: native.label, fontSize: 16 },
     cardMeta: { color: native.tertiaryLabel, marginTop: 4, fontSize: 12 },
-    input: {
-      marginTop: 8,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: tokens.border,
-      color: native.label,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-    },
     button: {
       marginTop: 8,
       backgroundColor: tokens.primary,
@@ -290,6 +209,7 @@ function createVoiceStyles() {
       alignItems: "center",
     },
     disabled: { opacity: 0.4 },
+    pressed: { opacity: 0.7 },
     buttonLabel: { color: tokens.primaryForeground, fontWeight: "600" },
     voices: { marginTop: 12, borderRadius: 12, borderWidth: 1, borderColor: tokens.border },
     voiceRow: {

@@ -163,6 +163,7 @@ export default function Layout() {
                     sheetGrabberVisible: true,
                   }}
                 />
+                <Stack.Screen name="providers" options={{ title: t("Providers") }} />
                 <Stack.Screen name="models" options={{ title: t("Models") }} />
                 <Stack.Screen name="usage" options={{ title: t("Usage") }} />
                 <Stack.Screen name="computer-settings" options={{ title: t("Computer") }} />

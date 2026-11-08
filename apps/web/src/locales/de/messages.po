@@ -36,7 +36,7 @@ msgid "{0, plural, one {# compaction} other {# compactions}} · {1} in · {2} ou
 msgstr ""
 
 #. placeholder {0}: group.entries.length
-#: src/pages/ModelSettingsOverlay.tsx:107
+#: src/pages/ProvidersSettings.tsx:138
 msgid "{0, plural, one {# model} other {# models}}"
 msgstr "{0, plural, one {# Modell} other {# Modelle}}"
 
@@ -110,7 +110,7 @@ msgid "{0} in · {1} out"
 msgstr "{0} rein · {1} raus"
 
 #. placeholder {0}: item.status.busyBotName
-#: src/pages/ComputerSettingsPanel.tsx:112
+#: src/pages/ComputerSettingsPanel.tsx:124
 msgid "{0} is using it"
 msgstr ""
 
@@ -140,7 +140,7 @@ msgid "{0} will still respond to direct mentions."
 msgstr ""
 
 #. placeholder {0}: bot.name
-#: src/pages/shell/computer-preview.tsx:74
+#: src/pages/shell/computer-preview.tsx:79
 msgid "{0}'s screen"
 msgstr "{0}s Bildschirm"
 
@@ -152,7 +152,7 @@ msgstr ""
 msgid "{botName} is speaking"
 msgstr ""
 
-#: src/pages/shell/computer-preview.tsx:93
+#: src/pages/shell/computer-preview.tsx:98
 msgid "{botName}’s computer"
 msgstr "Computer von {botName}"
 
@@ -558,7 +558,7 @@ msgstr "Die API ist wieder da, aber das Update wurde nicht abgeschlossen. Prüfe
 #: src/pages/Onboarding.tsx:630
 #: src/pages/Onboarding.tsx:633
 #: src/pages/Onboarding.tsx:647
-#: src/pages/VoiceSettingsOverlay.tsx:247
+#: src/pages/ProvidersSettings.tsx:217
 msgid "API key"
 msgstr "API-Schlüssel"
 
@@ -745,7 +745,7 @@ msgstr ""
 msgid "Bearer token"
 msgstr "Bearer-Token"
 
-#: src/pages/shell/computer-preview.tsx:85
+#: src/pages/shell/computer-preview.tsx:90
 msgid "Booting live desktop…"
 msgstr "Live-Desktop wird gestartet…"
 
@@ -806,7 +806,7 @@ msgid "Bots are working"
 msgstr "Bots arbeiten"
 
 #. placeholder {0}: item.bots.map((bot) => bot.name).join(", ")
-#: src/pages/ComputerSettingsPanel.tsx:104
+#: src/pages/ComputerSettingsPanel.tsx:116
 msgid "Bots: {0}"
 msgstr ""
 
@@ -822,7 +822,7 @@ msgstr ""
 msgid "Browse MCP servers"
 msgstr ""
 
-#: src/pages/ComputerSettingsPanel.tsx:68
+#: src/pages/ComputerSettingsPanel.tsx:80
 msgid "Busy. Try again when idle."
 msgstr ""
 
@@ -945,7 +945,7 @@ msgstr "Bot auswählen …"
 msgid "Choose a new password"
 msgstr "Wähle ein neues Passwort"
 
-#: src/pages/ModelSettingsOverlay.tsx:47
+#: src/pages/ModelSettingsOverlay.tsx:35
 msgid "Choose which connected model Rakazo uses."
 msgstr "Wähle das verbundene Modell aus, das Rakazo verwendet."
 
@@ -1012,7 +1012,7 @@ msgid "Close MCP servers"
 msgstr "MCP-Server schließen"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:127
+#: src/pages/SettingsOverlay.tsx:146
 msgid "Close memory settings"
 msgstr "Erinnerungseinstellungen schließen"
 
@@ -1020,8 +1020,8 @@ msgstr "Erinnerungseinstellungen schließen"
 msgid "Close messaging settings"
 msgstr "Nachrichteneinstellungen schließen"
 
-#: src/pages/ModelSettingsOverlay.tsx:63
-#: src/pages/SettingsOverlay.tsx:125
+#: src/pages/ModelSettingsOverlay.tsx:51
+#: src/pages/SettingsOverlay.tsx:144
 msgid "Close model settings"
 msgstr "Modelleinstellungen schließen"
 
@@ -1038,12 +1038,12 @@ msgstr "Vorschau schließen"
 msgid "Close skills"
 msgstr "Skills schließen"
 
-#: src/pages/SettingsOverlay.tsx:130
+#: src/pages/SettingsOverlay.tsx:149
 msgid "Close user settings"
 msgstr "Benutzereinstellungen schließen"
 
-#: src/pages/SettingsOverlay.tsx:129
-#: src/pages/VoiceSettingsOverlay.tsx:174
+#: src/pages/SettingsOverlay.tsx:148
+#: src/pages/VoiceSettingsOverlay.tsx:141
 msgid "Close voice settings"
 msgstr "Stimmeinstellungen schließen"
 
@@ -1084,13 +1084,13 @@ msgstr "Komplex"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:117
+#: src/pages/SettingsOverlay.tsx:136
 #: src/pages/shell/block-views.tsx:131
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
 msgstr "Computer"
 
-#: src/pages/shell/computer-preview.tsx:88
+#: src/pages/shell/computer-preview.tsx:93
 msgid "Computer failed to boot"
 msgstr "Computer konnte nicht gestartet werden"
 
@@ -1098,11 +1098,11 @@ msgstr "Computer konnte nicht gestartet werden"
 msgid "Computer is asleep"
 msgstr "Computer ist im Ruhezustand"
 
-#: src/pages/shell/computer-preview.tsx:87
+#: src/pages/shell/computer-preview.tsx:92
 msgid "Computer is asleep. Open it to wake."
 msgstr "Der Computer schläft. Öffne ihn, um ihn aufzuwecken."
 
-#: src/pages/shell/computer-preview.tsx:89
+#: src/pages/shell/computer-preview.tsx:94
 msgid "Computer is stopped"
 msgstr "Computer ist gestoppt"
 
@@ -1139,13 +1139,17 @@ msgstr "Passwort bestätigen"
 #: src/pages/DecisionModelSettingsPanel.tsx:176
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
-#: src/pages/VoiceSettingsOverlay.tsx:269
+#: src/pages/ProvidersSettings.tsx:239
 msgid "Connect"
 msgstr "Verbinden"
 
 #: src/pages/Onboarding.tsx:384
 msgid "Connect a model"
 msgstr "Modell verbinden"
+
+#: src/pages/VoiceSettingsOverlay.tsx:205
+msgid "Connect a voice provider"
+msgstr ""
 
 #: src/pages/model-settings/model-detail.tsx:333
 msgid "Connect API key"
@@ -1176,9 +1180,9 @@ msgstr "Treg verbinden"
 #: src/pages/DecisionModelSettingsPanel.tsx:98
 #: src/pages/McpOAuthCallback.tsx:54
 #: src/pages/MemorySettingsOverlay.tsx:191
-#: src/pages/ModelSettingsOverlay.tsx:114
+#: src/pages/ProvidersSettings.tsx:145
+#: src/pages/ProvidersSettings.tsx:195
 #: src/pages/shell/message-cards.tsx:186
-#: src/pages/VoiceSettingsOverlay.tsx:226
 msgid "Connected"
 msgstr "Verbunden"
 
@@ -1187,8 +1191,8 @@ msgstr "Verbunden"
 msgid "Connected · {0}"
 msgstr "Verbunden · {0}"
 
-#. placeholder {0}: selected.name
-#: src/pages/VoiceSettingsOverlay.tsx:106
+#. placeholder {0}: selectedVoice.name
+#: src/pages/ProvidersSettings.tsx:68
 msgid "Connected {0}."
 msgstr "{0} verbunden."
 
@@ -1209,9 +1213,9 @@ msgstr "Verbunden. Die Tools sind ab deiner nächsten Nachricht verfügbar."
 #: src/pages/McpServersOverlay.tsx:38
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
+#: src/pages/ProvidersSettings.tsx:235
 #: src/pages/shell/message-cards.tsx:275
 #: src/pages/shell/screen-frame.tsx:44
-#: src/pages/VoiceSettingsOverlay.tsx:265
 msgid "Connecting…"
 msgstr "Verbindung wird hergestellt…"
 
@@ -1324,7 +1328,7 @@ msgstr ""
 msgid "Could not connect this provider"
 msgstr "Anbieter konnte nicht verbunden werden"
 
-#: src/pages/VoiceSettingsOverlay.tsx:108
+#: src/pages/ProvidersSettings.tsx:70
 msgid "Could not connect this voice provider"
 msgstr "Stimmanbieter konnte nicht verbunden werden"
 
@@ -1394,7 +1398,7 @@ msgstr "OAuth-Verbindung konnte nicht getrennt werden"
 msgid "Could not disconnect OpenRouter"
 msgstr ""
 
-#: src/pages/VoiceSettingsOverlay.tsx:124
+#: src/pages/ProvidersSettings.tsx:86
 msgid "Could not disconnect this voice provider"
 msgstr ""
 
@@ -1442,7 +1446,7 @@ msgstr "Bestätigungsregeln konnten nicht geladen werden"
 msgid "Could not load bots. Reload to try again."
 msgstr ""
 
-#: src/pages/ComputerSettingsPanel.tsx:79
+#: src/pages/ComputerSettingsPanel.tsx:91
 msgid "Could not load computers"
 msgstr ""
 
@@ -1487,12 +1491,13 @@ msgstr "Datei konnte nicht geladen werden."
 msgid "Could not load update status"
 msgstr "Update-Status konnte nicht geladen werden"
 
-#: src/pages/VoiceSettingsOverlay.tsx:81
-#: src/pages/VoiceSettingsOverlay.tsx:205
+#: src/pages/ProvidersSettings.tsx:48
+#: src/pages/VoiceSettingsOverlay.tsx:82
+#: src/pages/VoiceSettingsOverlay.tsx:170
 msgid "Could not load voice settings"
 msgstr "Stimmeinstellungen konnten nicht geladen werden"
 
-#: src/pages/VoiceSettingsOverlay.tsx:158
+#: src/pages/VoiceSettingsOverlay.tsx:125
 msgid "Could not play a test clip"
 msgstr "Testclip konnte nicht abgespielt werden"
 
@@ -1580,7 +1585,7 @@ msgstr "Regel konnte nicht gespeichert werden"
 msgid "Could not save skill"
 msgstr "Skill konnte nicht gespeichert werden"
 
-#: src/pages/VoiceSettingsOverlay.tsx:139
+#: src/pages/VoiceSettingsOverlay.tsx:106
 msgid "Could not save that voice"
 msgstr "Stimme konnte nicht gespeichert werden"
 
@@ -1629,11 +1634,11 @@ msgid "Could not update agent access"
 msgstr "Agent-Zugriff konnte nicht aktualisiert werden"
 
 #: src/components/ComputerMaintenanceActions.tsx:67
-#: src/pages/ComputerSettingsPanel.tsx:71
+#: src/pages/ComputerSettingsPanel.tsx:83
 msgid "Could not update computer"
 msgstr "Computer konnte nicht aktualisiert werden"
 
-#: src/pages/ComputerSettingsPanel.tsx:81
+#: src/pages/ComputerSettingsPanel.tsx:93
 msgid "Could not update computers"
 msgstr ""
 
@@ -1792,7 +1797,7 @@ msgstr "Tage"
 msgid "Debug mode"
 msgstr "Debug-Modus"
 
-#: src/pages/SettingsOverlay.tsx:116
+#: src/pages/SettingsOverlay.tsx:135
 msgid "Decision Model"
 msgstr ""
 
@@ -1935,13 +1940,13 @@ msgstr ""
 #: src/pages/DecisionModelSettingsPanel.tsx:111
 #: src/pages/McpServersOverlay.tsx:494
 #: src/pages/MemorySettingsOverlay.tsx:211
-#: src/pages/VoiceSettingsOverlay.tsx:284
+#: src/pages/ProvidersSettings.tsx:252
 msgid "Disconnect"
 msgstr "Trennen"
 
 #: src/pages/DecisionModelSettingsPanel.tsx:111
 #: src/pages/MemorySettingsOverlay.tsx:211
-#: src/pages/VoiceSettingsOverlay.tsx:282
+#: src/pages/ProvidersSettings.tsx:250
 msgid "Disconnecting…"
 msgstr "Verbindung wird getrennt…"
 
@@ -2263,7 +2268,7 @@ msgstr "Vollbild"
 msgid "FYI"
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:112
+#: src/pages/SettingsOverlay.tsx:131
 msgid "General"
 msgstr "Allgemein"
 
@@ -2325,11 +2330,11 @@ msgstr "Header-Name"
 msgid "Header value"
 msgstr "Header-Wert"
 
-#: src/pages/VoiceSettingsOverlay.tsx:317
+#: src/pages/VoiceSettingsOverlay.tsx:236
 msgid "Hear a sample"
 msgstr "Beispiel anhören"
 
-#: src/pages/VoiceSettingsOverlay.tsx:151
+#: src/pages/VoiceSettingsOverlay.tsx:118
 msgid "Hi, this is how I'll sound when I read replies out loud."
 msgstr "Hallo, so klinge ich, wenn ich Antworten vorlese."
 
@@ -2384,7 +2389,7 @@ msgstr "So wird geprüft"
 msgid "I’m done"
 msgstr "Ich bin fertig"
 
-#: src/pages/VoiceSettingsOverlay.tsx:156
+#: src/pages/VoiceSettingsOverlay.tsx:123
 msgid "If you heard that, voice is ready."
 msgstr "Wenn du das gehört hast, ist die Stimme einsatzbereit."
 
@@ -2560,8 +2565,8 @@ msgstr "Integrationen werden geladen…"
 msgid "Loading memory settings…"
 msgstr "Erinnerungseinstellungen werden geladen…"
 
-#: src/pages/model-settings/model-detail.tsx:365
-#: src/pages/ModelSettingsOverlay.tsx:45
+#: src/pages/model-settings/model-detail.tsx:366
+#: src/pages/ModelSettingsOverlay.tsx:33
 msgid "Loading model catalog…"
 msgstr "Modellkatalog wird geladen…"
 
@@ -2577,7 +2582,7 @@ msgstr "Regeln werden geladen…"
 msgid "Loading tools…"
 msgstr ""
 
-#: src/pages/VoiceSettingsOverlay.tsx:238
+#: src/pages/VoiceSettingsOverlay.tsx:198
 msgid "Loading voice providers…"
 msgstr "Stimmanbieter werden geladen…"
 
@@ -2677,7 +2682,7 @@ msgstr "Mitglieder ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX} auswählen)"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:36
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:115
+#: src/pages/SettingsOverlay.tsx:134
 msgid "Memory"
 msgstr "Erinnerungen"
 
@@ -2805,8 +2810,10 @@ msgstr "Modellkosten werden über deine Anbieterschlüssel abgerechnet."
 msgid "Model updated."
 msgstr "Modell aktualisiert."
 
-#: src/pages/ModelSettingsOverlay.tsx:56
-#: src/pages/SettingsOverlay.tsx:113
+#: src/pages/ModelSettingsOverlay.tsx:44
+#: src/pages/ProvidersSettings.tsx:114
+#: src/pages/ProvidersSettings.tsx:116
+#: src/pages/SettingsOverlay.tsx:132
 #: src/pages/usage-settings.tsx:69
 msgid "Models"
 msgstr "Modelle"
@@ -2824,7 +2831,7 @@ msgstr "Monatlich"
 msgid "Monthly on day {day} at {time}"
 msgstr "Monatlich am {day}. um {time}"
 
-#: src/components/ComputerMaintenanceActions.tsx:152
+#: src/components/ComputerMaintenanceActions.tsx:157
 msgid "More computer actions"
 msgstr "Weitere Computeraktionen"
 
@@ -2957,7 +2964,7 @@ msgstr "Keine passenden Bots"
 msgid "No chat apps linked yet."
 msgstr "Noch keine Chat-Apps verknüpft."
 
-#: src/pages/ComputerSettingsPanel.tsx:91
+#: src/pages/ComputerSettingsPanel.tsx:103
 msgid "No computers"
 msgstr ""
 
@@ -3003,7 +3010,7 @@ msgstr "Noch keine MCP-Server."
 msgid "No messages with {peerBotName} yet."
 msgstr "Noch keine Nachrichten mit {peerBotName}."
 
-#: src/pages/model-settings/model-detail.tsx:369
+#: src/pages/model-settings/model-detail.tsx:370
 msgid "No model catalog is available."
 msgstr "Kein Modellkatalog verfügbar."
 
@@ -3011,7 +3018,7 @@ msgstr "Kein Modellkatalog verfügbar."
 msgid "No model connected"
 msgstr "Kein Modell verbunden"
 
-#: src/pages/ModelSettingsOverlay.tsx:122
+#: src/pages/ProvidersSettings.tsx:153
 msgid "No providers found."
 msgstr "Keine Anbieter gefunden."
 
@@ -3274,7 +3281,7 @@ msgstr "Passwort aktualisiert"
 msgid "Passwords do not match"
 msgstr "Die Passwörter stimmen nicht überein"
 
-#: src/pages/VoiceSettingsOverlay.tsx:255
+#: src/pages/ProvidersSettings.tsx:225
 msgid "Paste a replacement key"
 msgstr "Ersatzschlüssel einfügen"
 
@@ -3282,7 +3289,7 @@ msgstr "Ersatzschlüssel einfügen"
 msgid "Paste the OpenAI-compatible address from your server. Rakazo adds /v1 if needed."
 msgstr "Füge die OpenAI-kompatible Adresse deines Servers ein. Rakazo ergänzt /v1 bei Bedarf."
 
-#: src/pages/VoiceSettingsOverlay.tsx:255
+#: src/pages/ProvidersSettings.tsx:225
 msgid "Paste your API key"
 msgstr "Füge deinen API-Schlüssel ein"
 
@@ -3302,7 +3309,7 @@ msgstr "Persönliche Zugangsdaten"
 msgid "Pin"
 msgstr "Anheften"
 
-#: src/pages/VoiceSettingsOverlay.tsx:317
+#: src/pages/VoiceSettingsOverlay.tsx:236
 msgid "Playing…"
 msgstr "Wiedergabe…"
 
@@ -3324,7 +3331,7 @@ msgstr ""
 msgid "Private"
 msgstr "Privat"
 
-#: src/pages/ComputerSettingsPanel.tsx:103
+#: src/pages/ComputerSettingsPanel.tsx:115
 msgid "Private Computer"
 msgstr ""
 
@@ -3332,7 +3339,7 @@ msgstr ""
 msgid "Private workspace with its own bots and groups."
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:110
+#: src/pages/SettingsOverlay.tsx:128
 msgid "Profile"
 msgstr "Profil"
 
@@ -3350,8 +3357,8 @@ msgstr ""
 msgid "Provider"
 msgstr "Anbieter"
 
-#: src/pages/ModelSettingsOverlay.tsx:77
-#: src/pages/VoiceSettingsOverlay.tsx:186
+#: src/pages/SettingsOverlay.tsx:129
+#: src/pages/VoiceSettingsOverlay.tsx:154
 msgid "Providers"
 msgstr "Anbieter"
 
@@ -3437,7 +3444,7 @@ msgstr "Aufnahme gestartet. Aktualisiere die Ansicht, um fortzufahren."
 msgid "Recording: {0}"
 msgstr "Aufnahme: {0}"
 
-#: src/components/ComputerMaintenanceActions.tsx:131
+#: src/components/ComputerMaintenanceActions.tsx:136
 #: src/components/ComputerUpdateProgress.tsx:234
 msgid "Recover computer"
 msgstr "Computer wiederherstellen"
@@ -3451,7 +3458,7 @@ msgstr ""
 msgid "Recovering Team Computer"
 msgstr ""
 
-#: src/components/ComputerMaintenanceActions.tsx:131
+#: src/components/ComputerMaintenanceActions.tsx:136
 msgid "Recovering…"
 msgstr "Wird wiederhergestellt …"
 
@@ -3573,7 +3580,7 @@ msgstr "Erneut öffnen"
 msgid "Replace API key"
 msgstr "API-Schlüssel ersetzen"
 
-#: src/pages/VoiceSettingsOverlay.tsx:267
+#: src/pages/ProvidersSettings.tsx:237
 msgid "Replace key"
 msgstr "Schlüssel ersetzen"
 
@@ -3607,7 +3614,7 @@ msgstr "Angefragt"
 msgid "Reset"
 msgstr "Zurücksetzen"
 
-#: src/components/ComputerMaintenanceActions.tsx:139
+#: src/components/ComputerMaintenanceActions.tsx:144
 msgid "Reset computer"
 msgstr "Computer zurücksetzen"
 
@@ -3624,7 +3631,7 @@ msgid "Reset your password"
 msgstr "Setze dein Passwort zurück"
 
 #: src/components/ComputerMaintenanceActions.tsx:103
-#: src/components/ComputerMaintenanceActions.tsx:139
+#: src/components/ComputerMaintenanceActions.tsx:144
 msgid "Resetting…"
 msgstr "Wird zurückgesetzt …"
 
@@ -3657,7 +3664,7 @@ msgstr ""
 
 #: src/pages/bot-page/page-kit.tsx:52
 #: src/pages/bot-page/page-kit.tsx:88
-#: src/pages/ComputerSettingsPanel.tsx:84
+#: src/pages/ComputerSettingsPanel.tsx:96
 #: src/pages/shell/image-stack.tsx:156
 #: src/pages/shell/image-viewer.tsx:36
 msgid "Retry"
@@ -3843,8 +3850,8 @@ msgstr ""
 msgid "Search models"
 msgstr "Modelle suchen"
 
-#: src/pages/ModelSettingsOverlay.tsx:80
-#: src/pages/ModelSettingsOverlay.tsx:86
+#: src/pages/ProvidersSettings.tsx:104
+#: src/pages/ProvidersSettings.tsx:110
 msgid "Search providers"
 msgstr "Anbieter suchen"
 
@@ -3905,7 +3912,7 @@ msgstr "Server-URL"
 
 #: src/pages/bot-page/BotPage.tsx:101
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:179
+#: src/pages/SettingsOverlay.tsx:198
 #: src/pages/shell/sidebar-footer.tsx:195
 #: src/pages/shell/sidebar-footer.tsx:202
 msgid "Settings"
@@ -4054,11 +4061,13 @@ msgstr "Space-Standard"
 msgid "Spaces"
 msgstr ""
 
-#: src/pages/VoiceSettingsOverlay.tsx:218
+#: src/pages/ProvidersSettings.tsx:187
+#: src/pages/VoiceSettingsOverlay.tsx:183
 msgid "Speak + transcribe"
 msgstr "Sprechen + transkribieren"
 
-#: src/pages/VoiceSettingsOverlay.tsx:220
+#: src/pages/ProvidersSettings.tsx:189
+#: src/pages/VoiceSettingsOverlay.tsx:185
 msgid "Speak only"
 msgstr "Nur sprechen"
 
@@ -4151,11 +4160,11 @@ msgstr "Unterstützt Denkmodus"
 msgid "Switch bot"
 msgstr "Bot wechseln"
 
-#: src/pages/SettingsOverlay.tsx:388
+#: src/pages/SettingsOverlay.tsx:424
 msgid "Switch space"
 msgstr "Space wechseln"
 
-#: src/pages/model-settings/model-detail.tsx:358
+#: src/pages/model-settings/model-detail.tsx:359
 msgid "Switching…"
 msgstr "Wird gewechselt…"
 
@@ -4167,7 +4176,7 @@ msgstr "System"
 msgid "Take control"
 msgstr ""
 
-#: src/components/ComputerMaintenanceActions.tsx:160
+#: src/components/ComputerMaintenanceActions.tsx:165
 #: src/components/teach/TeachComputerOverlay.tsx:213
 #: src/components/teach/TeachComputerOverlay.tsx:224
 msgid "Teach a task"
@@ -4183,8 +4192,8 @@ msgid "Team"
 msgstr "Team"
 
 #: src/components/ComputerUpdateProgress.tsx:61
-#: src/pages/ComputerSettingsPanel.tsx:103
-#: src/pages/shell/computer-preview.tsx:93
+#: src/pages/ComputerSettingsPanel.tsx:115
+#: src/pages/shell/computer-preview.tsx:98
 msgid "Team Computer"
 msgstr "Team-Computer"
 
@@ -4368,15 +4377,19 @@ msgstr "Aktuell"
 msgid "Update"
 msgstr "Aktualisieren"
 
-#: src/pages/ComputerSettingsPanel.tsx:58
+#: src/pages/ComputerSettingsPanel.tsx:65
 msgid "Update all computers"
 msgstr ""
 
+#: src/components/ComputerMaintenanceActions.tsx:116
 #: src/components/SoftwareUpdateSection.tsx:260
+#: src/pages/SettingsOverlay.tsx:364
+#: src/pages/SettingsOverlay.tsx:364
+#: src/pages/shell/computer-preview.tsx:75
 msgid "Update available"
 msgstr "Update verfügbar"
 
-#: src/components/ComputerMaintenanceActions.tsx:122
+#: src/components/ComputerMaintenanceActions.tsx:127
 msgid "Update computer"
 msgstr "Computer aktualisieren"
 
@@ -4399,16 +4412,16 @@ msgstr ""
 msgid "Updated"
 msgstr "Aktualisiert"
 
-#: src/pages/SettingsOverlay.tsx:111
+#: src/pages/SettingsOverlay.tsx:130
 msgid "Updates"
 msgstr "Updates"
 
-#: src/pages/ComputerSettingsPanel.tsx:70
+#: src/pages/ComputerSettingsPanel.tsx:82
 msgid "Updates are unavailable on this device"
 msgstr ""
 
 #. placeholder {0}: result.queued.length
-#: src/pages/ComputerSettingsPanel.tsx:62
+#: src/pages/ComputerSettingsPanel.tsx:74
 msgid "Updates queued: {0}"
 msgstr ""
 
@@ -4421,13 +4434,13 @@ msgstr ""
 msgid "Updating Team Computer"
 msgstr ""
 
-#: src/components/ComputerMaintenanceActions.tsx:122
+#: src/components/ComputerMaintenanceActions.tsx:127
 #: src/components/SoftwareUpdateSection.tsx:81
-#: src/pages/ComputerSettingsPanel.tsx:58
+#: src/pages/ComputerSettingsPanel.tsx:65
 msgid "Updating…"
 msgstr "Wird aktualisiert …"
 
-#: src/pages/SettingsOverlay.tsx:118
+#: src/pages/SettingsOverlay.tsx:137
 #: src/pages/shell/sidebar-footer.tsx:207
 #: src/pages/shell/sidebar-footer.tsx:214
 msgid "Usage"
@@ -4443,7 +4456,7 @@ msgstr "Gefundenes Modell verwenden"
 msgid "Use default guidance"
 msgstr ""
 
-#: src/pages/model-settings/model-detail.tsx:358
+#: src/pages/model-settings/model-detail.tsx:359
 msgid "Use this model"
 msgstr "Dieses Modell verwenden"
 
@@ -4457,11 +4470,13 @@ msgstr "Wird geprüft…"
 
 #: src/pages/bot-page/SettingDetails.tsx:185
 #: src/pages/bot-page/SettingDetails.tsx:189
-#: src/pages/SettingsOverlay.tsx:114
+#: src/pages/ProvidersSettings.tsx:159
+#: src/pages/ProvidersSettings.tsx:161
+#: src/pages/SettingsOverlay.tsx:133
 #: src/pages/shell/thread-header.tsx:139
 #: src/pages/shell/thread-header.tsx:140
-#: src/pages/VoiceSettingsOverlay.tsx:170
-#: src/pages/VoiceSettingsOverlay.tsx:293
+#: src/pages/VoiceSettingsOverlay.tsx:137
+#: src/pages/VoiceSettingsOverlay.tsx:212
 msgid "Voice"
 msgstr "Stimme"
 
@@ -4590,7 +4605,7 @@ msgstr "Du kannst diesen Tab schließen, wenn du nicht automatisch weitergeleite
 msgid "You can close this window."
 msgstr "Du kannst dieses Fenster schließen."
 
-#: src/pages/ComputerSettingsPanel.tsx:109
+#: src/pages/ComputerSettingsPanel.tsx:121
 #: src/pages/shell/side-panel.tsx:333
 msgid "You have control"
 msgstr "Du hast die Kontrolle"

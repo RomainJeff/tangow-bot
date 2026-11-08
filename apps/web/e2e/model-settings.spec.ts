@@ -19,7 +19,7 @@ test("custom connections persist reasoning support and bot thinking", async ({
   const userName = `Reasoning ${stamp}`;
   await signup(page, `reasoning-model-${stamp}@rakazo.test`, "password12", userName);
   await completeOnboarding(page);
-  await openUserSettings(page, "models");
+  await openUserSettings(page, "providers");
   await page.getByPlaceholder("Search providers").fill("openai-compatible");
   await page.getByRole("button", { name: /OpenAI-compatible/ }).click();
   await page.getByLabel("OpenAI-compatible server URL").fill("http://127.0.0.1:8090/v1");
@@ -62,7 +62,7 @@ test("custom connections persist reasoning support and bot thinking", async ({
     1,
   );
   await page.reload();
-  await openUserSettings(page, "models");
+  await openUserSettings(page, "providers");
   await page.getByText("Advanced", { exact: true }).click();
   await expect(page.getByRole("checkbox", { name: "Supports thinking" })).toBeChecked();
   await expect(page.getByRole("combobox", { name: "Reasoning effort", exact: true })).toHaveValue(
@@ -83,7 +83,7 @@ test("custom connections persist reasoning support and bot thinking", async ({
   expect(
     clearedCredentials.find((entry) => entry.modelId === "arbitrary-model")?.maxImagesPerPrompt,
   ).toBeUndefined();
-  await page.getByRole("button", { name: "Close model settings" }).click();
+  await page.getByRole("button", { name: "Close user settings" }).click();
   const settings = await openBotSettings(page);
   await settings.getByRole("button", { name: /^Model/ }).click();
   const botPage = page.getByTestId("bot-page");
@@ -136,7 +136,7 @@ test("connects to and lists an OpenAI-compatible endpoint", async ({ page }, tes
     await signup(page, `local-model-${stamp}@rakazo.test`, "password12", userName);
     await completeOnboarding(page);
 
-    await openUserSettings(page, "models");
+    await openUserSettings(page, "providers");
     const providerSearch = page.getByPlaceholder("Search providers");
     await providerSearch.fill("openai-compatible");
     await page.getByRole("button", { name: /OpenAI-compatible/ }).click();
@@ -190,12 +190,13 @@ test("model settings connect, replace, and cancel provider authentication", asyn
   await signup(page, `models-${stamp}@rakazo.test`, "password12", userName);
   await completeOnboarding(page);
 
-  await openUserSettings(page, "models");
-  await expect(page.getByRole("button", { name: "Close model settings" })).toBeVisible();
+  await openUserSettings(page, "providers");
+  await expect(page.getByRole("button", { name: "Close user settings" })).toBeVisible();
 
   const providerSearch = page.getByPlaceholder("Search providers");
+  const modelProviders = page.getByRole("region", { name: "Models", exact: true });
   await providerSearch.fill("scripted");
-  await page.getByRole("button", { name: /Scripted/ }).click();
+  await modelProviders.getByRole("button", { name: /Scripted/ }).click();
   await expect(page.getByRole("combobox", { name: "Model", exact: true })).toHaveText(
     /Scripted runtime/,
   );
@@ -250,7 +251,7 @@ test("model settings connect, replace, and cancel provider authentication", asyn
     request.url().includes("/rpc/models/cancelOAuth"),
   );
   await providerSearch.fill("scripted");
-  await page.getByRole("button", { name: /Scripted/ }).click();
+  await modelProviders.getByRole("button", { name: /Scripted/ }).click();
   await cancelled;
   expect(finishRequests).toBe(0);
   await page.getByLabel("Replace API key").fill("fake-scripted-key-three");
