@@ -73,13 +73,9 @@ tags:
 
 - openLink: "rakazo:///account"
 - extendedWaitUntil:
-    visible: "Change password"
+    visible: "Integrations"
     timeout: 10000
-- takeScreenshot: "10-account"
-- tapOn: "Change password"
-- assertVisible: "Current password"
-- takeScreenshot: "10b-change-password"
-- back
+- takeScreenshot: "10-settings"
 - tapOn: "Usage"
 - extendedWaitUntil:
     visible: "Model spend uses your provider keys."
@@ -87,14 +83,22 @@ tags:
 - takeScreenshot: "10d-usage"
 - back
 
-- scrollUntilVisible:
-    element: "Computer"
-    direction: DOWN
 - tapOn: "Computer"
 - extendedWaitUntil:
     visible: "Update all computers|No computers"
     timeout: 10000
 - takeScreenshot: "10c-computer-settings"
+- back
+
+- tapOn: ${RAKAZO_SCREENSHOT_EMAIL}
+- extendedWaitUntil:
+    visible: "Change password"
+    timeout: 10000
+- takeScreenshot: "10e-profile"
+- tapOn: "Change password"
+- assertVisible: "Current password"
+- takeScreenshot: "10b-change-password"
+- back
 
 - openLink: "rakazo:///models"
 - extendedWaitUntil:
