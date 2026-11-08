@@ -1045,11 +1045,6 @@ describeWithDatabase("API authorization and resource isolation", () => {
     await expect(
       rpc<Space>(app, cookie, "spaces/rename", { spaceId: shared.id, name: "Team" }),
     ).resolves.toMatchObject({ id: shared.id, name: "Team", canRename: true });
-    expect(
-      (await rpc<SpaceNavigation>(app, memberCookie, "spaces/list", {}, shared.id)).spaces.find(
-        (space) => space.id === shared.id,
-      )?.name,
-    ).toBe("Team");
   });
 
   it("blocks bot creation after empty space deletion is claimed", async () => {

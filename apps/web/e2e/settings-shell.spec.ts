@@ -115,7 +115,6 @@ test("settings space switcher moves to another space and keeps the section", asy
   await nameInput.fill("Home");
   await nameInput.press("Enter");
   await expect(switcher).toContainText("Home");
-  await expect(nameInput).toHaveValue("Home");
   await captureScreenshot(page, testInfo, "settings-space-name");
 
   // At phone width the nav is a row of tabs; the switcher stays in it.

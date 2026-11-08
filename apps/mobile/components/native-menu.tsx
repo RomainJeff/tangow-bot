@@ -80,8 +80,8 @@ function IosMenu(props: NativeMenuProps) {
       >
         {"options" in props ? (
           <>
-            {props.options.length ? <ValueItems {...props} /> : null}
-            {props.options.length && props.actions?.length ? <Divider /> : null}
+            {props.options.length > 0 ? <ValueItems {...props} /> : null}
+            {props.options.length > 0 && props.actions?.length ? <Divider /> : null}
             {props.actions?.length ? <ActionItems actions={props.actions} /> : null}
           </>
         ) : (
