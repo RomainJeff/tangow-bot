@@ -113,16 +113,10 @@ async function createSpaceDefaults(
   prisma: SpaceClient,
   input: { spaceId: string; userId: string; memoryContent: string },
 ): Promise<void> {
-  await prisma.memoryDocument.createMany({
-    data: {
-      spaceId: input.spaceId,
-      userId: input.userId,
-      scope: "user",
-      path: "MEMORY.md",
-      content: input.memoryContent,
-    },
-    skipDuplicates: true,
-  });
+  const memory = { spaceId: input.spaceId, userId: input.userId, scope: "user", path: "MEMORY.md" };
+  if (!(await prisma.memoryDocument.findFirst({ where: memory, select: { id: true } }))) {
+    await prisma.memoryDocument.create({ data: { ...memory, content: input.memoryContent } });
+  }
   await prisma.notificationPreference.createMany({
     data: { spaceId: input.spaceId, userId: input.userId },
     skipDuplicates: true,

@@ -212,5 +212,10 @@ describe("Space invite links", () => {
       spaceId: shared,
     });
     expect(await spaceIdsOf("guest")).toContain(shared);
+    expect(
+      await prisma.memoryDocument.count({
+        where: { spaceId: shared, userId: "guest", scope: "user", path: "MEMORY.md" },
+      }),
+    ).toBe(1);
   });
 });
