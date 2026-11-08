@@ -1,4 +1,5 @@
 export const ZH_MESSAGES: Record<string, string> = {
+  "Update available": "有可用更新",
   "30d": "30 天",
   "7d": "7 天",
   Breakdown: "细分",

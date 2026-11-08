@@ -78,6 +78,8 @@ import type {
 
 export interface SandboxProvider {
   describe(): AdapterDescriptor<SandboxCapabilities>;
+  /** Latest successfully published computer environment; null when unavailable. */
+  currentRelease?(context: AdapterContext): Promise<string | null>;
   /** Optional live browser on the same leased screen as observe/act. */
   pageBrowser?(
     computer: ComputerRef,
@@ -90,6 +92,7 @@ export interface SandboxProvider {
       botId: string;
       homePath: string;
       providerRef?: string;
+      releaseRef?: string | null;
       providerKind?: ComputerRef["kind"];
       /**
        * A home kept on worker volumes: mount each at its path and serve the workspace from `root`.

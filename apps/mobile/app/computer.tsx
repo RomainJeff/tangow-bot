@@ -1,8 +1,8 @@
 import type { ComputerMode, ComputerReleaseReason } from "@rakazo/contracts";
-import { useLocalSearchParams, useNavigation } from "expo-router";
+import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import type { ReactNode } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Button, Modal, Pressable, Text, View } from "react-native";
 import {
   initialWindowMetrics,
   SafeAreaProvider,
@@ -33,6 +33,7 @@ import { useScreenLink } from "../lib/use-screen-link";
 
 export default function Computer() {
   const { t } = useI18n();
+  const router = useRouter();
   const tokens = useMobileTokens();
   const navigation = useNavigation();
   const { botId, name: nameParam } = useLocalSearchParams<{ botId?: string; name?: string }>();
@@ -301,6 +302,9 @@ export default function Computer() {
           </Pressable>
         )}
       </View>
+      {computer?.updateAvailable ? (
+        <Button title={t("Update available")} onPress={() => router.push("/computer-settings")} />
+      ) : null}
       <ComputerModePicker
         value={computer?.mode}
         disabled={switching}

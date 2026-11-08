@@ -1,3 +1,4 @@
+import type { ComputerListItem } from "@rakazo/contracts";
 import type { Href } from "expo-router";
 import { useRouter } from "expo-router";
 import { Fragment, useCallback, useEffect, useState } from "react";
@@ -13,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusedRead } from "../components/bot-page/kit";
 import { NativeMenu } from "../components/native-menu";
 import { NativeSymbol } from "../components/native-symbol";
 import { SettingSwitch } from "../components/setting-switch";
@@ -47,6 +49,12 @@ export default function Account() {
   const [spaceId, setSpaceId] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const { read: computers } = useFocusedRead(
+    () => rpc<ComputerListItem[]>("computer/list"),
+    [spaceId],
+  );
+  const computerUpdateAvailable =
+    computers.kind === "ready" && computers.value.some((item) => item.status.updateAvailable);
   const [notifications, setNotifications] = useState<LiveNotificationSettings>(
     DEFAULT_LIVE_NOTIFICATION_SETTINGS,
   );
@@ -290,6 +298,9 @@ export default function Account() {
                 style={({ pressed }) => [styles.row, pressed && styles.pressed]}
               >
                 <Text style={styles.rowLabel}>{row.label}</Text>
+                {row.href === "/computer-settings" && computerUpdateAvailable ? (
+                  <Text style={styles.email}>{t("Update available")}</Text>
+                ) : null}
                 <Chevron />
               </Pressable>
             </Fragment>

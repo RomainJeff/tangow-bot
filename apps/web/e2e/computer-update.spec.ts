@@ -19,6 +19,13 @@ test("global Computer settings updates idle computers without taking control and
   const busyBotId = await createNamedBot(page, "Scout", { computerMode: "dedicated" });
   await rpc(page, "computer/boot", { botId: busyBotId });
   await rpc(page, "computer/takeover", { botId: busyBotId });
+  // The fake provider has no image registry. Supply a published release notice for this UI flow.
+  await page.route("**/rpc/computer/list", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    for (const item of body.json) item.status.updateAvailable = true;
+    await route.fulfill({ response, json: body });
+  });
   const controlRequests: string[] = [];
   page.on("request", (request) => {
     if (/\/rpc\/computer\/(boot|takeover)$/.test(new URL(request.url()).pathname)) {
@@ -28,6 +35,10 @@ test("global Computer settings updates idle computers without taking control and
   const settings = await openUserSettings(page, "computer");
   await expect(settings.getByTestId("computer-settings-row")).toHaveCount(2);
   const team = settings.getByTestId("computer-settings-row").filter({ hasText: "Team Computer" });
+  await expect(team).toContainText("Update available");
+  await expect(
+    settings.getByTestId("settings-nav-computer").getByRole("img", { name: "Update available" }),
+  ).toBeVisible();
   await expect(team).toContainText("Chief");
   await expect(team).toContainText("Planner");
   const privateComputer = settings
@@ -54,8 +65,10 @@ test("global Computer settings updates idle computers without taking control and
   const result: { json: ComputerUpdateAllResult } = await (await response).json();
   expect(result.json.queued).toHaveLength(1);
   expect(result.json.skipped).toEqual([{ botId: busyBotId, name: "Scout", reason: "busy" }]);
-  await expect(settings.getByRole("status")).toContainText("Updates queued: 1");
-  await expect(settings.getByRole("status")).toContainText("Busy. Try again when idle.");
+  await expect(settings.getByTestId("computer-update-result")).toContainText("Updates queued: 1");
+  await expect(settings.getByTestId("computer-update-result")).toContainText(
+    "Busy. Try again when idle.",
+  );
   expect(controlRequests).toEqual([]);
   expect(await rpc<ComputerStatus>(page, "computer/status", { botId: busyBotId })).toMatchObject({
     controlHolder: "user",
@@ -84,6 +97,7 @@ test("computer maintenance shows durable background progress and failure recover
             bots: [{ id: botId, name: "Chief" }],
             status: {
               ...status,
+              updateAvailable: !updates.some((item) => item.status === "completed"),
               state: updates.some((item) => item.status !== "failed" && item.status !== "completed")
                 ? "booting"
                 : "stopped",
@@ -144,6 +158,9 @@ test("computer maintenance shows durable background progress and failure recover
   await expect(
     settings.getByRole("button", { name: "Recover computer", exact: true }),
   ).toBeEnabled();
+  await expect(
+    settings.getByRole("button", { name: "Update all computers", exact: true }),
+  ).toHaveCount(0);
   await settings.getByRole("button", { name: "Close user settings" }).click();
   await expect(settings).not.toBeVisible();
   await page.getByRole("button", { name: /Computer updated/ }).click();

@@ -7,7 +7,11 @@ import { ComputerMaintenanceActions } from "../components/ComputerMaintenanceAct
 import { computerUpdates } from "../lib/computer-updates";
 import { rpc } from "../lib/rpc";
 
-export function ComputerSettingsPanel() {
+export function ComputerSettingsPanel({
+  onUpdateAvailableChange,
+}: {
+  onUpdateAvailableChange: (available: boolean) => void;
+}) {
   const { t } = useLingui();
   const [computers, setComputers] = useState<ComputerListItem[] | null>(null);
   const [error, setError] = useState<"load" | "update" | null>(null);
@@ -22,7 +26,9 @@ export function ComputerSettingsPanel() {
   async function refresh() {
     setError(null);
     try {
-      setComputers(await rpc.computer.list());
+      const items = await rpc.computer.list();
+      setComputers(items);
+      onUpdateAvailableChange(items.some((item) => item.status.updateAvailable));
     } catch {
       setError("load");
     }
@@ -50,15 +56,21 @@ export function ComputerSettingsPanel() {
 
   return (
     <div data-testid="computer-settings" className="flex flex-col gap-4">
-      <Button
-        className="self-start"
-        disabled={pending || !computers?.some((item) => item.status.canUpdate)}
-        onClick={() => void updateAll()}
-      >
-        {pending ? <Trans>Updating…</Trans> : <Trans>Update all computers</Trans>}
-      </Button>
+      {computers?.some((item) => item.status.updateAvailable) ? (
+        <Button
+          className="self-start"
+          disabled={pending || !computers?.some((item) => item.status.canUpdate)}
+          onClick={() => void updateAll()}
+        >
+          {pending ? <Trans>Updating…</Trans> : <Trans>Update all computers</Trans>}
+        </Button>
+      ) : null}
       {result ? (
-        <div role="status" className="text-meta text-muted-foreground">
+        <div
+          data-testid="computer-update-result"
+          role="status"
+          className="text-meta text-muted-foreground"
+        >
           <p>{t`Updates queued: ${result.queued.length}`}</p>
           {result.skipped.map((item) => (
             <p key={item.botId}>
