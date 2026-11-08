@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-11-08
+
+#### Changed
+
+- On web and desktop, settings now separate your profile from the active space's settings, and a space switcher in settings moves you to another space without leaving the window.
+
 ### 2026-11-06
 
 #### Added

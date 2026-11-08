@@ -308,8 +308,10 @@ export function ShellPage() {
         navigate={navigate}
         runBotAction={runBotAction}
         refreshAgentSkills={refreshAgentSkills}
+        openSpaceChat={sidebar.openSpaceChat}
         userName={userName}
         initials={initials}
+        userImage={userImage}
         email={session.data?.user.email}
       />
 

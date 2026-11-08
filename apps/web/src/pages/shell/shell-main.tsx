@@ -285,7 +285,7 @@ export function ShellMain({
                   return;
                 }
                 if (action === "settings-general") {
-                  openSettings("general");
+                  openSettings("profile");
                   return;
                 }
                 if (action === "settings-usage") openSettings("usage");
