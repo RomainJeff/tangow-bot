@@ -328,11 +328,7 @@ function loopbackTwinOrigins(origin: string): string[] {
   }
 }
 
-export const blockedAuthPaths = [
-  "/organization/create",
-  "/organization/invite",
-  "/organization/accept-invitation",
-  "/organization/reject-invitation",
-  "/organization/remove-member",
-  "/organization/update-member-role",
-];
+/** The app manages Space membership itself; Better Auth's organization endpoints would expose every member's email and bypass that flow. */
+export function isBlockedAuthPath(path: string): boolean {
+  return path.startsWith("/organization/");
+}

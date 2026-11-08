@@ -70,7 +70,7 @@ import {
   toTeamChatInbound,
 } from "@rakazo/adapters";
 import type { GuestConnector } from "@rakazo/adapters/runtime-worker";
-import { blockedAuthPaths, createAuth } from "@rakazo/auth";
+import { createAuth, isBlockedAuthPath } from "@rakazo/auth";
 import { signupPolicyFromEnv } from "@rakazo/core";
 import type { Pool, PrismaClient } from "@rakazo/db";
 import {
@@ -552,7 +552,7 @@ export async function createApp(
   mountScreenTarget(app, prisma, env.screenProxySecret);
   app.on(["GET", "POST"], "/api/auth/*", async (c) => {
     const path = new URL(c.req.url).pathname.replace("/api/auth", "");
-    if (blockedAuthPaths.some((blocked) => path.startsWith(blocked))) {
+    if (isBlockedAuthPath(path)) {
       return c.json({ error: "Not available in version 1" }, 404);
     }
     return auth.handler(c.req.raw);
