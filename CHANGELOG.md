@@ -18,6 +18,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Settings on web, desktop, iPhone and Android now show your account first, then the current space with a switcher, so you can change space and edit that space's settings without leaving settings.
 - Model and voice keys are now connected once in an account Providers section on web, desktop, iPhone and Android, while each space keeps its own model and voice choice in its Models and Voice settings.
 
+#### Fixed
+
+- On web and desktop, the settings window keeps the same size in every section, instead of widening on Providers, Models and Voice and narrowing again elsewhere.
+
 ### 2026-11-06
 
 #### Added

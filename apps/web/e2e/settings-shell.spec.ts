@@ -31,6 +31,7 @@ test("settings shell is two-pane and deep-links Providers Models Memory Decision
   await expect(settings.getByTestId("settings-space-label")).toBeVisible();
   await expect(settings.getByTestId("settings-space-switcher")).toHaveCount(0);
   await captureScreenshot(page, testInfo, "settings-shell-profile");
+  const profileBox = await settings.boundingBox();
 
   // Keys belong to the account; each space keeps only its model and voice choice.
   await settings.getByTestId("settings-nav-providers").click();
@@ -53,6 +54,11 @@ test("settings shell is two-pane and deep-links Providers Models Memory Decision
   await expect(settings.getByTestId("model-settings")).toBeVisible();
   await expect(settings.getByLabel("Active model", { exact: true })).toBeVisible();
   await expect(settings.getByPlaceholder("Search providers")).toHaveCount(0);
+  // The window keeps one size whatever the section holds. Let any resize transition finish first.
+  await settings.evaluate((element) =>
+    Promise.all(element.getAnimations().map((animation) => animation.finished)),
+  );
+  expect(await settings.boundingBox()).toEqual(profileBox);
   await captureScreenshot(page, testInfo, "settings-shell-models");
 
   await settings.getByTestId("settings-nav-memory").click();
