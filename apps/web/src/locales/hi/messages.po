@@ -164,6 +164,10 @@ msgstr "{count} · अगला {next}"
 msgid "{count} more"
 msgstr ""
 
+#: src/pages/SpaceGeneralSettings.tsx:233
+msgid "{days, plural, one {Invite link · expires in # day} other {Invite link · expires in # days}}"
+msgstr ""
+
 #: src/pages/ActivityList.tsx:140
 msgid "{days}d ago"
 msgstr "{days} दिन पहले"
@@ -294,12 +298,12 @@ msgstr "कार्रवाई की पुष्टि"
 #. placeholder {0}: sectionMenu.section.name
 #: src/pages/bot-page/BotPage.tsx:346
 #: src/pages/BotContextMenu.tsx:86
-#: src/pages/shell/shell-overlays.tsx:355
+#: src/pages/shell/shell-overlays.tsx:354
 #: src/pages/shell/sidebar-roster.tsx:149
 msgid "Actions for {0}"
 msgstr "{0} के लिए कार्रवाइयां"
 
-#: src/pages/shell/shell-overlays.tsx:229
+#: src/pages/shell/shell-overlays.tsx:228
 msgid "Actions for space"
 msgstr ""
 
@@ -438,7 +442,7 @@ msgstr "जोड़ा जा रहा है…"
 #: src/pages/Onboarding.tsx:496
 #: src/pages/plugins/advanced-integrations.tsx:77
 #: src/pages/RoutineSchedule.tsx:47
-#: src/pages/SpaceGeneralSettings.tsx:42
+#: src/pages/SpaceGeneralSettings.tsx:48
 msgid "Advanced"
 msgstr "उन्नत"
 
@@ -783,7 +787,7 @@ msgid "Bot screen preview"
 msgstr "बॉट स्क्रीन प्रीव्यू"
 
 #: src/pages/shell/composer-pickers.tsx:296
-#: src/pages/shell/shell-overlays.tsx:166
+#: src/pages/shell/shell-overlays.tsx:165
 #: src/pages/shell/thread-header.tsx:171
 #: src/pages/shell/thread-header.tsx:172
 msgid "Bot settings"
@@ -906,7 +910,7 @@ msgstr "चैनल"
 msgid "Chat apps"
 msgstr "चैट ऐप्स"
 
-#: src/pages/SpaceGeneralSettings.tsx:30
+#: src/pages/SpaceGeneralSettings.tsx:36
 msgid "Chat apps, group channels, and agent connections."
 msgstr "चैट ऐप्स, ग्रुप चैनल और एजेंट कनेक्शन।"
 
@@ -1264,6 +1268,10 @@ msgstr ""
 #: src/pages/shell/session-view.tsx:277
 msgid "Copy diagnostic"
 msgstr "निदान कॉपी करें"
+
+#: src/pages/SpaceGeneralSettings.tsx:265
+msgid "Copy invite link"
+msgstr ""
 
 #: src/pages/ScratchpadSection.tsx:56
 msgid "Could not add"
@@ -1659,13 +1667,30 @@ msgstr ""
 msgid "Couldn't create"
 msgstr "नहीं बनाया जा सका"
 
+#: src/pages/SpaceGeneralSettings.tsx:176
+msgid "Couldn't create an invite link"
+msgstr ""
+
+#: src/pages/SpaceGeneralSettings.tsx:155
+msgid "Couldn't load members"
+msgstr ""
+
 #: src/pages/MessagingSettingsOverlay.tsx:53
 msgid "Couldn't load messaging settings"
 msgstr "मैसेजिंग सेटिंग्स लोड नहीं हो सकीं"
 
-#: src/pages/SpaceGeneralSettings.tsx:90
+#. placeholder {0}: member.name
+#: src/pages/SpaceGeneralSettings.tsx:215
+msgid "Couldn't remove {0}"
+msgstr ""
+
+#: src/pages/SpaceGeneralSettings.tsx:96
 msgid "Couldn't rename the space"
 msgstr "स्पेस का नाम नहीं बदला जा सका"
+
+#: src/pages/SpaceGeneralSettings.tsx:248
+msgid "Couldn't revoke the invite link"
+msgstr ""
 
 #: src/pages/AccountSettingsOverlay.tsx:69
 msgid "Couldn't update avatars"
@@ -1861,7 +1886,7 @@ msgstr "मेमोरी भी डिलीट करें"
 msgid "Delete routine"
 msgstr "रूटीन डिलीट करें"
 
-#: src/pages/shell/shell-overlays.tsx:243
+#: src/pages/shell/shell-overlays.tsx:242
 msgid "Delete space"
 msgstr ""
 
@@ -2041,7 +2066,7 @@ msgstr "संपादित करके फिर भेजें"
 msgid "Edit message"
 msgstr ""
 
-#: src/pages/shell/shell-overlays.tsx:166
+#: src/pages/shell/shell-overlays.tsx:165
 msgid "Edit Profile"
 msgstr "प्रोफ़ाइल संपादित करें"
 
@@ -2541,6 +2566,10 @@ msgstr "लाइट"
 msgid "Link a chat app"
 msgstr "चैट ऐप जोड़ें"
 
+#: src/pages/SpaceGeneralSettings.tsx:265
+msgid "Link copied"
+msgstr ""
+
 #: src/pages/ExternalConversationSettings.tsx:99
 msgid "Listen"
 msgstr ""
@@ -2617,7 +2646,7 @@ msgstr "सुनिश्चित करें कि इस कंप्य�
 msgid "Manage MCP servers"
 msgstr "MCP सर्वर प्रबंधित करें"
 
-#: src/pages/SpaceGeneralSettings.tsx:33
+#: src/pages/SpaceGeneralSettings.tsx:39
 msgid "Manage messaging settings"
 msgstr "मैसेजिंग सेटिंग्स प्रबंधित करें"
 
@@ -2671,6 +2700,10 @@ msgstr "MCP सर्वर"
 #: src/pages/Onboarding.tsx:505
 msgid "Medium"
 msgstr "मध्यम"
+
+#: src/pages/SpaceGeneralSettings.tsx:189
+msgid "Members"
+msgstr ""
 
 #: src/pages/GroupPanel.tsx:264
 msgid "Members ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
@@ -2745,7 +2778,7 @@ msgid "Messaged {peer}"
 msgstr "{peer} को संदेश भेजा"
 
 #: src/pages/MessagingSettingsOverlay.tsx:99
-#: src/pages/SpaceGeneralSettings.tsx:27
+#: src/pages/SpaceGeneralSettings.tsx:33
 msgid "Messaging"
 msgstr "मैसेजिंग"
 
@@ -2859,7 +2892,7 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx:72
 #: src/pages/shell/dialogs.tsx:187
 #: src/pages/shell/dialogs.tsx:250
-#: src/pages/SpaceGeneralSettings.tsx:106
+#: src/pages/SpaceGeneralSettings.tsx:112
 msgid "Name"
 msgstr "नाम"
 
@@ -3150,7 +3183,7 @@ msgstr "1 तारीख को {0} बजे"
 msgid "One-time"
 msgstr "एक बार"
 
-#: src/pages/shell/shell-overlays.tsx:281
+#: src/pages/shell/shell-overlays.tsx:280
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
 msgstr ""
 
@@ -3212,7 +3245,7 @@ msgstr ""
 msgid "Optional"
 msgstr "वैकल्पिक"
 
-#: src/pages/SpaceGeneralSettings.tsx:45
+#: src/pages/SpaceGeneralSettings.tsx:51
 msgid "Optional controls most people never need"
 msgstr "वैकल्पिक नियंत्रण जिनकी अधिकांश लोगों को कभी ज़रूरत नहीं होती"
 
@@ -3254,6 +3287,10 @@ msgstr ""
 #: src/components/AgentSteps.tsx:97
 msgid "Output"
 msgstr "आउटपुट"
+
+#: src/pages/SpaceGeneralSettings.tsx:202
+msgid "Owner"
+msgstr ""
 
 #: src/pages/ScratchpadSection.tsx:143
 #: src/pages/ScratchpadSection.tsx:148
@@ -3505,6 +3542,7 @@ msgstr ""
 #: src/pages/plugins/advanced-integrations.tsx:377
 #: src/pages/plugins/connection-detail.tsx:110
 #: src/pages/ScratchpadSection.tsx:165
+#: src/pages/SpaceGeneralSettings.tsx:219
 msgid "Remove"
 msgstr "हटाएं"
 
@@ -3566,7 +3604,7 @@ msgstr "हटाया जा रहा है…"
 
 #: src/pages/BotContextMenu.tsx:121
 #: src/pages/shell/dialogs.tsx:246
-#: src/pages/shell/shell-overlays.tsx:370
+#: src/pages/shell/shell-overlays.tsx:369
 msgid "Rename section"
 msgstr ""
 
@@ -3690,6 +3728,7 @@ msgid "rev {0}"
 msgstr "रिवीज़न {0}"
 
 #: src/pages/MessagingSettingsOverlay.tsx:325
+#: src/pages/SpaceGeneralSettings.tsx:252
 msgid "Revoke"
 msgstr "रद्द करें"
 
@@ -3912,7 +3951,7 @@ msgstr "सर्वर URL"
 
 #: src/pages/bot-page/BotPage.tsx:101
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:198
+#: src/pages/SettingsOverlay.tsx:193
 #: src/pages/shell/sidebar-footer.tsx:195
 #: src/pages/shell/sidebar-footer.tsx:202
 msgid "Settings"
@@ -4160,7 +4199,7 @@ msgstr "सोचने की क्षमता का समर्थन क�
 msgid "Switch bot"
 msgstr "बॉट बदलें"
 
-#: src/pages/SettingsOverlay.tsx:424
+#: src/pages/SettingsOverlay.tsx:421
 msgid "Switch space"
 msgstr "स्पेस बदलें"
 
@@ -4383,8 +4422,8 @@ msgstr ""
 
 #: src/components/ComputerMaintenanceActions.tsx:116
 #: src/components/SoftwareUpdateSection.tsx:260
-#: src/pages/SettingsOverlay.tsx:364
-#: src/pages/SettingsOverlay.tsx:364
+#: src/pages/SettingsOverlay.tsx:361
+#: src/pages/SettingsOverlay.tsx:361
 #: src/pages/shell/computer-preview.tsx:75
 msgid "Update available"
 msgstr "अपडेट उपलब्ध"

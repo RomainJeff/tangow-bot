@@ -1,8 +1,11 @@
+import { plural } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Button, Input } from "@rakazo/ui-web";
-import { useEffect, useId, useState } from "react";
+import type { SpaceMembers } from "@rakazo/contracts";
+import { Button, Input, SettingRow, UserAvatar } from "@rakazo/ui-web";
+import { useCallback, useEffect, useId, useState } from "react";
 import { ApprovalRulesSettings } from "../components/ApprovalRulesSettings";
 import { rpc } from "../lib/rpc";
+import { userInitials } from "../lib/user-initials";
 
 type GeneralSpace = { id: string; name: string; canRename?: boolean };
 
@@ -20,6 +23,9 @@ export function SpaceGeneralSettings({
   return (
     <div className="space-y-5">
       {space ? <SpaceNameRow key={space.id} space={space} onRenamed={onSpaceRenamed} /> : null}
+      {space ? (
+        <SpaceMembersSection key={space.id} spaceId={space.id} isOwner={space.canRename === true} />
+      ) : null}
 
       {messagingEnabled && onOpenMessaging ? (
         <section className="rounded-card bg-group shadow-group px-4 py-4">
@@ -125,6 +131,143 @@ function SpaceNameRow({
       </div>
       {error ? (
         <p role="alert" className="mt-2 text-[12.5px] text-destructive">
+          {error}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+const DAY_MS = 24 * 60 * 60_000;
+
+function SpaceMembersSection({ spaceId, isOwner }: { spaceId: string; isOwner: boolean }) {
+  const { t } = useLingui();
+  const [view, setView] = useState<SpaceMembers | null>(null);
+  const [pending, setPending] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setView(await rpc.spaces.members({ spaceId }));
+  }, [spaceId]);
+
+  useEffect(() => {
+    void refresh().catch(() => setError(t`Couldn't load members`));
+  }, [refresh, t]);
+
+  async function act(action: () => Promise<void>, failure: string) {
+    setPending(true);
+    setError(null);
+    try {
+      await action();
+      await refresh();
+    } catch {
+      setError(failure);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const copyInvite = () =>
+    act(async () => {
+      const { url } = await rpc.spaces.createInvite({ spaceId });
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+    }, t`Couldn't create an invite link`);
+
+  if (!view) {
+    return error ? (
+      <p role="alert" className="text-meta text-destructive">
+        {error}
+      </p>
+    ) : null;
+  }
+
+  return (
+    <section data-testid="space-members" className="rounded-card bg-group shadow-group">
+      <h3 className="px-3.5 pt-3 text-label text-muted-foreground">
+        <Trans>Members</Trans>
+      </h3>
+      {view.members.map((member) => (
+        <SettingRow
+          key={member.userId}
+          leading={
+            <UserAvatar
+              initials={userInitials(member.name)}
+              image={member.image}
+              className="size-7 text-label"
+            />
+          }
+          label={member.name}
+          value={member.isOwner ? t`Owner` : undefined}
+        >
+          {isOwner && !member.isOwner ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={pending}
+              onClick={() =>
+                void act(
+                  () =>
+                    rpc.spaces
+                      .removeMember({ spaceId, userId: member.userId })
+                      .then(() => undefined),
+                  t`Couldn't remove ${member.name}`,
+                )
+              }
+            >
+              <Trans>Remove</Trans>
+            </Button>
+          ) : null}
+        </SettingRow>
+      ))}
+      {view.invitations.map((invitation) => {
+        const days = Math.max(
+          1,
+          Math.ceil((new Date(invitation.expiresAt).getTime() - Date.now()) / DAY_MS),
+        );
+        return (
+          <SettingRow
+            key={invitation.id}
+            data-testid="space-invite-row"
+            label={plural(days, {
+              one: "Invite link · expires in # day",
+              other: "Invite link · expires in # days",
+            })}
+          >
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={pending}
+              onClick={() =>
+                void act(
+                  () =>
+                    rpc.spaces
+                      .revokeInvite({ spaceId, invitationId: invitation.id })
+                      .then(() => undefined),
+                  t`Couldn't revoke the invite link`,
+                )
+              }
+            >
+              <Trans>Revoke</Trans>
+            </Button>
+          </SettingRow>
+        );
+      })}
+      {isOwner ? (
+        <div className="px-3.5 pt-1 pb-3.5">
+          <Button
+            variant="secondary"
+            className="rounded-full"
+            disabled={pending}
+            onClick={() => void copyInvite()}
+          >
+            {copied ? <Trans>Link copied</Trans> : <Trans>Copy invite link</Trans>}
+          </Button>
+        </div>
+      ) : null}
+      {error ? (
+        <p role="alert" className="px-3.5 pb-3 text-meta text-destructive">
           {error}
         </p>
       ) : null}
