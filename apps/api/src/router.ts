@@ -2757,7 +2757,11 @@ export function createRouter(deps: RouterDeps) {
       }),
       remove: authed.routines.remove.handler(async ({ context, input }) => {
         const existing = await deps.prisma.routine.findFirst({
-          where: { id: input.routineId, spaceId: context.actor.spaceId },
+          where: {
+            id: input.routineId,
+            spaceId: context.actor.spaceId,
+            userId: context.actor.userId,
+          },
         });
         if (!existing) throw new IsolationError();
         await deps.prisma.routine.delete({ where: { id: existing.id } });
