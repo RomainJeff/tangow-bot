@@ -644,18 +644,11 @@ export function createRouter(deps: RouterDeps) {
       }),
       rename: authed.spaces.rename.handler(async ({ context, input }) => {
         const { actor } = context;
-        const [currentSpace, membership] = await Promise.all([
-          deps.prisma.space.findUnique({
-            where: { id: actor.spaceId },
-            select: { organizationId: true },
-          }),
-          deps.prisma.spaceMember.findUnique({
-            where: { spaceId_userId: { spaceId: input.spaceId, userId: actor.userId } },
-            select: { organizationId: true, role: true },
-          }),
-        ]);
-        if (!currentSpace) throw new IsolationError();
-        if (!membership || membership.organizationId !== currentSpace.organizationId) {
+        const membership = await deps.prisma.spaceMember.findUnique({
+          where: { spaceId_userId: { spaceId: input.spaceId, userId: actor.userId } },
+          select: { role: true },
+        });
+        if (!membership) {
           throw new ORPCError("NOT_FOUND", { message: new SpaceNotFoundError().message });
         }
         if (membership.role !== "owner") {
@@ -4988,13 +4981,8 @@ async function spaceNavigationDto(
   repos: ReturnType<typeof createRepos>,
   groupRepos: ReturnType<typeof createGroupRepos>,
 ): Promise<SpaceNavigation> {
-  const currentSpace = await deps.prisma.space.findUnique({
-    where: { id: actor.spaceId },
-    select: { organizationId: true },
-  });
-  if (!currentSpace) throw new IsolationError();
   const memberships = await deps.prisma.spaceMember.findMany({
-    where: { userId: actor.userId, organizationId: currentSpace.organizationId },
+    where: { userId: actor.userId },
     select: {
       spaceId: true,
       role: true,

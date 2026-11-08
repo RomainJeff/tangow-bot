@@ -68,6 +68,7 @@ export const SPACE_DELETION_CLAIM_TIMEOUT_MS = 5 * 60_000;
 type SpaceClient = Pick<
   PrismaClient,
   | "space"
+  | "member"
   | "spaceMember"
   | "spaceModelPreference"
   | "spaceVoicePreference"
@@ -189,27 +190,34 @@ export async function createSpaceForMember(
   await withTransactionRetry(() =>
     prisma.$transaction(
       async (tx) => {
-        const currentMembership = await tx.spaceMember.findUnique({
-          where: {
-            spaceId_userId: {
-              spaceId: input.currentSpaceId,
-              userId: input.userId,
+        const [currentMembership, ownOrganization] = await Promise.all([
+          tx.spaceMember.findUnique({
+            where: {
+              spaceId_userId: {
+                spaceId: input.currentSpaceId,
+                userId: input.userId,
+              },
             },
-          },
-          select: { organizationId: true },
-        });
-        if (!currentMembership) throw new IsolationError();
+            select: { id: true },
+          }),
+          tx.member.findFirst({
+            where: { userId: input.userId, role: "owner" },
+            orderBy: { createdAt: "asc" },
+            select: { organizationId: true },
+          }),
+        ]);
+        if (!currentMembership || !ownOrganization) throw new IsolationError();
         const count = await tx.spaceMember.count({
           where: {
             userId: input.userId,
-            organizationId: currentMembership.organizationId,
+            organizationId: ownOrganization.organizationId,
           },
         });
         if (count >= MAX_SPACES_PER_MEMBER) throw new SpaceLimitError();
         await createSpace(tx, {
           spaceId,
           spaceMembershipId,
-          organizationId: currentMembership.organizationId,
+          organizationId: ownOrganization.organizationId,
           userId: input.userId,
           name,
           createdAt,
@@ -273,54 +281,31 @@ async function assertEmptySpaceDeletable(
   db: SpaceDeleteDb,
   input: EmptySpaceDeleteInput,
 ): Promise<{
-  organizationId: string;
   memberships: Array<{
     spaceId: string;
+    role: string;
     createdAt: Date;
     space: { isDefault: boolean };
   }>;
   computers: Array<{ homeKey: string; kind: string; providerRef: string }>;
 }> {
-  const currentMembership = await db.spaceMember.findUnique({
-    where: {
-      spaceId_userId: {
-        spaceId: input.currentSpaceId,
-        userId: input.userId,
-      },
-    },
-    select: { organizationId: true },
-  });
-  if (!currentMembership) throw new IsolationError();
-  const targetMembership = await db.spaceMember.findUnique({
-    where: {
-      spaceId_userId: {
-        spaceId: input.spaceId,
-        userId: input.userId,
-      },
-    },
-    select: {
-      organizationId: true,
-      role: true,
-      space: { select: { isDefault: true } },
-    },
-  });
-  if (!targetMembership || targetMembership.organizationId !== currentMembership.organizationId) {
-    throw new SpaceNotFoundError();
-  }
-  if (targetMembership.role !== "owner") throw new CannotDeleteSpaceAsNonOwnerError();
-  if (targetMembership.space.isDefault) throw new CannotDeleteDefaultSpaceError();
   const memberships = await db.spaceMember.findMany({
-    where: {
-      userId: input.userId,
-      organizationId: currentMembership.organizationId,
-    },
+    where: { userId: input.userId },
     select: {
       spaceId: true,
+      role: true,
       createdAt: true,
       space: { select: { isDefault: true } },
     },
     orderBy: { createdAt: "asc" },
   });
+  if (!memberships.some((membership) => membership.spaceId === input.currentSpaceId)) {
+    throw new IsolationError();
+  }
+  const targetMembership = memberships.find((membership) => membership.spaceId === input.spaceId);
+  if (!targetMembership) throw new SpaceNotFoundError();
+  if (targetMembership.role !== "owner") throw new CannotDeleteSpaceAsNonOwnerError();
+  if (targetMembership.space.isDefault) throw new CannotDeleteDefaultSpaceError();
   if (memberships.length <= 1) throw new CannotDeleteLastSpaceError();
   const [botCount, groupCount, computers] = await Promise.all([
     db.bot.count({ where: { spaceId: input.spaceId } }),
@@ -332,11 +317,16 @@ async function assertEmptySpaceDeletable(
   ]);
   if (botCount > 0 || groupCount > 0) throw new SpaceNotEmptyError();
   return {
-    organizationId: currentMembership.organizationId,
     memberships,
     computers: computers.flatMap((computer) =>
       computer.providerRef
-        ? [{ homeKey: computer.homeKey, kind: computer.kind, providerRef: computer.providerRef }]
+        ? [
+            {
+              homeKey: computer.homeKey,
+              kind: computer.kind,
+              providerRef: computer.providerRef,
+            },
+          ]
         : [],
     ),
   };
@@ -456,7 +446,10 @@ export async function deleteEmptySpaceForMember(
         const remaining = planned.memberships.filter(
           (membership) => membership.spaceId !== input.spaceId,
         );
-        const fallback = remaining.find((membership) => membership.space.isDefault) ?? remaining[0];
+        const fallback =
+          remaining.find(
+            (membership) => membership.space.isDefault && membership.role === "owner",
+          ) ?? remaining[0];
         if (!fallback) throw new CannotDeleteLastSpaceError();
         return { id: fallback.spaceId };
       },
