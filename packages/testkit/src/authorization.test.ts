@@ -1191,6 +1191,51 @@ describeWithDatabase("API authorization and resource isolation", () => {
     ).resolves.toMatchObject({ status: 404 });
   });
 
+  it("searches a member's own thread with a shared bot, never anyone else's", async () => {
+    const { owner, space, dana, sam, bot } = await sharedBotSpace("bot-share-search");
+    const share = { botId: bot.id, visibility: "space", userIds: [] };
+    await rpc(app, owner, "bots/share", share, space);
+    const word = `nebula${Date.now()}`;
+    const send = (cookie: string, body: object) =>
+      rpc(app, cookie, "threads/send", { botId: bot.id, ...body }, space);
+    const file = await rpc<{ id: string }>(
+      app,
+      dana.cookie,
+      "artifacts/create",
+      {
+        botId: bot.id,
+        name: `${word}.txt`,
+        mimeType: "text/plain",
+        contentBase64: Buffer.from("notes").toString("base64"),
+      },
+      space,
+    );
+    await send(dana.cookie, { text: `Dana's ${word} plan`, artifactIds: [file.id] });
+    await send(owner, { text: `Owner's ${word} plan` });
+    const search = async (cookie: string) =>
+      (
+        await rpc<{ hits: Array<{ kind: string; snippet: string; botId?: string }> }>(
+          app,
+          cookie,
+          "search/query",
+          { q: word },
+          space,
+        )
+      ).hits;
+
+    const found = await search(dana.cookie);
+    expect(found.map((hit) => hit.kind).sort()).toEqual(["file", "message"]);
+    expect(found.every((hit) => hit.botId === bot.id)).toBe(true);
+    expect(found.find((hit) => hit.kind === "message")?.snippet).toContain("Dana's");
+    expect(await search(sam.cookie)).toEqual([]);
+    expect((await search(owner)).map((hit) => hit.snippet)).toEqual([
+      expect.stringContaining("Owner's"),
+    ]);
+
+    await rpc(app, owner, "bots/share", { ...share, visibility: "private" }, space);
+    expect(await search(dana.cookie)).toEqual([]);
+  });
+
   it("renames a space only for its owner", async () => {
     const cookie = await signup(app, `space-rename-${stamp}@rakazo.test`, "Space Rename");
     const actor = await rpc<Actor>(app, cookie, "me");
