@@ -656,6 +656,16 @@ export function createRouter(deps: RouterDeps) {
     });
     if (claimed.count !== 1) throw new ORPCError("CONFLICT");
     try {
+      // Read under the claim, which sharing a private bot also takes.
+      const { visibility } = await deps.prisma.bot.findUniqueOrThrow({
+        where: { id: bot.id },
+        select: { visibility: true },
+      });
+      if (mode === "team" && visibility !== "private") {
+        throw new ORPCError("BAD_REQUEST", { message: "Stop sharing this bot first" });
+      }
+      // Unsharing cancels the other people's runs, so on a bot that may move every run is the
+      // owner's, one they see and can stop.
       const active = await deps.prisma.run.findFirst({
         where: { botId: bot.id, status: { in: [...ACTIVE_RUN_STATUSES] } },
         select: { id: true },

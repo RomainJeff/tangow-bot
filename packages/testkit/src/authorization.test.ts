@@ -1461,6 +1461,22 @@ describeWithDatabase("API authorization and resource isolation", () => {
     expect(await listed(owner)).toMatchObject({ computerMode: "dedicated" });
   });
 
+  it("keeps a shared bot off the team computer until it is unshared", async () => {
+    const { owner, space, bot, listed } = await sharedBotSpace("bot-share-team");
+    const share = { botId: bot.id, visibility: "space", userIds: [] };
+    const toTeam = { botId: bot.id, mode: "team" };
+    await rpc(app, owner, "bots/share", share, space);
+
+    await expect(rpc(app, owner, "bots/setComputer", toTeam, space)).rejects.toThrow(
+      "Stop sharing this bot first",
+    );
+    expect(await listed(owner)).toMatchObject({ computerMode: "dedicated" });
+
+    await rpc(app, owner, "bots/share", { ...share, visibility: "private" }, space);
+    await rpc(app, owner, "bots/setComputer", toTeam, space);
+    expect(await listed(owner)).toMatchObject({ computerMode: "team" });
+  });
+
   it("renames a space only for its owner", async () => {
     const cookie = await signup(app, `space-rename-${stamp}@rakazo.test`, "Space Rename");
     const actor = await rpc<Actor>(app, cookie, "me");
