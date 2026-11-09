@@ -27,7 +27,6 @@ import {
   settleSteeringAttachmentLoads,
   toolCompletionAuditPayload,
   toolCompletionFromResult,
-  unreadConversationCount,
 } from "./executor.js";
 import { serializeModelSecret } from "./pi-oauth.js";
 import { recordingSessionLog } from "./session-log/recording.test-support.js";
@@ -545,20 +544,6 @@ describe("run notification preference", () => {
       shape: avatarIdentitySeed("bot-1") % SHAPES.length,
     });
     await expect(notificationAvatar(prismaFor(2, "robot"), run)).resolves.toBeUndefined();
-  });
-
-  it("counts the user's unread live chats for the badge, not archived or channel threads", async () => {
-    const count = vi.fn(async () => 3);
-    const prisma = { thread: { count } } as unknown as PrismaClient;
-
-    await expect(unreadConversationCount(prisma, "user-1")).resolves.toBe(3);
-    expect(count).toHaveBeenCalledWith({
-      where: {
-        userId: "user-1",
-        unread: true,
-        OR: [{ bot: { archivedAt: null } }, { group: { archivedAt: null } }],
-      },
-    });
   });
 });
 

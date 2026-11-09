@@ -19,15 +19,16 @@ export class NotSpaceMemberError extends Error {
 }
 
 /**
- * Bots someone else owns that `userId` may use in `spaceId`. Only Space members reach a Space
- * (`requireMembership`), so a removed person matches nothing here.
+ * Bots someone else owns that `userId` may use in `spaceId`, or in any Space without one. Only
+ * Space members reach a Space (`requireMembership`), so a removed person matches nothing there;
+ * a caller without that check must also require the membership.
  */
 export function sharedWithFilter(
   userId: string,
-  spaceId: string | { in: string[] },
+  spaceId?: string | { in: string[] },
 ): Prisma.BotWhereInput {
   return {
-    spaceId,
+    ...(spaceId ? { spaceId } : {}),
     userId: { not: userId },
     archivedAt: null,
     OR: [{ visibility: "space" }, { visibility: "people", shares: { some: { userId } } }],

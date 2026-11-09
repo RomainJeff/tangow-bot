@@ -7010,9 +7010,9 @@ export async function runNotificationsEnabled(
 }
 
 /**
- * The conversations the inbox shows with an unread mark: a live bot's or group's thread. An
- * archived chat's thread and a messaging channel's thread are not listed there, so they do
- * not count.
+ * The conversations the inbox shows with an unread mark: a live bot's or group's thread, or the
+ * person's own thread with a bot still shared with them in a Space they are still in. An archived
+ * chat's thread and a messaging channel's thread are not listed there, so they do not count.
  */
 export async function unreadConversationCount(
   prisma: PrismaClient,
@@ -7022,7 +7022,14 @@ export async function unreadConversationCount(
     where: {
       userId,
       unread: true,
-      OR: [{ bot: { archivedAt: null } }, { group: { archivedAt: null } }],
+      OR: [
+        { bot: { archivedAt: null } },
+        { group: { archivedAt: null } },
+        {
+          memberBot: sharedWithFilter(userId),
+          space: { memberships: { some: { userId } } },
+        },
+      ],
     },
   });
 }
