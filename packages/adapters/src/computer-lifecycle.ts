@@ -563,7 +563,15 @@ export async function acquireComputerExecutionLease(
   const computer = await prisma.computer.findUniqueOrThrow({ where: { id: input.computerId } });
   if (computer.maintenanceId && computer.maintenanceId !== input.runId)
     throw new ComputerBusyError();
-  if (computer.scope !== "team") return null;
+  // A shared bot's runs take turns on its dedicated computer, as on a team computer.
+  if (
+    computer.scope !== "team" &&
+    !(await prisma.bot.findFirst({
+      where: { id: input.botId, visibility: { not: "private" } },
+      select: { id: true },
+    }))
+  )
+    return null;
   if (isLiveSuspending(computer)) throw new ComputerBusyError("transition");
   const now = new Date();
   const expiresAt = new Date(now.getTime() + EXECUTION_LEASE_MS);
