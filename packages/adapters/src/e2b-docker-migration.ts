@@ -232,11 +232,13 @@ export async function migrateE2BToDocker(
     for (const computer of [...inventory.computers].sort((a, b) =>
       b.scope.localeCompare(a.scope),
     )) {
-      if (covered.has(computer.spaceId)) continue;
+      // A team reservation locks only its person's computers in the Space.
+      const person = `${computer.spaceId}:${computer.userId}`;
+      if (covered.has(person)) continue;
       const reservation = await lifecycle.reserveHomeMove(computer.id);
       if ("blocker" in reservation) throw new Error(`Home move refused: ${reservation.blocker}`);
       reservations.push(reservation.marker);
-      if (computer.scope === "team") covered.add(computer.spaceId);
+      if (computer.scope === "team") covered.add(person);
     }
     for (const volume of state.volumes) {
       ctx.signal.throwIfAborted();
