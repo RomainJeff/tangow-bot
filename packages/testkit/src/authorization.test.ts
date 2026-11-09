@@ -1236,6 +1236,54 @@ describeWithDatabase("API authorization and resource isolation", () => {
     expect(await search(dana.cookie)).toEqual([]);
   });
 
+  /** A finished routine run of `userId` in `threadId`, with its own session under the thread's. */
+  async function finishedRun(space: string, botId: string, userId: string, threadId: string) {
+    const thread = await handles.prisma.thread.findUniqueOrThrow({ where: { id: threadId } });
+    const session = await handles.prisma.conversationSession.create({
+      data: {
+        id: crypto.randomUUID(),
+        spaceId: space,
+        kind: "routine",
+        parentSessionId: thread.sessionId,
+      },
+    });
+    const task = await handles.prisma.task.create({
+      data: { spaceId: space, userId, botId, threadId, prompt: "private prompt", status: "done" },
+    });
+    return handles.prisma.run.create({
+      data: {
+        spaceId: space,
+        userId,
+        botId,
+        threadId,
+        taskId: task.id,
+        sessionId: session.id,
+        status: "completed",
+        trigger: "routine",
+        completedAt: new Date(),
+      },
+    });
+  }
+
+  it("reads a session only from the person's own thread with a shared bot", async () => {
+    const { owner, space, dana, sam, bot } = await sharedBotSpace("bot-share-sessions");
+    await rpc(app, owner, "bots/share", { botId: bot.id, visibility: "space", userIds: [] }, space);
+    const danaThread = (
+      await rpc<{ threadId: string }>(app, dana.cookie, "threads/get", { botId: bot.id }, space)
+    ).threadId;
+    const ownerActor = await rpc<Actor>(app, owner, "me", {}, space);
+    const ownerRun = await finishedRun(space, bot.id, ownerActor.userId, bot.threadId);
+    const danaRun = await finishedRun(space, bot.id, dana.userId, danaThread);
+    const read = (cookie: string, sessionId: string) =>
+      raw(app, cookie, "sessions/entries", { sessionId }, space);
+
+    await expect(read(dana.cookie, danaRun.sessionId)).resolves.toMatchObject({ status: 200 });
+    await expect(read(owner, ownerRun.sessionId)).resolves.toMatchObject({ status: 200 });
+    await expect(read(dana.cookie, ownerRun.sessionId)).resolves.toMatchObject({ status: 404 });
+    await expect(read(owner, danaRun.sessionId)).resolves.toMatchObject({ status: 404 });
+    await expect(read(sam.cookie, danaRun.sessionId)).resolves.toMatchObject({ status: 404 });
+  });
+
   it("renames a space only for its owner", async () => {
     const cookie = await signup(app, `space-rename-${stamp}@rakazo.test`, "Space Rename");
     const actor = await rpc<Actor>(app, cookie, "me");
