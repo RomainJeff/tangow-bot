@@ -161,7 +161,8 @@ export function createAgentSkillsService(
   ): Promise<Array<AgentSkill & Access>> {
     const rows = await prisma.volumeSkill.findMany({
       where: {
-        bot: { spaceId: actor.spaceId },
+        // Shared skills come from the caller's own /workspace/shared, which their bots index.
+        bot: { spaceId: actor.spaceId, userId: actor.userId },
         OR: [
           { source: "shared" },
           {

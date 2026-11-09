@@ -156,7 +156,6 @@ model Space {
   createdByUser               User?                        @relation("SpaceCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
   createdAt                   DateTime                     @default(now())
   deletingAt                  DateTime?
-  skillIndexReceivedAt         DateTime?
   deletionClaimId             String?
   memberships                 SpaceMember[]
   bots                        Bot[]
@@ -420,7 +419,7 @@ model Bot {
   externalConversations ExternalConversation[]
   volumes               Volume[]
 
-  @@unique([spaceId, spawnKey])
+  @@unique([spaceId, userId, spawnKey])
   @@index([spaceId, userId, archivedAt, pinned, updatedAt])
   @@index([sectionId])
   @@index([computerId])
@@ -1026,8 +1025,9 @@ model Computer {
   @@map("computers")
 }
 
-// A whole provider volume: one bot_private per bot, one space_shared per space (SQL partial unique
-// indexes, volumes_owner_shape_check). Owners restrict deletion so no provider volume is orphaned.
+// A whole provider volume: one bot_private per bot, one space_shared per person in a space (SQL
+// partial unique indexes, volumes_owner_shape_check). Owners restrict deletion so no provider
+// volume is orphaned.
 model Volume {
   id           String   @id @default(cuid())
   kind         String
@@ -1035,6 +1035,10 @@ model Volume {
   space        Space    @relation(fields: [spaceId], references: [id], onDelete: Restrict)
   botId        String?
   bot          Bot?     @relation(fields: [botId], references: [id], onDelete: Restrict)
+  /// The person whose space_shared volume this is; null on bot_private.
+  userId       String?
+  /// The last shared skill index taken from this space_shared volume.
+  skillIndexReceivedAt DateTime?
   providerKind String
   providerRef  String?
   ensureUntil  DateTime?

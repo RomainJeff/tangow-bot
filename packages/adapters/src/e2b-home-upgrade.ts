@@ -396,13 +396,15 @@ async function planDockerVolumes(
 ): Promise<VolumePlan[]> {
   const computer = await deps.prisma.computer.findUniqueOrThrow({
     where: { id: computerId },
-    select: { scope: true, spaceId: true, bots: { select: { id: true } } },
+    select: { scope: true, spaceId: true, userId: true, bots: { select: { id: true } } },
   });
   const rows = await deps.prisma.volume.findMany({
     where: {
       OR: [
         { kind: "bot_private", botId: { in: computer.bots.map((bot) => bot.id) } },
-        ...(computer.scope === "team" ? [{ kind: "space_shared", spaceId: computer.spaceId }] : []),
+        ...(computer.scope === "team"
+          ? [{ kind: "space_shared", spaceId: computer.spaceId, userId: computer.userId }]
+          : []),
       ],
     },
     select: { id: true, kind: true, botId: true, providerKind: true, providerRef: true },

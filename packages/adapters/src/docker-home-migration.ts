@@ -79,6 +79,7 @@ export async function moveDockerHomeToVolumes(
       kind: true,
       scope: true,
       spaceId: true,
+      userId: true,
       homeKey: true,
       homeStorage: true,
       bots: { select: { id: true } },
@@ -117,7 +118,11 @@ export async function moveDockerHomeToVolumes(
       refs.set(botId, (await workers.ensureVolume(owner, context)).providerRef);
     }
     if (layout.team) {
-      const owner = { kind: "space_shared" as const, spaceId: computer.spaceId };
+      const owner = {
+        kind: "space_shared" as const,
+        spaceId: computer.spaceId,
+        userId: computer.userId,
+      };
       refs.set("", (await workers.ensureVolume(owner, context)).providerRef);
     }
     await mkdir(path.join(data, "volumes"), { recursive: true });
@@ -163,7 +168,7 @@ export async function moveDockerHomeToVolumes(
  * and those whose home still holds the move marker. A busy computer, or one whose home conflicts
  * with its volumes, is logged and skipped; the others still move. Any other error throws: storage
  * the move cannot use (EXDEV, EACCES, EROFS, ENOSPC, EIO) or a database failure. Then each visited
- * space's legacy user skills are copied once to its shared volume (`copyLegacyUserSkills`).
+ * space owner's legacy user skills are copied once to their shared volume (`copyLegacyUserSkills`).
  */
 export async function moveIdleDockerHomes(
   deps: { prisma: PrismaClient; workers: WorkerLifecycle; dataDir: string },
@@ -237,9 +242,9 @@ export async function listDeferredDockerHomes(deps: { prisma: PrismaClient; data
 }
 
 /**
- * Copies a space's legacy user skills, `DATA_DIR/skills/user/<space>/<user>/<skill>`, to
- * `skills/` on its shared volume, once, as the E2B upgrade does: worker runs read only managed,
- * bot and shared volume skills. Links are never followed, nothing on the volume is replaced, and a
+ * Copies the space owner's legacy user skills, `DATA_DIR/skills/user/<space>/<owner>/<skill>`, to
+ * `skills/` on the owner's shared volume, once, as the E2B upgrade does: worker runs read only
+ * managed, bot and shared volume skills. Links are never followed, nothing on the volume is replaced, and a
  * bundle that differs from the volume's is logged and left. It waits while a team home of the
  * space has not finished moving, since that move needs the shared volume empty.
  */
@@ -260,10 +265,20 @@ export async function copyLegacyUserSkills(
       return "waiting";
     }
   }
-  const owner = { kind: "space_shared" as const, spaceId };
+  // Legacy skills predate invitations: only the owner's go to the owner's volume.
+  const { userId } = await deps.prisma.spaceMember.findFirstOrThrow({
+    where: { spaceId, role: "owner" },
+    select: { userId: true },
+  });
+  const owner = { kind: "space_shared" as const, spaceId, userId };
   const { providerRef } = await deps.workers.ensureVolume(owner, context);
   const report = await migrateUserSkillsToShared(
-    { source, volumeRef: providerRef, files: new DockerVolumeFiles(path.join(data, "volumes")) },
+    {
+      source,
+      user: userId,
+      volumeRef: providerRef,
+      files: new DockerVolumeFiles(path.join(data, "volumes")),
+    },
     context,
   );
   const conflicts = report.events.filter((event) => event.kind === "conflict").length;

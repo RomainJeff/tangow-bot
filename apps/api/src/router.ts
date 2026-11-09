@@ -401,10 +401,12 @@ async function purgeCompactedHistoryMemory(
   reason: string,
 ): Promise<void> {
   if (target.kind !== "bot") return;
-  const configuredMemory = await deps.memoryProviders.resolve(actor.spaceId).catch((error) => {
-    getLogger().error(`semantic memory resolution after ${reason} failed`, error);
-    return null;
-  });
+  const configuredMemory = await deps.memoryProviders
+    .resolve(actor.spaceId, actor.userId)
+    .catch((error) => {
+      getLogger().error(`semantic memory resolution after ${reason} failed`, error);
+      return null;
+    });
   if (!configuredMemory) return;
   // Best effort: the conversation rows are already deleted, so failing the request here would
   // help nothing — a failed purge only leaves stale summaries recallable.
@@ -2755,7 +2757,11 @@ export function createRouter(deps: RouterDeps) {
       }),
       remove: authed.routines.remove.handler(async ({ context, input }) => {
         const existing = await deps.prisma.routine.findFirst({
-          where: { id: input.routineId, spaceId: context.actor.spaceId },
+          where: {
+            id: input.routineId,
+            spaceId: context.actor.spaceId,
+            userId: context.actor.userId,
+          },
         });
         if (!existing) throw new IsolationError();
         await deps.prisma.routine.delete({ where: { id: existing.id } });

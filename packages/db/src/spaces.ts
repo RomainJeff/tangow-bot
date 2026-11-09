@@ -277,6 +277,11 @@ type ClaimedSpaceDeleteInput = EmptySpaceDeleteInput & { claimId: string };
 
 type SpaceDeleteDb = Pick<PrismaClient, "spaceMember" | "bot" | "chatGroup" | "computer">;
 
+async function spaceMemberIds(db: Pick<PrismaClient, "spaceMember">, spaceId: string) {
+  const members = await db.spaceMember.findMany({ where: { spaceId }, select: { userId: true } });
+  return members.map((member) => member.userId);
+}
+
 async function assertEmptySpaceDeletable(
   db: SpaceDeleteDb,
   input: EmptySpaceDeleteInput,
@@ -307,9 +312,11 @@ async function assertEmptySpaceDeletable(
   if (targetMembership.role !== "owner") throw new CannotDeleteSpaceAsNonOwnerError();
   if (targetMembership.space.isDefault) throw new CannotDeleteDefaultSpaceError();
   if (memberships.length <= 1) throw new CannotDeleteLastSpaceError();
+  // A removed person's bots and groups are hidden from the owner and go with the Space.
+  const member = { userId: { in: await spaceMemberIds(db, input.spaceId) } };
   const [botCount, groupCount, computers] = await Promise.all([
-    db.bot.count({ where: { spaceId: input.spaceId } }),
-    db.chatGroup.count({ where: { spaceId: input.spaceId } }),
+    db.bot.count({ where: { spaceId: input.spaceId, ...member } }),
+    db.chatGroup.count({ where: { spaceId: input.spaceId, ...member } }),
     db.computer.findMany({
       where: { spaceId: input.spaceId, providerRef: { not: null } },
       select: { homeKey: true, kind: true, providerRef: true },
@@ -685,6 +692,8 @@ export async function removeSpaceMember(
 ): Promise<void> {
   const { organizationId } = await requireSpaceOwner(prisma, input);
   await prisma.$transaction(async (tx) => {
+    // Bot creation holds this lock while it checks membership, so none can land after the archive.
+    await lockSpaceDeletion(tx, input.spaceId);
     const target = await tx.spaceMember.findUnique({
       where: {
         spaceId_userId: { spaceId: input.spaceId, userId: input.memberUserId },
@@ -698,6 +707,14 @@ export async function removeSpaceMember(
         spaceId_userId: { spaceId: input.spaceId, userId: input.memberUserId },
       },
     });
+    // Nothing is deleted: their bots are archived, so they claim no new run (webhooks and
+    // channels included), and their routines stop. All of it goes when the Space is deleted.
+    const leftovers = { spaceId: input.spaceId, userId: input.memberUserId };
+    await tx.bot.updateMany({
+      where: { ...leftovers, archivedAt: null },
+      data: { archivedAt: new Date() },
+    });
+    await tx.routine.updateMany({ where: leftovers, data: { active: false, nextRunAt: null } });
     await tx.member.deleteMany({
       where: {
         organizationId,

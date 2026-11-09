@@ -451,8 +451,9 @@ export function createRepos(prisma: PrismaClient) {
         if (!input.spawnKey) return null;
         return prisma.bot.findUnique({
           where: {
-            spaceId_spawnKey: {
+            spaceId_userId_spawnKey: {
               spaceId: actor.spaceId,
+              userId: actor.userId,
               spawnKey: input.spawnKey,
             },
           },

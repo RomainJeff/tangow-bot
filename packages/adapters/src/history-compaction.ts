@@ -780,7 +780,7 @@ export async function compactHistory(
   // Local compaction is first-party behavior and must not depend on an optional external store.
   let semanticMemory: ConfiguredMemoryProvider | null = null;
   try {
-    semanticMemory = await deps.memoryProviders.resolve(thread.spaceId);
+    semanticMemory = await deps.memoryProviders.resolve(thread.spaceId, thread.userId);
   } catch (error) {
     getLogger().error("Failed to load semantic memory provider for history compaction", error);
   }

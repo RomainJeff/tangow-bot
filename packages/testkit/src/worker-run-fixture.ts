@@ -281,7 +281,7 @@ export async function startWorkerRun<
     await prisma.volume.createMany({
       data: [
         { kind: "bot_private", spaceId: SPACE, botId: bot.id, providerKind: "local-worker" },
-        { kind: "space_shared", spaceId: SPACE, providerKind: "local-worker" },
+        { kind: "space_shared", spaceId: SPACE, userId: USER, providerKind: "local-worker" },
       ].map((volume) => ({ ...volume, providerRef: volume.kind })),
     });
   }
@@ -349,7 +349,10 @@ export async function startWorkerRun<
       { kind: "bot_private", spaceId: SPACE, botId: bot.id },
       context,
     );
-    await current.lifecycle.ensureVolume({ kind: "space_shared", spaceId: SPACE }, context);
+    await current.lifecycle.ensureVolume(
+      { kind: "space_shared", spaceId: SPACE, userId: USER },
+      context,
+    );
   }
 
   return {

@@ -11,9 +11,18 @@ type MigrationEvent = {
   reason?: string;
 };
 
-/** Copy independent bundles; leave every conflicting bundle for manual resolution. */
+/**
+ * Copy independent bundles; leave every conflicting bundle for manual resolution. `user` limits
+ * the copy to one person's directory.
+ */
 export async function migrateUserSkillsToShared(
-  options: { source: string; volumeRef: string; files: VolumeFiles; dryRun?: boolean },
+  options: {
+    source: string;
+    volumeRef: string;
+    files: VolumeFiles;
+    dryRun?: boolean;
+    user?: string;
+  },
   context: AdapterContext,
 ) {
   const events: MigrationEvent[] = [];
@@ -41,6 +50,7 @@ export async function migrateUserSkillsToShared(
     }
   };
   for (const user of users.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (options.user !== undefined && user.name !== options.user) continue;
     if (!user.isDirectory() || user.name.startsWith(".")) {
       events.push({ kind: "skipped", source: user.name, reason: "not a visible owner directory" });
       continue;
