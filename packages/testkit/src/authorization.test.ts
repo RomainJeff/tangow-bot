@@ -1340,6 +1340,48 @@ describeWithDatabase("API authorization and resource isolation", () => {
     expect(JSON.stringify(exported)).not.toContain("Dana's");
   });
 
+  it("shows each person the status of their own thread with a shared bot", async () => {
+    const { owner, space, dana, bot, listed } = await sharedBotSpace("bot-share-status");
+    await rpc(app, owner, "bots/share", { botId: bot.id, visibility: "space", userIds: [] }, space);
+    const other = await rpc<SharedBot>(app, owner, "bots/create", botInput("Other"), space);
+    await rpc(app, owner, "groups/create", { name: "Crew", botIds: [bot.id, other.id] }, space);
+    const danaThread = (
+      await rpc<{ threadId: string }>(app, dana.cookie, "threads/get", { botId: bot.id }, space)
+    ).threadId;
+    const task = await handles.prisma.task.create({
+      data: {
+        spaceId: space,
+        userId: dana.userId,
+        botId: bot.id,
+        threadId: danaThread,
+        prompt: "Dana's question",
+        status: "waiting_input",
+      },
+    });
+    await handles.prisma.run.create({
+      data: {
+        spaceId: space,
+        userId: dana.userId,
+        botId: bot.id,
+        threadId: danaThread,
+        taskId: task.id,
+        status: "waiting_input",
+        trigger: "user",
+      },
+    });
+
+    expect((await listed(dana.cookie))?.status).toBe("waiting_input");
+    expect((await listed(owner))?.status).toBe("idle");
+    const [group] = await rpc<Array<{ members: Array<{ botId: string; status: string }> }>>(
+      app,
+      owner,
+      "groups/list",
+      {},
+      space,
+    );
+    expect(group?.members.find((member) => member.botId === bot.id)?.status).toBe("idle");
+  });
+
   it("renames a space only for its owner", async () => {
     const cookie = await signup(app, `space-rename-${stamp}@rakazo.test`, "Space Rename");
     const actor = await rpc<Actor>(app, cookie, "me");
@@ -1984,6 +2026,7 @@ interface SharedBot {
   id: string;
   threadId: string;
   isOwner: boolean;
+  status: string;
   instructions: string;
   modelId: string | null;
 }
