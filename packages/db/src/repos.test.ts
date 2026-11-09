@@ -37,7 +37,11 @@ const baseBot = {
 function reposFor(memoryScope: string | null) {
   const prisma = {
     bot: {
-      findMany: vi.fn(async () => [{ ...baseBot, memoryScope }]),
+      // The second read is bots shared with the actor: none here.
+      findMany: vi
+        .fn()
+        .mockResolvedValueOnce([{ ...baseBot, memoryScope }])
+        .mockResolvedValueOnce([]),
     },
     $queryRaw: vi.fn(async () => []),
   };
@@ -60,21 +64,26 @@ describe("createRepos.listBots", () => {
 
 describe("createRepos.listSpaceBotsForSpaces", () => {
   it("loads and maps only the compact cross-space sidebar fields", async () => {
-    const findMany = vi.fn(async (_query: { where: unknown; select: Record<string, unknown> }) => [
-      {
-        id: "bot-2",
-        spaceId: "ws-2",
-        name: "Support",
-        title: "Customer support",
-        color: "#123456",
-        notifyOnFinish: false,
-        pinned: true,
-        sectionId: null,
-        updatedAt: new Date("2026-08-20T00:00:00.000Z"),
-        thread: { unread: true, sessionId: "session-2" },
-        runs: [{ status: "running" }],
-      },
-    ]);
+    const findMany = vi.fn(
+      async (query: { where: { OR?: unknown }; select: Record<string, unknown> }) =>
+        query.where.OR
+          ? []
+          : [
+              {
+                id: "bot-2",
+                spaceId: "ws-2",
+                name: "Support",
+                title: "Customer support",
+                color: "#123456",
+                notifyOnFinish: false,
+                pinned: true,
+                sectionId: null,
+                updatedAt: new Date("2026-08-20T00:00:00.000Z"),
+                thread: { unread: true, sessionId: "session-2" },
+                runs: [{ status: "running" }],
+              },
+            ],
+    );
     const $queryRaw = vi.fn(async () => [
       {
         id: "entry-1",

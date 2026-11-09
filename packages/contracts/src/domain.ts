@@ -79,8 +79,21 @@ export const BotSchema = z.object({
   webhookConfigured: z.boolean(),
   /** Present when created with an idempotency key (e.g. onboarding:first). */
   spawnKey: z.string().nullable(),
+  /** False on a bot someone else shared with you: `threadId` is then your own thread with it. */
+  isOwner: z.boolean(),
 });
 export type Bot = z.infer<typeof BotSchema>;
+
+/** Who besides its owner uses a bot: nobody, everyone in its Space, or the people listed. */
+export const BotVisibilitySchema = z.enum(["private", "space", "people"]);
+export type BotVisibility = z.infer<typeof BotVisibilitySchema>;
+
+export const BotSharingSchema = z.object({
+  visibility: BotVisibilitySchema,
+  /** Kept only for `people`. */
+  userIds: z.array(Id).max(200),
+});
+export type BotSharing = z.infer<typeof BotSharingSchema>;
 
 export const ReorderBotsInput = z.object({
   botIds: z

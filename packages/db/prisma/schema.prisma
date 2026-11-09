@@ -31,6 +31,7 @@ model User {
   botSecrets BotSecret[]
   agentSecrets               AgentSecret[]
   spaceInvitations           SpaceInvitation[]
+  botShares                  BotShare[]
 
   @@unique([email])
   @@map("user")
@@ -387,7 +388,7 @@ model Bot {
   children          Bot[]             @relation("BotChildren")
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
-  thread            Thread?
+  thread            Thread?           @relation("BotThread")
   computerId        String?
   computer          Computer?         @relation(fields: [computerId], references: [id], onDelete: SetNull)
   computerSwitching Boolean           @default(false)
@@ -400,6 +401,11 @@ model Bot {
   webhookSecretId   String?
   teamChatAmbientEnabled Boolean @default(false)
   teamChatRules          String  @default("")
+  /// Who besides the owner uses the bot: `private`, `space` (every member) or `people` (BotShare rows).
+  visibility        String            @default("private")
+  shares            BotShare[]
+  /// One per person the bot is shared with; `thread` stays the owner's.
+  memberThreads     Thread[]          @relation("MemberBotThreads")
   routines          Routine[]
   scratchpadItems   ScratchpadItem[]
   taughtSkills      TaughtSkill[]
@@ -425,6 +431,20 @@ model Bot {
   @@index([computerId])
   @@index([parentBotId])
   @@map("bots")
+}
+
+/// A person a bot with `visibility = people` is shared with.
+model BotShare {
+  id        String   @id @default(cuid())
+  botId     String
+  bot       Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([botId, userId])
+  @@index([userId])
+  @@map("bot_shares")
 }
 
 model BotSection {
@@ -498,7 +518,10 @@ model Thread {
   spaceId                     String
   space                       Space      @relation(fields: [spaceId], references: [id], onDelete: Cascade)
   botId                       String?    @unique
-  bot                         Bot?       @relation(fields: [botId], references: [id], onDelete: Cascade)
+  bot                         Bot?       @relation("BotThread", fields: [botId], references: [id], onDelete: Cascade)
+  /// A member's own thread with a shared bot; `userId` is that member.
+  memberBotId                 String?
+  memberBot                   Bot?       @relation("MemberBotThreads", fields: [memberBotId], references: [id], onDelete: Cascade)
   groupId                     String?    @unique
   group                       ChatGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
   externalConversationId      String?    @unique
@@ -516,6 +539,7 @@ model Thread {
   runs                        Run[]
   routines                    Routine[]
 
+  @@unique([memberBotId, userId])
   @@index([spaceId])
   @@map("threads")
 }

@@ -86,6 +86,7 @@ const BOT: Bot = {
   teamChatRules: "",
   webhookConfigured: false,
   spawnKey: null,
+  isOwner: true,
 };
 
 const HOUR = 60 * 60 * 1000;
