@@ -653,7 +653,9 @@ describeWithDatabase("API authorization and resource isolation", () => {
     // A Space the caller doesn't belong to resolves to their own Space, never to the requested one.
     const intruderActor = await rpc<Actor>(app, intruder, "me", {}, support.id);
     expect(intruderActor.spaceId).not.toBe(support.id);
-    expect(await rpc<Array<{ id: string }>>(app, intruder, "bots/list", {}, support.id)).toEqual([]);
+    expect(await rpc<Array<{ id: string }>>(app, intruder, "bots/list", {}, support.id)).toEqual(
+      [],
+    );
   });
 
   it("enforces the space limit across concurrent creation requests", async () => {
