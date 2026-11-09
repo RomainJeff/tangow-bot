@@ -18,6 +18,7 @@ import {
   createThreadEvents,
   createThreadMessage,
   RunHistoryWriteError,
+  sharedBotThread,
 } from "@rakazo/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
@@ -1315,6 +1316,60 @@ describeJourneys("required product journeys", () => {
         },
       }),
     ).toBe(1);
+  });
+
+  it("5c: a member's schedule on a shared bot wakes in their own thread until unshared", async () => {
+    const owner = await signup(app, `schedule-share-owner-${stamp}@rakazo.test`, "Owner");
+    const ownerMe = await rpc<Me>(app, owner, "me");
+    const member = await signup(app, `schedule-share-member-${stamp}@rakazo.test`, "Member");
+    const memberId = (await rpc<Me>(app, member, "me")).userId;
+    const { url } = await rpc<{ url: string }>(app, owner, "spaces/createInvite", {
+      spaceId: ownerMe.spaceId,
+    });
+    await rpc(app, member, "spaces/acceptInvite", { token: new URL(url).pathname.slice(8) });
+    const bot = await rpc<Bot>(app, owner, "bots/create", {
+      name: "Shared scheduler",
+      title: "",
+      description: "",
+      instructions: "",
+      notifyOnFinish: false,
+    });
+    const share = { botId: bot.id, visibility: "people", userIds: [memberId] };
+    await rpc(app, owner, "bots/share", share);
+    const memberActor = { ...ownerMe, userId: memberId, email: "", isDeploymentOwner: false };
+    const memberThread = (await sharedBotThread(prisma, memberActor, bot.id))!.thread;
+
+    const created = await createScheduleFromTool(
+      { prisma, events: createThreadEvents(prisma), jobs },
+      {
+        spaceId: ownerMe.spaceId,
+        botId: bot.id,
+        userId: memberId,
+        threadId: memberThread.id,
+        name: "Member ping",
+        prompt: "say member-reminder-ok",
+        schedule: { delaySeconds: 30 },
+      },
+    );
+    if (!("ok" in created) || !created.ok) throw new Error("member schedule create failed");
+    const wake = async () => {
+      const dueAt = new Date(Date.now() - 1_000);
+      await prisma.routine.update({
+        where: { id: created.routineId },
+        data: { nextRunAt: dueAt, active: true },
+      });
+      await executor.wakeRoutine(created.routineId, dueAt.toISOString());
+    };
+    await wake();
+    const runs = () => prisma.run.findMany({ where: { routineId: created.routineId } });
+    expect((await runs()).map((run) => run.threadId)).toEqual([memberThread.id]);
+
+    await rpc(app, owner, "bots/share", { ...share, visibility: "private", userIds: [] });
+    expect(
+      await prisma.routine.findUniqueOrThrow({ where: { id: created.routineId } }),
+    ).toMatchObject({ active: false, nextRunAt: null });
+    await wake();
+    expect(await runs()).toHaveLength(1);
   });
 
   it("allocates event and entry cursors atomically under concurrent writes", async () => {

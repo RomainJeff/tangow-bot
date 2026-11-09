@@ -103,7 +103,7 @@ export async function getBotSharing(
 
 /**
  * The owner sets who uses the bot. People are kept only for `people`; whoever loses access keeps
- * their thread, hidden, and their runs in it stop.
+ * their thread, hidden, and their runs in it and their routines on the bot stop.
  */
 export async function setBotSharing(
   prisma: PrismaClient,
@@ -132,6 +132,10 @@ export async function setBotSharing(
         select: { id: true, taskId: true },
       });
       await cancelRunsInTransaction(tx, runs, new Date(), actor.userId);
+      await tx.routine.updateMany({
+        where: { botId: input.botId, userId: { notIn: [...userIds, actor.userId] } },
+        data: { active: false, nextRunAt: null },
+      });
     }
     return { visibility: input.visibility, userIds };
   });

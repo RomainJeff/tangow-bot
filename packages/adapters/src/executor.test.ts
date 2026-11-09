@@ -604,6 +604,7 @@ describe("createRunExecutor", () => {
       bot: {
         findUnique: vi.fn(async () => ({
           id: "bot-1",
+          userId: "user-1",
           thread: { id: "thread-1" },
         })),
       },
@@ -675,6 +676,7 @@ describe("createRunExecutor", () => {
       bot: {
         findUnique: vi.fn(async () => ({
           id: "bot-1",
+          userId: "user-1",
           thread: { id: "dm-thread-1" },
         })),
       },
@@ -741,6 +743,7 @@ describe("createRunExecutor", () => {
       bot: {
         findUnique: vi.fn(async () => ({
           id: "bot-1",
+          userId: "user-1",
           thread: { id: "dm-thread-1" },
         })),
       },
@@ -822,6 +825,7 @@ description: Prepare standup notes
       bot: {
         findUnique: vi.fn(async () => ({
           id: "bot-1",
+          userId: "user-1",
           thread: { id: "thread-1" },
         })),
       },
@@ -879,6 +883,7 @@ description: Prepare standup notes
       bot: {
         findUnique: vi.fn(async () => ({
           id: "bot-1",
+          userId: "user-1",
           thread: { id: "thread-1" },
         })),
       },
@@ -934,6 +939,7 @@ description: Prepare standup notes
       bot: {
         findUnique: vi.fn(async () => ({
           id: "bot-1",
+          userId: "user-1",
           thread: { id: "thread-1" },
         })),
       },

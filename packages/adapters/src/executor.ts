@@ -207,6 +207,7 @@ import {
   runPersistence,
   SpaceLimitError,
   sessionEntryFromRow,
+  sharedWithFilter,
   threadEventSeq,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -1364,24 +1365,36 @@ export function createRunExecutor(deps: ExecutorDeps) {
         include: { thread: true },
       });
       if (!bot?.thread) return;
+      // A member's routine on a shared bot runs in their own thread, while it is still shared with
+      // them, and never falls back to the owner's.
+      const memberRoutine = routine.userId !== bot.userId;
       const targetThread = routine.threadId
         ? await deps.prisma.thread.findFirst({
             where: {
               id: routine.threadId,
               spaceId: routine.spaceId,
-              OR: [
-                { botId: bot.id },
-                {
-                  group: {
-                    archivedAt: null,
-                    members: { some: { botId: bot.id } },
-                  },
-                },
-              ],
+              OR: memberRoutine
+                ? [
+                    {
+                      memberBotId: bot.id,
+                      userId: routine.userId,
+                      memberBot: sharedWithFilter(routine.userId, routine.spaceId),
+                    },
+                  ]
+                : [
+                    { botId: bot.id },
+                    {
+                      group: {
+                        archivedAt: null,
+                        members: { some: { botId: bot.id } },
+                      },
+                    },
+                  ],
             },
             select: { id: true },
           })
         : null;
+      if (memberRoutine && !targetThread) return;
       const thread = targetThread ?? bot.thread;
       // A schedule with no valid parseable cron among its crons (e.g. a
       // legacy row accepted before cron validation was added) fires the
