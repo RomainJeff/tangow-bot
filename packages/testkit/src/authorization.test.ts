@@ -1212,6 +1212,17 @@ describeWithDatabase("API authorization and resource isolation", () => {
     );
     await send(dana.cookie, { text: `Dana's ${word} plan`, artifactIds: [file.id] });
     await send(owner, { text: `Owner's ${word} plan` });
+    await handles.prisma.routine.create({
+      data: {
+        spaceId: space,
+        botId: bot.id,
+        userId: dana.userId,
+        name: `Dana's ${word} check`,
+        prompt: "Check in",
+        crons: ["0 9 * * *"],
+        timezone: "UTC",
+      },
+    });
     const search = async (cookie: string) =>
       (
         await rpc<{ hits: Array<{ kind: string; snippet: string; botId?: string }> }>(
@@ -1224,7 +1235,7 @@ describeWithDatabase("API authorization and resource isolation", () => {
       ).hits;
 
     const found = await search(dana.cookie);
-    expect(found.map((hit) => hit.kind).sort()).toEqual(["file", "message"]);
+    expect(found.map((hit) => hit.kind).sort()).toEqual(["file", "message", "routine"]);
     expect(found.every((hit) => hit.botId === bot.id)).toBe(true);
     expect(found.find((hit) => hit.kind === "message")?.snippet).toContain("Dana's");
     expect(await search(sam.cookie)).toEqual([]);

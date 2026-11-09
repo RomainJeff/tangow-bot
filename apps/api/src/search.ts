@@ -285,7 +285,13 @@ export async function querySpaceSearch(
         { name: { contains: query, mode: "insensitive" } },
         { prompt: { contains: query, mode: "insensitive" } },
       ],
-      bot: { archivedAt: null },
+      // A routine on a bot no longer shared with its creator goes with their hidden thread.
+      bot: {
+        OR: [
+          { userId: actor.userId, archivedAt: null },
+          sharedWithFilter(actor.userId, actor.spaceId),
+        ],
+      },
     },
     include: { bot: { select: { name: true } } },
     take: SEARCH_LIMIT,
