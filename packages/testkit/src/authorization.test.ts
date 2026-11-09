@@ -1423,6 +1423,44 @@ describeWithDatabase("API authorization and resource isolation", () => {
     await expect(read("runs/recap")).resolves.toMatchObject({ status: 404 });
   });
 
+  it("moves a bot onto a computer of its own when it is first shared, never mid-run", async () => {
+    const { owner, space, bot, listed } = await sharedBotSpace("bot-share-computer");
+    const ownerId = (await rpc<Actor>(app, owner, "me", {}, space)).userId;
+    const share = { botId: bot.id, visibility: "space", userIds: [] };
+    const task = await handles.prisma.task.create({
+      data: {
+        spaceId: space,
+        userId: ownerId,
+        botId: bot.id,
+        threadId: bot.threadId,
+        prompt: "",
+        status: "waiting_input",
+      },
+    });
+    const run = await handles.prisma.run.create({
+      data: {
+        spaceId: space,
+        userId: ownerId,
+        botId: bot.id,
+        threadId: bot.threadId,
+        taskId: task.id,
+        status: "waiting_input",
+        trigger: "user",
+      },
+    });
+    expect(await listed(owner)).toMatchObject({ computerMode: "team" });
+
+    await expect(rpc(app, owner, "bots/share", share, space)).rejects.toThrow("Stop the bot first");
+    expect(await listed(owner)).toMatchObject({ computerMode: "team" });
+    await expect(rpc(app, owner, "bots/sharing", { botId: bot.id }, space)).resolves.toMatchObject({
+      visibility: "private",
+    });
+
+    await handles.prisma.run.update({ where: { id: run.id }, data: { status: "cancelled" } });
+    await rpc(app, owner, "bots/share", share, space);
+    expect(await listed(owner)).toMatchObject({ computerMode: "dedicated" });
+  });
+
   it("renames a space only for its owner", async () => {
     const cookie = await signup(app, `space-rename-${stamp}@rakazo.test`, "Space Rename");
     const actor = await rpc<Actor>(app, cookie, "me");
