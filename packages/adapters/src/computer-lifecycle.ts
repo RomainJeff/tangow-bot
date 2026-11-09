@@ -160,11 +160,18 @@ async function loadVolumeHome(
   computer: { id: string; scope: string; spaceId: string; userId: string },
 ) {
   const scope = parseComputerMode(computer.scope);
+  // A shared bot's computer is used by others, so its owner's shared volume stays off it.
+  const sharedBot = await prisma.bot.findFirst({
+    where: { computerId: computer.id, visibility: { not: "private" } },
+    select: { id: true },
+  });
   const volumes = await prisma.volume.findMany({
     where: {
       OR: [
         { kind: "bot_private", bot: { computerId: computer.id } },
-        { kind: "space_shared", spaceId: computer.spaceId, userId: computer.userId },
+        ...(sharedBot
+          ? []
+          : [{ kind: "space_shared", spaceId: computer.spaceId, userId: computer.userId }]),
       ],
     },
     select: { kind: true, botId: true, providerRef: true },

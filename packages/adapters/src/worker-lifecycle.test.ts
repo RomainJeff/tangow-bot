@@ -108,6 +108,16 @@ describe("worker plan", () => {
     });
   });
 
+  it("mounts a shared bot's own volume, never its owner's shared one", async () => {
+    const { bot, privateVolume } = await fixture.migratedBot();
+    await prisma.bot.update({ where: { id: bot.id }, data: { visibility: "space" } });
+    const attempt = await fixture.seedAttempt((await fixture.seedRun(bot)).id);
+
+    expect((await fixture.launchFor(workers, attempt.id, allFiles)).volumes).toEqual([
+      { volumeId: privateVolume.id, access: "rw" },
+    ]);
+  });
+
   it.each([
     ["private", { private: "rw", shared: null }],
     ["shared", { private: null, shared: "rw" }],

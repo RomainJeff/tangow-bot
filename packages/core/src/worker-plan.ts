@@ -134,6 +134,8 @@ export type LaunchInputs = {
   computer: { id: string; homeStorage: HomeStorage } | null;
   privateVolumeId: string | null;
   sharedVolumeId: string | null;
+  /** A bot shared with others never mounts its owner's shared volume. */
+  botShared: boolean;
 };
 
 export function planLaunch(inputs: LaunchInputs, needs: RunNeeds): LaunchPlan {
@@ -144,7 +146,7 @@ export function planLaunch(inputs: LaunchInputs, needs: RunNeeds): LaunchPlan {
   }
   const slots: Array<[VolumeSlot, VolumeAccess | null, string | null]> = [
     ["private", privateAccess, inputs.privateVolumeId],
-    ["shared", sharedAccess, inputs.sharedVolumeId],
+    ["shared", inputs.botShared ? null : sharedAccess, inputs.sharedVolumeId],
   ];
   const volumes: VolumeGrant[] = [];
   for (const [slot, access, volumeId] of slots) {

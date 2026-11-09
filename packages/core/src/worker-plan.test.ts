@@ -105,6 +105,7 @@ describe("the launch a run gets from its tools and its bot's computer", () => {
     fence: 2,
     privateVolumeId: "vol_private_a",
     sharedVolumeId: "vol_shared_a",
+    botShared: false,
   };
   const onVolumes = { id: "computer_a", homeStorage: "volumes" as const };
   const launch = (volumes: VolumeGrant[], computer: WorkerLaunch["computer"]) => ({
