@@ -59,7 +59,6 @@ function mapBot(
   },
   preview = "",
   status = "idle",
-  isOwner = true,
 ): Bot {
   if (!bot.thread) {
     throw new IsolationError("Bot is missing its thread");
@@ -96,21 +95,52 @@ function mapBot(
     teamChatRules: bot.teamChatRules ?? "",
     webhookConfigured: Boolean(bot.webhookSecretId),
     spawnKey: bot.spawnKey ?? null,
-    isOwner,
+    isOwner: true,
   };
 }
 
+/**
+ * What a member sees of a bot shared with them: who it is and their own thread with it, never how
+ * its owner set it up. The owner's pin and section are the owner's too.
+ */
+const SHARED_BOT_SETTINGS = {
+  title: "",
+  description: "",
+  instructions: "",
+  notifyOnFinish: false,
+  pinned: false,
+  sectionId: null,
+  archivedAt: null,
+  parentBotId: null,
+  memoryScope: null,
+  computerMode: "team",
+  voiceId: null,
+  autoSpeak: false,
+  chattyReplies: false,
+  modelProvider: null,
+  modelId: null,
+  thinkingLevel: null,
+  teamChatAmbientEnabled: false,
+  teamChatRules: "",
+  webhookConfigured: false,
+  spawnKey: null,
+  isOwner: false,
+} as const satisfies Partial<Bot>;
+
 export function createRepos(prisma: PrismaClient) {
-  /**
-   * Bots shared with `userId`, each with that person's own thread in place of the owner's. The
-   * owner's pin and section are theirs, so a shared bot shows neither.
-   */
+  /** Bots shared with `userId`, each with that person's own thread in place of the owner's. */
   async function findSharedBots(userId: string, spaceId: string | { in: string[] }) {
     const query = () =>
       prisma.bot.findMany({
         where: sharedWithFilter(userId, spaceId),
-        include: {
-          computer: { select: { scope: true } },
+        select: {
+          id: true,
+          spaceId: true,
+          name: true,
+          color: true,
+          shapeSeed: true,
+          createdAt: true,
+          updatedAt: true,
           memberThreads: {
             where: { userId },
             select: { id: true, unread: true, sessionId: true, runs: activeRunSelection },
@@ -121,7 +151,7 @@ export function createRepos(prisma: PrismaClient) {
     let bots = await query();
     if (await ensureMemberThreads(prisma, userId, bots)) bots = await query();
     return bots.flatMap(({ memberThreads: [thread], ...bot }) =>
-      thread ? [{ ...bot, thread, pinned: false, sectionId: null }] : [],
+      thread ? [{ ...SHARED_BOT_SETTINGS, ...bot, thread }] : [],
     );
   }
 
@@ -334,13 +364,16 @@ export function createRepos(prisma: PrismaClient) {
             bot.runs[0]?.status ?? "idle",
           ),
         ),
-        ...shared.map((bot) =>
-          mapBot(
-            bot,
-            previews.get(bot.thread.sessionId) ?? "",
-            bot.thread.runs[0]?.status ?? "idle",
-            false,
-          ),
+        ...shared.map(
+          ({ thread, createdAt, updatedAt, ...bot }): Bot => ({
+            ...bot,
+            threadId: thread.id,
+            unread: thread.unread,
+            preview: previews.get(thread.sessionId) ?? "",
+            status: thread.runs[0]?.status ?? "idle",
+            createdAt: createdAt.toISOString(),
+            updatedAt: updatedAt.toISOString(),
+          }),
         ),
       ];
     },

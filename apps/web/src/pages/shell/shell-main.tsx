@@ -278,6 +278,7 @@ export function ShellMain({
               agentSkills={agentSkills}
               recentWriting={thread.recentWriting}
               onSlashOpen={refreshAgentSkills}
+              chatSettings={inGroup || active?.isOwner !== false}
               onSlashAction={(action) => {
                 if (action === "chat-settings") {
                   if (inGroup) setPanel("group-settings");

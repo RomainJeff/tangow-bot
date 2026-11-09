@@ -61,6 +61,7 @@ export const Composer = memo(function Composer({
   agentSkills,
   onSlashOpen,
   onSlashAction,
+  chatSettings,
   recentWriting,
 }: {
   activeName?: string;
@@ -106,6 +107,8 @@ export const Composer = memo(function Composer({
   agentSkills?: AgentSkillCatalogEntry[];
   onSlashOpen?: () => void;
   onSlashAction?: (action: SlashActionId) => void;
+  /** False in a thread with a bot shared with you: "/" offers no chat settings. */
+  chatSettings?: boolean;
   /** The person's own recent messages here, to dictate in the language they
    * write in (`dictationLangFor`) rather than the browser's own language. */
   recentWriting?: () => readonly string[];
@@ -113,7 +116,7 @@ export const Composer = memo(function Composer({
   const { t } = useLingui();
   const [draft, setDraft] = useState("");
   const { linkPreview, linkPreviewView, draftChange } = useDraftLinkPreview(draft, previewLink);
-  const pickers = useComposerPickers({ mentionTargets, agentSkills, onSlashOpen });
+  const pickers = useComposerPickers({ mentionTargets, agentSkills, onSlashOpen, chatSettings });
   const [selectedSkill, setSelectedSkill] = useState<AgentSkillCatalogEntry | null>(null);
   const [selectedMentions, setSelectedMentions] = useState<ComposerMention[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);

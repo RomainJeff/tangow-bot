@@ -1070,6 +1070,21 @@ describeWithDatabase("API authorization and resource isolation", () => {
     });
     expect(await listed(dana.cookie)).toMatchObject({ isOwner: false });
     expect(await listed(sam.cookie)).toBeUndefined();
+    await rpc(app, owner, "bots/update", { botId: bot.id, instructions: "Owner's recipe" }, space);
+    await handles.prisma.bot.update({
+      where: { id: bot.id },
+      data: { modelProvider: "test", modelId: "test/model", teamChatRules: "Owner's rules" },
+    });
+    expect(await listed(owner)).toMatchObject({
+      instructions: "Owner's recipe",
+      modelId: "test/model",
+    });
+    expect(await listed(dana.cookie)).toMatchObject({
+      instructions: "",
+      modelProvider: null,
+      modelId: null,
+      teamChatRules: "",
+    });
 
     await expect(raw(app, dana.cookie, "bots/share", share, space)).resolves.toMatchObject({
       status: 403,
@@ -1789,6 +1804,8 @@ interface SharedBot {
   id: string;
   threadId: string;
   isOwner: boolean;
+  instructions: string;
+  modelId: string | null;
 }
 
 function exhaustiveProtectedCalls<
