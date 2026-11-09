@@ -1745,8 +1745,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const threadLoad = deps.prisma.thread.findUniqueOrThrow({ where: { id: run.threadId } });
         const historySessionOf = (loaded: { sessionId: string | null }) =>
           backgroundHelper ? run.sessionId : (loaded.sessionId ?? run.sessionId);
-        const compacts = (owner: { botId: string | null }) =>
-          Boolean(owner.botId) && deps.runtime.describe().capabilities.compaction;
+        const compacts = (owner: { botId: string | null; memberBotId: string | null }) =>
+          Boolean(owner.botId ?? owner.memberBotId) &&
+          deps.runtime.describe().capabilities.compaction;
         const [
           bot,
           thread,

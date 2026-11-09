@@ -123,7 +123,12 @@ describe("no consumer of a message's blocks repeats a preview's title (CA 12, CA
       {
         prisma: {
           run: {
-            findUnique: vi.fn(async () => ({ id: "r1", botId: "b1", trigger: "bot_message" })),
+            findUnique: vi.fn(async () => ({
+              id: "r1",
+              botId: "b1",
+              trigger: "bot_message",
+              thread: { memberBotId: null },
+            })),
             updateMany: vi.fn(),
           },
           messagingIdentity: { findUnique: vi.fn(async () => ({ id: "i1", userId: "u1" })) },

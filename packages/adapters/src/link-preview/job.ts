@@ -87,6 +87,7 @@ type ThreadScope = {
   spaceId: string;
   userId: string;
   botId: string | null;
+  memberBotId: string | null;
   groupId: string | null;
 };
 
@@ -139,7 +140,14 @@ async function previewHumanMessage(
   if (found.links.length) await attachLinks(deps, thread, message.id, found, budget);
 }
 
-const threadScope = { id: true, spaceId: true, userId: true, botId: true, groupId: true } as const;
+const threadScope = {
+  id: true,
+  spaceId: true,
+  userId: true,
+  botId: true,
+  memberBotId: true,
+  groupId: true,
+} as const;
 
 async function previewRunMessages(
   deps: LinkPreviewJobDeps,
@@ -327,6 +335,7 @@ async function createPreviewArtifact(
   try {
     const botId =
       thread.botId ??
+      thread.memberBotId ??
       (thread.groupId
         ? (
             await deps.prisma.chatGroupMember.findFirst({

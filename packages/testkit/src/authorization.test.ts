@@ -1077,6 +1077,26 @@ describeWithDatabase("API authorization and resource isolation", () => {
     await expect(
       raw(app, owner, "bots/share", { ...share, userIds: [strangerId] }, space),
     ).resolves.toMatchObject({ status: 400 });
+
+    const thread = (cookie: string) =>
+      rpc<{ threadId: string }>(app, cookie, "threads/get", { botId: bot.id }, space);
+    const danaThread = (await thread(dana.cookie)).threadId;
+    expect(danaThread).not.toBe(bot.threadId);
+    expect(danaThread).toBe((await listed(dana.cookie))?.threadId);
+    expect((await thread(owner)).threadId).toBe(bot.threadId);
+    expect((await listed(owner))?.threadId).toBe(bot.threadId);
+    await expect(
+      raw(app, sam.cookie, "threads/get", { botId: bot.id }, space),
+    ).resolves.toMatchObject({ status: 404 });
+    await expect(rpc(app, dana.cookie, "threads/clear", { botId: bot.id }, space)).resolves.toEqual(
+      { ok: true },
+    );
+
+    await rpc(app, owner, "bots/share", { ...share, visibility: "private" }, space);
+    await expect(
+      raw(app, dana.cookie, "threads/get", { botId: bot.id }, space),
+    ).resolves.toMatchObject({ status: 404 });
+    expect(await listed(dana.cookie)).toBeUndefined();
   });
 
   it("renames a space only for its owner", async () => {

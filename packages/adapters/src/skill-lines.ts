@@ -133,10 +133,15 @@ export async function writeSkillLines(deps: SkillLineDeps, runId: string): Promi
     ? undefined
     : startedByUser
       ? { id: run.threadId, sessionId: run.sessionId }
-      : await deps.prisma.thread.findUnique({
+      : // A member's thread with a shared bot keeps its own lines out of the owner's thread.
+        ((await deps.prisma.thread.findFirst({
+          where: { id: run.threadId, memberBotId: { not: null } },
+          select: { id: true, sessionId: true },
+        })) ??
+        (await deps.prisma.thread.findUnique({
           where: { botId: run.botId },
           select: { id: true, sessionId: true },
-        });
+        })));
   const logLines = async (
     tx: Prisma.TransactionClient,
     sessionId: string,

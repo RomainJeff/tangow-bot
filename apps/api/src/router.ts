@@ -916,7 +916,8 @@ export function createRouter(deps: RouterDeps) {
             resolveThreadTarget(deps.prisma, actor, { botId: active.id }).then((target) =>
               threadSnapshot(deps, target),
             ),
-            listRoutinesDto(deps, actor, active.id),
+            // A shared bot's routines are its owner's.
+            active.isOwner ? listRoutinesDto(deps, actor, active.id) : [],
           ])
         : [null, []];
       return {
