@@ -4834,7 +4834,11 @@ export function createRouter(deps: RouterDeps) {
             where: { botId: input.botId, spaceId: context.actor.spaceId },
           }),
           deps.prisma.routine.findMany({
-            where: { botId: input.botId, spaceId: context.actor.spaceId },
+            where: {
+              botId: input.botId,
+              spaceId: context.actor.spaceId,
+              userId: context.actor.userId,
+            },
           }),
           (async () => {
             const exported: Array<{ path: string; content: string }> = [];
@@ -5609,9 +5613,10 @@ function mapRoutine(
   };
 }
 
+/** The actor's routines on their bot: those of the people it is shared with stay theirs. */
 async function listRoutinesDto(deps: RouterDeps, actor: Actor, botId: string) {
   const rows = await deps.prisma.routine.findMany({
-    where: { botId, spaceId: actor.spaceId },
+    where: { botId, spaceId: actor.spaceId, userId: actor.userId },
   });
   const lastRuns = await lastRunsByRoutine(
     deps.prisma,

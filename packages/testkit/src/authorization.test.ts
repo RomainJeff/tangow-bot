@@ -1303,6 +1303,43 @@ describeWithDatabase("API authorization and resource isolation", () => {
     expect(listed.map((item) => item.title)).toEqual(["Owner's todo"]);
   });
 
+  it("lists and exports only the owner's routines and thread of a shared bot", async () => {
+    const { owner, space, dana, bot } = await sharedBotSpace("bot-share-routines");
+    await rpc(app, owner, "bots/share", { botId: bot.id, visibility: "space", userIds: [] }, space);
+    await rpc(app, owner, "routines/create", { ...routineInput(bot.id), name: "Owner's" }, space);
+    // A member's run sets up a routine on the bot it runs on.
+    await handles.prisma.routine.create({
+      data: {
+        spaceId: space,
+        botId: bot.id,
+        userId: dana.userId,
+        name: "Dana's",
+        prompt: "Dana's private prompt",
+        crons: ["0 9 * * *"],
+        timezone: "UTC",
+      },
+    });
+    await rpc(app, dana.cookie, "threads/send", { botId: bot.id, text: "Dana's secret" }, space);
+
+    const listed = await rpc<Array<{ name: string }>>(
+      app,
+      owner,
+      "routines/list",
+      { botId: bot.id },
+      space,
+    );
+    expect(listed.map((routine) => routine.name)).toEqual(["Owner's"]);
+    const exported = await rpc<{ routines: Array<{ name: string }> }>(
+      app,
+      owner,
+      "export/bot",
+      { botId: bot.id },
+      space,
+    );
+    expect(exported.routines.map((routine) => routine.name)).toEqual(["Owner's"]);
+    expect(JSON.stringify(exported)).not.toContain("Dana's");
+  });
+
   it("renames a space only for its owner", async () => {
     const cookie = await signup(app, `space-rename-${stamp}@rakazo.test`, "Space Rename");
     const actor = await rpc<Actor>(app, cookie, "me");
