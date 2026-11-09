@@ -132,7 +132,7 @@ export function ShareBotDialog({
             ) : null}
             {sharing.visibility === "private" ? null : (
               <p className="text-meta text-muted-foreground">
-                <Trans>Everyone who uses this bot can see its files.</Trans>
+                <Trans>Everyone who uses this bot can see its files and browser sign-ins.</Trans>
               </p>
             )}
           </div>

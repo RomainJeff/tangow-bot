@@ -2176,8 +2176,8 @@ msgid "Everyone in {spaceName}"
 msgstr "Everyone in {spaceName}"
 
 #: src/pages/ShareBotDialog.tsx:135
-msgid "Everyone who uses this bot can see its files."
-msgstr "Everyone who uses this bot can see its files."
+msgid "Everyone who uses this bot can see its files and browser sign-ins."
+msgstr "Everyone who uses this bot can see its files and browser sign-ins."
 
 #: src/pages/plugins/advanced-integrations.tsx:304
 msgid "Executor token"
