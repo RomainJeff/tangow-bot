@@ -1160,6 +1160,37 @@ describeWithDatabase("API authorization and resource isolation", () => {
     await expect(read(owner, danaFile.id)).resolves.toMatchObject({ status: 404 });
   });
 
+  it("lets a member preview links and remove a preview in their own thread only", async () => {
+    const { owner, space, dana, sam, bot } = await sharedBotSpace("bot-share-links");
+    await rpc(app, owner, "bots/share", { botId: bot.id, visibility: "space", userIds: [] }, space);
+    const { threadId } = await rpc<{ threadId: string }>(
+      app,
+      dana.cookie,
+      "threads/get",
+      { botId: bot.id },
+      space,
+    );
+    await rpc(app, dana.cookie, "threads/send", { botId: bot.id, text: "Hello" }, space);
+    const message = await handles.prisma.sessionEntry.findFirstOrThrow({
+      where: { session: { threadId }, type: "user.message" },
+      select: { id: true },
+    });
+    const preview = { threadId, url: "http://127.0.0.1/" };
+
+    await expect(raw(app, dana.cookie, "links/preview", preview, space)).resolves.toMatchObject({
+      status: 200,
+    });
+    await expect(
+      rpc(app, dana.cookie, "messages/removeLinkPreview", { messageId: message.id }, space),
+    ).resolves.toEqual({ ok: true });
+    await expect(raw(app, sam.cookie, "links/preview", preview, space)).resolves.toMatchObject({
+      status: 404,
+    });
+    await expect(
+      raw(app, sam.cookie, "messages/removeLinkPreview", { messageId: message.id }, space),
+    ).resolves.toMatchObject({ status: 404 });
+  });
+
   it("renames a space only for its owner", async () => {
     const cookie = await signup(app, `space-rename-${stamp}@rakazo.test`, "Space Rename");
     const actor = await rpc<Actor>(app, cookie, "me");

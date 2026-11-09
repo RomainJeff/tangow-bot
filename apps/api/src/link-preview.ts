@@ -13,6 +13,7 @@ import {
   IsolationError,
   type PrismaClient,
   removeLinkPreviewBlock,
+  sharedWithFilter,
   type ThreadEvents,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -56,11 +57,18 @@ export interface LinkPreviewApiDeps {
   };
 }
 
-/** A thread the actor may write to: theirs, in their space, with a live bot or group. */
+/**
+ * A thread the actor may write to: theirs, in their space, with a live bot or group, or their own
+ * thread with a bot still shared with them.
+ */
 const writableThread = (actor: Actor) => ({
   spaceId: actor.spaceId,
   userId: actor.userId,
-  OR: [{ bot: { archivedAt: null } }, { group: { archivedAt: null } }],
+  OR: [
+    { bot: { archivedAt: null } },
+    { group: { archivedAt: null } },
+    { memberBot: sharedWithFilter(actor.userId, actor.spaceId) },
+  ],
 });
 
 /**
