@@ -8,14 +8,29 @@ export function parseComputerMode(scope: string): ComputerMode {
   throw new Error(`Unknown computer scope: ${scope}`);
 }
 
-export function computerScopeKey(mode: ComputerMode, spaceId: string, botId?: string) {
-  if (mode === "team") return `team:${spaceId}`;
+export function computerScopeKey(
+  mode: ComputerMode,
+  spaceId: string,
+  userId: string,
+  botId?: string,
+) {
+  if (mode === "team") return `team:${spaceId}:${userId}`;
   if (!botId) throw new Error("Dedicated computers require a bot id");
+  return dedicatedComputerScopeKey(botId);
+}
+
+export function dedicatedComputerScopeKey(botId: string) {
   return `bot:${botId}`;
 }
 
-export function computerHomeKey(mode: ComputerMode, spaceId: string, botId?: string) {
-  if (mode === "team") return `team-${spaceId}`;
+/** Written once at row creation, so legacy team homes keep `team-<spaceId>`. */
+export function computerHomeKey(
+  mode: ComputerMode,
+  spaceId: string,
+  userId: string,
+  botId?: string,
+) {
+  if (mode === "team") return `team-${spaceId}-${userId}`;
   if (!botId) throw new Error("Dedicated computers require a bot id");
   return botId;
 }
@@ -46,7 +61,7 @@ export async function ensureComputerRecord(
     homeStorage: string;
   },
 ) {
-  const scopeKey = computerScopeKey(input.mode, input.spaceId, input.botId);
+  const scopeKey = computerScopeKey(input.mode, input.spaceId, input.userId, input.botId);
   return prisma.computer.upsert({
     where: { scopeKey },
     create: {
@@ -54,7 +69,7 @@ export async function ensureComputerRecord(
       userId: input.userId,
       scope: input.mode,
       scopeKey,
-      homeKey: computerHomeKey(input.mode, input.spaceId, input.botId),
+      homeKey: computerHomeKey(input.mode, input.spaceId, input.userId, input.botId),
       kind: input.kind,
       homeStorage: input.homeStorage,
     },

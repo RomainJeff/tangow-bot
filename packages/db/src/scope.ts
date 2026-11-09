@@ -24,14 +24,16 @@ export async function requireMembership(
   userId: string,
   requestedSpaceId?: string | null,
 ): Promise<Actor> {
-  const membership = await prisma.spaceMember.findFirst({
-    where: {
-      userId,
-      ...(requestedSpaceId ? { spaceId: requestedSpaceId } : {}),
-    },
-    orderBy: [{ space: { isDefault: "desc" } }, { createdAt: "asc" }, { id: "asc" }],
-    include: { member: { include: { user: true } } },
-  });
+  const findMembership = (spaceId?: string | null) =>
+    prisma.spaceMember.findFirst({
+      where: { userId, ...(spaceId ? { spaceId } : {}) },
+      orderBy: [{ space: { isDefault: "desc" } }, { createdAt: "asc" }, { id: "asc" }],
+      include: { member: { include: { user: true } } },
+    });
+  // A selection gone stale (removed, or the Space or its owner deleted) lands in the user's own
+  // Space instead of locking out every request; the client follows the Space bootstrap returns.
+  const membership =
+    (requestedSpaceId ? await findMembership(requestedSpaceId) : null) ?? (await findMembership());
   if (!membership) {
     throw new IsolationError("No personal space");
   }

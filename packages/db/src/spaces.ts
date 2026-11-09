@@ -1,4 +1,6 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
+import { cancelRunsInTransaction } from "./cancel-runs.js";
 import { Prisma, type PrismaClient } from "./client.js";
 import { IsolationError } from "./scope.js";
 import { withTransactionRetry } from "./transaction-retry.js";
@@ -68,6 +70,7 @@ export const SPACE_DELETION_CLAIM_TIMEOUT_MS = 5 * 60_000;
 type SpaceClient = Pick<
   PrismaClient,
   | "space"
+  | "member"
   | "spaceMember"
   | "spaceModelPreference"
   | "spaceVoicePreference"
@@ -112,26 +115,24 @@ async function createSpaceDefaults(
   prisma: SpaceClient,
   input: { spaceId: string; userId: string; memoryContent: string },
 ): Promise<void> {
-  await prisma.memoryDocument.create({
-    data: {
-      spaceId: input.spaceId,
-      userId: input.userId,
-      scope: "user",
-      path: "MEMORY.md",
-      content: input.memoryContent,
-    },
-  });
-  await prisma.notificationPreference.create({
-    data: {
-      spaceId: input.spaceId,
-      userId: input.userId,
-    },
+  const memory = { spaceId: input.spaceId, userId: input.userId, scope: "user", path: "MEMORY.md" };
+  if (!(await prisma.memoryDocument.findFirst({ where: memory, select: { id: true } }))) {
+    await prisma.memoryDocument.create({ data: { ...memory, content: input.memoryContent } });
+  }
+  await prisma.notificationPreference.createMany({
+    data: { spaceId: input.spaceId, userId: input.userId },
+    skipDuplicates: true,
   });
 }
 
 async function copyProviderPreferences(
   prisma: SpaceClient,
-  input: { sourceSpaceId: string; targetSpaceId: string; userId: string; createdAt: Date },
+  input: {
+    sourceSpaceId: string;
+    targetSpaceId: string;
+    userId: string;
+    createdAt: Date;
+  },
 ): Promise<void> {
   const [modelPreferences, voicePreferences] = await Promise.all([
     prisma.spaceModelPreference.findMany({
@@ -153,6 +154,7 @@ async function copyProviderPreferences(
             createdAt: input.createdAt,
             updatedAt: input.createdAt,
           })),
+          skipDuplicates: true,
         })
       : Promise.resolve(),
     voicePreferences.length
@@ -166,12 +168,13 @@ async function copyProviderPreferences(
             createdAt: input.createdAt,
             updatedAt: input.createdAt,
           })),
+          skipDuplicates: true,
         })
       : Promise.resolve(),
   ]);
 }
 
-/** Create a sibling privacy boundary for a member of the active organization. */
+/** Create a privacy boundary in the caller's own organization, never in one they joined. */
 export async function createSpaceForMember(
   prisma: PrismaClient,
   input: {
@@ -189,27 +192,34 @@ export async function createSpaceForMember(
   await withTransactionRetry(() =>
     prisma.$transaction(
       async (tx) => {
-        const currentMembership = await tx.spaceMember.findUnique({
-          where: {
-            spaceId_userId: {
-              spaceId: input.currentSpaceId,
-              userId: input.userId,
+        const [currentMembership, ownOrganization] = await Promise.all([
+          tx.spaceMember.findUnique({
+            where: {
+              spaceId_userId: {
+                spaceId: input.currentSpaceId,
+                userId: input.userId,
+              },
             },
-          },
-          select: { organizationId: true },
-        });
-        if (!currentMembership) throw new IsolationError();
+            select: { id: true },
+          }),
+          tx.member.findFirst({
+            where: { userId: input.userId, role: "owner" },
+            orderBy: { createdAt: "asc" },
+            select: { organizationId: true },
+          }),
+        ]);
+        if (!currentMembership || !ownOrganization) throw new IsolationError();
         const count = await tx.spaceMember.count({
           where: {
             userId: input.userId,
-            organizationId: currentMembership.organizationId,
+            organizationId: ownOrganization.organizationId,
           },
         });
         if (count >= MAX_SPACES_PER_MEMBER) throw new SpaceLimitError();
         await createSpace(tx, {
           spaceId,
           spaceMembershipId,
-          organizationId: currentMembership.organizationId,
+          organizationId: ownOrganization.organizationId,
           userId: input.userId,
           name,
           createdAt,
@@ -269,62 +279,46 @@ type ClaimedSpaceDeleteInput = EmptySpaceDeleteInput & { claimId: string };
 
 type SpaceDeleteDb = Pick<PrismaClient, "spaceMember" | "bot" | "chatGroup" | "computer">;
 
+async function spaceMemberIds(db: Pick<PrismaClient, "spaceMember">, spaceId: string) {
+  const members = await db.spaceMember.findMany({ where: { spaceId }, select: { userId: true } });
+  return members.map((member) => member.userId);
+}
+
 async function assertEmptySpaceDeletable(
   db: SpaceDeleteDb,
   input: EmptySpaceDeleteInput,
 ): Promise<{
-  organizationId: string;
   memberships: Array<{
     spaceId: string;
+    role: string;
     createdAt: Date;
     space: { isDefault: boolean };
   }>;
   computers: Array<{ homeKey: string; kind: string; providerRef: string }>;
 }> {
-  const currentMembership = await db.spaceMember.findUnique({
-    where: {
-      spaceId_userId: {
-        spaceId: input.currentSpaceId,
-        userId: input.userId,
-      },
-    },
-    select: { organizationId: true },
-  });
-  if (!currentMembership) throw new IsolationError();
-  const targetMembership = await db.spaceMember.findUnique({
-    where: {
-      spaceId_userId: {
-        spaceId: input.spaceId,
-        userId: input.userId,
-      },
-    },
-    select: {
-      organizationId: true,
-      role: true,
-      space: { select: { isDefault: true } },
-    },
-  });
-  if (!targetMembership || targetMembership.organizationId !== currentMembership.organizationId) {
-    throw new SpaceNotFoundError();
-  }
-  if (targetMembership.role !== "owner") throw new CannotDeleteSpaceAsNonOwnerError();
-  if (targetMembership.space.isDefault) throw new CannotDeleteDefaultSpaceError();
   const memberships = await db.spaceMember.findMany({
-    where: {
-      userId: input.userId,
-      organizationId: currentMembership.organizationId,
-    },
+    where: { userId: input.userId },
     select: {
       spaceId: true,
+      role: true,
       createdAt: true,
       space: { select: { isDefault: true } },
     },
     orderBy: { createdAt: "asc" },
   });
+  if (!memberships.some((membership) => membership.spaceId === input.currentSpaceId)) {
+    throw new IsolationError();
+  }
+  const targetMembership = memberships.find((membership) => membership.spaceId === input.spaceId);
+  if (!targetMembership) throw new SpaceNotFoundError();
+  if (targetMembership.role !== "owner") throw new CannotDeleteSpaceAsNonOwnerError();
+  if (targetMembership.space.isDefault) throw new CannotDeleteDefaultSpaceError();
   if (memberships.length <= 1) throw new CannotDeleteLastSpaceError();
+  // A removed person's bots and groups are hidden from the owner and go with the Space.
+  const member = { userId: { in: await spaceMemberIds(db, input.spaceId) } };
   const [botCount, groupCount, computers] = await Promise.all([
-    db.bot.count({ where: { spaceId: input.spaceId } }),
-    db.chatGroup.count({ where: { spaceId: input.spaceId } }),
+    db.bot.count({ where: { spaceId: input.spaceId, ...member } }),
+    db.chatGroup.count({ where: { spaceId: input.spaceId, ...member } }),
     db.computer.findMany({
       where: { spaceId: input.spaceId, providerRef: { not: null } },
       select: { homeKey: true, kind: true, providerRef: true },
@@ -332,11 +326,16 @@ async function assertEmptySpaceDeletable(
   ]);
   if (botCount > 0 || groupCount > 0) throw new SpaceNotEmptyError();
   return {
-    organizationId: currentMembership.organizationId,
     memberships,
     computers: computers.flatMap((computer) =>
       computer.providerRef
-        ? [{ homeKey: computer.homeKey, kind: computer.kind, providerRef: computer.providerRef }]
+        ? [
+            {
+              homeKey: computer.homeKey,
+              kind: computer.kind,
+              providerRef: computer.providerRef,
+            },
+          ]
         : [],
     ),
   };
@@ -456,11 +455,281 @@ export async function deleteEmptySpaceForMember(
         const remaining = planned.memberships.filter(
           (membership) => membership.spaceId !== input.spaceId,
         );
-        const fallback = remaining.find((membership) => membership.space.isDefault) ?? remaining[0];
+        const fallback =
+          remaining.find(
+            (membership) => membership.space.isDefault && membership.role === "owner",
+          ) ?? remaining[0];
         if (!fallback) throw new CannotDeleteLastSpaceError();
         return { id: fallback.spaceId };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),
   );
+}
+
+export const SPACE_INVITATION_TTL_MS = 7 * 24 * 60 * 60_000;
+
+export class NotSpaceOwnerError extends Error {
+  constructor() {
+    super("Only the space owner can manage members");
+    this.name = "NotSpaceOwnerError";
+  }
+}
+
+export class CannotRemoveSpaceOwnerError extends Error {
+  constructor() {
+    super("The space owner cannot be removed");
+    this.name = "CannotRemoveSpaceOwnerError";
+  }
+}
+
+export class SpaceInvitationUnavailableError extends Error {
+  constructor() {
+    super("This invite link has expired or was already used");
+    this.name = "SpaceInvitationUnavailableError";
+  }
+}
+
+function hashInvitationToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+async function requireSpaceOwner(
+  db: Pick<PrismaClient, "spaceMember">,
+  input: { spaceId: string; userId: string },
+): Promise<{ organizationId: string }> {
+  const membership = await db.spaceMember.findUnique({
+    where: { spaceId_userId: { spaceId: input.spaceId, userId: input.userId } },
+    select: { organizationId: true, role: true },
+  });
+  if (!membership) throw new SpaceNotFoundError();
+  if (membership.role !== "owner") throw new NotSpaceOwnerError();
+  return { organizationId: membership.organizationId };
+}
+
+/** Mint a single-use link token; only its hash is stored, so the token is returned exactly once. */
+export async function createSpaceInvitation(
+  prisma: PrismaClient,
+  input: { spaceId: string; userId: string },
+): Promise<{ id: string; token: string; expiresAt: Date }> {
+  await requireSpaceOwner(prisma, input);
+  const now = new Date();
+  const token = randomBytes(32).toString("base64url");
+  const invitation = {
+    id: randomUUID(),
+    spaceId: input.spaceId,
+    createdByUserId: input.userId,
+    tokenHash: hashInvitationToken(token),
+    expiresAt: new Date(now.getTime() + SPACE_INVITATION_TTL_MS),
+    createdAt: now,
+  };
+  await prisma.$transaction([
+    prisma.spaceInvitation.deleteMany({
+      where: { spaceId: input.spaceId, expiresAt: { lte: now } },
+    }),
+    prisma.spaceInvitation.create({ data: invitation }),
+  ]);
+  return { id: invitation.id, token, expiresAt: invitation.expiresAt };
+}
+
+export async function revokeSpaceInvitation(
+  prisma: PrismaClient,
+  input: { spaceId: string; userId: string; invitationId: string },
+): Promise<void> {
+  await requireSpaceOwner(prisma, input);
+  await prisma.spaceInvitation.deleteMany({
+    where: { id: input.invitationId, spaceId: input.spaceId },
+  });
+}
+
+/** What the accept screen shows before the person commits; null once the link is spent. */
+export async function previewSpaceInvitation(
+  prisma: PrismaClient,
+  token: string,
+): Promise<{ spaceName: string; inviterName: string } | null> {
+  const invitation = await prisma.spaceInvitation.findUnique({
+    where: { tokenHash: hashInvitationToken(token) },
+    select: {
+      expiresAt: true,
+      space: { select: { name: true } },
+      createdByUser: { select: { name: true } },
+    },
+  });
+  if (!invitation || invitation.expiresAt <= new Date()) return null;
+  return {
+    spaceName: invitation.space.name,
+    inviterName: invitation.createdByUser.name,
+  };
+}
+
+/** Consume a live link and join its Space. A person already in the Space keeps the link unspent. */
+export async function acceptSpaceInvitation(
+  prisma: PrismaClient,
+  input: { token: string; userId: string },
+): Promise<{ spaceId: string }> {
+  const tokenHash = hashInvitationToken(input.token);
+  return withTransactionRetry(() =>
+    prisma.$transaction(
+      async (tx) => {
+        const now = new Date();
+        const invitation = await tx.spaceInvitation.findUnique({
+          where: { tokenHash },
+          select: {
+            spaceId: true,
+            space: { select: { organizationId: true } },
+          },
+        });
+        if (!invitation) throw new SpaceInvitationUnavailableError();
+        const { spaceId } = invitation;
+        const { organizationId } = invitation.space;
+        const existing = await tx.spaceMember.findUnique({
+          where: { spaceId_userId: { spaceId, userId: input.userId } },
+          select: { id: true },
+        });
+        if (existing) return { spaceId };
+        const consumed = await tx.spaceInvitation.deleteMany({
+          where: { tokenHash, expiresAt: { gt: now } },
+        });
+        if (consumed.count !== 1) throw new SpaceInvitationUnavailableError();
+        await tx.member.upsert({
+          where: {
+            organizationId_userId: { organizationId, userId: input.userId },
+          },
+          create: {
+            id: randomUUID(),
+            organizationId,
+            userId: input.userId,
+            role: "member",
+            createdAt: now,
+          },
+          update: {},
+        });
+        await tx.spaceMember.create({
+          data: {
+            id: randomUUID(),
+            spaceId,
+            organizationId,
+            userId: input.userId,
+            role: "member",
+            createdAt: now,
+          },
+        });
+        await createSpaceDefaults(tx, {
+          spaceId,
+          userId: input.userId,
+          memoryContent: "# Space memory\n\n",
+        });
+        const home = await tx.spaceMember.findFirst({
+          where: {
+            userId: input.userId,
+            role: "owner",
+            space: { isDefault: true },
+          },
+          orderBy: { createdAt: "asc" },
+          select: { spaceId: true },
+        });
+        if (home) {
+          await copyProviderPreferences(tx, {
+            sourceSpaceId: home.spaceId,
+            targetSpaceId: spaceId,
+            userId: input.userId,
+            createdAt: now,
+          });
+        }
+        return { spaceId };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    ),
+  );
+}
+
+export interface SpaceMembersView {
+  members: Array<{
+    userId: string;
+    name: string;
+    image: string | null;
+    isOwner: boolean;
+  }>;
+  /** Live links, listed only for the owner. */
+  invitations: Array<{ id: string; expiresAt: Date }>;
+}
+
+export async function listSpaceMembers(
+  prisma: PrismaClient,
+  input: { spaceId: string; userId: string },
+): Promise<SpaceMembersView> {
+  const memberships = await prisma.spaceMember.findMany({
+    where: { spaceId: input.spaceId },
+    select: {
+      userId: true,
+      role: true,
+      member: { select: { user: { select: { name: true, image: true } } } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  const caller = memberships.find((membership) => membership.userId === input.userId);
+  if (!caller) throw new SpaceNotFoundError();
+  const invitations =
+    caller.role === "owner"
+      ? await prisma.spaceInvitation.findMany({
+          where: { spaceId: input.spaceId, expiresAt: { gt: new Date() } },
+          select: { id: true, expiresAt: true },
+          orderBy: { createdAt: "asc" },
+        })
+      : [];
+  return {
+    members: memberships.map((membership) => ({
+      userId: membership.userId,
+      name: membership.member.user.name,
+      image: membership.member.user.image,
+      isOwner: membership.role === "owner",
+    })),
+    invitations,
+  };
+}
+
+export async function removeSpaceMember(
+  prisma: PrismaClient,
+  input: { spaceId: string; userId: string; memberUserId: string },
+): Promise<void> {
+  const { organizationId } = await requireSpaceOwner(prisma, input);
+  await prisma.$transaction(async (tx) => {
+    // Bot creation holds this lock while it checks membership, so none can land after the archive.
+    await lockSpaceDeletion(tx, input.spaceId);
+    const target = await tx.spaceMember.findUnique({
+      where: {
+        spaceId_userId: { spaceId: input.spaceId, userId: input.memberUserId },
+      },
+      select: { role: true },
+    });
+    if (!target) return;
+    if (target.role === "owner") throw new CannotRemoveSpaceOwnerError();
+    await tx.spaceMember.delete({
+      where: {
+        spaceId_userId: { spaceId: input.spaceId, userId: input.memberUserId },
+      },
+    });
+    // Archived, not deleted: archived bots claim no run, webhooks and channels included. Their
+    // rows go with the Space.
+    const leftovers = { spaceId: input.spaceId, userId: input.memberUserId };
+    await tx.bot.updateMany({
+      where: { ...leftovers, archivedAt: null },
+      data: { archivedAt: new Date() },
+    });
+    await tx.routine.updateMany({ where: leftovers, data: { active: false, nextRunAt: null } });
+    // Archiving only stops new claims; a run already going would keep the Space's secrets.
+    const activeRuns = await tx.run.findMany({
+      where: { bot: leftovers, status: { in: [...ACTIVE_RUN_STATUSES] } },
+      select: { id: true, taskId: true },
+    });
+    await cancelRunsInTransaction(tx, activeRuns, new Date());
+    await tx.member.deleteMany({
+      where: {
+        organizationId,
+        userId: input.memberUserId,
+        role: { not: "owner" },
+        spaceMemberships: { none: {} },
+      },
+    });
+  });
 }

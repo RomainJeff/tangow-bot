@@ -60,6 +60,7 @@ import {
   SkillAvailabilitySchema,
   SkillPlaybookSchema,
   SpaceDecisionConfigSchema,
+  SpaceMembersSchema,
   SpaceMemoryConfigSchema,
   SpaceNavigationSchema,
   SpaceSchema,
@@ -179,6 +180,7 @@ const threadSendInput = threadTarget
   });
 
 const SpaceNameSchema = z.string().trim().min(1).max(60);
+const SpaceInviteTokenSchema = z.string().min(1).max(128);
 
 export const appContract = {
   // Mobile 2026.11.0 and earlier ask this before every send and block on a 404. Remove once they are gone.
@@ -197,6 +199,24 @@ export const appContract = {
     remove: oc
       .input(z.object({ spaceId: Id }))
       .output(z.object({ ok: z.literal(true), activeSpaceId: Id })),
+    members: oc.input(z.object({ spaceId: Id })).output(SpaceMembersSchema),
+    /** Owner only. The URL carries the token and is returned this once. */
+    createInvite: oc
+      .input(z.object({ spaceId: Id }))
+      .output(z.object({ url: z.string(), expiresAt: z.string() })),
+    revokeInvite: oc
+      .input(z.object({ spaceId: Id, invitationId: Id }))
+      .output(z.object({ ok: z.literal(true) })),
+    removeMember: oc
+      .input(z.object({ spaceId: Id, userId: Id }))
+      .output(z.object({ ok: z.literal(true) })),
+    /** Null once the link has expired, been used or been revoked. */
+    invitation: oc
+      .input(z.object({ token: SpaceInviteTokenSchema }))
+      .output(z.object({ spaceName: z.string(), inviterName: z.string() }).nullable()),
+    acceptInvite: oc
+      .input(z.object({ token: SpaceInviteTokenSchema }))
+      .output(z.object({ spaceId: Id })),
   },
   bootstrap: oc.input(z.object({ botId: Id.optional() })).output(AppBootstrapSchema),
   deployment: {

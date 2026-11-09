@@ -277,15 +277,21 @@ function resolverFor(
 describe("SpaceDecisionProviderResolver", () => {
   it("resolves nothing without a connection or for an unknown provider", async () => {
     const empty = resolverFor({ none: true });
-    await expect(empty.resolver.resolve("space-1")).resolves.toBeNull();
+    await expect(empty.resolver.resolve("space-1", "config-author")).resolves.toBeNull();
     const unknown = resolverFor({ provider: "unknown" });
-    await expect(unknown.resolver.resolve("space-1")).resolves.toBeNull();
+    await expect(unknown.resolver.resolve("space-1", "config-author")).resolves.toBeNull();
     expect(unknown.secrets.load).not.toHaveBeenCalled();
+  });
+
+  it("resolves nothing for a Space member who did not set it up", async () => {
+    const { resolver, secrets } = resolverFor();
+    await expect(resolver.resolve("space-1", "space-member")).resolves.toBeNull();
+    expect(secrets.load).not.toHaveBeenCalled();
   });
 
   it("builds the Space provider from stored credentials", async () => {
     const { resolver } = resolverFor();
-    const provider = await resolver.resolve("space-1");
+    const provider = await resolver.resolve("space-1", "config-author");
     expect(provider?.describe()).toMatchObject({
       id: "openrouter",
       capabilities: { maxOptions: 255 },
@@ -299,7 +305,7 @@ describe("SpaceDecisionProviderResolver", () => {
         baseUrl: "http://127.0.0.1:9000",
         ownerUserId,
       });
-      await expect(resolver.resolve("space-1")).resolves.toBeNull();
+      await expect(resolver.resolve("space-1", "config-author")).resolves.toBeNull();
       expect(secrets.load).not.toHaveBeenCalled();
     },
   );
@@ -309,6 +315,6 @@ describe("SpaceDecisionProviderResolver", () => {
       baseUrl: "http://127.0.0.1:9000",
       ownerUserId: "config-author",
     });
-    await expect(resolver.resolve("space-1")).resolves.not.toBeNull();
+    await expect(resolver.resolve("space-1", "config-author")).resolves.not.toBeNull();
   });
 });

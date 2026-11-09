@@ -38,7 +38,17 @@ describe("requireMembership", () => {
     );
   });
 
-  it("rejects a requested space the user does not belong to", async () => {
+  it("falls back to the user's own Space when the requested one is no longer theirs", async () => {
+    const prisma = prismaForMembership(true);
+    vi.mocked(prisma.spaceMember.findFirst).mockResolvedValueOnce(null);
+
+    await expect(requireMembership(prisma, "user-1", "space-left")).resolves.toMatchObject({
+      userId: "user-1",
+      spaceId: "space-default",
+    });
+  });
+
+  it("rejects a user with no Space at all", async () => {
     await expect(
       requireMembership(prismaForMembership(false), "user-1", "space-foreign"),
     ).rejects.toBeInstanceOf(IsolationError);

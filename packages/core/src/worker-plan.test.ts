@@ -2,13 +2,14 @@ import { describe, expect, it } from "vitest";
 import type { VolumeGrant, VolumeRow, WorkerLaunch } from "./worker-plan.js";
 import { authorizeMounts, deriveRunNeeds, planLaunch, volumeMountPath } from "./worker-plan.js";
 
-const scope = { botId: "bot_a", spaceId: "space_a" };
+const scope = { botId: "bot_a", spaceId: "space_a", userId: "user_a" };
 const e2b = { kind: "e2b", readOnlyMounts: false };
 const privateA: VolumeRow = {
   id: "vol_private_a",
   kind: "bot_private",
   spaceId: "space_a",
   botId: "bot_a",
+  userId: null,
   providerKind: "e2b",
   providerRef: "rakazo-volume-vol_private_a",
 };
@@ -17,6 +18,7 @@ const sharedA: VolumeRow = {
   kind: "space_shared",
   spaceId: "space_a",
   botId: null,
+  userId: "user_a",
   providerKind: "e2b",
   providerRef: "rakazo-volume-vol_shared_a",
 };
@@ -98,6 +100,7 @@ describe("the launch a run gets from its tools and its bot's computer", () => {
     runId: "run_a",
     botId: "bot_a",
     spaceId: "space_a",
+    userId: "user_a",
     attemptId: "attempt_a",
     fence: 2,
     privateVolumeId: "vol_private_a",
@@ -109,6 +112,7 @@ describe("the launch a run gets from its tools and its bot's computer", () => {
     runId: "run_a",
     botId: "bot_a",
     spaceId: "space_a",
+    userId: "user_a",
     attemptId: "attempt_a",
     fence: 2,
     volumes,

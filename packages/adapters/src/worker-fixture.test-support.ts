@@ -45,9 +45,22 @@ export function workerFixture(prisma: PrismaClient) {
       return id;
     },
 
+    async seedMembership(spaceId: string) {
+      const createdAt = new Date();
+      const role = "owner";
+      await prisma.member.upsert({
+        where: { organizationId_userId: { organizationId, userId } },
+        create: { id: unique("member"), organizationId, userId, role, createdAt },
+        update: {},
+      });
+      await prisma.spaceMember.create({
+        data: { id: unique("space_member"), spaceId, organizationId, userId, role, createdAt },
+      });
+    },
+
     async seedComputer(
       spaceId: string,
-      fields: { kind?: string; scope?: string; homeStorage?: string } = {},
+      fields: { kind?: string; scope?: string; homeStorage?: string; userId?: string } = {},
     ) {
       const key = unique("home");
       return await prisma.computer.create({
@@ -55,11 +68,13 @@ export function workerFixture(prisma: PrismaClient) {
       });
     },
 
-    async seedBot(spaceId: string, computerId: string | null) {
+    async seedBot(spaceId: string, computerId: string | null, owner = userId) {
       const bot = await prisma.bot.create({
-        data: { spaceId, userId, name: unique("bot"), color: "#00C46A", computerId },
+        data: { spaceId, userId: owner, name: unique("bot"), color: "#00C46A", computerId },
       });
-      const thread = await prisma.thread.create({ data: { spaceId, userId, botId: bot.id } });
+      const thread = await prisma.thread.create({
+        data: { spaceId, userId: owner, botId: bot.id },
+      });
       return { ...bot, threadId: thread.id };
     },
 
@@ -102,9 +117,17 @@ export function workerFixture(prisma: PrismaClient) {
       spaceId: string,
       botId: string | null,
       providerRef: string | null = unique("fake-volume"),
+      owner = userId,
     ) {
       return await prisma.volume.create({
-        data: { kind, spaceId, botId, providerKind: "fake-worker", providerRef },
+        data: {
+          kind,
+          spaceId,
+          botId,
+          userId: kind === "space_shared" ? owner : null,
+          providerKind: "fake-worker",
+          providerRef,
+        },
       });
     },
 

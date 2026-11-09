@@ -1819,7 +1819,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }),
           findDefaultModelCredential(deps.prisma, run),
           deps.prisma.deploymentSettings.findUnique({ where: { id: "default" } }),
-          deps.memoryProviders.resolve(run.spaceId),
+          deps.memoryProviders.resolve(run.spaceId, run.userId),
           deps.prisma.taughtSkill.findMany({
             where: { botId: run.botId, spaceId: run.spaceId, status: "saved" },
             orderBy: { id: "asc" },
@@ -1837,7 +1837,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             },
           }),
           // Optional: a broken decision connection must never fail the run.
-          deps.decisionProviders?.resolve(run.spaceId).catch(() => null) ?? null,
+          deps.decisionProviders?.resolve(run.spaceId, run.userId).catch(() => null) ?? null,
           deps.prisma.spaceMember.findUnique({
             where: { spaceId_userId: { spaceId: run.spaceId, userId: run.userId } },
             select: { modelAuto: true },
@@ -4449,7 +4449,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
                   // Resolve again per call: a disconnected or replaced connection stops
                   // receiving page state at the next browser_run, not at the end of the run.
                   const current = decisionProvider
-                    ? await deps.decisionProviders?.resolve(run.spaceId).catch(() => null)
+                    ? await deps.decisionProviders
+                        ?.resolve(run.spaceId, run.userId)
+                        .catch(() => null)
                     : null;
                   const result = await browserRunFromTool(
                     browser,

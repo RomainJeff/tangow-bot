@@ -297,3 +297,14 @@ it("converts never-provisioned volume rows without inventing files or retaining 
     providerRef: null,
   });
 });
+
+it("migrates a Space whose members each have their own team computer", async () => {
+  const { spaceId } = await seed();
+  const member = fixture.unique("user");
+  await prisma().user.create({ data: { id: member, name: "M", email: `${member}@rakazo.test` } });
+  const theirs = await fixture.seedComputer(spaceId, { userId: member, homeStorage: "volumes" });
+  await expect(migrate()).resolves.toMatchObject({ outcome: "migrated", computers: 2 });
+  expect((await prisma().computer.findUniqueOrThrow({ where: { id: theirs.id } })).kind).toBe(
+    "docker",
+  );
+});

@@ -118,11 +118,13 @@ import {
 } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
+  acceptSpaceInvitation,
   appendComputerControlInTransaction,
   BotSectionNameConflictError,
   CannotDeleteDefaultSpaceError,
   CannotDeleteLastSpaceError,
   CannotDeleteSpaceAsNonOwnerError,
+  CannotRemoveSpaceOwnerError,
   claimEmptySpaceDeletionForMember,
   clearModelCategory,
   conversationRunFilter,
@@ -130,6 +132,7 @@ import {
   createGroupRepos,
   createRepos,
   createSpaceForMember,
+  createSpaceInvitation,
   createThreadMessageInTransaction,
   deleteEmptySpaceForMember,
   deleteUnreferencedCredentialSecret,
@@ -144,17 +147,23 @@ import {
   InvalidSpaceNameError,
   IsolationError,
   issueMessagingLinkCode,
+  listSpaceMembers,
   lockOwnedGroup,
+  NotSpaceOwnerError,
   newestModelCredentialOrder,
   newestVoiceCredentialOrder,
   OwnerWorkerLiveError,
   Prisma,
   parseComputerMode,
+  previewSpaceInvitation,
   RESOURCE_NOT_FOUND,
   releaseSpaceDeletionClaim,
+  removeSpaceMember,
   renewSpaceDeletionClaim,
+  revokeSpaceInvitation,
   SPACE_DELETION_CLAIM_TIMEOUT_MS,
   SpaceDeletionInProgressError,
+  SpaceInvitationUnavailableError,
   SpaceLimitError,
   SpaceNotEmptyError,
   SpaceNotFoundError,
@@ -392,10 +401,12 @@ async function purgeCompactedHistoryMemory(
   reason: string,
 ): Promise<void> {
   if (target.kind !== "bot") return;
-  const configuredMemory = await deps.memoryProviders.resolve(actor.spaceId).catch((error) => {
-    getLogger().error(`semantic memory resolution after ${reason} failed`, error);
-    return null;
-  });
+  const configuredMemory = await deps.memoryProviders
+    .resolve(actor.spaceId, actor.userId)
+    .catch((error) => {
+      getLogger().error(`semantic memory resolution after ${reason} failed`, error);
+      return null;
+    });
   if (!configuredMemory) return;
   // Best effort: the conversation rows are already deleted, so failing the request here would
   // help nothing — a failed purge only leaves stale summaries recallable.
@@ -557,6 +568,22 @@ function spaceTeardownTimeoutMs(): number {
 }
 
 /** Surface a Space deletion race as a retryable conflict instead of a generic failure. */
+function mapSpaceMembershipError(error: unknown): never {
+  if (error instanceof SpaceNotFoundError) {
+    throw new ORPCError("NOT_FOUND", { message: error.message });
+  }
+  if (error instanceof NotSpaceOwnerError) {
+    throw new ORPCError("FORBIDDEN", { message: error.message });
+  }
+  if (error instanceof CannotRemoveSpaceOwnerError) {
+    throw new ORPCError("BAD_REQUEST", { message: error.message });
+  }
+  if (error instanceof SpaceInvitationUnavailableError) {
+    throw new ORPCError("NOT_FOUND", { message: error.message });
+  }
+  throw error;
+}
+
 function mapSpaceLifecycleError(error: unknown): unknown {
   if (error instanceof SpaceDeletionInProgressError) {
     return new ORPCError("CONFLICT", { message: error.message });
@@ -644,18 +671,11 @@ export function createRouter(deps: RouterDeps) {
       }),
       rename: authed.spaces.rename.handler(async ({ context, input }) => {
         const { actor } = context;
-        const [currentSpace, membership] = await Promise.all([
-          deps.prisma.space.findUnique({
-            where: { id: actor.spaceId },
-            select: { organizationId: true },
-          }),
-          deps.prisma.spaceMember.findUnique({
-            where: { spaceId_userId: { spaceId: input.spaceId, userId: actor.userId } },
-            select: { organizationId: true, role: true },
-          }),
-        ]);
-        if (!currentSpace) throw new IsolationError();
-        if (!membership || membership.organizationId !== currentSpace.organizationId) {
+        const membership = await deps.prisma.spaceMember.findUnique({
+          where: { spaceId_userId: { spaceId: input.spaceId, userId: actor.userId } },
+          select: { role: true },
+        });
+        if (!membership) {
           throw new ORPCError("NOT_FOUND", { message: new SpaceNotFoundError().message });
         }
         if (membership.role !== "owner") {
@@ -818,6 +838,54 @@ export function createRouter(deps: RouterDeps) {
           if (claimRenewal) clearInterval(claimRenewal);
         }
       }),
+      members: authed.spaces.members.handler(async ({ context, input }) => {
+        const view = await listSpaceMembers(deps.prisma, {
+          spaceId: input.spaceId,
+          userId: context.actor.userId,
+        }).catch(mapSpaceMembershipError);
+        return {
+          members: view.members,
+          invitations: view.invitations.map((invitation) => ({
+            id: invitation.id,
+            expiresAt: invitation.expiresAt.toISOString(),
+          })),
+        };
+      }),
+      createInvite: authed.spaces.createInvite.handler(async ({ context, input }) => {
+        const invitation = await createSpaceInvitation(deps.prisma, {
+          spaceId: input.spaceId,
+          userId: context.actor.userId,
+        }).catch(mapSpaceMembershipError);
+        return {
+          url: new URL(`/invite/${invitation.token}`, deps.env.webOrigin).href,
+          expiresAt: invitation.expiresAt.toISOString(),
+        };
+      }),
+      revokeInvite: authed.spaces.revokeInvite.handler(async ({ context, input }) => {
+        await revokeSpaceInvitation(deps.prisma, {
+          spaceId: input.spaceId,
+          userId: context.actor.userId,
+          invitationId: input.invitationId,
+        }).catch(mapSpaceMembershipError);
+        return { ok: true as const };
+      }),
+      removeMember: authed.spaces.removeMember.handler(async ({ context, input }) => {
+        await removeSpaceMember(deps.prisma, {
+          spaceId: input.spaceId,
+          userId: context.actor.userId,
+          memberUserId: input.userId,
+        }).catch(mapSpaceMembershipError);
+        return { ok: true as const };
+      }),
+      invitation: authed.spaces.invitation.handler(({ input }) =>
+        previewSpaceInvitation(deps.prisma, input.token),
+      ),
+      acceptInvite: authed.spaces.acceptInvite.handler(({ context, input }) =>
+        acceptSpaceInvitation(deps.prisma, {
+          token: input.token,
+          userId: context.actor.userId,
+        }).catch(mapSpaceMembershipError),
+      ),
     },
     bootstrap: authed.bootstrap.handler(async ({ context, input }) => {
       const actor = context.actor;
@@ -2689,7 +2757,11 @@ export function createRouter(deps: RouterDeps) {
       }),
       remove: authed.routines.remove.handler(async ({ context, input }) => {
         const existing = await deps.prisma.routine.findFirst({
-          where: { id: input.routineId, spaceId: context.actor.spaceId },
+          where: {
+            id: input.routineId,
+            spaceId: context.actor.spaceId,
+            userId: context.actor.userId,
+          },
         });
         if (!existing) throw new IsolationError();
         await deps.prisma.routine.delete({ where: { id: existing.id } });
@@ -4988,13 +5060,8 @@ async function spaceNavigationDto(
   repos: ReturnType<typeof createRepos>,
   groupRepos: ReturnType<typeof createGroupRepos>,
 ): Promise<SpaceNavigation> {
-  const currentSpace = await deps.prisma.space.findUnique({
-    where: { id: actor.spaceId },
-    select: { organizationId: true },
-  });
-  if (!currentSpace) throw new IsolationError();
   const memberships = await deps.prisma.spaceMember.findMany({
-    where: { userId: actor.userId, organizationId: currentSpace.organizationId },
+    where: { userId: actor.userId },
     select: {
       spaceId: true,
       role: true,

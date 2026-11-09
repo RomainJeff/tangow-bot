@@ -96,7 +96,6 @@ async function main() {
         "packages/testkit/src/connections.test.ts",
         "packages/testkit/src/tangow-setup.postgres.test.ts",
         "packages/testkit/src/bot-secrets.test.ts",
-        "packages/db/src/space-membership.postgres.test.ts",
         "apps/api/src/model-routing.postgres.test.ts",
         "packages/db/src/sessions.postgres.test.ts",
         "packages/db/src/drop-messages.postgres.test.ts",

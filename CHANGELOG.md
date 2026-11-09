@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
+- **Invite people to a space with a link.** The space owner copies a single-use invite link from the space's General settings on web and desktop; it expires after 7 days and can be revoked there, next to the list of members the owner can remove. The person who opens it joins on web after signing in or signing up, and the space then appears in their space switcher on web, desktop, iPhone and Android.
 - **Rename a space.** The space owner can change its name from Name in the space's General settings on web and desktop, or from the space menu in Settings on iPhone and Android.
 - **Computer update notices on web, desktop and mobile.** Settings and the computer view show when an existing computer has an update available, with a manual update action. Unrelated application commits no longer count as computer updates.
 

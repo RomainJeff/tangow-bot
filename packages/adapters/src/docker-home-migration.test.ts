@@ -337,14 +337,20 @@ describe("copying legacy user skills to the shared volume", () => {
       `---\nname: ${name}\ndescription: Does ${name}.\n---\n${body}\n`,
     );
 
-  it("waits for the team home, then copies once, never through a link, never over a file", async () => {
+  it("waits for the team home, then copies the owner's once, never through a link, never over a file", async () => {
     const { computer } = await dockerComputer("team");
     const { spaceId } = computer;
+    const owner = fixture.userId;
+    await fixture.seedMembership(spaceId);
     await put(`homes/${computer.homeKey}/shared/team.txt`, "team");
-    await skill(spaceId, "ada", "deploy");
-    await skill(spaceId, "ada", "taken", "Ada's steps.");
-    await mkdir(path.join(dataDir, `skills/user/${spaceId}/ada/linked`));
-    await symlink("/etc/passwd", path.join(dataDir, `skills/user/${spaceId}/ada/linked/SKILL.md`));
+    await skill(spaceId, owner, "deploy");
+    await skill(spaceId, owner, "taken", "Ada's steps.");
+    await skill(spaceId, "a_member", "private");
+    await mkdir(path.join(dataDir, `skills/user/${spaceId}/${owner}/linked`));
+    await symlink(
+      "/etc/passwd",
+      path.join(dataDir, `skills/user/${spaceId}/${owner}/linked/SKILL.md`),
+    );
 
     await expect(copyLegacyUserSkills(deps, spaceId, fixture.context)).resolves.toBe("waiting");
 

@@ -47,9 +47,6 @@ export async function indexWorkerSkills(
     return !secret;
   });
   await prisma.$transaction(async (tx) => {
-    if (sources.includes("shared")) {
-      await tx.$queryRaw`SELECT id FROM spaces WHERE id = ${owner.spaceId} FOR UPDATE`;
-    }
     // Same run lock as cancellation and completion. A stale report never replaces the index.
     await tx.$queryRaw`SELECT id FROM runs WHERE id = ${owner.runId} FOR UPDATE`;
     const held = await tx.run.findFirst({
@@ -63,15 +60,22 @@ export async function indexWorkerSkills(
       },
     });
     if (!held) return;
-    let shared = false;
-    if (sources.includes("shared")) {
-      const space = await tx.space.findUniqueOrThrow({ where: { id: owner.spaceId } });
-      shared = space.skillIndexReceivedAt === null || receivedAt >= space.skillIndexReceivedAt;
-      if (shared)
-        await tx.space.update({
-          where: { id: owner.spaceId },
-          data: { skillIndexReceivedAt: receivedAt },
-        });
+    // The worker mounted its bot owner's shared volume, whose row orders that person's reports.
+    const [volume] = sources.includes("shared")
+      ? await tx.$queryRaw<{ id: string; userId: string; skillIndexReceivedAt: Date | null }[]>`
+          SELECT v.id, v."userId", v."skillIndexReceivedAt" FROM volumes v
+          JOIN bots b ON b.id = ${owner.botId}
+          WHERE v.kind = 'space_shared' AND v."spaceId" = b."spaceId" AND v."userId" = b."userId"
+          FOR UPDATE OF v`
+      : [];
+    const shared =
+      volume !== undefined &&
+      (volume.skillIndexReceivedAt === null || receivedAt >= volume.skillIndexReceivedAt);
+    if (shared) {
+      await tx.volume.update({
+        where: { id: volume.id },
+        data: { skillIndexReceivedAt: receivedAt },
+      });
     }
     await tx.volumeSkill.deleteMany({
       where: {
@@ -80,7 +84,9 @@ export async function indexWorkerSkills(
             botId: owner.botId,
             source: { in: sources.includes("bot") ? ["bot", "managed"] : ["managed"] },
           },
-          ...(shared ? [{ source: "shared", bot: { spaceId: owner.spaceId } }] : []),
+          ...(shared
+            ? [{ source: "shared", bot: { spaceId: owner.spaceId, userId: volume.userId } }]
+            : []),
         ],
       },
     });

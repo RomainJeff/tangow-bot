@@ -1,16 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   assertProfileImage,
-  blockedAuthPaths,
   buildTrustedOrigins,
+  isBlockedAuthPath,
   passwordResetEmail,
   resolveSignupPolicy,
 } from "./index.js";
 
 describe("auth policy", () => {
-  it("blocks invitation and org-creation paths in version 1", () => {
-    expect(blockedAuthPaths.some((path) => path.includes("invite"))).toBe(true);
-    expect(blockedAuthPaths.some((path) => path.includes("create"))).toBe(true);
+  it("blocks every Better Auth organization endpoint, reads and leave included", () => {
+    expect(isBlockedAuthPath("/organization/list-members")).toBe(true);
+    expect(isBlockedAuthPath("/organization/leave")).toBe(true);
+    expect(isBlockedAuthPath("/get-session")).toBe(false);
   });
 });
 

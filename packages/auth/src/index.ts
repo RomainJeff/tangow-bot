@@ -121,12 +121,16 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
             where: { userId: user.id },
             select: {
               organizationId: true,
-              organization: { select: { members: { select: { userId: true } } } },
+              organization: { select: { members: { select: { userId: true, role: true } } } },
             },
           });
+          // People invited to a Space join its organization as plain members,
+          // so an organization is personal when this user is its only owner.
           const personalOrganizationIds = memberships
             .filter(({ organization }) =>
-              organization.members.every((member) => member.userId === user.id),
+              organization.members.every(
+                (member) => member.userId === user.id || member.role !== "owner",
+              ),
             )
             .map(({ organizationId }) => organizationId);
           await env.beforeDeleteUser?.(user.id, { personalOrganizationIds });
@@ -324,11 +328,7 @@ function loopbackTwinOrigins(origin: string): string[] {
   }
 }
 
-export const blockedAuthPaths = [
-  "/organization/create",
-  "/organization/invite",
-  "/organization/accept-invitation",
-  "/organization/reject-invitation",
-  "/organization/remove-member",
-  "/organization/update-member-role",
-];
+/** Space membership goes through the app; these endpoints would leak member emails and bypass it. */
+export function isBlockedAuthPath(path: string): boolean {
+  return path.startsWith("/organization/");
+}

@@ -286,6 +286,15 @@ export const SpaceNavigationSchema = z.object({
 });
 export type SpaceNavigation = z.infer<typeof SpaceNavigationSchema>;
 
+export const SpaceMembersSchema = z.object({
+  members: z.array(
+    z.object({ userId: Id, name: z.string(), image: z.string().nullable(), isOwner: z.boolean() }),
+  ),
+  /** Live invite links; empty unless the caller owns the space. */
+  invitations: z.array(z.object({ id: Id, expiresAt: z.string() })),
+});
+export type SpaceMembers = z.infer<typeof SpaceMembersSchema>;
+
 export const BOT_NAME_MAX_LENGTH = 80;
 export const BOT_TITLE_MAX_LENGTH = 500;
 export const BOT_DESCRIPTION_MAX_LENGTH = 4000;

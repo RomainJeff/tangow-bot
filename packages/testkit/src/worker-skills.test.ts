@@ -287,7 +287,7 @@ it.each(["memory", "child"] as const)(
   },
 );
 
-it.each(["storage", "ordering", "metadata"])(
+it.each(["storage", "ordering", "metadata", "person"])(
   "protects the shared skill index, %s",
   async (scenario) => {
     const run = await startWorkerRun({ steps: [] });
@@ -398,7 +398,31 @@ it.each(["storage", "ordering", "metadata"])(
       secretStore,
       new Date("2026-02-01"),
     );
-    if (scenario === "storage" || scenario === "metadata") {
+    if (scenario === "person") {
+      // Another person's bot in the Space indexes its own /workspace/shared, later and empty.
+      const member = await run.prisma.bot.create({
+        data: { spaceId: run.spaceId, userId: "space-member", name: "Theirs", color: "#000000" },
+      });
+      await run.prisma.volume.create({
+        data: {
+          kind: "space_shared",
+          spaceId: run.spaceId,
+          userId: "space-member",
+          providerKind: "local-worker",
+        },
+      });
+      await run.prisma.run.update({ where: { id: newer }, data: { botId: member.id } });
+      await indexWorkerSkills(
+        run.prisma,
+        { ...owner(newer), userId: "space-member", botId: member.id },
+        [],
+        ["shared"],
+        [],
+        secretStore,
+        new Date("2026-02-03"),
+      );
+    }
+    if (scenario === "storage" || scenario === "metadata" || scenario === "person") {
       expect(
         await run.prisma.volumeSkill.findMany({
           select: { name: true, source: true, content: true },
