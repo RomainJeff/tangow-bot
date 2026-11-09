@@ -149,6 +149,9 @@ export function ShellPage() {
           navigate(`/app/${copy.id}`);
         });
         return;
+      case "share":
+        if (bot) overlays.setShareTarget(bot);
+        return;
       case "export":
         void downloadBotExport(botId, bot?.name ?? "bot");
         return;

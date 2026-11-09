@@ -296,14 +296,14 @@ msgstr "Aktionsbestätigungen"
 #. placeholder {0}: bot.name
 #. placeholder {0}: group.spaceName
 #. placeholder {0}: sectionMenu.section.name
-#: src/pages/bot-page/BotPage.tsx:346
-#: src/pages/BotContextMenu.tsx:86
-#: src/pages/shell/shell-overlays.tsx:354
+#: src/pages/bot-page/BotPage.tsx:347
+#: src/pages/BotContextMenu.tsx:93
+#: src/pages/shell/shell-overlays.tsx:376
 #: src/pages/shell/sidebar-roster.tsx:149
 msgid "Actions for {0}"
 msgstr "Aktionen für {0}"
 
-#: src/pages/shell/shell-overlays.tsx:228
+#: src/pages/shell/shell-overlays.tsx:250
 msgid "Actions for space"
 msgstr ""
 
@@ -325,14 +325,14 @@ msgstr "Aktives Modell"
 msgid "Active: {0}"
 msgstr "Aktiv: {0}"
 
-#: src/pages/bot-page/BotPage.tsx:98
+#: src/pages/bot-page/BotPage.tsx:99
 #: src/pages/bot-page/RoutineDetail.tsx:191
 #: src/pages/shell/sidebar-header.tsx:61
 #: src/pages/shell/sidebar-header.tsx:63
 msgid "Activity"
 msgstr "Aktivität"
 
-#: src/pages/bot-page/BotPage.tsx:271
+#: src/pages/bot-page/BotPage.tsx:272
 msgid "Activity, last run failed"
 msgstr "Aktivität, letzter Lauf fehlgeschlagen"
 
@@ -596,8 +596,8 @@ msgstr "Bestätige es im Chat oder sag Nein, um abzubrechen."
 msgid "Approve this server to let your agent use its tools."
 msgstr "Genehmige diesen Server, damit dein Agent seine Tools verwenden kann."
 
-#: src/pages/bot-page/BotPage.tsx:375
-#: src/pages/BotContextMenu.tsx:146
+#: src/pages/bot-page/BotPage.tsx:380
+#: src/pages/BotContextMenu.tsx:161
 msgid "Archive"
 msgstr "Archivieren"
 
@@ -721,7 +721,7 @@ msgid "Avatars"
 msgstr "Avatare"
 
 #: src/pages/plugins/connection-detail.tsx:47
-#: src/pages/shell/thread-header.tsx:68
+#: src/pages/shell/thread-header.tsx:70
 msgid "Back"
 msgstr "Zurück"
 
@@ -787,9 +787,9 @@ msgid "Bot screen preview"
 msgstr "Bot-Bildschirmvorschau"
 
 #: src/pages/shell/composer-pickers.tsx:296
-#: src/pages/shell/shell-overlays.tsx:165
-#: src/pages/shell/thread-header.tsx:171
-#: src/pages/shell/thread-header.tsx:172
+#: src/pages/shell/shell-overlays.tsx:170
+#: src/pages/shell/thread-header.tsx:174
+#: src/pages/shell/thread-header.tsx:175
 msgid "Bot settings"
 msgstr ""
 
@@ -963,8 +963,9 @@ msgstr "Leeren"
 msgid "Clear {0}’s conversation?"
 msgstr "Unterhaltung mit {0} leeren?"
 
-#: src/pages/bot-page/BotPage.tsx:371
-#: src/pages/BotContextMenu.tsx:142
+#: src/pages/bot-page/BotPage.tsx:376
+#: src/pages/BotContextMenu.tsx:157
+#: src/pages/BotContextMenu.tsx:176
 msgid "Clear conversation"
 msgstr "Unterhaltung leeren"
 
@@ -1029,7 +1030,7 @@ msgstr "Nachrichteneinstellungen schließen"
 msgid "Close model settings"
 msgstr "Modelleinstellungen schließen"
 
-#: src/pages/bot-page/BotPage.tsx:183
+#: src/pages/bot-page/BotPage.tsx:184
 #: src/pages/shell/side-panel.tsx:154
 msgid "Close panel"
 msgstr "Panel schließen"
@@ -1672,6 +1673,10 @@ msgstr "Konnte nicht erstellt werden"
 msgid "Couldn't create an invite link"
 msgstr ""
 
+#: src/pages/ShareBotDialog.tsx:50
+msgid "Couldn't load"
+msgstr ""
+
 #: src/pages/SpaceGeneralSettings.tsx:155
 msgid "Couldn't load members"
 msgstr ""
@@ -1691,6 +1696,10 @@ msgstr "Der Space konnte nicht umbenannt werden"
 
 #: src/pages/SpaceGeneralSettings.tsx:248
 msgid "Couldn't revoke the invite link"
+msgstr ""
+
+#: src/pages/ShareBotDialog.tsx:66
+msgid "Couldn't save"
 msgstr ""
 
 #: src/pages/AccountSettingsOverlay.tsx:69
@@ -1850,8 +1859,8 @@ msgstr ""
 msgid "Default scope"
 msgstr "Standardbereich"
 
-#: src/pages/bot-page/BotPage.tsx:381
-#: src/pages/BotContextMenu.tsx:150
+#: src/pages/bot-page/BotPage.tsx:386
+#: src/pages/BotContextMenu.tsx:165
 #: src/pages/KnowledgeSection.tsx:687
 #: src/pages/McpServersOverlay.tsx:509
 #: src/pages/shell/dialogs.tsx:409
@@ -1887,7 +1896,7 @@ msgstr "Erinnerungen ebenfalls löschen"
 msgid "Delete routine"
 msgstr "Routine löschen"
 
-#: src/pages/shell/shell-overlays.tsx:242
+#: src/pages/shell/shell-overlays.tsx:264
 msgid "Delete space"
 msgstr ""
 
@@ -2041,8 +2050,8 @@ msgstr ""
 msgid "Draft skill"
 msgstr "Skill-Entwurf"
 
-#: src/pages/bot-page/BotPage.tsx:362
-#: src/pages/BotContextMenu.tsx:137
+#: src/pages/bot-page/BotPage.tsx:367
+#: src/pages/BotContextMenu.tsx:152
 msgid "Duplicate"
 msgstr "Duplizieren"
 
@@ -2067,7 +2076,7 @@ msgstr "Bearbeiten und erneut senden"
 msgid "Edit message"
 msgstr ""
 
-#: src/pages/shell/shell-overlays.tsx:165
+#: src/pages/shell/shell-overlays.tsx:170
 msgid "Edit Profile"
 msgstr "Profil bearbeiten"
 
@@ -2161,6 +2170,11 @@ msgstr "Jede Woche"
 msgid "Everyday"
 msgstr "Alltag"
 
+#: src/pages/ShareBotDialog.tsx:92
+#: src/pages/ShareBotDialog.tsx:94
+msgid "Everyone in {spaceName}"
+msgstr ""
+
 #: src/pages/plugins/advanced-integrations.tsx:304
 msgid "Executor token"
 msgstr "Executor-Token"
@@ -2170,7 +2184,7 @@ msgstr "Executor-Token"
 msgid "Expand {0}"
 msgstr "{0} ausklappen"
 
-#: src/pages/bot-page/BotPage.tsx:366
+#: src/pages/bot-page/BotPage.tsx:371
 msgid "Export"
 msgstr "Exportieren"
 
@@ -2317,7 +2331,7 @@ msgid "Global"
 msgstr "Global"
 
 #: src/pages/MessagingSettingsOverlay.tsx:205
-#: src/pages/shell/thread-header.tsx:113
+#: src/pages/shell/thread-header.tsx:116
 msgid "Group"
 msgstr "Gruppe"
 
@@ -2543,7 +2557,7 @@ msgstr "Erinnerungen behalten"
 msgid "key"
 msgstr "Schlüssel"
 
-#: src/pages/bot-page/BotPage.tsx:100
+#: src/pages/bot-page/BotPage.tsx:101
 msgid "Knowledge"
 msgstr "Wissen"
 
@@ -2678,11 +2692,13 @@ msgstr ""
 msgid "Manual setup required"
 msgstr ""
 
-#: src/pages/BotContextMenu.tsx:128
+#: src/pages/BotContextMenu.tsx:137
+#: src/pages/BotContextMenu.tsx:172
 msgid "Mark as Read"
 msgstr "Als gelesen markieren"
 
-#: src/pages/BotContextMenu.tsx:128
+#: src/pages/BotContextMenu.tsx:137
+#: src/pages/BotContextMenu.tsx:172
 msgid "Mark as Unread"
 msgstr "Als ungelesen markieren"
 
@@ -2887,7 +2903,7 @@ msgstr "Weitere Computeraktionen"
 msgid "Move them to your shared memory."
 msgstr "Verschiebe sie in deine geteilten Erinnerungen."
 
-#: src/pages/BotContextMenu.tsx:98
+#: src/pages/BotContextMenu.tsx:107
 msgid "Move to"
 msgstr "Verschieben nach"
 
@@ -2958,7 +2974,7 @@ msgstr "Neues Passwort"
 msgid "New routine"
 msgstr "Neue Routine"
 
-#: src/pages/BotContextMenu.tsx:116
+#: src/pages/BotContextMenu.tsx:125
 #: src/pages/shell/dialogs.tsx:180
 msgid "New section"
 msgstr "Neuer Abschnitt"
@@ -3198,7 +3214,7 @@ msgstr "am 1. um {0}"
 msgid "One-time"
 msgstr "Einmalig"
 
-#: src/pages/shell/shell-overlays.tsx:280
+#: src/pages/shell/shell-overlays.tsx:302
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
 msgstr ""
 
@@ -3357,7 +3373,7 @@ msgstr ""
 msgid "Personal credential"
 msgstr "Persönliche Zugangsdaten"
 
-#: src/pages/BotContextMenu.tsx:93
+#: src/pages/BotContextMenu.tsx:102
 msgid "Pin"
 msgstr "Anheften"
 
@@ -3617,9 +3633,9 @@ msgstr "Entfernt, aber die Liste konnte nicht aktualisiert werden"
 msgid "Removing…"
 msgstr "Wird entfernt…"
 
-#: src/pages/BotContextMenu.tsx:121
+#: src/pages/BotContextMenu.tsx:130
 #: src/pages/shell/dialogs.tsx:246
-#: src/pages/shell/shell-overlays.tsx:369
+#: src/pages/shell/shell-overlays.tsx:391
 msgid "Rename section"
 msgstr ""
 
@@ -3693,7 +3709,7 @@ msgstr "Wird zurückgesetzt …"
 msgid "Restart to update"
 msgstr ""
 
-#: src/pages/bot-page/BotPage.tsx:356
+#: src/pages/bot-page/BotPage.tsx:357
 #: src/pages/shell/sidebar-footer.tsx:88
 #: src/pages/shell/sidebar-footer.tsx:119
 msgid "Restore"
@@ -3785,7 +3801,7 @@ msgstr "Routine erstellt von {by}"
 msgid "Routine updated"
 msgstr "Routine aktualisiert"
 
-#: src/pages/bot-page/BotPage.tsx:99
+#: src/pages/bot-page/BotPage.tsx:100
 msgid "Routines"
 msgstr "Routinen"
 
@@ -3867,8 +3883,8 @@ msgstr "Wird gespeichert…"
 msgid "Say yes or no, or answer in a sentence."
 msgstr "Antworte mit Ja oder Nein oder in einem Satz."
 
-#: src/pages/shell/thread-header.tsx:152
-#: src/pages/shell/thread-header.tsx:153
+#: src/pages/shell/thread-header.tsx:155
+#: src/pages/shell/thread-header.tsx:156
 msgid "Screen"
 msgstr "Bildschirm"
 
@@ -3919,7 +3935,7 @@ msgstr "Skills suchen"
 msgid "Searching…"
 msgstr "Suche…"
 
-#: src/pages/shell/thread-header.tsx:114
+#: src/pages/shell/thread-header.tsx:117
 msgid "Select a bot"
 msgstr "Bot auswählen"
 
@@ -3964,7 +3980,7 @@ msgstr "Servername"
 msgid "Server URL"
 msgstr "Server-URL"
 
-#: src/pages/bot-page/BotPage.tsx:101
+#: src/pages/bot-page/BotPage.tsx:102
 #: src/pages/MessagingSettingsOverlay.tsx:362
 #: src/pages/SettingsOverlay.tsx:193
 #: src/pages/shell/sidebar-footer.tsx:195
@@ -3990,6 +4006,16 @@ msgstr "Einrichtungshilfe"
 msgid "Shape {0}"
 msgstr "Form {0}"
 
+#: src/pages/bot-page/BotPage.tsx:363
+#: src/pages/BotContextMenu.tsx:147
+msgid "Share"
+msgstr ""
+
+#. placeholder {0}: bot.name
+#: src/pages/ShareBotDialog.tsx:86
+msgid "Share {0}"
+msgstr ""
+
 #: src/pages/bot-page/KnowledgeTab.tsx:107
 #: src/pages/MemorySettingsOverlay.tsx:49
 msgid "Shared"
@@ -4008,8 +4034,8 @@ msgid "Show agent steps, and every run in a bot's activity."
 msgstr "Zeigt Agent-Schritte und jeden Lauf in der Aktivität eines Bots."
 
 #: src/pages/shell/sidebar.tsx:133
-#: src/pages/shell/thread-header.tsx:84
-#: src/pages/shell/thread-header.tsx:85
+#: src/pages/shell/thread-header.tsx:86
+#: src/pages/shell/thread-header.tsx:87
 msgid "Show bots"
 msgstr "Bots anzeigen"
 
@@ -4397,7 +4423,7 @@ msgstr "Erneut versuchen"
 msgid "Type your answer"
 msgstr "Gib deine Antwort ein"
 
-#: src/pages/BotContextMenu.tsx:110
+#: src/pages/BotContextMenu.tsx:119
 msgid "Unassigned"
 msgstr "Nicht zugewiesen"
 
@@ -4417,7 +4443,7 @@ msgstr ""
 msgid "Unlink"
 msgstr "Verknüpfung aufheben"
 
-#: src/pages/BotContextMenu.tsx:93
+#: src/pages/BotContextMenu.tsx:102
 msgid "Unpin"
 msgstr "Lösen"
 
@@ -4531,8 +4557,8 @@ msgstr "Wird geprüft…"
 #: src/pages/ProvidersSettings.tsx:159
 #: src/pages/ProvidersSettings.tsx:161
 #: src/pages/SettingsOverlay.tsx:133
-#: src/pages/shell/thread-header.tsx:139
-#: src/pages/shell/thread-header.tsx:140
+#: src/pages/shell/thread-header.tsx:142
+#: src/pages/shell/thread-header.tsx:143
 #: src/pages/VoiceSettingsOverlay.tsx:137
 #: src/pages/VoiceSettingsOverlay.tsx:212
 msgid "Voice"

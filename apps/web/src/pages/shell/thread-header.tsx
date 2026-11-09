@@ -48,6 +48,8 @@ export function ThreadHeader({
   const location = useLocation();
   const navigate = useNavigate();
   const members = activeSnapshot?.members ?? activeGroup?.members ?? [];
+  // A bot shared with you: its page, screen, voice and settings stay its owner's.
+  const shared = !inGroup && active?.isOwner === false;
   return (
     // No band: it overlays the thread, which fades out under the scroll edge;
     // `-mb-header` pulls the thread up under it. `pt-1.5` centres it on the
@@ -92,10 +94,11 @@ export function ThreadHeader({
         <button
           type="button"
           data-testid="bot-settings-trigger"
+          disabled={shared}
           onClick={() =>
             inGroup ? setPanel("group-settings") : onOpenBotPage(botPageFor("header"))
           }
-          className="app-no-drag -mx-2 flex min-w-0 items-center gap-3 rounded-lg px-2 py-1 transition-colors hover:bg-muted"
+          className="app-no-drag -mx-2 flex min-w-0 items-center gap-3 rounded-lg px-2 py-1 transition-colors enabled:hover:bg-muted"
         >
           {/* D2-a: a mono (single-bot) thread carries the bot's identity here
               instead of on every message — no per-message avatar or name. */}
@@ -128,7 +131,7 @@ export function ThreadHeader({
           ) : null}
         </button>
       </div>
-      {!inGroup && active ? (
+      {!inGroup && active && !shared ? (
         <div className="rk-glass-control flex h-capsule shrink-0 items-center rounded-full p-0.5">
           {onVoice ? (
             <Button
