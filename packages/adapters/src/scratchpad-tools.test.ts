@@ -20,11 +20,11 @@ describe("scratchpad tools store", () => {
 
     const items = await listScratchpadItems(
       { prisma: prisma as never },
-      { spaceId: "ws", botId: "bot" },
+      { spaceId: "ws", botId: "bot", userId: "user" },
     );
 
     expect(findMany).toHaveBeenCalledWith({
-      where: { spaceId: "ws", botId: "bot", status: { in: ["open", "parked"] } },
+      where: { spaceId: "ws", botId: "bot", userId: "user", status: { in: ["open", "parked"] } },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
     });
     expect(items).toEqual([
@@ -155,7 +155,7 @@ describe("scratchpad tools store", () => {
     const findMany = vi.fn(async () => [row({ id: "1", title: "Open", status: "open" })]);
     const result = await listScratchpadItemsFromTool(
       { prisma: { scratchpadItem: { findMany } } as never },
-      { spaceId: "ws", botId: "bot" },
+      { spaceId: "ws", botId: "bot", userId: "user" },
     );
     expect(result.items).toHaveLength(1);
   });

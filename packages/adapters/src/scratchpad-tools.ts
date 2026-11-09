@@ -42,11 +42,13 @@ export function coerceScratchpadStatus(value: unknown): ScratchpadStatus {
   return isScratchpadStatus(value) ? value : "open";
 }
 
+/** One person's items on a bot: on a shared bot, each person keeps their own. */
 export async function listScratchpadItems(
   deps: ScratchpadToolDeps,
   input: {
     spaceId: string;
     botId: string;
+    userId: string;
     status?: ScratchpadStatus;
     includeDone?: boolean;
   },
@@ -60,6 +62,7 @@ export async function listScratchpadItems(
     where: {
       spaceId: input.spaceId,
       botId: input.botId,
+      userId: input.userId,
       ...statusFilter,
     },
     orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
@@ -207,12 +210,14 @@ export async function listScratchpadItemsFromTool(
   input: {
     spaceId: string;
     botId: string;
+    userId: string;
     includeDone?: boolean;
   },
 ) {
   const items = await listScratchpadItems(deps, {
     spaceId: input.spaceId,
     botId: input.botId,
+    userId: input.userId,
     includeDone: input.includeDone,
   });
   return { items };

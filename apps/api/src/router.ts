@@ -2873,6 +2873,7 @@ export function createRouter(deps: RouterDeps) {
           {
             spaceId: context.actor.spaceId,
             botId: input.botId,
+            userId: context.actor.userId,
             status: input.status,
             includeDone: input.includeDone ?? false,
           },

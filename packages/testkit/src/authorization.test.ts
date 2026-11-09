@@ -1284,6 +1284,25 @@ describeWithDatabase("API authorization and resource isolation", () => {
     await expect(read(sam.cookie, danaRun.sessionId)).resolves.toMatchObject({ status: 404 });
   });
 
+  it("keeps a member's scratchpad on a shared bot out of the owner's", async () => {
+    const { owner, space, dana, bot } = await sharedBotSpace("bot-share-scratchpad");
+    await rpc(app, owner, "bots/share", { botId: bot.id, visibility: "space", userIds: [] }, space);
+    await rpc(app, owner, "scratchpad/create", { botId: bot.id, title: "Owner's todo" }, space);
+    // A member's run adds to the scratchpad of the bot it runs on.
+    await handles.prisma.scratchpadItem.create({
+      data: { spaceId: space, botId: bot.id, userId: dana.userId, title: "Dana's todo" },
+    });
+
+    const listed = await rpc<Array<{ title: string }>>(
+      app,
+      owner,
+      "scratchpad/list",
+      { botId: bot.id },
+      space,
+    );
+    expect(listed.map((item) => item.title)).toEqual(["Owner's todo"]);
+  });
+
   it("renames a space only for its owner", async () => {
     const cookie = await signup(app, `space-rename-${stamp}@rakazo.test`, "Space Rename");
     const actor = await rpc<Actor>(app, cookie, "me");
