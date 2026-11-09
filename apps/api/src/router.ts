@@ -143,12 +143,15 @@ import {
   findSpaceDecisionConfig,
   findSpaceMemoryConfig,
   formatMessagingLinkCode,
+  getBotSharing,
   InvalidAnswerError,
   InvalidSpaceNameError,
   IsolationError,
   issueMessagingLinkCode,
   listSpaceMembers,
   lockOwnedGroup,
+  NotBotOwnerError,
+  NotSpaceMemberError,
   NotSpaceOwnerError,
   newestModelCredentialOrder,
   newestVoiceCredentialOrder,
@@ -169,6 +172,7 @@ import {
   SpaceNotFoundError,
   selectSpaceModelPreference,
   selectSpaceVoicePreference,
+  setBotSharing,
   setModelAuto,
   setModelCategory,
   threadEventSeq,
@@ -580,6 +584,16 @@ function mapSpaceMembershipError(error: unknown): never {
   }
   if (error instanceof SpaceInvitationUnavailableError) {
     throw new ORPCError("NOT_FOUND", { message: error.message });
+  }
+  throw error;
+}
+
+function mapBotSharingError(error: unknown): never {
+  if (error instanceof NotBotOwnerError) {
+    throw new ORPCError("FORBIDDEN", { message: error.message });
+  }
+  if (error instanceof NotSpaceMemberError) {
+    throw new ORPCError("BAD_REQUEST", { message: error.message });
   }
   throw error;
 }
@@ -1522,6 +1536,12 @@ export function createRouter(deps: RouterDeps) {
           webhookConfigured: true as const,
         };
       }),
+      sharing: authed.bots.sharing.handler(({ context, input }) =>
+        getBotSharing(deps.prisma, context.actor, input.botId).catch(mapBotSharingError),
+      ),
+      share: authed.bots.share.handler(({ context, input }) =>
+        setBotSharing(deps.prisma, context.actor, input).catch(mapBotSharingError),
+      ),
     },
     groups: {
       create: authed.groups.create.handler(async ({ context, input }) => {
