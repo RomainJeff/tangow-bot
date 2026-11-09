@@ -650,7 +650,10 @@ describeWithDatabase("API authorization and resource isolation", () => {
     expect(storedOriginal?.computerId).not.toBe(storedSupport?.computerId);
 
     const intruder = await signup(app, `spaces-intruder-${stamp}@rakazo.test`, "Intruder");
-    await expectDenied(app, intruder, "bots/list", {}, support.id);
+    // A Space the caller doesn't belong to resolves to their own Space, never to the requested one.
+    const intruderActor = await rpc<Actor>(app, intruder, "me", {}, support.id);
+    expect(intruderActor.spaceId).not.toBe(support.id);
+    expect(await rpc<Array<{ id: string }>>(app, intruder, "bots/list", {}, support.id)).toEqual([]);
   });
 
   it("enforces the space limit across concurrent creation requests", async () => {
