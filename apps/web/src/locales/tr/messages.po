@@ -242,7 +242,7 @@ msgid "{workingBotName} is working"
 msgstr "{workingBotName} çalışıyor"
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer-pickers.tsx:149
+#: src/pages/shell/composer-pickers.tsx:153
 msgid "@{0}"
 msgstr "@{0}"
 
@@ -296,14 +296,14 @@ msgstr "İşlem onayları"
 #. placeholder {0}: bot.name
 #. placeholder {0}: group.spaceName
 #. placeholder {0}: sectionMenu.section.name
-#: src/pages/bot-page/BotPage.tsx:346
-#: src/pages/BotContextMenu.tsx:86
-#: src/pages/shell/shell-overlays.tsx:354
+#: src/pages/bot-page/BotPage.tsx:347
+#: src/pages/BotContextMenu.tsx:93
+#: src/pages/shell/shell-overlays.tsx:376
 #: src/pages/shell/sidebar-roster.tsx:149
 msgid "Actions for {0}"
 msgstr "{0} için işlemler"
 
-#: src/pages/shell/shell-overlays.tsx:228
+#: src/pages/shell/shell-overlays.tsx:250
 msgid "Actions for space"
 msgstr ""
 
@@ -325,14 +325,14 @@ msgstr "Etkin model"
 msgid "Active: {0}"
 msgstr "Etkin: {0}"
 
-#: src/pages/bot-page/BotPage.tsx:98
+#: src/pages/bot-page/BotPage.tsx:99
 #: src/pages/bot-page/RoutineDetail.tsx:191
 #: src/pages/shell/sidebar-header.tsx:61
 #: src/pages/shell/sidebar-header.tsx:63
 msgid "Activity"
 msgstr "Etkinlik"
 
-#: src/pages/bot-page/BotPage.tsx:271
+#: src/pages/bot-page/BotPage.tsx:272
 msgid "Activity, last run failed"
 msgstr "Etkinlik, son çalışma başarısız oldu"
 
@@ -527,7 +527,7 @@ msgstr "Her zaman izinli"
 msgid "Answer"
 msgstr "Yanıtla"
 
-#: src/pages/shell/composer.tsx:290
+#: src/pages/shell/composer.tsx:293
 msgid "Answer {answerName}…"
 msgstr ""
 
@@ -596,8 +596,8 @@ msgstr "Sohbette onayla ya da iptal etmek için hayır de."
 msgid "Approve this server to let your agent use its tools."
 msgstr "Agent'ının bu sunucunun araçlarını kullanabilmesi için sunucuyu onayla."
 
-#: src/pages/bot-page/BotPage.tsx:375
-#: src/pages/BotContextMenu.tsx:146
+#: src/pages/bot-page/BotPage.tsx:380
+#: src/pages/BotContextMenu.tsx:161
 msgid "Archive"
 msgstr "Arşivle"
 
@@ -721,7 +721,7 @@ msgid "Avatars"
 msgstr "Avatarlar"
 
 #: src/pages/plugins/connection-detail.tsx:47
-#: src/pages/shell/thread-header.tsx:68
+#: src/pages/shell/thread-header.tsx:70
 msgid "Back"
 msgstr "Geri"
 
@@ -786,10 +786,10 @@ msgstr "Bot ekranı"
 msgid "Bot screen preview"
 msgstr "Bot ekranı önizlemesi"
 
-#: src/pages/shell/composer-pickers.tsx:296
-#: src/pages/shell/shell-overlays.tsx:165
-#: src/pages/shell/thread-header.tsx:171
-#: src/pages/shell/thread-header.tsx:172
+#: src/pages/shell/composer-pickers.tsx:300
+#: src/pages/shell/shell-overlays.tsx:170
+#: src/pages/shell/thread-header.tsx:174
+#: src/pages/shell/thread-header.tsx:175
 msgid "Bot settings"
 msgstr ""
 
@@ -963,8 +963,9 @@ msgstr "Temizle"
 msgid "Clear {0}’s conversation?"
 msgstr "{0} sohbeti temizlensin mi?"
 
-#: src/pages/bot-page/BotPage.tsx:371
-#: src/pages/BotContextMenu.tsx:142
+#: src/pages/bot-page/BotPage.tsx:376
+#: src/pages/BotContextMenu.tsx:157
+#: src/pages/BotContextMenu.tsx:176
 msgid "Clear conversation"
 msgstr "Sohbeti temizle"
 
@@ -1029,7 +1030,7 @@ msgstr "Mesajlaşma ayarlarını kapat"
 msgid "Close model settings"
 msgstr "Model ayarlarını kapat"
 
-#: src/pages/bot-page/BotPage.tsx:183
+#: src/pages/bot-page/BotPage.tsx:184
 #: src/pages/shell/side-panel.tsx:154
 msgid "Close panel"
 msgstr "Paneli kapat"
@@ -1672,6 +1673,10 @@ msgstr "Oluşturulamadı"
 msgid "Couldn't create an invite link"
 msgstr ""
 
+#: src/pages/ShareBotDialog.tsx:50
+msgid "Couldn't load"
+msgstr ""
+
 #: src/pages/SpaceGeneralSettings.tsx:155
 msgid "Couldn't load members"
 msgstr ""
@@ -1691,6 +1696,10 @@ msgstr "Alan yeniden adlandırılamadı"
 
 #: src/pages/SpaceGeneralSettings.tsx:248
 msgid "Couldn't revoke the invite link"
+msgstr ""
+
+#: src/pages/ShareBotDialog.tsx:66
+msgid "Couldn't save"
 msgstr ""
 
 #: src/pages/AccountSettingsOverlay.tsx:69
@@ -1850,8 +1859,8 @@ msgstr ""
 msgid "Default scope"
 msgstr "Varsayılan kapsam"
 
-#: src/pages/bot-page/BotPage.tsx:381
-#: src/pages/BotContextMenu.tsx:150
+#: src/pages/bot-page/BotPage.tsx:386
+#: src/pages/BotContextMenu.tsx:165
 #: src/pages/KnowledgeSection.tsx:687
 #: src/pages/McpServersOverlay.tsx:509
 #: src/pages/shell/dialogs.tsx:409
@@ -1887,7 +1896,7 @@ msgstr "Hafızayı da sil"
 msgid "Delete routine"
 msgstr "Rutini sil"
 
-#: src/pages/shell/shell-overlays.tsx:242
+#: src/pages/shell/shell-overlays.tsx:264
 msgid "Delete space"
 msgstr ""
 
@@ -1941,7 +1950,7 @@ msgstr ""
 msgid "Dictate"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:437
+#: src/pages/shell/composer.tsx:440
 msgid "Dictating"
 msgstr ""
 
@@ -2041,8 +2050,8 @@ msgstr ""
 msgid "Draft skill"
 msgstr "Taslak beceri"
 
-#: src/pages/bot-page/BotPage.tsx:362
-#: src/pages/BotContextMenu.tsx:137
+#: src/pages/bot-page/BotPage.tsx:367
+#: src/pages/BotContextMenu.tsx:152
 msgid "Duplicate"
 msgstr "Çoğalt"
 
@@ -2067,7 +2076,7 @@ msgstr "Düzenle ve yeniden gönder"
 msgid "Edit message"
 msgstr ""
 
-#: src/pages/shell/shell-overlays.tsx:165
+#: src/pages/shell/shell-overlays.tsx:170
 msgid "Edit Profile"
 msgstr "Profili Düzenle"
 
@@ -2161,6 +2170,11 @@ msgstr "Her hafta"
 msgid "Everyday"
 msgstr "Günlük"
 
+#: src/pages/ShareBotDialog.tsx:92
+#: src/pages/ShareBotDialog.tsx:94
+msgid "Everyone in {spaceName}"
+msgstr ""
+
 #: src/pages/plugins/advanced-integrations.tsx:304
 msgid "Executor token"
 msgstr "Executor belirteci"
@@ -2170,7 +2184,7 @@ msgstr "Executor belirteci"
 msgid "Expand {0}"
 msgstr "{0} ögesini genişlet"
 
-#: src/pages/bot-page/BotPage.tsx:366
+#: src/pages/bot-page/BotPage.tsx:371
 msgid "Export"
 msgstr "Dışa aktar"
 
@@ -2317,7 +2331,7 @@ msgid "Global"
 msgstr "Genel"
 
 #: src/pages/MessagingSettingsOverlay.tsx:205
-#: src/pages/shell/thread-header.tsx:113
+#: src/pages/shell/thread-header.tsx:116
 msgid "Group"
 msgstr "Grup"
 
@@ -2543,7 +2557,7 @@ msgstr "Hafızayı koru"
 msgid "key"
 msgstr "anahtar"
 
-#: src/pages/bot-page/BotPage.tsx:100
+#: src/pages/bot-page/BotPage.tsx:101
 msgid "Knowledge"
 msgstr "Bilgi"
 
@@ -2678,11 +2692,13 @@ msgstr ""
 msgid "Manual setup required"
 msgstr ""
 
-#: src/pages/BotContextMenu.tsx:128
+#: src/pages/BotContextMenu.tsx:137
+#: src/pages/BotContextMenu.tsx:172
 msgid "Mark as Read"
 msgstr "Okundu olarak işaretle"
 
-#: src/pages/BotContextMenu.tsx:128
+#: src/pages/BotContextMenu.tsx:137
+#: src/pages/BotContextMenu.tsx:172
 msgid "Mark as Unread"
 msgstr "Okunmadı olarak işaretle"
 
@@ -2739,7 +2755,7 @@ msgstr "Hafıza"
 msgid "Memory scope"
 msgstr "Hafıza kapsamı"
 
-#: src/pages/shell/composer-pickers.tsx:135
+#: src/pages/shell/composer-pickers.tsx:139
 msgid "Mentions"
 msgstr "Bahsetmeler"
 
@@ -2748,7 +2764,7 @@ msgid "Mentions only"
 msgstr ""
 
 #: src/pages/bot-page/BotActivity.tsx:358
-#: src/pages/shell/composer.tsx:293
+#: src/pages/shell/composer.tsx:296
 #: src/pages/shell/message-view.tsx:91
 msgid "Message"
 msgstr "Mesaj"
@@ -2758,7 +2774,7 @@ msgstr "Mesaj"
 msgid "Message"
 msgstr "Mesaj"
 
-#: src/pages/shell/composer.tsx:292
+#: src/pages/shell/composer.tsx:295
 msgid "Message {activeName}"
 msgstr "{activeName} sohbetine yaz"
 
@@ -2766,7 +2782,7 @@ msgstr "{activeName} sohbetine yaz"
 msgid "Message actions"
 msgstr ""
 
-#: src/pages/shell/composer.tsx:311
+#: src/pages/shell/composer.tsx:314
 msgid "Message composer"
 msgstr "Mesaj düzenleyici"
 
@@ -2783,7 +2799,7 @@ msgstr ""
 msgid "Message from {peer}"
 msgstr "{peer} botundan mesaj"
 
-#: src/pages/shell/composer.tsx:509
+#: src/pages/shell/composer.tsx:512
 msgid "Message…"
 msgstr "Mesaj…"
 
@@ -2887,7 +2903,7 @@ msgstr "Diğer bilgisayar eylemleri"
 msgid "Move them to your shared memory."
 msgstr "Bunları ortak hafızana taşı."
 
-#: src/pages/BotContextMenu.tsx:98
+#: src/pages/BotContextMenu.tsx:107
 msgid "Move to"
 msgstr "Taşı"
 
@@ -2958,7 +2974,7 @@ msgstr "Yeni parola"
 msgid "New routine"
 msgstr "Yeni rutin"
 
-#: src/pages/BotContextMenu.tsx:116
+#: src/pages/BotContextMenu.tsx:125
 #: src/pages/shell/dialogs.tsx:180
 msgid "New section"
 msgstr "Yeni bölüm"
@@ -3198,7 +3214,7 @@ msgstr "her ayın 1'inde saat {0}"
 msgid "One-time"
 msgstr "Tek seferlik"
 
-#: src/pages/shell/shell-overlays.tsx:280
+#: src/pages/shell/shell-overlays.tsx:302
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
 msgstr ""
 
@@ -3357,7 +3373,7 @@ msgstr ""
 msgid "Personal credential"
 msgstr "Kişisel kimlik bilgisi"
 
-#: src/pages/BotContextMenu.tsx:93
+#: src/pages/BotContextMenu.tsx:102
 msgid "Pin"
 msgstr "Sabitle"
 
@@ -3577,7 +3593,7 @@ msgid "Remove Git event?"
 msgstr "Git olayı kaldırılsın mı?"
 
 #. placeholder {0}: mention.name
-#: src/pages/shell/composer-pickers.tsx:280
+#: src/pages/shell/composer-pickers.tsx:284
 msgid "Remove mention {0}"
 msgstr "{0} bahsini kaldır"
 
@@ -3595,7 +3611,7 @@ msgid "Remove preview"
 msgstr "Önizlemeyi kaldır"
 
 #. placeholder {0}: skill.name
-#: src/pages/shell/composer-pickers.tsx:258
+#: src/pages/shell/composer-pickers.tsx:262
 msgid "Remove skill {0}"
 msgstr "{0} becerisini kaldır"
 
@@ -3617,9 +3633,9 @@ msgstr "Kaldırıldı ama liste yenilenemedi"
 msgid "Removing…"
 msgstr "Kaldırılıyor…"
 
-#: src/pages/BotContextMenu.tsx:121
+#: src/pages/BotContextMenu.tsx:130
 #: src/pages/shell/dialogs.tsx:246
-#: src/pages/shell/shell-overlays.tsx:369
+#: src/pages/shell/shell-overlays.tsx:391
 msgid "Rename section"
 msgstr ""
 
@@ -3693,7 +3709,7 @@ msgstr "Sıfırlanıyor…"
 msgid "Restart to update"
 msgstr ""
 
-#: src/pages/bot-page/BotPage.tsx:356
+#: src/pages/bot-page/BotPage.tsx:357
 #: src/pages/shell/sidebar-footer.tsx:88
 #: src/pages/shell/sidebar-footer.tsx:119
 msgid "Restore"
@@ -3785,7 +3801,7 @@ msgstr "Rutini {by} oluşturdu"
 msgid "Routine updated"
 msgstr "Rutin güncellendi"
 
-#: src/pages/bot-page/BotPage.tsx:99
+#: src/pages/bot-page/BotPage.tsx:100
 msgid "Routines"
 msgstr "Rutinler"
 
@@ -3867,8 +3883,8 @@ msgstr "Kaydediliyor…"
 msgid "Say yes or no, or answer in a sentence."
 msgstr "Evet ya da hayır de veya bir cümleyle yanıtla."
 
-#: src/pages/shell/thread-header.tsx:152
-#: src/pages/shell/thread-header.tsx:153
+#: src/pages/shell/thread-header.tsx:155
+#: src/pages/shell/thread-header.tsx:156
 msgid "Screen"
 msgstr "Ekran"
 
@@ -3919,14 +3935,14 @@ msgstr "Yeteneklerde ara"
 msgid "Searching…"
 msgstr "Aranıyor…"
 
-#: src/pages/shell/thread-header.tsx:114
+#: src/pages/shell/thread-header.tsx:117
 msgid "Select a bot"
 msgstr "Bir bot seç"
 
 #: src/components/ask/QuestionCard.tsx:205
 #: src/components/ask/QuestionCard.tsx:306
 #: src/components/DraftCard.tsx:326
-#: src/pages/shell/composer.tsx:407
+#: src/pages/shell/composer.tsx:410
 msgid "Send"
 msgstr "Gönder"
 
@@ -3964,7 +3980,7 @@ msgstr "Sunucu adı"
 msgid "Server URL"
 msgstr "Sunucu URL'si"
 
-#: src/pages/bot-page/BotPage.tsx:101
+#: src/pages/bot-page/BotPage.tsx:102
 #: src/pages/MessagingSettingsOverlay.tsx:362
 #: src/pages/SettingsOverlay.tsx:193
 #: src/pages/shell/sidebar-footer.tsx:195
@@ -3972,11 +3988,11 @@ msgstr "Sunucu URL'si"
 msgid "Settings"
 msgstr "Ayarlar"
 
-#: src/pages/shell/composer-pickers.tsx:298
+#: src/pages/shell/composer-pickers.tsx:302
 msgid "Settings: General"
 msgstr "Ayarlar: Genel"
 
-#: src/pages/shell/composer-pickers.tsx:300
+#: src/pages/shell/composer-pickers.tsx:304
 msgid "Settings: Usage"
 msgstr "Ayarlar: Kullanım"
 
@@ -3989,6 +4005,16 @@ msgstr "Kurulum yardımı"
 #: src/pages/bot-page/BotHero.tsx:152
 msgid "Shape {0}"
 msgstr "Şekil {0}"
+
+#: src/pages/bot-page/BotPage.tsx:363
+#: src/pages/BotContextMenu.tsx:147
+msgid "Share"
+msgstr ""
+
+#. placeholder {0}: bot.name
+#: src/pages/ShareBotDialog.tsx:86
+msgid "Share {0}"
+msgstr ""
 
 #: src/pages/bot-page/KnowledgeTab.tsx:107
 #: src/pages/MemorySettingsOverlay.tsx:49
@@ -4008,8 +4034,8 @@ msgid "Show agent steps, and every run in a bot's activity."
 msgstr "Ajan adımlarını ve bir botun etkinliğindeki her çalıştırmayı gösterir."
 
 #: src/pages/shell/sidebar.tsx:133
-#: src/pages/shell/thread-header.tsx:84
-#: src/pages/shell/thread-header.tsx:85
+#: src/pages/shell/thread-header.tsx:86
+#: src/pages/shell/thread-header.tsx:87
 msgid "Show bots"
 msgstr "Botları göster"
 
@@ -4055,7 +4081,7 @@ msgid "Sign up"
 msgstr "Kaydol"
 
 #. placeholder {0}: skill.name
-#: src/pages/shell/composer-pickers.tsx:196
+#: src/pages/shell/composer-pickers.tsx:200
 msgid "Skill {0}"
 msgstr "Beceri: {0}"
 
@@ -4160,7 +4186,7 @@ msgstr ""
 msgid "Steps"
 msgstr "Adımlar"
 
-#: src/pages/shell/composer.tsx:299
+#: src/pages/shell/composer.tsx:302
 #: src/pages/shell/side-panel.tsx:345
 #: src/pages/shell/side-panel.tsx:350
 msgid "Stop"
@@ -4397,7 +4423,7 @@ msgstr "Tekrar dene"
 msgid "Type your answer"
 msgstr "Yanıtını yaz"
 
-#: src/pages/BotContextMenu.tsx:110
+#: src/pages/BotContextMenu.tsx:119
 msgid "Unassigned"
 msgstr "Atanmamış"
 
@@ -4417,7 +4443,7 @@ msgstr ""
 msgid "Unlink"
 msgstr "Bağlantıyı kaldır"
 
-#: src/pages/BotContextMenu.tsx:93
+#: src/pages/BotContextMenu.tsx:102
 msgid "Unpin"
 msgstr "Sabitlemeyi kaldır"
 
@@ -4531,8 +4557,8 @@ msgstr "Doğrulanıyor…"
 #: src/pages/ProvidersSettings.tsx:159
 #: src/pages/ProvidersSettings.tsx:161
 #: src/pages/SettingsOverlay.tsx:133
-#: src/pages/shell/thread-header.tsx:139
-#: src/pages/shell/thread-header.tsx:140
+#: src/pages/shell/thread-header.tsx:142
+#: src/pages/shell/thread-header.tsx:143
 #: src/pages/VoiceSettingsOverlay.tsx:137
 #: src/pages/VoiceSettingsOverlay.tsx:212
 msgid "Voice"

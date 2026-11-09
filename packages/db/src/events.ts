@@ -399,7 +399,9 @@ async function truncateThreadInTransaction(
     where: {
       id: input.threadId,
       spaceId: input.spaceId,
-      ...(input.groupId ? { groupId: input.groupId } : { botId: input.botId }),
+      ...(input.groupId
+        ? { groupId: input.groupId }
+        : { OR: [{ botId: input.botId }, { memberBotId: input.botId }] }),
     },
     data: { unread: false },
     select: { sessionId: true },

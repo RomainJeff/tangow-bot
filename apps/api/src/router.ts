@@ -143,12 +143,15 @@ import {
   findSpaceDecisionConfig,
   findSpaceMemoryConfig,
   formatMessagingLinkCode,
+  getBotSharing,
   InvalidAnswerError,
   InvalidSpaceNameError,
   IsolationError,
   issueMessagingLinkCode,
   listSpaceMembers,
   lockOwnedGroup,
+  NotBotOwnerError,
+  NotSpaceMemberError,
   NotSpaceOwnerError,
   newestModelCredentialOrder,
   newestVoiceCredentialOrder,
@@ -169,6 +172,7 @@ import {
   SpaceNotFoundError,
   selectSpaceModelPreference,
   selectSpaceVoicePreference,
+  setBotSharing,
   setModelAuto,
   setModelCategory,
   threadEventSeq,
@@ -584,6 +588,16 @@ function mapSpaceMembershipError(error: unknown): never {
   throw error;
 }
 
+function mapBotSharingError(error: unknown): never {
+  if (error instanceof NotBotOwnerError) {
+    throw new ORPCError("FORBIDDEN", { message: error.message });
+  }
+  if (error instanceof NotSpaceMemberError) {
+    throw new ORPCError("BAD_REQUEST", { message: error.message });
+  }
+  throw error;
+}
+
 function mapSpaceLifecycleError(error: unknown): unknown {
   if (error instanceof SpaceDeletionInProgressError) {
     return new ORPCError("CONFLICT", { message: error.message });
@@ -902,7 +916,8 @@ export function createRouter(deps: RouterDeps) {
             resolveThreadTarget(deps.prisma, actor, { botId: active.id }).then((target) =>
               threadSnapshot(deps, target),
             ),
-            listRoutinesDto(deps, actor, active.id),
+            // A shared bot's routines are its owner's.
+            active.isOwner ? listRoutinesDto(deps, actor, active.id) : [],
           ])
         : [null, []];
       return {
@@ -1522,6 +1537,12 @@ export function createRouter(deps: RouterDeps) {
           webhookConfigured: true as const,
         };
       }),
+      sharing: authed.bots.sharing.handler(({ context, input }) =>
+        getBotSharing(deps.prisma, context.actor, input.botId).catch(mapBotSharingError),
+      ),
+      share: authed.bots.share.handler(({ context, input }) =>
+        setBotSharing(deps.prisma, context.actor, input).catch(mapBotSharingError),
+      ),
     },
     groups: {
       create: authed.groups.create.handler(async ({ context, input }) => {
@@ -4748,9 +4769,15 @@ export function createRouter(deps: RouterDeps) {
         }));
       }),
       create: authed.artifacts.create.handler(async ({ context, input }) => {
-        const botId = input.botId
-          ? (await repos.getBot(context.actor, input.botId)).id
-          : (await groupRepos.getGroupTarget(context.actor, input.groupId!)).members[0]?.bot.id;
+        // A bot shared with the actor is reached through their own thread with it; the artifact
+        // is theirs, as every file of a thread is its person's.
+        const target = input.botId
+          ? await resolveThreadTarget(deps.prisma, context.actor, { botId: input.botId })
+          : null;
+        const botId =
+          target?.kind === "bot"
+            ? target.botId
+            : (await groupRepos.getGroupTarget(context.actor, input.groupId!)).members[0]?.bot.id;
         if (!botId) throw new IsolationError();
         try {
           return await createOwnedArtifact(deps, context.actor, { ...input, botId });
@@ -4772,7 +4799,7 @@ export function createRouter(deps: RouterDeps) {
             contextBotId,
           });
         }
-        await repos.getBot(context.actor, input.botId!);
+        await resolveThreadTarget(deps.prisma, context.actor, { botId: input.botId! });
         try {
           return await getOwnedArtifact(deps, context.actor, {
             botId: input.botId!,

@@ -717,9 +717,16 @@ export async function removeSpaceMember(
       data: { archivedAt: new Date() },
     });
     await tx.routine.updateMany({ where: leftovers, data: { active: false, nextRunAt: null } });
+    // Their threads with bots shared with them stay, hidden: membership gates access to them.
+    await tx.botShare.deleteMany({
+      where: { userId: input.memberUserId, bot: { spaceId: input.spaceId } },
+    });
     // Archiving only stops new claims; a run already going would keep the Space's secrets.
     const activeRuns = await tx.run.findMany({
-      where: { bot: leftovers, status: { in: [...ACTIVE_RUN_STATUSES] } },
+      where: {
+        OR: [{ bot: leftovers }, { thread: { ...leftovers, memberBotId: { not: null } } }],
+        status: { in: [...ACTIVE_RUN_STATUSES] },
+      },
       select: { id: true, taskId: true },
     });
     await cancelRunsInTransaction(tx, activeRuns, new Date());

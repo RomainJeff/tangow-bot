@@ -685,10 +685,11 @@ export async function compactHistory(
 ): Promise<void> {
   const thread = await deps.prisma.thread.findUniqueOrThrow({ where: { id: threadId } });
   // A thread without an owning bot (a group, a team chat) has no memory to write to.
-  if (!thread.botId) return;
+  const botId = thread.botId ?? thread.memberBotId;
+  if (!botId) return;
   const botThread: CompactionThread = {
     id: threadId,
-    botId: thread.botId,
+    botId,
     spaceId: thread.spaceId,
     userId: thread.userId,
     sessionId: thread.sessionId,
@@ -699,7 +700,7 @@ export async function compactHistory(
   const [first] = tail;
   const previous = first?.type === "compaction" ? first : undefined;
   const uncompacted = previous ? tail.slice(1) : tail;
-  const exchanges = exchangesOf(uncompacted, thread.botId);
+  const exchanges = exchangesOf(uncompacted, botId);
   const kept = keptCount(exchanges, keptWindowTokens(historyBudget));
   const summarized = chunksOf(exchanges.slice(0, exchanges.length - kept));
   if (summarized.length === 0) return;
@@ -716,7 +717,7 @@ export async function compactHistory(
     ? await deps.resolveModel({
         userId: thread.userId,
         spaceId: thread.spaceId,
-        botId: thread.botId,
+        botId: botId,
       })
     : deps.deploymentModelKey
       ? {
@@ -789,7 +790,7 @@ export async function compactHistory(
     traceId: `history-compact:${threadId}`,
     spaceId: thread.spaceId,
     userId: thread.userId,
-    botId: thread.botId,
+    botId: botId,
     signal: new AbortController().signal,
   };
   if (semanticMemory) {
@@ -798,7 +799,7 @@ export async function compactHistory(
         {
           content: summary,
           scope: "isolated",
-          botId: thread.botId,
+          botId: botId,
           source: { kind: "history", generation },
         },
         memoryContext,
@@ -814,7 +815,7 @@ export async function compactHistory(
     if ((await historyGeneration(deps.prisma, sessionId)) !== generation) {
       try {
         const removed = await semanticMemory.provider.purgeHistory(
-          { botId: thread.botId, generations: [generation] },
+          { botId: botId, generations: [generation] },
           memoryContext,
         );
         if (!removed.ok) {

@@ -15,6 +15,7 @@ import {
   BotMcpServerSchema,
   BotSchema,
   BotSectionSchema,
+  BotSharingSchema,
   CapabilityInstallSchema,
   ComputerListItemSchema,
   ComputerModeSchema,
@@ -317,6 +318,10 @@ export const appContract = {
         webhookConfigured: z.literal(true),
       }),
     ),
+    /** Who the bot is shared with; its owner only. */
+    sharing: oc.input(botId).output(BotSharingSchema),
+    /** Owner only. People must be members of the bot's Space. */
+    share: oc.input(botId.extend(BotSharingSchema.shape)).output(BotSharingSchema),
   },
   groups: {
     create: oc.input(CreateGroupInput).output(GroupSchema),

@@ -99,8 +99,12 @@ export function pageBotOf(
   archivedBots: readonly Bot[],
   active: Bot | undefined,
 ): Bot | undefined {
-  if (pickedBotId === null) return active;
-  return [...archivedBots, ...bots].find((bot) => bot.id === pickedBotId);
+  const bot =
+    pickedBotId === null
+      ? active
+      : [...archivedBots, ...bots].find((candidate) => candidate.id === pickedBotId);
+  // A bot shared with you has no page here: its settings, routines and files are its owner's.
+  return bot?.isOwner ? bot : undefined;
 }
 
 /** The panel is showing when a kind is picked and it has something to show. */

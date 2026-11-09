@@ -45,6 +45,7 @@ import {
   progressSinceLastEntry,
   resumeAskWithComposerTextInTransaction,
   runsOfMessage,
+  sharedBotThread,
   type ThreadEvents,
   threadEntryByNonce,
   threadEventSeq,
@@ -390,13 +391,22 @@ export async function resolveThreadTarget(
   const repos = createRepos(prisma);
   const groupRepos = createGroupRepos(prisma);
   if (input.botId) {
-    const bot = await repos.getBot(actor, input.botId);
-    if (!bot.thread) throw new IsolationError();
+    const owned = await repos.getBot(actor, input.botId).catch((error: unknown) => {
+      if (error instanceof IsolationError) return null;
+      throw error;
+    });
+    if (owned) {
+      if (!owned.thread) throw new IsolationError();
+      return { kind: "bot", botId: owned.id, threadId: owned.thread.id, bot: owned };
+    }
+    // A bot shared with the actor: their own thread with it, never the owner's.
+    const shared = await sharedBotThread(prisma, actor, input.botId);
+    if (!shared) throw new IsolationError();
     return {
       kind: "bot",
-      botId: bot.id,
-      threadId: bot.thread.id,
-      bot,
+      botId: shared.bot.id,
+      threadId: shared.thread.id,
+      bot: { ...shared.bot, thread: shared.thread },
     };
   }
   if (input.groupId) {
@@ -437,14 +447,16 @@ export async function readSessionEntries(
   const thread = threadId
     ? await deps.prisma.thread.findUnique({
         where: { id: threadId },
-        select: { botId: true, groupId: true },
+        select: { botId: true, memberBotId: true, groupId: true },
       })
     : null;
   if (!thread) throw new IsolationError();
-  await resolveThreadTarget(deps.prisma, actor, {
-    botId: thread.botId ?? undefined,
+  const target = await resolveThreadTarget(deps.prisma, actor, {
+    botId: thread.botId ?? thread.memberBotId ?? undefined,
     groupId: thread.groupId ?? undefined,
   });
+  // A shared bot has a thread per person: reaching the bot is not reaching this one.
+  if (target.threadId !== threadId) throw new IsolationError();
   if (!run) throw new IsolationError();
   return readCappedRun(deps.sessionLog, run.id);
 }

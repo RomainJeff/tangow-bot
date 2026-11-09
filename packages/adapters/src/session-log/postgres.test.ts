@@ -311,7 +311,10 @@ describe("sessions migration", () => {
 
   it("gives every existing thread a main session and every run its thread's, and reruns", async () => {
     const { prisma } = database;
-    const threads = await prisma.thread.findMany({ orderBy: { id: "asc" } });
+    const threads = await prisma.thread.findMany({
+      select: { id: true, sessionId: true },
+      orderBy: { id: "asc" },
+    });
     const sessions = await prisma.conversationSession.findMany({ orderBy: { threadId: "asc" } });
     const runs = await prisma.run.findMany({ select: { id: true, sessionId: true } });
 
@@ -346,7 +349,10 @@ describe("sessions migration", () => {
 
   it("points a session that already has entries at its newest one, so the next append chains on", async () => {
     const { prisma } = database;
-    const { sessionId } = await prisma.thread.findUniqueOrThrow({ where: { id: "t1" } });
+    const { sessionId } = await prisma.thread.findUniqueOrThrow({
+      where: { id: "t1" },
+      select: { sessionId: true },
+    });
     const next = await prisma.$transaction((tx) =>
       new PostgresSessionLog(prisma).append(tx, {
         sessionId: SessionId.parse(sessionId),
@@ -361,12 +367,13 @@ describe("sessions migration", () => {
 
   it("creates a new thread's main session and files a new run under it", async () => {
     const { prisma } = database;
-    const bot = await prisma.bot.create({
-      data: { spaceId: "s1", userId: "u1", name: "C", color: "#000000" },
-    });
-    const thread = await prisma.thread.create({
-      data: { spaceId: "s1", userId: "u1", botId: bot.id },
-    });
+    const bot = { id: "b_new_thread" };
+    await prisma.$executeRaw`INSERT INTO bots (id, "spaceId", "userId", name, color, "updatedAt")
+      VALUES (${bot.id}, 's1', 'u1', 'C', '#000000', now())`;
+    const [thread] = await prisma.$queryRaw<Array<{ id: string; sessionId: string }>>`
+      INSERT INTO threads (id, "spaceId", "userId", "botId") VALUES ('t_new_thread', 's1', 'u1', ${bot.id})
+      RETURNING id, "sessionId"`;
+    if (!thread) throw new Error("thread not seeded");
     await prisma.$executeRaw`INSERT INTO runs
       (id, "spaceId", "botId", "threadId", "taskId", "userId", status, trigger, "updatedAt")
       VALUES ('r_new_thread', 's1', ${bot.id}, ${thread.id}, 'k1', 'u1', 'queued', 'user', now())`;

@@ -189,11 +189,18 @@ export async function searchRunsFromTool(
     const thread = await tx.thread.findFirst({
       where: { id: actor.threadId, userId: actor.userId, spaceId: actor.spaceId },
     });
+    // In a member's thread with a shared bot, the bot is the owner's and the run the member's.
+    const memberThread = Boolean(thread?.memberBotId) && thread?.memberBotId === actor.botId;
     const bot = await tx.bot.findFirst({
-      where: { id: actor.botId, userId: actor.userId, spaceId: actor.spaceId, archivedAt: null },
+      where: {
+        id: actor.botId,
+        spaceId: actor.spaceId,
+        archivedAt: null,
+        ...(memberThread ? {} : { userId: actor.userId }),
+      },
     });
     if (!thread || !bot || thread.externalConversationId) return DENIED;
-    if (thread.botId !== actor.botId) {
+    if (thread.botId !== actor.botId && !memberThread) {
       if (
         !thread.groupId ||
         !(await tx.chatGroup.findFirst({

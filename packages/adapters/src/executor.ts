@@ -207,6 +207,7 @@ import {
   runPersistence,
   SpaceLimitError,
   sessionEntryFromRow,
+  sharedWithFilter,
   threadEventSeq,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -1364,24 +1365,36 @@ export function createRunExecutor(deps: ExecutorDeps) {
         include: { thread: true },
       });
       if (!bot?.thread) return;
+      // A member's routine on a shared bot runs in their own thread, while it is still shared with
+      // them, and never falls back to the owner's.
+      const memberRoutine = routine.userId !== bot.userId;
       const targetThread = routine.threadId
         ? await deps.prisma.thread.findFirst({
             where: {
               id: routine.threadId,
               spaceId: routine.spaceId,
-              OR: [
-                { botId: bot.id },
-                {
-                  group: {
-                    archivedAt: null,
-                    members: { some: { botId: bot.id } },
-                  },
-                },
-              ],
+              OR: memberRoutine
+                ? [
+                    {
+                      memberBotId: bot.id,
+                      userId: routine.userId,
+                      memberBot: sharedWithFilter(routine.userId, routine.spaceId),
+                    },
+                  ]
+                : [
+                    { botId: bot.id },
+                    {
+                      group: {
+                        archivedAt: null,
+                        members: { some: { botId: bot.id } },
+                      },
+                    },
+                  ],
             },
             select: { id: true },
           })
         : null;
+      if (memberRoutine && !targetThread) return;
       const thread = targetThread ?? bot.thread;
       // A schedule with no valid parseable cron among its crons (e.g. a
       // legacy row accepted before cron validation was added) fires the
@@ -1745,8 +1758,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const threadLoad = deps.prisma.thread.findUniqueOrThrow({ where: { id: run.threadId } });
         const historySessionOf = (loaded: { sessionId: string | null }) =>
           backgroundHelper ? run.sessionId : (loaded.sessionId ?? run.sessionId);
-        const compacts = (owner: { botId: string | null }) =>
-          Boolean(owner.botId) && deps.runtime.describe().capabilities.compaction;
+        const compacts = (owner: { botId: string | null; memberBotId: string | null }) =>
+          Boolean(owner.botId ?? owner.memberBotId) &&
+          deps.runtime.describe().capabilities.compaction;
         const [
           bot,
           thread,
@@ -6996,9 +7010,9 @@ export async function runNotificationsEnabled(
 }
 
 /**
- * The conversations the inbox shows with an unread mark: a live bot's or group's thread. An
- * archived chat's thread and a messaging channel's thread are not listed there, so they do
- * not count.
+ * The conversations the inbox shows with an unread mark: a live bot's or group's thread, or the
+ * person's own thread with a bot still shared with them in a Space they are still in. An archived
+ * chat's thread and a messaging channel's thread are not listed there, so they do not count.
  */
 export async function unreadConversationCount(
   prisma: PrismaClient,
@@ -7008,7 +7022,14 @@ export async function unreadConversationCount(
     where: {
       userId,
       unread: true,
-      OR: [{ bot: { archivedAt: null } }, { group: { archivedAt: null } }],
+      OR: [
+        { bot: { archivedAt: null } },
+        { group: { archivedAt: null } },
+        {
+          memberBot: sharedWithFilter(userId),
+          space: { memberships: { some: { userId } } },
+        },
+      ],
     },
   });
 }

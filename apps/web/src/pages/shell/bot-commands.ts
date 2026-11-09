@@ -10,7 +10,14 @@ export type UpdateBotPatch = Omit<Parameters<typeof rpc.bots.update>[0], "botId"
 
 export type RoutinePatch = Omit<Parameters<typeof rpc.routines.update>[0], "routineId">;
 
-export type BotAction = "duplicate" | "export" | "clear" | "archive" | "restore" | "delete";
+export type BotAction =
+  | "duplicate"
+  | "share"
+  | "export"
+  | "clear"
+  | "archive"
+  | "restore"
+  | "delete";
 
 /** A run to show whole, with what its dialog needs to open its artifacts. */
 export type RunView = Pick<RunActivityRow, "runId" | "botId" | "groupId"> & { title: string };

@@ -31,6 +31,9 @@ import type { Voice } from "./use-voice";
 const BotContextMenu = lazy(() =>
   import("../BotContextMenu").then((module) => ({ default: module.BotContextMenu })),
 );
+const ShareBotDialog = lazy(() =>
+  import("../ShareBotDialog").then((module) => ({ default: module.ShareBotDialog })),
+);
 const MessagingSettingsOverlay = lazy(() =>
   import("../MessagingSettingsOverlay").then((module) => ({
     default: module.MessagingSettingsOverlay,
@@ -89,6 +92,7 @@ export function ShellOverlays({
   const { sectionMenu, setSectionMenu, closeSectionMenu } = overlays;
   const { deleteTarget, setDeleteTarget, deleteGroupTarget, setDeleteGroupTarget } = overlays;
   const { deleteSpaceTarget, setDeleteSpaceTarget, clearTarget, setClearTarget } = overlays;
+  const { shareTarget, setShareTarget } = overlays;
   const { newSectionTarget, setNewSectionTarget } = overlays;
   const { renameSectionTarget, setRenameSectionTarget } = overlays;
   const { peerConversation, setPeerConversation } = overlays;
@@ -104,6 +108,7 @@ export function ShellOverlays({
         {contextChat && botMenu ? (
           <BotContextMenu
             bot={contextChat}
+            owned={contextBot?.isOwner ?? true}
             position={botMenu.position}
             onClose={closeBotMenu}
             sections={botSections}
@@ -173,6 +178,14 @@ export function ShellOverlays({
               navigate(`/app/g/${contextGroup!.id}`);
               setPanel("group-settings");
             }}
+            onShare={
+              contextBot
+                ? () => {
+                    setBotMenu(null);
+                    runBotAction(contextBot.id, "share");
+                  }
+                : undefined
+            }
             onDuplicate={() => {
               setBotMenu(null);
               if (contextBot) {
@@ -202,6 +215,15 @@ export function ShellOverlays({
               if (contextBot) runBotAction(contextBot.id, "delete");
               else setDeleteGroupTarget(contextGroup!);
             }}
+          />
+        ) : null}
+
+        {shareTarget && bootstrapMe ? (
+          <ShareBotDialog
+            bot={shareTarget}
+            spaceName={spaces.find((space) => space.id === shareTarget.spaceId)?.name ?? ""}
+            userId={bootstrapMe.userId}
+            onClose={() => setShareTarget(null)}
           />
         ) : null}
 

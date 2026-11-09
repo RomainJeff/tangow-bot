@@ -124,7 +124,7 @@ export async function openThreadDb(): Promise<ThreadDb> {
       where: { id: threadId },
       include: { group: { include: { members: { orderBy: { createdAt: "asc" }, take: 1 } } } },
     });
-    const feedBotId = thread.botId ?? thread.group?.members[0]?.botId;
+    const feedBotId = thread.botId ?? thread.memberBotId ?? thread.group?.members[0]?.botId;
     if (!feedBotId) throw new Error(`Thread ${threadId} has no bot`);
     return { ...thread, feedBotId, sessionId: SessionId.parse(thread.sessionId) };
   }

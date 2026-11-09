@@ -42,27 +42,16 @@ async function seedExistingDeployment() {
       "homeKey", kind, "updatedAt") VALUES (${id}, ${SPACE}, ${USER}, ${scope}, ${id}, ${id},
       ${kind}, now())`;
   }
-  const bot = await prisma.bot.create({
-    data: {
-      spaceId: SPACE,
-      userId: USER,
-      name: "Ada",
-      color: "#00C46A",
-      computerId: "computer_team",
-    },
-  });
-  await prisma.bot.create({
-    data: {
-      spaceId: SPACE,
-      userId: USER,
-      name: "Bob",
-      color: "#00C46A",
-      computerId: "computer_dedicated",
-    },
-  });
-  const thread = await prisma.thread.create({
-    data: { spaceId: SPACE, userId: USER, botId: bot.id },
-  });
+  const bot = { id: "bot_migration" };
+  await prisma.$executeRaw`INSERT INTO bots (id, "spaceId", "userId", name, color, "computerId",
+    "updatedAt") VALUES (${bot.id}, ${SPACE}, ${USER}, 'Ada', '#00C46A', 'computer_team', now()),
+    ('bot_migration_dedicated', ${SPACE}, ${USER}, 'Bob', '#00C46A', 'computer_dedicated', now())`;
+  const [thread] = await prisma.$queryRaw<
+    Array<{ id: string; sessionId: string }>
+  >`INSERT INTO threads
+    (id, "spaceId", "userId", "botId") VALUES ('thread_migration', ${SPACE}, ${USER}, ${bot.id})
+    RETURNING id, "sessionId"`;
+  if (!thread) throw new Error("thread not seeded");
   const task = await prisma.task.create({
     data: {
       spaceId: SPACE,

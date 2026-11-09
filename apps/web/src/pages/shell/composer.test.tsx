@@ -522,3 +522,18 @@ describe("Composer while a question waits", () => {
     unmount(root, container);
   });
 });
+
+describe("Composer slash actions", () => {
+  it("offers bot settings only where the chat's settings are yours", () => {
+    for (const [chatSettings, offered] of [
+      [undefined, true],
+      [false, false],
+    ] as const) {
+      const { container, root } = mount({ chatSettings });
+      act(() => typeInto(draftTextarea(container), "/"));
+      expect(container.textContent?.includes("Bot settings")).toBe(offered);
+      expect(container.textContent).toContain("Settings: General");
+      unmount(root, container);
+    }
+  });
+});

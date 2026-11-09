@@ -6,6 +6,7 @@ import {
   type MessageBlock,
   type SpaceBot,
 } from "@rakazo/contracts";
+import { ensureMemberThreads, sharedWithFilter } from "./bot-sharing.js";
 import type { PrismaClient } from "./client.js";
 import { type ComputerMode, ensureComputerRecord, parseComputerMode } from "./computers.js";
 import { createThreadMessageInTransaction } from "./messages.js";
@@ -94,10 +95,66 @@ function mapBot(
     teamChatRules: bot.teamChatRules ?? "",
     webhookConfigured: Boolean(bot.webhookSecretId),
     spawnKey: bot.spawnKey ?? null,
+    isOwner: true,
   };
 }
 
+/**
+ * What a member sees of a bot shared with them: who it is and their own thread with it, never how
+ * its owner set it up. The owner's pin and section are the owner's too.
+ */
+const SHARED_BOT_SETTINGS = {
+  title: "",
+  description: "",
+  instructions: "",
+  notifyOnFinish: false,
+  pinned: false,
+  sectionId: null,
+  archivedAt: null,
+  parentBotId: null,
+  memoryScope: null,
+  computerMode: "team",
+  voiceId: null,
+  autoSpeak: false,
+  chattyReplies: false,
+  modelProvider: null,
+  modelId: null,
+  thinkingLevel: null,
+  teamChatAmbientEnabled: false,
+  teamChatRules: "",
+  webhookConfigured: false,
+  spawnKey: null,
+  isOwner: false,
+} as const satisfies Partial<Bot>;
+
 export function createRepos(prisma: PrismaClient) {
+  /** Bots shared with `userId`, each with that person's own thread in place of the owner's. */
+  async function findSharedBots(userId: string, spaceId: string | { in: string[] }) {
+    const query = () =>
+      prisma.bot.findMany({
+        where: sharedWithFilter(userId, spaceId),
+        select: {
+          id: true,
+          spaceId: true,
+          name: true,
+          color: true,
+          shapeSeed: true,
+          createdAt: true,
+          updatedAt: true,
+          memberThreads: {
+            where: { userId },
+            select: { id: true, unread: true, sessionId: true, runs: activeRunSelection },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      });
+    let bots = await query();
+    if (await ensureMemberThreads(prisma, userId, bots)) bots = await query();
+    return bots.flatMap(({ memberThreads: [thread], ...bot }) =>
+      thread ? [{ ...SHARED_BOT_SETTINGS, ...bot, thread }] : [],
+    );
+  }
+
   async function listBotSectionsForSpaces(
     actor: Actor,
     spaceIds: string[],
@@ -141,28 +198,33 @@ export function createRepos(prisma: PrismaClient) {
       },
       orderBy: [{ pinned: "desc" }, { position: "asc" }, { createdAt: "asc" }],
     });
+    const shared = await findSharedBots(actor.userId, { in: spaceIds });
+    const rows = [
+      ...bots.map(({ runs, ...bot }) => {
+        if (!bot.thread) throw new IsolationError("Bot is missing its thread");
+        return { ...bot, thread: { ...bot.thread, runs } };
+      }),
+      ...shared,
+    ];
     const previews = await sessionPreviews(
       prisma,
-      bots.flatMap((bot) => bot.thread?.sessionId ?? []),
+      rows.map((bot) => bot.thread.sessionId),
     );
-    return bots.map((bot) => {
-      if (!bot.thread) throw new IsolationError("Bot is missing its thread");
-      return {
-        id: bot.id,
-        spaceId: bot.spaceId,
-        name: bot.name,
-        title: bot.title,
-        color: bot.color,
-        shapeSeed: bot.shapeSeed,
-        notifyOnFinish: bot.notifyOnFinish,
-        pinned: bot.pinned,
-        sectionId: bot.sectionId,
-        unread: bot.thread.unread,
-        preview: previews.get(bot.thread.sessionId) ?? "",
-        status: bot.runs[0]?.status ?? "idle",
-        updatedAt: bot.updatedAt.toISOString(),
-      };
-    });
+    return rows.map((bot) => ({
+      id: bot.id,
+      spaceId: bot.spaceId,
+      name: bot.name,
+      title: bot.title,
+      color: bot.color,
+      shapeSeed: bot.shapeSeed,
+      notifyOnFinish: bot.notifyOnFinish,
+      pinned: bot.pinned,
+      sectionId: bot.sectionId,
+      unread: bot.thread.unread,
+      preview: previews.get(bot.thread.sessionId) ?? "",
+      status: bot.thread.runs[0]?.status ?? "idle",
+      updatedAt: bot.updatedAt.toISOString(),
+    }));
   }
 
   return {
@@ -289,21 +351,36 @@ export function createRepos(prisma: PrismaClient) {
         },
         orderBy: [{ pinned: "desc" }, { position: "asc" }, { createdAt: "asc" }],
       });
-      const previews = await sessionPreviews(
-        prisma,
-        bots.flatMap((bot) => bot.thread?.sessionId ?? []),
-      );
-      return bots.map((bot) =>
-        mapBot(
-          bot,
-          (bot.thread && previews.get(bot.thread.sessionId)) ?? "",
-          bot.runs[0]?.status ?? "idle",
+      const shared = options.archived ? [] : await findSharedBots(actor.userId, actor.spaceId);
+      const previews = await sessionPreviews(prisma, [
+        ...bots.flatMap((bot) => bot.thread?.sessionId ?? []),
+        ...shared.map((bot) => bot.thread.sessionId),
+      ]);
+      return [
+        ...bots.map((bot) =>
+          mapBot(
+            bot,
+            (bot.thread && previews.get(bot.thread.sessionId)) ?? "",
+            bot.runs[0]?.status ?? "idle",
+          ),
         ),
-      );
+        ...shared.map(
+          ({ thread, createdAt, updatedAt, ...bot }): Bot => ({
+            ...bot,
+            threadId: thread.id,
+            unread: thread.unread,
+            preview: previews.get(thread.sessionId) ?? "",
+            status: thread.runs[0]?.status ?? "idle",
+            createdAt: createdAt.toISOString(),
+            updatedAt: updatedAt.toISOString(),
+          }),
+        ),
+      ];
     },
 
     listSpaceBotsForSpaces,
 
+    /** The actor's own bot; a bot shared with them is reached through `sharedBotThread`. */
     async getBot(actor: Actor, botId: string, options: { includeArchived?: boolean } = {}) {
       const bot = await prisma.bot.findFirst({
         where: {

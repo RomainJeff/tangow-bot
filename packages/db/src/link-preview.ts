@@ -319,7 +319,7 @@ function isPreviewBlock(block: unknown): boolean {
 
 /**
  * The bot an event of this thread is attributed to when the message names none: the thread's
- * own, or a group's first member. A message that has an author keeps it (a group's second bot).
+ * own (a shared bot in a member's thread), or a group's first member. A message that has an author keeps it (a group's second bot).
  */
 async function eventBotIdForThread(
   tx: Prisma.TransactionClient,
@@ -327,10 +327,10 @@ async function eventBotIdForThread(
 ): Promise<string | null> {
   const thread = await tx.thread.findUnique({
     where: { id: threadId },
-    select: { botId: true, groupId: true },
+    select: { botId: true, memberBotId: true, groupId: true },
   });
   if (!thread) return null;
-  if (thread.botId) return thread.botId;
+  if (thread.botId ?? thread.memberBotId) return thread.botId ?? thread.memberBotId;
   if (!thread.groupId) return null;
   const member = await tx.chatGroupMember.findFirst({
     where: { groupId: thread.groupId },

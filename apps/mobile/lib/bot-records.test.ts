@@ -35,6 +35,7 @@ function bot(partial: Partial<Bot> = {}): Bot {
     teamChatRules: "",
     webhookConfigured: false,
     spawnKey: null,
+    isOwner: true,
     ...partial,
   };
 }

@@ -22,6 +22,7 @@ import {
   Eraser,
   MoreHorizontal,
   Trash2,
+  UserPlus,
   X,
 } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
@@ -357,6 +358,10 @@ function MoreMenu({
           </DropdownMenuItem>
         ) : (
           <>
+            <DropdownMenuItem onClick={() => onAction("share")}>
+              <UserPlus />
+              {t`Share`}
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => onAction("duplicate")}>
               <Copy />
               {t`Duplicate`}
