@@ -1033,26 +1033,32 @@ describeWithDatabase("API authorization and resource isolation", () => {
     ).resolves.toMatchObject({ status: 404 });
   });
 
-  it("shares a bot only by its owner and only with members of its Space", async () => {
-    const owner = await signup(app, `bot-share-owner-${stamp}@rakazo.test`, "Ada");
+  /** An owner's Space with two members, Dana and Sam, and a bot of the owner's in it. */
+  async function sharedBotSpace(prefix: string) {
+    const owner = await signup(app, `${prefix}-owner-${stamp}@rakazo.test`, "Ada");
     const space = (await rpc<Space>(app, owner, "spaces/create", { name: "Studio" })).id;
-    const join = async (email: string, name: string) => {
-      const cookie = await signup(app, `${email}-${stamp}@rakazo.test`, name);
+    const join = async (name: string) => {
+      const cookie = await signup(app, `${prefix}-${name}-${stamp}@rakazo.test`, name);
       const { url } = await rpc<{ url: string }>(app, owner, "spaces/createInvite", {
         spaceId: space,
       });
       await rpc(app, cookie, "spaces/acceptInvite", { token: new URL(url).pathname.slice(8) });
       return { cookie, userId: (await rpc<Actor>(app, cookie, "me", {}, space)).userId };
     };
-    const dana = await join("bot-share-dana", "Dana");
-    const sam = await join("bot-share-sam", "Sam");
-    const stranger = await signup(app, `bot-share-stranger-${stamp}@rakazo.test`, "Lee");
-    const strangerId = (await rpc<Actor>(app, stranger, "me")).userId;
+    const dana = await join("Dana");
+    const sam = await join("Sam");
     const bot = await rpc<SharedBot>(app, owner, "bots/create", botInput("Notes"), space);
     const listed = async (cookie: string) =>
       (await rpc<SharedBot[]>(app, cookie, "bots/list", {}, space)).find(
         (row) => row.id === bot.id,
       );
+    return { owner, space, dana, sam, bot, listed };
+  }
+
+  it("shares a bot only by its owner and only with members of its Space", async () => {
+    const { owner, space, dana, sam, bot, listed } = await sharedBotSpace("bot-share");
+    const stranger = await signup(app, `bot-share-stranger-${stamp}@rakazo.test`, "Lee");
+    const strangerId = (await rpc<Actor>(app, stranger, "me")).userId;
     const share = { botId: bot.id, visibility: "people", userIds: [dana.userId] };
 
     await expect(raw(app, dana.cookie, "bots/share", share, space)).resolves.toMatchObject({
@@ -1097,6 +1103,46 @@ describeWithDatabase("API authorization and resource isolation", () => {
       raw(app, dana.cookie, "threads/get", { botId: bot.id }, space),
     ).resolves.toMatchObject({ status: 404 });
     expect(await listed(dana.cookie)).toBeUndefined();
+  });
+
+  it("gives a member the files of their own thread with a shared bot, never anyone else's", async () => {
+    const { owner, space, dana, sam, bot } = await sharedBotSpace("bot-share-files");
+    await rpc(
+      app,
+      owner,
+      "bots/share",
+      { botId: bot.id, visibility: "people", userIds: [dana.userId, sam.userId] },
+      space,
+    );
+    const attach = (cookie: string, text: string) =>
+      rpc<{ id: string }>(
+        app,
+        cookie,
+        "artifacts/create",
+        {
+          botId: bot.id,
+          name: "note.txt",
+          mimeType: "text/plain",
+          contentBase64: Buffer.from(text).toString("base64"),
+        },
+        space,
+      );
+    const read = (cookie: string, artifactId: string) =>
+      raw(app, cookie, "artifacts/get", { botId: bot.id, artifactId }, space);
+
+    const danaFile = await attach(dana.cookie, "dana's note");
+    const ownerFile = await attach(owner, "owner's note");
+    const own = await rpc<{ contentBase64: string }>(
+      app,
+      dana.cookie,
+      "artifacts/get",
+      { botId: bot.id, artifactId: danaFile.id },
+      space,
+    );
+    expect(Buffer.from(own.contentBase64, "base64").toString()).toBe("dana's note");
+    await expect(read(dana.cookie, ownerFile.id)).resolves.toMatchObject({ status: 404 });
+    await expect(read(sam.cookie, danaFile.id)).resolves.toMatchObject({ status: 404 });
+    await expect(read(owner, danaFile.id)).resolves.toMatchObject({ status: 404 });
   });
 
   it("renames a space only for its owner", async () => {

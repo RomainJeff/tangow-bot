@@ -4769,9 +4769,15 @@ export function createRouter(deps: RouterDeps) {
         }));
       }),
       create: authed.artifacts.create.handler(async ({ context, input }) => {
-        const botId = input.botId
-          ? (await repos.getBot(context.actor, input.botId)).id
-          : (await groupRepos.getGroupTarget(context.actor, input.groupId!)).members[0]?.bot.id;
+        // A bot shared with the actor is reached through their own thread with it; the artifact
+        // is theirs, as every file of a thread is its person's.
+        const target = input.botId
+          ? await resolveThreadTarget(deps.prisma, context.actor, { botId: input.botId })
+          : null;
+        const botId =
+          target?.kind === "bot"
+            ? target.botId
+            : (await groupRepos.getGroupTarget(context.actor, input.groupId!)).members[0]?.bot.id;
         if (!botId) throw new IsolationError();
         try {
           return await createOwnedArtifact(deps, context.actor, { ...input, botId });
@@ -4793,7 +4799,7 @@ export function createRouter(deps: RouterDeps) {
             contextBotId,
           });
         }
-        await repos.getBot(context.actor, input.botId!);
+        await resolveThreadTarget(deps.prisma, context.actor, { botId: input.botId! });
         try {
           return await getOwnedArtifact(deps, context.actor, {
             botId: input.botId!,
