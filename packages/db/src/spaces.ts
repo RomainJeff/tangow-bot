@@ -1,4 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
+import { cancelRunsInTransaction } from "./cancel-runs.js";
 import { Prisma, type PrismaClient } from "./client.js";
 import { IsolationError } from "./scope.js";
 import { withTransactionRetry } from "./transaction-retry.js";
@@ -715,6 +717,12 @@ export async function removeSpaceMember(
       data: { archivedAt: new Date() },
     });
     await tx.routine.updateMany({ where: leftovers, data: { active: false, nextRunAt: null } });
+    // Archiving only stops new claims; a run already going would keep the Space's secrets.
+    const activeRuns = await tx.run.findMany({
+      where: { bot: leftovers, status: { in: [...ACTIVE_RUN_STATUSES] } },
+      select: { id: true, taskId: true },
+    });
+    await cancelRunsInTransaction(tx, activeRuns, new Date());
     await tx.member.deleteMany({
       where: {
         organizationId,

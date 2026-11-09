@@ -88,7 +88,7 @@ describe("people sharing a Space", () => {
     expect(bots.map((bot) => bot.computerId)).toEqual(computers.map((computer) => computer.id));
   });
 
-  it("stops a removed member's bots and routines, and their leftovers do not block deleting the Space", async () => {
+  it("stops a removed member's bots, runs and routines, and their leftovers do not block deleting the Space", async () => {
     const [memberBot] = await prisma.bot.findMany({ where: { spaceId: shared, userId: "member" } });
     if (!memberBot) throw new Error("expected the member's bot");
     await prisma.routine.create({
@@ -115,11 +115,23 @@ describe("people sharing a Space", () => {
       data: { kind: "bot_private", spaceId: shared, botId: memberBot.id, providerKind: "fake" },
     });
 
+    const thread = await prisma.thread.findUniqueOrThrow({ where: { botId: memberBot.id } });
+    const owned = { spaceId: shared, userId: "member", botId: memberBot.id, threadId: thread.id };
+    const task = await prisma.task.create({
+      data: { ...owned, prompt: "Work", status: "running" },
+    });
+    const run = await prisma.run.create({
+      data: { ...owned, taskId: task.id, status: "running", trigger: "user" },
+    });
+
     await removeSpaceMember(prisma, { spaceId: shared, userId: "owner", memberUserId: "member" });
 
     expect(
       (await prisma.bot.findUniqueOrThrow({ where: { id: memberBot.id } })).archivedAt,
     ).not.toBeNull();
+    expect((await prisma.run.findUniqueOrThrow({ where: { id: run.id } })).status).toBe(
+      "cancelled",
+    );
     expect(await prisma.routine.findMany({ where: { botId: memberBot.id } })).toEqual([
       expect.objectContaining({ active: false, nextRunAt: null }),
     ]);
