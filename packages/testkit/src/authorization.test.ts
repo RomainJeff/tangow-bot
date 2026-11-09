@@ -1212,6 +1212,17 @@ describeWithDatabase("API authorization and resource isolation", () => {
     );
     await send(dana.cookie, { text: `Dana's ${word} plan`, artifactIds: [file.id] });
     await send(owner, { text: `Owner's ${word} plan` });
+    await handles.prisma.routine.create({
+      data: {
+        spaceId: space,
+        botId: bot.id,
+        userId: dana.userId,
+        name: `Dana's ${word} check`,
+        prompt: "Check in",
+        crons: ["0 9 * * *"],
+        timezone: "UTC",
+      },
+    });
     const search = async (cookie: string) =>
       (
         await rpc<{ hits: Array<{ kind: string; snippet: string; botId?: string }> }>(
@@ -1224,7 +1235,7 @@ describeWithDatabase("API authorization and resource isolation", () => {
       ).hits;
 
     const found = await search(dana.cookie);
-    expect(found.map((hit) => hit.kind).sort()).toEqual(["file", "message"]);
+    expect(found.map((hit) => hit.kind).sort()).toEqual(["file", "message", "routine"]);
     expect(found.every((hit) => hit.botId === bot.id)).toBe(true);
     expect(found.find((hit) => hit.kind === "message")?.snippet).toContain("Dana's");
     expect(await search(sam.cookie)).toEqual([]);
@@ -1234,6 +1245,182 @@ describeWithDatabase("API authorization and resource isolation", () => {
 
     await rpc(app, owner, "bots/share", { ...share, visibility: "private" }, space);
     expect(await search(dana.cookie)).toEqual([]);
+  });
+
+  /** A finished routine run of `userId` in `threadId`, with its own session under the thread's. */
+  async function finishedRun(space: string, botId: string, userId: string, threadId: string) {
+    const thread = await handles.prisma.thread.findUniqueOrThrow({ where: { id: threadId } });
+    const session = await handles.prisma.conversationSession.create({
+      data: {
+        id: crypto.randomUUID(),
+        spaceId: space,
+        kind: "routine",
+        parentSessionId: thread.sessionId,
+      },
+    });
+    const task = await handles.prisma.task.create({
+      data: { spaceId: space, userId, botId, threadId, prompt: "private prompt", status: "done" },
+    });
+    return handles.prisma.run.create({
+      data: {
+        spaceId: space,
+        userId,
+        botId,
+        threadId,
+        taskId: task.id,
+        sessionId: session.id,
+        status: "completed",
+        trigger: "routine",
+        completedAt: new Date(),
+      },
+    });
+  }
+
+  it("reads a session only from the person's own thread with a shared bot", async () => {
+    const { owner, space, dana, sam, bot } = await sharedBotSpace("bot-share-sessions");
+    await rpc(app, owner, "bots/share", { botId: bot.id, visibility: "space", userIds: [] }, space);
+    const danaThread = (
+      await rpc<{ threadId: string }>(app, dana.cookie, "threads/get", { botId: bot.id }, space)
+    ).threadId;
+    const ownerActor = await rpc<Actor>(app, owner, "me", {}, space);
+    const ownerRun = await finishedRun(space, bot.id, ownerActor.userId, bot.threadId);
+    const danaRun = await finishedRun(space, bot.id, dana.userId, danaThread);
+    const read = (cookie: string, sessionId: string) =>
+      raw(app, cookie, "sessions/entries", { sessionId }, space);
+
+    await expect(read(dana.cookie, danaRun.sessionId)).resolves.toMatchObject({ status: 200 });
+    await expect(read(owner, ownerRun.sessionId)).resolves.toMatchObject({ status: 200 });
+    await expect(read(dana.cookie, ownerRun.sessionId)).resolves.toMatchObject({ status: 404 });
+    await expect(read(owner, danaRun.sessionId)).resolves.toMatchObject({ status: 404 });
+    await expect(read(sam.cookie, danaRun.sessionId)).resolves.toMatchObject({ status: 404 });
+  });
+
+  it("keeps a member's scratchpad on a shared bot out of the owner's", async () => {
+    const { owner, space, dana, bot } = await sharedBotSpace("bot-share-scratchpad");
+    await rpc(app, owner, "bots/share", { botId: bot.id, visibility: "space", userIds: [] }, space);
+    await rpc(app, owner, "scratchpad/create", { botId: bot.id, title: "Owner's todo" }, space);
+    // A member's run adds to the scratchpad of the bot it runs on.
+    await handles.prisma.scratchpadItem.create({
+      data: { spaceId: space, botId: bot.id, userId: dana.userId, title: "Dana's todo" },
+    });
+
+    const listed = await rpc<Array<{ title: string }>>(
+      app,
+      owner,
+      "scratchpad/list",
+      { botId: bot.id },
+      space,
+    );
+    expect(listed.map((item) => item.title)).toEqual(["Owner's todo"]);
+  });
+
+  it("lists and exports only the owner's routines and thread of a shared bot", async () => {
+    const { owner, space, dana, bot } = await sharedBotSpace("bot-share-routines");
+    await rpc(app, owner, "bots/share", { botId: bot.id, visibility: "space", userIds: [] }, space);
+    await rpc(app, owner, "routines/create", { ...routineInput(bot.id), name: "Owner's" }, space);
+    // A member's run sets up a routine on the bot it runs on.
+    await handles.prisma.routine.create({
+      data: {
+        spaceId: space,
+        botId: bot.id,
+        userId: dana.userId,
+        name: "Dana's",
+        prompt: "Dana's private prompt",
+        crons: ["0 9 * * *"],
+        timezone: "UTC",
+      },
+    });
+    await rpc(app, dana.cookie, "threads/send", { botId: bot.id, text: "Dana's secret" }, space);
+
+    const listed = await rpc<Array<{ name: string }>>(
+      app,
+      owner,
+      "routines/list",
+      { botId: bot.id },
+      space,
+    );
+    expect(listed.map((routine) => routine.name)).toEqual(["Owner's"]);
+    const exported = await rpc<{ routines: Array<{ name: string }> }>(
+      app,
+      owner,
+      "export/bot",
+      { botId: bot.id },
+      space,
+    );
+    expect(exported.routines.map((routine) => routine.name)).toEqual(["Owner's"]);
+    expect(JSON.stringify(exported)).not.toContain("Dana's");
+  });
+
+  it("shows each person the status of their own thread with a shared bot", async () => {
+    const { owner, space, dana, bot, listed } = await sharedBotSpace("bot-share-status");
+    await rpc(app, owner, "bots/share", { botId: bot.id, visibility: "space", userIds: [] }, space);
+    const other = await rpc<SharedBot>(app, owner, "bots/create", botInput("Other"), space);
+    await rpc(app, owner, "groups/create", { name: "Crew", botIds: [bot.id, other.id] }, space);
+    const danaThread = (
+      await rpc<{ threadId: string }>(app, dana.cookie, "threads/get", { botId: bot.id }, space)
+    ).threadId;
+    const task = await handles.prisma.task.create({
+      data: {
+        spaceId: space,
+        userId: dana.userId,
+        botId: bot.id,
+        threadId: danaThread,
+        prompt: "Dana's question",
+        status: "waiting_input",
+      },
+    });
+    await handles.prisma.run.create({
+      data: {
+        spaceId: space,
+        userId: dana.userId,
+        botId: bot.id,
+        threadId: danaThread,
+        taskId: task.id,
+        status: "waiting_input",
+        trigger: "user",
+      },
+    });
+
+    expect((await listed(dana.cookie))?.status).toBe("waiting_input");
+    expect((await listed(owner))?.status).toBe("idle");
+    const [group] = await rpc<Array<{ members: Array<{ botId: string; status: string }> }>>(
+      app,
+      owner,
+      "groups/list",
+      {},
+      space,
+    );
+    expect(group?.members.find((member) => member.botId === bot.id)?.status).toBe("idle");
+  });
+
+  it("hides a member's runs and their traces once the bot is unshared", async () => {
+    const { owner, space, dana, bot } = await sharedBotSpace("bot-share-runs");
+    const share = { botId: bot.id, visibility: "space", userIds: [] };
+    await rpc(app, owner, "bots/share", share, space);
+    const danaThread = (
+      await rpc<{ threadId: string }>(app, dana.cookie, "threads/get", { botId: bot.id }, space)
+    ).threadId;
+    const run = await finishedRun(space, bot.id, dana.userId, danaThread);
+    const recent = async () =>
+      (
+        await rpc<{ runs: Array<{ runId: string }> }>(
+          app,
+          dana.cookie,
+          "runs/list",
+          { filter: "recent" },
+          space,
+        )
+      ).runs.map((row) => row.runId);
+    const read = (procedure: string) => raw(app, dana.cookie, procedure, { runId: run.id }, space);
+
+    expect(await recent()).toEqual([run.id]);
+    await expect(read("runs/entries")).resolves.toMatchObject({ status: 200 });
+    await expect(read("runs/recap")).resolves.toMatchObject({ status: 200 });
+
+    await rpc(app, owner, "bots/share", { ...share, visibility: "private" }, space);
+    expect(await recent()).toEqual([]);
+    await expect(read("runs/entries")).resolves.toMatchObject({ status: 404 });
+    await expect(read("runs/recap")).resolves.toMatchObject({ status: 404 });
   });
 
   it("renames a space only for its owner", async () => {
@@ -1880,6 +2067,7 @@ interface SharedBot {
   id: string;
   threadId: string;
   isOwner: boolean;
+  status: string;
   instructions: string;
   modelId: string | null;
 }

@@ -2074,6 +2074,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               : loadAgentScratchpadContext(deps, {
                   spaceId: run.spaceId,
                   botId: bot.id,
+                  userId: run.userId,
                 }),
             recallPromise,
           ]);
@@ -4511,6 +4512,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             return listScratchpadItemsFromTool(deps, {
               spaceId: run.spaceId,
               botId: bot.id,
+              userId: run.userId,
               includeDone: Boolean(args.includeDone),
             });
           }

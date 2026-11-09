@@ -12,7 +12,7 @@ import { type ComputerMode, ensureComputerRecord, parseComputerMode } from "./co
 import { createThreadMessageInTransaction } from "./messages.js";
 import { BotSectionNameConflictError, IsolationError } from "./scope.js";
 import { lockSpaceForContentCreation } from "./spaces.js";
-import { activeRunSelection, sessionPreviews } from "./thread-listing.js";
+import { activeRunSelection, ownerRunSelection, sessionPreviews } from "./thread-listing.js";
 
 function isUniqueViolation(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "P2002");
@@ -194,7 +194,7 @@ export function createRepos(prisma: PrismaClient) {
         sectionId: true,
         updatedAt: true,
         thread: { select: { unread: true, sessionId: true } },
-        runs: activeRunSelection,
+        runs: ownerRunSelection,
       },
       orderBy: [{ pinned: "desc" }, { position: "asc" }, { createdAt: "asc" }],
     });
@@ -346,7 +346,7 @@ export function createRepos(prisma: PrismaClient) {
         },
         include: {
           thread: true,
-          runs: activeRunSelection,
+          runs: ownerRunSelection,
           computer: { select: { scope: true } },
         },
         orderBy: [{ pinned: "desc" }, { position: "asc" }, { createdAt: "asc" }],

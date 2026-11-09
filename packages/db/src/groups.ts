@@ -11,7 +11,7 @@ import type { Prisma, PrismaClient } from "./client.js";
 import { expireComputerExecutionLeases } from "./computers.js";
 import { IsolationError } from "./scope.js";
 import { lockSpaceForContentCreation } from "./spaces.js";
-import { activeRunSelection, activeRunStatuses, sessionPreviews } from "./thread-listing.js";
+import { activeRunStatuses, ownerRunSelection, sessionPreviews } from "./thread-listing.js";
 
 type GroupRecord = {
   id: string;
@@ -131,7 +131,7 @@ const groupInclude = {
           name: true,
           color: true,
           shapeSeed: true,
-          runs: activeRunSelection,
+          runs: ownerRunSelection,
         },
       },
     },
@@ -150,7 +150,7 @@ const groupTargetInclude = {
           name: true,
           color: true,
           shapeSeed: true,
-          runs: activeRunSelection,
+          runs: ownerRunSelection,
         },
       },
     },
