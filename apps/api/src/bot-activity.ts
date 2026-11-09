@@ -12,7 +12,7 @@ import { RUNS_PAGE_DEFAULT } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, projectThreadItems, routineRoles, runRecap } from "@rakazo/core";
 import type { Prisma, PrismaClient } from "@rakazo/db";
 import { IsolationError } from "@rakazo/db";
-import { mapRun, RUN_INCLUDE, TERMINAL_STATUSES } from "./runs.js";
+import { mapRun, RUN_INCLUDE, TERMINAL_STATUSES, visibleRuns } from "./runs.js";
 
 type Entry = { createdAt: Date; id: string; item: BotActivityItem };
 
@@ -149,7 +149,7 @@ export async function readCappedRun(sessionLog: RunLog, runId: string): Promise<
 
 async function ownRunId(prisma: PrismaClient, actor: Actor, runId: string): Promise<string> {
   const run = await prisma.run.findFirst({
-    where: { id: runId, spaceId: actor.spaceId, userId: actor.userId },
+    where: { id: runId, ...visibleRuns(actor) },
     select: { id: true },
   });
   if (!run) throw new IsolationError();

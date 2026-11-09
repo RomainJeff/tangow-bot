@@ -1382,6 +1382,36 @@ describeWithDatabase("API authorization and resource isolation", () => {
     expect(group?.members.find((member) => member.botId === bot.id)?.status).toBe("idle");
   });
 
+  it("hides a member's runs and their traces once the bot is unshared", async () => {
+    const { owner, space, dana, bot } = await sharedBotSpace("bot-share-runs");
+    const share = { botId: bot.id, visibility: "space", userIds: [] };
+    await rpc(app, owner, "bots/share", share, space);
+    const danaThread = (
+      await rpc<{ threadId: string }>(app, dana.cookie, "threads/get", { botId: bot.id }, space)
+    ).threadId;
+    const run = await finishedRun(space, bot.id, dana.userId, danaThread);
+    const recent = async () =>
+      (
+        await rpc<{ runs: Array<{ runId: string }> }>(
+          app,
+          dana.cookie,
+          "runs/list",
+          { filter: "recent" },
+          space,
+        )
+      ).runs.map((row) => row.runId);
+    const read = (procedure: string) => raw(app, dana.cookie, procedure, { runId: run.id }, space);
+
+    expect(await recent()).toEqual([run.id]);
+    await expect(read("runs/entries")).resolves.toMatchObject({ status: 200 });
+    await expect(read("runs/recap")).resolves.toMatchObject({ status: 200 });
+
+    await rpc(app, owner, "bots/share", { ...share, visibility: "private" }, space);
+    expect(await recent()).toEqual([]);
+    await expect(read("runs/entries")).resolves.toMatchObject({ status: 404 });
+    await expect(read("runs/recap")).resolves.toMatchObject({ status: 404 });
+  });
+
   it("renames a space only for its owner", async () => {
     const cookie = await signup(app, `space-rename-${stamp}@rakazo.test`, "Space Rename");
     const actor = await rpc<Actor>(app, cookie, "me");
