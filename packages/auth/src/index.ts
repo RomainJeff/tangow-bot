@@ -328,7 +328,7 @@ function loopbackTwinOrigins(origin: string): string[] {
   }
 }
 
-/** The app manages Space membership itself; Better Auth's organization endpoints would expose every member's email and bypass that flow. */
+/** Space membership goes through the app; these endpoints would leak member emails and bypass it. */
 export function isBlockedAuthPath(path: string): boolean {
   return path.startsWith("/organization/");
 }

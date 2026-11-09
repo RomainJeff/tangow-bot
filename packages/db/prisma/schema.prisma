@@ -1037,7 +1037,6 @@ model Volume {
   bot          Bot?     @relation(fields: [botId], references: [id], onDelete: Restrict)
   /// The person whose space_shared volume this is; null on bot_private.
   userId       String?
-  /// The last shared skill index taken from this space_shared volume.
   skillIndexReceivedAt DateTime?
   providerKind String
   providerRef  String?

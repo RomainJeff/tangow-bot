@@ -1,9 +1,6 @@
 const PENDING_INVITE_KEY = "rakazo:pending-invite";
 
-/**
- * An invite link opened while signed out waits here through sign in or sign up.
- * localStorage, not sessionStorage: the email verification link opens a new tab.
- */
+/** localStorage, not sessionStorage: sign up's email verification opens a new tab. */
 export function pendingInvite(): string | null {
   try {
     return window.localStorage.getItem(PENDING_INVITE_KEY);
@@ -23,9 +20,7 @@ export function holdInvite(token: string): void {
 export function dropInvite(): void {
   try {
     window.localStorage.removeItem(PENDING_INVITE_KEY);
-  } catch {
-    // Nothing to clear.
-  }
+  } catch {}
 }
 
 export function invitePath(token: string): string {

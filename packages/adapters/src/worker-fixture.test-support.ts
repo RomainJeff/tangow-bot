@@ -45,7 +45,6 @@ export function workerFixture(prisma: PrismaClient) {
       return id;
     },
 
-    /** Makes the fixture's person the owner of the space. */
     async seedMembership(spaceId: string) {
       const createdAt = new Date();
       const role = "owner";

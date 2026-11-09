@@ -8,7 +8,6 @@ export function parseComputerMode(scope: string): ComputerMode {
   throw new Error(`Unknown computer scope: ${scope}`);
 }
 
-/** A team computer belongs to one person in a Space; a dedicated one to its bot. */
 export function computerScopeKey(
   mode: ComputerMode,
   spaceId: string,
@@ -24,7 +23,7 @@ export function dedicatedComputerScopeKey(botId: string) {
   return `bot:${botId}`;
 }
 
-/** Written once, when the row is created: homes created before per-person computers keep `team-<spaceId>`. */
+/** Written once at row creation, so legacy team homes keep `team-<spaceId>`. */
 export function computerHomeKey(
   mode: ComputerMode,
   spaceId: string,

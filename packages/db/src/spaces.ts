@@ -707,8 +707,8 @@ export async function removeSpaceMember(
         spaceId_userId: { spaceId: input.spaceId, userId: input.memberUserId },
       },
     });
-    // Nothing is deleted: their bots are archived, so they claim no new run (webhooks and
-    // channels included), and their routines stop. All of it goes when the Space is deleted.
+    // Archived, not deleted: archived bots claim no run, webhooks and channels included. Their
+    // rows go with the Space.
     const leftovers = { spaceId: input.spaceId, userId: input.memberUserId };
     await tx.bot.updateMany({
       where: { ...leftovers, archivedAt: null },
