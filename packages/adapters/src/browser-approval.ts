@@ -63,6 +63,7 @@ export async function releaseBrowserApprovalScreen(
           spaceId: run.spaceId,
           userId: run.userId,
           botId: run.botId,
+          ...(hold.memberId ? { memberId: hold.memberId } : {}),
           runId,
           screenLeaseId: hold.screenLeaseId,
           signal: new AbortController().signal,

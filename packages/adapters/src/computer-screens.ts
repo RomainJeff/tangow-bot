@@ -11,8 +11,10 @@ export class ComputerScreenUnavailableError extends Error {
   }
 }
 
+/** A screen, and the browser profile on it, belong to the bot, or to one member's runs of it. */
 export function screenSessionKey(context: AdapterContext): string {
-  return context.botId ?? "default";
+  if (!context.botId) return "default";
+  return context.memberId ? `${context.botId}:${context.memberId}` : context.botId;
 }
 
 export class SingleScreenClaimTracker {

@@ -58,6 +58,22 @@ describe("Team Computer parallel screens", () => {
     ).toBe("office");
   });
 
+  it("gives each member of a shared bot a desk of their own and keeps the owner's", async () => {
+    const fake = new FakeSandboxProvider();
+    const owner = { ...writer, botId: "notes" };
+    const dana = { ...owner, memberId: "dana" };
+    const computer = await fake.provision({ botId: "notes", homePath: "/tmp/notes" }, owner);
+    const desk = (text: string, context: typeof owner) =>
+      fake.act(computer, { actions: [{ kind: "clipboard", text }], observe: false }, context);
+
+    await desk("owner-desk", owner);
+    await desk("dana-desk", dana);
+
+    expect((await fake.observe(computer, owner)).activeWindow?.title).toBe("owner-desk");
+    expect((await fake.observe(computer, dana)).activeWindow?.title).toBe("dana-desk");
+    expect((await fake.connectScreen(computer, { view: "stream" }, owner)).url).toMatch(/\/notes$/);
+  });
+
   it("releases a single-screen claim only for the owning bot", () => {
     const claims = new SingleScreenClaimTracker();
     claims.claim("computer-1", writer);
