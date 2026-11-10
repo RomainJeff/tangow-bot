@@ -124,6 +124,14 @@ export const GroupMemberSchema = z.object({
 });
 export type GroupMember = z.infer<typeof GroupMemberSchema>;
 
+/** A person in a group, or one who wrote in its thread, as a group's people are shown. */
+export const GroupPersonSchema = z.object({
+  userId: Id,
+  name: z.string(),
+  image: z.string().nullable(),
+});
+export type GroupPerson = z.infer<typeof GroupPersonSchema>;
+
 /** Selected-text excerpt carried by a reply; capped so a quote stays a quote. */
 export const REPLY_QUOTE_MAX_LENGTH = 2_000;
 
@@ -1007,6 +1015,8 @@ export const ThreadSnapshotSchema = z.object({
   groupId: Id.optional(),
   groupName: z.string().optional(),
   members: z.array(GroupMemberSchema).optional(),
+  /** A group's people and anyone who wrote in it since leaving, for its messages' `authorId`. */
+  people: z.array(GroupPersonSchema).optional(),
   run: RunSchema.nullable(),
   activeRuns: z.array(RunSchema).optional(),
   computer: ComputerStatusSchema.optional(),

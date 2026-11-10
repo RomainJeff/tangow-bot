@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { bootstrapUserSpace } from "./bootstrap-user.js";
 import type { PrismaClient } from "./client.js";
-import { createGroupRepos } from "./groups.js";
+import { createGroupRepos, groupThreadPeople } from "./groups.js";
+import { createThreadMessage } from "./messages.js";
 import { openPgliteDatabase, type PgliteDatabase } from "./pglite.test-support.js";
 import { createRepos } from "./repos.js";
 import { IsolationError } from "./scope.js";
@@ -14,6 +15,7 @@ describe("people in a group", () => {
   let prisma: PrismaClient;
   let space: string;
   let groupId: string;
+  let botId: string;
 
   const actor = (userId: string) => ({
     userId,
@@ -44,6 +46,7 @@ describe("people in a group", () => {
       instructions: "",
       notifyOnFinish: false,
     });
+    botId = bot.id;
     groupId = (
       await createGroupRepos(prisma).createGroup(actor("creator"), {
         name: "Crew",
@@ -85,5 +88,44 @@ describe("people in a group", () => {
       IsolationError,
     );
     expect((await groups.getGroupTarget(actor("creator"), groupId)).name).toBe("Crew");
+  });
+
+  it("marks a person's message unread for the group's other people, not for its writer", async () => {
+    const thread = await prisma.thread.findUniqueOrThrow({ where: { groupId } });
+    await prisma.chatGroupPerson.updateMany({ where: { groupId }, data: { unread: false } });
+    const entry = await createThreadMessage(prisma, {
+      threadId: thread.id,
+      role: "user",
+      blocks: [{ kind: "text", text: "Hello" }],
+      authorId: "person",
+      feedBotId: botId,
+    });
+    expect(entry.payload).toMatchObject({ authorId: "person" });
+    const marks = await prisma.chatGroupPerson.findMany({
+      where: { groupId },
+      select: { userId: true, unread: true },
+      orderBy: { userId: "asc" },
+    });
+    expect(marks).toEqual([
+      { userId: "creator", unread: true },
+      { userId: "person", unread: false },
+    ]);
+  });
+
+  it("still names someone who wrote in the group after they leave it", async () => {
+    const thread = await prisma.thread.findUniqueOrThrow({ where: { groupId } });
+    await prisma.chatGroupPerson.create({ data: { groupId, userId: "outsider" } });
+    await createThreadMessage(prisma, {
+      threadId: thread.id,
+      role: "user",
+      blocks: [{ kind: "text", text: "Bye" }],
+      authorId: "outsider",
+      feedBotId: botId,
+    });
+    await prisma.chatGroupPerson.delete({
+      where: { groupId_userId: { groupId, userId: "outsider" } },
+    });
+    const people = await groupThreadPeople(prisma, { groupId, sessionId: thread.sessionId });
+    expect(people.map((person) => person.userId)).toEqual(["creator", "person", "outsider"]);
   });
 });

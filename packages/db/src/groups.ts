@@ -4,6 +4,7 @@ import {
   GROUP_MEMBER_MIN,
   type Group,
   type GroupMember,
+  type GroupPerson,
   type SpaceGroup,
 } from "@rakazo/contracts";
 import { cancelRunsInTransaction } from "./cancel-runs.js";
@@ -598,4 +599,42 @@ export async function markThreadsUnread(
     where: { unread: false, group: { thread: { id: { in: threadIds } } } },
     data: { unread: true },
   });
+}
+
+/**
+ * Whom a group thread's messages name: its people, in the order they joined, then anyone who
+ * wrote in it and has left since.
+ */
+export async function groupThreadPeople(
+  prisma: Pick<PrismaClient, "chatGroupPerson" | "user" | "$queryRaw">,
+  group: { groupId: string; sessionId: string },
+): Promise<GroupPerson[]> {
+  const [people, authors] = await Promise.all([
+    prisma.chatGroupPerson.findMany({
+      where: { groupId: group.groupId },
+      select: { user: { select: { id: true, name: true, image: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.$queryRaw<Array<{ userId: string }>>`
+      SELECT DISTINCT e.payload->>'authorId' AS "userId"
+      FROM session_entries e
+      WHERE e."sessionId" = ${group.sessionId}
+        AND e.type = 'user.message'
+        AND e.payload->>'authorId' IS NOT NULL
+    `,
+  ]);
+  const current = new Set(people.map((person) => person.user.id));
+  const former = authors.map((row) => row.userId).filter((userId) => !current.has(userId));
+  const formerUsers = former.length
+    ? await prisma.user.findMany({
+        where: { id: { in: former } },
+        select: { id: true, name: true, image: true },
+        orderBy: { name: "asc" },
+      })
+    : [];
+  return [...people.map((person) => person.user), ...formerUsers].map((user) => ({
+    userId: user.id,
+    name: user.name,
+    image: user.image,
+  }));
 }

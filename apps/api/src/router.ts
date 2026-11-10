@@ -1753,7 +1753,7 @@ export function createRouter(deps: RouterDeps) {
       }),
       react: authed.threads.react.handler(async ({ context, input }) => {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
-        const result = await reactToThreadMessage(deps, target, input);
+        const result = await reactToThreadMessage(deps, context.actor, target, input);
         if (result.eventSeq != null) {
           await deps.events.notify(target.threadId, result.eventSeq).catch((error) => {
             getLogger().error("thread reaction realtime notification", error);
@@ -1879,6 +1879,7 @@ export function createRouter(deps: RouterDeps) {
             role: "user",
             blocks,
             feedBotId: botId,
+            authorId: context.actor.userId,
           });
           const active = await tx.run.findFirst({
             where: {

@@ -20,6 +20,8 @@ export interface CreateThreadMessageInput {
   feedBotId?: string;
   /** The bots a group send addresses, in the order it dispatches them. */
   targets?: string[];
+  /** Who wrote a person's message in a group; absent, the thread's own person. */
+  authorId?: string;
 }
 
 /** A person's message whose clientNonce the thread already holds: the first delivery stands. */
@@ -45,7 +47,7 @@ export async function createThreadMessageInTransaction(
     tx,
     input.threadId,
     input.markUnread ?? false,
-    input.role === "user" ? {} : undefined,
+    input.role === "user" ? { userId: input.authorId } : undefined,
   );
   const id = EntryId.parse(randomUUID());
   const entry = await appendSessionEntryInTransaction(tx, {
@@ -79,6 +81,7 @@ function threadMessageEntry(input: CreateThreadMessageInput) {
         : {}),
       ...(input.clientNonce ? { clientNonce: input.clientNonce } : {}),
       ...(input.targets ? { targets: input.targets } : {}),
+      ...(input.authorId ? { authorId: input.authorId } : {}),
       source:
         input.source ??
         (input.blocks.some((block) => block.kind === "channel_message") ? "channel" : "app"),

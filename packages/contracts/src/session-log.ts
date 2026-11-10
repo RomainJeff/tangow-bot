@@ -145,6 +145,8 @@ const UserMessagePayload = z.object({
    * `parent`: what a bot sent the background helper it started, kept in the helper's session.
    */
   source: z.enum(["app", "steering", "channel", "routine", "card", "parent"]),
+  /** The person who wrote it in a group; absent, the thread's own person. */
+  authorId: z.string().min(1).optional(),
 });
 
 const SubagentPayload = z.object({
