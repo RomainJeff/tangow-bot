@@ -1750,6 +1750,35 @@ describeJourneys("required product journeys", () => {
       ],
     });
 
+    // Their memory in a Space they joined: their own there, and of a bot shared with them.
+    const host = await signup(app, `account-delete-host-${stamp}@rakazo.test`, "Host");
+    const hostMe = await rpc<Me>(app, host, "me");
+    const { url } = await rpc<{ url: string }>(app, host, "spaces/createInvite", {
+      spaceId: hostMe.spaceId,
+    });
+    await rpc(app, cookie, "spaces/acceptInvite", { token: new URL(url).pathname.slice(8) });
+    const shared = await rpc<Bot>(app, host, "bots/create", {
+      name: "Shared",
+      title: "",
+      description: "",
+      instructions: "",
+      notifyOnFinish: false,
+    });
+    await rpc(app, host, "bots/share", { botId: shared.id, visibility: "space", userIds: [] });
+    await prisma.memoryDocument.create({
+      data: {
+        spaceId: hostMe.spaceId,
+        botId: shared.id,
+        userId: me.userId,
+        scope: "bot",
+        path: "MEMORY.md",
+        content: "- Private to the deleted account",
+      },
+    });
+    expect(
+      await prisma.memoryDocument.count({ where: { spaceId: hostMe.spaceId, userId: me.userId } }),
+    ).toBe(2);
+
     const deleted = await app.request("/api/auth/delete-user", {
       method: "POST",
       headers: {
@@ -1765,6 +1794,8 @@ describeJourneys("required product journeys", () => {
     expect(await prisma.organization.findUnique({ where: { id: me.spaceId } })).toBeNull();
     expect(await prisma.bot.findUnique({ where: { id: bot.id } })).toBeNull();
     expect(await prisma.volume.count({ where: { spaceId: me.spaceId } })).toBe(0);
+    expect(await prisma.memoryDocument.count({ where: { userId: me.userId } })).toBe(0);
+    expect(await prisma.memoryDocument.count({ where: { botId: shared.id } })).toBe(1);
     expect((await raw(app, cookie, "me")).status).toBeGreaterThanOrEqual(400);
   });
 
