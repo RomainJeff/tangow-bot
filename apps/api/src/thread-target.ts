@@ -297,7 +297,9 @@ async function replayExistingSend(
   const runs = [...created, ...steered, ...answered].toSorted(
     (a, b) => order(a.botId) - order(b.botId),
   );
-  if (runs.length === 0) return null;
+  // A group message that woke no bot records no target, and answers with no run.
+  const wokeNoBot = message.type === "user.message" && message.payload.targets?.length === 0;
+  if (runs.length === 0 && !wokeNoBot) return null;
   await enqueueRunsNeedingContinue(deps.jobs, runs);
   await deps.events.notify(threadId, await threadEventSeq(deps.prisma, threadId)).catch((error) => {
     // Subscribers catch up from the durable event cursor after a missed realtime wake.
@@ -308,10 +310,9 @@ async function replayExistingSend(
 
 function sendResult(message: { seq: number }, runs: ReadonlyArray<{ id: string; taskId: string }>) {
   const first = runs[0];
-  if (!first) throw new IsolationError("Send did not create a run");
   return {
-    taskId: first.taskId,
-    runId: first.id,
+    taskId: first?.taskId,
+    runId: first?.id,
     seq: message.seq,
     runIds: runs.map((run) => run.id),
   };
