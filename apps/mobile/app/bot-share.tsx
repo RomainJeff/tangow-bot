@@ -9,7 +9,6 @@ import { SpokenError } from "../components/bot-page/spoken-error";
 import { UserAvatar } from "../components/user-avatar";
 import { type MobileSpaceNavigation, rpc } from "../lib/api";
 import { mobileTokens } from "../lib/appearance";
-import { useBotPageContext } from "../lib/bot-page";
 import { readShareableApps, readShareSheet, type ShareSheet, saveSharing } from "../lib/bot-share";
 import { useI18n } from "../lib/i18n";
 import { userInitials } from "../lib/inbox";
@@ -28,10 +27,6 @@ export default function BotShareScreen() {
   const styles = useThemedStyles(createShareStyles);
   const { t } = useI18n();
   const router = useRouter();
-  const page = useBotPageContext(botId);
-  const bot = page?.bot;
-  const userId = page?.userId;
-  const spaceId = bot?.spaceId;
   const [sheet, setSheet] = useState<ShareSheet | null>(null);
   const [spaceName, setSpaceName] = useState("");
   const [apps, setApps] = useState<ShareableApp[]>([]);
@@ -40,17 +35,17 @@ export default function BotShareScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
-    if (!spaceId || !userId) return () => undefined;
     let live = true;
     setFailed(false);
-    const opening = readShareSheet({ id: botId, spaceId }, userId);
+    const opening = readShareSheet(botId);
     opening.then(
       (read) => live && setSheet(read),
       () => live && setFailed(true),
     );
-    rpc<MobileSpaceNavigation>("spaces/list").then(
-      (navigation) =>
-        live && setSpaceName(navigation.spaces.find((space) => space.id === spaceId)?.name ?? ""),
+    Promise.all([opening, rpc<MobileSpaceNavigation>("spaces/list")]).then(
+      ([read, navigation]) =>
+        live &&
+        setSpaceName(navigation.spaces.find((space) => space.id === read.bot.spaceId)?.name ?? ""),
       () => undefined,
     );
     // The apps declared on opening stay listed, so switching one off never makes it vanish.
@@ -63,7 +58,7 @@ export default function BotShareScreen() {
     return () => {
       live = false;
     };
-  }, [botId, spaceId, userId]);
+  }, [botId]);
   useEffect(load, [load]);
 
   async function save(next: Parameters<typeof saveSharing>[1]) {
@@ -115,7 +110,7 @@ export default function BotShareScreen() {
     <>
       <Stack.Screen
         options={{
-          title: t("Share {name}", { name: bot?.name ?? "" }),
+          title: t("Share {name}", { name: sheet?.bot.name ?? "" }),
           unstable_headerRightItems: () => [
             { type: "button", label: t("Done"), variant: "done", onPress: () => router.back() },
           ],

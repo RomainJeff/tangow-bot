@@ -6,6 +6,7 @@ const server = vi.hoisted(() => ({
 }));
 
 vi.mock("./api", () => ({
+  selectedSpaceId: () => "space-1",
   rpc: vi.fn(async (proc: string, input: unknown) => {
     server.calls.push({ proc, input });
     const answer = server.answers[proc];
@@ -14,7 +15,7 @@ vi.mock("./api", () => ({
   }),
 }));
 
-import { readShareableApps, saveSharing } from "./bot-share";
+import { readShareableApps, readShareSheet, saveSharing } from "./bot-share";
 
 const skill = (enabled: boolean) => ({
   id: "skill-changelog",
@@ -28,6 +29,24 @@ describe("the mobile share sheet", () => {
   beforeEach(() => {
     server.calls = [];
     server.answers = {};
+  });
+
+  it("fails, for its Retry, when the bot itself can't be read, and opens once it can", async () => {
+    server.answers.me = () => ({ userId: "owner" });
+    const opened = readShareSheet("bot-1");
+    await expect(opened).rejects.toThrow("unexpected bots/get");
+    server.answers["bots/get"] = () => ({ id: "bot-1", name: "Writer", spaceId: "space-1" });
+    server.answers["bots/sharing"] = () => ({ visibility: "private", userIds: [], connectors: [] });
+    server.answers["spaces/members"] = () => ({
+      members: [
+        { userId: "owner", name: "Ada" },
+        { userId: "grace", name: "Grace" },
+      ],
+    });
+    server.answers["agentSkills/list"] = () => [skill(false)];
+    const sheet = await readShareSheet("bot-1");
+    expect(sheet.bot).toEqual({ name: "Writer", spaceId: "space-1" });
+    expect(sheet.people.map((member) => member.userId)).toEqual(["grace"]);
   });
 
   it("saves through bots/share and reads the skills again, since sharing changes which count", async () => {

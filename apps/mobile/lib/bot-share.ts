@@ -1,5 +1,6 @@
 import type {
   AgentSkillCatalogEntry,
+  Bot,
   BotMcpServer,
   BotSharing,
   Connection,
@@ -10,27 +11,32 @@ import type {
 import type { ShareableApp } from "@rakazo/core";
 import { givableSkills, shareableApps } from "@rakazo/core";
 import { rpc } from "./api";
+import { readViewer } from "./bot-page";
 import { t } from "./i18n";
 
-/** Who the bot is shared with, who else is in its Space, and the owner's skills it can be given. */
+/**
+ * The bot, who it is shared with, who else is in its Space, and the owner's skills it can be
+ * given. The bot is read here, not taken from the bot page's record, so any failed read, the
+ * bot's included, ends in the sheet's Retry.
+ */
 export type ShareSheet = {
+  bot: Pick<Bot, "name" | "spaceId">;
   sharing: BotSharing;
   people: SpaceMembers["members"];
   skills: AgentSkillCatalogEntry[];
 };
 
-export async function readShareSheet(
-  bot: { id: string; spaceId: string },
-  userId: string,
-): Promise<ShareSheet> {
+export async function readShareSheet(botId: string): Promise<ShareSheet> {
+  const [bot, me] = await Promise.all([rpc<Bot>("bots/get", { botId }), readViewer()]);
   const [sharing, view, catalog] = await Promise.all([
-    rpc<BotSharing>("bots/sharing", { botId: bot.id }),
+    rpc<BotSharing>("bots/sharing", { botId }),
     rpc<SpaceMembers>("spaces/members", { spaceId: bot.spaceId }),
     rpc<AgentSkillCatalogEntry[]>("agentSkills/list"),
   ]);
   return {
+    bot: { name: bot.name, spaceId: bot.spaceId },
     sharing,
-    people: view.members.filter((member) => member.userId !== userId),
+    people: view.members.filter((member) => member.userId !== me.userId),
     skills: givableSkills(catalog),
   };
 }
