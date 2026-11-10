@@ -88,9 +88,13 @@ export type Bot = z.infer<typeof BotSchema>;
 export const BotVisibilitySchema = z.enum(["private", "space", "people"]);
 export type BotVisibility = z.infer<typeof BotVisibilitySchema>;
 
-/** An app a shared bot needs: each person who runs it brings their own account. */
+/**
+ * An app or MCP server a shared bot needs: each person who runs it brings their own account or
+ * credentials. An MCP entry points at its owner's server, never a copy.
+ */
 export const BotConnectorSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("app"), connectorId: z.string().min(1), provider: z.string().min(1) }),
+  z.object({ kind: z.literal("mcp"), serverId: Id }),
 ]);
 export type BotConnector = z.infer<typeof BotConnectorSchema>;
 
@@ -98,7 +102,7 @@ export const BotSharingSchema = z.object({
   visibility: BotVisibilitySchema,
   /** Kept only for `people`. */
   userIds: z.array(Id).max(200),
-  /** The apps the owner declared: a member's run sees only these. */
+  /** The apps and MCP servers the owner declared: a member's run sees only these. */
   connectors: z.array(BotConnectorSchema).max(100),
 });
 export type BotSharing = z.infer<typeof BotSharingSchema>;

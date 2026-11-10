@@ -397,7 +397,9 @@ export async function offerMissingApps(
     threadId: target.threadId,
     sessionId: bot.thread.sessionId,
   };
-  const declared = botConnectors(bot.connectors);
+  const declared = botConnectors(bot.connectors).flatMap((need) =>
+    need.kind === "app" ? [need] : [],
+  );
   if (declared.length === 0) return;
   const [connected, offered] = await Promise.all([
     deps.prisma.connection.findMany({

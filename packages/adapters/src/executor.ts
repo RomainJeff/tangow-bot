@@ -8926,7 +8926,9 @@ export function declaredOnly<T extends { connectorId: string; provider: string }
 ): T[] {
   if (bot.userId === speakerId) return rows;
   const declared = new Set(
-    botConnectors(bot.connectors ?? []).map((need) => `${need.connectorId}:${need.provider}`),
+    botConnectors(bot.connectors ?? []).flatMap((need) =>
+      need.kind === "app" ? [`${need.connectorId}:${need.provider}`] : [],
+    ),
   );
   return rows.filter((row) => declared.has(`${row.connectorId}:${row.provider}`));
 }

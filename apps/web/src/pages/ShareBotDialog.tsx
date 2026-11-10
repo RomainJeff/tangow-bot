@@ -29,8 +29,8 @@ const givable = (skills: AgentSkillCatalogEntry[]) =>
   skills.filter((skill) => skill.source === "user" && skill.availability !== "disabled");
 
 type App = { key: string; name: string; need: BotConnector };
-const appKey = (app: { connectorId: string; provider: string }) =>
-  `${app.connectorId}:${app.provider}`;
+const appKey = (need: BotConnector) =>
+  need.kind === "mcp" ? `mcp:${need.serverId}` : `${need.connectorId}:${need.provider}`;
 
 /**
  * The owner's connected apps, one per app however many accounts, named as in the catalog, then
@@ -42,7 +42,7 @@ function shareableApps(
   declared: BotConnector[],
 ): App[] {
   const apps = new Map<string, App>();
-  const add = (need: BotConnector, fallbackName: string) => {
+  const add = (need: Extract<BotConnector, { kind: "app" }>, fallbackName: string) => {
     if (apps.has(appKey(need))) return;
     const item = catalog.find(
       (entry) => entry.connectorId === need.connectorId && entry.slug === need.provider,
@@ -53,7 +53,7 @@ function shareableApps(
     if (row.status !== "connected") continue;
     add({ kind: "app", connectorId: row.connectorId, provider: row.provider }, row.displayName);
   }
-  for (const need of declared) add(need, need.provider);
+  for (const need of declared) if (need.kind === "app") add(need, need.provider);
   return [...apps.values()];
 }
 
