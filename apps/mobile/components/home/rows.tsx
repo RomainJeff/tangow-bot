@@ -10,6 +10,7 @@ import { useI18n } from "../../lib/i18n";
 import { botTag, formatThreadTime } from "../../lib/inbox";
 import { useThemedStyles } from "../../lib/native";
 import { previewSnippet } from "../../lib/preview";
+import { rosterMuted } from "../../lib/shared-bot";
 import { BotAvatar } from "../bot-avatar";
 import { GroupAvatar } from "../group-avatar";
 import { createHomeStyles } from "./styles";
@@ -205,7 +206,7 @@ export function BotRow({
   const label = [
     bot.name,
     tag,
-    bot.notifyOnFinish ? null : t("notifications silenced"),
+    rosterMuted(bot) ? t("notifications silenced") : null,
     bot.unread ? t("unread") : null,
     time,
     preview,
@@ -231,7 +232,7 @@ export function BotRow({
           identity={bot.id}
           shapeSeed={bot.shapeSeed}
           status={bot.status}
-          muted={!bot.notifyOnFinish}
+          muted={rosterMuted(bot)}
           size={sizes.mobileStack}
           still
         />

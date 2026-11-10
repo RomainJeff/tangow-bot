@@ -4,6 +4,7 @@ import { drawsNothing, projectThreadView } from "@rakazo/core";
 import { describe, expect, it } from "vitest";
 import {
   hasVisibleMessagePresentation,
+  memoryNoteLine,
   messagePresentationSegments,
   skillLineRoute,
   skillLineSegment,
@@ -198,5 +199,30 @@ describe("skill lines", () => {
       ["message", "e_0", true],
       ["message", "e_2", false],
     ]);
+  });
+
+  it("draws a save for a shared bot's team under the message, and nothing for a private save", () => {
+    const entries = [
+      { type: "memory.revised", payload: { facts: ["Releases go out on Thursdays"], team: true } },
+      { type: "memory.revised", payload: { facts: ["Prefers short replies"] } },
+    ].map((entry, seq) =>
+      SessionEntrySchema.parse({
+        id: `e_${seq}`,
+        seq,
+        parentId: seq === 0 ? null : `e_${seq - 1}`,
+        ts: `2026-11-10T09:00:0${seq}.000Z`,
+        sessionId: "ses_main",
+        botId: "bot_ada",
+        runId: "run_1",
+        ...entry,
+      }),
+    );
+    const rows = projectThreadView(entries, {
+      rendersNothing: (item) =>
+        drawsNothing(item, (blocks) => hasVisibleMessagePresentation(blocks)),
+    }).rows;
+    expect(
+      rows.map((row) => (row.item.kind === "note" ? memoryNoteLine(row.item) : row.item.kind)),
+    ).toEqual(["Saved for the team"]);
   });
 });

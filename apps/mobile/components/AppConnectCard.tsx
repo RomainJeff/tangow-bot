@@ -147,6 +147,11 @@ export function AppConnectCard({
           </Text>
         ) : null}
       </View>
+      {view.hint ? (
+        <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
+          {view.hint}
+        </Text>
+      ) : null}
       {error ? (
         <Text style={{ color: tokens.destructive, ...nativeTextStyle("meta") }}>{error}</Text>
       ) : null}

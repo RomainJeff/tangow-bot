@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { ComposioEmulator } from "@rakazo/adapters";
+import { ComposioEmulator, ScriptedVoiceProvider } from "@rakazo/adapters";
 import type { appContract, Space, SpaceNavigation } from "@rakazo/contracts";
 import {
   claimEmptySpaceDeletionForMember,
@@ -1088,6 +1088,63 @@ describeWithDatabase("API authorization and resource isolation", () => {
       );
     return { owner, space, dana, sam, bot, listed };
   }
+
+  it("speaks a shared bot's messages in its own voice for a member, and for nobody else", async () => {
+    const { owner, space, dana, sam, bot } = await sharedBotSpace("bot-voice");
+    await rpc(app, owner, "bots/update", { botId: bot.id, voiceId: "owner-picked-voice" }, space);
+    await rpc(
+      app,
+      owner,
+      "bots/share",
+      {
+        botId: bot.id,
+        visibility: "people",
+        userIds: [dana.userId],
+      },
+      space,
+    );
+    for (const cookie of [dana.cookie, sam.cookie]) {
+      await rpc(
+        app,
+        cookie,
+        "voice/connect",
+        { provider: "scripted", apiKey: "fake-voice-key" },
+        space,
+      );
+    }
+    const synthesize = vi.spyOn(ScriptedVoiceProvider.prototype, "synthesize");
+    try {
+      const speak = (cookie: string) =>
+        app.request("/api/voice/speak", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie,
+            "x-rakazo-space-id": space,
+            origin: "http://127.0.0.1:5173",
+          },
+          body: JSON.stringify({ text: "Release notes go out on Thursdays.", botId: bot.id }),
+        });
+
+      await expect(
+        rpc(app, dana.cookie, "voice/prepare", { text: "Hello.", botId: bot.id }, space),
+      ).resolves.toMatchObject({ ready: true });
+      expect((await speak(dana.cookie)).status).toBe(200);
+      expect(synthesize).toHaveBeenCalledWith(
+        expect.objectContaining({ voiceId: "owner-picked-voice" }),
+        expect.anything(),
+      );
+
+      // In the Space but not shared with: the bot stays out of reach, as before.
+      await expect(
+        raw(app, sam.cookie, "voice/prepare", { text: "Hello.", botId: bot.id }, space),
+      ).resolves.toMatchObject({ status: 404 });
+      expect((await speak(sam.cookie)).status).toBeGreaterThanOrEqual(400);
+      expect(synthesize).toHaveBeenCalledOnce();
+    } finally {
+      synthesize.mockRestore();
+    }
+  });
 
   it("shares a bot only by its owner and only with members of its Space", async () => {
     const { owner, space, dana, sam, bot, listed } = await sharedBotSpace("bot-share");

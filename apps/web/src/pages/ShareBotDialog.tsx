@@ -2,14 +2,19 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import type {
   AgentSkillCatalogEntry,
   Bot,
-  BotConnector,
-  BotMcpServer,
   BotSharing,
-  Connection,
   ConnectionCatalogItem,
-  McpServer,
   SpaceMembers,
 } from "@rakazo/contracts";
+import type { ShareableApp } from "@rakazo/core";
+import {
+  connectorKey,
+  declareApp,
+  givableSkills,
+  shareableApps,
+  shareWithPerson,
+  shareWithSpace,
+} from "@rakazo/core";
 import {
   Checkbox,
   Dialog,
@@ -26,54 +31,15 @@ import { saveFailureReason } from "../lib/save-store";
 import { userInitials } from "../lib/user-initials";
 import { SettingsGroup } from "./bot-page/page-kit";
 
-/** The owner's own skills a bot can be given; a disabled one is given to no bot. */
-const givable = (skills: AgentSkillCatalogEntry[]) =>
-  skills.filter((skill) => skill.source === "user" && skill.availability !== "disabled");
-
-type App = { key: string; name: string; need: BotConnector };
-const appKey = (need: BotConnector) =>
-  need.kind === "mcp" ? `mcp:${need.serverId}` : `${need.connectorId}:${need.provider}`;
-
 /**
- * The owner's connected apps, one per app however many accounts, named as in the catalog, and the
- * MCP servers they gave the bot, then everything already declared, so an app the owner has since
- * disconnected or a server they deleted can still be unticked.
+ * The owner's MCP servers, and those given to the bot: the only ones it can declare. A failed read
+ * fails the apps list, since without them a declared server would read as deleted.
  */
-function shareableApps(
-  rows: Connection[],
-  catalog: ConnectionCatalogItem[],
-  servers: { all: McpServer[]; given: Set<string> },
-  declared: BotConnector[],
-  deleted: string,
-): App[] {
-  const apps = new Map<string, App>();
-  const add = (need: BotConnector, name: string) => {
-    if (!apps.has(appKey(need))) apps.set(appKey(need), { key: appKey(need), name, need });
-  };
-  const nameOf = (need: BotConnector, fallback: string) =>
-    need.kind === "mcp"
-      ? (servers.all.find((server) => server.id === need.serverId)?.name ?? deleted)
-      : (catalog.find(
-          (entry) => entry.connectorId === need.connectorId && entry.slug === need.provider,
-        )?.name ?? fallback);
-  for (const row of rows) {
-    if (row.status !== "connected") continue;
-    const need = { kind: "app", connectorId: row.connectorId, provider: row.provider } as const;
-    add(need, nameOf(need, row.displayName));
-  }
-  for (const server of servers.all) {
-    if (servers.given.has(server.id)) add({ kind: "mcp", serverId: server.id }, server.name);
-  }
-  for (const need of declared) add(need, nameOf(need, need.kind === "app" ? need.provider : ""));
-  return [...apps.values()];
-}
-
-/** The owner's MCP servers, and those given to the bot: the only ones it can declare. */
 async function givenServers(botId: string) {
   const [all, assignments] = await Promise.all([
     rpc.mcp.servers.list(),
     rpc.mcp.assignments.list({ botId }),
-  ]).catch(() => [[], []] as [McpServer[], BotMcpServer[]]);
+  ]);
   return { all, given: new Set(assignments.map((assignment) => assignment.serverId)) };
 }
 
@@ -98,7 +64,7 @@ export function ShareBotDialog({
   const [sharing, setSharing] = useState<BotSharing | null>(null);
   const [people, setPeople] = useState<SpaceMembers["members"]>([]);
   const [skills, setSkills] = useState<AgentSkillCatalogEntry[]>([]);
-  const [apps, setApps] = useState<App[]>([]);
+  const [apps, setApps] = useState<ShareableApp[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -114,7 +80,7 @@ export function ShareBotDialog({
         if (!live) return;
         setSharing(current);
         setPeople(view.members.filter((member) => member.userId !== userId));
-        setSkills(givable(catalog));
+        setSkills(givableSkills(catalog));
       },
       () => live && setError(t`Couldn't load`),
     );
@@ -145,7 +111,7 @@ export function ShareBotDialog({
     try {
       setSharing(await rpc.bots.share({ botId: bot.id, ...next }));
       // Sharing changes which skills count for the bot.
-      setSkills(givable(await rpc.agentSkills.list()));
+      setSkills(givableSkills(await rpc.agentSkills.list()));
     } catch (failure) {
       setSharing(previous);
       // A refusal the API explains, such as a bot still running, says why.
@@ -168,22 +134,15 @@ export function ShareBotDialog({
     }
   }
 
-  const declared = new Set(sharing?.connectors.map(appKey));
-  const giveApp = (app: App, checked: boolean) => {
-    if (!sharing) return;
-    const connectors = checked
-      ? [...sharing.connectors, app.need]
-      : sharing.connectors.filter((need) => appKey(need) !== app.key);
-    void save({ visibility: sharing.visibility, userIds: sharing.userIds, connectors });
+  const declared = new Set(sharing?.connectors.map(connectorKey));
+  const giveApp = (app: ShareableApp, checked: boolean) => {
+    if (sharing) void save(declareApp(sharing, app, checked));
   };
 
   const everyone = sharing?.visibility === "space";
   const chosen = sharing?.visibility === "people" ? sharing.userIds : [];
   const toggle = (memberId: string, checked: boolean) => {
-    const userIds = checked
-      ? [...chosen, memberId]
-      : chosen.filter((chosenId) => chosenId !== memberId);
-    void save({ visibility: userIds.length > 0 ? "people" : "private", userIds });
+    if (sharing) void save(shareWithPerson(sharing, memberId, checked));
   };
 
   return (
@@ -202,13 +161,7 @@ export function ShareBotDialog({
                   aria-label={t`Everyone in ${spaceName}`}
                   checked={everyone}
                   disabled={pending}
-                  onCheckedChange={(checked) =>
-                    void save(
-                      checked
-                        ? { visibility: "space", userIds: [] }
-                        : { visibility: "private", userIds: [] },
-                    )
-                  }
+                  onCheckedChange={(checked) => void save(shareWithSpace(checked))}
                 />
               </SettingRow>
             </SettingsGroup>

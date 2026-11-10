@@ -221,6 +221,7 @@ import {
 import { messageArrivalStaggerMs, useMessageArrivals } from "../lib/message-arrivals";
 import {
   hasVisibleMessagePresentation,
+  memoryNoteLine,
   messagePresentationSegments,
   skillLineRoute,
   skillLineSegment,
@@ -237,6 +238,7 @@ import {
 import { reactionPopKey, useReactionPops } from "../lib/reaction-pop";
 import { threadRefreshDelayMs } from "../lib/refresh";
 import { isViewedRunLine, originSession } from "../lib/session-sheet";
+import { rosterMuted, sharedWithMe, threadBotActions } from "../lib/shared-bot";
 import { closeSheet, openSheet } from "../lib/sheet";
 import { openSpawnBotEdit, syncSpawnBotEdit } from "../lib/spawn-bot-edit";
 import { hexWithAlpha } from "../lib/stop-contour-math";
@@ -561,9 +563,7 @@ function Thread() {
   const drawnRows = useRef<ReadonlyMap<string, ThreadRow>>(new Map());
   const liveView = useMemo((): ThreadView => {
     const projected = projectThreadView(snap?.entries ?? [], {
-      // ponytail: no team memory line on mobile until shared bots reach it; the row stays out.
       rendersNothing: (item) =>
-        (item.kind === "note" && item.type === "memory.revised") ||
         drawsNothing(item, (blocks) => hasVisibleMessagePresentation(blocks, showSteps)),
       progress: snap?.layer,
       imageStacks: true,
@@ -630,9 +630,14 @@ function Thread() {
   const slashQueryNormalized = slashQuery?.trim().toLowerCase() ?? null;
   const slashSkillOptions =
     slashQuery !== null && mentionQuery === null ? slashSkills(agentSkills, slashQuery) : [];
+  const currentBot = botId ? mentionBots.find((bot) => bot.id === botId) : undefined;
+  // Your own thread with a bot shared with you: nothing here leads to its owner's screens.
+  const shared = !inGroup && sharedWithMe(currentBot);
   const slashActionOptions =
     slashQuery !== null && mentionQuery === null
       ? SLASH_ACTIONS.filter((action) => {
+          // A shared bot's settings are its owner's.
+          if (shared && action.id === "chat-settings") return false;
           if (!slashQueryNormalized) return true;
           const label = t(action.label);
           return (
@@ -641,7 +646,6 @@ function Thread() {
           );
         })
       : [];
-  const currentBot = botId ? mentionBots.find((bot) => bot.id === botId) : undefined;
   const displayName = currentBot?.name ?? name;
   const notificationThreadId = snap?.threadId ?? currentBot?.threadId;
   activeThreadId.current = notificationThreadId;
@@ -830,40 +834,24 @@ function Thread() {
     [snap?.members],
   );
 
-  const botActions: MenuAction[] = [
-    {
-      label: t("Bot settings"),
-      onPress: () =>
-        router.push({
-          pathname: "/bot",
-          params: { botId: botId ?? "", tab: "settings" },
-        }),
+  const botActions = threadBotActions(shared, {
+    openSettings: () =>
+      router.push({
+        pathname: "/bot",
+        params: { botId: botId ?? "", tab: "settings" },
+      }),
+    share: () => router.push({ pathname: "/bot-share", params: { botId: botId ?? "" } }),
+    openComputer: () =>
+      router.push({
+        pathname: "/computer",
+        params: { botId: botId ?? "", name: displayName ?? t("Bot") },
+      }),
+    clear: () => confirmClearConversation(clearThread),
+    archive: () => {
+      if (botId) archiveBot(botId, leaveBot);
     },
-    {
-      label: t("Open computer"),
-      onPress: () =>
-        router.push({
-          pathname: "/computer",
-          params: { botId: botId ?? "", name: displayName ?? t("Bot") },
-        }),
-    },
-    {
-      label: t("Clear conversation"),
-      destructive: true,
-      onPress: () => confirmClearConversation(clearThread),
-    },
-    {
-      label: t("Archive"),
-      onPress: () => {
-        if (botId) archiveBot(botId, leaveBot);
-      },
-    },
-    {
-      label: t("Delete…"),
-      destructive: true,
-      onPress: () => confirmDeleteBot({ id: botId ?? "", name: displayName || t("Bot") }, leaveBot),
-    },
-  ];
+    remove: () => confirmDeleteBot({ id: botId ?? "", name: displayName || t("Bot") }, leaveBot),
+  });
 
   // `botActions` is rebuilt every render; the header menu keeps stable labels and reads the
   // latest handlers through this ref, so the header effect does not re-run on every render.
@@ -878,7 +866,7 @@ function Thread() {
           onPress: () => botActionsRef.current[index]?.onPress(),
         }),
       ),
-    [t],
+    [t, shared],
   );
 
   useLayoutEffect(() => {
@@ -900,7 +888,7 @@ function Thread() {
                 shapeSeed={currentBot.shapeSeed}
                 size={34}
                 status={currentBotStatus}
-                muted={!currentBot.notifyOnFinish}
+                muted={rosterMuted(currentBot)}
                 still
               />
             ) : null}
@@ -938,7 +926,9 @@ function Thread() {
             compact
             accessibilityLabel={displayName || t("Thread")}
             actions={botMenuActions}
-            onPrimaryAction={() => router.push({ pathname: "/bot", params: { botId } })}
+            onPrimaryAction={
+              shared ? undefined : () => router.push({ pathname: "/bot", params: { botId } })
+            }
             onAndroidOpen={() => setBotActionsOpen(true)}
             style={titleStyle}
           >
@@ -947,7 +937,7 @@ function Thread() {
         );
       },
       headerRight: () =>
-        inGroup ? (
+        shared ? null : inGroup ? (
           <Pressable
             accessibilityLabel={t("Group settings")}
             hitSlop={8}
@@ -995,6 +985,7 @@ function Thread() {
     groupId,
     groupMemberNames,
     inGroup,
+    shared,
     botMenuActions,
     navigation,
     router,
@@ -2226,6 +2217,7 @@ function Thread() {
         // The card shows the link, so the bubble does not repeat the line that is only that link.
         previewedUrl={previewCard && !cardReplacesBubbleView ? previewCard.url : undefined}
         onOpenSession={openStepSession}
+        routineLinks={!shared}
       />
     );
     const bubblePart = (imagePart: "words" | "images") => cloneElement(bubble, { imagePart });
@@ -3530,6 +3522,7 @@ const MessageBubble = memo(function MessageBubble({
   openImageViewer,
   previewedUrl,
   onOpenSession,
+  routineLinks = true,
 }: {
   botId: string;
   groupId?: string;
@@ -3561,6 +3554,8 @@ const MessageBubble = memo(function MessageBubble({
   previewedUrl?: string;
   /** Opens the helper session a step ran. */
   onOpenSession?: (sessionId: SessionId, title: string) => void;
+  /** False on a bot shared with you: its routine screens are its owner's. */
+  routineLinks?: boolean;
 }) {
   const tokens = useMobileTokens();
   const { t } = useI18n();
@@ -3766,6 +3761,7 @@ const MessageBubble = memo(function MessageBubble({
           block={askBlock}
           cardId={message.id}
           cardBotId={cardBotId}
+          routineLinks={routineLinks}
           canAnswer={canAnswer}
           viewerUserId={viewerUserId}
           actionProps={actionProps}
@@ -3985,6 +3981,7 @@ function ApprovalCard({
   block,
   cardId,
   cardBotId,
+  routineLinks,
   canAnswer,
   viewerUserId,
   actionProps,
@@ -3995,6 +3992,8 @@ function ApprovalCard({
   block: Extract<MessageBlock, { kind: "ask" }>;
   cardId: string;
   cardBotId: string;
+  /** False on a bot shared with you: its routine screens are its owner's. */
+  routineLinks: boolean;
   canAnswer: boolean;
   viewerUserId?: string;
   actionProps: MessageActionProps;
@@ -4035,6 +4034,14 @@ function ApprovalCard({
           return t("Answered");
       }
     }
+    const line = (
+      <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
+        {block.confirms === "updated" ? t("Routine updated") : t("Routine created")} ·{" "}
+        <Text style={{ color: tokens.foreground, fontWeight: "600" }}>{created.label}</Text>
+      </Text>
+    );
+    // A shared bot's routine screen is its owner's: the routine is managed by asking the bot.
+    if (!routineLinks) return line;
     return (
       <Pressable
         accessibilityRole="link"
@@ -4046,10 +4053,7 @@ function ApprovalCard({
         }
         style={{ flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 }}
       >
-        <Text style={{ color: tokens.mutedForeground, ...nativeTextStyle("meta") }}>
-          {block.confirms === "updated" ? t("Routine updated") : t("Routine created")} ·{" "}
-          <Text style={{ color: tokens.foreground, fontWeight: "600" }}>{created.label}</Text>
-        </Text>
+        {line}
         <NativeSymbol
           ios="chevron.right"
           android="chevron-forward"
@@ -4263,6 +4267,7 @@ const ItemRow = memo(function ItemRow({
             block={card}
             cardId={item.id}
             cardBotId={item.botId ?? botId}
+            routineLinks={!sharedWithMe(bots.find((bot) => bot.id === (item.botId ?? botId)))}
             canAnswer={!readOnly && canAnswer}
             viewerUserId={viewerUserId}
             actionProps={NO_ACTIONS}
@@ -4323,6 +4328,22 @@ function NoteRow({ item, isNew }: { item: NoteItem; isNew: boolean }) {
     const { skillId, name, change } = item.payload;
     return (
       <BubbleMeta lines={[skillLineMeta({ skillId, name, change }, isNew, router)]} standalone />
+    );
+  }
+  const memory = memoryNoteLine(item);
+  if (memory) {
+    return (
+      <BubbleMeta
+        lines={[
+          {
+            id: item.id,
+            label: memory,
+            icon: { ios: "person.2", android: "people-outline" },
+            live: isNew,
+          },
+        ]}
+        standalone
+      />
     );
   }
   return null;

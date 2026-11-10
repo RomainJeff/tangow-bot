@@ -1,5 +1,10 @@
-import type { AgentSkillCatalogEntry, MemoryDocument, SpaceMemoryConfig } from "@rakazo/contracts";
-import { filterSkillList } from "@rakazo/core";
+import type {
+  AgentSkillCatalogEntry,
+  BotSharing,
+  MemoryDocument,
+  SpaceMemoryConfig,
+} from "@rakazo/contracts";
+import { filterSkillList, showsTeamMemory } from "@rakazo/core";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { rpc } from "../../lib/api";
@@ -36,6 +41,7 @@ export function KnowledgeTab({
   return (
     <>
       <MemoryGroup page={page} epoch={epoch} />
+      <TeamMemoryGroup botId={page.bot.id} epoch={epoch} />
       <Group label={t("Files")}>
         <FileList botId={page.bot.id} path="" shown={5} epoch={epoch} />
       </Group>
@@ -89,6 +95,44 @@ function MemoryGroup({ page, epoch }: { page: BotPageContext; epoch: number }) {
       {provider.read.kind === "ready" && provider.read.value ? (
         <MemoryScopeRow page={page} />
       ) : null}
+    </Group>
+  );
+}
+
+/**
+ * What a run saved for everyone a shared bot is shared with, under the owner's own memory of it:
+ * shown on a shared bot, and on any bot that still has some, since unsharing keeps it.
+ */
+function TeamMemoryGroup({ botId, epoch }: { botId: string; epoch: number }) {
+  const { t } = useI18n();
+  const router = useRouter();
+  const { read } = useFocusedRead(
+    () =>
+      Promise.all([
+        rpc<BotSharing>("bots/sharing", { botId }),
+        rpc<MemoryDocument[]>("memory/list", { botId, scope: "team" }),
+      ]).then(([sharing, docs]) => (showsTeamMemory(sharing, docs) ? docs : null)),
+    [botId, epoch],
+  );
+  if (read.kind !== "ready" || read.value === null) return null;
+  const date = new Intl.DateTimeFormat(dateLocaleForUi(), { day: "numeric", month: "short" });
+  return (
+    <Group label={t("Team memory")}>
+      {read.value.length === 0 ? (
+        <QuietLine>{t("Nothing remembered yet")}</QuietLine>
+      ) : (
+        read.value.map((doc) => (
+          <Row
+            key={doc.id}
+            label={doc.path}
+            subline={date.format(new Date(doc.updatedAt))}
+            chevron
+            onPress={() =>
+              router.push({ pathname: "/bot-memory", params: { botId, documentId: doc.id } })
+            }
+          />
+        ))
+      )}
     </Group>
   );
 }
