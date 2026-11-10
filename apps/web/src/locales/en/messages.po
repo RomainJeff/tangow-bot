@@ -1439,7 +1439,7 @@ msgstr "Could not import skill"
 msgid "Could not install connector"
 msgstr "Could not install connector"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:148
+#: src/pages/bot-page/KnowledgeTab.tsx:181
 #: src/pages/bot-page/page-kit.tsx:80
 #: src/pages/KnowledgeSection.tsx:90
 #: src/pages/KnowledgeSection.tsx:119
@@ -2260,7 +2260,7 @@ msgstr "Fast"
 msgid "Featured"
 msgstr "Featured"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:52
+#: src/pages/bot-page/KnowledgeTab.tsx:66
 msgid "Files"
 msgstr "Files"
 
@@ -2466,7 +2466,7 @@ msgstr "Import"
 msgid "Import OpenAPI JSON"
 msgstr "Import OpenAPI JSON"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:105
+#: src/pages/bot-page/KnowledgeTab.tsx:137
 msgid "Inherit default"
 msgstr "Inherit default"
 
@@ -2532,7 +2532,7 @@ msgstr "Interval unit"
 msgid "Invited by {0}"
 msgstr "Invited by {0}"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:106
+#: src/pages/bot-page/KnowledgeTab.tsx:138
 #: src/pages/MemorySettingsOverlay.tsx:49
 msgid "Isolated"
 msgstr "Isolated"
@@ -2757,14 +2757,14 @@ msgstr "Members ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgid "Members (pick {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgstr "Members (pick {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:36
+#: src/pages/bot-page/KnowledgeTab.tsx:37
 #: src/pages/MemorySettingsOverlay.tsx:159
 #: src/pages/SettingsOverlay.tsx:134
 msgid "Memory"
 msgstr "Memory"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:96
-#: src/pages/bot-page/KnowledgeTab.tsx:100
+#: src/pages/bot-page/KnowledgeTab.tsx:128
+#: src/pages/bot-page/KnowledgeTab.tsx:132
 msgid "Memory scope"
 msgstr "Memory scope"
 
@@ -3166,7 +3166,8 @@ msgstr "Not sent"
 msgid "Nothing is still running"
 msgstr "Nothing is still running"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:42
+#: src/pages/bot-page/KnowledgeTab.tsx:43
+#: src/pages/bot-page/KnowledgeTab.tsx:55
 #: src/pages/KnowledgeSection.tsx:42
 msgid "Nothing remembered yet"
 msgstr "Nothing remembered yet"
@@ -4033,7 +4034,7 @@ msgstr "Share"
 msgid "Share {0}"
 msgstr "Share {0}"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:107
+#: src/pages/bot-page/KnowledgeTab.tsx:139
 #: src/pages/MemorySettingsOverlay.tsx:49
 msgid "Shared"
 msgstr "Shared"
@@ -4114,7 +4115,7 @@ msgstr "Skill learned · {name}"
 msgid "Skill updated · {name}"
 msgstr "Skill updated · {name}"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:55
+#: src/pages/bot-page/KnowledgeTab.tsx:69
 #: src/pages/CustomizeOverlay.tsx:28
 #: src/pages/CustomizeOverlay.tsx:103
 msgid "Skills"
@@ -4302,6 +4303,10 @@ msgstr "Team Computer"
 #: src/pages/MessagingSettingsOverlay.tsx:337
 msgid "Team conversations"
 msgstr "Team conversations"
+
+#: src/pages/bot-page/KnowledgeTab.tsx:49
+msgid "Team memory"
+msgstr "Team memory"
 
 #: src/pages/bot-page/routine-copy.ts:32
 msgid "Teams message"

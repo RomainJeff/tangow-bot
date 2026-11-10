@@ -1,7 +1,15 @@
-import { captureScreenshot, completeOnboarding, createNamedBot, rpc, signup } from "./helpers";
+import type { MemoryDocument } from "@rakazo/contracts";
+import {
+  captureScreenshot,
+  completeOnboarding,
+  createNamedBot,
+  openBotTab,
+  rpc,
+  signup,
+} from "./helpers";
 import { expect, test } from "./test";
 
-test("a member's run on a shared bot saves for the team and the thread says so", async ({
+test("a member's run saves for a shared bot's team, and its owner reads and edits it", async ({
   page,
   browser,
   baseURL,
@@ -37,4 +45,35 @@ test("a member's run on a shared bot saves for the team and the thread says so",
   await guest.setViewportSize({ width: 390, height: 844 });
   await captureScreenshot(guest, testInfo, "team-memory-thread-line-phone");
   await guestContext.close();
+
+  // The owner finds the save under Team memory, beside their own memory of the bot, and edits it.
+  await page.reload();
+  const knowledge = (await openBotTab(page, "Knowledge")).getByTestId("bot-knowledge");
+  const team = knowledge.getByTestId("bot-knowledge-team-memory");
+  const teamRow = team.getByRole("button", { name: /MEMORY\.md/ });
+  await expect(teamRow).toBeVisible();
+  await expect(knowledge.getByTestId("bot-knowledge-memory")).toContainText("MEMORY.md");
+  await captureScreenshot(page, testInfo, "team-memory-section");
+  await teamRow.click();
+  const panel = page.getByTestId("side-panel");
+  const editor = panel.locator("textarea");
+  await expect(editor).toHaveValue("- release notes go out on Thursdays");
+  await editor.fill("- Release notes go out on Thursdays at 10:00");
+  await panel.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(team.getByText("rev 2")).toBeVisible();
+  expect(await rpc<MemoryDocument[]>(page, "memory/list", { botId, scope: "team" })).toEqual([
+    expect.objectContaining({ content: "- Release notes go out on Thursdays at 10:00" }),
+  ]);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await openBotTab(page, "Knowledge");
+  await expect(teamRow).toBeVisible();
+  await captureScreenshot(page, testInfo, "team-memory-section-phone");
+
+  // A private bot has no team memory to show.
+  await rpc(page, "bots/share", { botId, visibility: "private", userIds: [] });
+  await page.reload();
+  await openBotTab(page, "Knowledge");
+  await expect(knowledge.getByTestId("bot-knowledge-memory")).toBeVisible();
+  await expect(team).toHaveCount(0);
 });

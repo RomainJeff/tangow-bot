@@ -31,6 +31,7 @@ export function KnowledgeTab({
 }) {
   const { t } = useLingui();
   const { bot } = page;
+  const shared = useShared(bot.id, epoch);
   return (
     <div data-testid="bot-knowledge" className="flex flex-col gap-6">
       <KnowledgeGroup label={t`Memory`}>
@@ -44,6 +45,19 @@ export function KnowledgeTab({
           onOpen={(doc) => onOpen({ kind: "memory", documentId: doc.id })}
         />
       </KnowledgeGroup>
+      {shared ? (
+        <KnowledgeGroup label={t`Team memory`}>
+          <MemoryDocumentList
+            key={bot.id}
+            load={() => rpc.memory.list({ botId: bot.id, scope: "team" })}
+            epoch={epoch}
+            exportFilename="team-memory.md"
+            emptyLabel={<Trans>Nothing remembered yet</Trans>}
+            testId="bot-knowledge-team-memory"
+            onOpen={(doc) => onOpen({ kind: "memory", documentId: doc.id })}
+          />
+        </KnowledgeGroup>
+      ) : null}
       {memoryProviderConfigured ? (
         <SettingsGroup>
           <MemoryScopeRow page={page} />
@@ -63,6 +77,24 @@ export function KnowledgeTab({
       <ScratchpadSection botId={bot.id} />
     </div>
   );
+}
+
+/** Whether the bot is shared, so it has team memory beside the owner's own. */
+function useShared(botId: string, epoch: number): boolean {
+  const [shared, setShared] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    rpc.bots
+      .sharing({ botId })
+      .then((sharing) => {
+        if (!cancelled) setShared(sharing.visibility !== "private");
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [botId, epoch]);
+  return shared;
 }
 
 function KnowledgeGroup({
@@ -126,8 +158,9 @@ export function MemoryDetail({
   >({ kind: "loading" });
   useEffect(() => {
     let cancelled = false;
+    // The owner's memory of the bot or, on a shared bot, its team memory.
     rpc.memory
-      .list({ botId, scope: "bot" })
+      .list({ botId })
       .then((docs) => {
         if (!cancelled) setRead({ kind: "ready", doc: docs.find((doc) => doc.id === documentId) });
       })
