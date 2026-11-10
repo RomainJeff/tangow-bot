@@ -1,3 +1,4 @@
+import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { allowlistDrift, McpConnector } from "./mcp-connector.js";
 import { type McpOAuthBroker, StoredMcpOAuthProvider } from "./mcp-oauth.js";
@@ -717,6 +718,69 @@ describe("MCP connector session cache", () => {
     expect(state.initializations).toBe(3);
 
     await connector.close();
+  });
+});
+
+describe("MCP servers on a shared bot", () => {
+  it("gives a member's run only their own copies of the servers still declared", async () => {
+    const database = await openPgliteDatabase();
+    const { prisma } = database;
+    for (const id of ["owner", "member"]) {
+      await prisma.user.create({ data: { id, name: id, email: `${id}@rakazo.test` } });
+    }
+    await prisma.organization.create({
+      data: { id: "org-mcp", name: "Org", slug: "org-mcp", createdAt: new Date() },
+    });
+    await prisma.space.create({ data: { id: "w1", organizationId: "org-mcp", name: "Team" } });
+    const bot = await prisma.bot.create({
+      data: { spaceId: "w1", userId: "owner", name: "Notes", color: "#00C46A" },
+    });
+    const give = async (userId: string, slug: string, declaredServerId?: string) => {
+      const server = await prisma.mcpServer.create({
+        data: {
+          spaceId: "w1",
+          userId,
+          slug,
+          name: slug,
+          transport: "streamable_http",
+          endpoint: "https://mcp.example.test/mcp",
+        },
+      });
+      await prisma.botMcpServer.create({
+        data: { spaceId: "w1", userId, botId: bot.id, serverId: server.id, declaredServerId },
+      });
+      return server;
+    };
+    const linear = await give("owner", "linear");
+    await give("owner", "github");
+    await give("member", "linear", linear.id);
+    const declare = (serverIds: string[]) =>
+      prisma.bot.update({
+        where: { id: bot.id },
+        data: { connectors: serverIds.map((serverId) => ({ kind: "mcp", serverId })) },
+      });
+    vi.stubGlobal("fetch", mcpFetch({ failNext: false, initializations: 0 }));
+    const connector = new McpConnector(prisma, {} as never, { network: TEST_NETWORK });
+    const context = { spaceId: "w1", botId: bot.id, signal: new AbortController().signal };
+    const tools = async (userId: string) =>
+      (
+        await connector.discoverTools({
+          ...context,
+          userId,
+          ...(userId === "owner" ? {} : { memberId: userId }),
+        } as never)
+      ).map((tool) => tool.route?.catalogGroup);
+
+    await declare([linear.id]);
+    expect(await tools("member")).toEqual(["linear"]);
+    expect((await tools("owner")).sort()).toEqual(["github", "linear"]);
+
+    await declare([]);
+    expect(await tools("member")).toEqual([]);
+    expect((await tools("owner")).sort()).toEqual(["github", "linear"]);
+
+    await connector.close();
+    await database.close();
   });
 });
 

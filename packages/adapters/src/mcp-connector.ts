@@ -6,7 +6,8 @@ import type {
   ConnectorTool,
 } from "@rakazo/adapter-kit";
 import { isLocalMcpHost } from "@rakazo/contracts";
-import type { McpServer, PrismaClient } from "@rakazo/db";
+import type { McpServer, Prisma, PrismaClient } from "@rakazo/db";
+import { botConnectors } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { connectorError, connectorResult } from "./connector-errors.js";
 import { sanitizeConnectorError } from "./connector-safety.js";
@@ -105,15 +106,34 @@ export class McpConnector implements ConnectorProvider {
     return resolveCatalogCall(call, catalogEntries(await this.authorizedTools(context)));
   }
 
+  /**
+   * The run's person's own servers on the bot. On a bot shared with them, only their copies of
+   * the servers its owner still declares.
+   */
+  private async assignmentsWhere(
+    context: AdapterContext & { botId: string },
+  ): Promise<Prisma.BotMcpServerWhereInput> {
+    const where = {
+      botId: context.botId,
+      spaceId: context.spaceId,
+      userId: context.userId,
+      server: { enabled: true },
+    };
+    if (!context.memberId) return where;
+    const bot = await this.prisma.bot.findUnique({
+      where: { id: context.botId },
+      select: { connectors: true },
+    });
+    const declared = botConnectors(bot?.connectors ?? []).flatMap((need) =>
+      need.kind === "mcp" ? [need.serverId] : [],
+    );
+    return { ...where, declaredServerId: { in: declared } };
+  }
+
   private async authorizedTools(context: AdapterContext): Promise<ConnectorTool[]> {
     if (!context.botId) return [];
     const assignments = await this.prisma.botMcpServer.findMany({
-      where: {
-        botId: context.botId,
-        spaceId: context.spaceId,
-        userId: context.userId,
-        server: { enabled: true },
-      },
+      where: await this.assignmentsWhere({ ...context, botId: context.botId }),
       include: { server: true },
     });
     const groups = await Promise.all(
@@ -195,11 +215,8 @@ export class McpConnector implements ConnectorProvider {
     }
     const assignment = await this.prisma.botMcpServer.findFirst({
       where: {
-        botId: context.botId,
+        ...(await this.assignmentsWhere({ ...context, botId: context.botId })),
         serverId: call.route.resourceId,
-        spaceId: context.spaceId,
-        userId: context.userId,
-        server: { enabled: true },
       },
       include: { server: true },
     });
