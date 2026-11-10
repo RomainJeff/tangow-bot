@@ -8046,7 +8046,7 @@ async function spawnBotPreflight(
       kind: "spawn_bot",
       status: "intended",
       idempotencyKey: { not: effectKey },
-      run: { botId: run.botId, status: { in: [...ACTIVE_RUN_STATUSES] } },
+      run: { botId: run.botId, userId: run.userId, status: { in: [...ACTIVE_RUN_STATUSES] } },
     },
     select: { id: true },
   });
@@ -8064,7 +8064,7 @@ async function spawnBotPreflight(
         kind: "spawn_bot",
         status: "denied",
         updatedAt: { gte: new Date(Date.now() - SPAWN_BOT_CANCEL_LOCK_MS) },
-        run: { botId: run.botId },
+        run: { botId: run.botId, userId: run.userId },
       },
       select: { id: true },
     });
@@ -8524,19 +8524,19 @@ async function settleRoutineCard(
 }
 
 /**
- * Two calls can pass the pre-check together, so after inserting we read back: the oldest
- * pending request of this bot keeps its card, every other one settles with an error.
+ * Two calls can pass the pre-check together, so after inserting we read back: the oldest pending
+ * request of this bot for this person keeps its card, every other one settles with an error.
  */
 async function spawnBotRaceLoss(
   deps: ExecutorDeps,
-  run: { botId: string },
+  run: { botId: string; userId: string },
   effectId: string,
 ): Promise<{ error: string } | undefined> {
   const [first] = await deps.prisma.externalEffect.findMany({
     where: {
       kind: "spawn_bot",
       status: "intended",
-      run: { botId: run.botId, status: { in: [...ACTIVE_RUN_STATUSES] } },
+      run: { botId: run.botId, userId: run.userId, status: { in: [...ACTIVE_RUN_STATUSES] } },
     },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     take: 1,

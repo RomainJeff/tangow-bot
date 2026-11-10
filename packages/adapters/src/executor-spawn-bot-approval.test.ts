@@ -56,7 +56,7 @@ type Effect = {
   reviewDecision?: string;
 };
 
-type WorldRun = { id: string; botId: string; status: string };
+type WorldRun = { id: string; botId: string; userId: string; status: string };
 
 /** ExternalEffect rows and runs shared by every executor of one test. */
 function createWorld() {
@@ -71,7 +71,7 @@ type Where = {
   runId?: string;
   idempotencyKey?: string | { not?: string };
   updatedAt?: { gte?: Date };
-  run?: { botId?: string; status?: { in?: string[] } };
+  run?: { botId?: string; userId?: string; status?: { in?: string[] } };
 };
 
 function matches(world: World, effect: Effect, where: Where = {}) {
@@ -94,6 +94,7 @@ function matches(world: World, effect: Effect, where: Where = {}) {
     const owner = world.runs.find((candidate) => candidate.id === effect.runId);
     if (!owner) return false;
     if (where.run.botId && owner.botId !== where.run.botId) return false;
+    if (where.run.userId && owner.userId !== where.run.userId) return false;
     if (where.run.status?.in && !where.run.status.in.includes(owner.status)) return false;
   }
   return true;
@@ -105,6 +106,7 @@ function fixture({
   world = createWorld(),
   runId = "run-1",
   botId = "bot-1",
+  userId = "user-1",
   botName = "Assistant",
   trigger = "user",
   requireToolApproval = true,
@@ -122,7 +124,7 @@ function fixture({
     threadId: `thread-${runId}`,
     taskId: "task-1",
     spaceId: "space-1",
-    userId: "user-1",
+    userId,
     status: "queued",
     trigger,
     requireToolApproval,
@@ -503,6 +505,20 @@ describe("spawn_bot approval in the executor", () => {
       expect(other.pauseRunForInput).toHaveBeenCalledOnce();
     });
 
+    it.each([
+      ["a member's", "member-1", "user-1"],
+      ["the owner's", "user-1", "member-1"],
+    ])("does not let %s card on a shared bot block anyone else", async (_, first, second) => {
+      const waiting = fixture({ runId: "run-a", userId: first });
+      waiting.setCalls([{ args: veille, executionId: "call-1" }]);
+      await waiting.run_();
+
+      const other = fixture({ world: waiting.world, runId: "run-b", userId: second });
+      other.setCalls([{ args: { ...veille, name: "Autre" }, executionId: "call-2" }]);
+      await other.run_();
+      expect(other.pauseRunForInput).toHaveBeenCalledOnce();
+    });
+
     it("refuses another request in the same run after a Cancel", async () => {
       const f = fixture();
       f.setCalls([{ args: veille, executionId: "call-1" }]);
@@ -635,7 +651,7 @@ describe("spawn_bot approval in the executor", () => {
       "is blocked by a %s run that kept an intended effect",
       async (status) => {
         const world = createWorld();
-        world.runs.push({ id: "old-run", botId: "bot-1", status });
+        world.runs.push({ id: "old-run", botId: "bot-1", userId: "user-1", status });
         world.effects.push({
           id: "effect-old",
           runId: "old-run",
@@ -658,7 +674,7 @@ describe("spawn_bot approval in the executor", () => {
       "is not blocked by a %s run that kept an intended effect",
       async (status) => {
         const world = createWorld();
-        world.runs.push({ id: "old-run", botId: "bot-1", status });
+        world.runs.push({ id: "old-run", botId: "bot-1", userId: "user-1", status });
         world.effects.push({
           id: "effect-old",
           runId: "old-run",
@@ -733,9 +749,9 @@ describe("spawn_bot approval in the executor", () => {
   });
 
   describe("CA30 a Cancel silences unattended bots for 24 hours", () => {
-    function withCancelledCard(hoursAgo: number) {
+    function withCancelledCard(hoursAgo: number, userId = "user-1") {
       const world = createWorld();
-      world.runs.push({ id: "old-run", botId: "bot-1", status: "completed" });
+      world.runs.push({ id: "old-run", botId: "bot-1", userId, status: "completed" });
       const at = new Date(Date.now() - hoursAgo * HOUR);
       world.effects.push({
         id: "effect-old",
@@ -799,6 +815,13 @@ describe("spawn_bot approval in the executor", () => {
       await f.run_();
       expect(f.results[0]).toEqual(SPAWN_BOT_CANCELLED_RESULT);
       expect(f.pauseRunForInput).not.toHaveBeenCalled();
+    });
+
+    it("does not silence a shared bot for the owner after a member's Cancel", async () => {
+      const f = fixture({ world: withCancelledCard(1, "member-1"), trigger: "routine" });
+      f.setCalls([{ args: { ...veille, name: "Autre" }, executionId: "call-1" }]);
+      await f.run_();
+      expect(f.pauseRunForInput).toHaveBeenCalledOnce();
     });
 
     it("lets an unattended bot ask again after 24 hours", async () => {
