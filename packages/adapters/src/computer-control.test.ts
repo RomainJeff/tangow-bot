@@ -94,6 +94,19 @@ describe("computer control leases", () => {
     });
   });
 
+  it("revokes a member's own screen when their takeover on a shared bot expires", async () => {
+    const owner = controlHarness({ controlRunId: "owner-run" });
+    const member = controlHarness({ controlRunId: "member-run", controlRunUserId: "member" });
+
+    await expireComputerControl(owner.deps, "computer-id", "lease-1");
+    await expireComputerControl(member.deps, "computer-id", "lease-1");
+
+    const revoked = (harness: { setScreenControl: { mock: { calls: unknown[][] } } }) =>
+      harness.setScreenControl.mock.calls[0]?.[2];
+    expect(revoked(owner)).not.toHaveProperty("memberId");
+    expect(revoked(member)).toMatchObject({ botId: "bot", memberId: "member" });
+  });
+
   it("resumes the run holding the takeover lease instead of a newer waiting run", async () => {
     const harness = controlHarness({ controlRunId: "run-holding-takeover" });
 
@@ -307,6 +320,8 @@ function controlHarness(
     enqueueError?: Error;
     waitingRunId?: string;
     controlRunId?: string;
+    /** The person whose run holds the takeover; the computer's owner by default. */
+    controlRunUserId?: string;
     executionRunId?: string;
   } = {},
 ) {
@@ -339,6 +354,9 @@ function controlHarness(
         thread: { id: "thread" },
         computer,
       }),
+    },
+    run: {
+      findUnique: vi.fn().mockResolvedValue({ userId: options.controlRunUserId ?? "user" }),
     },
   };
   const setScreenControl = vi.fn(async () => {

@@ -3,6 +3,7 @@ import { BotSharingSchema } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import { cancelRunsInTransaction } from "./cancel-runs.js";
 import type { Prisma, PrismaClient } from "./client.js";
+import { expireComputerExecutionLeases } from "./computers.js";
 import { IsolationError } from "./scope.js";
 
 export class NotBotOwnerError extends Error {
@@ -169,6 +170,8 @@ export async function setBotSharing(
         select: { id: true, taskId: true },
       });
       await cancelRunsInTransaction(tx, runs, new Date(), actor.userId);
+      // A cancelled run waiting on the screen gives the computer back at once.
+      await expireComputerExecutionLeases(tx, { runId: { in: runs.map((run) => run.id) } });
       await tx.routine.updateMany({
         where: { botId: input.botId, userId: { notIn: [...userIds, actor.userId] } },
         data: { active: false, nextRunAt: null },

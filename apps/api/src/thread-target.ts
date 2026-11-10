@@ -60,7 +60,12 @@ import {
   resolveSendAttachments,
 } from "./artifacts.js";
 import { readCappedRun } from "./bot-activity.js";
-import { currentComputerRelease, resolveBusyBotName, toComputerStatus } from "./computer-status.js";
+import {
+  computerSeenBy,
+  currentComputerRelease,
+  resolveBusyBotName,
+  toComputerStatus,
+} from "./computer-status.js";
 import { withSerializableRetry } from "./serializable-retry.js";
 import { loadEntryPage, threadSessionId, withoutHiddenPeerRuns } from "./thread-message-pages.js";
 
@@ -484,12 +489,16 @@ export async function threadSnapshot(
   target: ThreadTarget,
 ): Promise<ThreadSnapshot> {
   if (target.kind === "bot") {
-    const [busyBotName, core] = await Promise.all([
+    // Whose thread this is: the owner's, or a member's own thread with a shared bot.
+    const viewerId = target.bot.thread?.userId ?? target.bot.userId;
+    const [busyBotName, seen, core] = await Promise.all([
       resolveBusyBotName(deps.prisma, {
         computerId: target.bot.computer?.id,
         botId: target.botId,
         botName: target.bot.name,
+        userId: viewerId,
       }),
+      computerSeenBy(deps.prisma, target.bot, viewerId),
       deps.prisma.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR SHARE`;
         const [sessionId, last, waitingRun, busyOrFailed] = await Promise.all([
@@ -578,9 +587,12 @@ export async function threadSnapshot(
       computer: toComputerStatus(
         target.botId,
         target.bot.screenGeneration,
-        target.bot.computer,
-        busyBotName,
-        await currentComputerRelease(deps.sandbox, target.bot),
+        seen.computer,
+        busyBotName ?? (seen.heldByOther ? target.bot.name : null),
+        // A computer's updates are its owner's to apply.
+        viewerId === target.bot.userId
+          ? await currentComputerRelease(deps.sandbox, target.bot)
+          : null,
       ),
     };
   }

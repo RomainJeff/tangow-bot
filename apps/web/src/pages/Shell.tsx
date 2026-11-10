@@ -6,6 +6,7 @@ import { ComputerUpdateProgress } from "../components/ComputerUpdateProgress";
 import { authClient } from "../lib/auth";
 import { markAfterPaint, markOnce } from "../lib/performance";
 import { rpc } from "../lib/rpc";
+import { canTakeComputerControl } from "../lib/thread-events";
 import { userInitials } from "../lib/user-initials";
 import { useAgentSkillCatalog } from "./shell/agent-skill-catalog";
 import type { BotAction, BotCommands } from "./shell/bot-commands";
@@ -337,10 +338,12 @@ export function ShellPage() {
         composerRunning={thread.composerRunning}
         sending={send.sending}
         stopRun={send.stopRun}
-        canTakeControl={
-          store.snapshot?.run?.status === "waiting_takeover" ||
-          (!thread.composerRunning && !store.computer?.busyBotName)
-        }
+        canTakeControl={canTakeComputerControl({
+          shared: active?.isOwner === false,
+          runStatus: store.snapshot?.run?.status,
+          composerRunning: thread.composerRunning,
+          busyBotName: store.computer?.busyBotName,
+        })}
         takeComputerControl={control.takeComputerControl}
         releaseComputer={control.releaseComputer}
         refreshThread={sync.refreshThread}

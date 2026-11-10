@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import { cancelRunsInTransaction } from "./cancel-runs.js";
 import { Prisma, type PrismaClient } from "./client.js";
+import { expireComputerExecutionLeases } from "./computers.js";
 import { IsolationError } from "./scope.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 import { deleteOwnerVolumes } from "./volumes.js";
@@ -730,6 +731,8 @@ export async function removeSpaceMember(
       select: { id: true, taskId: true },
     });
     await cancelRunsInTransaction(tx, activeRuns, new Date());
+    // A cancelled run waiting on a screen gives its computer back at once.
+    await expireComputerExecutionLeases(tx, { runId: { in: activeRuns.map((run) => run.id) } });
     await tx.member.deleteMany({
       where: {
         organizationId,

@@ -177,6 +177,7 @@ import {
   setBotSharing,
   setModelAuto,
   setModelCategory,
+  sharedBotThread,
   threadEventSeq,
   touchGroupUpdatedAt,
   usageBreakdown,
@@ -193,8 +194,10 @@ import {
 import { listBotActivity, readRunEntries, readRunRecap } from "./bot-activity.js";
 import { botProfileLabelsChanged, commitBotUpdate } from "./bot-update.js";
 import {
+  computerSeenBy,
   currentComputerRelease,
   executionBlocksUserTakeover,
+  holdsComputerControl,
   resolveBusyBotName,
   toComputerStatus,
 } from "./computer-status.js";
@@ -386,13 +389,19 @@ async function lockProviderConnectionScope(
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('connection-provider'), hashtext(${scope}))`;
 }
 
-function computerContext(actor: Actor, botId: string, operationId: string): AdapterContext {
+function computerContext(
+  actor: Pick<Actor, "spaceId" | "userId">,
+  botId: string,
+  operationId: string,
+  memberId?: string,
+): AdapterContext {
   return {
     operationId,
     traceId: operationId,
     spaceId: actor.spaceId,
     userId: actor.userId,
     botId,
+    ...(memberId ? { memberId } : {}),
     signal: new AbortController().signal,
   };
 }
@@ -927,6 +936,7 @@ export function createRouter(deps: RouterDeps) {
           userId: context.actor.userId,
           memberUserId: input.userId,
         }).catch(mapSpaceMembershipError);
+        await endCancelledRunControl(deps, input.spaceId);
         return { ok: true as const };
       }),
       invitation: authed.spaces.invitation.handler(({ input }) =>
@@ -1544,7 +1554,11 @@ export function createRouter(deps: RouterDeps) {
             message: "This server's address holds a secret, so it can't be shared",
           });
         }
-        if (visibility !== "private" || input.visibility === "private") return share();
+        if (visibility !== "private" || input.visibility === "private") {
+          const sharing = await share();
+          await endCancelledRunControl(deps, context.actor.spaceId);
+          return sharing;
+        }
         // A shared bot runs on its own computer, restarted without the owner's /workspace/shared.
         const bot = await repos.getBot(context.actor, input.botId);
         return switchBotComputer(context.actor, bot, "dedicated", share);
@@ -1981,6 +1995,7 @@ export function createRouter(deps: RouterDeps) {
               computerId: computer.id,
               botId: other.id,
               botName: other.name,
+              userId: context.actor.userId,
             });
           }
           result.push({ botId: bot.id, name: bot.name, bots: computer.bots, status });
@@ -2014,12 +2029,14 @@ export function createRouter(deps: RouterDeps) {
         computerStatus(deps, context.actor, input.botId),
       ),
       boot: authed.computer.boot.handler(async ({ context, input }) => {
-        const bot = await repos.getBot(context.actor, input.botId);
+        const { bot, memberId } = await computerBot(deps, context.actor, input.botId);
         if (!bot.computer) throw new IsolationError();
         if (bot.computer.state === "running" && bot.computer.providerRef) {
           scheduleComputerSleep(deps.jobs, bot.computer.id);
           return computerStatus(deps, context.actor, input.botId);
         }
+        // A shared bot's computer starts for its runs or its owner.
+        if (memberId) throw new ORPCError("FORBIDDEN");
         const ctx = computerContext(context.actor, bot.id, "boot");
         const manualRunId = `boot:${randomUUID()}`;
         let lease: ComputerExecutionLease | null;
@@ -2219,14 +2236,27 @@ export function createRouter(deps: RouterDeps) {
         return { ok: true as const };
       }),
       takeover: authed.computer.takeover.handler(async ({ context, input }) => {
-        let bot = await repos.getBot(context.actor, input.botId);
+        let { bot, memberId } = await computerBot(deps, context.actor, input.botId);
         if (!bot.computer?.providerRef || bot.computer.state !== "running") {
           throw new ORPCError("BAD_REQUEST", { message: "computer must be running" });
         }
-        if (hasActiveComputerControl(bot.computer) && bot.computer.controlBotId === bot.id) {
+        if (memberId) {
+          // A member takes the screen only when their own run asks them to, or holds it already.
+          const run = await memberComputerRun(deps.prisma, bot, memberId);
+          const controlled = hasActiveComputerControl(bot.computer);
+          if (!run || (!controlled && run.status !== "waiting_takeover")) {
+            throw new ORPCError("FORBIDDEN");
+          }
+          // Someone else has the screen; the member takes over once it is released.
+          if (controlled && bot.computer.controlRunId !== run.id) {
+            throw new ORPCError("CONFLICT", { message: "Computer is busy" });
+          }
+        }
+        if (await holdsComputerControl(deps.prisma, bot.computer, bot, context.actor.userId)) {
           await bindWaitingTakeoverToControl(deps, {
             spaceId: context.actor.spaceId,
             threadId: bot.thread?.id,
+            userId: context.actor.userId,
             botId: bot.id,
             computerId: bot.computer.id,
             controlLeaseId: bot.computer.controlLeaseId!,
@@ -2242,6 +2272,10 @@ export function createRouter(deps: RouterDeps) {
             leaseId: bot.computer.controlLeaseId!,
             expiresAt: bot.computer.controlLeaseExpiresAt!.toISOString(),
           };
+        }
+        if (hasActiveComputerControl(bot.computer) && bot.computer.controlBotId === bot.id) {
+          // Another person on a shared bot has the screen for their own run.
+          throw new ORPCError("CONFLICT", { message: "Computer is busy" });
         }
         if (hasActiveComputerControl(bot.computer) && bot.computer.controlBotId !== bot.id) {
           const previousBotId = bot.computer.controlBotId!;
@@ -2261,12 +2295,12 @@ export function createRouter(deps: RouterDeps) {
               controlRunId: null,
             },
           });
-          bot = await repos.getBot(context.actor, input.botId);
+          ({ bot } = await computerBot(deps, context.actor, input.botId));
           if (!bot.computer) throw new IsolationError();
         }
         if (bot.computer.controlLeaseId) {
           await expireComputerControl(deps, bot.computer.id, bot.computer.controlLeaseId);
-          bot = await repos.getBot(context.actor, input.botId);
+          ({ bot } = await computerBot(deps, context.actor, input.botId));
         }
         if (!bot.computer) throw new IsolationError();
 
@@ -2276,10 +2310,13 @@ export function createRouter(deps: RouterDeps) {
         const executionRun = executionLease
           ? await deps.prisma.run.findUnique({
               where: { id: executionLease.runId },
-              select: { botId: true, status: true },
+              select: { botId: true, status: true, userId: true },
             })
           : null;
+        // On a shared bot, another person's run and the takeover it waits for are theirs.
+        const othersRun = Boolean(executionRun && executionRun.userId !== context.actor.userId);
         const waitingForTakeover =
+          !othersRun &&
           executionRun?.botId === bot.id &&
           (executionRun.status === "waiting_takeover" ||
             bot.computer.controlRunId === executionLease?.runId);
@@ -2289,9 +2326,12 @@ export function createRouter(deps: RouterDeps) {
             leaseExpiresAt: executionLease?.expiresAt,
             runStatus: executionRun?.status,
             takeoverRequested: waitingForTakeover,
+            othersRun,
           })
         ) {
-          throw new ORPCError("CONFLICT", { message: "Stop the bot first" });
+          throw new ORPCError("CONFLICT", {
+            message: othersRun ? "Computer is busy" : "Stop the bot first",
+          });
         }
         // Keep an inactive lease as a fencing tombstone. The next run reclaims it
         // with a higher fence, even if this user's screen remains connected.
@@ -2342,12 +2382,13 @@ export function createRouter(deps: RouterDeps) {
           const current = await deps.prisma.computer.findUniqueOrThrow({
             where: { id: bot.computer.id },
           });
-          if (!hasActiveComputerControl(current) || current.controlBotId !== bot.id) {
+          if (!(await holdsComputerControl(deps.prisma, current, bot, context.actor.userId))) {
             throw new ORPCError("CONFLICT", { message: "Computer control changed; try again" });
           }
           await bindWaitingTakeoverToControl(deps, {
             spaceId: context.actor.spaceId,
             threadId: bot.thread?.id,
+            userId: context.actor.userId,
             botId: bot.id,
             computerId: current.id,
             controlLeaseId: current.controlLeaseId!,
@@ -2394,7 +2435,7 @@ export function createRouter(deps: RouterDeps) {
         return { leaseId, expiresAt: expiresAt.toISOString() };
       }),
       release: authed.computer.release.handler(async ({ context, input }) => {
-        const bot = await repos.getBot(context.actor, input.botId);
+        const { bot, memberId } = await computerBot(deps, context.actor, input.botId);
         if (!bot.computer) throw new IsolationError();
         const controlBotId = bot.computer.controlBotId;
         const controlLeaseId = bot.computer.controlLeaseId;
@@ -2413,11 +2454,14 @@ export function createRouter(deps: RouterDeps) {
           }
           return { ok: true as const };
         }
+        if (!(await holdsComputerControl(deps.prisma, bot.computer, bot, context.actor.userId))) {
+          return { ok: true as const };
+        }
         if (bot.computer.providerRef) {
           await deps.sandbox.setScreenControl?.(
             toComputerRef(bot.computer),
             false,
-            computerContext(context.actor, controlBotId, "screen.release"),
+            computerContext(context.actor, controlBotId, "screen.release", memberId),
             controlLeaseId,
           );
         }
@@ -2546,9 +2590,9 @@ export function createRouter(deps: RouterDeps) {
         return { path: input.path, content };
       }),
       screenUrl: authed.computer.screenUrl.handler(async ({ context, input }) => {
-        let bot = await repos.getBot(context.actor, input.botId);
+        let { bot, memberId } = await computerBot(deps, context.actor, input.botId);
         if (await expireStaleComputerControl(deps, bot.computer)) {
-          bot = await repos.getBot(context.actor, input.botId);
+          ({ bot } = await computerBot(deps, context.actor, input.botId));
         }
         if (
           !bot.computer?.providerRef ||
@@ -2556,19 +2600,33 @@ export function createRouter(deps: RouterDeps) {
         ) {
           return { url: null };
         }
+        // A member sees only their own screen, while their own run holds the computer.
+        if (memberId && !(await memberComputerRun(deps.prisma, bot, memberId))) {
+          return { url: null };
+        }
         const computer = bot.computer;
+        const holdsControl = await holdsComputerControl(
+          deps.prisma,
+          computer,
+          bot,
+          context.actor.userId,
+        );
         const session = await deps.sandbox
           .connectScreen(
             toComputerRef(computer),
             {
               view: "stream",
-              interactive: hasActiveComputerControl(computer) && computer.controlBotId === bot.id,
-              controlToken:
-                computer.controlBotId === bot.id
-                  ? (computer.controlLeaseId ?? undefined)
-                  : undefined,
+              interactive: holdsControl,
+              controlToken: holdsControl ? (computer.controlLeaseId ?? undefined) : undefined,
             },
-            await computerScreenContext(deps.prisma, context.actor, computer.id, bot.id, "screen"),
+            await computerScreenContext(
+              deps.prisma,
+              context.actor,
+              computer.id,
+              bot.id,
+              "screen",
+              memberId,
+            ),
           )
           .catch(async (error: unknown) => {
             if (isComputerScreenUnavailable(error)) {
@@ -2591,10 +2649,7 @@ export function createRouter(deps: RouterDeps) {
           });
         if (!session?.url) return { url: null };
         scheduleComputerSleep(deps.jobs, bot.computer.id);
-        const viewUrl = withViewOnly(
-          session.url,
-          !(hasActiveComputerControl(bot.computer) && bot.computer.controlBotId === bot.id),
-        );
+        const viewUrl = withViewOnly(session.url, !holdsControl);
         return {
           url: addScreenProxyCapability(
             viewUrl,
@@ -2612,7 +2667,11 @@ export function createRouter(deps: RouterDeps) {
         };
       }),
       heartbeat: authed.computer.heartbeat.handler(async ({ context, input }) => {
-        const bot = await repos.getBot(context.actor, input.botId);
+        const { bot, memberId } = await computerBot(deps, context.actor, input.botId);
+        // A member keeps the computer awake only while their own run holds it.
+        if (memberId && !(await memberComputerRun(deps.prisma, bot, memberId))) {
+          return { ok: true as const };
+        }
         if (bot.computer?.state === "running" && bot.computer.providerRef) {
           await deps.prisma.computer.updateMany({
             where: { id: bot.computer.id, state: "running" },
@@ -5307,23 +5366,118 @@ async function computerStatus(
   actor: Actor,
   botId: string,
 ): Promise<ComputerStatus> {
-  const repos = createRepos(deps.prisma);
-  let bot = await repos.getBot(actor, botId);
+  let { bot, memberId } = await computerBot(deps, actor, botId);
   if (await expireStaleComputerControl(deps, bot.computer)) {
-    bot = await repos.getBot(actor, botId);
+    ({ bot } = await computerBot(deps, actor, botId));
   }
   const busyBotName = await resolveBusyBotName(deps.prisma, {
     computerId: bot.computer?.id,
     botId,
     botName: bot.name,
+    userId: actor.userId,
   });
+  const seen = await computerSeenBy(deps.prisma, bot, actor.userId);
   return toComputerStatus(
     botId,
     bot.screenGeneration,
-    bot.computer,
-    busyBotName,
-    await currentComputerRelease(deps.sandbox, actor),
+    seen.computer,
+    busyBotName ?? (seen.heldByOther ? bot.name : null),
+    // A computer's updates are its owner's to apply.
+    memberId ? null : await currentComputerRelease(deps.sandbox, actor),
   );
+}
+
+/**
+ * The bot whose computer the actor reaches: their own, or a bot shared with them (`memberId`),
+ * whose computer they reach only for their own run's screen. Everything else stays the owner's.
+ */
+async function computerBot(deps: RouterDeps, actor: Actor, botId: string) {
+  const owned = await createRepos(deps.prisma)
+    .getBot(actor, botId)
+    .catch((error: unknown) => {
+      if (error instanceof IsolationError) return null;
+      throw error;
+    });
+  if (owned) return { bot: owned, memberId: undefined };
+  const shared = await sharedBotThread(deps.prisma, actor, botId);
+  if (!shared) throw new IsolationError();
+  return { bot: { ...shared.bot, thread: shared.thread }, memberId: actor.userId };
+}
+
+/**
+ * A takeover whose run was just cancelled, because its person lost the bot or left the Space,
+ * ends at once: the provider revokes that person's screen, and its control lease stops matching
+ * any screen capability.
+ */
+async function endCancelledRunControl(deps: RouterDeps, spaceId: string) {
+  const computers = await deps.prisma.computer.findMany({
+    where: {
+      spaceId,
+      controlHolder: "user",
+      controlBotId: { not: null },
+      controlLeaseId: { not: null },
+      controlRunId: { not: null },
+    },
+  });
+  for (const computer of computers) {
+    const run = await deps.prisma.run.findUnique({
+      where: { id: computer.controlRunId! },
+      select: { status: true, userId: true },
+    });
+    if (run?.status !== "cancelled") continue;
+    const botId = computer.controlBotId!;
+    const leaseId = computer.controlLeaseId!;
+    if (computer.providerRef) {
+      await deps.sandbox.setScreenControl?.(
+        toComputerRef(computer),
+        false,
+        computerContext(
+          computer,
+          botId,
+          "screen.release",
+          run.userId === computer.userId ? undefined : run.userId,
+        ),
+        leaseId,
+      );
+    }
+    const released = await deps.events.finalizeComputerControlRelease({
+      spaceId: computer.spaceId,
+      computerId: computer.id,
+      botId,
+      runId: computer.controlRunId,
+      leaseId,
+      holder: "none",
+      reason: "released",
+    });
+    if (!released) continue;
+    await deps.jobs
+      .cancel(computerControlExpireJobKey(computer.id, leaseId))
+      .catch((error) => getLogger().error("computer control expiry cancellation", error));
+  }
+}
+
+/** The member's own run, in their own thread, that holds the shared bot's computer right now. */
+async function memberComputerRun(
+  prisma: PrismaClient,
+  bot: { id: string; computer: { id: string } | null; thread: { id: string } | null },
+  memberId: string,
+) {
+  if (!bot.computer || !bot.thread) return null;
+  const lease = await prisma.computerExecutionLease.findUnique({
+    where: { computerId_botId: { computerId: bot.computer.id, botId: bot.id } },
+    select: { runId: true },
+  });
+  if (!lease) return null;
+  return prisma.run.findFirst({
+    where: {
+      id: lease.runId,
+      botId: bot.id,
+      userId: memberId,
+      threadId: bot.thread.id,
+      status: { in: [...ACTIVE_RUN_STATUSES] },
+    },
+    select: { id: true, status: true },
+  });
 }
 
 async function runComputerReplace(
@@ -5395,6 +5549,8 @@ async function bindWaitingTakeoverToControl(
   input: {
     spaceId: string;
     threadId: string | null | undefined;
+    /** Who takes over: only their own run is bound, never another person's on a shared bot. */
+    userId: string;
     botId: string;
     computerId: string;
     controlLeaseId: string;
@@ -5412,10 +5568,12 @@ async function bindWaitingTakeoverToControl(
 
     const executionRun = await tx.run.findUnique({
       where: { id: executionLease.runId },
-      select: { botId: true, status: true },
+      select: { botId: true, status: true, userId: true },
     });
     const waitingForTakeover =
-      executionRun?.botId === input.botId && executionRun.status === "waiting_takeover";
+      executionRun?.botId === input.botId &&
+      executionRun.userId === input.userId &&
+      executionRun.status === "waiting_takeover";
     if (!waitingForTakeover) return;
     if (input.controlRunId === executionLease.runId) return;
 
@@ -5456,8 +5614,9 @@ async function computerScreenContext(
   computerId: string,
   botId: string,
   operationId: string,
+  memberId?: string,
 ): Promise<AdapterContext> {
-  const context = computerContext(actor, botId, operationId);
+  const context = computerContext(actor, botId, operationId, memberId);
   const lease = await prisma.computerExecutionLease.findUnique({
     where: { computerId_botId: { computerId, botId } },
     select: { runId: true, fence: true, expiresAt: true },

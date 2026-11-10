@@ -1697,9 +1697,11 @@ function Thread() {
           botId: id,
           name:
             snap?.members?.find((member) => member.botId === id)?.name ?? displayName ?? t("Bot"),
+          // Your own run's screen on a bot shared with you: the computer stays its owner's.
+          ...(shared ? { shared: "1" } : {}),
         },
       }),
-    [router, snap?.members, displayName, t],
+    [router, snap?.members, displayName, t, shared],
   );
 
   const speak = useCallback(

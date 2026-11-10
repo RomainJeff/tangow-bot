@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { MobileBot } from "./api.js";
-import { rosterMuted, threadBotActions } from "./shared-bot.js";
+import { computerScreenControls, rosterMuted, threadBotActions } from "./shared-bot.js";
 
 const handlers = {
   openSettings: vi.fn(),
@@ -30,5 +30,24 @@ describe("rosterMuted", () => {
     const silenced = { notifyOnFinish: false } as MobileBot;
     expect(rosterMuted({ ...silenced, isOwner: false })).toBe(false);
     expect(rosterMuted({ ...silenced, isOwner: true })).toBe(true);
+  });
+});
+
+describe("computerScreenControls", () => {
+  const idle = { busyBotName: null, takeoverRequested: false };
+
+  it("offers a member only the takeover their own run asks for", () => {
+    expect(computerScreenControls(true, idle)).toEqual({ takeControl: false, modePicker: false });
+    expect(computerScreenControls(true, { ...idle, takeoverRequested: true })).toEqual({
+      takeControl: true,
+      modePicker: false,
+    });
+  });
+
+  it("keeps the owner's controls as they were", () => {
+    expect(computerScreenControls(false, idle)).toEqual({ takeControl: true, modePicker: true });
+    expect(computerScreenControls(false, { ...idle, busyBotName: "Notes" })).toMatchObject({
+      takeControl: false,
+    });
   });
 });

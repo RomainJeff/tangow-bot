@@ -7,6 +7,7 @@ import type { ThreadState } from "./thread-events.js";
 import {
   activeThreadRuns,
   applyThreadSendReceipt,
+  canTakeComputerControl,
   clearActiveThreadRuns,
   clearBusyWhileWaitingTakeover,
   computerPanelAutoBoot,
@@ -802,6 +803,16 @@ describe("computer event reduction", () => {
       false,
     );
     expect(computerTakeoverBlocked(computer({ busyBotName: "Writer" }), "completed")).toBe(false);
+  });
+
+  it("offers a member Take control only when their own run waits and the screen is free", () => {
+    const idle = { runStatus: null, composerRunning: false, busyBotName: null };
+    const waiting = { ...idle, runStatus: "waiting_takeover" };
+    expect(canTakeComputerControl({ ...idle, shared: true })).toBe(false);
+    expect(canTakeComputerControl({ ...waiting, shared: true })).toBe(true);
+    expect(canTakeComputerControl({ ...waiting, shared: true, busyBotName: "Notes" })).toBe(false);
+    expect(canTakeComputerControl({ ...idle, shared: false })).toBe(true);
+    expect(canTakeComputerControl({ ...idle, shared: false, busyBotName: "Writer" })).toBe(false);
   });
 
   it("marks takeover requested and clears control unless the lease was retained", () => {

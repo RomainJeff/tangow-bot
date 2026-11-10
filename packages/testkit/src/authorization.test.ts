@@ -3,14 +3,18 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { ComposioEmulator, ScriptedVoiceProvider } from "@rakazo/adapters";
 import type { appContract, Space, SpaceNavigation } from "@rakazo/contracts";
+import { resolveScreenProxySecret } from "@rakazo/core";
+import { SCREEN_TARGET_ENDPOINT } from "@rakazo/core/node/screen-capability";
 import {
   claimEmptySpaceDeletionForMember,
   deleteEmptySpaceForMember,
+  pauseRunForTakeover,
   releaseSpaceDeletionClaim,
   renewSpaceDeletionClaim,
 } from "@rakazo/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
+import { addScreenProxyCapability } from "../../../apps/api/src/screen-proxy.ts";
 import { sessionCookieHeader } from "./index.js";
 
 type App = { request: (input: string, init?: RequestInit) => Response | Promise<Response> };
@@ -1916,6 +1920,258 @@ describeWithDatabase("API authorization and resource isolation", () => {
     await rpc(app, owner, "bots/share", { ...share, visibility: "private" }, space);
     await rpc(app, owner, "bots/setComputer", toTeam, space);
     expect(await listed(owner)).toMatchObject({ computerMode: "team" });
+  });
+
+  /** A bot shared with Dana and Sam, its dedicated computer running, and Dana's run on it. */
+  async function sharedBotComputer(prefix: string) {
+    const spaceFixture = await sharedBotSpace(prefix);
+    const { owner, space, dana, sam, bot } = spaceFixture;
+    const share = { botId: bot.id, visibility: "people", userIds: [dana.userId, sam.userId] };
+    await rpc(app, owner, "bots/share", share, space);
+    await rpc(app, owner, "computer/boot", { botId: bot.id }, space);
+    const { computer } = await handles.prisma.bot.findUniqueOrThrow({
+      where: { id: bot.id },
+      select: { computer: { select: { id: true } } },
+    });
+    const computerId = computer!.id;
+    const danaThread = (
+      await rpc<{ threadId: string }>(app, dana.cookie, "threads/get", { botId: bot.id }, space)
+    ).threadId;
+    await rpc(app, sam.cookie, "threads/get", { botId: bot.id }, space);
+    /** Dana's run holding the bot's computer: running for a worker, or paused for her. */
+    const danaRun = async (status: "running" | "waiting_takeover") => {
+      const task = await handles.prisma.task.create({
+        data: {
+          spaceId: space,
+          userId: dana.userId,
+          botId: bot.id,
+          threadId: danaThread,
+          prompt: "Sign in",
+          status: "running",
+        },
+      });
+      const run = await handles.prisma.run.create({
+        data: {
+          spaceId: space,
+          userId: dana.userId,
+          botId: bot.id,
+          threadId: danaThread,
+          taskId: task.id,
+          status,
+          trigger: "user",
+          ...(status === "running" ? { leaseOwner: "worker", leaseFence: 1 } : {}),
+        },
+      });
+      const lease = { runId: run.id, fence: 1, expiresAt: new Date(Date.now() + 60_000) };
+      await handles.prisma.computerExecutionLease.upsert({
+        where: { computerId_botId: { computerId, botId: bot.id } },
+        create: { computerId, botId: bot.id, ...lease },
+        update: lease,
+      });
+      return run;
+    };
+    const call = (cookie: string, procedure: string, body: object = {}) =>
+      raw(app, cookie, procedure, { botId: bot.id, ...body }, space);
+    const status = (cookie: string) =>
+      rpc<{
+        controlHolder: string;
+        busyBotName: string | null;
+        takeoverRequested: boolean;
+        updateAvailable: boolean;
+      }>(app, cookie, "computer/status", { botId: bot.id }, space);
+    const screen = (cookie: string) =>
+      rpc<{ url: string | null }>(app, cookie, "computer/screenUrl", { botId: bot.id }, space);
+    const takeover = (cookie: string) =>
+      rpc<{ leaseId: string }>(app, cookie, "computer/takeover", { botId: bot.id }, space);
+    const release = (cookie: string) =>
+      rpc(app, cookie, "computer/release", { botId: bot.id, reason: "done" }, space);
+    return {
+      ...spaceFixture,
+      share,
+      computerId,
+      danaThread,
+      danaRun,
+      call,
+      status,
+      screen,
+      takeover,
+      release,
+    };
+  }
+
+  it("lets a member take over only their own run's screen on a shared bot", async () => {
+    const fixture = await sharedBotComputer("bot-share-takeover");
+    const { owner, space, dana, sam, bot, listed, share, computerId, danaThread } = fixture;
+    const { call, status, screen } = fixture;
+    const stranger = await signup(app, `bot-share-takeover-stranger-${stamp}@rakazo.test`, "Lee");
+    // Dana's run asked for her on the screen and holds the bot's computer, as a paused run does.
+    const run = await fixture.danaRun("waiting_takeover");
+    await handles.prisma.computer.update({
+      where: { id: computerId },
+      data: { controlRunId: run.id },
+    });
+
+    // Neither the owner nor another member takes over Dana's run.
+    await expect(call(owner, "computer/takeover")).resolves.toMatchObject({ status: 409 });
+    expect(await status(owner)).toMatchObject({ busyBotName: "Notes" });
+    await expect(call(sam.cookie, "computer/takeover")).resolves.toMatchObject({ status: 403 });
+    expect(await screen(sam.cookie)).toEqual({ url: null });
+    expect(await status(sam.cookie)).toMatchObject({ busyBotName: "Notes" });
+    await expect(call(stranger, "computer/takeover")).resolves.toMatchObject({ status: 404 });
+    await expect(call(stranger, "computer/status")).resolves.toMatchObject({ status: 404 });
+
+    expect(await status(dana.cookie)).toMatchObject({ busyBotName: null, updateAvailable: false });
+    await expect(call(dana.cookie, "computer/boot")).resolves.toMatchObject({ status: 200 });
+    const granted = await rpc<{ leaseId: string }>(
+      app,
+      dana.cookie,
+      "computer/takeover",
+      { botId: bot.id },
+      space,
+    );
+    expect(await status(dana.cookie)).toMatchObject({ controlHolder: "user" });
+    expect(await status(owner)).toMatchObject({ controlHolder: "none", busyBotName: "Notes" });
+    // Her own screen and browser profile, under her control.
+    expect((await screen(dana.cookie)).url?.split("/").at(-1)).toBe(
+      `${bot.id}:${dana.userId}?view_only=false`,
+    );
+    await expect(call(dana.cookie, "computer/heartbeat")).resolves.toMatchObject({ status: 200 });
+
+    // The computer itself stays the owner's.
+    for (const [procedure, body] of [
+      ["computer/stop", {}],
+      ["computer/recover", {}],
+      ["computer/reset", {}],
+      ["computer/update", {}],
+      ["computer/input", { kind: "key", payload: { key: "A" } }],
+      ["computer/files", { path: "/" }],
+      ["computer/readFile", { path: "MEMORY.md" }],
+      ["bots/setComputer", { mode: "team" }],
+    ] as const) {
+      await expect(call(dana.cookie, procedure, body), procedure).resolves.toMatchObject({
+        status: 404,
+      });
+    }
+
+    // The owner's release leaves Dana's takeover alone; hers resumes her run in her thread.
+    await rpc(app, owner, "computer/release", { botId: bot.id, reason: "done" }, space);
+    expect(await status(dana.cookie)).toMatchObject({ controlHolder: "user" });
+    await rpc(app, dana.cookie, "computer/release", { botId: bot.id, reason: "done" }, space);
+    await expect(
+      handles.prisma.run.findUniqueOrThrow({ where: { id: run.id } }),
+    ).resolves.toMatchObject({ status: "queued", checkpoint: "takeover" });
+    const takeoverEvents = await handles.prisma.event.findMany({
+      where: { botId: bot.id, type: { startsWith: "computer.takeover" } },
+      select: { threadId: true, type: true, payload: true },
+      orderBy: { seq: "asc" },
+    });
+    expect(takeoverEvents).toEqual([
+      expect.objectContaining({ threadId: danaThread, type: "computer.takeover.granted" }),
+      expect.objectContaining({ threadId: danaThread, type: "computer.takeover.released" }),
+    ]);
+    expect(takeoverEvents[0]?.payload).toMatchObject({ leaseId: granted.leaseId });
+    await expect(call(dana.cookie, "computer/takeover")).resolves.toMatchObject({ status: 403 });
+
+    await rpc(app, owner, "bots/share", { ...share, userIds: [sam.userId] }, space);
+    expect(await listed(dana.cookie)).toBeUndefined();
+    for (const procedure of ["computer/status", "computer/takeover", "computer/screenUrl"]) {
+      await expect(call(dana.cookie, procedure), procedure).resolves.toMatchObject({
+        status: 404,
+      });
+    }
+  });
+
+  it("keeps the owner's screen when a member's run asks for a takeover while the owner holds it", async () => {
+    const fixture = await sharedBotComputer("bot-share-owner-control");
+    const { owner, space, dana, bot, computerId, danaThread } = fixture;
+    const { call, status, screen, takeover, release } = fixture;
+    const owners = await takeover(owner);
+    const run = await fixture.danaRun("running");
+    const attempt = await handles.prisma.attempt.create({
+      data: { runId: run.id, fence: 1, status: "running" },
+    });
+    await expect(
+      pauseRunForTakeover(handles.prisma, {
+        spaceId: space,
+        threadId: danaThread,
+        botId: bot.id,
+        runId: run.id,
+        attemptId: attempt.id,
+        leaseOwner: "worker",
+        leaseFence: 1,
+        reason: "Sign in",
+        computerId,
+      }),
+    ).resolves.toBe(true);
+
+    // The owner's control is never Dana's: she can't take it, learn its lease or end it.
+    const refused = await call(dana.cookie, "computer/takeover");
+    expect(refused.status).toBe(409);
+    expect(await refused.text()).not.toContain(owners.leaseId);
+    expect(await status(dana.cookie)).toMatchObject({
+      controlHolder: "none",
+      busyBotName: "Notes",
+    });
+    await release(dana.cookie);
+    expect(await status(owner)).toMatchObject({ controlHolder: "user" });
+
+    // Once the owner hands back, the screen waits for Dana, and her thread hears of it.
+    await release(owner);
+    expect(await status(dana.cookie)).toMatchObject({
+      busyBotName: null,
+      takeoverRequested: true,
+    });
+    await expect(
+      handles.prisma.event.count({ where: { threadId: danaThread, type: "computer.status" } }),
+    ).resolves.toBe(1);
+    expect((await takeover(dana.cookie)).leaseId).not.toBe(owners.leaseId);
+    expect((await screen(dana.cookie)).url?.split("/").at(-1)).toBe(
+      `${bot.id}:${dana.userId}?view_only=false`,
+    );
+  });
+
+  it("ends an unshared member's takeover at once, screen included", async () => {
+    const fixture = await sharedBotComputer("bot-share-unshared-control");
+    const { owner, space, dana, sam, bot, share, computerId } = fixture;
+    const run = await fixture.danaRun("waiting_takeover");
+    await handles.prisma.computer.update({
+      where: { id: computerId },
+      data: { controlRunId: run.id },
+    });
+    const { leaseId } = await fixture.takeover(dana.cookie);
+    const generations = await handles.prisma.bot.findUniqueOrThrow({
+      where: { id: bot.id },
+      select: { screenGeneration: true, computer: { select: { screenGeneration: true } } },
+    });
+    const secret = resolveScreenProxySecret();
+    const capability = new URL(
+      addScreenProxyCapability(
+        "http://127.0.0.1:49152/embed.html?view_only=false",
+        secret,
+        "http://127.0.0.1:5173",
+        {
+          botId: bot.id,
+          computerId,
+          botGeneration: generations.screenGeneration,
+          computerGeneration: generations.computer!.screenGeneration,
+          controlLeaseId: leaseId,
+        },
+      ),
+    ).pathname;
+    const target = () =>
+      app.request(SCREEN_TARGET_ENDPOINT, {
+        method: "POST",
+        headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" },
+        body: JSON.stringify({ path: capability }),
+      });
+    expect((await target()).status).toBe(200);
+
+    await rpc(app, owner, "bots/share", { ...share, userIds: [sam.userId] }, space);
+    expect((await target()).status).toBe(403);
+    expect(await fixture.status(owner)).toMatchObject({ controlHolder: "none", busyBotName: null });
+    await expect(fixture.takeover(owner)).resolves.toMatchObject({
+      leaseId: expect.any(String),
+    });
   });
 
   it("renames a space only for its owner", async () => {
