@@ -1680,6 +1680,15 @@ describeWithDatabase("API authorization and resource isolation", () => {
       allowedTools: ["list_issues"],
     });
     expect((await appCards(dana.cookie, bot.id, space)).answered).toEqual([`mcp:${linear.id}`]);
+    // Adding it again, say after a failed response, gives back the same copy.
+    await expect(
+      rpc(app, dana.cookie, "bots/addDeclaredMcp", { botId: bot.id, serverId: linear.id }, space),
+    ).resolves.toMatchObject({ id: mine.id });
+    expect(
+      await handles.prisma.botMcpServer.count({
+        where: { botId: bot.id, userId: dana.userId, declaredServerId: linear.id },
+      }),
+    ).toBe(1);
 
     // The existing assignment endpoints stay the owner's: a member attaches nothing through them.
     await expect(

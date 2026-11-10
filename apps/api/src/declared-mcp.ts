@@ -92,7 +92,8 @@ export async function getDeclaredMcp(
 
 /**
  * The actor's own copy of a declared server, with their own credentials under the declared names,
- * given to the shared bot for the actor only with the tools its owner allows there.
+ * given to the shared bot for the actor only with the tools its owner allows there. Their copy
+ * already added stays as it is.
  */
 export async function addDeclaredMcp(
   deps: { prisma: PrismaClient; secrets: EncryptedSecretStore },
@@ -107,6 +108,12 @@ export async function addDeclaredMcp(
   stdio: McpStdioRule,
 ) {
   const { bot, assignment } = await declaredServer(deps.prisma, actor, input, stdio);
+  // Added already, say by a retry after the card failed to flip: that copy, not a second one.
+  const added = await deps.prisma.botMcpServer.findFirst({
+    where: { botId: bot.id, userId: actor.userId, declaredServerId: assignment.serverId },
+    include: { server: true },
+  });
+  if (added) return added.server;
   const declared = publicHalf(assignment);
   const only = (values: Record<string, string>, names: string[]) =>
     Object.fromEntries(names.flatMap((name) => (values[name] ? [[name, values[name]]] : [])));
