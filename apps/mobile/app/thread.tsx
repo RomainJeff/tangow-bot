@@ -840,6 +840,7 @@ function Thread() {
         pathname: "/bot",
         params: { botId: botId ?? "", tab: "settings" },
       }),
+    share: () => router.push({ pathname: "/bot-share", params: { botId: botId ?? "" } }),
     openComputer: () =>
       router.push({
         pathname: "/computer",

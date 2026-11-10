@@ -4,6 +4,7 @@ import { rosterMuted, threadBotActions } from "./shared-bot.js";
 
 const handlers = {
   openSettings: vi.fn(),
+  share: vi.fn(),
   openComputer: vi.fn(),
   clear: vi.fn(),
   archive: vi.fn(),
@@ -17,9 +18,10 @@ describe("threadBotActions", () => {
     ]);
   });
 
-  it("gives the owner the bot's settings, computer and lifecycle", () => {
+  it("gives the owner the bot's settings, sharing, computer and lifecycle", () => {
     expect(threadBotActions(false, handlers).map((action) => action.label)).toEqual([
       "Bot settings",
+      "Share",
       "Open computer",
       "Clear conversation",
       "Archive",

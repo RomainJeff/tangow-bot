@@ -493,6 +493,11 @@ export const RU_MESSAGES: Record<string, string> = {
   "Setup help": "Помощь по настройке",
   Share: "Поделиться",
   "Share {name}": "Поделиться {name}",
+  "Apps this bot can use": "Приложения, доступные этому боту",
+  "Everyone in {space}": "Все в {space}",
+  "Everyone who uses this bot can see its files and browser sign-ins.":
+    "Все, кто пользуется этим ботом, видят его файлы и входы в браузере.",
+  "Skills this bot can use": "Навыки, доступные этому боту",
   Show: "Показать",
   "Show more": "Показать ещё",
   "Show {label}": "Показать {label}",

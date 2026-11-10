@@ -19,6 +19,7 @@ export function rosterMuted(bot: MobileBot | SpaceBot): boolean {
 
 export type ThreadBotHandlers = {
   openSettings: () => void;
+  share: () => void;
   openComputer: () => void;
   clear: () => void;
   archive: () => void;
@@ -31,6 +32,7 @@ export function threadBotActions(shared: boolean, on: ThreadBotHandlers): MenuAc
   if (shared) return [clear];
   return [
     { label: t("Bot settings"), onPress: on.openSettings },
+    { label: t("Share"), onPress: on.share },
     { label: t("Open computer"), onPress: on.openComputer },
     clear,
     { label: t("Archive"), onPress: on.archive },

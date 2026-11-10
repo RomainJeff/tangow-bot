@@ -494,6 +494,11 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Setup help": "设置帮助",
   Share: "分享",
   "Share {name}": "分享 {name}",
+  "Apps this bot can use": "此 Bot 可用的应用",
+  "Everyone in {space}": "{space} 中的所有人",
+  "Everyone who uses this bot can see its files and browser sign-ins.":
+    "使用此 Bot 的每个人都能看到它的文件和浏览器登录。",
+  "Skills this bot can use": "此 Bot 可用的技能",
   Show: "显示",
   "Show more": "显示更多",
   "Show {label}": "显示 {label}",

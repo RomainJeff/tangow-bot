@@ -74,6 +74,10 @@ export default function BotPageScreen() {
     page
       ? [
           {
+            label: t("Share"),
+            onPress: () => router.push({ pathname: "/bot-share", params: { botId } }),
+          },
+          {
             label: t("Clear conversation"),
             destructive: true,
             onPress: () => confirmClearConversation(() => clearConversation(botId)),
