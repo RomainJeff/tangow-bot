@@ -19,12 +19,11 @@ type GroupRecord = {
   userId: string;
   name: string;
   description: string;
-  pinned: boolean;
-  sectionId: string | null;
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
-  thread: { id: string; unread: boolean; sessionId: string } | null;
+  thread: { id: string; sessionId: string } | null;
+  people: PersonRecord[];
   members: Array<{
     bot: {
       id: string;
@@ -36,12 +35,29 @@ type GroupRecord = {
   }>;
 };
 
+type PersonRecord = { userId: string; unread: boolean; pinned: boolean; sectionId: string | null };
+
 type SpaceGroupRecord = Pick<
   GroupRecord,
-  "id" | "spaceId" | "name" | "pinned" | "sectionId" | "updatedAt" | "members"
+  "id" | "spaceId" | "name" | "updatedAt" | "members" | "people"
 > & {
-  thread: { unread: boolean; sessionId: string } | null;
+  thread: { sessionId: string } | null;
 };
+
+/** The actor's own read, pin and section state in a group they are a person in. */
+function personState(people: PersonRecord[], userId: string) {
+  const person = people.find((row) => row.userId === userId);
+  if (!person) throw new IsolationError();
+  return { pinned: person.pinned, sectionId: person.sectionId, unread: person.unread };
+}
+
+/** Pinned first, then the most recently active. */
+function byPinThenActivity(
+  a: { pinned: boolean; updatedAt: string },
+  b: { pinned: boolean; updatedAt: string },
+) {
+  return Number(b.pinned) - Number(a.pinned) || b.updatedAt.localeCompare(a.updatedAt);
+}
 
 function mapGroupMembers(members: GroupRecord["members"]): GroupMember[] {
   return members.map((member) => ({
@@ -53,36 +69,34 @@ function mapGroupMembers(members: GroupRecord["members"]): GroupMember[] {
   }));
 }
 
-function mapGroup(group: GroupRecord, preview: string): Group {
+function mapGroup(group: GroupRecord, preview: string, userId: string): Group {
   if (!group.thread) throw new IsolationError("Group is missing its thread");
+  const { unread, ...organization } = personState(group.people, userId);
   return {
     id: group.id,
     spaceId: group.spaceId,
     name: group.name,
     description: group.description,
-    pinned: group.pinned,
-    sectionId: group.sectionId,
+    ...organization,
     archivedAt: group.archivedAt?.toISOString() ?? null,
     members: mapGroupMembers(group.members),
     threadId: group.thread.id,
     preview,
-    unread: group.thread.unread,
+    unread,
     updatedAt: group.updatedAt.toISOString(),
     createdAt: group.createdAt.toISOString(),
   };
 }
 
-function mapSpaceGroup(group: SpaceGroupRecord, preview: string): SpaceGroup {
+function mapSpaceGroup(group: SpaceGroupRecord, preview: string, userId: string): SpaceGroup {
   if (!group.thread) throw new IsolationError("Group is missing its thread");
   return {
     id: group.id,
     spaceId: group.spaceId,
     name: group.name,
-    pinned: group.pinned,
-    sectionId: group.sectionId,
+    ...personState(group.people, userId),
     members: mapGroupMembers(group.members),
     preview,
-    unread: group.thread.unread,
     updatedAt: group.updatedAt.toISOString(),
   };
 }
@@ -120,8 +134,14 @@ async function assertOwnedBots(
   });
 }
 
+const peopleSelection = {
+  select: { userId: true, unread: true, pinned: true, sectionId: true },
+  orderBy: { createdAt: "asc" as const },
+} as const;
+
 const groupInclude = {
-  thread: { select: { id: true, unread: true, sessionId: true } },
+  thread: { select: { id: true, sessionId: true } },
+  people: peopleSelection,
   members: {
     where: { bot: { archivedAt: null } },
     include: {
@@ -170,9 +190,9 @@ async function groupPreviews(
 }
 
 export function createGroupRepos(prisma: PrismaClient) {
-  async function presentGroup(group: GroupRecord): Promise<Group> {
+  async function presentGroup(group: GroupRecord, userId: string): Promise<Group> {
     const previews = await groupPreviews(prisma, [group]);
-    return mapGroup(group, (group.thread && previews.get(group.thread.sessionId)) ?? "");
+    return mapGroup(group, (group.thread && previews.get(group.thread.sessionId)) ?? "", userId);
   }
 
   async function listSpaceGroupsForSpaces(actor: Actor, spaceIds: string[]): Promise<SpaceGroup[]> {
@@ -187,19 +207,23 @@ export function createGroupRepos(prisma: PrismaClient) {
         id: true,
         spaceId: true,
         name: true,
-        pinned: true,
-        sectionId: true,
         updatedAt: true,
-        thread: { select: { unread: true, sessionId: true } },
+        thread: { select: { sessionId: true } },
         members: groupInclude.members,
+        people: peopleSelection,
       },
-      orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }],
     });
     const listed = groups.filter((group) => hasMinimumActiveMembers(group.members));
     const previews = await groupPreviews(prisma, listed);
-    return listed.map((group) =>
-      mapSpaceGroup(group, (group.thread && previews.get(group.thread.sessionId)) ?? ""),
-    );
+    return listed
+      .map((group) =>
+        mapSpaceGroup(
+          group,
+          (group.thread && previews.get(group.thread.sessionId)) ?? "",
+          actor.userId,
+        ),
+      )
+      .sort(byPinThenActivity);
   }
 
   return {
@@ -211,13 +235,18 @@ export function createGroupRepos(prisma: PrismaClient) {
           archivedAt: options.archived ? { not: null } : null,
         },
         include: groupInclude,
-        orderBy: [{ pinned: "desc" }, { updatedAt: "desc" }],
       });
       const listed = groups.filter((group) => hasMinimumActiveMembers(group.members));
       const previews = await groupPreviews(prisma, listed);
-      return listed.map((group) =>
-        mapGroup(group, (group.thread && previews.get(group.thread.sessionId)) ?? ""),
-      );
+      return listed
+        .map((group) =>
+          mapGroup(
+            group,
+            (group.thread && previews.get(group.thread.sessionId)) ?? "",
+            actor.userId,
+          ),
+        )
+        .sort(byPinThenActivity);
     },
 
     listSpaceGroupsForSpaces,
@@ -271,6 +300,7 @@ export function createGroupRepos(prisma: PrismaClient) {
         await tx.chatGroupMember.createMany({
           data: members.map((member) => ({ groupId: group.id, botId: member.botId })),
         });
+        await tx.chatGroupPerson.create({ data: { groupId: group.id, userId: actor.userId } });
         await tx.thread.create({
           data: {
             spaceId: actor.spaceId,
@@ -283,7 +313,7 @@ export function createGroupRepos(prisma: PrismaClient) {
           include: groupInclude,
         });
       });
-      return mapGroup(created, "");
+      return mapGroup(created, "", actor.userId);
     },
 
     async updateGroup(
@@ -357,13 +387,14 @@ export function createGroupRepos(prisma: PrismaClient) {
         }
         await tx.chatGroup.update({
           where: { id: input.groupId },
-          data: {
-            updatedAt: new Date(),
-            description: input.description?.trim(),
-            pinned: input.pinned,
-            sectionId: input.sectionId,
-          },
+          data: { updatedAt: new Date(), description: input.description?.trim() },
         });
+        if (input.pinned !== undefined || input.sectionId !== undefined) {
+          await tx.chatGroupPerson.update({
+            where: { groupId_userId: { groupId: input.groupId, userId: actor.userId } },
+            data: { pinned: input.pinned, sectionId: input.sectionId },
+          });
+        }
         return tx.chatGroup
           .findFirstOrThrow({
             where: { id: input.groupId },
@@ -373,7 +404,7 @@ export function createGroupRepos(prisma: PrismaClient) {
       });
       if (!updated.group.thread) throw new IsolationError();
       return {
-        group: await presentGroup(updated.group),
+        group: await presentGroup(updated.group, actor.userId),
         cancelledRunIds: updated.cancelledRunIds,
       };
     },
@@ -442,10 +473,8 @@ export function createGroupRepos(prisma: PrismaClient) {
           });
         }
 
-        await tx.chatGroup.update({
-          where: { id: groupId },
-          data: { archivedAt: now, pinned: false },
-        });
+        await tx.chatGroup.update({ where: { id: groupId }, data: { archivedAt: now } });
+        await tx.chatGroupPerson.updateMany({ where: { groupId }, data: { pinned: false } });
 
         return { cancelledRunIds: runIds, computers: computersWithLease };
       });
@@ -506,5 +535,44 @@ export async function touchGroupUpdatedAt(
   await prisma.chatGroup.update({
     where: { id: groupId },
     data: { updatedAt: new Date() },
+  });
+}
+
+/**
+ * A new entry turns a thread unread for whoever did not write it: in a group, every other
+ * person's own mark; elsewhere, the thread's one person's, unless they wrote it. No author is a
+ * bot or the system, so everyone's.
+ */
+export async function markThreadUnread(
+  tx: Pick<Prisma.TransactionClient, "thread" | "chatGroupPerson">,
+  thread: { id: string; groupId: string | null; userId: string },
+  authorId?: string,
+) {
+  if (thread.groupId) {
+    await tx.chatGroupPerson.updateMany({
+      where: {
+        groupId: thread.groupId,
+        unread: false,
+        ...(authorId ? { userId: { not: authorId } } : {}),
+      },
+      data: { unread: true },
+    });
+  } else if (authorId === undefined || thread.userId !== authorId) {
+    await tx.thread.update({ where: { id: thread.id }, data: { unread: true } });
+  }
+}
+
+/** Marks threads unread for everyone in them: no person wrote what was added. */
+export async function markThreadsUnread(
+  tx: Pick<Prisma.TransactionClient, "thread" | "chatGroupPerson">,
+  threadIds: string[],
+) {
+  await tx.thread.updateMany({
+    where: { id: { in: threadIds }, groupId: null },
+    data: { unread: true },
+  });
+  await tx.chatGroupPerson.updateMany({
+    where: { unread: false, group: { thread: { id: { in: threadIds } } } },
+    data: { unread: true },
   });
 }

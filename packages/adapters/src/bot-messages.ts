@@ -14,6 +14,7 @@ import type { Prisma, PrismaClient } from "@rakazo/db";
 import {
   appendSessionEntryInTransaction,
   loadBotMessageContext,
+  markThreadsUnread,
   threadEntryByNonce,
   threadEventSeq,
   withTransactionRetry,
@@ -241,10 +242,7 @@ export async function messageBot(
 
       // Both sides in one transaction so a failed notify cannot leave one delivered and the other
       // blank. The delivery is the recipient's prompt, but it is still unread peer activity.
-      await tx.thread.updateMany({
-        where: { id: { in: [run.threadId, targetThreadId] } },
-        data: { unread: true },
-      });
+      await markThreadsUnread(tx, [run.threadId, targetThreadId]);
       const receivedId = randomUUID();
       await appendBotMessageInTransaction(tx, {
         sender: {

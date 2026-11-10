@@ -32,6 +32,7 @@ model User {
   agentSecrets               AgentSecret[]
   spaceInvitations           SpaceInvitation[]
   botShares                  BotShare[]
+  groupMemberships           ChatGroupPerson[]
 
   @@unique([email])
   @@map("user")
@@ -422,6 +423,7 @@ model Bot {
   skills            BotSkill[]
   volumeSkills      VolumeSkill[]
   groupMembers      ChatGroupMember[]
+  ledGroups         ChatGroup[]       @relation("GroupLeadBot")
   botSecrets BotSecret[]
 
   externalConversations ExternalConversation[]
@@ -460,7 +462,7 @@ model BotSection {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
   bots      Bot[]
-  groups    ChatGroup[]
+  groups    ChatGroupPerson[]
 
   @@unique([spaceId, userId, name])
   @@index([spaceId, userId, position, createdAt])
@@ -484,22 +486,43 @@ model ChatGroup {
   id         String            @id @default(cuid())
   spaceId    String
   space      Space             @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  /// The creator: the one person who manages the group.
   userId      String
   name        String
   description String            @default("")
-  pinned      Boolean           @default(false)
-  sectionId   String?
-  section     BotSection?       @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  /// The bot that answers a message naming no bot; null is the first bot.
+  leadBotId   String?
+  leadBot     Bot?              @relation("GroupLeadBot", fields: [leadBotId], references: [id], onDelete: SetNull)
   archivedAt  DateTime?
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
   members     ChatGroupMember[]
+  people      ChatGroupPerson[]
   thread     Thread?
   artifacts  Artifact[]
 
-  @@index([spaceId, userId, archivedAt, pinned, updatedAt])
-  @@index([sectionId])
+  @@index([spaceId, userId, archivedAt, updatedAt])
+  @@index([leadBotId])
   @@map("chat_groups")
+}
+
+/// A person in a group, the creator included, with their own read, pin and section state.
+model ChatGroupPerson {
+  id        String      @id @default(cuid())
+  groupId   String
+  group     ChatGroup   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unread    Boolean     @default(false)
+  pinned    Boolean     @default(false)
+  sectionId String?
+  section   BotSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  createdAt DateTime    @default(now())
+
+  @@unique([groupId, userId])
+  @@index([userId])
+  @@index([sectionId])
+  @@map("chat_group_people")
 }
 
 model ChatGroupMember {

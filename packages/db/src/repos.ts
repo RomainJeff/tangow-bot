@@ -286,8 +286,8 @@ export function createRepos(prisma: PrismaClient) {
         if (input.botId) {
           await tx.bot.update({ where: { id: target.id }, data: { sectionId: section.id } });
         } else {
-          await tx.chatGroup.update({
-            where: { id: target.id },
+          await tx.chatGroupPerson.update({
+            where: { groupId_userId: { groupId: target.id, userId: actor.userId } },
             data: { sectionId: section.id },
           });
         }

@@ -95,6 +95,7 @@ function deps(
       findFirst: vi.fn().mockResolvedValue(options.targetArchived ? null : { id: "bot-target" }),
     },
     task: { create: vi.fn().mockResolvedValue({ id: "task-1" }) },
+    chatGroupPerson: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     thread: {
       updateMany: vi.fn().mockResolvedValue({ count: 2 }),
       findUniqueOrThrow: vi.fn().mockResolvedValue({ nextEventSeq: 8 }),
@@ -191,7 +192,7 @@ describe("messaging another bot", () => {
     expect(harness.notify).toHaveBeenCalledWith("thread-target", 7);
     expect(harness.notify).toHaveBeenCalledWith("thread-sender", 7);
     expect(harness.tx.thread.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: ["thread-sender", "thread-target"] } },
+      where: { id: { in: ["thread-sender", "thread-target"] }, groupId: null },
       data: { unread: true },
     });
     expect(harness.enqueue).toHaveBeenCalledTimes(1);

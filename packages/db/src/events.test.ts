@@ -454,7 +454,14 @@ describe("pauseRunForInput", () => {
       attempt: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       thread: {
         update: vi.fn().mockResolvedValue({ sessionId: "session-1", botId: "bot-1" }),
-        findUniqueOrThrow: vi.fn().mockResolvedValue({ nextEventSeq: 9 }),
+        findUniqueOrThrow: vi.fn().mockResolvedValue({
+          id: "thread-1",
+          sessionId: "session-1",
+          botId: "bot-1",
+          groupId: null,
+          userId: "user-1",
+          nextEventSeq: 9,
+        }),
       },
       event: {
         create: vi.fn(async ({ data }: { data: { seq: number; type: string } }) => ({
@@ -517,7 +524,14 @@ describe("pauseRunForInput", () => {
       attempt: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       thread: {
         update: vi.fn().mockResolvedValue({ sessionId: "session-1", botId: "bot-1" }),
-        findUniqueOrThrow: vi.fn().mockResolvedValue({ nextEventSeq: 9 }),
+        findUniqueOrThrow: vi.fn().mockResolvedValue({
+          id: "thread-1",
+          sessionId: "session-1",
+          botId: "bot-1",
+          groupId: null,
+          userId: "user-1",
+          nextEventSeq: 9,
+        }),
       },
       event: {
         create: vi.fn(async ({ data }: { data: { seq: number; type: string } }) => ({

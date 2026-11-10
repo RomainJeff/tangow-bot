@@ -3,6 +3,7 @@ import type { SessionEntryDraft } from "@rakazo/adapter-kit";
 import type { MessageBlock, SessionEntry, SessionEntryOf } from "@rakazo/contracts";
 import { EntryId, SessionId } from "@rakazo/contracts";
 import type { Prisma, PrismaClient } from "./client.js";
+import { markThreadUnread } from "./groups.js";
 import { appendRunBlocksInTransaction, appendSessionEntryInTransaction } from "./sessions.js";
 
 export interface CreateThreadMessageInput {
@@ -40,7 +41,12 @@ export async function createThreadMessageInTransaction(
   tx: Prisma.TransactionClient,
   input: CreateThreadMessageInput,
 ): Promise<SessionEntry> {
-  const thread = await markThread(tx, input.threadId, input.markUnread ?? false);
+  const thread = await markThread(
+    tx,
+    input.threadId,
+    input.markUnread ?? false,
+    input.role === "user" ? {} : undefined,
+  );
   const id = EntryId.parse(randomUUID());
   const entry = await appendSessionEntryInTransaction(tx, {
     ...threadMessageEntry(input),
@@ -128,11 +134,31 @@ export async function createBotMessageInTransaction(
   return id;
 }
 
-async function markThread(tx: Prisma.TransactionClient, threadId: string, unread: boolean) {
-  const select = { sessionId: true, botId: true, memberBotId: true } as const;
-  const thread = unread
-    ? await tx.thread.update({ where: { id: threadId }, data: { unread: true }, select })
-    : await tx.thread.findUniqueOrThrow({ where: { id: threadId }, select });
+/**
+ * The thread an entry goes in. `unread` turns it unread for everyone; a person's message in a
+ * group (`author`, the thread's own person when no id is given) is unread for its other people.
+ */
+async function markThread(
+  tx: Prisma.TransactionClient,
+  threadId: string,
+  unread: boolean,
+  author?: { userId?: string },
+) {
+  const thread = await tx.thread.findUniqueOrThrow({
+    where: { id: threadId },
+    select: {
+      id: true,
+      sessionId: true,
+      botId: true,
+      memberBotId: true,
+      groupId: true,
+      userId: true,
+    },
+  });
+  if (unread) await markThreadUnread(tx, thread);
+  else if (author && thread.groupId) {
+    await markThreadUnread(tx, thread, author.userId ?? thread.userId);
+  }
   return {
     sessionId: SessionId.parse(thread.sessionId),
     botId: thread.botId ?? thread.memberBotId,

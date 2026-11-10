@@ -245,6 +245,7 @@ function fixture({
       })),
     },
     chatGroupMember: { findMany: vi.fn(async () => []) },
+    chatGroupPerson: { updateMany: vi.fn(async () => ({ count: 1 })) },
     event: { create: vi.fn(async () => ({ id: "event-1" })), count: vi.fn(async () => 0) },
     usageRecord: { count: vi.fn(async () => 0) },
     task: { findUniqueOrThrow: vi.fn(async () => ({ id: run.taskId, prompt: "Help the user" })) },

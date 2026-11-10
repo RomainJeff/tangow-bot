@@ -41,6 +41,7 @@ import type { BrowserApprovalCheckpoint } from "./browser-approval-checkpoint.js
 import { cancelRunsInTransaction } from "./cancel-runs.js";
 import type { Prisma, PrismaClient, Run } from "./client.js";
 import { expireComputerExecutionLeases } from "./computers.js";
+import { markThreadsUnread } from "./groups.js";
 import { createBotMessageInTransaction, createThreadMessageInTransaction } from "./messages.js";
 import {
   appendCardStateInTransaction,
@@ -403,9 +404,16 @@ async function truncateThreadInTransaction(
         ? { groupId: input.groupId }
         : { OR: [{ botId: input.botId }, { memberBotId: input.botId }] }),
     },
-    data: { unread: false },
+    // A group keeps each person's read mark on their own row.
+    data: input.groupId ? {} : { unread: false },
     select: { sessionId: true },
   });
+  if (input.groupId && input.userId) {
+    await tx.chatGroupPerson.updateMany({
+      where: { groupId: input.groupId, userId: input.userId },
+      data: { unread: false },
+    });
+  }
   const activeRuns = await tx.run.findMany({
     where: {
       spaceId: input.spaceId,
@@ -1683,7 +1691,7 @@ export async function pauseRunForInput(
         where: { id: input.runId },
         select: { sessionId: true },
       });
-      await tx.thread.update({ where: { id: input.threadId }, data: { unread: true } });
+      await markThreadsUnread(tx, [input.threadId]);
       await appendSessionEntryInTransaction(tx, {
         type: "effect.requested",
         sessionId: sessionId as SessionId,

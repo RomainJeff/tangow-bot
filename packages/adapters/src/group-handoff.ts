@@ -6,6 +6,7 @@ import {
   appendSessionEntryInTransaction,
   IsolationError,
   lockOwnedGroup,
+  markThreadsUnread,
   type PrismaClient,
   touchGroupUpdatedAt,
 } from "@rakazo/db";
@@ -121,7 +122,7 @@ export async function handoffToGroupBot(
       } as const;
     }
 
-    await tx.thread.update({ where: { id: run.threadId }, data: { unread: true } });
+    await markThreadsUnread(tx, [run.threadId]);
     const handoff = await appendSessionEntryInTransaction(tx, {
       type: "handoff",
       sessionId: activeSource.sessionId as SessionId,

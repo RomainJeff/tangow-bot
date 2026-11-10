@@ -1322,6 +1322,13 @@ export async function setThreadUnreadState(
   target: ThreadTarget,
   unread: boolean,
 ) {
+  if (target.kind === "group") {
+    await prisma.chatGroupPerson.updateMany({
+      where: { groupId: target.groupId, userId: actor.userId, unread: { not: unread } },
+      data: { unread },
+    });
+    return;
+  }
   const result = await prisma.thread.updateMany({
     where: {
       id: target.threadId,

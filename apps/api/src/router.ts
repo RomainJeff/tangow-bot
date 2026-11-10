@@ -1585,7 +1585,10 @@ export function createRouter(deps: RouterDeps) {
         groupRepos.listGroups(context.actor, { archived: true }),
       ),
       get: authed.groups.get.handler(async ({ context, input }) =>
-        groupRepos.mapGroup(await groupRepos.getGroup(context.actor, input.groupId)),
+        groupRepos.mapGroup(
+          await groupRepos.getGroup(context.actor, input.groupId),
+          context.actor.userId,
+        ),
       ),
       duplicate: authed.groups.duplicate.handler(async ({ context, input }) => {
         const source = await groupRepos.getGroup(context.actor, input.groupId);
