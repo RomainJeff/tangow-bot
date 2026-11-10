@@ -2114,6 +2114,7 @@ describe("sendUserMessage", () => {
     const fanout = new TestFanout();
     const publish = vi.spyOn(fanout, "publish");
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       thread: {
         findUniqueOrThrow: vi
           .fn()
@@ -2191,6 +2192,7 @@ describe("sendUserMessage", () => {
     ["messaging", true],
   ] as const)("steers a busy run with a %s message, untrusted: %s", async (trigger, untrusted) => {
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       thread: {
         findUniqueOrThrow: vi
           .fn()

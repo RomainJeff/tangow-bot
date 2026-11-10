@@ -714,9 +714,13 @@ export async function markThreadUnread(
 
 /** Marks threads unread for everyone in them: no person wrote what was added. */
 export async function markThreadsUnread(
-  tx: Pick<Prisma.TransactionClient, "thread" | "chatGroupPerson">,
+  tx: Pick<Prisma.TransactionClient, "thread" | "chatGroupPerson" | "$queryRaw">,
   threadIds: string[],
 ) {
+  // Thread rows before person rows, in id order: the order every send and append takes.
+  for (const threadId of [...threadIds].sort()) {
+    await tx.$queryRaw`SELECT id FROM threads WHERE id = ${threadId} FOR UPDATE`;
+  }
   await tx.thread.updateMany({
     where: { id: { in: threadIds }, groupId: null },
     data: { unread: true },

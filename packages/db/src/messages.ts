@@ -147,6 +147,8 @@ async function markThread(
   unread: boolean,
   author?: { userId?: string },
 ) {
+  // Thread row before any person row, the order a group send and the append below take.
+  await tx.$queryRaw`SELECT id FROM threads WHERE id = ${threadId} FOR UPDATE`;
   const thread = await tx.thread.findUniqueOrThrow({
     where: { id: threadId },
     select: {

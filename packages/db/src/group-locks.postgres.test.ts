@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb, type PrismaClient } from "./client.js";
 import { clearThread } from "./events.js";
+import { markThreadsUnread } from "./groups.js";
+import { createBotMessageInTransaction } from "./messages.js";
 
 const databaseUrl = process.env.DATABASE_URL;
 const describePostgres =
@@ -104,6 +106,35 @@ describePostgres("group thread lock order (PostgreSQL)", () => {
 
     const probe = await personRowWhileThreadHeld(threadId, groupId, () =>
       clearThread(prisma, { spaceId: id, threadId, botId, groupId, userId: id }),
+    );
+
+    expect(probe).toBe("free");
+  });
+
+  it.each([
+    [
+      "a bot's message",
+      (threadId: string, botId: string) =>
+        prisma.$transaction(
+          (tx) =>
+            createBotMessageInTransaction(tx, {
+              threadId,
+              botId,
+              blocks: [{ kind: "text", text: "hi" }],
+            }),
+          TRANSACTION,
+        ),
+    ],
+    [
+      "a bot's activity",
+      (threadId: string) =>
+        prisma.$transaction((tx) => markThreadsUnread(tx, [threadId]), TRANSACTION),
+    ],
+  ])("marks a group unread for %s behind its thread lock", async (_, operation) => {
+    const { threadId, groupId, botId } = await groupThread();
+
+    const probe = await personRowWhileThreadHeld(threadId, groupId, () =>
+      operation(threadId, botId),
     );
 
     expect(probe).toBe("free");
