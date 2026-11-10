@@ -6,7 +6,12 @@ import { createGroupRepos, GroupCreatorCannotLeaveError } from "./groups.js";
 import { openPgliteDatabase, type PgliteDatabase } from "./pglite.test-support.js";
 import { createRepos } from "./repos.js";
 import { IsolationError } from "./scope.js";
-import { acceptSpaceInvitation, createSpaceForMember, createSpaceInvitation } from "./spaces.js";
+import {
+  acceptSpaceInvitation,
+  createSpaceForMember,
+  createSpaceInvitation,
+  removeSpaceMember,
+} from "./spaces.js";
 
 const env = { signupsEnabled: "true", signupAllowlist: undefined };
 
@@ -136,5 +141,17 @@ describe("a group's people, bots and lead", () => {
       IsolationError,
     );
     expect(await status(creatorRun!.id)).toBe("running");
+  });
+
+  it("takes someone removed from the Space out of its groups and stops their runs there", async () => {
+    const group = await newGroup(["ana", "ben"]);
+    const [anaRun, benRun] = await Promise.all(
+      ["ana", "ben"].map((userId) => startRun(userId, group.threadId)),
+    );
+    await removeSpaceMember(prisma, { spaceId: space, userId: "creator", memberUserId: "ben" });
+
+    expect(await prisma.chatGroupPerson.count({ where: { userId: "ben" } })).toBe(0);
+    expect(await status(benRun!.id)).toBe("cancelled");
+    expect(await status(anaRun!.id)).toBe("running");
   });
 });
