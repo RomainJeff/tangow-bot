@@ -209,12 +209,20 @@ export async function expireComputerControl(
   if (claimed.count !== 1) return false;
 
   if (computer.providerRef) {
+    // A member's takeover on a shared bot is on their own screen, named by their run's person.
+    const run = computer.controlRunId
+      ? await deps.prisma.run.findUnique({
+          where: { id: computer.controlRunId },
+          select: { userId: true },
+        })
+      : null;
     const context: AdapterContext = {
       operationId: "computer.control-expire",
       traceId: "computer.control-expire",
       spaceId: computer.spaceId,
       userId: computer.userId,
       botId,
+      ...(run && run.userId !== computer.userId ? { memberId: run.userId } : {}),
       signal: new AbortController().signal,
     };
     await deps.sandbox.setScreenControl?.(toComputerRef(computer), false, context, leaseId);
