@@ -26,6 +26,14 @@ describe("mobileSearchDestination", () => {
     });
   });
 
+  it("opens a routine match on a bot shared with you in your own thread", () => {
+    const hit: SearchHit = { ...base, kind: "routine", routineId: "routine-1" };
+    expect(mobileSearchDestination(hit, true)).toEqual({
+      pathname: "/thread",
+      params: { botId: "bot-1", name: "Scout" },
+    });
+  });
+
   it("opens group matches in the group thread", () => {
     const hit: SearchHit = {
       kind: "message",
