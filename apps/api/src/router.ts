@@ -393,7 +393,7 @@ async function lockProviderConnectionScope(
 
 function computerContext(
   actor: Pick<Actor, "spaceId" | "userId">,
-  botId: string,
+  botId: string | undefined,
   operationId: string,
   memberId?: string,
 ): AdapterContext {
@@ -402,7 +402,7 @@ function computerContext(
     traceId: operationId,
     spaceId: actor.spaceId,
     userId: actor.userId,
-    botId,
+    ...(botId ? { botId } : {}),
     ...(memberId ? { memberId } : {}),
     signal: new AbortController().signal,
   };

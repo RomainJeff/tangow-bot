@@ -378,8 +378,10 @@ export async function destroyBot(
   await deps.workerLifecycle?.releaseOwnerWorkers({ botId: bot.id }, context);
   const deletion = await withTransactionRetry(() =>
     deps.prisma.$transaction(async (tx) => {
-      const locked = await tx.$queryRaw<Array<{ id: string; webhookSecretId: string | null }>>`
-        SELECT id, "webhookSecretId"
+      const locked = await tx.$queryRaw<
+        Array<{ id: string; userId: string; webhookSecretId: string | null }>
+      >`
+        SELECT id, "userId", "webhookSecretId"
         FROM bots
         WHERE id = ${bot.id} AND "spaceId" = ${bot.spaceId}
         FOR UPDATE
@@ -394,7 +396,10 @@ export async function destroyBot(
       await tx.artifact.deleteMany({
         where: { botId: bot.id, groupId: null, spaceId: bot.spaceId },
       });
-      const groupCleanup = await detachBotFromGroups(tx, bot.id);
+      const groupCleanup = await detachBotFromGroups(tx, {
+        id: bot.id,
+        userId: locked[0]?.userId ?? bot.userId,
+      });
       await tx.computerExecutionLease.deleteMany({ where: { botId: bot.id } });
       await tx.computer.updateMany({
         where: {
@@ -482,7 +487,16 @@ export async function destroyBot(
   }
 }
 
-async function detachBotFromGroups(tx: Prisma.TransactionClient, botId: string) {
+/**
+ * Takes a deleted bot out of its groups. A group left with no active bot is dissolved when the
+ * bot's owner created it; someone else's, built with a bot shared with them, is archived with its
+ * history instead.
+ */
+async function detachBotFromGroups(
+  tx: Prisma.TransactionClient,
+  bot: { id: string; userId: string | undefined },
+) {
+  const botId = bot.id;
   await tx.$queryRaw<Array<{ id: string }>>`
     SELECT groups.id
     FROM chat_groups AS groups
@@ -500,23 +514,24 @@ async function detachBotFromGroups(tx: Prisma.TransactionClient, botId: string) 
       thread: { select: { id: true } },
     },
   });
-  const dissolvedGroupIds: string[] = [];
-  for (const group of affectedGroups) {
-    const activeMembersAfterDeletion = group.members.filter(
-      (member) => member.botId !== botId && member.bot.archivedAt === null,
-    ).length;
-    if (activeMembersAfterDeletion < GROUP_MEMBER_MIN) {
-      dissolvedGroupIds.push(group.id);
-    }
-  }
-  const dissolvedGroupIdSet = new Set(dissolvedGroupIds);
-  const dissolvedThreadIds = affectedGroups
-    .filter((group) => dissolvedGroupIdSet.has(group.id))
-    .flatMap((group) => (group.thread ? [group.thread.id] : []));
-  const activeRuns = dissolvedThreadIds.length
+  const closedGroups = affectedGroups.filter(
+    (group) =>
+      group.members.filter((member) => member.botId !== botId && member.bot.archivedAt === null)
+        .length < GROUP_MEMBER_MIN,
+  );
+  const dissolvedGroupIds = closedGroups
+    .filter((group) => group.userId === bot.userId)
+    .map((group) => group.id);
+  const archivedGroupIds = closedGroups
+    .filter((group) => group.userId !== bot.userId)
+    .map((group) => group.id);
+  const closedThreadIds = closedGroups.flatMap((group) =>
+    group.thread ? [group.thread.id] : [],
+  );
+  const activeRuns = closedThreadIds.length
     ? await tx.run.findMany({
         where: {
-          threadId: { in: dissolvedThreadIds },
+          threadId: { in: closedThreadIds },
           status: { in: [...ACTIVE_RUN_STATUSES] },
         },
         select: {
@@ -556,6 +571,16 @@ async function detachBotFromGroups(tx: Prisma.TransactionClient, botId: string) 
     : [];
   if (dissolvedGroupIds.length) {
     await tx.chatGroup.deleteMany({ where: { id: { in: dissolvedGroupIds } } });
+  }
+  if (archivedGroupIds.length) {
+    await tx.chatGroup.updateMany({
+      where: { id: { in: archivedGroupIds }, archivedAt: null },
+      data: { archivedAt: new Date() },
+    });
+    await tx.chatGroupPerson.updateMany({
+      where: { groupId: { in: archivedGroupIds } },
+      data: { pinned: false },
+    });
   }
   return {
     artifactKeys: groupArtifacts.map((artifact) => artifact.storageKey),

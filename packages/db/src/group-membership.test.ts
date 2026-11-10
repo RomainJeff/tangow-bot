@@ -128,4 +128,22 @@ describe("people in a group", () => {
     const people = await groupThreadPeople(prisma, { groupId, sessionId: thread.sessionId });
     expect(people.map((person) => person.userId)).toEqual(["creator", "person", "outsider"]);
   });
+
+  it("keeps an archived group whose last bot was deleted for its creator to delete", async () => {
+    const groups = createGroupRepos(prisma);
+    const lone = await groups.createGroup(actor("creator"), { name: "Orphan", botIds: [botId] });
+    // What deleting a bot shared with the creator leaves: no bot, archived, history kept.
+    await prisma.chatGroupMember.deleteMany({ where: { groupId: lone.id } });
+    await prisma.chatGroup.update({ where: { id: lone.id }, data: { archivedAt: new Date() } });
+
+    const archived = await groups.listGroups(actor("creator"), { archived: true });
+    expect(archived.find((group) => group.id === lone.id)?.members).toEqual([]);
+    await expect(groups.restoreGroup(actor("creator"), lone.id)).rejects.toBeInstanceOf(
+      IsolationError,
+    );
+    await expect(groups.removeGroup(actor("creator"), lone.id)).resolves.toEqual({
+      contextBotId: undefined,
+      artifactStorageKeys: [],
+    });
+  });
 });

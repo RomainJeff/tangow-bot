@@ -304,7 +304,10 @@ export function createGroupRepos(prisma: PrismaClient) {
         },
         include: groupInclude,
       });
-      const listed = groups.filter((group) => hasMinimumActiveMembers(group.members));
+      // An archived group whose last bot was deleted still lists, for its creator to delete.
+      const listed = options.archived
+        ? groups
+        : groups.filter((group) => hasMinimumActiveMembers(group.members));
       const previews = await groupPreviews(prisma, listed);
       return listed
         .map((group) =>
@@ -580,7 +583,12 @@ export function createGroupRepos(prisma: PrismaClient) {
 
     async restoreGroup(actor: Actor, groupId: string) {
       const restored = await prisma.chatGroup.updateMany({
-        where: { id: groupId, spaceId: actor.spaceId, userId: actor.userId },
+        where: {
+          id: groupId,
+          spaceId: actor.spaceId,
+          userId: actor.userId,
+          members: { some: { bot: { archivedAt: null } } },
+        },
         data: { archivedAt: null },
       });
       if (restored.count !== 1) throw new IsolationError();
@@ -615,11 +623,11 @@ export function createGroupRepos(prisma: PrismaClient) {
             members: { orderBy: { createdAt: "asc" }, take: 1, select: { botId: true } },
           },
         });
-        const contextBotId = group?.members[0]?.botId;
-        if (!contextBotId) throw new IsolationError();
+        if (!group) throw new IsolationError();
         await tx.chatGroup.delete({ where: { id: groupId } });
         return {
-          contextBotId,
+          // None when its last bot was deleted.
+          contextBotId: group.members[0]?.botId,
           artifactStorageKeys: group.artifacts.map((artifact) => artifact.storageKey),
         };
       });
