@@ -2,10 +2,8 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import type {
   AgentSkillCatalogEntry,
   Bot,
-  BotMcpServer,
   BotSharing,
   ConnectionCatalogItem,
-  McpServer,
   SpaceMembers,
 } from "@rakazo/contracts";
 import type { ShareableApp } from "@rakazo/core";
@@ -33,12 +31,15 @@ import { saveFailureReason } from "../lib/save-store";
 import { userInitials } from "../lib/user-initials";
 import { SettingsGroup } from "./bot-page/page-kit";
 
-/** The owner's MCP servers, and those given to the bot: the only ones it can declare. */
+/**
+ * The owner's MCP servers, and those given to the bot: the only ones it can declare. A failed read
+ * fails the apps list, since without them a declared server would read as deleted.
+ */
 async function givenServers(botId: string) {
   const [all, assignments] = await Promise.all([
     rpc.mcp.servers.list(),
     rpc.mcp.assignments.list({ botId }),
-  ]).catch(() => [[], []] as [McpServer[], BotMcpServer[]]);
+  ]);
   return { all, given: new Set(assignments.map((assignment) => assignment.serverId)) };
 }
 
