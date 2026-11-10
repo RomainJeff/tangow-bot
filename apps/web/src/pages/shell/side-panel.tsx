@@ -360,7 +360,8 @@ export function ComputerOverlay({
             ) : canTakeControl ? (
               <TakeControlButton onTake={takeComputerControl} />
             ) : null}
-            {active && !recordingSkill ? (
+            {/* Teaching and the computer's upkeep stay with a shared bot's owner. */}
+            {active?.isOwner && !recordingSkill ? (
               <TeachComputerOverlayControl
                 key={active.id}
                 botId={active.id}
