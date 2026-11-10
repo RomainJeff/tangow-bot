@@ -166,7 +166,8 @@ const ComputerControlEntry = entry(
 );
 const MemoryRevisedEntry = entry(
   "memory.revised",
-  z.object({ ...risen, facts: z.array(z.string()) }),
+  // `team`: a run saved these facts for everyone a shared bot is shared with; the thread says so.
+  z.object({ ...risen, facts: z.array(z.string()), team: z.literal(true).optional() }),
 );
 const SkillLearntEntry = entry(
   "skill.learnt",

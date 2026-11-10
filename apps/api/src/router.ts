@@ -57,6 +57,7 @@ import {
   McpOAuthBroker,
   mapScratchpadItem,
   modelCredentialDto,
+  onOwnBot,
   planLiveConnectionSync,
   prepareApiInstall,
   prepareGraphqlInstall,
@@ -95,6 +96,7 @@ import type {
   ComputerStatus,
   ComputerUpdateAllResult,
   Me,
+  MemoryScope,
   SpaceNavigation,
 } from "@rakazo/contracts";
 import {
@@ -408,12 +410,13 @@ async function purgeCompactedHistoryMemory(
   reason: string,
 ): Promise<void> {
   if (target.kind !== "bot") return;
-  const configuredMemory = await deps.memoryProviders
-    .resolve(actor.spaceId, actor.userId)
-    .catch((error) => {
-      getLogger().error(`semantic memory resolution after ${reason} failed`, error);
-      return null;
-    });
+  const configuredMemory = await onOwnBot(
+    { userId: actor.userId, botUserId: target.bot.userId },
+    () => deps.memoryProviders.resolve(actor.spaceId, actor.userId),
+  ).catch((error) => {
+    getLogger().error(`semantic memory resolution after ${reason} failed`, error);
+    return null;
+  });
   if (!configuredMemory) return;
   // Best effort: the conversation rows are already deleted, so failing the request here would
   // help nothing — a failed purge only leaves stale summaries recallable.
@@ -2640,7 +2643,7 @@ export function createRouter(deps: RouterDeps) {
         });
         return docs.map((doc) => ({
           id: doc.id,
-          scope: doc.scope as "bot" | "user",
+          scope: doc.scope as MemoryScope,
           botId: doc.botId,
           path: doc.path,
           content: doc.content,
@@ -2659,7 +2662,7 @@ export function createRouter(deps: RouterDeps) {
         if (!doc) throw new IsolationError();
         const updated = await deps.memory.commit(
           {
-            scope: doc.scope as "bot" | "user",
+            scope: doc.scope as MemoryScope,
             botId: doc.botId ?? undefined,
             path: doc.path,
             content: input.content,
@@ -2674,7 +2677,7 @@ export function createRouter(deps: RouterDeps) {
         );
         return {
           id: updated.id,
-          scope: doc.scope as "bot" | "user",
+          scope: doc.scope as MemoryScope,
           botId: doc.botId,
           path: updated.path,
           content: updated.content,
@@ -4822,8 +4825,13 @@ export function createRouter(deps: RouterDeps) {
           signal: new AbortController().signal,
         };
         const [memory, routines, files, history] = await Promise.all([
+          // The owner's own memory of the bot and its team memory, never a member's.
           deps.prisma.memoryDocument.findMany({
-            where: { botId: input.botId, spaceId: context.actor.spaceId },
+            where: {
+              botId: input.botId,
+              spaceId: context.actor.spaceId,
+              userId: context.actor.userId,
+            },
           }),
           deps.prisma.routine.findMany({
             where: {
@@ -4857,7 +4865,10 @@ export function createRouter(deps: RouterDeps) {
             description: bot.description,
             instructions: bot.instructions,
           },
-          memory: memory.map((m) => ({ path: m.path, content: m.content })),
+          memory: memory.map((m) => ({
+            path: m.scope === "team" ? `team/${m.path}` : m.path,
+            content: m.content,
+          })),
           routines: routines.map((r) => ({
             name: r.name,
             prompt: r.prompt,

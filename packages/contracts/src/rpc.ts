@@ -87,7 +87,7 @@ import {
   AskDraftEdits,
   ProductEventSchema,
 } from "./events.js";
-import { Id, IsoDate } from "./ids.js";
+import { Id, IsoDate, MemoryScope } from "./ids.js";
 import {
   IntegrationProviderConfigSchema,
   IntegrationSetupStateSchema,
@@ -494,7 +494,7 @@ export const appContract = {
   },
   memory: {
     list: oc
-      .input(z.object({ botId: Id.optional(), scope: z.enum(["bot", "user"]).optional() }))
+      .input(z.object({ botId: Id.optional(), scope: MemoryScope.optional() }))
       .output(z.array(MemoryDocumentSchema)),
     update: oc
       .input(z.object({ documentId: Id, content: z.string() }))

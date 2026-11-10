@@ -92,6 +92,12 @@ describe("no consumer of a message's blocks repeats a preview's title (CA 12, CA
         prisma: {
           $transaction: async (work: (tx: unknown) => unknown) => work(undefined),
           thread: { findUniqueOrThrow: vi.fn(async () => thread) },
+          bot: {
+            findUniqueOrThrow: vi.fn(async () => ({
+              userId: thread.userId,
+              visibility: "private",
+            })),
+          },
           deploymentSettings: { findUnique: vi.fn(async () => null) },
           usageRecord: { create: vi.fn() },
         } as unknown as PrismaClient,

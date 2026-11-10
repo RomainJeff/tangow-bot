@@ -1439,7 +1439,7 @@ msgstr "스킬을 가져오지 못했습니다"
 msgid "Could not install connector"
 msgstr "도구 연결을 추가하지 못했습니다."
 
-#: src/pages/bot-page/KnowledgeTab.tsx:148
+#: src/pages/bot-page/KnowledgeTab.tsx:181
 #: src/pages/bot-page/page-kit.tsx:80
 #: src/pages/KnowledgeSection.tsx:90
 #: src/pages/KnowledgeSection.tsx:119
@@ -2260,7 +2260,7 @@ msgstr "빠름"
 msgid "Featured"
 msgstr "추천"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:52
+#: src/pages/bot-page/KnowledgeTab.tsx:66
 msgid "Files"
 msgstr "파일"
 
@@ -2466,7 +2466,7 @@ msgstr "가져오기"
 msgid "Import OpenAPI JSON"
 msgstr "OpenAPI JSON 가져오기"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:105
+#: src/pages/bot-page/KnowledgeTab.tsx:137
 msgid "Inherit default"
 msgstr "기본 설정 사용"
 
@@ -2532,7 +2532,7 @@ msgstr "간격 단위"
 msgid "Invited by {0}"
 msgstr ""
 
-#: src/pages/bot-page/KnowledgeTab.tsx:106
+#: src/pages/bot-page/KnowledgeTab.tsx:138
 #: src/pages/MemorySettingsOverlay.tsx:49
 msgid "Isolated"
 msgstr "이 Bot만 사용"
@@ -2757,14 +2757,14 @@ msgstr "참여 Bot ({GROUP_MEMBER_MIN}~{GROUP_MEMBER_MAX}개)"
 msgid "Members (pick {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgstr "참여 Bot ({GROUP_MEMBER_MIN}~{GROUP_MEMBER_MAX}개 선택)"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:36
+#: src/pages/bot-page/KnowledgeTab.tsx:37
 #: src/pages/MemorySettingsOverlay.tsx:159
 #: src/pages/SettingsOverlay.tsx:134
 msgid "Memory"
 msgstr "기억"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:96
-#: src/pages/bot-page/KnowledgeTab.tsx:100
+#: src/pages/bot-page/KnowledgeTab.tsx:128
+#: src/pages/bot-page/KnowledgeTab.tsx:132
 msgid "Memory scope"
 msgstr "기억 사용 범위"
 
@@ -3166,7 +3166,8 @@ msgstr ""
 msgid "Nothing is still running"
 msgstr "실행 중인 작업 없음"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:42
+#: src/pages/bot-page/KnowledgeTab.tsx:43
+#: src/pages/bot-page/KnowledgeTab.tsx:55
 #: src/pages/KnowledgeSection.tsx:42
 msgid "Nothing remembered yet"
 msgstr "아직 기억한 내용이 없습니다"
@@ -3865,6 +3866,10 @@ msgstr "저장"
 msgid "Saved"
 msgstr "저장됨"
 
+#: src/pages/shell/thread-row.tsx:479
+msgid "Saved for the team"
+msgstr ""
+
 #: src/pages/ScratchpadSection.tsx:53
 #: src/pages/ScratchpadSection.tsx:75
 msgid "Saved, but list refresh failed"
@@ -4029,7 +4034,7 @@ msgstr ""
 msgid "Share {0}"
 msgstr ""
 
-#: src/pages/bot-page/KnowledgeTab.tsx:107
+#: src/pages/bot-page/KnowledgeTab.tsx:139
 #: src/pages/MemorySettingsOverlay.tsx:49
 msgid "Shared"
 msgstr "함께 사용"
@@ -4110,7 +4115,7 @@ msgstr ""
 msgid "Skill updated · {name}"
 msgstr ""
 
-#: src/pages/bot-page/KnowledgeTab.tsx:55
+#: src/pages/bot-page/KnowledgeTab.tsx:69
 #: src/pages/CustomizeOverlay.tsx:28
 #: src/pages/CustomizeOverlay.tsx:103
 msgid "Skills"
@@ -4297,6 +4302,10 @@ msgstr "팀 컴퓨터"
 
 #: src/pages/MessagingSettingsOverlay.tsx:337
 msgid "Team conversations"
+msgstr ""
+
+#: src/pages/bot-page/KnowledgeTab.tsx:49
+msgid "Team memory"
 msgstr ""
 
 #: src/pages/bot-page/routine-copy.ts:32

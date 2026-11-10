@@ -75,7 +75,7 @@ export type RoutineRunStatus = z.infer<typeof RoutineRunStatus>;
 export const EffectStatus = z.enum(["intended", "completed", "failed", "ambiguous", "reconciled"]);
 export type EffectStatus = z.infer<typeof EffectStatus>;
 
-export const MemoryScope = z.enum(["bot", "user"]);
+export const MemoryScope = z.enum(["bot", "user", "team"]);
 export type MemoryScope = z.infer<typeof MemoryScope>;
 
 export const ThinkingLevelSchema = z.enum([

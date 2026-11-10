@@ -21,6 +21,7 @@ import type {
   ConfiguredMemoryProvider,
   MemoryProviderResolver,
 } from "./memory-provider-factory.js";
+import { onOwnBot } from "./memory-provider-factory.js";
 
 export const DEFAULT_COMPACTION_SETTINGS = { reserveTokens: 16_384, keepRecentTokens: 20_000 };
 
@@ -358,6 +359,8 @@ Output one Markdown bullet per fact ("- the fact"), each a single self-contained
 type CompactionThread = {
   id: string;
   botId: string;
+  /** Who owns the bot: its team memory is stored under them. */
+  bot: { userId: string };
   spaceId: string;
   userId: string;
   sessionId: string;
@@ -422,7 +425,11 @@ async function learnDurableFacts(
     context: AdapterContext;
   },
 ): Promise<void> {
-  const explicitMemory = await loadAgentMemoryContext(deps.memory, thread.botId, options.context);
+  const explicitMemory = await loadAgentMemoryContext(
+    deps.memory,
+    { id: thread.botId, ...thread.bot },
+    options.context,
+  );
   // Both halves are untrusted data, escaped out of the tags they sit in, as in the summarizer.
   const prompt = [
     `<conversation>\n${escapePromptData(options.transcript)}\n</conversation>`,
@@ -690,6 +697,10 @@ export async function compactHistory(
   const botThread: CompactionThread = {
     id: threadId,
     botId,
+    bot: await deps.prisma.bot.findUniqueOrThrow({
+      where: { id: botId },
+      select: { userId: true },
+    }),
     spaceId: thread.spaceId,
     userId: thread.userId,
     sessionId: thread.sessionId,
@@ -781,7 +792,10 @@ export async function compactHistory(
   // Local compaction is first-party behavior and must not depend on an optional external store.
   let semanticMemory: ConfiguredMemoryProvider | null = null;
   try {
-    semanticMemory = await deps.memoryProviders.resolve(thread.spaceId, thread.userId);
+    semanticMemory = await onOwnBot(
+      { userId: thread.userId, botUserId: botThread.bot.userId },
+      () => deps.memoryProviders.resolve(thread.spaceId, thread.userId),
+    );
   } catch (error) {
     getLogger().error("Failed to load semantic memory provider for history compaction", error);
   }

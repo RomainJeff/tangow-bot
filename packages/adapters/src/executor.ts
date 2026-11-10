@@ -357,6 +357,7 @@ import {
 } from "./mcp-server-tool.js";
 import { loadAgentMemoryContext } from "./memory-context.js";
 import type { MemoryProviderResolver } from "./memory-provider-factory.js";
+import { onOwnBot } from "./memory-provider-factory.js";
 import { selectMemoryTools } from "./memory-tools.js";
 import { catalogContextWindow, catalogModel } from "./model-catalog.js";
 import { classifyModelRoute } from "./model-route-classification.js";
@@ -1835,7 +1836,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }),
           findDefaultModelCredential(deps.prisma, run),
           deps.prisma.deploymentSettings.findUnique({ where: { id: "default" } }),
-          deps.memoryProviders.resolve(run.spaceId, run.userId),
+          botLoad.then((loaded) =>
+            onOwnBot({ userId: run.userId, botUserId: loaded.userId }, () =>
+              deps.memoryProviders.resolve(run.spaceId, run.userId),
+            ),
+          ),
           deps.prisma.taughtSkill.findMany({
             where: { botId: run.botId, spaceId: run.spaceId, status: "saved" },
             orderBy: { id: "asc" },
@@ -1855,7 +1860,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
             },
           }),
           // Optional: a broken decision connection must never fail the run.
-          deps.decisionProviders?.resolve(run.spaceId, run.userId).catch(() => null) ?? null,
+          botLoad.then((loaded) =>
+            onOwnBot(
+              { userId: run.userId, botUserId: loaded.userId },
+              async () =>
+                (await deps.decisionProviders
+                  ?.resolve(run.spaceId, run.userId)
+                  .catch(() => null)) ?? null,
+            ),
+          ),
           deps.prisma.spaceMember.findUnique({
             where: { spaceId_userId: { spaceId: run.spaceId, userId: run.userId } },
             select: { modelAuto: true },
@@ -2075,7 +2088,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             loadCurrentTurnImages(deps, turnBlocks, context),
             messagingChannelRun
               ? Promise.resolve("")
-              : loadAgentMemoryContext(deps.memory, bot.id, context),
+              : loadAgentMemoryContext(deps.memory, bot, context),
             messagingChannelRun
               ? Promise.resolve("")
               : loadAgentScratchpadContext(deps, {
@@ -2086,6 +2099,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
             recallPromise,
           ]);
         const semanticMemoryEnabled = Boolean(semanticMemory) && !messagingChannelRun;
+        // How `remember` reaches a shared bot's team memory: a flag, or the tool's only job when
+        // the person's own facts go to semantic memory.
+        const teamRemember: TeamRemember | undefined =
+          bot.visibility === "private" ? undefined : semanticMemoryEnabled ? "only" : "flag";
         let recalledMemory = "";
         if (recalled) {
           if (recalled.ok && recalled.value.length > 0) {
@@ -2398,6 +2415,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             browserRunAllowed: Boolean(decisionProvider),
             messageUserExposed,
             feedbackAvailable: Boolean(deps.feedback),
+            teamRemember,
           }),
           // Cross-owner agent connections only exist for chat-linked bots.
           ...(hasMessagingIdentity ? agentConnectionTools : []),
@@ -2649,6 +2667,24 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const unansweredCalls = new Map<string, string>();
         const logEntry = (draft: SessionEntryDraft) =>
           deps.prisma.$transaction((tx) => deps.sessionLog.append(tx, draft));
+        // Facts this run saved for a shared bot's team: one line says so under its message.
+        const teamFacts: string[] = [];
+        const writeTeamSaveLine = async () => {
+          if (teamFacts.length === 0) return;
+          const seq = await deps.prisma.$transaction(async (tx) => {
+            await deps.sessionLog.append(tx, {
+              type: "memory.revised",
+              sessionId: runLog.sessionId,
+              botId: bot.id,
+              runId,
+              payload: { facts: teamFacts, team: true },
+            });
+            return threadEventSeq(tx, thread.id);
+          });
+          await deps.events.notify(thread.id, seq).catch((error) => {
+            getLogger().error("team memory line", error);
+          });
+        };
         const announcesTools = runtime.describe().capabilities.streaming;
         const toolAnnouncements = new Map<string, ReturnType<typeof deferred>>();
         const toolAnnounced = (executionId: string) => {
@@ -4418,9 +4454,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (name === "remember") {
             const fact = String(args.content ?? "").trim();
             if (!fact) return finish({ error: "remember needs a fact to store." });
+            // Any person's run on a shared bot may save for the team, stored under the owner.
+            const team = teamRemember === "only" || (teamRemember === "flag" && args.team === true);
             await deps.memory.commit(
               {
-                scope: "bot",
+                scope: team ? "team" : "bot",
                 botId: bot.id,
                 path: String(args.path ?? "MEMORY.md"),
                 // One bullet per fact; the store adds the separator and keeps what is there.
@@ -4429,8 +4467,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 sourceRunId: runId,
                 sourceThreadId: thread.id,
               },
-              context,
+              team ? { ...context, userId: bot.userId } : context,
             );
+            if (team) teamFacts.push(fact);
             return finish({ ok: true });
           }
           if (name === "web_search") {
@@ -5854,7 +5893,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
             takeoverExposed: tools.some((tool) => tool.name === "request_takeover"),
             pageBrowserAllowed: pageBrowserAllowed && offered("browser_navigate"),
             browserRunAllowed: tools.some((tool) => tool.name === "browser_run"),
-            rememberExposed: tools.some((tool) => tool.name === "remember"),
+            // A team-only remember is not where the person's own preferences go.
+            rememberExposed:
+              teamRemember !== "only" && tools.some((tool) => tool.name === "remember"),
             searchRunsExposed: tools.some((tool) => tool.name === "search_runs"),
             workspaceInstruction,
             agentEnvironmentInstruction,
@@ -6727,6 +6768,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           });
           if (!completed) return;
           if (savedSkill) await writeRunSkillLines(runId);
+          await writeTeamSaveLine().catch((error) => getLogger().error("team memory line", error));
           // After the commit, never inside it. Delegated runs report back to the ordering bot:
           // no preview for them.
           if (run.trigger !== "bot_message") {
@@ -6819,6 +6861,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           });
           if (!failed) return;
           if (savedSkill) await writeRunSkillLines(runId);
+          await writeTeamSaveLine().catch((error) => getLogger().error("team memory line", error));
           await settleStrandedCards();
           if (failed.continuationRunId) {
             await deps.jobs
@@ -7152,6 +7195,8 @@ export function selectBuiltinToolsForRun(options: {
   messageUserExposed?: boolean;
   /** The deployment has somewhere to file feedback. */
   feedbackAvailable?: boolean;
+  /** On a shared bot, how `remember` saves for its team. */
+  teamRemember?: TeamRemember;
 }) {
   const selected = selectMemoryTools(
     filterBuiltinToolsForRun(
@@ -7165,6 +7210,7 @@ export function selectBuiltinToolsForRun(options: {
       options.trigger,
     ),
     options.semanticMemoryEnabled,
+    options.teamRemember === "only",
   ).filter(
     (tool) =>
       (tool.name !== "search_runs" || options.searchRunsExposed !== false) &&
@@ -7177,7 +7223,41 @@ export function selectBuiltinToolsForRun(options: {
         (!["remember", "save_memory", "recall_memory", "forget_memory"].includes(tool.name) &&
           !tool.name.startsWith("scratchpad_"))),
   );
-  return selected;
+  const mode = options.teamRemember;
+  return mode ? selected.map((tool) => rememberForTeam(tool, mode)) : selected;
+}
+
+/**
+ * "flag": the person's own memory of the bot, or with `team` the shared bot's team memory.
+ * "only": the person's own facts go to semantic memory, so `remember` saves for the team only.
+ */
+type TeamRemember = "flag" | "only";
+
+/** On a shared bot, `remember` can save a fact for everyone the bot is shared with. */
+function rememberForTeam(tool: ConnectorTool, mode: TeamRemember): ConnectorTool {
+  if (tool.name !== "remember") return tool;
+  if (mode === "only") {
+    return {
+      ...tool,
+      description:
+        "Save a durable fact for everyone who uses this bot, in its team memory. Each call adds one line; nothing already stored is replaced. Only for what the whole team should know.",
+    };
+  }
+  const schema = tool.inputSchema as { properties: Record<string, unknown> };
+  return {
+    ...tool,
+    inputSchema: {
+      ...schema,
+      properties: {
+        ...schema.properties,
+        team: {
+          type: "boolean",
+          description:
+            "Save it for everyone this bot is shared with. Leave it off for what concerns only the person you are talking to.",
+        },
+      },
+    },
+  };
 }
 
 export const PAGE_BROWSER_TOOL_NAMES = new Set([

@@ -362,6 +362,9 @@ export async function createApp(
           ),
         ),
       );
+      // What remains is their memory in Spaces they joined: their own there, and their private
+      // memory of bots shared with them. Team memory is stored under each bot's owner.
+      await prisma.memoryDocument.deleteMany({ where: { userId } });
       // Deleting those organizations deletes their spaces, which a volume row would block.
       const spaces = await prisma.space.findMany({
         where: { organizationId: { in: personalOrganizationIds } },

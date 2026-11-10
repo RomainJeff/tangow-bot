@@ -347,6 +347,7 @@ function listActivity(input: BotActivityInput) {
 }
 
 const READS: Record<string, unknown> = {
+  "bots/sharing": { visibility: "private", userIds: [], connectors: [] },
   "models/credentials": [
     {
       id: "credential-1",

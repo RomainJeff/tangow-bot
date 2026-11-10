@@ -561,7 +561,9 @@ function Thread() {
   const drawnRows = useRef<ReadonlyMap<string, ThreadRow>>(new Map());
   const liveView = useMemo((): ThreadView => {
     const projected = projectThreadView(snap?.entries ?? [], {
+      // ponytail: no team memory line on mobile until shared bots reach it; the row stays out.
       rendersNothing: (item) =>
+        (item.kind === "note" && item.type === "memory.revised") ||
         drawsNothing(item, (blocks) => hasVisibleMessagePresentation(blocks, showSteps)),
       progress: snap?.layer,
       imageStacks: true,
