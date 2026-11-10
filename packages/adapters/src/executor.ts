@@ -8202,13 +8202,13 @@ async function stopHelpers(
 
 /**
  * Runs only before a first proposal card: what the user already sees or said decides whether the
- * bot may show one (proposalRefusal). Reads a Not now in this run, a Not now to the same proposal in
- * the last day, the cards of the day, and the latest cards of this conversation to tell a correction
- * from a new proposal.
+ * bot may show one (proposalRefusal). Reads a Not now in this run, the person's Not now to the same
+ * proposal in the last day, the person's cards of the day, and the latest cards of this conversation
+ * to tell a correction from a new proposal. On a shared bot, each person answers only for themselves.
  */
 async function proposalPreflight(
   deps: ExecutorDeps,
-  run: { id: string; botId: string; threadId: string },
+  run: { id: string; botId: string; userId: string; threadId: string },
   card: { kind: ProposalEffectKind; name: string; effectKey: string },
 ): Promise<ProposalRefusal | undefined> {
   const now = new Date();
@@ -8251,7 +8251,7 @@ async function proposalPreflight(
       deps.prisma.externalEffect.findFirst({
         where: {
           kind: card.kind,
-          run: { botId: run.botId },
+          run: { botId: run.botId, userId: run.userId },
           request: { path: [PROPOSAL_KEY_FIELD], equals: proposalKey(card.name) },
           answeredAt: { gte: new Date(now.getTime() - PROPOSAL_WINDOW_MS) },
           ...SAID_NOT_NOW,
@@ -8261,7 +8261,7 @@ async function proposalPreflight(
       deps.prisma.externalEffect.findMany({
         where: {
           kind: { in: PROPOSAL_EFFECT_KINDS },
-          run: { botId: run.botId },
+          run: { botId: run.botId, userId: run.userId },
           createdAt: { gte: new Date(now.getTime() - PROPOSAL_WINDOW_MS) },
         },
         orderBy: { createdAt: "desc" },

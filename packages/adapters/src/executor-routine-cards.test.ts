@@ -40,16 +40,24 @@ type Effect = {
   updatedAt?: Date;
   answeredAt?: Date;
   createdAt?: Date;
+  /** The run it came from, by default the owner's in thread-1. */
+  run?: { threadId: string; userId: string };
 };
 type EffectWhere = Partial<Record<keyof Effect, unknown>>;
 
+const runOf = (effect: Effect) => effect.run ?? { threadId: "thread-1", userId: "user-1" };
+
 /**
- * Equality, `{ gte }` on dates, `{ in }`, `{ not }`, `OR`, a JSON null and a JSON path; relation
- * filters are ignored: every effect is bot-1's, in thread-1.
+ * Equality, `{ gte }` on dates, `{ in }`, `{ not }`, `OR`, a JSON null and a JSON path; a run
+ * filter reads only its thread and person: every effect is bot-1's.
  */
 const effectMatches = (effect: Effect, where: EffectWhere = {}): boolean =>
   Object.entries(where).every(([key, value]) => {
-    if (key === "run") return true;
+    if (key === "run") {
+      const { threadId, userId } = value as { threadId?: string; userId?: string };
+      const run = runOf(effect);
+      return (!threadId || run.threadId === threadId) && (!userId || run.userId === userId);
+    }
     if (key === "OR")
       return (value as EffectWhere[]).some((option) => effectMatches(effect, option));
     const actual = effect[key as keyof Effect];
@@ -73,7 +81,7 @@ const effectMatches = (effect: Effect, where: EffectWhere = {}): boolean =>
     return actual === value;
   });
 
-const inThread = (effect: Effect) => ({ ...effect, run: { threadId: "thread-1" } });
+const inThread = (effect: Effect) => ({ ...effect, run: { threadId: runOf(effect).threadId } });
 
 type ToolCall = { name: string; args: Record<string, unknown> };
 type Row = Record<string, unknown>;
@@ -721,6 +729,32 @@ describe("a routine the bot proposes on its own", () => {
       routine: { name: "Weekly offers" },
     });
   });
+
+  it.each([
+    ["a member's", "member-1", false],
+    ["the owner's", "user-1", true],
+  ])(
+    "does not let %s Not now on a shared bot hold the routine back from anyone else",
+    async (_, saidBy, member) => {
+      const said = new Date(Date.now() - 60 * 60 * 1000);
+      const f = fixture({
+        member,
+        effects: [
+          proposalEffect({
+            request: withProposalKey(offers, offers.name),
+            createdAt: said,
+            answeredAt: said,
+            run: { threadId: `thread-${saidBy}`, userId: saidBy },
+          }),
+        ],
+      });
+      await f.play([[propose()]]);
+      expect(f.askBlock()).toMatchObject({
+        proposal: "routine",
+        routine: { name: "Weekly offers" },
+      });
+    },
+  );
 
   it("proposes another routine the same day, and corrects a card the user answered by typing", async () => {
     const recent = { createdAt: new Date(Date.now() - 60 * 60 * 1000), answeredAt: new Date() };
