@@ -1,5 +1,6 @@
 import type { SpaceBot } from "@rakazo/contracts";
 import type { MobileBot } from "./api";
+import type { ComputerStatus } from "./computer";
 import { t } from "./i18n";
 import type { MenuAction } from "./native-menu";
 
@@ -38,4 +39,18 @@ export function threadBotActions(shared: boolean, on: ThreadBotHandlers): MenuAc
     { label: t("Archive"), onPress: on.archive },
     { label: t("Delete…"), destructive: true, onPress: on.remove },
   ];
+}
+
+/**
+ * What the computer screen offers. On a bot shared with you, only the takeover your own run asks
+ * for: the computer itself, its mode and its upkeep, stays its owner's.
+ */
+export function computerScreenControls(
+  shared: boolean,
+  computer: Pick<ComputerStatus, "busyBotName" | "takeoverRequested"> | null,
+) {
+  return {
+    takeControl: !computer?.busyBotName && (!shared || Boolean(computer?.takeoverRequested)),
+    modePicker: !shared,
+  };
 }

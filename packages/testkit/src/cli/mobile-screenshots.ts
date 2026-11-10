@@ -301,6 +301,8 @@ async function seedSharedBots(app: App, cookie: string, prisma: PrismaClient, wr
     { botId: releaseNotes.id, visibility: "space", userIds: [] },
     spaceId,
   );
+  // Its dedicated computer is up, as when the screenshot user's run uses it.
+  await rpc(app, teammate, "computer/boot", { botId: releaseNotes.id }, spaceId);
   // Listing the roster gives the screenshot user their own thread with the shared bot.
   await rpc(app, cookie, "bots/list");
   const memberThread = await prisma.thread.findFirstOrThrow({

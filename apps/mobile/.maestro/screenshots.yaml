@@ -272,6 +272,20 @@ tags:
     commands:
       - back
 
+# The shared bot's computer as the member sees it: no mode picker, and no Take control until
+# their own run asks for them.
+- openLink: "rakazo:///computer?botId=${RAKAZO_SCREENSHOT_SHARED_BOT_ID}&name=Release%20notes&shared=1"
+# iOS asks before opening its own link.
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Release notes’s computer"
+    timeout: 10000
+- assertNotVisible: "Take control"
+- assertNotVisible: "Private"
+- takeScreenshot: "32b-shared-bot-computer"
+
 # The owner's share sheet for Writer, shared with the teammate, then its team memory.
 - openLink: "rakazo:///bot-share?botId=${RAKAZO_SCREENSHOT_SHARE_BOT_ID}"
 # iOS asks before opening its own link.
