@@ -525,9 +525,7 @@ async function detachBotFromGroups(
   const archivedGroupIds = closedGroups
     .filter((group) => group.userId !== bot.userId)
     .map((group) => group.id);
-  const closedThreadIds = closedGroups.flatMap((group) =>
-    group.thread ? [group.thread.id] : [],
-  );
+  const closedThreadIds = closedGroups.flatMap((group) => (group.thread ? [group.thread.id] : []));
   const activeRuns = closedThreadIds.length
     ? await tx.run.findMany({
         where: {
