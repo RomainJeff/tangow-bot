@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Share a bot with everyone in your space or with chosen people.** From Share on the bot, on web, desktop, iPhone and Android, the owner picks who can use it and which of their skills, apps and MCP servers it can use; each person then talks to it in their own private thread, with their own accounts and credentials, and their messages and routines stay theirs. What the bot saves for the team is marked "Saved for the team" in the thread and listed under Team memory on the owner's bot page, while each person keeps their own memory of it.
 
+#### Changed
+
+- The desktop app on macOS, Windows and Linux and the iPhone app now have the new Tangow icon, a linen one-stroke "tw" on black, in place of the clay bot.
+
 ### 2026-11-08
 
 #### Added
