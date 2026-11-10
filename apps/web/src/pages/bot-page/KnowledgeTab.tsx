@@ -1,5 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { MemoryDocument } from "@rakazo/contracts";
+import { showsTeamMemory } from "@rakazo/core";
 import { NativeSelect, NativeSelectOption, SaveMeta, SettingRow } from "@rakazo/ui-web";
 import { type ReactNode, useEffect, useState } from "react";
 import { rpc } from "../../lib/rpc";
@@ -31,6 +32,7 @@ export function KnowledgeTab({
 }) {
   const { t } = useLingui();
   const { bot } = page;
+  const showsTeam = useShowsTeamMemory(bot.id, epoch);
   return (
     <div data-testid="bot-knowledge" className="flex flex-col gap-6">
       <KnowledgeGroup label={t`Memory`}>
@@ -44,6 +46,19 @@ export function KnowledgeTab({
           onOpen={(doc) => onOpen({ kind: "memory", documentId: doc.id })}
         />
       </KnowledgeGroup>
+      {showsTeam ? (
+        <KnowledgeGroup label={t`Team memory`}>
+          <MemoryDocumentList
+            key={bot.id}
+            load={() => rpc.memory.list({ botId: bot.id, scope: "team" })}
+            epoch={epoch}
+            exportFilename="team-memory.md"
+            emptyLabel={<Trans>Nothing remembered yet</Trans>}
+            testId="bot-knowledge-team-memory"
+            onOpen={(doc) => onOpen({ kind: "memory", documentId: doc.id })}
+          />
+        </KnowledgeGroup>
+      ) : null}
       {memoryProviderConfigured ? (
         <SettingsGroup>
           <MemoryScopeRow page={page} />
@@ -63,6 +78,22 @@ export function KnowledgeTab({
       <ScratchpadSection botId={bot.id} />
     </div>
   );
+}
+
+function useShowsTeamMemory(botId: string, epoch: number): boolean {
+  const [shows, setShows] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([rpc.bots.sharing({ botId }), rpc.memory.list({ botId, scope: "team" })])
+      .then(([sharing, team]) => {
+        if (!cancelled) setShows(showsTeamMemory(sharing, team));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [botId, epoch]);
+  return shows;
 }
 
 function KnowledgeGroup({
@@ -126,8 +157,9 @@ export function MemoryDetail({
   >({ kind: "loading" });
   useEffect(() => {
     let cancelled = false;
+    // The owner's memory of the bot, or its team memory.
     rpc.memory
-      .list({ botId, scope: "bot" })
+      .list({ botId })
       .then((docs) => {
         if (!cancelled) setRead({ kind: "ready", doc: docs.find((doc) => doc.id === documentId) });
       })

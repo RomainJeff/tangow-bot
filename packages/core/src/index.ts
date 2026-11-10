@@ -17,6 +17,7 @@ export * from "./bloub/index.js";
 export * from "./bot-messages.js";
 export * from "./bot-model.js";
 export * from "./bot-sections.js";
+export * from "./bot-sharing.js";
 export * from "./compose-update.js";
 export * from "./composer-link-preview.js";
 export * from "./composer-mention-picker.js";

@@ -115,6 +115,10 @@ async function main() {
           "-e",
           `RAKAZO_SCREENSHOT_ROUTINE_ID=${fixture.routineId}`,
           "-e",
+          `RAKAZO_SCREENSHOT_SHARED_BOT_ID=${fixture.sharedBotId}`,
+          "-e",
+          `RAKAZO_SCREENSHOT_SHARE_BOT_ID=${fixture.shareBotId}`,
+          "-e",
           `RAKAZO_NOTIFICATION_VIDEO=${path.join(REPORT_DIR, "notification-demo")}`,
           "-e",
           `RAKAZO_EXPAND_NOTIFICATIONS_URL=${EXPAND_NOTIFICATIONS_URL}`,
@@ -259,8 +263,102 @@ async function seedFixture(app: App, prisma: PrismaClient) {
     widget: true,
   });
   await seedImageStacks(app, cookie, prisma, botThread, researcher.id);
+  const sharing = await seedSharedBots(app, cookie, prisma, writer.id);
 
-  return { botId: researcher.id, groupId: group.id, routineId: routine.id };
+  return { botId: researcher.id, groupId: group.id, routineId: routine.id, ...sharing };
+}
+
+/**
+ * A teammate joins the Space and shares "Release notes" with everyone in it: the screenshot user
+ * then has their own thread with it, where a run saved for the team and a declared MCP server
+ * asks to be added. The screenshot user shares Writer with the teammate in turn, with a skill and
+ * an app, and Writer keeps a team memory.
+ */
+async function seedSharedBots(app: App, cookie: string, prisma: PrismaClient, writerId: string) {
+  const { spaceId, userId } = await rpc<{ spaceId: string; userId: string }>(app, cookie, "me");
+  const { url } = await rpc<{ url: string }>(app, cookie, "spaces/createInvite", { spaceId });
+  const teammate = await signup(app, "mobile-screenshots-teammate@example.test", "Grace Hopper");
+  await rpc(app, teammate, "spaces/acceptInvite", {
+    token: new URL(url).pathname.split("/").pop(),
+  });
+  const releaseNotes = await rpc<{ id: string }>(
+    app,
+    teammate,
+    "bots/create",
+    {
+      name: "Release notes",
+      title: "Weekly release notes",
+      description: "Drafts the release notes from merged work.",
+      instructions: "Draft clear release notes.",
+      notifyOnFinish: true,
+    },
+    spaceId,
+  );
+  await rpc(
+    app,
+    teammate,
+    "bots/share",
+    { botId: releaseNotes.id, visibility: "space", userIds: [] },
+    spaceId,
+  );
+  // Its dedicated computer is up, as when the screenshot user's run uses it.
+  await rpc(app, teammate, "computer/boot", { botId: releaseNotes.id }, spaceId);
+  // Listing the roster gives the screenshot user their own thread with the shared bot.
+  await rpc(app, cookie, "bots/list");
+  const memberThread = await prisma.thread.findFirstOrThrow({
+    where: { memberBotId: releaseNotes.id, userId },
+  });
+  await seedExchange(prisma, memberThread, {
+    botId: releaseNotes.id,
+    question: "When do release notes go out?",
+    cards: [
+      {
+        kind: "app_connect",
+        connectorId: "mcp",
+        provider: "mcp-linear",
+        name: "Linear",
+        description: "Issues and projects for the release.",
+        logo: null,
+        status: "pending",
+      },
+    ],
+    reply: "On Thursdays. I'll remember that for the team.",
+    teamFacts: ["Release notes go out on Thursdays"],
+  });
+
+  const { userId: teammateId } = await rpc<{ userId: string }>(app, teammate, "me");
+  const skill = await rpc<{ id: string }>(app, cookie, "agentSkills/create", {
+    name: "changelog",
+    description: "Write the changelog from merged work.",
+    body: "Steps",
+  });
+  const gmail = await rpc<{ connectionId: string }>(app, cookie, "connections/begin", {
+    connectorId: "composio",
+    provider: "GMAIL",
+    displayName: "Gmail",
+  });
+  await rpc(app, cookie, "connections/complete", { connectionId: gmail.connectionId });
+  await rpc(app, cookie, "bots/share", {
+    botId: writerId,
+    visibility: "people",
+    userIds: [teammateId],
+    connectors: [{ kind: "app", connectorId: "composio", provider: "GMAIL" }],
+  });
+  await rpc(app, cookie, "agentSkills/setAccess", {
+    skillId: skill.id,
+    bots: [{ botId: writerId, enabled: true }],
+  });
+  await prisma.memoryDocument.create({
+    data: {
+      spaceId,
+      userId,
+      botId: writerId,
+      scope: "team",
+      path: "MEMORY.md",
+      content: "- Drafts go to the launch channel before noon.",
+    },
+  });
+  return { sharedBotId: releaseNotes.id, shareBotId: writerId };
 }
 
 type FixtureThread = {
@@ -280,6 +378,10 @@ async function seedExchange(
     ask?: { text: string; answer: string };
     reply: string;
     widget?: boolean;
+    /** Cards the thread shows before the reply, such as an app the bot needs. */
+    cards?: MessageBlock[];
+    /** Saved for the team after the reply, as a shared bot's `remember` does. */
+    teamFacts?: string[];
   },
 ) {
   const question = await createThreadMessage(prisma, {
@@ -384,7 +486,11 @@ async function seedExchange(
     });
     await publish([{ kind: "widget", title: "Launch checklist", artifactId: artifact.id }]);
   }
+  for (const card of exchange.cards ?? []) await publish([card]);
   await publish([{ kind: "text", text: exchange.reply }]);
+  if (exchange.teamFacts) {
+    await append({ type: "memory.revised", payload: { facts: exchange.teamFacts, team: true } });
+  }
   await append({
     type: "run.finished",
     payload: { status: "completed", usage: { inputTokens: 1840, outputTokens: 212 } },
@@ -516,11 +622,11 @@ function png(width: number, height: number, pixel: (x: number, y: number) => num
   ]);
 }
 
-async function signup(app: App) {
+async function signup(app: App, email = EMAIL, name = "Screenshot User") {
   const response = await app.request("/api/auth/sign-up/email", {
     method: "POST",
     headers: { "content-type": "application/json", origin: WEB_ORIGIN },
-    body: JSON.stringify({ email: EMAIL, password: PASSWORD, name: "Screenshot User" }),
+    body: JSON.stringify({ email, password: PASSWORD, name }),
   });
   if (!response.ok) throw new Error(`Fixture signup failed with ${response.status}`);
   const cookie = sessionCookieHeader(response);
@@ -528,13 +634,20 @@ async function signup(app: App) {
   return cookie;
 }
 
-async function rpc<T>(app: App, cookie: string, procedure: string, body: unknown = {}): Promise<T> {
+async function rpc<T>(
+  app: App,
+  cookie: string,
+  procedure: string,
+  body: unknown = {},
+  spaceId?: string,
+): Promise<T> {
   const response = await app.request(`/rpc/${procedure}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
       cookie,
       origin: WEB_ORIGIN,
+      ...(spaceId ? { "x-rakazo-space-id": spaceId } : {}),
     },
     body: JSON.stringify({ json: body }),
   });

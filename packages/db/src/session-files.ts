@@ -119,7 +119,7 @@ export async function importThreadSessions(
         }>
       >`
         SELECT t."sessionId", t."spaceId", t."userId",
-          COALESCE(t."botId", (
+          COALESCE(t."botId", t."memberBotId", (
             SELECT m."botId" FROM chat_group_members m WHERE m."groupId" = t."groupId"
             ORDER BY m."createdAt" LIMIT 1)) AS "botId",
           EXISTS (SELECT 1 FROM session_entries e WHERE e."sessionId" = t."sessionId") AS logged

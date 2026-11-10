@@ -329,7 +329,8 @@ export function useRoster({
       botOrderEpochRef.current += 1;
       botsRef.current = next;
       setBots(next);
-      pendingBotOrderRef.current = next.map((bot) => bot.id);
+      // A bot shared with you keeps its owner's order; only yours are saved.
+      pendingBotOrderRef.current = next.filter((bot) => bot.isOwner).map((bot) => bot.id);
       void flushBotOrder();
     },
     [flushBotOrder],

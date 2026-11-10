@@ -129,9 +129,12 @@ export async function createBotMessageInTransaction(
 }
 
 async function markThread(tx: Prisma.TransactionClient, threadId: string, unread: boolean) {
-  const select = { sessionId: true, botId: true } as const;
+  const select = { sessionId: true, botId: true, memberBotId: true } as const;
   const thread = unread
     ? await tx.thread.update({ where: { id: threadId }, data: { unread: true }, select })
     : await tx.thread.findUniqueOrThrow({ where: { id: threadId }, select });
-  return { sessionId: SessionId.parse(thread.sessionId), botId: thread.botId };
+  return {
+    sessionId: SessionId.parse(thread.sessionId),
+    botId: thread.botId ?? thread.memberBotId,
+  };
 }

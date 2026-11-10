@@ -7,7 +7,7 @@ describe("scratchpad prompt context", () => {
     await expect(
       loadAgentScratchpadContext(
         { prisma: { scratchpadItem: { findMany } } as never },
-        { spaceId: "ws", botId: "bot" },
+        { spaceId: "ws", botId: "bot", userId: "user" },
       ),
     ).resolves.toBeUndefined();
   });
@@ -36,7 +36,7 @@ describe("scratchpad prompt context", () => {
 
     const result = await loadAgentScratchpadContext(
       { prisma: { scratchpadItem: { findMany } } as never },
-      { spaceId: "ws", botId: "bot" },
+      { spaceId: "ws", botId: "bot", userId: "user" },
     );
 
     expect(findMany).toHaveBeenCalledWith(
@@ -68,7 +68,7 @@ describe("scratchpad prompt context", () => {
     ]);
     const result = await loadAgentScratchpadContext(
       { prisma: { scratchpadItem: { findMany } } as never },
-      { spaceId: "ws", botId: "bot" },
+      { spaceId: "ws", botId: "bot", userId: "user" },
       280,
     );
 

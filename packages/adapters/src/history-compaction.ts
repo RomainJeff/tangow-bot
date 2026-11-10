@@ -21,6 +21,7 @@ import type {
   ConfiguredMemoryProvider,
   MemoryProviderResolver,
 } from "./memory-provider-factory.js";
+import { onOwnBot } from "./memory-provider-factory.js";
 
 export const DEFAULT_COMPACTION_SETTINGS = { reserveTokens: 16_384, keepRecentTokens: 20_000 };
 
@@ -358,6 +359,8 @@ Output one Markdown bullet per fact ("- the fact"), each a single self-contained
 type CompactionThread = {
   id: string;
   botId: string;
+  /** Who owns the bot: its team memory is stored under them. */
+  bot: { userId: string };
   spaceId: string;
   userId: string;
   sessionId: string;
@@ -422,7 +425,11 @@ async function learnDurableFacts(
     context: AdapterContext;
   },
 ): Promise<void> {
-  const explicitMemory = await loadAgentMemoryContext(deps.memory, thread.botId, options.context);
+  const explicitMemory = await loadAgentMemoryContext(
+    deps.memory,
+    { id: thread.botId, ...thread.bot },
+    options.context,
+  );
   // Both halves are untrusted data, escaped out of the tags they sit in, as in the summarizer.
   const prompt = [
     `<conversation>\n${escapePromptData(options.transcript)}\n</conversation>`,
@@ -685,10 +692,15 @@ export async function compactHistory(
 ): Promise<void> {
   const thread = await deps.prisma.thread.findUniqueOrThrow({ where: { id: threadId } });
   // A thread without an owning bot (a group, a team chat) has no memory to write to.
-  if (!thread.botId) return;
+  const botId = thread.botId ?? thread.memberBotId;
+  if (!botId) return;
   const botThread: CompactionThread = {
     id: threadId,
-    botId: thread.botId,
+    botId,
+    bot: await deps.prisma.bot.findUniqueOrThrow({
+      where: { id: botId },
+      select: { userId: true },
+    }),
     spaceId: thread.spaceId,
     userId: thread.userId,
     sessionId: thread.sessionId,
@@ -699,7 +711,7 @@ export async function compactHistory(
   const [first] = tail;
   const previous = first?.type === "compaction" ? first : undefined;
   const uncompacted = previous ? tail.slice(1) : tail;
-  const exchanges = exchangesOf(uncompacted, thread.botId);
+  const exchanges = exchangesOf(uncompacted, botId);
   const kept = keptCount(exchanges, keptWindowTokens(historyBudget));
   const summarized = chunksOf(exchanges.slice(0, exchanges.length - kept));
   if (summarized.length === 0) return;
@@ -716,7 +728,7 @@ export async function compactHistory(
     ? await deps.resolveModel({
         userId: thread.userId,
         spaceId: thread.spaceId,
-        botId: thread.botId,
+        botId: botId,
       })
     : deps.deploymentModelKey
       ? {
@@ -780,7 +792,10 @@ export async function compactHistory(
   // Local compaction is first-party behavior and must not depend on an optional external store.
   let semanticMemory: ConfiguredMemoryProvider | null = null;
   try {
-    semanticMemory = await deps.memoryProviders.resolve(thread.spaceId, thread.userId);
+    semanticMemory = await onOwnBot(
+      { userId: thread.userId, botUserId: botThread.bot.userId },
+      () => deps.memoryProviders.resolve(thread.spaceId, thread.userId),
+    );
   } catch (error) {
     getLogger().error("Failed to load semantic memory provider for history compaction", error);
   }
@@ -789,7 +804,7 @@ export async function compactHistory(
     traceId: `history-compact:${threadId}`,
     spaceId: thread.spaceId,
     userId: thread.userId,
-    botId: thread.botId,
+    botId: botId,
     signal: new AbortController().signal,
   };
   if (semanticMemory) {
@@ -798,7 +813,7 @@ export async function compactHistory(
         {
           content: summary,
           scope: "isolated",
-          botId: thread.botId,
+          botId: botId,
           source: { kind: "history", generation },
         },
         memoryContext,
@@ -814,7 +829,7 @@ export async function compactHistory(
     if ((await historyGeneration(deps.prisma, sessionId)) !== generation) {
       try {
         const removed = await semanticMemory.provider.purgeHistory(
-          { botId: thread.botId, generations: [generation] },
+          { botId: botId, generations: [generation] },
           memoryContext,
         );
         if (!removed.ok) {

@@ -465,6 +465,7 @@ function NoteLine({
   item: ItemOf<"note">;
   onOpenSkill?: (skill: SkillSourceBlock) => void;
 }) {
+  const { t } = useLingui();
   if (item.type === "skill.learnt") {
     const { skillId, name, change } = item.payload;
     return (
@@ -473,6 +474,9 @@ function NoteLine({
         className="px-4"
       />
     );
+  }
+  if (item.type === "memory.revised" && item.payload.team) {
+    return <MessageMeta lines={{ label: t`Saved for the team` }} className="px-4" />;
   }
   if (item.type === "system.note") {
     return (

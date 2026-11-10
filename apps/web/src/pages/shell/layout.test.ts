@@ -73,7 +73,7 @@ describe("threadJumpLocation", () => {
 });
 
 describe("pageBotOf", () => {
-  const bot = (id: string) => ({ id }) as Bot;
+  const bot = (id: string, isOwner = true) => ({ id, isOwner }) as Bot;
   const [alpha, beta, scout] = [bot("alpha"), bot("beta"), bot("scout")];
 
   it("shows the thread's bot until an archived bot is picked", () => {
@@ -84,5 +84,11 @@ describe("pageBotOf", () => {
   it("keeps the picked bot once restored, and shows no page once it is deleted", () => {
     expect(pageBotOf("scout", [alpha, scout], [], alpha)).toBe(scout);
     expect(pageBotOf("scout", [alpha], [], alpha)).toBeUndefined();
+  });
+
+  it("shows no page for a bot shared with you, open or picked", () => {
+    const shared = bot("shared", false);
+    expect(pageBotOf(null, [alpha, shared], [], shared)).toBeUndefined();
+    expect(pageBotOf("shared", [alpha, shared], [], alpha)).toBeUndefined();
   });
 });

@@ -18,6 +18,7 @@ import {
   createThreadEvents,
   createThreadMessage,
   RunHistoryWriteError,
+  sharedBotThread,
 } from "@rakazo/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
@@ -1317,6 +1318,60 @@ describeJourneys("required product journeys", () => {
     ).toBe(1);
   });
 
+  it("5c: a member's schedule on a shared bot wakes in their own thread until unshared", async () => {
+    const owner = await signup(app, `schedule-share-owner-${stamp}@rakazo.test`, "Owner");
+    const ownerMe = await rpc<Me>(app, owner, "me");
+    const member = await signup(app, `schedule-share-member-${stamp}@rakazo.test`, "Member");
+    const memberId = (await rpc<Me>(app, member, "me")).userId;
+    const { url } = await rpc<{ url: string }>(app, owner, "spaces/createInvite", {
+      spaceId: ownerMe.spaceId,
+    });
+    await rpc(app, member, "spaces/acceptInvite", { token: new URL(url).pathname.slice(8) });
+    const bot = await rpc<Bot>(app, owner, "bots/create", {
+      name: "Shared scheduler",
+      title: "",
+      description: "",
+      instructions: "",
+      notifyOnFinish: false,
+    });
+    const share = { botId: bot.id, visibility: "people", userIds: [memberId] };
+    await rpc(app, owner, "bots/share", share);
+    const memberActor = { ...ownerMe, userId: memberId, email: "", isDeploymentOwner: false };
+    const memberThread = (await sharedBotThread(prisma, memberActor, bot.id))!.thread;
+
+    const created = await createScheduleFromTool(
+      { prisma, events: createThreadEvents(prisma), jobs },
+      {
+        spaceId: ownerMe.spaceId,
+        botId: bot.id,
+        userId: memberId,
+        threadId: memberThread.id,
+        name: "Member ping",
+        prompt: "say member-reminder-ok",
+        schedule: { delaySeconds: 30 },
+      },
+    );
+    if (!("ok" in created) || !created.ok) throw new Error("member schedule create failed");
+    const wake = async () => {
+      const dueAt = new Date(Date.now() - 1_000);
+      await prisma.routine.update({
+        where: { id: created.routineId },
+        data: { nextRunAt: dueAt, active: true },
+      });
+      await executor.wakeRoutine(created.routineId, dueAt.toISOString());
+    };
+    await wake();
+    const runs = () => prisma.run.findMany({ where: { routineId: created.routineId } });
+    expect((await runs()).map((run) => run.threadId)).toEqual([memberThread.id]);
+
+    await rpc(app, owner, "bots/share", { ...share, visibility: "private", userIds: [] });
+    expect(
+      await prisma.routine.findUniqueOrThrow({ where: { id: created.routineId } }),
+    ).toMatchObject({ active: false, nextRunAt: null });
+    await wake();
+    expect(await runs()).toHaveLength(1);
+  });
+
   it("allocates event and entry cursors atomically under concurrent writes", async () => {
     const cookie = await signup(app, `sequence-j-${stamp}@rakazo.test`, "Sequence");
     const actor = await rpc<Me>(app, cookie, "me");
@@ -1533,6 +1588,9 @@ describeJourneys("required product journeys", () => {
       where: { id: goneMemory.id },
       data: { content: "important retained context" },
     });
+    const goneTeamMemory = await prisma.memoryDocument.create({
+      data: { ...goneMemory, id: undefined, scope: "team", content: "team context" },
+    });
     await sendAndWait(
       app,
       ada,
@@ -1643,6 +1701,13 @@ describeJourneys("required product journeys", () => {
       scope: "user",
       content: "important retained context",
     });
+    const [kept, keptTeam] = await Promise.all(
+      [goneMemory.id, goneTeamMemory.id].map((id) =>
+        prisma.memoryDocument.findUniqueOrThrow({ where: { id } }),
+      ),
+    );
+    expect(keptTeam).toMatchObject({ botId: null, scope: "user", content: "team context" });
+    expect(keptTeam!.path).toBe(kept!.path.replace(/\/MEMORY\.md$/, "/team/MEMORY.md"));
     // The name is the half that makes a detached usage row readable: bot_deletions is keyed by
     // the bot id, so a per-bot spend report can still label spend that belongs to a bot that
     // no longer exists.
@@ -1685,6 +1750,35 @@ describeJourneys("required product journeys", () => {
       ],
     });
 
+    // Their memory in a Space they joined: their own there, and of a bot shared with them.
+    const host = await signup(app, `account-delete-host-${stamp}@rakazo.test`, "Host");
+    const hostMe = await rpc<Me>(app, host, "me");
+    const { url } = await rpc<{ url: string }>(app, host, "spaces/createInvite", {
+      spaceId: hostMe.spaceId,
+    });
+    await rpc(app, cookie, "spaces/acceptInvite", { token: new URL(url).pathname.slice(8) });
+    const shared = await rpc<Bot>(app, host, "bots/create", {
+      name: "Shared",
+      title: "",
+      description: "",
+      instructions: "",
+      notifyOnFinish: false,
+    });
+    await rpc(app, host, "bots/share", { botId: shared.id, visibility: "space", userIds: [] });
+    await prisma.memoryDocument.create({
+      data: {
+        spaceId: hostMe.spaceId,
+        botId: shared.id,
+        userId: me.userId,
+        scope: "bot",
+        path: "MEMORY.md",
+        content: "- Private to the deleted account",
+      },
+    });
+    expect(
+      await prisma.memoryDocument.count({ where: { spaceId: hostMe.spaceId, userId: me.userId } }),
+    ).toBe(2);
+
     const deleted = await app.request("/api/auth/delete-user", {
       method: "POST",
       headers: {
@@ -1700,6 +1794,8 @@ describeJourneys("required product journeys", () => {
     expect(await prisma.organization.findUnique({ where: { id: me.spaceId } })).toBeNull();
     expect(await prisma.bot.findUnique({ where: { id: bot.id } })).toBeNull();
     expect(await prisma.volume.count({ where: { spaceId: me.spaceId } })).toBe(0);
+    expect(await prisma.memoryDocument.count({ where: { userId: me.userId } })).toBe(0);
+    expect(await prisma.memoryDocument.count({ where: { botId: shared.id } })).toBe(1);
     expect((await raw(app, cookie, "me")).status).toBeGreaterThanOrEqual(400);
   });
 

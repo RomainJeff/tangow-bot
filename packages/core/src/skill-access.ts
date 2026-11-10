@@ -18,15 +18,17 @@ export function asSkillAvailability(value: string | null | undefined): SkillAvai
 /**
  * "disabled" hides the skill from every bot, overrides included; otherwise
  * BotSkill.enabled (override) wins and availability decides. Missing = "all".
+ * A shared bot sees only the skills its owner turned on for it.
  */
 export function isSkillVisible(input: {
   availability?: SkillAvailability | null;
   override?: boolean | null;
+  sharedBot?: boolean;
 }): boolean {
   const availability = input.availability ?? "all";
   if (availability === "disabled") return false;
   if (typeof input.override === "boolean") return input.override;
-  return availability === "all";
+  return availability === "all" && !input.sharedBot;
 }
 
 /** Skill versions an earlier build kept under the data dir; account deletion still removes them. */

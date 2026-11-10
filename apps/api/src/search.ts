@@ -2,7 +2,13 @@ import type { Actor, MessageBlock, SearchHit } from "@rakazo/contracts";
 import { LINK_BLOCK_KINDS, toThreadEntry } from "@rakazo/contracts";
 import { extractLinksFromText, matchesSearchQuery, snippetAroundMatch } from "@rakazo/core";
 import type { SessionEntryRow } from "@rakazo/db";
-import { ENTRY_ON_CHAIN, Prisma, type PrismaClient, sessionEntryFromRow } from "@rakazo/db";
+import {
+  ENTRY_ON_CHAIN,
+  Prisma,
+  type PrismaClient,
+  sessionEntryFromRow,
+  sharedWithFilter,
+} from "@rakazo/db";
 import { withoutHiddenPeerRuns } from "./thread-message-pages.js";
 import { userFileArtifact } from "./user-file-artifact.js";
 
@@ -21,6 +27,14 @@ const SEARCHABLE_BLOCKS = `$[*] ? (!exists(@.kind) || (${[...LINK_BLOCK_KINDS]
 const ENTRY_COLUMNS = Prisma.sql`e.id, e."sessionId", e.seq, e."parentId", e.type, e.payload,
   e."botId" AS "entryBotId", e."runId", e."createdAt"`;
 type EntryColumns = Omit<SessionEntryRow, "botId"> & { entryBotId: string | null };
+
+/**
+ * The actor's own thread with a bot: the bot's thread when it is theirs, or their member thread
+ * while the bot is still shared with them (`sharedBotIds`). A group thread passes too.
+ */
+function ownBotThread(sharedBotIds: string[]) {
+  return Prisma.sql`(t."memberBotId" IS NULL OR t."memberBotId" = ANY(${sharedBotIds}))`;
+}
 
 /** The rows the thread shows, by the rule its own view follows: a hidden peer run stays out. */
 async function shownRows<R extends EntryColumns>(prisma: PrismaClient, rows: R[]): Promise<R[]> {
@@ -59,9 +73,11 @@ async function findArtifactMessages(
   actor: Actor,
   artifacts: Array<{ id: string; targetId: string }>,
   target: "bot" | "group",
+  sharedBotIds: string[],
 ): Promise<Map<string, { id: string; seq: number }>> {
   if (artifacts.length === 0) return new Map();
-  const targetColumn = target === "bot" ? Prisma.sql`t."botId"` : Prisma.sql`t."groupId"`;
+  const targetColumn =
+    target === "bot" ? Prisma.sql`COALESCE(t."botId", t."memberBotId")` : Prisma.sql`t."groupId"`;
   const candidates = Prisma.join(
     artifacts.map(({ id, targetId }) => Prisma.sql`(${id}, ${targetId})`),
   );
@@ -77,6 +93,7 @@ async function findArtifactMessages(
         WHERE t."spaceId" = ${actor.spaceId}
           AND t."userId" = ${actor.userId}
           AND ${targetColumn} = candidate."targetId"
+          AND ${ownBotThread(sharedBotIds)}
           AND e.type IN ${MESSAGE_ENTRY_TYPES}
           AND (e.payload -> 'blocks')::text ILIKE ('%' || candidate."artifactId" || '%')
           AND ${ENTRY_ON_CHAIN}
@@ -171,6 +188,12 @@ export async function querySpaceSearch(
   }
 
   const contentBudget = Math.max(0, SEARCH_LIMIT - conversationHits.length);
+  const sharedBotIds = (
+    await prisma.bot.findMany({
+      where: sharedWithFilter(actor.userId, actor.spaceId),
+      select: { id: true },
+    })
+  ).map((bot) => bot.id);
 
   const artifacts = await prisma.artifact.findMany({
     where: {
@@ -192,6 +215,7 @@ export async function querySpaceSearch(
       artifact.botId && artifact.bot ? [{ id: artifact.id, targetId: artifact.botId }] : [],
     ),
     "bot",
+    sharedBotIds,
   );
   for (const artifact of artifacts) {
     if (!artifact.botId || !artifact.bot) continue;
@@ -231,6 +255,7 @@ export async function querySpaceSearch(
       artifact.groupId && artifact.group ? [{ id: artifact.id, targetId: artifact.groupId }] : [],
     ),
     "group",
+    sharedBotIds,
   );
   for (const artifact of groupArtifacts) {
     if (!artifact.groupId || !artifact.group) continue;
@@ -260,7 +285,13 @@ export async function querySpaceSearch(
         { name: { contains: query, mode: "insensitive" } },
         { prompt: { contains: query, mode: "insensitive" } },
       ],
-      bot: { archivedAt: null },
+      // A routine on a bot no longer shared with its creator goes with their hidden thread.
+      bot: {
+        OR: [
+          { userId: actor.userId, archivedAt: null },
+          sharedWithFilter(actor.userId, actor.spaceId),
+        ],
+      },
     },
     include: { bot: { select: { name: true } } },
     take: SEARCH_LIMIT,
@@ -291,9 +322,10 @@ export async function querySpaceSearch(
     FROM session_entries e
     INNER JOIN sessions s ON s.id = e."sessionId" AND s.kind = 'thread'
     INNER JOIN threads t ON t.id = s."threadId"
-    INNER JOIN bots b ON b.id = t."botId"
+    INNER JOIN bots b ON b.id = COALESCE(t."botId", t."memberBotId")
     WHERE t."spaceId" = ${actor.spaceId}
       AND t."userId" = ${actor.userId}
+      AND ${ownBotThread(sharedBotIds)}
       AND b."archivedAt" IS NULL
       AND e.type IN ${MESSAGE_ENTRY_TYPES}
       AND jsonb_path_query_array(e.payload -> 'blocks', ${SEARCHABLE_BLOCKS}::jsonpath)::text ILIKE ${pattern}

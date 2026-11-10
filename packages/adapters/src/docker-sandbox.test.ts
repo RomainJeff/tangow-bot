@@ -79,6 +79,22 @@ describe("Docker sandbox", () => {
     });
   });
 
+  it("asks for a member's own screen on a shared bot and the bot's for its owner", async () => {
+    const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) =>
+      Response.json({}),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new DockerSandboxProvider("http://supervisor.test", "test-token");
+    const computer = { id: "computer", botId: "bot", kind: "docker" as const, providerRef: "c" };
+
+    await provider.releaseScreen(computer, context);
+    await provider.releaseScreen(computer, { ...context, memberId: "dana" });
+
+    expect(
+      fetchMock.mock.calls.map(([, init]) => new Headers(init?.headers).get("x-rakazo-screen-id")),
+    ).toEqual(["bot", "bot:dana"]);
+  });
+
   it("rejects a declared oversized success response without buffering it", async () => {
     const cancel = vi.fn();
     vi.stubGlobal(
@@ -360,6 +376,23 @@ describe("Docker sandbox", () => {
       homePath: "/data/homes/bot",
       spaceId: "workspace",
       userId: "user",
+    });
+  });
+
+  it("passes on which shared bot's skills the supervisor mounts", async () => {
+    const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) =>
+      Response.json({ id: "computer", resumed: false }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new DockerSandboxProvider("http://supervisor.test", "test-token");
+
+    await provider.provision(
+      { botId: "bot", homePath: "/data/homes/bot", skillsBotId: "bot" },
+      context,
+    );
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      skillsBotId: "bot",
     });
   });
 

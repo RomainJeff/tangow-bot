@@ -268,7 +268,11 @@ describe("sandbox supervisor HTTP boundary", () => {
 
 describe("skills binds", () => {
   it("derives read-only skills binds from ids and the translated data dir", () => {
-    expect(skillsBindsFor("/data", "s1", "u1", (p) => p.replace("/data", "/var/rakazo"))).toEqual([
+    expect(
+      skillsBindsFor("/data", { spaceId: "s1", userId: "u1" }, (p) =>
+        p.replace("/data", "/var/rakazo"),
+      ),
+    ).toEqual([
       "/var/rakazo/skills/user/s1/u1:/skills/user:ro",
       "/var/rakazo/managed-skills:/managed-skills:ro",
     ]);

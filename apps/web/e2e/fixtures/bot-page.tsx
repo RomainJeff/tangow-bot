@@ -86,6 +86,7 @@ const BOT: Bot = {
   teamChatRules: "",
   webhookConfigured: false,
   spawnKey: null,
+  isOwner: true,
 };
 
 const HOUR = 60 * 60 * 1000;
@@ -346,6 +347,7 @@ function listActivity(input: BotActivityInput) {
 }
 
 const READS: Record<string, unknown> = {
+  "bots/sharing": { visibility: "private", userIds: [], connectors: [] },
   "models/credentials": [
     {
       id: "credential-1",

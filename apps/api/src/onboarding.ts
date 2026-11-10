@@ -5,6 +5,7 @@ import { featuredConnectorProvidersMatch } from "@rakazo/core";
 import {
   appendCardStateInTransaction,
   blocksOf,
+  botConnectors,
   createBotMessageInTransaction,
   IsolationError,
   type Prisma,
@@ -12,6 +13,8 @@ import {
   type ThreadEvents,
   threadEventSeq,
 } from "@rakazo/db";
+import { type McpStdioRule, missingDeclaredMcpCards } from "./declared-mcp.js";
+import { resolveThreadTarget, type ThreadTarget } from "./thread-target.js";
 
 /**
  * First-run conversational onboarding, seeded deterministically into the bot's
@@ -23,6 +26,7 @@ type OnboardingDeps = {
   prisma: PrismaClient;
   events: ThreadEvents;
   connectors: ConnectorRegistry;
+  mcpStdio?: McpStdioRule;
 };
 
 type FocusOption = {
@@ -302,23 +306,7 @@ export async function chooseFocus(
     },
   ]);
 
-  const providers = deps.connectors.managedProviders();
-  const catalog = (
-    await Promise.all(
-      providers.map((provider) =>
-        provider
-          .catalog({
-            operationId: "onboarding.choose",
-            traceId: "onboarding.choose",
-            spaceId: actor.spaceId,
-            userId: actor.userId,
-            botId: bot.id,
-            signal: AbortSignal.timeout(15_000),
-          })
-          .catch(() => []),
-      ),
-    )
-  ).flat();
+  const catalog = await appCatalog(deps, actor, bot.id, "onboarding.choose");
   const cards: MessageBlock[] = option.apps.flatMap((slug) => {
     const entry = catalog.find(
       (item) =>
@@ -361,6 +349,113 @@ export async function chooseFocus(
   ]);
 }
 
+/** Every connector's apps, as `actor` sees them; a connector that fails lists none. */
+async function appCatalog(deps: OnboardingDeps, actor: Actor, botId: string, operation: string) {
+  const providers = deps.connectors.managedProviders();
+  return (
+    await Promise.all(
+      providers.map((provider) =>
+        provider
+          .catalog({
+            operationId: operation,
+            traceId: operation,
+            spaceId: actor.spaceId,
+            userId: actor.userId,
+            botId,
+            signal: AbortSignal.timeout(15_000),
+          })
+          .catch(() => []),
+      ),
+    )
+  ).flat();
+}
+
+/** The apps already offered in a thread, by `appConnectAnswerId`. */
+async function offeredApps(db: PrismaClient | Prisma.TransactionClient, sessionId: string) {
+  return new Set(
+    (await cardsWith(db, sessionId, "app_connect")).flatMap((card) =>
+      card.blocks.flatMap((block) =>
+        block.kind === "app_connect" ? [appConnectAnswerId(block)] : [],
+      ),
+    ),
+  );
+}
+
+/**
+ * On a bot shared with them, a member's message brings a card for each app the owner declared that
+ * the member has not connected, and each declared MCP server they have not added. Each is offered
+ * once in the thread, so a member who leaves it aside is not asked again.
+ */
+export async function offerMissingApps(
+  deps: OnboardingDeps,
+  actor: Actor,
+  target: Extract<ThreadTarget, { kind: "bot" }>,
+): Promise<void> {
+  const { bot } = target;
+  if (bot.userId === actor.userId || !bot.thread) return;
+  const thread = {
+    spaceId: actor.spaceId,
+    botId: target.botId,
+    threadId: target.threadId,
+    sessionId: bot.thread.sessionId,
+  };
+  if (botConnectors(bot.connectors).length === 0) return;
+  const offered = await offeredApps(deps.prisma, thread.sessionId);
+  const [apps, servers] = await Promise.all([
+    missingAppCards(deps, actor, bot, offered),
+    missingDeclaredMcpCards(deps.prisma, actor, bot.id, deps.mcpStdio ?? {}),
+  ]);
+  const cards = [...apps, ...servers].filter((card) => !offered.has(appConnectAnswerId(card)));
+  if (cards.length === 0) return;
+  const seq = await deps.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await tx.$executeRaw`SELECT id FROM threads WHERE id = ${thread.threadId} FOR UPDATE`;
+    const offeredNow = await offeredApps(tx, thread.sessionId);
+    const fresh = cards.filter((card) => !offeredNow.has(appConnectAnswerId(card)));
+    return fresh.length > 0 ? postInTransaction(tx, thread, fresh) : null;
+  });
+  if (seq !== null) await deps.events.notify(thread.threadId, seq);
+}
+
+/** A card for each declared app the actor has not connected and was not offered yet. */
+async function missingAppCards(
+  deps: OnboardingDeps,
+  actor: Actor,
+  bot: { id: string; connectors: Prisma.JsonValue },
+  offered: Set<string>,
+): Promise<AppConnectBlock[]> {
+  const declared = botConnectors(bot.connectors).flatMap((need) =>
+    need.kind === "app" ? [need] : [],
+  );
+  if (declared.length === 0) return [];
+  const connected = await deps.prisma.connection.findMany({
+    where: { spaceId: actor.spaceId, userId: actor.userId, status: "connected" },
+    select: { connectorId: true, provider: true },
+  });
+  const have = new Set([...connected.map(appConnectAnswerId), ...offered]);
+  const missing = declared.filter((need) => !have.has(appConnectAnswerId(need)));
+  if (missing.length === 0) return [];
+  const catalog = await appCatalog(deps, actor, bot.id, "onboarding.missingApps");
+  return missing.flatMap((need): AppConnectBlock[] => {
+    const entry = catalog.find(
+      (item) =>
+        (item.connectorId ?? "composio") === need.connectorId &&
+        item.slug.toLowerCase() === need.provider.toLowerCase(),
+    );
+    if (!entry) return [];
+    return [
+      {
+        kind: "app_connect",
+        connectorId: need.connectorId,
+        provider: need.provider,
+        name: entry.name,
+        description: APP_DESCRIPTIONS[need.provider.toLowerCase()] ?? "",
+        logo: entry.logo ?? null,
+        status: "pending",
+      },
+    ];
+  });
+}
+
 export async function markAppConnected(
   deps: OnboardingDeps,
   actor: Actor,
@@ -368,11 +463,14 @@ export async function markAppConnected(
   provider: string,
   connectorId = "composio",
 ): Promise<void> {
-  const { bot, thread } = await requireBotThread(deps, actor, botId);
+  // The actor's own thread with the bot, which is a member's on a bot shared with them.
+  const resolved = await resolveThreadTarget(deps.prisma, actor, { botId });
+  if (resolved.kind !== "bot" || !resolved.bot.thread) throw new IsolationError();
+  const thread = resolved.bot.thread;
   const target = {
     spaceId: actor.spaceId,
-    botId: bot.id,
-    threadId: thread.id,
+    botId: resolved.botId,
+    threadId: resolved.threadId,
     sessionId: thread.sessionId,
   };
   const matches = (block: MessageBlock): block is AppConnectBlock =>

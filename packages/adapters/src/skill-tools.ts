@@ -1,4 +1,4 @@
-import { lstat, mkdir, readdir, readFile, rmdir } from "node:fs/promises";
+import { cp, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, rmdir } from "node:fs/promises";
 import path from "node:path";
 import type { AdapterContext, ComputerRef, SandboxProvider } from "@rakazo/adapter-kit";
 import {
@@ -27,6 +27,7 @@ import { loadManagedSkills } from "./managed-skills.js";
 import type { SkillOwnerLock } from "./skill-lock.js";
 import type { SkillTreeFile } from "./skill-store.js";
 import {
+  botSkillsRoot,
   hasCode,
   isExists,
   isStorableFile,
@@ -56,6 +57,7 @@ const BOT_SKILLS_MAX_BYTES = 200 * 1024 * 1024;
 
 type SkillOwner = {
   spaceId: string;
+  /** Whose skills: the bot's owner, also in the run of someone the bot is shared with. */
   userId: string;
   /** When set, list/read/update/delete only see skills visible to this bot. */
   botId?: string;
@@ -134,7 +136,7 @@ function rejectInvalidSkillFields(name: string, description: string): string | u
 }
 
 export async function listAgentSkillRecords(
-  deps: SkillToolDeps,
+  deps: Pick<SkillToolDeps, "prisma" | "dataDir">,
   owner: SkillOwner,
 ): Promise<Array<SkillRecord & { id: string }>> {
   const [managed, userSkills] = await Promise.all([
@@ -152,9 +154,10 @@ async function onlyVisibleTo<T extends { id: string }>(
   botId: string,
   records: T[],
 ): Promise<T[]> {
-  const [settings, overrides] = await Promise.all([
+  const [settings, overrides, bot] = await Promise.all([
     prisma.skillSetting.findMany({ where: { spaceId: owner.spaceId, userId: owner.userId } }),
     prisma.botSkill.findMany({ where: { botId, spaceId: owner.spaceId, userId: owner.userId } }),
+    prisma.bot.findFirst({ where: { id: botId }, select: { visibility: true } }),
   ]);
   const availability = new Map(
     settings.map((s) => [s.skillKey, asSkillAvailability(s.availability)]),
@@ -166,8 +169,60 @@ async function onlyVisibleTo<T extends { id: string }>(
       isSkillVisible({
         availability: availability.get(record.id) ?? "all",
         override: override.get(record.id),
+        sharedBot: bot !== null && bot.visibility !== "private",
       }),
   );
+}
+
+/**
+ * Refreshes a shared bot's copy of its owner's skills that are on for it, which its computer
+ * mounts in place of anyone's library: the same files whoever runs the bot. Each skill is copied
+ * beside the copy, then renamed in, so the mounted folder itself never changes.
+ */
+export async function copySharedSkills(
+  deps: Pick<SkillToolDeps, "prisma" | "dataDir">,
+  bot: { id: string; spaceId: string; userId: string },
+): Promise<void> {
+  const owner = { spaceId: bot.spaceId, userId: bot.userId, botId: bot.id };
+  const names = (await listAgentSkillRecords(deps, owner))
+    .filter((record) => record.source === "user")
+    .map((record) => skillDirName(record.name));
+  const from = userSkillsRoot(deps.dataDir, owner);
+  const to = botSkillsRoot(deps.dataDir, bot);
+  await mkdir(to, { recursive: true });
+  for (const entry of await readdir(to)) {
+    if (!names.includes(entry)) await rm(path.join(to, entry), { recursive: true, force: true });
+  }
+  const staging = await mkdtemp(`${to}.copy-`);
+  try {
+    for (const name of names) {
+      // Plain files and folders only, as the store reads them: a link is never followed.
+      const copied = await cp(path.join(from, name), path.join(staging, name), {
+        recursive: true,
+        filter: async (source) => {
+          const info = await lstat(source);
+          return info.isDirectory() || isStorableFile(info, { hardLinks: true });
+        },
+      }).then(
+        () => true,
+        (error: unknown) => {
+          // A skill whose folder is not named after it (renamed from a shell) is listed but has
+          // no folder here; it is left out rather than keep the bot's computer from starting.
+          if (!hasCode(error, "ENOENT")) throw error;
+          getLogger().warn("[skills] shared bot skill left out: its folder has another name", {
+            botId: bot.id,
+            folder: name,
+          });
+          return false;
+        },
+      );
+      if (!copied) continue;
+      await rm(path.join(to, name), { recursive: true, force: true });
+      await rename(path.join(staging, name), path.join(to, name));
+    }
+  } finally {
+    await rm(staging, { recursive: true, force: true });
+  }
 }
 
 async function findOwnedSkill(

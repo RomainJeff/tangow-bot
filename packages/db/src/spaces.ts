@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import { cancelRunsInTransaction } from "./cancel-runs.js";
 import { Prisma, type PrismaClient } from "./client.js";
+import { expireComputerExecutionLeases } from "./computers.js";
 import { IsolationError } from "./scope.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 import { deleteOwnerVolumes } from "./volumes.js";
@@ -717,12 +718,21 @@ export async function removeSpaceMember(
       data: { archivedAt: new Date() },
     });
     await tx.routine.updateMany({ where: leftovers, data: { active: false, nextRunAt: null } });
+    // Their threads with bots shared with them stay, hidden: membership gates access to them.
+    await tx.botShare.deleteMany({
+      where: { userId: input.memberUserId, bot: { spaceId: input.spaceId } },
+    });
     // Archiving only stops new claims; a run already going would keep the Space's secrets.
     const activeRuns = await tx.run.findMany({
-      where: { bot: leftovers, status: { in: [...ACTIVE_RUN_STATUSES] } },
+      where: {
+        OR: [{ bot: leftovers }, { thread: { ...leftovers, memberBotId: { not: null } } }],
+        status: { in: [...ACTIVE_RUN_STATUSES] },
+      },
       select: { id: true, taskId: true },
     });
     await cancelRunsInTransaction(tx, activeRuns, new Date());
+    // A cancelled run waiting on a screen gives its computer back at once.
+    await expireComputerExecutionLeases(tx, { runId: { in: activeRuns.map((run) => run.id) } });
     await tx.member.deleteMany({
       where: {
         organizationId,

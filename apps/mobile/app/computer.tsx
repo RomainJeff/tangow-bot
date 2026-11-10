@@ -29,6 +29,7 @@ import { defaultApiBase } from "../lib/endpoint";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
 import { screenLinkEffects } from "../lib/screen-link";
+import { computerScreenControls } from "../lib/shared-bot";
 import { useScreenLink } from "../lib/use-screen-link";
 
 export default function Computer() {
@@ -36,7 +37,11 @@ export default function Computer() {
   const router = useRouter();
   const tokens = useMobileTokens();
   const navigation = useNavigation();
-  const { botId, name: nameParam } = useLocalSearchParams<{ botId?: string; name?: string }>();
+  const {
+    botId,
+    name: nameParam,
+    shared,
+  } = useLocalSearchParams<{ botId?: string; name?: string; shared?: string }>();
   const name = nameParam || t("Bot");
   const [computer, setComputer] = useState<ComputerStatus | null>(null);
   const [screenUrl, setScreenUrl] = useState<string | null>(null);
@@ -55,6 +60,7 @@ export default function Computer() {
   useEffect(() => setScreenError(null), [embeddedScreenUrl]);
 
   const hasControl = computer?.controlHolder === "user" && computer.controlBotId === botId;
+  const controls = computerScreenControls(shared === "1", computer);
   const label = computerLabel(computer?.mode, name);
 
   useLayoutEffect(() => {
@@ -288,7 +294,7 @@ export default function Computer() {
             takeoverRequested={computer?.takeoverRequested ?? false}
             onRelease={releaseComputer}
           />
-        ) : computer?.busyBotName ? null : (
+        ) : !controls.takeControl ? null : (
           <Pressable
             onPress={() => void openComputer({ takeControl: true })}
             style={{
@@ -305,11 +311,13 @@ export default function Computer() {
       {computer?.updateAvailable ? (
         <Button title={t("Update available")} onPress={() => router.push("/computer-settings")} />
       ) : null}
-      <ComputerModePicker
-        value={computer?.mode}
-        disabled={switching}
-        onChange={(mode) => void setComputerMode(mode)}
-      />
+      {controls.modePicker ? (
+        <ComputerModePicker
+          value={computer?.mode}
+          disabled={switching}
+          onChange={(mode) => void setComputerMode(mode)}
+        />
+      ) : null}
 
       <Modal
         visible={booting || computerOpen}
@@ -406,7 +414,7 @@ export default function Computer() {
                       takeoverRequested={computer?.takeoverRequested ?? false}
                       onRelease={releaseComputer}
                     />
-                  ) : computer?.busyBotName ? null : (
+                  ) : !controls.takeControl ? null : (
                     <Pressable
                       onPress={() =>
                         void bootComputer({ takeControl: true, overlay: false }).catch(

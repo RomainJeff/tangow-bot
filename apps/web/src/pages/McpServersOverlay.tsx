@@ -1,6 +1,6 @@
 import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { Bot, BotMcpServer, McpServer, McpTransport } from "@rakazo/contracts";
+import type { Bot, BotMcpServer, DeclaredMcp, McpServer, McpTransport } from "@rakazo/contracts";
 import { deriveMcpSlug } from "@rakazo/core";
 import {
   Badge,
@@ -39,8 +39,20 @@ function oauthActionLabel(server: McpServer, pending: boolean): string {
   return server.oauthStatus === "none" ? t`Connect OAuth` : t`Reconnect OAuth`;
 }
 
-export function McpServersOverlay({ onClose }: { onClose: () => void }) {
+/**
+ * The caller's MCP servers. With `declared`, a server a bot shared with them needs: its form comes
+ * filled in and locked, and they type only their own credentials.
+ */
+export function McpServersOverlay({
+  onClose,
+  declared,
+}: {
+  onClose: () => void;
+  declared?: { botId: string; serverId: string; onAdded: () => void };
+}) {
   const { t } = useLingui();
+  const [need, setNeed] = useState<DeclaredMcp | null>(null);
+  const [credentials, setCredentials] = useState<Record<string, string>>({});
   const [servers, setServers] = useState<McpServer[]>([]);
   const [bots, setBots] = useState<Bot[]>([]);
   const [botAssignments, setBotAssignments] = useState<Record<string, BotMcpServer[]>>({});
@@ -64,7 +76,8 @@ export function McpServersOverlay({ onClose }: { onClose: () => void }) {
       rpc.bots.list(),
       rpc.mcp.assignments.all(),
     ]);
-    const activeBots = nextBots.filter((bot) => !bot.archivedAt);
+    // Only the owner of a bot gives it servers; one shared with the caller takes no toggle.
+    const activeBots = nextBots.filter((bot) => !bot.archivedAt && bot.isOwner);
     setServers(nextServers);
     setBots(activeBots);
     setBotAssignments(
@@ -83,6 +96,24 @@ export function McpServersOverlay({ onClose }: { onClose: () => void }) {
     );
   }, []);
 
+  const declaredBotId = declared?.botId;
+  const declaredServerId = declared?.serverId;
+  useEffect(() => {
+    if (!declaredBotId || !declaredServerId) return;
+    void rpc.bots.declaredMcp({ botId: declaredBotId, serverId: declaredServerId }).then(
+      (server) => {
+        setNeed(server);
+        setName(server.name);
+        setTransport(server.transport);
+        setEndpoint(server.endpoint ?? "");
+        setCommand(server.command ?? "");
+        setArgs(server.args.join(" "));
+      },
+      (err: unknown) =>
+        setError(err instanceof Error ? err.message : t`Could not load MCP servers`),
+    );
+  }, [declaredBotId, declaredServerId]);
+
   useEffect(() => {
     // BroadcastChannel instead of window.opener messaging: provider login
     // pages with COOP sever the opener link, but the channel is origin-scoped
@@ -100,6 +131,33 @@ export function McpServersOverlay({ onClose }: { onClose: () => void }) {
     setSelectedBotIds((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
     );
+  }
+
+  async function addDeclared(target: NonNullable<typeof declared>, server: DeclaredMcp) {
+    setError(null);
+    setSaving(true);
+    const values = (keys: string[]) =>
+      Object.fromEntries(
+        keys.flatMap((key) => (credentials[key] ? [[key, credentials[key]]] : [])),
+      );
+    try {
+      await rpc.bots.addDeclaredMcp({
+        botId: target.botId,
+        serverId: server.serverId,
+        headers: values(server.headerKeys),
+        env: values(server.envKeys),
+        secret: secret || undefined,
+      });
+      target.onAdded();
+      setNeed(null);
+      setSecret("");
+      setCredentials({});
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t`Could not add MCP server`);
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function addServer() {
@@ -270,7 +328,7 @@ export function McpServersOverlay({ onClose }: { onClose: () => void }) {
           </p>
         ) : null}
         <div className="rk-scroll grid min-h-0 grid-cols-1 gap-5 overflow-y-auto p-6 lg:grid-cols-2">
-          <Card className="self-start">
+          <Card className="self-start" hidden={Boolean(declared && !need)}>
             <CardHeader>
               <CardTitle>
                 <Trans>Add server</Trans>
@@ -284,6 +342,7 @@ export function McpServersOverlay({ onClose }: { onClose: () => void }) {
                   </FieldLabel>
                   <Input
                     id="mcp-name"
+                    disabled={Boolean(need)}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g. Mobbin"
@@ -294,9 +353,15 @@ export function McpServersOverlay({ onClose }: { onClose: () => void }) {
                   onValueChange={(value) => setTransport(value as McpTransport)}
                 >
                   <TabsList className="w-full">
-                    <TabsTrigger value="streamable_http">HTTP</TabsTrigger>
-                    <TabsTrigger value="sse">SSE</TabsTrigger>
-                    <TabsTrigger value="stdio">STDIO</TabsTrigger>
+                    <TabsTrigger value="streamable_http" disabled={Boolean(need)}>
+                      HTTP
+                    </TabsTrigger>
+                    <TabsTrigger value="sse" disabled={Boolean(need)}>
+                      SSE
+                    </TabsTrigger>
+                    <TabsTrigger value="stdio" disabled={Boolean(need)}>
+                      STDIO
+                    </TabsTrigger>
                   </TabsList>
                 </Tabs>
                 {transport === "stdio" ? (
@@ -307,6 +372,7 @@ export function McpServersOverlay({ onClose }: { onClose: () => void }) {
                       </FieldLabel>
                       <Input
                         id="mcp-command"
+                        disabled={Boolean(need)}
                         value={command}
                         onChange={(e) => setCommand(e.target.value)}
                         placeholder="/opt/mcp-server"
@@ -318,6 +384,7 @@ export function McpServersOverlay({ onClose }: { onClose: () => void }) {
                       </FieldLabel>
                       <Input
                         id="mcp-args"
+                        disabled={Boolean(need)}
                         value={args}
                         onChange={(e) => setArgs(e.target.value)}
                         placeholder="--stdio"
@@ -331,12 +398,27 @@ export function McpServersOverlay({ onClose }: { onClose: () => void }) {
                     </FieldLabel>
                     <Input
                       id="mcp-endpoint"
+                      disabled={Boolean(need)}
                       value={endpoint}
                       onChange={(e) => setEndpoint(e.target.value)}
                       placeholder="https://api.mobbin.com/mcp"
                     />
                   </Field>
                 )}
+                {need?.headerKeys.concat(need.envKeys).map((key) => (
+                  <Field key={key}>
+                    <FieldLabel htmlFor={`mcp-credential-${key}`}>{key}</FieldLabel>
+                    <Input
+                      id={`mcp-credential-${key}`}
+                      type="password"
+                      value={credentials[key] ?? ""}
+                      onChange={(e) =>
+                        setCredentials((values) => ({ ...values, [key]: e.target.value }))
+                      }
+                      placeholder={t`Stored encrypted`}
+                    />
+                  </Field>
+                ))}
                 <details className="group rounded-card bg-group shadow-group">
                   <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2.5 text-sm text-foreground">
                     <span>
@@ -362,7 +444,7 @@ export function McpServersOverlay({ onClose }: { onClose: () => void }) {
                         placeholder={t`Stored encrypted`}
                       />
                     </Field>
-                    {transport !== "stdio" ? (
+                    {transport !== "stdio" && !need ? (
                       <div className="grid grid-cols-[.7fr_1fr] gap-2">
                         <Input
                           aria-label={t`Header name`}
@@ -380,7 +462,7 @@ export function McpServersOverlay({ onClose }: { onClose: () => void }) {
                     ) : null}
                   </div>
                 </details>
-                {bots.length > 0 ? (
+                {bots.length > 0 && !need ? (
                   <Field>
                     <FieldTitle>
                       <Trans>Agents:</Trans>
@@ -411,7 +493,7 @@ export function McpServersOverlay({ onClose }: { onClose: () => void }) {
                 type="button"
                 className="mt-5 w-full"
                 disabled={saving}
-                onClick={() => void addServer()}
+                onClick={() => void (declared && need ? addDeclared(declared, need) : addServer())}
               >
                 {saving ? <Trans>Adding…</Trans> : <Trans>Add server</Trans>}
               </Button>

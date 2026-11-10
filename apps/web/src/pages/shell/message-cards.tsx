@@ -4,12 +4,16 @@ import type { MessageBlock } from "@rakazo/contracts";
 import { abortableDelay } from "@rakazo/core";
 import { Button, FramedBlock, LinkPreviewPicture, Surface } from "@rakazo/ui-web";
 import { ImageIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { SuccessPop } from "../../components/ai/primitives";
 import type { ArtifactTarget } from "../../lib/artifact-open";
 import { connectMcpOauth } from "../../lib/mcp-connect";
 import { rpc } from "../../lib/rpc";
 import { useArtifactImageSrc } from "./use-artifact-image-src";
+
+const McpServersOverlay = lazy(() =>
+  import("../McpServersOverlay").then((module) => ({ default: module.McpServersOverlay })),
+);
 
 export function ChoiceCard({
   botId,
@@ -113,6 +117,9 @@ export function AppConnectCard({
   const [localStatus, setLocalStatus] = useState<"pending" | "connected">(block.status);
   const [error, setError] = useState<string | null>(null);
   const connectionAttempt = useRef<AbortController | null>(null);
+  // An MCP server a shared bot needs: the person adds it with their own credentials.
+  const [adding, setAdding] = useState(false);
+  const mcp = block.connectorId === "mcp";
   const status = block.status === "connected" ? "connected" : localStatus;
   useEffect(() => () => connectionAttempt.current?.abort(), []);
 
@@ -189,13 +196,25 @@ export function AppConnectCard({
             variant="secondary"
             className="rounded-full hover:border-border hover:bg-accent hover:text-foreground"
             disabled={busy}
-            onClick={() => void authorize()}
+            onClick={() => (mcp ? setAdding(true) : void authorize())}
           >
-            {busy ? t`Waiting…` : t`Authorize`}
+            {busy ? t`Waiting…` : mcp ? t`Add` : t`Authorize`}
           </Button>
         )}
       </div>
       {error ? <p className="mt-2 text-time text-destructive">{error}</p> : null}
+      {adding ? (
+        <Suspense fallback={null}>
+          <McpServersOverlay
+            declared={{
+              botId,
+              serverId: block.provider,
+              onAdded: () => setLocalStatus("connected"),
+            }}
+            onClose={() => setAdding(false)}
+          />
+        </Suspense>
+      ) : null}
     </Surface>
   );
 }

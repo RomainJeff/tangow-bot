@@ -199,6 +199,7 @@ function fixture({
     bot: {
       findUniqueOrThrow: vi.fn(async () => ({
         id: run.botId,
+        userId: "user-1",
         name: "Assistant",
         title: "Assistant",
         description: "Test assistant",

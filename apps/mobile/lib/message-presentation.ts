@@ -1,6 +1,7 @@
-import type { MessageBlock } from "@rakazo/contracts";
+import type { MessageBlock, ThreadItem } from "@rakazo/contracts";
 import type { NarrationSegment, SkillSourceBlock } from "@rakazo/core";
 import { isToolActivityBlock, narrationSegments } from "@rakazo/core";
+import { t } from "./i18n";
 
 /**
  * The blocks the thread is about to draw: tool activity is hidden, except the
@@ -55,4 +56,12 @@ export async function skillLineRoute(
  */
 export function skillLineSegment(segmentTexts: readonly string[]): number {
   return segmentTexts.findLastIndex((text) => text !== "");
+}
+
+/**
+ * The line a memory note draws: a run saved for everyone a shared bot is shared with, which every
+ * other person's runs will read. A save to one's own memory draws nothing, as before.
+ */
+export function memoryNoteLine(item: Extract<ThreadItem, { kind: "note" }>): string | null {
+  return item.type === "memory.revised" && item.payload.team ? t("Saved for the team") : null;
 }

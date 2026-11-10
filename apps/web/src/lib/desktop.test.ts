@@ -96,7 +96,7 @@ describe("window chrome", () => {
     // The bot-name trigger stays clickable (and out of the drag region) while
     // carrying its hover affordance.
     expect(shell).toContain(
-      'className="app-no-drag -mx-2 flex min-w-0 items-center gap-3 rounded-lg px-2 py-1 transition-colors hover:bg-muted"',
+      'className="app-no-drag -mx-2 flex min-w-0 items-center gap-3 rounded-lg px-2 py-1 transition-colors enabled:hover:bg-muted"',
     );
     // One computer button and one settings button in the capsule, each out of the drag region.
     expect(shell).toContain('const CAPSULE_BUTTON = "app-no-drag ');

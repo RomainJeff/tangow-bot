@@ -388,6 +388,20 @@ export function computerTakeoverBlocked(
   return isActive(runStatus as RunStatus);
 }
 
+/**
+ * Whether the computer window offers Take control. On a bot shared with you, only when your own
+ * run waits for you and nobody else has the screen; its owner may also take it whenever it is free.
+ */
+export function canTakeComputerControl(input: {
+  shared: boolean;
+  runStatus: string | null | undefined;
+  composerRunning: boolean;
+  busyBotName: string | null | undefined;
+}): boolean {
+  if (input.shared) return input.runStatus === "waiting_takeover" && !input.busyBotName;
+  return input.runStatus === "waiting_takeover" || (!input.composerRunning && !input.busyBotName);
+}
+
 export function computerPanelAutoBoot(
   state: ComputerStatus["state"] | undefined,
   screenUrl?: string | null,

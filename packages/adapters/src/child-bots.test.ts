@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import type {
   AdapterContext,
   AgentHomeStore,
@@ -16,6 +19,7 @@ import {
   destroyBot,
   spawnBot,
 } from "./child-bots.js";
+import { botSkillsRoot } from "./skill-store.js";
 
 vi.mock("../../db/src/sessions.js", async () =>
   (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
@@ -525,6 +529,57 @@ describe("destroyBot", () => {
       type: "computer.status",
       payload: { status: "running" },
     });
+  });
+
+  it("removes the bot's copy of its owner's skills", async () => {
+    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-destroy-bot-skills-"));
+    const bot = { id: "bot-1", spaceId: "workspace-1", name: "Researcher", archivedAt: null };
+    const copy = botSkillsRoot(dataDir, bot);
+    await mkdir(path.join(copy, "release-steps", "scripts"), { recursive: true });
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      chatGroup: { findMany: vi.fn().mockResolvedValue([]) },
+      artifact: {
+        findMany: vi.fn().mockResolvedValue([]),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      computerExecutionLease: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+      computer: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+      botDeletion: { create: vi.fn().mockResolvedValue({}) },
+      bot: { delete: vi.fn().mockResolvedValue({}) },
+    };
+    const prisma = {
+      bot: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      computer: { findUnique: vi.fn().mockResolvedValue(null) },
+      run: {
+        findMany: vi.fn().mockResolvedValue([]),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      routine: {
+        findMany: vi.fn().mockResolvedValue([]),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      $transaction: vi.fn(async (callback: (client: unknown) => Promise<unknown>) => callback(tx)),
+    } as unknown as PrismaClient;
+    try {
+      await destroyBot(
+        {
+          prisma,
+          sandbox: {} as SandboxProvider,
+          home: {} as AgentHomeStore,
+          jobs: { cancel: vi.fn() } as unknown as JobPublisher,
+          events: {} as ThreadEvents,
+          dataDir,
+        },
+        bot,
+        context,
+        { deleteMemories: true },
+      );
+
+      await expect(stat(copy)).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await rm(dataDir, { recursive: true, force: true });
+    }
   });
 
   it("surfaces transaction failures instead of reporting deletion success", async () => {

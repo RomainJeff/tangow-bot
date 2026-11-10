@@ -39,6 +39,10 @@ tags:
 - tapOn:
     text: "Don’t allow"
     optional: true
+# iOS offers to save the password over the inbox.
+- tapOn:
+    text: "Not Now"
+    optional: true
 
 - extendedWaitUntil:
     visible: "Researcher"
@@ -238,6 +242,78 @@ tags:
     visible: "Weekly fixture review"
     timeout: 10000
 - takeScreenshot: "21-routine"
+
+# A bot shared with this user: their own thread, the team save under the reply, the MCP card
+# pointing to web or desktop, and a title menu without the owner's screens.
+- openLink: "rakazo:///thread?botId=${RAKAZO_SCREENSHOT_SHARED_BOT_ID}&name=Release%20notes"
+# iOS asks before opening its own link.
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Saved for the team"
+    timeout: 10000
+- assertVisible: "Add it on web or desktop"
+- assertNotVisible: "Open computer"
+- takeScreenshot: "31-shared-bot-thread"
+- tapOn: "Release notes"
+- assertVisible: "Clear conversation"
+- assertNotVisible: "Bot settings"
+- takeScreenshot: "32-shared-bot-actions"
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          point: "50%,92%"
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+
+# The shared bot's computer as the member sees it: no mode picker, and no Take control until
+# their own run asks for them.
+- openLink: "rakazo:///computer?botId=${RAKAZO_SCREENSHOT_SHARED_BOT_ID}&name=Release%20notes&shared=1"
+# iOS asks before opening its own link.
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Release notes’s computer"
+    timeout: 10000
+- assertNotVisible: "Take control"
+- assertNotVisible: "Private"
+- takeScreenshot: "32b-shared-bot-computer"
+
+# The owner's share sheet for Writer, shared with the teammate, then its team memory.
+- openLink: "rakazo:///bot-share?botId=${RAKAZO_SCREENSHOT_SHARE_BOT_ID}"
+# iOS asks before opening its own link.
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Skills this bot can use"
+    timeout: 10000
+- assertVisible: "Grace Hopper"
+- assertVisible: "Apps this bot can use"
+- assertVisible: "Everyone who uses this bot can see its files and browser sign-ins."
+- takeScreenshot: "33-share-sheet"
+- tapOn: "Done"
+
+- openLink: "rakazo:///bot?botId=${RAKAZO_SCREENSHOT_SHARE_BOT_ID}"
+# iOS asks before opening its own link.
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Knowledge"
+    timeout: 10000
+- tapOn: "Knowledge"
+- extendedWaitUntil:
+    visible: "Team memory"
+    timeout: 10000
+- takeScreenshot: "34-team-memory"
 
 # Verify saved appearance changes on already-mounted screens and modal routes.
 - openLink: "rakazo:///account"

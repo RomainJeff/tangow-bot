@@ -62,6 +62,7 @@ export function useShellOverlays(sessionUser: unknown, spaceId: string | undefin
   }, [spaceMenu]);
   const closeSpaceMenu = useCallback(() => setSpaceMenu(null), []);
   const [clearTarget, setClearTarget] = useState<ChatTarget | null>(null);
+  const [shareTarget, setShareTarget] = useState<Bot | null>(null);
   const [newSectionTarget, setNewSectionTarget] = useState<ChatTarget | null>(null);
   const [renameSectionTarget, setRenameSectionTarget] = useState<{
     section: BotSection;
@@ -183,6 +184,8 @@ export function useShellOverlays(sessionUser: unknown, spaceId: string | undefin
     closeSpaceMenu,
     clearTarget,
     setClearTarget,
+    shareTarget,
+    setShareTarget,
     newSectionTarget,
     setNewSectionTarget,
     renameSectionTarget,

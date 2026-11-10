@@ -727,6 +727,24 @@ describe("starting a computer whose home is on volumes", () => {
     });
   });
 
+  it("keeps the owner's shared volume off a shared bot's dedicated computer", async () => {
+    const spaceId = await fixture.seedSpace();
+    const computer = await fixture.seedComputer(spaceId, {
+      homeStorage: "volumes",
+      scope: "dedicated",
+    });
+    const bot = await fixture.seedBot(spaceId, computer.id);
+    await fixture.seedVolume("bot_private", spaceId, bot.id);
+    await fixture.seedVolume("space_shared", spaceId, null);
+    await prisma.bot.update({ where: { id: bot.id }, data: { visibility: "space" } });
+
+    const { sdk } = await start(computer, bot.id, {});
+
+    expect(Object.keys(vi.mocked(sdk.create).mock.calls[0]![0].volumeMounts ?? {})).toEqual([
+      `/workspace/bots/${bot.id}`,
+    ]);
+  });
+
   it("archives the files of the machine it replaces under a key of their own", async () => {
     const { computer, bot } = await fixture.migratedBot();
     await prisma.computer.update({

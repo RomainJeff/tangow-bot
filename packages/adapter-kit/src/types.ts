@@ -16,6 +16,8 @@ export interface AdapterContext {
   spaceId: string;
   userId: string;
   botId?: string;
+  /** Someone the bot is shared with, whose run this is; unset for the owner's own runs. */
+  memberId?: string;
   runId?: string;
   /** Opaque fence for releasing a graphical screen without tearing down its replacement. */
   screenLeaseId?: string;
@@ -259,8 +261,14 @@ export interface ConnectorCapabilities {
 
 export type ConnectorCatalogItem = ConnectionCatalogItem;
 
+/**
+ * "bot" is the context person's own memory of the bot. "team" is a shared bot's memory common to
+ * everyone it is shared with, stored under the bot owner: read and write it as the owner.
+ */
+export type MarkdownMemoryScope = "bot" | "user" | "team";
+
 export interface MemoryReadRequest {
-  scope: "bot" | "user";
+  scope: MarkdownMemoryScope;
   botId?: string;
   path?: string;
 }
@@ -288,7 +296,7 @@ export interface MemorySearchResult {
 }
 
 export interface MemoryCommitRequest {
-  scope: "bot" | "user";
+  scope: MarkdownMemoryScope;
   botId?: string;
   path: string;
   content: string;

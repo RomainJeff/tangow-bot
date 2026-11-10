@@ -88,6 +88,7 @@ type PlanRow = {
   homeStorage: HomeStorage | null;
   privateVolumeId: string | null;
   sharedVolumeId: string | null;
+  botShared: boolean;
   homeMoving: boolean;
 };
 
@@ -357,7 +358,7 @@ export function createWorkerLifecycle(deps: {
     async plan(input: { attemptId: string; needs: RunNeeds }): Promise<LaunchPlan> {
       const [row] = await prisma.$queryRaw<PlanRow[]>`
         SELECT r.id AS "runId", r."botId", r."spaceId", b."userId", a.fence, r."leaseFence", r.status,
-          c.id AS "computerId", c."homeStorage",
+          c.id AS "computerId", c."homeStorage", b.visibility <> 'private' AS "botShared",
           EXISTS (SELECT 1 FROM computers moving WHERE moving."spaceId" = r."spaceId"
             AND moving."userId" = b."userId" AND moving."maintenanceId" LIKE 'home-move:%'
             AND (moving.scope = 'team' OR moving.id = b."computerId")) AS "homeMoving",

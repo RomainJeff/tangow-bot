@@ -34,6 +34,7 @@ import { homeMovePending } from "./docker-home-migration.js";
 import { resolveAgentHomePath } from "./home.js";
 import type { RunWorkers } from "./runtime-worker/runtime.js";
 import { userSkillsRoot } from "./skill-store.js";
+import { copySharedSkills } from "./skill-tools.js";
 
 type ComputerUpdateProgress = (
   stage: Exclude<ComputerUpdate["stage"], "preparing">,
@@ -158,13 +159,16 @@ export { toComputerRef } from "./computer-support.js";
 async function loadVolumeHome(
   prisma: PrismaClient,
   computer: { id: string; scope: string; spaceId: string; userId: string },
+  sharedBot: boolean,
 ) {
   const scope = parseComputerMode(computer.scope);
   const volumes = await prisma.volume.findMany({
     where: {
       OR: [
         { kind: "bot_private", bot: { computerId: computer.id } },
-        { kind: "space_shared", spaceId: computer.spaceId, userId: computer.userId },
+        ...(sharedBot
+          ? []
+          : [{ kind: "space_shared", spaceId: computer.spaceId, userId: computer.userId }]),
       ],
     },
     select: { kind: true, botId: true, providerRef: true },
@@ -227,9 +231,17 @@ export async function provisionComputer(
     throw new ComputerBusyError("home_move_incomplete");
   }
   await mkdir(homePath, { recursive: true });
+  // A shared bot's computer is used by others: its owner's shared volume stays off it, and it
+  // mounts the bot's own copy of its skills instead of the library of whoever runs it.
+  const sharedBot = await deps.prisma.bot.findFirst({
+    where: { computerId, visibility: { not: "private" } },
+    select: { id: true, spaceId: true, userId: true },
+  });
   // Docker would create missing bind sources as root; create them as the worker user first.
   if (deps.dataDir) {
-    await mkdir(userSkillsRoot(deps.dataDir, context), { recursive: true });
+    if (sharedBot)
+      await copySharedSkills({ prisma: deps.prisma, dataDir: deps.dataDir }, sharedBot);
+    else await mkdir(userSkillsRoot(deps.dataDir, context), { recursive: true });
   }
 
   // If we first observe abandoned "booting", remember that stamp before waiting. A concurrent
@@ -357,10 +369,11 @@ export async function provisionComputer(
         providerRef: existing.providerRef ?? undefined,
         providerKind: existing.kind as ComputerRef["kind"],
         releaseRef: existing.releaseRef,
+        ...(sharedBot ? { skillsBotId: sharedBot.id } : {}),
         ...(existing.homeStorage === "volumes"
           ? {
               volumeHome: {
-                ...(await loadVolumeHome(deps.prisma, existing)),
+                ...(await loadVolumeHome(deps.prisma, existing, sharedBot !== null)),
                 archive: (files: AsyncIterable<PortableFile>) =>
                   archiveDiscardedWorkspace(
                     deps.home,
@@ -556,7 +569,15 @@ export async function acquireComputerExecutionLease(
   const computer = await prisma.computer.findUniqueOrThrow({ where: { id: input.computerId } });
   if (computer.maintenanceId && computer.maintenanceId !== input.runId)
     throw new ComputerBusyError();
-  if (computer.scope !== "team") return null;
+  // A shared bot's runs take turns on its dedicated computer, as on a team computer.
+  if (
+    computer.scope !== "team" &&
+    !(await prisma.bot.findFirst({
+      where: { id: input.botId, visibility: { not: "private" } },
+      select: { id: true },
+    }))
+  )
+    return null;
   if (isLiveSuspending(computer)) throw new ComputerBusyError("transition");
   const now = new Date();
   const expiresAt = new Date(now.getTime() + EXECUTION_LEASE_MS);

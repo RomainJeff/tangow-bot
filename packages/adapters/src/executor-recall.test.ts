@@ -10,7 +10,7 @@ vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
   provisionComputer: async () => ({ id: "computer-1", kind: "docker" }),
 }));
 
-function fixture() {
+function fixture(runUserId = "user-1") {
   const taskPrompt = "What did Ava decide?";
   const run = {
     id: "run-1",
@@ -18,7 +18,7 @@ function fixture() {
     threadId: "thread-1",
     taskId: "task-1",
     spaceId: "space-1",
-    userId: "user-1",
+    userId: runUserId,
     status: "queued",
     trigger: "user",
     leaseFence: 0,
@@ -38,8 +38,11 @@ function fixture() {
       }),
     },
     bot: {
+      findFirst: vi.fn(async () => ({ visibility: "private" })),
       findUniqueOrThrow: vi.fn(async () => ({
         id: run.botId,
+        userId: "user-1",
+        visibility: runUserId === "user-1" ? "private" : "space",
         name: "Assistant",
         title: "Assistant",
         description: "Test assistant",
@@ -91,6 +94,7 @@ function fixture() {
       updateMany: vi.fn(async () => ({ count: 0 })),
     },
   };
+  const resolveDecisions = vi.fn(async () => null);
   const recall = vi.fn(async (_request: SemanticMemoryRecallRequest) => ({
     ok: true as const,
     value: [{ memory: "Ava decided to ship behind a feature flag.", score: 0.9 }],
@@ -130,11 +134,13 @@ function fixture() {
       pauseRunForInput: vi.fn(async () => true),
       finalizeRun: vi.fn(async () => ({ continuationRunId: null })),
     },
+    decisionProviders: { resolve: resolveDecisions },
     jobs: { enqueue: vi.fn(async () => undefined) },
     secrets: [],
   } as unknown as Parameters<typeof createRunExecutor>[0]);
   return {
     recall,
+    resolveDecisions,
     runtimeRun,
     async run() {
       await executor.continueRun(run.id, "worker-1");
@@ -162,5 +168,20 @@ describe("automatic semantic recall", () => {
     expect(runtimeRequest.prompt).toContain(
       "<recalled_memory>\n- Ava decided to ship behind a feature flag.\n</recalled_memory>\n\nWhat did Ava decide?",
     );
+  });
+});
+
+describe("semantic memory and decisions on a shared bot", () => {
+  it("serve none of a member's runs, even with a connection the member set up", async () => {
+    // The resolvers answer for anyone here, as for a member who set up the Space's connection.
+    const f = fixture("member-1");
+
+    await f.run();
+
+    expect(f.recall).not.toHaveBeenCalled();
+    expect(f.resolveDecisions).not.toHaveBeenCalled();
+    const [request] = f.runtimeRun.mock.calls[0]! as unknown as [AgentRunRequest];
+    expect(request.tools.map((tool) => tool.name)).not.toContain("recall_memory");
+    expect(request.tools.map((tool) => tool.name)).toContain("remember");
   });
 });

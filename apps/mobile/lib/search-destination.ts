@@ -1,6 +1,10 @@
 import type { SearchHit } from "@rakazo/contracts";
 
-export function mobileSearchDestination(hit: SearchHit):
+/** `sharedBot`: the hit's bot was shared with you, and its routine screens are its owner's. */
+export function mobileSearchDestination(
+  hit: SearchHit,
+  sharedBot = false,
+):
   | {
       pathname: "/bot-routine";
       params: { botId: string; routineId: string };
@@ -13,7 +17,7 @@ export function mobileSearchDestination(hit: SearchHit):
       pathname: "/thread";
       params: { botId: string; name: string; messageId?: string };
     } {
-  if (hit.routineId) {
+  if (hit.routineId && !sharedBot) {
     return { pathname: "/bot-routine", params: { botId: hit.botId!, routineId: hit.routineId } };
   }
   if (hit.groupId) {

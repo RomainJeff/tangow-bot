@@ -410,20 +410,32 @@ describe("compactHistory", () => {
   });
   afterAll(() => database.close());
 
-  async function seedThread(): Promise<Seeded> {
+  /** The owner's thread with a new bot of theirs, or with `member`, that person's own thread. */
+  async function seedThread(member?: string): Promise<Seeded> {
     const { prisma } = database;
     const bot = await prisma.bot.create({
-      data: { spaceId: SPACE, userId: USER, name: "Ada", color: "#00C46A" },
+      data: {
+        spaceId: SPACE,
+        userId: USER,
+        name: "Ada",
+        color: "#00C46A",
+        ...(member ? { visibility: "space" } : {}),
+      },
     });
+    const person = member ?? USER;
     const thread = await prisma.thread.create({
-      data: { spaceId: SPACE, userId: USER, botId: bot.id },
+      data: {
+        spaceId: SPACE,
+        userId: person,
+        ...(member ? { memberBotId: bot.id } : { botId: bot.id }),
+      },
     });
     const task = await prisma.task.create({
       data: {
         spaceId: SPACE,
         botId: bot.id,
         threadId: thread.id,
-        userId: USER,
+        userId: person,
         prompt: "",
         status: "running",
       },
@@ -434,7 +446,7 @@ describe("compactHistory", () => {
         botId: bot.id,
         threadId: thread.id,
         taskId: task.id,
-        userId: USER,
+        userId: person,
         status: "running",
         trigger: "user",
       },
@@ -987,6 +999,20 @@ describe("compactHistory", () => {
       expect.objectContaining({ spaceId: SPACE, userId: USER, botId: seeded.botId }),
     );
     expect(h.purgeHistory).not.toHaveBeenCalled();
+  });
+
+  it("saves nothing to semantic memory from a member's thread with a shared bot", async () => {
+    const seeded = await seedThread("member_compaction");
+    await append(seeded, exchanges(seeded, 2));
+    const h = harness(seeded);
+
+    await h.compact();
+
+    expect((await compactionOf(seeded))?.entry.payload).toMatchObject({
+      summary: "Summary of the session.",
+    });
+    expect(h.memoryProviders.resolve).not.toHaveBeenCalled();
+    expect(h.saveMemory).not.toHaveBeenCalled();
   });
 
   it("purges its own save when a clear lands while saving, and still compacts when that purge fails", async () => {

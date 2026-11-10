@@ -187,6 +187,7 @@ import {
   appendRunFinishedInTransaction,
   BROWSER_APPROVAL_CHECKPOINT_PREFIX,
   blocksOf,
+  botConnectors,
   browserApprovalCheckpointOf,
   cancelRunsInTransaction,
   createBotMessageInTransaction,
@@ -207,6 +208,7 @@ import {
   runPersistence,
   SpaceLimitError,
   sessionEntryFromRow,
+  sharedWithFilter,
   threadEventSeq,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -355,6 +357,7 @@ import {
 } from "./mcp-server-tool.js";
 import { loadAgentMemoryContext } from "./memory-context.js";
 import type { MemoryProviderResolver } from "./memory-provider-factory.js";
+import { onOwnBot } from "./memory-provider-factory.js";
 import { selectMemoryTools } from "./memory-tools.js";
 import { catalogContextWindow, catalogModel } from "./model-catalog.js";
 import { classifyModelRoute } from "./model-route-classification.js";
@@ -1364,24 +1367,36 @@ export function createRunExecutor(deps: ExecutorDeps) {
         include: { thread: true },
       });
       if (!bot?.thread) return;
+      // A member's routine on a shared bot runs in their own thread, while it is still shared with
+      // them, and never falls back to the owner's.
+      const memberRoutine = routine.userId !== bot.userId;
       const targetThread = routine.threadId
         ? await deps.prisma.thread.findFirst({
             where: {
               id: routine.threadId,
               spaceId: routine.spaceId,
-              OR: [
-                { botId: bot.id },
-                {
-                  group: {
-                    archivedAt: null,
-                    members: { some: { botId: bot.id } },
-                  },
-                },
-              ],
+              OR: memberRoutine
+                ? [
+                    {
+                      memberBotId: bot.id,
+                      userId: routine.userId,
+                      memberBot: sharedWithFilter(routine.userId, routine.spaceId),
+                    },
+                  ]
+                : [
+                    { botId: bot.id },
+                    {
+                      group: {
+                        archivedAt: null,
+                        members: { some: { botId: bot.id } },
+                      },
+                    },
+                  ],
             },
             select: { id: true },
           })
         : null;
+      if (memberRoutine && !targetThread) return;
       const thread = targetThread ?? bot.thread;
       // A schedule with no valid parseable cron among its crons (e.g. a
       // legacy row accepted before cron validation was added) fires the
@@ -1397,7 +1412,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
       const previousLastRunAt = routine.lastRunAt;
       const skillRecords = await listAgentSkillRecords(skillDeps, {
         spaceId: routine.spaceId,
-        userId: routine.userId,
+        userId: bot.userId,
         botId: routine.botId,
       });
       const routinePrompt = expandSkillReferencesInPrompt(
@@ -1743,10 +1758,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const historyStartedAt = performance.now();
         let historyMs = 0;
         const threadLoad = deps.prisma.thread.findUniqueOrThrow({ where: { id: run.threadId } });
+        const botLoad = deps.prisma.bot.findUniqueOrThrow({
+          where: { id: run.botId },
+          include: { computer: true },
+        });
         const historySessionOf = (loaded: { sessionId: string | null }) =>
           backgroundHelper ? run.sessionId : (loaded.sessionId ?? run.sessionId);
-        const compacts = (owner: { botId: string | null }) =>
-          Boolean(owner.botId) && deps.runtime.describe().capabilities.compaction;
+        const compacts = (owner: { botId: string | null; memberBotId: string | null }) =>
+          Boolean(owner.botId ?? owner.memberBotId) &&
+          deps.runtime.describe().capabilities.compaction;
         const [
           bot,
           thread,
@@ -1764,10 +1784,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           modelMember,
           categoryRows,
         ] = await Promise.all([
-          deps.prisma.bot.findUniqueOrThrow({
-            where: { id: run.botId },
-            include: { computer: true },
-          }),
+          botLoad,
           threadLoad,
           threadLoad
             .then((loaded) =>
@@ -1819,16 +1836,22 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }),
           findDefaultModelCredential(deps.prisma, run),
           deps.prisma.deploymentSettings.findUnique({ where: { id: "default" } }),
-          deps.memoryProviders.resolve(run.spaceId, run.userId),
+          botLoad.then((loaded) =>
+            onOwnBot({ userId: run.userId, botUserId: loaded.userId }, () =>
+              deps.memoryProviders.resolve(run.spaceId, run.userId),
+            ),
+          ),
           deps.prisma.taughtSkill.findMany({
             where: { botId: run.botId, spaceId: run.spaceId, status: "saved" },
             orderBy: { id: "asc" },
           }),
-          listAgentSkillRecords(skillDeps, {
-            spaceId: run.spaceId,
-            userId: run.userId,
-            botId: run.botId,
-          }),
+          botLoad.then((loaded) =>
+            listAgentSkillRecords(skillDeps, {
+              spaceId: run.spaceId,
+              userId: loaded.userId,
+              botId: run.botId,
+            }),
+          ),
           deps.prisma.agentSecret.findMany({
             where: { spaceId: run.spaceId },
             select: {
@@ -1837,7 +1860,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
             },
           }),
           // Optional: a broken decision connection must never fail the run.
-          deps.decisionProviders?.resolve(run.spaceId, run.userId).catch(() => null) ?? null,
+          botLoad.then((loaded) =>
+            onOwnBot(
+              { userId: run.userId, botUserId: loaded.userId },
+              async () =>
+                (await deps.decisionProviders
+                  ?.resolve(run.spaceId, run.userId)
+                  .catch(() => null)) ?? null,
+            ),
+          ),
           deps.prisma.spaceMember.findUnique({
             where: { spaceId_userId: { spaceId: run.spaceId, userId: run.userId } },
             select: { modelAuto: true },
@@ -1869,7 +1900,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const onShutdown = () => runAbortController?.abort(deps.shutdownSignal?.reason);
         deps.shutdownSignal?.addEventListener("abort", onShutdown);
         detachShutdown = () => deps.shutdownSignal?.removeEventListener("abort", onShutdown);
-        const composioRows = storedConnections.filter(
+        // The rows are the run's person's own accounts; a member gets only the apps declared.
+        const runConnections = declaredOnly(storedConnections, bot, run.userId);
+        const composioRows = runConnections.filter(
           (connection) => connection.connectorId === "composio",
         );
         let liveSlugs: string[] = [];
@@ -1884,7 +1917,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         }
         const connectedComposio = mergeConnectedPlugins(composioRows, liveSlugs);
         const connectedPlugins = selectRunConnections(
-          storedConnections,
+          runConnections,
           connectedComposio.map((connection) => connection.provider),
         );
         const context = {
@@ -1893,6 +1926,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           spaceId: run.spaceId,
           userId: run.userId,
           botId: bot.id,
+          ...(run.userId === bot.userId ? {} : { memberId: run.userId }),
           runId,
           screenLeaseId: screenLeaseIdForRun(null, runId, fence),
           signal: runAbortController.signal,
@@ -2054,16 +2088,21 @@ export function createRunExecutor(deps: ExecutorDeps) {
             loadCurrentTurnImages(deps, turnBlocks, context),
             messagingChannelRun
               ? Promise.resolve("")
-              : loadAgentMemoryContext(deps.memory, bot.id, context),
+              : loadAgentMemoryContext(deps.memory, bot, context),
             messagingChannelRun
               ? Promise.resolve("")
               : loadAgentScratchpadContext(deps, {
                   spaceId: run.spaceId,
                   botId: bot.id,
+                  userId: run.userId,
                 }),
             recallPromise,
           ]);
         const semanticMemoryEnabled = Boolean(semanticMemory) && !messagingChannelRun;
+        // How `remember` reaches a shared bot's team memory: a flag, or the tool's only job when
+        // the person's own facts go to semantic memory.
+        const teamRemember: TeamRemember | undefined =
+          bot.visibility === "private" ? undefined : semanticMemoryEnabled ? "only" : "flag";
         let recalledMemory = "";
         if (recalled) {
           if (recalled.ok && recalled.value.length > 0) {
@@ -2376,6 +2415,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             browserRunAllowed: Boolean(decisionProvider),
             messageUserExposed,
             feedbackAvailable: Boolean(deps.feedback),
+            teamRemember,
           }),
           // Cross-owner agent connections only exist for chat-linked bots.
           ...(hasMessagingIdentity ? agentConnectionTools : []),
@@ -2627,6 +2667,24 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const unansweredCalls = new Map<string, string>();
         const logEntry = (draft: SessionEntryDraft) =>
           deps.prisma.$transaction((tx) => deps.sessionLog.append(tx, draft));
+        // Facts this run saved for a shared bot's team: one line says so under its message.
+        const teamFacts: string[] = [];
+        const writeTeamSaveLine = async () => {
+          if (teamFacts.length === 0) return;
+          const seq = await deps.prisma.$transaction(async (tx) => {
+            await deps.sessionLog.append(tx, {
+              type: "memory.revised",
+              sessionId: runLog.sessionId,
+              botId: bot.id,
+              runId,
+              payload: { facts: teamFacts, team: true },
+            });
+            return threadEventSeq(tx, thread.id);
+          });
+          await deps.events.notify(thread.id, seq).catch((error) => {
+            getLogger().error("team memory line", error);
+          });
+        };
         const announcesTools = runtime.describe().capabilities.streaming;
         const toolAnnouncements = new Map<string, ReturnType<typeof deferred>>();
         const toolAnnounced = (executionId: string) => {
@@ -3131,7 +3189,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           );
         };
 
-        const skillOwner = { spaceId: run.spaceId, userId: run.userId, botId: run.botId };
+        const skillOwner = { spaceId: run.spaceId, userId: bot.userId, botId: run.botId };
         /** The skills this run followed, in order. */
         const recordSkillUse = async (skillName: string, via: string) => {
           if (learning === "off" && via !== "read") return;
@@ -3401,7 +3459,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const skillRefusal = viaConnector
             ? undefined
             : skillWriteRefusal(
-                { trigger: run.trigger, sourceRole, trustedRoutine, steeredByOthers },
+                {
+                  trigger: run.trigger,
+                  sourceRole,
+                  trustedRoutine,
+                  steeredByOthers,
+                  memberRun: run.userId !== bot.userId,
+                },
                 name,
               );
           if (skillRefusal) return { error: skillRefusal };
@@ -4390,9 +4454,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (name === "remember") {
             const fact = String(args.content ?? "").trim();
             if (!fact) return finish({ error: "remember needs a fact to store." });
+            // Any person's run on a shared bot may save for the team, stored under the owner.
+            const team = teamRemember === "only" || (teamRemember === "flag" && args.team === true);
             await deps.memory.commit(
               {
-                scope: "bot",
+                scope: team ? "team" : "bot",
                 botId: bot.id,
                 path: String(args.path ?? "MEMORY.md"),
                 // One bullet per fact; the store adds the separator and keeps what is there.
@@ -4401,8 +4467,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 sourceRunId: runId,
                 sourceThreadId: thread.id,
               },
-              context,
+              team ? { ...context, userId: bot.userId } : context,
             );
+            if (team) teamFacts.push(fact);
             return finish({ ok: true });
           }
           if (name === "web_search") {
@@ -4497,6 +4564,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             return listScratchpadItemsFromTool(deps, {
               spaceId: run.spaceId,
               botId: bot.id,
+              userId: run.userId,
               includeDone: Boolean(args.includeDone),
             });
           }
@@ -5825,7 +5893,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
             takeoverExposed: tools.some((tool) => tool.name === "request_takeover"),
             pageBrowserAllowed: pageBrowserAllowed && offered("browser_navigate"),
             browserRunAllowed: tools.some((tool) => tool.name === "browser_run"),
-            rememberExposed: tools.some((tool) => tool.name === "remember"),
+            // A team-only remember is not where the person's own preferences go.
+            rememberExposed:
+              teamRemember !== "only" && tools.some((tool) => tool.name === "remember"),
             searchRunsExposed: tools.some((tool) => tool.name === "search_runs"),
             workspaceInstruction,
             agentEnvironmentInstruction,
@@ -6698,6 +6768,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           });
           if (!completed) return;
           if (savedSkill) await writeRunSkillLines(runId);
+          await writeTeamSaveLine().catch((error) => getLogger().error("team memory line", error));
           // After the commit, never inside it. Delegated runs report back to the ordering bot:
           // no preview for them.
           if (run.trigger !== "bot_message") {
@@ -6790,6 +6861,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           });
           if (!failed) return;
           if (savedSkill) await writeRunSkillLines(runId);
+          await writeTeamSaveLine().catch((error) => getLogger().error("team memory line", error));
           await settleStrandedCards();
           if (failed.continuationRunId) {
             await deps.jobs
@@ -6996,9 +7068,9 @@ export async function runNotificationsEnabled(
 }
 
 /**
- * The conversations the inbox shows with an unread mark: a live bot's or group's thread. An
- * archived chat's thread and a messaging channel's thread are not listed there, so they do
- * not count.
+ * The conversations the inbox shows with an unread mark: a live bot's or group's thread, or the
+ * person's own thread with a bot still shared with them in a Space they are still in. An archived
+ * chat's thread and a messaging channel's thread are not listed there, so they do not count.
  */
 export async function unreadConversationCount(
   prisma: PrismaClient,
@@ -7008,7 +7080,14 @@ export async function unreadConversationCount(
     where: {
       userId,
       unread: true,
-      OR: [{ bot: { archivedAt: null } }, { group: { archivedAt: null } }],
+      OR: [
+        { bot: { archivedAt: null } },
+        { group: { archivedAt: null } },
+        {
+          memberBot: sharedWithFilter(userId),
+          space: { memberships: { some: { userId } } },
+        },
+      ],
     },
   });
 }
@@ -7116,6 +7195,8 @@ export function selectBuiltinToolsForRun(options: {
   messageUserExposed?: boolean;
   /** The deployment has somewhere to file feedback. */
   feedbackAvailable?: boolean;
+  /** On a shared bot, how `remember` saves for its team. */
+  teamRemember?: TeamRemember;
 }) {
   const selected = selectMemoryTools(
     filterBuiltinToolsForRun(
@@ -7129,6 +7210,7 @@ export function selectBuiltinToolsForRun(options: {
       options.trigger,
     ),
     options.semanticMemoryEnabled,
+    options.teamRemember === "only",
   ).filter(
     (tool) =>
       (tool.name !== "search_runs" || options.searchRunsExposed !== false) &&
@@ -7141,7 +7223,41 @@ export function selectBuiltinToolsForRun(options: {
         (!["remember", "save_memory", "recall_memory", "forget_memory"].includes(tool.name) &&
           !tool.name.startsWith("scratchpad_"))),
   );
-  return selected;
+  const mode = options.teamRemember;
+  return mode ? selected.map((tool) => rememberForTeam(tool, mode)) : selected;
+}
+
+/**
+ * "flag": the person's own memory of the bot, or with `team` the shared bot's team memory.
+ * "only": the person's own facts go to semantic memory, so `remember` saves for the team only.
+ */
+type TeamRemember = "flag" | "only";
+
+/** On a shared bot, `remember` can save a fact for everyone the bot is shared with. */
+function rememberForTeam(tool: ConnectorTool, mode: TeamRemember): ConnectorTool {
+  if (tool.name !== "remember") return tool;
+  if (mode === "only") {
+    return {
+      ...tool,
+      description:
+        "Save a durable fact for everyone who uses this bot, in its team memory. Each call adds one line; nothing already stored is replaced. Only for what the whole team should know.",
+    };
+  }
+  const schema = tool.inputSchema as { properties: Record<string, unknown> };
+  return {
+    ...tool,
+    inputSchema: {
+      ...schema,
+      properties: {
+        ...schema.properties,
+        team: {
+          type: "boolean",
+          description:
+            "Save it for everyone this bot is shared with. Leave it off for what concerns only the person you are talking to.",
+        },
+      },
+    },
+  };
 }
 
 export const PAGE_BROWSER_TOOL_NAMES = new Set([
@@ -8013,7 +8129,7 @@ async function spawnBotPreflight(
       kind: "spawn_bot",
       status: "intended",
       idempotencyKey: { not: effectKey },
-      run: { botId: run.botId, status: { in: [...ACTIVE_RUN_STATUSES] } },
+      run: { botId: run.botId, userId: run.userId, status: { in: [...ACTIVE_RUN_STATUSES] } },
     },
     select: { id: true },
   });
@@ -8031,7 +8147,7 @@ async function spawnBotPreflight(
         kind: "spawn_bot",
         status: "denied",
         updatedAt: { gte: new Date(Date.now() - SPAWN_BOT_CANCEL_LOCK_MS) },
-        run: { botId: run.botId },
+        run: { botId: run.botId, userId: run.userId },
       },
       select: { id: true },
     });
@@ -8169,13 +8285,13 @@ async function stopHelpers(
 
 /**
  * Runs only before a first proposal card: what the user already sees or said decides whether the
- * bot may show one (proposalRefusal). Reads a Not now in this run, a Not now to the same proposal in
- * the last day, the cards of the day, and the latest cards of this conversation to tell a correction
- * from a new proposal.
+ * bot may show one (proposalRefusal). Reads a Not now in this run, the person's Not now to the same
+ * proposal in the last day, the person's cards of the day, and the latest cards of this conversation
+ * to tell a correction from a new proposal. On a shared bot, each person answers only for themselves.
  */
 async function proposalPreflight(
   deps: ExecutorDeps,
-  run: { id: string; botId: string; threadId: string },
+  run: { id: string; botId: string; userId: string; threadId: string },
   card: { kind: ProposalEffectKind; name: string; effectKey: string },
 ): Promise<ProposalRefusal | undefined> {
   const now = new Date();
@@ -8218,7 +8334,7 @@ async function proposalPreflight(
       deps.prisma.externalEffect.findFirst({
         where: {
           kind: card.kind,
-          run: { botId: run.botId },
+          run: { botId: run.botId, userId: run.userId },
           request: { path: [PROPOSAL_KEY_FIELD], equals: proposalKey(card.name) },
           answeredAt: { gte: new Date(now.getTime() - PROPOSAL_WINDOW_MS) },
           ...SAID_NOT_NOW,
@@ -8228,7 +8344,7 @@ async function proposalPreflight(
       deps.prisma.externalEffect.findMany({
         where: {
           kind: { in: PROPOSAL_EFFECT_KINDS },
-          run: { botId: run.botId },
+          run: { botId: run.botId, userId: run.userId },
           createdAt: { gte: new Date(now.getTime() - PROPOSAL_WINDOW_MS) },
         },
         orderBy: { createdAt: "desc" },
@@ -8491,19 +8607,19 @@ async function settleRoutineCard(
 }
 
 /**
- * Two calls can pass the pre-check together, so after inserting we read back: the oldest
- * pending request of this bot keeps its card, every other one settles with an error.
+ * Two calls can pass the pre-check together, so after inserting we read back: the oldest pending
+ * request of this bot for this person keeps its card, every other one settles with an error.
  */
 async function spawnBotRaceLoss(
   deps: ExecutorDeps,
-  run: { botId: string },
+  run: { botId: string; userId: string },
   effectId: string,
 ): Promise<{ error: string } | undefined> {
   const [first] = await deps.prisma.externalEffect.findMany({
     where: {
       kind: "spawn_bot",
       status: "intended",
-      run: { botId: run.botId, status: { in: [...ACTIVE_RUN_STATUSES] } },
+      run: { botId: run.botId, userId: run.userId, status: { in: [...ACTIVE_RUN_STATUSES] } },
     },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     take: 1,
@@ -8880,6 +8996,21 @@ async function withModelCredentialLock<T>(key: string, fn: () => Promise<T>): Pr
     release();
     if (modelCredentialLocks.get(key) === current) modelCredentialLocks.delete(key);
   }
+}
+
+/** The owner keeps every app; anyone else running the bot gets only the apps its owner declared. */
+export function declaredOnly<T extends { connectorId: string; provider: string }>(
+  rows: T[],
+  bot: { userId: string; connectors?: Prisma.JsonValue },
+  speakerId: string,
+): T[] {
+  if (bot.userId === speakerId) return rows;
+  const declared = new Set(
+    botConnectors(bot.connectors ?? []).flatMap((need) =>
+      need.kind === "app" ? [`${need.connectorId}:${need.provider}`] : [],
+    ),
+  );
+  return rows.filter((row) => declared.has(`${row.connectorId}:${row.provider}`));
 }
 
 export function selectRunConnections<

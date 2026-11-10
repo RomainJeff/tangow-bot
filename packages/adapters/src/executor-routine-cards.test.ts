@@ -1,7 +1,12 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { AgentRunRequest, AgentRuntimeEvent, ConnectorCall } from "@rakazo/adapter-kit";
+import type {
+  AdapterContext,
+  AgentRunRequest,
+  AgentRuntimeEvent,
+  ConnectorCall,
+} from "@rakazo/adapter-kit";
 import { BOT_MESSAGE_MAX_HOPS, BOT_OFFER_PROPOSALS, withProposalKey } from "@rakazo/core";
 import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
 import { Prisma } from "@rakazo/db";
@@ -40,16 +45,24 @@ type Effect = {
   updatedAt?: Date;
   answeredAt?: Date;
   createdAt?: Date;
+  /** The run it came from, by default the owner's in thread-1. */
+  run?: { threadId: string; userId: string };
 };
 type EffectWhere = Partial<Record<keyof Effect, unknown>>;
 
+const runOf = (effect: Effect) => effect.run ?? { threadId: "thread-1", userId: "user-1" };
+
 /**
- * Equality, `{ gte }` on dates, `{ in }`, `{ not }`, `OR`, a JSON null and a JSON path; relation
- * filters are ignored: every effect is bot-1's, in thread-1.
+ * Equality, `{ gte }` on dates, `{ in }`, `{ not }`, `OR`, a JSON null and a JSON path; a run
+ * filter reads only its thread and person: every effect is bot-1's.
  */
 const effectMatches = (effect: Effect, where: EffectWhere = {}): boolean =>
   Object.entries(where).every(([key, value]) => {
-    if (key === "run") return true;
+    if (key === "run") {
+      const { threadId, userId } = value as { threadId?: string; userId?: string };
+      const run = runOf(effect);
+      return (!threadId || run.threadId === threadId) && (!userId || run.userId === userId);
+    }
     if (key === "OR")
       return (value as EffectWhere[]).some((option) => effectMatches(effect, option));
     const actual = effect[key as keyof Effect];
@@ -73,7 +86,7 @@ const effectMatches = (effect: Effect, where: EffectWhere = {}): boolean =>
     return actual === value;
   });
 
-const inThread = (effect: Effect) => ({ ...effect, run: { threadId: "thread-1" } });
+const inThread = (effect: Effect) => ({ ...effect, run: { threadId: runOf(effect).threadId } });
 
 type ToolCall = { name: string; args: Record<string, unknown> };
 type Row = Record<string, unknown>;
@@ -146,6 +159,12 @@ function fixture(
     ask?: Extract<AgentRuntimeEvent, { type: "ask" }>;
     /** Values the run redacts. */
     secrets?: string[];
+    /** The run is for someone the bot is shared with, not its owner. */
+    member?: boolean;
+    /** Every person's connected accounts in the Space. */
+    connections?: Row[];
+    /** The apps the bot's owner declared. */
+    connectors?: Row[];
   } = {},
 ) {
   const effects: Effect[] = [...(options.effects ?? [])];
@@ -159,7 +178,7 @@ function fixture(
     threadId: "thread-1",
     taskId: "task-1",
     spaceId: "space-1",
-    userId: "user-1",
+    userId: options.member ? "member-1" : "user-1",
     status: "queued",
     trigger: options.trigger ?? "user",
     sourceMessageId: null,
@@ -240,12 +259,15 @@ function fixture(
     bot: {
       findUniqueOrThrow: vi.fn(async () => ({
         id: "bot-1",
+        userId: "user-1",
         name: "Assistant",
         title: "Assistant",
         description: "Test assistant",
         computerId: "computer-1",
         computer: { id: "computer-1", scope: "dedicated" },
+        connectors: options.connectors ?? [],
       })),
+      findFirst: vi.fn(async () => ({ visibility: "private" })),
       findMany: vi.fn(async () => []),
     },
     attempt: {
@@ -296,7 +318,11 @@ function fixture(
         prompt: options.taskPrompt ?? "Remind me to stretch",
       })),
     },
-    connection: { findMany: vi.fn(async () => []) },
+    connection: {
+      findMany: vi.fn(async ({ where }: { where: Row }) =>
+        (options.connections ?? []).filter((row) => routineMatches(row, where)),
+      ),
+    },
     spaceMember: { findUnique: async () => ({ modelAuto: false }) },
     spaceModelCategory: { findMany: async () => [] },
     spaceModelPreference: { findFirst: vi.fn(async () => null) },
@@ -344,6 +370,7 @@ function fixture(
     run.status = input.outcome;
     return { continuationRunId: null };
   });
+  const discoverTools = vi.fn(async (_context: AdapterContext) => [] as never[]);
   const execute = vi.fn(async function* (call: ConnectorCall) {
     yield { type: "result" as const, data: { item: call.args.id } };
   });
@@ -382,7 +409,7 @@ function fixture(
     sessionLog: log.sessionLog,
     runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
     connector: {
-      discoverTools: async () => [],
+      discoverTools,
       resolveCall: async () => undefined,
       execute,
     },
@@ -447,6 +474,8 @@ function fixture(
         where.id === cardId ? { sessionId: "session-main" } : null) as never);
     },
     send,
+    /** The accounts the run's tools were discovered with. */
+    connected: () => discoverTools.mock.calls[0]?.[0].connectedConnections,
     instructions: () =>
       (runtimeRun.mock.calls[0]?.[0] as AgentRunRequest | undefined)?.instructions,
     /** Every turn the runtime was asked for. */
@@ -717,6 +746,32 @@ describe("a routine the bot proposes on its own", () => {
       routine: { name: "Weekly offers" },
     });
   });
+
+  it.each([
+    ["a member's", "member-1", false],
+    ["the owner's", "user-1", true],
+  ])(
+    "does not let %s Not now on a shared bot hold the routine back from anyone else",
+    async (_, saidBy, member) => {
+      const said = new Date(Date.now() - 60 * 60 * 1000);
+      const f = fixture({
+        member,
+        effects: [
+          proposalEffect({
+            request: withProposalKey(offers, offers.name),
+            createdAt: said,
+            answeredAt: said,
+            run: { threadId: `thread-${saidBy}`, userId: saidBy },
+          }),
+        ],
+      });
+      await f.play([[propose()]]);
+      expect(f.askBlock()).toMatchObject({
+        proposal: "routine",
+        routine: { name: "Weekly offers" },
+      });
+    },
+  );
 
   it("proposes another routine the same day, and corrects a card the user answered by typing", async () => {
     const recent = { createdAt: new Date(Date.now() - 60 * 60 * 1000), answeredAt: new Date() };
@@ -1588,6 +1643,15 @@ describe("a skill the bot saves on its own", () => {
     ]);
   });
 
+  it("refuses it in the run of someone the bot is shared with", async () => {
+    const f = fixture({ member: true });
+    await f.play([[save]]);
+    expect(f.results).toEqual([
+      { error: "Only the owner of this bot can save or change its skills." },
+    ]);
+    expect(f.askBlock()).toBeUndefined();
+  });
+
   it("refuses it once a webhook steers into the user's run, and saves it when they steer", async () => {
     const steered = fixture({ requireToolApproval: false, steering: [false, true] });
     await steered.play([[save]]);
@@ -1709,5 +1773,39 @@ describe("a question card the bot asks", () => {
       expect.objectContaining({ kind: "help", body: "Which key?" }),
       expect.anything(),
     );
+  });
+});
+
+describe("the apps of a shared bot", () => {
+  const account = (userId: string, provider: string) => ({
+    id: `${userId}-${provider}`,
+    spaceId: "space-1",
+    userId,
+    connectorId: "composio",
+    provider,
+    providerRef: `${userId}-${provider}-ref`,
+    displayName: provider,
+    status: "connected",
+  });
+  const connections = [
+    account("user-1", "gmail"),
+    account("user-1", "slack"),
+    account("member-1", "gmail"),
+    account("member-1", "slack"),
+  ];
+  const connectors = [{ kind: "app", connectorId: "composio", provider: "gmail" }];
+
+  it("gives a member's run only the declared apps, with the member's own accounts", async () => {
+    const f = fixture({ member: true, connections, connectors });
+    await f.play([]);
+    expect(f.connected()).toEqual([
+      expect.objectContaining({ id: "member-1-gmail", providerRef: "member-1-gmail-ref" }),
+    ]);
+  });
+
+  it("keeps every app of the owner in the owner's run", async () => {
+    const f = fixture({ connections, connectors });
+    await f.play([]);
+    expect(f.connected()?.map((row) => row.id)).toEqual(["user-1-gmail", "user-1-slack"]);
   });
 });

@@ -1,6 +1,6 @@
 import type { Actor, Routine, RunActivityRow, SessionEntry } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, classifyRunFailure, isTerminal } from "@rakazo/core";
-import { Prisma, type PrismaClient, sessionEntryFromRow } from "@rakazo/db";
+import { Prisma, type PrismaClient, sessionEntryFromRow, sharedWithFilter } from "@rakazo/db";
 
 const RECENT_LIMIT = 20;
 export const TERMINAL_STATUSES = ["completed", "failed", "cancelled"] as const;
@@ -79,6 +79,21 @@ export function mapRun(row: RunRow): RunActivityRow {
   };
 }
 
+/**
+ * The actor's runs they may still see: on their own bots, or in their own thread with a bot still
+ * shared with them. Once a bot is unshared, the member's thread is hidden and so are its runs.
+ */
+export function visibleRuns(actor: Actor): Prisma.RunWhereInput {
+  return {
+    spaceId: actor.spaceId,
+    userId: actor.userId,
+    OR: [
+      { bot: { userId: actor.userId } },
+      { thread: { memberBot: sharedWithFilter(actor.userId, actor.spaceId) } },
+    ],
+  };
+}
+
 export async function listSpaceRuns(
   prisma: PrismaClient,
   actor: Actor,
@@ -86,8 +101,7 @@ export async function listSpaceRuns(
 ): Promise<RunActivityRow[]> {
   const rows = await prisma.run.findMany({
     where: {
-      spaceId: actor.spaceId,
-      userId: actor.userId,
+      ...visibleRuns(actor),
       bot: { archivedAt: null },
       ...(filter === "active"
         ? { status: { in: [...ACTIVE_RUN_STATUSES] } }

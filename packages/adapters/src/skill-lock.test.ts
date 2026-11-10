@@ -157,6 +157,7 @@ function pooledPrisma(size: number, waitMs: number) {
     ...base,
     skillSetting: lazy(base.skillSetting),
     botSkill: lazy(base.botSkill),
+    bot: lazy({ findFirst: async () => null }),
     $transaction: (batch: Array<{ query: () => Promise<unknown> }>) =>
       withConnection(() => Promise.all(batch.map((op) => op.query()))),
   };

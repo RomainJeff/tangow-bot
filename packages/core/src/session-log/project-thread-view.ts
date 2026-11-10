@@ -91,7 +91,7 @@ export function drawsNothing(
     case "effect":
       return !item.card;
     case "note":
-      return !SHOWN_NOTES.has(item.type);
+      return !(SHOWN_NOTES.has(item.type) || (item.type === "memory.revised" && item.payload.team));
     default:
       return false;
   }

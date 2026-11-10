@@ -19,10 +19,13 @@ export function useComposerPickers({
   mentionTargets,
   agentSkills,
   onSlashOpen,
+  chatSettings = true,
 }: {
   mentionTargets?: ComposerMention[];
   agentSkills?: AgentSkillCatalogEntry[];
   onSlashOpen?: () => void;
+  /** False in a thread with a bot shared with you, whose settings are its owner's. */
+  chatSettings?: boolean;
 }) {
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionHighlightIndex, setMentionHighlightIndex] = useState(0);
@@ -86,11 +89,12 @@ export function useComposerPickers({
     // The picker shows each action under its own label, so a search matches that label too.
     return SLASH_ACTIONS.filter(
       (action) =>
-        !query ||
-        action.label.toLowerCase().includes(query) ||
-        slashActionLabel(action.id).toLowerCase().includes(query),
+        (chatSettings || action.id !== "chat-settings") &&
+        (!query ||
+          action.label.toLowerCase().includes(query) ||
+          slashActionLabel(action.id).toLowerCase().includes(query)),
     );
-  }, [slashQuery]);
+  }, [slashQuery, chatSettings]);
 
   const showSlashPicker =
     slashQuery !== null &&

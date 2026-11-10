@@ -125,6 +125,8 @@ export class InstalledConnectorProvider implements ConnectorProvider {
   }
 
   private async authorizedTools(context: AdapterContext): Promise<ConnectorTool[]> {
+    // A member's run on a shared bot gets only the apps its owner declared, never an installed source.
+    if (context.memberId) return [];
     const installs = await this.prisma.capabilityInstall.findMany({
       where: {
         spaceId: context.spaceId,

@@ -77,9 +77,13 @@ export async function mirrorMessagingOutbound(
 async function mirrorRun(deps: MessagingDeliveryDeps, runId: string): Promise<void> {
   const run = await deps.prisma.run.findUnique({
     where: { id: runId },
-    include: { sourceMessage: { select: { payload: true } } },
+    include: {
+      sourceMessage: { select: { payload: true } },
+      thread: { select: { memberBotId: true } },
+    },
   });
-  if (!run) return;
+  // A member's thread with a shared bot is reached only in the app, never through its channels.
+  if (!run || run.thread.memberBotId) return;
 
   if (run.trigger === "messaging") {
     const channelBlock = blocksOf(run.sourceMessage).find(

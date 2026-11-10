@@ -49,6 +49,7 @@ const messagingRun = {
   botId: "bot-1",
   trigger: "messaging",
   sourceMessage: { payload: { blocks: [{ kind: "text", text: "hi" }] } },
+  thread: { memberBotId: null as string | null },
 };
 
 function createFakeSurface(sendError?: Error) {
@@ -284,6 +285,14 @@ describe("deliverMessagingOutbound", () => {
       { threadId: "sendblue:dm-1", body: "Hello from your bot" },
       context,
     );
+  });
+
+  it("keeps a member's thread with a shared bot out of the bot's chat", async () => {
+    const deps = createDeps({
+      run: { ...messagingRun, trigger: "bot_message", thread: { memberBotId: "bot-1" } },
+    });
+    await deliverMessagingOutbound(deps, { runId: "run-1" }, context);
+    expect(deps.rows).toHaveLength(0);
   });
 
   it("holds sendblue DM sends at the consecutive-outbound cap", async () => {
@@ -622,6 +631,7 @@ function createChannelDeps(
         ],
       },
     },
+    thread: { memberBotId: null },
   };
   const posterIdentity = {
     id: "mi-1",

@@ -27,7 +27,6 @@ import {
   settleSteeringAttachmentLoads,
   toolCompletionAuditPayload,
   toolCompletionFromResult,
-  unreadConversationCount,
 } from "./executor.js";
 import { serializeModelSecret } from "./pi-oauth.js";
 import { recordingSessionLog } from "./session-log/recording.test-support.js";
@@ -546,20 +545,6 @@ describe("run notification preference", () => {
     });
     await expect(notificationAvatar(prismaFor(2, "robot"), run)).resolves.toBeUndefined();
   });
-
-  it("counts the user's unread live chats for the badge, not archived or channel threads", async () => {
-    const count = vi.fn(async () => 3);
-    const prisma = { thread: { count } } as unknown as PrismaClient;
-
-    await expect(unreadConversationCount(prisma, "user-1")).resolves.toBe(3);
-    expect(count).toHaveBeenCalledWith({
-      where: {
-        userId: "user-1",
-        unread: true,
-        OR: [{ bot: { archivedAt: null } }, { group: { archivedAt: null } }],
-      },
-    });
-  });
 });
 
 describe("createRunExecutor", () => {
@@ -602,8 +587,10 @@ describe("createRunExecutor", () => {
         })),
       },
       bot: {
+        findFirst: vi.fn(async () => ({ visibility: "private" })),
         findUnique: vi.fn(async () => ({
           id: "bot-1",
+          userId: "user-1",
           thread: { id: "thread-1" },
         })),
       },
@@ -673,8 +660,10 @@ describe("createRunExecutor", () => {
         })),
       },
       bot: {
+        findFirst: vi.fn(async () => ({ visibility: "private" })),
         findUnique: vi.fn(async () => ({
           id: "bot-1",
+          userId: "user-1",
           thread: { id: "dm-thread-1" },
         })),
       },
@@ -739,8 +728,10 @@ describe("createRunExecutor", () => {
         })),
       },
       bot: {
+        findFirst: vi.fn(async () => ({ visibility: "private" })),
         findUnique: vi.fn(async () => ({
           id: "bot-1",
+          userId: "user-1",
           thread: { id: "dm-thread-1" },
         })),
       },
@@ -820,8 +811,10 @@ description: Prepare standup notes
         })),
       },
       bot: {
+        findFirst: vi.fn(async () => ({ visibility: "private" })),
         findUnique: vi.fn(async () => ({
           id: "bot-1",
+          userId: "user-1",
           thread: { id: "thread-1" },
         })),
       },
@@ -877,8 +870,10 @@ description: Prepare standup notes
         })),
       },
       bot: {
+        findFirst: vi.fn(async () => ({ visibility: "private" })),
         findUnique: vi.fn(async () => ({
           id: "bot-1",
+          userId: "user-1",
           thread: { id: "thread-1" },
         })),
       },
@@ -932,8 +927,10 @@ description: Prepare standup notes
         })),
       },
       bot: {
+        findFirst: vi.fn(async () => ({ visibility: "private" })),
         findUnique: vi.fn(async () => ({
           id: "bot-1",
+          userId: "user-1",
           thread: { id: "thread-1" },
         })),
       },
@@ -1256,6 +1253,7 @@ description: Prepare standup notes
         ? { computerId: "computer-1", computerSwitching: false }
         : {
             id: "bot-1",
+            userId: "user-1",
             name: "Assistant",
             modelProvider: null,
             modelId: null,
@@ -1270,7 +1268,7 @@ description: Prepare standup notes
         findUniqueOrThrow: vi.fn(async () => ({ status: "leased", startedAt: null })),
         updateMany: vi.fn(async () => ({ count: 1 })),
       },
-      bot: { findUniqueOrThrow: botLookup },
+      bot: { findUniqueOrThrow: botLookup, findFirst: vi.fn(async () => null) },
       computer: {
         findUniqueOrThrow: vi.fn(async () => ({ scope: "private", state: "running" })),
       },

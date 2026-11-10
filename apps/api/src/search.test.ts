@@ -61,7 +61,7 @@ describe("artifact search batching", () => {
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(4);
     const direct = prisma.$queryRaw.mock.calls[0]?.[0];
     const group = prisma.$queryRaw.mock.calls[1]?.[0];
-    expect(direct.text).toContain('t."botId" = candidate."targetId"');
+    expect(direct.text).toContain('COALESCE(t."botId", t."memberBotId") = candidate."targetId"');
     expect(group.text).toContain('t."groupId" = candidate."targetId"');
     for (const query of [direct, group]) {
       expect(query.values).toContain(actor.spaceId);

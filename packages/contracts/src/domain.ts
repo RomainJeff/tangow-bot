@@ -79,8 +79,33 @@ export const BotSchema = z.object({
   webhookConfigured: z.boolean(),
   /** Present when created with an idempotency key (e.g. onboarding:first). */
   spawnKey: z.string().nullable(),
+  /** False on a bot someone else shared with you: `threadId` is then your own thread with it. */
+  isOwner: z.boolean(),
 });
 export type Bot = z.infer<typeof BotSchema>;
+
+/** Who besides its owner uses a bot: nobody, everyone in its Space, or the people listed. */
+export const BotVisibilitySchema = z.enum(["private", "space", "people"]);
+export type BotVisibility = z.infer<typeof BotVisibilitySchema>;
+
+/**
+ * An app or MCP server a shared bot needs: each person who runs it brings their own account or
+ * credentials. An MCP entry points at its owner's server, never a copy.
+ */
+export const BotConnectorSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("app"), connectorId: z.string().min(1), provider: z.string().min(1) }),
+  z.object({ kind: z.literal("mcp"), serverId: Id }),
+]);
+export type BotConnector = z.infer<typeof BotConnectorSchema>;
+
+export const BotSharingSchema = z.object({
+  visibility: BotVisibilitySchema,
+  /** Kept only for `people`. */
+  userIds: z.array(Id).max(200),
+  /** The apps and MCP servers the owner declared: a member's run sees only these. */
+  connectors: z.array(BotConnectorSchema).max(100),
+});
+export type BotSharing = z.infer<typeof BotSharingSchema>;
 
 export const ReorderBotsInput = z.object({
   botIds: z
@@ -747,6 +772,27 @@ export const McpServerSchema = z.object({
   updatedAt: z.string(),
 });
 export type McpServer = z.infer<typeof McpServerSchema>;
+
+/**
+ * The public half of an MCP server a shared bot declares, as a member sees it: header and
+ * environment names only, never a value, token or secret.
+ */
+export const DeclaredMcpSchema = McpServerSchema.pick({
+  slug: true,
+  name: true,
+  description: true,
+  transport: true,
+  endpoint: true,
+  command: true,
+  args: true,
+  headerKeys: true,
+  envKeys: true,
+}).extend({
+  serverId: Id,
+  /** The tools the owner allows on the bot; null allows them all. */
+  allowedTools: z.array(z.string()).nullable(),
+});
+export type DeclaredMcp = z.infer<typeof DeclaredMcpSchema>;
 
 export const BotMcpServerSchema = z.object({
   id: Id,

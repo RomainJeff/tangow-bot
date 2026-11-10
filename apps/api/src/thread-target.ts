@@ -45,6 +45,7 @@ import {
   progressSinceLastEntry,
   resumeAskWithComposerTextInTransaction,
   runsOfMessage,
+  sharedBotThread,
   type ThreadEvents,
   threadEntryByNonce,
   threadEventSeq,
@@ -59,7 +60,12 @@ import {
   resolveSendAttachments,
 } from "./artifacts.js";
 import { readCappedRun } from "./bot-activity.js";
-import { currentComputerRelease, resolveBusyBotName, toComputerStatus } from "./computer-status.js";
+import {
+  computerSeenBy,
+  currentComputerRelease,
+  resolveBusyBotName,
+  toComputerStatus,
+} from "./computer-status.js";
 import { withSerializableRetry } from "./serializable-retry.js";
 import { loadEntryPage, threadSessionId, withoutHiddenPeerRuns } from "./thread-message-pages.js";
 
@@ -390,13 +396,22 @@ export async function resolveThreadTarget(
   const repos = createRepos(prisma);
   const groupRepos = createGroupRepos(prisma);
   if (input.botId) {
-    const bot = await repos.getBot(actor, input.botId);
-    if (!bot.thread) throw new IsolationError();
+    const owned = await repos.getBot(actor, input.botId).catch((error: unknown) => {
+      if (error instanceof IsolationError) return null;
+      throw error;
+    });
+    if (owned) {
+      if (!owned.thread) throw new IsolationError();
+      return { kind: "bot", botId: owned.id, threadId: owned.thread.id, bot: owned };
+    }
+    // A bot shared with the actor: their own thread with it, never the owner's.
+    const shared = await sharedBotThread(prisma, actor, input.botId);
+    if (!shared) throw new IsolationError();
     return {
       kind: "bot",
-      botId: bot.id,
-      threadId: bot.thread.id,
-      bot,
+      botId: shared.bot.id,
+      threadId: shared.thread.id,
+      bot: { ...shared.bot, thread: shared.thread },
     };
   }
   if (input.groupId) {
@@ -437,14 +452,16 @@ export async function readSessionEntries(
   const thread = threadId
     ? await deps.prisma.thread.findUnique({
         where: { id: threadId },
-        select: { botId: true, groupId: true },
+        select: { botId: true, memberBotId: true, groupId: true },
       })
     : null;
   if (!thread) throw new IsolationError();
-  await resolveThreadTarget(deps.prisma, actor, {
-    botId: thread.botId ?? undefined,
+  const target = await resolveThreadTarget(deps.prisma, actor, {
+    botId: thread.botId ?? thread.memberBotId ?? undefined,
     groupId: thread.groupId ?? undefined,
   });
+  // A shared bot has a thread per person: reaching the bot is not reaching this one.
+  if (target.threadId !== threadId) throw new IsolationError();
   if (!run) throw new IsolationError();
   return readCappedRun(deps.sessionLog, run.id);
 }
@@ -472,12 +489,16 @@ export async function threadSnapshot(
   target: ThreadTarget,
 ): Promise<ThreadSnapshot> {
   if (target.kind === "bot") {
-    const [busyBotName, core] = await Promise.all([
+    // Whose thread this is: the owner's, or a member's own thread with a shared bot.
+    const viewerId = target.bot.thread?.userId ?? target.bot.userId;
+    const [busyBotName, seen, core] = await Promise.all([
       resolveBusyBotName(deps.prisma, {
         computerId: target.bot.computer?.id,
         botId: target.botId,
         botName: target.bot.name,
+        userId: viewerId,
       }),
+      computerSeenBy(deps.prisma, target.bot, viewerId),
       deps.prisma.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR SHARE`;
         const [sessionId, last, waitingRun, busyOrFailed] = await Promise.all([
@@ -566,9 +587,12 @@ export async function threadSnapshot(
       computer: toComputerStatus(
         target.botId,
         target.bot.screenGeneration,
-        target.bot.computer,
-        busyBotName,
-        await currentComputerRelease(deps.sandbox, target.bot),
+        seen.computer,
+        busyBotName ?? (seen.heldByOther ? target.bot.name : null),
+        // A computer's updates are its owner's to apply.
+        viewerId === target.bot.userId
+          ? await currentComputerRelease(deps.sandbox, target.bot)
+          : null,
       ),
     };
   }
@@ -1247,6 +1271,7 @@ export async function stopThreadRuns(
         spaceId: actor.spaceId,
         userId: actor.userId,
         botId,
+        ...(hold.memberId ? { memberId: hold.memberId } : {}),
         runId,
         screenLeaseId: hold.screenLeaseId,
         cancelRunWork: true,

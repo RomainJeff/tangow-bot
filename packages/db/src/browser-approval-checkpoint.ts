@@ -15,6 +15,8 @@ const browserApprovalCheckpointSchema = z.object({
     writableRoots: z.array(z.string()).optional(),
   }),
   screenLeaseId: z.string().min(1),
+  /** The member whose run holds the screen, whose browser profile it shows. */
+  memberId: z.string().min(1).optional(),
   lease: z
     .object({
       computerId: z.string(),

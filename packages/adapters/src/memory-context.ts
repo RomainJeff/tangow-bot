@@ -1,25 +1,36 @@
-import type { AdapterContext, MemorySnapshot, MemoryStore } from "@rakazo/adapter-kit";
+import type {
+  AdapterContext,
+  MarkdownMemoryScope,
+  MemorySnapshot,
+  MemoryStore,
+} from "@rakazo/adapter-kit";
 import { escapePromptData } from "@rakazo/core";
 
 const MAX_AGENT_MEMORY_BYTES = 32 * 1024;
 
 type ScopedMemoryDocument = MemorySnapshot["documents"][number] & {
-  scope: "bot" | "user";
+  scope: MarkdownMemoryScope;
 };
 
+/**
+ * The person's own memory of the bot and their user memory, and the bot's team memory, stored
+ * under its owner. Team memory is read whenever it exists: unsharing a bot keeps what was saved.
+ */
 export async function loadAgentMemoryContext(
   memory: MemoryStore,
-  botId: string,
+  bot: { id: string; userId: string },
   context: AdapterContext,
   maxBytes = MAX_AGENT_MEMORY_BYTES,
 ): Promise<string | undefined> {
-  const [botMemory, userMemory] = await Promise.all([
-    memory.read({ scope: "bot", botId }, context),
+  const [botMemory, userMemory, teamMemory] = await Promise.all([
+    memory.read({ scope: "bot", botId: bot.id }, context),
     memory.read({ scope: "user" }, context),
+    memory.read({ scope: "team", botId: bot.id }, { ...context, userId: bot.userId }),
   ]);
   const documents: ScopedMemoryDocument[] = [
     ...botMemory.documents.map((document) => ({ ...document, scope: "bot" as const })),
     ...userMemory.documents.map((document) => ({ ...document, scope: "user" as const })),
+    ...teamMemory.documents.map((document) => ({ ...document, scope: "team" as const })),
   ];
   if (documents.length === 0) return undefined;
 

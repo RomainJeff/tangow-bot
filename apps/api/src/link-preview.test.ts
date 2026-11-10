@@ -1,6 +1,11 @@
 import { RPCHandler } from "@orpc/server/fetch";
 import type { Actor } from "@rakazo/contracts";
-import { appendCardStateInTransaction, IsolationError, type PrismaClient } from "@rakazo/db";
+import {
+  appendCardStateInTransaction,
+  IsolationError,
+  type PrismaClient,
+  sharedWithFilter,
+} from "@rakazo/db";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createInFlightGuard,
@@ -125,7 +130,7 @@ describe("links.preview: access first (CA 19, CA 54)", () => {
     expect(read).not.toHaveBeenCalled();
   });
 
-  it("looks the thread up by the actor's own space and user, on a live bot or group", async () => {
+  it("looks the thread up by the actor's own space and user, on a live bot, group or shared bot", async () => {
     const { deps, prisma } = composer();
 
     await previewLinkForComposer(
@@ -140,7 +145,11 @@ describe("links.preview: access first (CA 19, CA 54)", () => {
         id: "thread-1",
         spaceId: "space-1",
         userId: "user-1",
-        OR: [{ bot: { archivedAt: null } }, { group: { archivedAt: null } }],
+        OR: [
+          { bot: { archivedAt: null } },
+          { group: { archivedAt: null } },
+          { memberBot: sharedWithFilter("user-1", "space-1") },
+        ],
       },
       select: { id: true },
     });
@@ -587,7 +596,11 @@ describe("messages.removeLinkPreview (CA 16, CA 19, CA 54)", () => {
           thread: {
             spaceId: "space-1",
             userId: "user-1",
-            OR: [{ bot: { archivedAt: null } }, { group: { archivedAt: null } }],
+            OR: [
+              { bot: { archivedAt: null } },
+              { group: { archivedAt: null } },
+              { memberBot: sharedWithFilter("user-1", "space-1") },
+            ],
           },
         },
       },
