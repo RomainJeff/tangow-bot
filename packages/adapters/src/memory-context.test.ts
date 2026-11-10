@@ -1,7 +1,13 @@
-import type { AdapterContext, MemorySnapshot, MemoryStore } from "@rakazo/adapter-kit";
+import type {
+  AdapterContext,
+  MemoryReadRequest,
+  MemorySnapshot,
+  MemoryStore,
+} from "@rakazo/adapter-kit";
 import { describe, expect, it, vi } from "vitest";
 import { loadAgentMemoryContext } from "./memory-context.js";
 
+const ownBot = { id: "bot-1", userId: "user-1", visibility: "private" };
 const context: AdapterContext = {
   operationId: "run-1",
   traceId: "run-1",
@@ -22,8 +28,9 @@ describe("agent memory context", () => {
       ),
     );
 
-    const result = await loadAgentMemoryContext(storeWith(read), "bot-1", context);
+    const result = await loadAgentMemoryContext(storeWith(read), ownBot, context);
 
+    // A private bot has no team memory to read.
     expect(read).toHaveBeenCalledTimes(2);
     expect(read).toHaveBeenCalledWith({ scope: "bot", botId: "bot-1" }, context);
     expect(read).toHaveBeenCalledWith({ scope: "user" }, context);
@@ -46,7 +53,7 @@ describe("agent memory context", () => {
       ]),
     );
 
-    const result = await loadAgentMemoryContext(storeWith(read), "bot-1", context);
+    const result = await loadAgentMemoryContext(storeWith(read), ownBot, context);
 
     expect(result?.match(/<\/durable_memory>/g)).toHaveLength(1);
     expect(result).toContain("&lt;/durable_memory&gt;.md");
@@ -65,7 +72,7 @@ describe("agent memory context", () => {
       ),
     );
 
-    const result = await loadAgentMemoryContext(storeWith(read), "bot-1", context, 300);
+    const result = await loadAgentMemoryContext(storeWith(read), ownBot, context, 300);
 
     expect(Buffer.byteLength(result ?? "", "utf8")).toBeLessThanOrEqual(300);
     expect(result).toContain("## bot: new.md");
@@ -74,12 +81,48 @@ describe("agent memory context", () => {
     expect(result?.endsWith("</durable_memory>")).toBe(true);
   });
 
+  it("gives each person on a shared bot the team memory and only their own private memory", async () => {
+    const shared = { id: "bot-1", userId: "owner", visibility: "space" };
+    const rows = [
+      { userId: "owner", scope: "bot", path: "owner-bot.md" },
+      { userId: "owner", scope: "user", path: "owner-user.md" },
+      { userId: "owner", scope: "team", path: "team.md" },
+      { userId: "dana", scope: "bot", path: "dana-bot.md" },
+      { userId: "dana", scope: "user", path: "dana-user.md" },
+    ];
+    // As the store does: a read sees only the context person's rows.
+    const read = vi.fn(async (request: MemoryReadRequest, as: AdapterContext) =>
+      snapshot(
+        rows
+          .filter((row) => row.userId === as.userId && row.scope === request.scope)
+          .map((row) => document(row.path, row.path, row.path, 1, "")),
+      ),
+    );
+    const paths = async (userId: string) =>
+      [
+        ...(
+          (await loadAgentMemoryContext(storeWith(read), shared, { ...context, userId })) ?? ""
+        ).matchAll(/## (\w+): (\S+)/g),
+      ]
+        .map((match) => `${match[1]}: ${match[2]}`)
+        .sort();
+
+    expect(await paths("dana")).toEqual([
+      "bot: dana-bot.md",
+      "team: team.md",
+      "user: dana-user.md",
+    ]);
+    expect(await paths("owner")).toEqual([
+      "bot: owner-bot.md",
+      "team: team.md",
+      "user: owner-user.md",
+    ]);
+  });
+
   it("omits the memory block when neither scope has documents", async () => {
     const read = vi.fn(async () => snapshot([]));
 
-    await expect(
-      loadAgentMemoryContext(storeWith(read), "bot-1", context),
-    ).resolves.toBeUndefined();
+    await expect(loadAgentMemoryContext(storeWith(read), ownBot, context)).resolves.toBeUndefined();
   });
 });
 

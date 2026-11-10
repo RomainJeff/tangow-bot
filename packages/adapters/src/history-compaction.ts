@@ -358,6 +358,8 @@ Output one Markdown bullet per fact ("- the fact"), each a single self-contained
 type CompactionThread = {
   id: string;
   botId: string;
+  /** Who owns the bot, and whether it is shared: a shared bot's team memory is the owner's. */
+  bot: { userId: string; visibility: string };
   spaceId: string;
   userId: string;
   sessionId: string;
@@ -422,7 +424,11 @@ async function learnDurableFacts(
     context: AdapterContext;
   },
 ): Promise<void> {
-  const explicitMemory = await loadAgentMemoryContext(deps.memory, thread.botId, options.context);
+  const explicitMemory = await loadAgentMemoryContext(
+    deps.memory,
+    { id: thread.botId, ...thread.bot },
+    options.context,
+  );
   // Both halves are untrusted data, escaped out of the tags they sit in, as in the summarizer.
   const prompt = [
     `<conversation>\n${escapePromptData(options.transcript)}\n</conversation>`,
@@ -690,6 +696,10 @@ export async function compactHistory(
   const botThread: CompactionThread = {
     id: threadId,
     botId,
+    bot: await deps.prisma.bot.findUniqueOrThrow({
+      where: { id: botId },
+      select: { userId: true, visibility: true },
+    }),
     spaceId: thread.spaceId,
     userId: thread.userId,
     sessionId: thread.sessionId,

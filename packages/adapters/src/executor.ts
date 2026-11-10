@@ -2075,7 +2075,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             loadCurrentTurnImages(deps, turnBlocks, context),
             messagingChannelRun
               ? Promise.resolve("")
-              : loadAgentMemoryContext(deps.memory, bot.id, context),
+              : loadAgentMemoryContext(deps.memory, bot, context),
             messagingChannelRun
               ? Promise.resolve("")
               : loadAgentScratchpadContext(deps, {
