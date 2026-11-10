@@ -187,6 +187,7 @@ import {
   appendRunFinishedInTransaction,
   BROWSER_APPROVAL_CHECKPOINT_PREFIX,
   blocksOf,
+  botConnectors,
   browserApprovalCheckpointOf,
   cancelRunsInTransaction,
   createBotMessageInTransaction,
@@ -1886,7 +1887,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const onShutdown = () => runAbortController?.abort(deps.shutdownSignal?.reason);
         deps.shutdownSignal?.addEventListener("abort", onShutdown);
         detachShutdown = () => deps.shutdownSignal?.removeEventListener("abort", onShutdown);
-        const composioRows = storedConnections.filter(
+        // The rows are the run's person's own accounts; a member gets only the apps declared.
+        const runConnections = declaredOnly(storedConnections, bot, run.userId);
+        const composioRows = runConnections.filter(
           (connection) => connection.connectorId === "composio",
         );
         let liveSlugs: string[] = [];
@@ -1901,7 +1904,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
         }
         const connectedComposio = mergeConnectedPlugins(composioRows, liveSlugs);
         const connectedPlugins = selectRunConnections(
-          storedConnections,
+          runConnections,
           connectedComposio.map((connection) => connection.provider),
         );
         const context = {
@@ -8913,6 +8916,19 @@ async function withModelCredentialLock<T>(key: string, fn: () => Promise<T>): Pr
     release();
     if (modelCredentialLocks.get(key) === current) modelCredentialLocks.delete(key);
   }
+}
+
+/** The owner keeps every app; anyone else running the bot gets only the apps its owner declared. */
+export function declaredOnly<T extends { connectorId: string; provider: string }>(
+  rows: T[],
+  bot: { userId: string; connectors?: Prisma.JsonValue },
+  speakerId: string,
+): T[] {
+  if (bot.userId === speakerId) return rows;
+  const declared = new Set(
+    botConnectors(bot.connectors ?? []).map((need) => `${need.connectorId}:${need.provider}`),
+  );
+  return rows.filter((row) => declared.has(`${row.connectorId}:${row.provider}`));
 }
 
 export function selectRunConnections<

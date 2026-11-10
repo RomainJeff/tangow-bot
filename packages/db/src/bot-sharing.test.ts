@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { bootstrapUserSpace } from "./bootstrap-user.js";
-import { setBotSharing, sharedBotThread } from "./bot-sharing.js";
+import { getBotSharing, setBotSharing, sharedBotThread } from "./bot-sharing.js";
 import type { PrismaClient } from "./client.js";
 import { openPgliteDatabase, type PgliteDatabase } from "./pglite.test-support.js";
 import { createRepos } from "./repos.js";
@@ -111,6 +111,25 @@ describe("sharing a bot", () => {
       "cancelled",
     );
     expect(await prisma.botShare.findMany({ where: { botId } })).toEqual([]);
+  });
+
+  it("declares no app until its owner does, and keeps them when a share leaves them out", async () => {
+    const gmail = { kind: "app" as const, connectorId: "composio", provider: "gmail" };
+    expect(await getBotSharing(prisma, actor("owner"), botId)).toMatchObject({ connectors: [] });
+
+    await setBotSharing(prisma, actor("owner"), {
+      botId,
+      visibility: "space",
+      userIds: [],
+      connectors: [gmail],
+    });
+    await setBotSharing(prisma, actor("owner"), { botId, visibility: "people", userIds: ["dana"] });
+
+    expect(await getBotSharing(prisma, actor("owner"), botId)).toEqual({
+      visibility: "people",
+      userIds: ["dana"],
+      connectors: [gmail],
+    });
   });
 
   it("drops the access of a removed member, stops their runs and keeps their thread", async () => {

@@ -417,6 +417,30 @@ describe("OpenAPI connector import", () => {
     ).resolves.toEqual([]);
   });
 
+  it("gives no installed source to a member's run on a shared bot", async () => {
+    const install = {
+      id: "api-1",
+      kind: "api",
+      name: "Contacts API",
+      source: "https://api.example.test/v1",
+      secretId: null,
+      config: {
+        auth: { type: "none" },
+        operations: [{ id: "list_contacts", method: "GET", path: "/contacts" }],
+      },
+    };
+    const provider = new InstalledConnectorProvider(
+      { capabilityInstall: { findMany: vi.fn().mockResolvedValue([install]) } } as never,
+      {} as never,
+    );
+    const context = { spaceId: "space-1", userId: "user-1", signal: new AbortController().signal };
+
+    await expect(provider.discoverTools(context as never)).resolves.toHaveLength(1);
+    await expect(
+      provider.discoverTools({ ...context, memberId: "user-1" } as never),
+    ).resolves.toEqual([]);
+  });
+
   it.each([200, 401])(
     "executes an installed API operation whose id matches a catalog control and preserves HTTP failure status %s",
     async (status) => {

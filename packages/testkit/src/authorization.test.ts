@@ -1067,6 +1067,7 @@ describeWithDatabase("API authorization and resource isolation", () => {
     await expect(rpc(app, owner, "bots/share", share, space)).resolves.toEqual({
       visibility: "people",
       userIds: [dana.userId],
+      connectors: [],
     });
     expect(await listed(dana.cookie)).toMatchObject({ isOwner: false });
     expect(await listed(sam.cookie)).toBeUndefined();
@@ -1086,8 +1087,12 @@ describeWithDatabase("API authorization and resource isolation", () => {
       teamChatRules: "",
     });
 
-    await expect(raw(app, dana.cookie, "bots/share", share, space)).resolves.toMatchObject({
-      status: 403,
+    const gmail = { kind: "app", connectorId: "composio", provider: "gmail" };
+    await expect(
+      raw(app, dana.cookie, "bots/share", { ...share, connectors: [gmail] }, space),
+    ).resolves.toMatchObject({ status: 403 });
+    await expect(rpc(app, owner, "bots/sharing", { botId: bot.id }, space)).resolves.toMatchObject({
+      connectors: [],
     });
     await expect(
       raw(app, dana.cookie, "bots/sharing", { botId: bot.id }, space),
@@ -1488,6 +1493,68 @@ describeWithDatabase("API authorization and resource isolation", () => {
     const on = { skillId: skill.id, bots: [{ botId: bot.id, enabled: true }] };
     await rpc(app, owner, "agentSkills/setAccess", on, space);
     expect(await visibleTo()).toContain(bot.id);
+  });
+
+  it("offers a member each declared app they lack once, in their own thread", async () => {
+    const { owner, space, dana, bot } = await sharedBotSpace("bot-share-apps");
+    const need = (provider: string) => ({ kind: "app", connectorId: "composio", provider });
+    await rpc(
+      app,
+      owner,
+      "bots/share",
+      {
+        botId: bot.id,
+        visibility: "space",
+        userIds: [],
+        connectors: [need("GMAIL"), need("SLACK")],
+      },
+      space,
+    );
+    await rpc(
+      app,
+      dana.cookie,
+      "connections/begin",
+      { connectorId: "composio", provider: "SLACK", displayName: "Slack" },
+      space,
+    );
+    const cards = async (cookie: string) => {
+      const { threadId } = await rpc<{ threadId: string }>(
+        app,
+        cookie,
+        "threads/get",
+        { botId: bot.id },
+        space,
+      );
+      const { sessionId } = await handles.prisma.thread.findUniqueOrThrow({
+        where: { id: threadId },
+      });
+      const entries = await handles.prisma.sessionEntry.findMany({
+        where: { sessionId, type: "bot.text" },
+      });
+      return entries.flatMap((entry) =>
+        ((entry.payload as { blocks?: Array<{ kind: string; provider?: string }> }).blocks ?? [])
+          .filter((block) => block.kind === "app_connect")
+          .map((block) => block.provider),
+      );
+    };
+    const say = (text: string) =>
+      rpc(app, dana.cookie, "threads/send", { botId: bot.id, text }, space);
+
+    await say("Draft the notes for this week.");
+    await vi.waitFor(async () => expect(await cards(dana.cookie)).toEqual(["GMAIL"]));
+    await say("And the week after.");
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(await cards(dana.cookie)).toEqual(["GMAIL"]);
+    expect(await cards(owner)).toEqual([]);
+    await expect(
+      rpc(
+        app,
+        dana.cookie,
+        "onboarding/appConnected",
+        { botId: bot.id, provider: "GMAIL", connectorId: "composio" },
+        space,
+      ),
+    ).resolves.toEqual({ ok: true });
   });
 
   it("keeps a shared bot off the team computer until it is unshared", async () => {

@@ -1,4 +1,5 @@
 import type { Actor, BotSharing } from "@rakazo/contracts";
+import { BotSharingSchema } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import { cancelRunsInTransaction } from "./cancel-runs.js";
 import type { Prisma, PrismaClient } from "./client.js";
@@ -68,7 +69,7 @@ export async function ensureMemberThreads(
 async function ownedBot(db: Prisma.TransactionClient, actor: Actor, botId: string) {
   const bot = await db.bot.findFirst({
     where: { id: botId, spaceId: actor.spaceId, archivedAt: null },
-    select: { id: true, userId: true, visibility: true },
+    select: { id: true, userId: true, visibility: true, connectors: true },
   });
   if (bot?.userId === actor.userId) return bot;
   // Someone the bot is shared with learns it exists already; anyone else learns nothing.
@@ -99,7 +100,13 @@ export async function getBotSharing(
   return {
     visibility: bot.visibility as BotSharing["visibility"],
     userIds: shares.map((share) => share.userId),
+    connectors: botConnectors(bot.connectors),
   };
+}
+
+/** The apps a bot declares; a stored value that no longer parses declares none. */
+export function botConnectors(value: Prisma.JsonValue): BotSharing["connectors"] {
+  return BotSharingSchema.shape.connectors.catch([]).parse(value);
 }
 
 /**
@@ -109,16 +116,21 @@ export async function getBotSharing(
 export async function setBotSharing(
   prisma: PrismaClient,
   actor: Actor,
-  input: { botId: string } & BotSharing,
+  input: { botId: string } & Omit<BotSharing, "connectors"> &
+    Partial<Pick<BotSharing, "connectors">>,
 ): Promise<BotSharing> {
   const userIds = input.visibility === "people" ? [...new Set(input.userIds)] : [];
   return prisma.$transaction(async (tx) => {
-    await ownedBot(tx, actor, input.botId);
+    const bot = await ownedBot(tx, actor, input.botId);
     const members = await tx.spaceMember.count({
       where: { spaceId: actor.spaceId, userId: { in: userIds, not: actor.userId } },
     });
     if (members !== userIds.length) throw new NotSpaceMemberError();
-    await tx.bot.update({ where: { id: input.botId }, data: { visibility: input.visibility } });
+    const connectors = input.connectors ?? botConnectors(bot.connectors);
+    await tx.bot.update({
+      where: { id: input.botId },
+      data: { visibility: input.visibility, connectors },
+    });
     await tx.botShare.deleteMany({ where: { botId: input.botId, userId: { notIn: userIds } } });
     await tx.botShare.createMany({
       data: userIds.map((userId) => ({ botId: input.botId, userId })),
@@ -138,6 +150,6 @@ export async function setBotSharing(
         data: { active: false, nextRunAt: null },
       });
     }
-    return { visibility: input.visibility, userIds };
+    return { visibility: input.visibility, userIds, connectors };
   });
 }

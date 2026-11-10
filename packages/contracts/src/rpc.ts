@@ -321,7 +321,15 @@ export const appContract = {
     /** Who the bot is shared with; its owner only. */
     sharing: oc.input(botId).output(BotSharingSchema),
     /** Owner only. People must be members of the bot's Space. */
-    share: oc.input(botId.extend(BotSharingSchema.shape)).output(BotSharingSchema),
+    share: oc
+      .input(
+        botId.extend({
+          ...BotSharingSchema.shape,
+          /** Left out: the declared apps stay as they are. */
+          connectors: BotSharingSchema.shape.connectors.optional(),
+        }),
+      )
+      .output(BotSharingSchema),
   },
   groups: {
     create: oc.input(CreateGroupInput).output(GroupSchema),

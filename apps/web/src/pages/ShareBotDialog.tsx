@@ -1,5 +1,13 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { AgentSkillCatalogEntry, Bot, BotSharing, SpaceMembers } from "@rakazo/contracts";
+import type {
+  AgentSkillCatalogEntry,
+  Bot,
+  BotConnector,
+  BotSharing,
+  Connection,
+  ConnectionCatalogItem,
+  SpaceMembers,
+} from "@rakazo/contracts";
 import {
   Checkbox,
   Dialog,
@@ -20,10 +28,39 @@ import { SettingsGroup } from "./bot-page/page-kit";
 const givable = (skills: AgentSkillCatalogEntry[]) =>
   skills.filter((skill) => skill.source === "user" && skill.availability !== "disabled");
 
+type App = { key: string; name: string; need: BotConnector };
+const appKey = (app: { connectorId: string; provider: string }) =>
+  `${app.connectorId}:${app.provider}`;
+
+/**
+ * The owner's connected apps, one per app however many accounts, named as in the catalog, then
+ * the apps already declared, so one the owner has since disconnected can still be unticked.
+ */
+function shareableApps(
+  rows: Connection[],
+  catalog: ConnectionCatalogItem[],
+  declared: BotConnector[],
+): App[] {
+  const apps = new Map<string, App>();
+  const add = (need: BotConnector, fallbackName: string) => {
+    if (apps.has(appKey(need))) return;
+    const item = catalog.find(
+      (entry) => entry.connectorId === need.connectorId && entry.slug === need.provider,
+    );
+    apps.set(appKey(need), { key: appKey(need), name: item?.name ?? fallbackName, need });
+  };
+  for (const row of rows) {
+    if (row.status !== "connected") continue;
+    add({ kind: "app", connectorId: row.connectorId, provider: row.provider }, row.displayName);
+  }
+  for (const need of declared) add(need, need.provider);
+  return [...apps.values()];
+}
+
 /**
  * Who besides its owner uses the bot: everyone in the Space, or the people ticked. Each change
  * saves itself; no one ticked means only the owner. Once shared, the bot uses only the skills
- * ticked for it.
+ * ticked for it, and a member's run only the apps ticked, with the member's own accounts.
  */
 export function ShareBotDialog({
   bot,
@@ -40,13 +77,15 @@ export function ShareBotDialog({
   const [sharing, setSharing] = useState<BotSharing | null>(null);
   const [people, setPeople] = useState<SpaceMembers["members"]>([]);
   const [skills, setSkills] = useState<AgentSkillCatalogEntry[]>([]);
+  const [apps, setApps] = useState<App[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
+    const opening = rpc.bots.sharing({ botId: bot.id });
     Promise.all([
-      rpc.bots.sharing({ botId: bot.id }),
+      opening,
       rpc.spaces.members({ spaceId: bot.spaceId }),
       rpc.agentSkills.list(),
     ]).then(
@@ -58,14 +97,27 @@ export function ShareBotDialog({
       },
       () => live && setError(t`Couldn't load`),
     );
+    // The catalog only names the apps, and can be slow: the sheet doesn't wait for it. The apps
+    // declared on opening stay listed, so unticking one never makes it vanish.
+    Promise.all([
+      rpc.connections.list(),
+      rpc.connections.catalog({}).catch(() => [] as ConnectionCatalogItem[]),
+      opening,
+    ]).then(
+      ([rows, catalog, current]) =>
+        live && setApps(shareableApps(rows, catalog, current.connectors)),
+      () => undefined,
+    );
     return () => {
       live = false;
     };
   }, [bot.id, bot.spaceId, userId, t]);
 
-  async function save(next: BotSharing) {
+  async function save(
+    next: Omit<BotSharing, "connectors"> & Partial<Pick<BotSharing, "connectors">>,
+  ) {
     const previous = sharing;
-    setSharing(next);
+    setSharing(previous && { ...previous, ...next });
     setPending(true);
     setError(null);
     try {
@@ -93,6 +145,15 @@ export function ShareBotDialog({
       setError(t`Couldn't save`);
     }
   }
+
+  const declared = new Set(sharing?.connectors.map(appKey));
+  const giveApp = (app: App, checked: boolean) => {
+    if (!sharing) return;
+    const connectors = checked
+      ? [...sharing.connectors, app.need]
+      : sharing.connectors.filter((need) => appKey(need) !== app.key);
+    void save({ visibility: sharing.visibility, userIds: sharing.userIds, connectors });
+  };
 
   const everyone = sharing?.visibility === "space";
   const chosen = sharing?.visibility === "people" ? sharing.userIds : [];
@@ -161,6 +222,20 @@ export function ShareBotDialog({
                       aria-label={skill.name}
                       checked={skill.visibleBotIds.includes(bot.id)}
                       onCheckedChange={(checked) => void giveSkill(skill, checked)}
+                    />
+                  </SettingRow>
+                ))}
+              </SettingsGroup>
+            ) : null}
+            {sharing.visibility !== "private" && apps.length > 0 ? (
+              <SettingsGroup label={t`Apps this bot can use`}>
+                {apps.map((app) => (
+                  <SettingRow key={app.key} label={app.name}>
+                    <Checkbox
+                      aria-label={app.name}
+                      checked={declared.has(app.key)}
+                      disabled={pending}
+                      onCheckedChange={(checked) => giveApp(app, checked)}
                     />
                   </SettingRow>
                 ))}

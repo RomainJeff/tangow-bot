@@ -596,6 +596,10 @@ msgstr "채팅에서 승인하거나, 취소하려면 아니요라고 말해 주
 msgid "Approve this server to let your agent use its tools."
 msgstr "이 서버를 승인하면 Bot이 제공되는 도구를 사용할 수 있습니다."
 
+#: src/pages/ShareBotDialog.tsx:219
+msgid "Apps this bot can use"
+msgstr ""
+
 #: src/pages/bot-page/BotPage.tsx:380
 #: src/pages/BotContextMenu.tsx:161
 msgid "Archive"
@@ -1673,7 +1677,7 @@ msgstr "만들 수 없음"
 msgid "Couldn't create an invite link"
 msgstr ""
 
-#: src/pages/ShareBotDialog.tsx:59
+#: src/pages/ShareBotDialog.tsx:89
 msgid "Couldn't load"
 msgstr ""
 
@@ -1698,8 +1702,8 @@ msgstr "스페이스 이름을 바꾸지 못했습니다"
 msgid "Couldn't revoke the invite link"
 msgstr ""
 
-#: src/pages/ShareBotDialog.tsx:78
-#: src/pages/ShareBotDialog.tsx:93
+#: src/pages/ShareBotDialog.tsx:118
+#: src/pages/ShareBotDialog.tsx:133
 msgid "Couldn't save"
 msgstr ""
 
@@ -2171,12 +2175,12 @@ msgstr "매주"
 msgid "Everyday"
 msgstr "일상"
 
-#: src/pages/ShareBotDialog.tsx:117
-#: src/pages/ShareBotDialog.tsx:119
+#: src/pages/ShareBotDialog.tsx:166
+#: src/pages/ShareBotDialog.tsx:168
 msgid "Everyone in {spaceName}"
 msgstr ""
 
-#: src/pages/ShareBotDialog.tsx:171
+#: src/pages/ShareBotDialog.tsx:234
 msgid "Everyone who uses this bot can see its files and browser sign-ins."
 msgstr ""
 
@@ -4017,7 +4021,7 @@ msgid "Share"
 msgstr ""
 
 #. placeholder {0}: bot.name
-#: src/pages/ShareBotDialog.tsx:111
+#: src/pages/ShareBotDialog.tsx:160
 msgid "Share {0}"
 msgstr ""
 
@@ -4108,7 +4112,7 @@ msgstr ""
 msgid "Skills"
 msgstr "스킬"
 
-#: src/pages/ShareBotDialog.tsx:157
+#: src/pages/ShareBotDialog.tsx:206
 msgid "Skills this bot can use"
 msgstr ""
 

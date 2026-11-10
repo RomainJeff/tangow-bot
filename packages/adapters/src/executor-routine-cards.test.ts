@@ -1,7 +1,12 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { AgentRunRequest, AgentRuntimeEvent, ConnectorCall } from "@rakazo/adapter-kit";
+import type {
+  AdapterContext,
+  AgentRunRequest,
+  AgentRuntimeEvent,
+  ConnectorCall,
+} from "@rakazo/adapter-kit";
 import { BOT_MESSAGE_MAX_HOPS, BOT_OFFER_PROPOSALS, withProposalKey } from "@rakazo/core";
 import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
 import { Prisma } from "@rakazo/db";
@@ -156,6 +161,10 @@ function fixture(
     secrets?: string[];
     /** The run is for someone the bot is shared with, not its owner. */
     member?: boolean;
+    /** Every person's connected accounts in the Space. */
+    connections?: Row[];
+    /** The apps the bot's owner declared. */
+    connectors?: Row[];
   } = {},
 ) {
   const effects: Effect[] = [...(options.effects ?? [])];
@@ -256,6 +265,7 @@ function fixture(
         description: "Test assistant",
         computerId: "computer-1",
         computer: { id: "computer-1", scope: "dedicated" },
+        connectors: options.connectors ?? [],
       })),
       findFirst: vi.fn(async () => ({ visibility: "private" })),
       findMany: vi.fn(async () => []),
@@ -308,7 +318,11 @@ function fixture(
         prompt: options.taskPrompt ?? "Remind me to stretch",
       })),
     },
-    connection: { findMany: vi.fn(async () => []) },
+    connection: {
+      findMany: vi.fn(async ({ where }: { where: Row }) =>
+        (options.connections ?? []).filter((row) => routineMatches(row, where)),
+      ),
+    },
     spaceMember: { findUnique: async () => ({ modelAuto: false }) },
     spaceModelCategory: { findMany: async () => [] },
     spaceModelPreference: { findFirst: vi.fn(async () => null) },
@@ -356,6 +370,7 @@ function fixture(
     run.status = input.outcome;
     return { continuationRunId: null };
   });
+  const discoverTools = vi.fn(async (_context: AdapterContext) => [] as never[]);
   const execute = vi.fn(async function* (call: ConnectorCall) {
     yield { type: "result" as const, data: { item: call.args.id } };
   });
@@ -394,7 +409,7 @@ function fixture(
     sessionLog: log.sessionLog,
     runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
     connector: {
-      discoverTools: async () => [],
+      discoverTools,
       resolveCall: async () => undefined,
       execute,
     },
@@ -459,6 +474,8 @@ function fixture(
         where.id === cardId ? { sessionId: "session-main" } : null) as never);
     },
     send,
+    /** The accounts the run's tools were discovered with. */
+    connected: () => discoverTools.mock.calls[0]?.[0].connectedConnections,
     instructions: () =>
       (runtimeRun.mock.calls[0]?.[0] as AgentRunRequest | undefined)?.instructions,
     /** Every turn the runtime was asked for. */
@@ -1756,5 +1773,39 @@ describe("a question card the bot asks", () => {
       expect.objectContaining({ kind: "help", body: "Which key?" }),
       expect.anything(),
     );
+  });
+});
+
+describe("the apps of a shared bot", () => {
+  const account = (userId: string, provider: string) => ({
+    id: `${userId}-${provider}`,
+    spaceId: "space-1",
+    userId,
+    connectorId: "composio",
+    provider,
+    providerRef: `${userId}-${provider}-ref`,
+    displayName: provider,
+    status: "connected",
+  });
+  const connections = [
+    account("user-1", "gmail"),
+    account("user-1", "slack"),
+    account("member-1", "gmail"),
+    account("member-1", "slack"),
+  ];
+  const connectors = [{ kind: "app", connectorId: "composio", provider: "gmail" }];
+
+  it("gives a member's run only the declared apps, with the member's own accounts", async () => {
+    const f = fixture({ member: true, connections, connectors });
+    await f.play([]);
+    expect(f.connected()).toEqual([
+      expect.objectContaining({ id: "member-1-gmail", providerRef: "member-1-gmail-ref" }),
+    ]);
+  });
+
+  it("keeps every app of the owner in the owner's run", async () => {
+    const f = fixture({ connections, connectors });
+    await f.play([]);
+    expect(f.connected()?.map((row) => row.id)).toEqual(["user-1-gmail", "user-1-slack"]);
   });
 });

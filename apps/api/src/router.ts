@@ -217,6 +217,7 @@ import {
   chooseFocus,
   dismissFocus,
   markAppConnected,
+  offerMissingApps,
   promptFocus,
   startOnboarding,
 } from "./onboarding.js";
@@ -1739,13 +1740,22 @@ export function createRouter(deps: RouterDeps) {
         if (target.kind === "bot") {
           await assertTeachingSendAllowed(deps.prisma, context.actor.spaceId, target.botId);
         }
-        return sendThreadMessage(deps, context.actor, target, input).catch((error: unknown) => {
-          // A replaced draft's recipients the server refused: the reply goes back to the composer.
-          if (error instanceof InvalidAnswerError) {
-            throw new ORPCError("BAD_REQUEST", { message: error.message });
-          }
-          throw error;
-        });
+        const sent = await sendThreadMessage(deps, context.actor, target, input).catch(
+          (error: unknown) => {
+            // A replaced draft's recipients the server refused: the reply goes back to the composer.
+            if (error instanceof InvalidAnswerError) {
+              throw new ORPCError("BAD_REQUEST", { message: error.message });
+            }
+            throw error;
+          },
+        );
+        if (target.kind === "bot") {
+          // The connector catalog can be slow: the cards follow the message, never hold it up.
+          void offerMissingApps(onboardingDeps, context.actor, target).catch((error) => {
+            getLogger().error("missing app cards", error);
+          });
+        }
+        return sent;
       }),
       react: authed.threads.react.handler(async ({ context, input }) => {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
