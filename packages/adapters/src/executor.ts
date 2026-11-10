@@ -2099,6 +2099,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
             recallPromise,
           ]);
         const semanticMemoryEnabled = Boolean(semanticMemory) && !messagingChannelRun;
+        // How `remember` reaches a shared bot's team memory: a flag, or the tool's only job when
+        // the person's own facts go to semantic memory.
+        const teamRemember: TeamRemember | undefined =
+          bot.visibility === "private" ? undefined : semanticMemoryEnabled ? "only" : "flag";
         let recalledMemory = "";
         if (recalled) {
           if (recalled.ok && recalled.value.length > 0) {
@@ -2411,7 +2415,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             browserRunAllowed: Boolean(decisionProvider),
             messageUserExposed,
             feedbackAvailable: Boolean(deps.feedback),
-            sharedBot: bot.visibility !== "private",
+            teamRemember,
           }),
           // Cross-owner agent connections only exist for chat-linked bots.
           ...(hasMessagingIdentity ? agentConnectionTools : []),
@@ -4451,7 +4455,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             const fact = String(args.content ?? "").trim();
             if (!fact) return finish({ error: "remember needs a fact to store." });
             // Any person's run on a shared bot may save for the team, stored under the owner.
-            const team = bot.visibility !== "private" && args.team === true;
+            const team = teamRemember === "only" || (teamRemember === "flag" && args.team === true);
             await deps.memory.commit(
               {
                 scope: team ? "team" : "bot",
@@ -5889,7 +5893,9 @@ export function createRunExecutor(deps: ExecutorDeps) {
             takeoverExposed: tools.some((tool) => tool.name === "request_takeover"),
             pageBrowserAllowed: pageBrowserAllowed && offered("browser_navigate"),
             browserRunAllowed: tools.some((tool) => tool.name === "browser_run"),
-            rememberExposed: tools.some((tool) => tool.name === "remember"),
+            // A team-only remember is not where the person's own preferences go.
+            rememberExposed:
+              teamRemember !== "only" && tools.some((tool) => tool.name === "remember"),
             searchRunsExposed: tools.some((tool) => tool.name === "search_runs"),
             workspaceInstruction,
             agentEnvironmentInstruction,
@@ -7189,8 +7195,8 @@ export function selectBuiltinToolsForRun(options: {
   messageUserExposed?: boolean;
   /** The deployment has somewhere to file feedback. */
   feedbackAvailable?: boolean;
-  /** The bot is shared, so it has team memory beside each person's own. */
-  sharedBot?: boolean;
+  /** On a shared bot, how `remember` saves for its team. */
+  teamRemember?: TeamRemember;
 }) {
   const selected = selectMemoryTools(
     filterBuiltinToolsForRun(
@@ -7204,6 +7210,7 @@ export function selectBuiltinToolsForRun(options: {
       options.trigger,
     ),
     options.semanticMemoryEnabled,
+    options.teamRemember === "only",
   ).filter(
     (tool) =>
       (tool.name !== "search_runs" || options.searchRunsExposed !== false) &&
@@ -7216,12 +7223,26 @@ export function selectBuiltinToolsForRun(options: {
         (!["remember", "save_memory", "recall_memory", "forget_memory"].includes(tool.name) &&
           !tool.name.startsWith("scratchpad_"))),
   );
-  return options.sharedBot ? selected.map(rememberForTeam) : selected;
+  const mode = options.teamRemember;
+  return mode ? selected.map((tool) => rememberForTeam(tool, mode)) : selected;
 }
 
+/**
+ * "flag": the person's own memory of the bot, or with `team` the shared bot's team memory.
+ * "only": the person's own facts go to semantic memory, so `remember` saves for the team only.
+ */
+type TeamRemember = "flag" | "only";
+
 /** On a shared bot, `remember` can save a fact for everyone the bot is shared with. */
-function rememberForTeam(tool: ConnectorTool): ConnectorTool {
+function rememberForTeam(tool: ConnectorTool, mode: TeamRemember): ConnectorTool {
   if (tool.name !== "remember") return tool;
+  if (mode === "only") {
+    return {
+      ...tool,
+      description:
+        "Save a durable fact for everyone who uses this bot, in its team memory. Each call adds one line; nothing already stored is replaced. Only for what the whole team should know.",
+    };
+  }
   const schema = tool.inputSchema as { properties: Record<string, unknown> };
   return {
     ...tool,

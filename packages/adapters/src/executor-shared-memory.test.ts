@@ -16,7 +16,13 @@ vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
 }));
 
 /** A run of `runUserId` on the owner's bot that calls `remember` once with `args`. */
-function fixture(options: { visibility: string; runUserId: string; args: object }) {
+function fixture(options: {
+  visibility: string;
+  runUserId: string;
+  args: object;
+  /** The person set up semantic memory, so their own facts go to `save_memory`. */
+  semantic?: boolean;
+}) {
   const run = {
     id: "run-1",
     botId: "bot-1",
@@ -114,7 +120,20 @@ function fixture(options: { visibility: string; runUserId: string; args: object 
     runtime: { describe: () => ({ capabilities: { scripted: false } }), run: runtimeRun },
     sandbox: { describe: () => ({ capabilities: { graphical: false } }) },
     memory: { read: async () => ({ documents: [] }), commit },
-    memoryProviders: { resolve: async () => null },
+    memoryProviders: {
+      resolve: async () =>
+        options.semantic
+          ? {
+              defaultScope: "isolated" as const,
+              provider: {
+                describe: () => ({ capabilities: { recall: true, save: true } }),
+                recall: async () => ({ ok: true as const, value: [] }),
+                save: vi.fn(),
+                purgeHistory: vi.fn(),
+              },
+            }
+          : null,
+    },
     events: {
       append: vi.fn(async () => undefined),
       pauseRunForInput: vi.fn(async () => true),
@@ -133,6 +152,7 @@ function fixture(options: { visibility: string; runUserId: string; args: object 
         offersTeam: Boolean(
           (remember!.inputSchema as { properties: Record<string, unknown> }).properties.team,
         ),
+        description: remember!.description,
       };
     },
   };
@@ -142,7 +162,7 @@ describe("remember on a shared bot", () => {
   it("saves a member's team fact under the owner and keeps the run that wrote it", async () => {
     const f = fixture({ visibility: "space", runUserId: "dana", args: { team: true } });
 
-    await expect(f.run()).resolves.toEqual({
+    await expect(f.run()).resolves.toMatchObject({
       saved: { scope: "team", as: "owner", sourceRunId: "run-1" },
       offersTeam: true,
     });
@@ -157,9 +177,19 @@ describe("remember on a shared bot", () => {
   it("offers no team flag on a private bot and ignores one", async () => {
     const f = fixture({ visibility: "private", runUserId: "owner", args: { team: true } });
 
-    await expect(f.run()).resolves.toEqual({
+    await expect(f.run()).resolves.toMatchObject({
       saved: { scope: "bot", as: "owner", sourceRunId: "run-1" },
       offersTeam: false,
+    });
+  });
+
+  it("keeps remember for the team when the owner's own facts go to semantic memory", async () => {
+    const f = fixture({ visibility: "space", runUserId: "owner", args: {}, semantic: true });
+
+    await expect(f.run()).resolves.toEqual({
+      saved: { scope: "team", as: "owner", sourceRunId: "run-1" },
+      offersTeam: false,
+      description: expect.stringContaining("everyone who uses this bot"),
     });
   });
 });
