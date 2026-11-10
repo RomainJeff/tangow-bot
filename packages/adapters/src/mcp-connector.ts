@@ -6,7 +6,7 @@ import type {
   ConnectorTool,
 } from "@rakazo/adapter-kit";
 import { isLocalMcpHost } from "@rakazo/contracts";
-import type { McpServer, Prisma, PrismaClient } from "@rakazo/db";
+import type { McpServer, PrismaClient } from "@rakazo/db";
 import { botConnectors } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { connectorError, connectorResult } from "./connector-errors.js";
@@ -108,34 +108,58 @@ export class McpConnector implements ConnectorProvider {
 
   /**
    * The run's person's own servers on the bot. On a bot shared with them, only their copies of
-   * the servers its owner still declares.
+   * the servers its owner still declares and still gives the bot, enabled, each with the tools the
+   * owner allows there now.
    */
-  private async assignmentsWhere(
-    context: AdapterContext & { botId: string },
-  ): Promise<Prisma.BotMcpServerWhereInput> {
+  private async assignments(context: AdapterContext & { botId: string }, serverId?: string) {
     const where = {
       botId: context.botId,
       spaceId: context.spaceId,
       userId: context.userId,
       server: { enabled: true },
+      ...(serverId ? { serverId } : {}),
     };
-    if (!context.memberId) return where;
+    if (!context.memberId) {
+      return this.prisma.botMcpServer.findMany({ where, include: { server: true } });
+    }
     const bot = await this.prisma.bot.findUnique({
       where: { id: context.botId },
-      select: { connectors: true },
+      select: {
+        userId: true,
+        connectors: true,
+        mcpServers: {
+          where: { server: { enabled: true } },
+          select: { userId: true, serverId: true, allowAllTools: true, allowedTools: true },
+        },
+      },
     });
-    const declared = botConnectors(bot?.connectors ?? []).flatMap((need) =>
-      need.kind === "mcp" ? [need.serverId] : [],
+    const declared = new Set(
+      botConnectors(bot?.connectors ?? []).flatMap((need) =>
+        need.kind === "mcp" ? [need.serverId] : [],
+      ),
     );
-    return { ...where, declaredServerId: { in: declared } };
+    const live = new Map(
+      (bot?.mcpServers ?? [])
+        .filter((row) => row.userId === bot?.userId && declared.has(row.serverId))
+        .map((row) => [row.serverId, row]),
+    );
+    const copies = await this.prisma.botMcpServer.findMany({
+      where: { ...where, declaredServerId: { in: [...live.keys()] } },
+      include: { server: true },
+    });
+    return copies.map((copy) => {
+      const owner = live.get(copy.declaredServerId ?? "");
+      return {
+        ...copy,
+        allowAllTools: !!owner?.allowAllTools,
+        allowedTools: owner?.allowedTools ?? [],
+      };
+    });
   }
 
   private async authorizedTools(context: AdapterContext): Promise<ConnectorTool[]> {
     if (!context.botId) return [];
-    const assignments = await this.prisma.botMcpServer.findMany({
-      where: await this.assignmentsWhere({ ...context, botId: context.botId }),
-      include: { server: true },
-    });
+    const assignments = await this.assignments({ ...context, botId: context.botId });
     const groups = await Promise.all(
       assignments.map(async (assignment): Promise<ConnectorTool[]> => {
         try {
@@ -213,13 +237,10 @@ export class McpConnector implements ConnectorProvider {
       };
       return;
     }
-    const assignment = await this.prisma.botMcpServer.findFirst({
-      where: {
-        ...(await this.assignmentsWhere({ ...context, botId: context.botId })),
-        serverId: call.route.resourceId,
-      },
-      include: { server: true },
-    });
+    const [assignment] = await this.assignments(
+      { ...context, botId: context.botId },
+      call.route.resourceId,
+    );
     if (
       !assignment ||
       (!assignment.allowAllTools &&

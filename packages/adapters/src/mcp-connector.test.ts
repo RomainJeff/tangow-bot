@@ -124,7 +124,6 @@ describe("MCP connector session cache", () => {
     const prisma = {
       botMcpServer: {
         findMany: vi.fn().mockResolvedValue([ASSIGNMENT]),
-        findFirst: vi.fn().mockResolvedValue(ASSIGNMENT),
       },
     };
     const connector = new McpConnector(prisma as never, {} as never, {
@@ -176,7 +175,6 @@ describe("MCP connector session cache", () => {
         {
           botMcpServer: {
             findMany: vi.fn().mockResolvedValue([ASSIGNMENT]),
-            findFirst: vi.fn().mockResolvedValue(ASSIGNMENT),
           },
         } as never,
         {} as never,
@@ -266,7 +264,6 @@ describe("MCP connector session cache", () => {
     const prisma = {
       botMcpServer: {
         findMany: vi.fn().mockResolvedValue([ASSIGNMENT]),
-        findFirst: vi.fn().mockResolvedValue(ASSIGNMENT),
       },
     };
     const connector = new McpConnector(prisma as never, {} as never, {
@@ -424,7 +421,6 @@ describe("MCP connector session cache", () => {
     const prisma = {
       botMcpServer: {
         findMany: vi.fn().mockResolvedValue([ASSIGNMENT]),
-        findFirst: vi.fn().mockResolvedValue(ASSIGNMENT),
       },
     };
     const connector = new McpConnector(prisma as never, {} as never, {
@@ -598,7 +594,6 @@ describe("MCP connector session cache", () => {
     const prisma = {
       botMcpServer: {
         findMany: vi.fn().mockResolvedValue([ASSIGNMENT]),
-        findFirst: vi.fn().mockResolvedValue(ASSIGNMENT),
       },
     };
     const connector = new McpConnector(prisma as never, {} as never, {
@@ -650,12 +645,9 @@ describe("MCP connector session cache", () => {
     const state = { failNext: false, initializations: 0, calls: [] as string[] };
     vi.stubGlobal("fetch", mcpFetch(state));
     const findMany = vi.fn().mockResolvedValue([ASSIGNMENT]);
-    const findFirst = vi.fn().mockResolvedValue(ASSIGNMENT);
-    const connector = new McpConnector(
-      { botMcpServer: { findMany, findFirst } } as never,
-      {} as never,
-      { network: TEST_NETWORK },
-    );
+    const connector = new McpConnector({ botMcpServer: { findMany } } as never, {} as never, {
+      network: TEST_NETWORK,
+    });
     const context = {
       spaceId: "w1",
       userId: "u1",
@@ -677,14 +669,14 @@ describe("MCP connector session cache", () => {
     expect(await run()).toMatchObject([{ type: "result" }]);
     expect(state.calls).toEqual(["echo"]);
 
-    findFirst.mockResolvedValue(null);
+    findMany.mockResolvedValue([]);
     expect(await run()).toEqual([
       { type: "error", kind: "permission_denied", message: "MCP tool is not assigned to this bot" },
     ]);
     expect(state.calls).toEqual(["echo"]);
 
     const bumped = { ...ASSIGNMENT, server: { ...SERVER, revision: 2 } };
-    findFirst.mockResolvedValue(bumped);
+    findMany.mockResolvedValue([bumped]);
     expect(await run()).toMatchObject([{ type: "result" }]);
     expect(state.initializations).toBe(2);
     await connector.close();
@@ -696,7 +688,6 @@ describe("MCP connector session cache", () => {
     const prisma = {
       botMcpServer: {
         findMany: vi.fn().mockResolvedValue([ASSIGNMENT]),
-        findFirst: vi.fn().mockResolvedValue(ASSIGNMENT),
       },
     };
     const connector = new McpConnector(prisma as never, {} as never, {
@@ -722,7 +713,8 @@ describe("MCP connector session cache", () => {
 });
 
 describe("MCP servers on a shared bot", () => {
-  it("gives a member's run only their own copies of the servers still declared", async () => {
+  /** An owner's bot with Linear and GitHub, and a member's own copy of the owner's Linear. */
+  async function sharedBot(offered = ["echo"]) {
     const database = await openPgliteDatabase();
     const { prisma } = database;
     for (const id of ["owner", "member"]) {
@@ -746,41 +738,87 @@ describe("MCP servers on a shared bot", () => {
           endpoint: "https://mcp.example.test/mcp",
         },
       });
-      await prisma.botMcpServer.create({
+      const assignment = await prisma.botMcpServer.create({
         data: { spaceId: "w1", userId, botId: bot.id, serverId: server.id, declaredServerId },
       });
-      return server;
+      return { server, assignment };
     };
     const linear = await give("owner", "linear");
     await give("owner", "github");
-    await give("member", "linear", linear.id);
+    const copy = await give("member", "linear", linear.server.id);
     const declare = (serverIds: string[]) =>
       prisma.bot.update({
         where: { id: bot.id },
         data: { connectors: serverIds.map((serverId) => ({ kind: "mcp", serverId })) },
       });
-    vi.stubGlobal("fetch", mcpFetch({ failNext: false, initializations: 0 }));
+    vi.stubGlobal(
+      "fetch",
+      mcpFetch({
+        failNext: false,
+        initializations: 0,
+        tools: offered.map((name) => ({ name, inputSchema: { type: "object" } })),
+      }),
+    );
     const connector = new McpConnector(prisma, {} as never, { network: TEST_NETWORK });
-    const context = { spaceId: "w1", botId: bot.id, signal: new AbortController().signal };
+    const context = (userId: string) =>
+      ({
+        spaceId: "w1",
+        botId: bot.id,
+        userId,
+        ...(userId === "owner" ? {} : { memberId: userId }),
+        signal: new AbortController().signal,
+      }) as never;
     const tools = async (userId: string) =>
-      (
-        await connector.discoverTools({
-          ...context,
-          userId,
-          ...(userId === "owner" ? {} : { memberId: userId }),
-        } as never)
-      ).map((tool) => tool.route?.catalogGroup);
+      (await connector.discoverTools(context(userId))).map((tool) => tool.name).sort();
+    const close = async () => {
+      await connector.close();
+      await database.close();
+    };
+    return { prisma, linear, copy, declare, connector, context, tools, close };
+  }
 
-    await declare([linear.id]);
-    expect(await tools("member")).toEqual(["linear"]);
-    expect((await tools("owner")).sort()).toEqual(["github", "linear"]);
+  it("gives a member's run only their own copies of the servers still declared", async () => {
+    const { declare, linear, tools, close } = await sharedBot();
+
+    await declare([linear.server.id]);
+    expect(await tools("member")).toEqual(["mcp__linear__echo"]);
+    expect(await tools("owner")).toEqual(["mcp__github__echo", "mcp__linear__echo"]);
 
     await declare([]);
     expect(await tools("member")).toEqual([]);
-    expect((await tools("owner")).sort()).toEqual(["github", "linear"]);
+    expect(await tools("owner")).toEqual(["mcp__github__echo", "mcp__linear__echo"]);
+    await close();
+  });
 
-    await connector.close();
-    await database.close();
+  it("follows the owner's server on the bot as it is now: its tools, enabled, given", async () => {
+    const { prisma, declare, linear, copy, connector, context, tools, close } = await sharedBot([
+      "echo",
+      "upper",
+    ]);
+    await declare([linear.server.id]);
+    expect(await tools("member")).toEqual(["mcp__linear__echo", "mcp__linear__upper"]);
+
+    await prisma.botMcpServer.update({
+      where: { id: linear.assignment.id },
+      data: { allowAllTools: false, allowedTools: ["echo"] },
+    });
+    expect(await tools("member")).toEqual(["mcp__linear__echo"]);
+    const call = {
+      tool: "mcp__linear__upper",
+      args: {},
+      route: { connectorId: "mcp", resourceId: copy.server.id, toolName: "upper" },
+    } as never;
+    const events: unknown[] = [];
+    for await (const event of connector.execute(call, context("member"))) events.push(event);
+    expect(events).toMatchObject([{ type: "error", kind: "permission_denied" }]);
+
+    await prisma.mcpServer.update({ where: { id: linear.server.id }, data: { enabled: false } });
+    expect(await tools("member")).toEqual([]);
+
+    await prisma.mcpServer.update({ where: { id: linear.server.id }, data: { enabled: true } });
+    await prisma.botMcpServer.delete({ where: { id: linear.assignment.id } });
+    expect(await tools("member")).toEqual([]);
+    await close();
   });
 });
 
