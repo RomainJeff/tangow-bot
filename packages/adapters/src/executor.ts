@@ -1410,7 +1410,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
       const previousLastRunAt = routine.lastRunAt;
       const skillRecords = await listAgentSkillRecords(skillDeps, {
         spaceId: routine.spaceId,
-        userId: routine.userId,
+        userId: bot.userId,
         botId: routine.botId,
       });
       const routinePrompt = expandSkillReferencesInPrompt(
@@ -1756,6 +1756,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const historyStartedAt = performance.now();
         let historyMs = 0;
         const threadLoad = deps.prisma.thread.findUniqueOrThrow({ where: { id: run.threadId } });
+        const botLoad = deps.prisma.bot.findUniqueOrThrow({
+          where: { id: run.botId },
+          include: { computer: true },
+        });
         const historySessionOf = (loaded: { sessionId: string | null }) =>
           backgroundHelper ? run.sessionId : (loaded.sessionId ?? run.sessionId);
         const compacts = (owner: { botId: string | null; memberBotId: string | null }) =>
@@ -1778,10 +1782,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           modelMember,
           categoryRows,
         ] = await Promise.all([
-          deps.prisma.bot.findUniqueOrThrow({
-            where: { id: run.botId },
-            include: { computer: true },
-          }),
+          botLoad,
           threadLoad,
           threadLoad
             .then((loaded) =>
@@ -1838,11 +1839,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
             where: { botId: run.botId, spaceId: run.spaceId, status: "saved" },
             orderBy: { id: "asc" },
           }),
-          listAgentSkillRecords(skillDeps, {
-            spaceId: run.spaceId,
-            userId: run.userId,
-            botId: run.botId,
-          }),
+          botLoad.then((loaded) =>
+            listAgentSkillRecords(skillDeps, {
+              spaceId: run.spaceId,
+              userId: loaded.userId,
+              botId: run.botId,
+            }),
+          ),
           deps.prisma.agentSecret.findMany({
             where: { spaceId: run.spaceId },
             select: {
@@ -3147,7 +3150,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           );
         };
 
-        const skillOwner = { spaceId: run.spaceId, userId: run.userId, botId: run.botId };
+        const skillOwner = { spaceId: run.spaceId, userId: bot.userId, botId: run.botId };
         /** The skills this run followed, in order. */
         const recordSkillUse = async (skillName: string, via: string) => {
           if (learning === "off" && via !== "read") return;

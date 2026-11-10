@@ -1461,6 +1461,35 @@ describeWithDatabase("API authorization and resource isolation", () => {
     expect(await listed(owner)).toMatchObject({ computerMode: "dedicated" });
   });
 
+  it("lists for a shared bot only the skills its owner turned on for it", async () => {
+    const { owner, space, bot } = await sharedBotSpace("bot-share-skills");
+    const skill = await rpc<{ id: string }>(
+      app,
+      owner,
+      "agentSkills/create",
+      { name: "Release steps", description: "How we ship", body: "Steps" },
+      space,
+    );
+    const visibleTo = async () =>
+      (
+        await rpc<Array<{ id: string; visibleBotIds: string[] }>>(
+          app,
+          owner,
+          "agentSkills/list",
+          {},
+          space,
+        )
+      ).find((entry) => entry.id === skill.id)?.visibleBotIds;
+    expect(await visibleTo()).toContain(bot.id);
+
+    await rpc(app, owner, "bots/share", { botId: bot.id, visibility: "space", userIds: [] }, space);
+    expect(await visibleTo()).not.toContain(bot.id);
+
+    const on = { skillId: skill.id, bots: [{ botId: bot.id, enabled: true }] };
+    await rpc(app, owner, "agentSkills/setAccess", on, space);
+    expect(await visibleTo()).toContain(bot.id);
+  });
+
   it("keeps a shared bot off the team computer until it is unshared", async () => {
     const { owner, space, bot, listed } = await sharedBotSpace("bot-share-team");
     const share = { botId: bot.id, visibility: "space", userIds: [] };

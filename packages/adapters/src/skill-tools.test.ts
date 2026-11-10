@@ -69,11 +69,15 @@ const ownNames = (records: Array<{ name: string; source: string }>) =>
 const matches = (row: Row, where: Row) =>
   Object.entries(where).every(([key, value]) => row[key] === value);
 
-// ponytail: only findMany/createMany/upsert/updateMany/deleteMany, what the tools and tests use.
+// ponytail: only findMany/findFirst/createMany/upsert/updateMany/deleteMany, what the tools and tests use.
 function table(store: Row[]) {
   return {
     findMany: vi.fn(async ({ where = {} }: { where?: Row } = {}) =>
       store.filter((row) => matches(row, where)).map((row) => ({ ...row })),
+    ),
+    findFirst: vi.fn(
+      async ({ where = {} }: { where?: Row } = {}) =>
+        store.find((row) => matches(row, where)) ?? null,
     ),
     updateMany: vi.fn(async ({ where, data }: { where: Row; data: Row }) => {
       const hits = store.filter((row) => matches(row, where));
@@ -125,6 +129,7 @@ function makePrisma() {
     ),
     skillSetting: table([]),
     botSkill: table([]),
+    bot: table([]),
   };
   return prisma;
 }
@@ -395,6 +400,21 @@ describe("skill tools", () => {
         newName: longName,
       }),
     ).toEqual({ error: "Skill name must be at most 80 characters." });
+  });
+
+  it("gives a shared bot only the skills its owner turned on for it", async () => {
+    await seed("Everyone", "d");
+    await seed("Turned on", "d");
+    await prisma.botSkill.createMany({
+      data: [{ ...owner, botId: "botA", skillKey: "user:turned on", enabled: true }],
+    });
+    await prisma.bot.createMany({ data: [{ id: "botA", visibility: "space" }] });
+
+    const records = await listAgentSkillRecords(deps, { ...owner, botId: "botA" });
+    expect(ownNames(records)).toEqual(["Turned on"]);
+    expect(
+      await skillReadFromTool(deps, { ...owner, botId: "botA" }, { name: "Everyone" }),
+    ).toEqual({ error: "Skill not found." });
   });
 
   it("filters the catalog by bot visibility when botId is given", async () => {

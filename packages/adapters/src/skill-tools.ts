@@ -56,6 +56,7 @@ const BOT_SKILLS_MAX_BYTES = 200 * 1024 * 1024;
 
 type SkillOwner = {
   spaceId: string;
+  /** Whose skills: the bot's owner, also in the run of someone the bot is shared with. */
   userId: string;
   /** When set, list/read/update/delete only see skills visible to this bot. */
   botId?: string;
@@ -152,9 +153,10 @@ async function onlyVisibleTo<T extends { id: string }>(
   botId: string,
   records: T[],
 ): Promise<T[]> {
-  const [settings, overrides] = await Promise.all([
+  const [settings, overrides, bot] = await Promise.all([
     prisma.skillSetting.findMany({ where: { spaceId: owner.spaceId, userId: owner.userId } }),
     prisma.botSkill.findMany({ where: { botId, spaceId: owner.spaceId, userId: owner.userId } }),
+    prisma.bot.findFirst({ where: { id: botId }, select: { visibility: true } }),
   ]);
   const availability = new Map(
     settings.map((s) => [s.skillKey, asSkillAvailability(s.availability)]),
@@ -166,6 +168,7 @@ async function onlyVisibleTo<T extends { id: string }>(
       isSkillVisible({
         availability: availability.get(record.id) ?? "all",
         override: override.get(record.id),
+        sharedBot: bot !== null && bot.visibility !== "private",
       }),
   );
 }

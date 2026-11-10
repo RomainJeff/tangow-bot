@@ -209,8 +209,10 @@ function fixture({
       }),
     },
     bot: {
+      findFirst: vi.fn(async () => ({ visibility: "private" })),
       findUniqueOrThrow: vi.fn(async () => ({
         id: botId,
+        userId: "user-1",
         name: botName,
         title: "Assistant",
         description: "Test assistant",

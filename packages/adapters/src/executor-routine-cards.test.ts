@@ -240,12 +240,14 @@ function fixture(
     bot: {
       findUniqueOrThrow: vi.fn(async () => ({
         id: "bot-1",
+        userId: "user-1",
         name: "Assistant",
         title: "Assistant",
         description: "Test assistant",
         computerId: "computer-1",
         computer: { id: "computer-1", scope: "dedicated" },
       })),
+      findFirst: vi.fn(async () => ({ visibility: "private" })),
       findMany: vi.fn(async () => []),
     },
     attempt: {

@@ -69,7 +69,7 @@ describe("agent skills service (filesystem)", () => {
   let dataDir: string;
   let prisma: {
     $transaction: ReturnType<typeof vi.fn>;
-    bot: { findMany: ReturnType<typeof vi.fn> };
+    bot: { findMany: ReturnType<typeof vi.fn>; findFirst: ReturnType<typeof vi.fn> };
     volumeSkill: { findMany: ReturnType<typeof vi.fn> };
     skillSetting: ReturnType<typeof table>;
     botSkill: ReturnType<typeof table>;
@@ -81,10 +81,12 @@ describe("agent skills service (filesystem)", () => {
       $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
       bot: {
         findMany: vi.fn(async ({ where }: { where?: { id?: { in: string[] } } } = {}) =>
-          [{ id: "bot-1" }, { id: "bot-2" }].filter(
-            (bot) => !where?.id || where.id.in.includes(bot.id),
-          ),
+          [
+            { id: "bot-1", visibility: "private" },
+            { id: "bot-2", visibility: "private" },
+          ].filter((bot) => !where?.id || where.id.in.includes(bot.id)),
         ),
+        findFirst: vi.fn(async () => ({ visibility: "private" })),
       },
       volumeSkill: { findMany: vi.fn(async () => []) },
       skillSetting: table([]),
