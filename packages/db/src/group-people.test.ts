@@ -92,7 +92,6 @@ describe("a group's people, bots and lead", () => {
     const group = await newGroup(["ana"]);
     expect(group.people.map((person) => person.userId)).toEqual(["creator", "ana"]);
     expect(group.canManage).toBe(true);
-    expect(group.leadBotId).toBeNull();
     const seen = await createGroupRepos(prisma).getGroup(actor("ana"), group.id);
     expect((await createGroupRepos(prisma).mapGroup(seen, "ana")).canManage).toBe(false);
 

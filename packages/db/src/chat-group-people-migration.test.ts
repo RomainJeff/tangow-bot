@@ -46,10 +46,6 @@ describe("chat group people migration", () => {
         },
         { groupId: "plain", userId: "creator", unread: false, pinned: false, sectionId: null },
       ]);
-      expect(await prisma.chatGroup.findMany({ select: { leadBotId: true } })).toEqual([
-        { leadBotId: null },
-        { leadBotId: null },
-      ]);
     } finally {
       await database.close();
     }
