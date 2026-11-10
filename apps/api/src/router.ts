@@ -151,7 +151,7 @@ import {
   IsolationError,
   issueMessagingLinkCode,
   listSpaceMembers,
-  lockOwnedGroup,
+  lockGroupForPerson,
   NotBotOwnerError,
   NotSpaceMemberError,
   NotSpaceOwnerError,
@@ -1862,7 +1862,7 @@ export function createRouter(deps: RouterDeps) {
           return { ok: true as const };
         }
         const committed = await deps.prisma.$transaction(async (tx) => {
-          await lockOwnedGroup(tx, context.actor, target.groupId);
+          await lockGroupForPerson(tx, context.actor, target.groupId);
           const group = await tx.chatGroup.findFirst({
             where: {
               id: target.groupId,

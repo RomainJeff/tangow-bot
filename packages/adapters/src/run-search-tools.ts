@@ -2,7 +2,7 @@ import type { RunSearchInput, SessionLog } from "@rakazo/adapter-kit";
 import { FactualRunRecapSchema, SessionId } from "@rakazo/contracts";
 import { matchesSearchQuery, snippetAroundMatch } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
-import { ENTRY_ON_CHAIN, Prisma } from "@rakazo/db";
+import { ENTRY_ON_CHAIN, groupMembershipFilter, Prisma } from "@rakazo/db";
 import { z } from "zod";
 import {
   decodeSearchCursor,
@@ -186,8 +186,13 @@ export async function searchRunsFromTool(
       threadId: caller.threadId,
       botId: caller.botId,
     };
+    // A group's thread is its creator's; anyone in the group runs bots there.
     const thread = await tx.thread.findFirst({
-      where: { id: actor.threadId, userId: actor.userId, spaceId: actor.spaceId },
+      where: {
+        id: actor.threadId,
+        spaceId: actor.spaceId,
+        OR: [{ userId: actor.userId }, { group: groupMembershipFilter(actor.userId) }],
+      },
     });
     // In a member's thread with a shared bot, the bot is the owner's and the run the member's.
     const memberThread = Boolean(thread?.memberBotId) && thread?.memberBotId === actor.botId;
@@ -206,8 +211,7 @@ export async function searchRunsFromTool(
         !(await tx.chatGroup.findFirst({
           where: {
             id: thread.groupId,
-            userId: actor.userId,
-            spaceId: actor.spaceId,
+            ...groupMembershipFilter(actor.userId, actor.spaceId),
             archivedAt: null,
             members: { some: { botId: actor.botId } },
           },

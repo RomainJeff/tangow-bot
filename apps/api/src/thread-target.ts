@@ -38,7 +38,7 @@ import {
   dismissProposalWithTextInTransaction,
   expireComputerExecutionLeases,
   IsolationError,
-  lockOwnedGroup,
+  lockGroupForPerson,
   logCancelledRunsInTransaction,
   type Prisma,
   type PrismaClient,
@@ -363,15 +363,9 @@ async function lockAndLoadGroupMembers(
   actor: Actor,
   target: Extract<ThreadTarget, { kind: "group" }>,
 ) {
-  await lockOwnedGroup(tx, actor, target.groupId);
+  await lockGroupForPerson(tx, actor, target.groupId);
   const group = await tx.chatGroup.findFirst({
-    where: {
-      id: target.groupId,
-      spaceId: actor.spaceId,
-      userId: actor.userId,
-      archivedAt: null,
-      thread: { id: target.threadId },
-    },
+    where: { id: target.groupId, archivedAt: null, thread: { id: target.threadId } },
     include: {
       members: {
         where: { bot: { archivedAt: null } },

@@ -148,7 +148,7 @@ describe("card images are readable by the thread's reader, and only by them (CA 
     ).rejects.toBeInstanceOf(IsolationError);
   });
 
-  it("serves a group thread's image to its owner and refuses everyone else", async () => {
+  it("serves a group thread's image in the group's Space and refuses everyone else", async () => {
     const deps = {
       prisma: { artifact: artifactTable([{ ...stored[0]!, groupId: "group-1" }]) } as never,
       artifacts: files as never,

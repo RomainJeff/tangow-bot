@@ -9,6 +9,7 @@ import {
 import { ensureMemberThreads, sharedWithFilter } from "./bot-sharing.js";
 import type { PrismaClient } from "./client.js";
 import { type ComputerMode, ensureComputerRecord, parseComputerMode } from "./computers.js";
+import { groupMembershipFilter } from "./groups.js";
 import { createThreadMessageInTransaction } from "./messages.js";
 import { BotSectionNameConflictError, IsolationError } from "./scope.js";
 import { lockSpaceForContentCreation } from "./spaces.js";
@@ -253,8 +254,7 @@ export function createRepos(prisma: PrismaClient) {
           : await tx.chatGroup.findFirst({
               where: {
                 id: input.groupId,
-                spaceId: actor.spaceId,
-                userId: actor.userId,
+                ...groupMembershipFilter(actor.userId, actor.spaceId),
                 archivedAt: null,
               },
               select: { id: true },

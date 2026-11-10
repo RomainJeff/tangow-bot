@@ -7,7 +7,7 @@ import {
   type SpaceGroup,
 } from "@rakazo/contracts";
 import { cancelRunsInTransaction } from "./cancel-runs.js";
-import type { Prisma, PrismaClient } from "./client.js";
+import { Prisma, type PrismaClient } from "./client.js";
 import { expireComputerExecutionLeases } from "./computers.js";
 import { IsolationError } from "./scope.js";
 import { lockSpaceForContentCreation } from "./spaces.js";
@@ -200,7 +200,7 @@ export function createGroupRepos(prisma: PrismaClient) {
     const groups = await prisma.chatGroup.findMany({
       where: {
         spaceId: { in: spaceIds },
-        userId: actor.userId,
+        ...groupMembershipFilter(actor.userId),
         archivedAt: null,
       },
       select: {
@@ -230,8 +230,7 @@ export function createGroupRepos(prisma: PrismaClient) {
     async listGroups(actor: Actor, options: { archived?: boolean } = {}): Promise<Group[]> {
       const groups = await prisma.chatGroup.findMany({
         where: {
-          spaceId: actor.spaceId,
-          userId: actor.userId,
+          ...groupMembershipFilter(actor.userId, actor.spaceId),
           archivedAt: options.archived ? { not: null } : null,
         },
         include: groupInclude,
@@ -255,8 +254,7 @@ export function createGroupRepos(prisma: PrismaClient) {
       const group = await prisma.chatGroup.findFirst({
         where: {
           id: groupId,
-          spaceId: actor.spaceId,
-          userId: actor.userId,
+          ...groupMembershipFilter(actor.userId, actor.spaceId),
           ...(options.includeArchived ? {} : { archivedAt: null }),
         },
         include: groupInclude,
@@ -269,8 +267,7 @@ export function createGroupRepos(prisma: PrismaClient) {
       const group = await prisma.chatGroup.findFirst({
         where: {
           id: groupId,
-          spaceId: actor.spaceId,
-          userId: actor.userId,
+          ...groupMembershipFilter(actor.userId, actor.spaceId),
           archivedAt: null,
         },
         include: groupTargetInclude,
@@ -329,14 +326,12 @@ export function createGroupRepos(prisma: PrismaClient) {
     ): Promise<{ group: Group; cancelledRunIds: string[] }> {
       const members = input.botIds ? await assertOwnedBots(prisma, actor, input.botIds) : undefined;
       const updated = await prisma.$transaction(async (tx) => {
-        await lockOwnedGroup(tx, actor, input.groupId);
+        // Anyone in the group pins and files it for themselves; only its creator changes it.
+        const manages =
+          input.name !== undefined || input.description !== undefined || members !== undefined;
+        await (manages ? lockGroupForCreator : lockGroupForPerson)(tx, actor, input.groupId);
         const current = await tx.chatGroup.findFirst({
-          where: {
-            id: input.groupId,
-            spaceId: actor.spaceId,
-            userId: actor.userId,
-            archivedAt: null,
-          },
+          where: { id: input.groupId, archivedAt: null },
           include: {
             members: { select: { botId: true, bot: { select: { archivedAt: true } } } },
             thread: { select: { id: true } },
@@ -411,14 +406,9 @@ export function createGroupRepos(prisma: PrismaClient) {
 
     async archiveGroup(actor: Actor, groupId: string) {
       return prisma.$transaction(async (tx) => {
-        await lockOwnedGroup(tx, actor, groupId);
+        await lockGroupForCreator(tx, actor, groupId);
         const current = await tx.chatGroup.findFirst({
-          where: {
-            id: groupId,
-            spaceId: actor.spaceId,
-            userId: actor.userId,
-            archivedAt: null,
-          },
+          where: { id: groupId, archivedAt: null },
           select: { thread: { select: { id: true } } },
         });
         if (!current?.thread) throw new IsolationError();
@@ -490,7 +480,7 @@ export function createGroupRepos(prisma: PrismaClient) {
 
     async removeGroup(actor: Actor, groupId: string) {
       return prisma.$transaction(async (tx) => {
-        await lockOwnedGroup(tx, actor, groupId);
+        await lockGroupForCreator(tx, actor, groupId);
         const group = await tx.chatGroup.findUnique({
           where: { id: groupId },
           select: {
@@ -512,7 +502,40 @@ export function createGroupRepos(prisma: PrismaClient) {
   };
 }
 
-export async function lockOwnedGroup(
+/** The groups `userId` is a person in, the creator among them. */
+export function groupMembershipFilter(
+  userId: string,
+  spaceId?: string,
+): Prisma.ChatGroupWhereInput {
+  return { ...(spaceId ? { spaceId } : {}), people: { some: { userId } } };
+}
+
+/** SQL for "`userId` is a person in the group `groupId`", for raw queries; see the filter above. */
+export function groupPersonSql(userId: string, groupId: Prisma.Sql) {
+  return Prisma.sql`EXISTS (
+    SELECT 1 FROM chat_group_people p WHERE p."groupId" = ${groupId} AND p."userId" = ${userId}
+  )`;
+}
+
+/** Locks a group the actor is a person in, for reading it or writing in its thread. */
+export async function lockGroupForPerson(
+  prisma: Pick<Prisma.TransactionClient, "$queryRaw">,
+  actor: Pick<Actor, "spaceId" | "userId">,
+  groupId: string,
+) {
+  const locked = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT g.id
+    FROM chat_groups g
+    WHERE g.id = ${groupId}
+      AND g."spaceId" = ${actor.spaceId}
+      AND ${groupPersonSql(actor.userId, Prisma.sql`g.id`)}
+    FOR UPDATE OF g
+  `;
+  if (locked.length !== 1) throw new IsolationError();
+}
+
+/** Locks a group the actor created: only they change it, archive it or delete it. */
+export async function lockGroupForCreator(
   prisma: Pick<Prisma.TransactionClient, "$queryRaw">,
   actor: Pick<Actor, "spaceId" | "userId">,
   groupId: string,

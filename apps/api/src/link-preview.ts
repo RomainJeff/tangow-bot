@@ -10,6 +10,7 @@ import {
 import type { Actor, LinkPreviewDraft } from "@rakazo/contracts";
 import { LINK_PREVIEW_COMPOSER_DEADLINE_MS } from "@rakazo/contracts";
 import {
+  groupMembershipFilter,
   IsolationError,
   type PrismaClient,
   removeLinkPreviewBlock,
@@ -58,16 +59,15 @@ export interface LinkPreviewApiDeps {
 }
 
 /**
- * A thread the actor may write to: theirs, in their space, with a live bot or group, or their own
- * thread with a bot still shared with them.
+ * A thread the actor may write to, in their space: theirs with a live bot, their own thread with a
+ * bot still shared with them, or a live group's they are a person in.
  */
 const writableThread = (actor: Actor) => ({
   spaceId: actor.spaceId,
-  userId: actor.userId,
   OR: [
-    { bot: { archivedAt: null } },
-    { group: { archivedAt: null } },
-    { memberBot: sharedWithFilter(actor.userId, actor.spaceId) },
+    { userId: actor.userId, bot: { archivedAt: null } },
+    { userId: actor.userId, memberBot: sharedWithFilter(actor.userId, actor.spaceId) },
+    { group: { archivedAt: null, ...groupMembershipFilter(actor.userId) } },
   ],
 });
 
