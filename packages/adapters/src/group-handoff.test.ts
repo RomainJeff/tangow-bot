@@ -36,6 +36,8 @@ function harness(
   source: Source,
   existing?: { sourceRuns: { id: string; botId: string }[] },
   runRow: { routineId?: string | null; trigger?: string; inheritedHop?: number | null } = {},
+  /** The bots the run's person can use. */
+  usable = ["bot-a", "bot-b", "bot-c"],
 ) {
   const runCreate = vi.fn(async () => ({ id: "run-b" }));
   const tx = {
@@ -43,6 +45,11 @@ function harness(
     sessionEntry: {
       findUnique: vi.fn(async () => source),
       findFirst: vi.fn(async () => existing ?? null),
+    },
+    bot: {
+      findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
+        where.id.in.filter((id) => usable.includes(id)).map((id) => ({ id })),
+      ),
     },
     chatGroup: {
       findFirst: vi.fn(async () => ({
@@ -131,6 +138,19 @@ describe("group handoff ownership", () => {
     ).resolves.toEqual({
       error:
         "do not hand this stage back to its sender; post the result in the shared thread instead",
+    });
+    expect(runCreate).not.toHaveBeenCalled();
+  });
+
+  it("refuses a handoff to a bot the run's person cannot use", async () => {
+    const { deps, runCreate } = harness({ type: "user.message", payload: {} }, undefined, {}, [
+      "bot-a",
+    ]);
+
+    await expect(
+      handoffToGroupBot(deps as never, run, "group-1", { bot_id: "bot-b", message: "Next" }),
+    ).resolves.toEqual({
+      error: "the person you are answering cannot use that bot; finish this stage yourself",
     });
     expect(runCreate).not.toHaveBeenCalled();
   });

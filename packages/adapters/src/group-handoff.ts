@@ -9,6 +9,7 @@ import {
   markThreadsUnread,
   type PrismaClient,
   touchGroupUpdatedAt,
+  usableBotIds,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { resolveRunHop } from "./bot-messages.js";
@@ -103,6 +104,12 @@ export async function handoffToGroupBot(
     if (targetId === run.botId) return { error: "cannot hand off to yourself" } as const;
     if (!group.members.some((member) => member.bot.id === targetId)) {
       return { error: "handoff target is not a group member" } as const;
+    }
+    // The next bot runs as the same person, so it must be one they can use.
+    if (!(await usableBotIds(tx, run.userId, run.spaceId, [targetId])).has(targetId)) {
+      return {
+        error: "the person you are answering cannot use that bot; finish this stage yourself",
+      } as const;
     }
 
     const source = activeSource.sourceMessage;

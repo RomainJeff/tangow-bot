@@ -29,6 +29,15 @@ beforeEach(() => {
   vi.resetAllMocks();
 });
 
+/** Every bot asked about is one the sender can use. */
+function everyBotUsable() {
+  return {
+    findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
+      where.id.in.map((id) => ({ id })),
+    ),
+  };
+}
+
 /** The thread row: its main session, its bot and the cursor of its feed. */
 const THREAD = { sessionId: "session-1", botId: "bot-1", nextEventSeq: 2 };
 
@@ -1767,6 +1776,7 @@ describe("sendThreadMessage", () => {
       },
       task: { updateMany: vi.fn().mockResolvedValue({ count: 1 }), create: vi.fn() },
       steeringMessage: { create: vi.fn() },
+      bot: everyBotUsable(),
       chatGroup: {
         findFirst: vi.fn().mockResolvedValue({
           id: "group-1",
@@ -1854,6 +1864,7 @@ describe("sendThreadMessage", () => {
       },
       task: { create: vi.fn(), updateMany: vi.fn() },
       steeringMessage: { create: vi.fn() },
+      bot: everyBotUsable(),
       chatGroup: {
         findFirst: vi.fn().mockResolvedValue({
           id: "group-1",
@@ -2276,6 +2287,7 @@ describe("sendThreadMessage", () => {
       },
       task: { create: vi.fn().mockResolvedValue({ id: "task-1" }) },
       steeringMessage: { create: vi.fn() },
+      bot: everyBotUsable(),
       chatGroup: {
         findFirst: vi.fn().mockResolvedValue({
           id: "group-1",
@@ -2323,6 +2335,100 @@ describe("sendThreadMessage", () => {
       entryId: "parent",
       quote: "just this span",
     });
+  });
+});
+
+describe("a group send runs as its sender", () => {
+  const actor = { spaceId: "workspace-1", userId: "ana" } as Actor;
+  const target = {
+    kind: "group",
+    groupId: "group-1",
+    groupName: "Group",
+    threadId: "thread-1",
+    members: [],
+    memberBotIds: ["bot-a", "bot-b"],
+  } satisfies ThreadTarget;
+
+  /** A group whose lead is Beta, where the sender can use only `usable`. */
+  function harness(usable: string[]) {
+    const tx = {
+      thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
+      sessionEntry: { findFirst: vi.fn().mockResolvedValue(null) },
+      run: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findUnique: vi.fn().mockResolvedValue({ status: "queued", startedAt: null }),
+        create: vi.fn(async ({ data }: { data: { botId: string } }) => ({
+          id: `run-${data.botId}`,
+          taskId: "task-1",
+          botId: data.botId,
+          status: "queued",
+        })),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      task: {
+        create: vi.fn().mockResolvedValue({ id: "task-1" }),
+        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
+      steeringMessage: { create: vi.fn() },
+      bot: {
+        findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
+          where.id.in.filter((id) => usable.includes(id)).map((id) => ({ id })),
+        ),
+      },
+      chatGroup: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "group-1",
+          leadBotId: "bot-b",
+          members: [
+            { bot: { id: "bot-a", name: "Alpha", color: null } },
+            { bot: { id: "bot-b", name: "Beta", color: null } },
+          ],
+        }),
+        update: vi.fn().mockResolvedValue({ id: "group-1" }),
+      },
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "group-1" }]),
+    };
+    const prisma = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
+      $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    } as unknown as PrismaClient;
+    const send = (text: string) =>
+      sendThreadMessage(
+        {
+          prisma,
+          events: { notify: vi.fn().mockResolvedValue(undefined) } as never,
+          jobs: { enqueue: vi.fn().mockResolvedValue(undefined) } as never,
+        },
+        actor,
+        target,
+        { text, clientNonce: "nonce-1" },
+      );
+    return { tx, send };
+  }
+
+  it("wakes the lead as the sender when the message names no bot", async () => {
+    const { tx, send } = harness(["bot-a", "bot-b"]);
+
+    await expect(send("hello all")).resolves.toMatchObject({ runIds: ["run-bot-b"] });
+    expect(tx.run.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ botId: "bot-b", userId: "ana" }),
+    });
+  });
+
+  it("stores a message naming no bot the sender can use, and wakes none", async () => {
+    const { tx, send } = harness([]);
+
+    await expect(send("@Alpha hello all")).resolves.toMatchObject({
+      runId: undefined,
+      runIds: [],
+    });
+    expect(sentMessages()).toEqual([
+      expect.objectContaining({
+        payload: expect.objectContaining({ authorId: "ana", targets: [] }),
+      }),
+    ]);
+    expect(tx.run.create).not.toHaveBeenCalled();
+    expect(tx.steeringMessage.create).not.toHaveBeenCalled();
   });
 });
 
@@ -2781,6 +2887,7 @@ describe("sendThreadMessage while a proposal card waits", () => {
     ]);
     tx.$queryRaw.mockResolvedValue([{ id: "group-1" }]);
     const group = Object.assign(tx, {
+      bot: everyBotUsable(),
       chatGroup: {
         findFirst: vi.fn().mockResolvedValue({
           id: "group-1",
@@ -2848,6 +2955,7 @@ describe("sendThreadMessage while a proposal card waits", () => {
     tx.run.findMany.mockResolvedValue([]);
     const run = { id: "run-beta", taskId: "task-beta", botId: "bot-2", status: "queued" };
     const group = Object.assign(tx, {
+      bot: everyBotUsable(),
       chatGroup: {
         findFirst: vi.fn().mockResolvedValue({
           id: "group-1",

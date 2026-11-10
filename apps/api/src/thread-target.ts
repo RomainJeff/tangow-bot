@@ -23,6 +23,7 @@ import {
 import {
   ACTIVE_RUN_STATUSES,
   blocksToAgentHistoryText,
+  groupLeadBotId,
   isActive,
   resolveGroupTargetBotIds,
   runFailureError,
@@ -378,11 +379,21 @@ async function lockAndLoadGroupMembers(
     },
   });
   if (!group || group.members.length < GROUP_MEMBER_MIN) throw new IsolationError();
-  return group.members.map((member) => ({
+  const members = group.members.map((member) => ({
     botId: member.bot.id,
     name: member.bot.name,
     color: member.bot.color,
   }));
+  return {
+    members,
+    leadBotId: group.leadBotId,
+    usableBotIds: await usableBotIds(
+      tx,
+      actor.userId,
+      actor.spaceId,
+      members.map((member) => member.botId),
+    ),
+  };
 }
 
 export async function resolveThreadTarget(
@@ -932,13 +943,17 @@ export async function sendThreadMessage(
         };
       }
 
-      const members = await lockAndLoadGroupMembers(tx, actor, target);
+      const group = await lockAndLoadGroupMembers(tx, actor, target);
+      const { members } = group;
       const memberBotIds = members.map((member) => member.botId);
       const mentionTargets = splitMentionTargets(input.mentions);
+      // Each woken bot runs as the sender, so only a bot they can use wakes.
       const targetBotIds = resolveGroupTargetBotIds({
         text: input.text ?? "",
         members: members.map((member) => ({ id: member.botId, name: member.name })),
         explicitMentions: mentionTargets.botMentionIds,
+        leadBotId: group.leadBotId,
+        usableBotIds: group.usableBotIds,
       });
       const { blocks: attachmentBlocks, artifacts } = await resolveGroupSendAttachments(
         { prisma: tx },
@@ -955,8 +970,14 @@ export async function sendThreadMessage(
       const blocks = buildUserMessageBlocks(input.text, attachmentBlocks, {
         linkPreview: input.linkPreview,
       });
-      // Each targeted bot gets a run in turn, so the first run is always the first target's.
-      const eventBotId = targetBotIds[0];
+      // Each targeted bot gets a run in turn, so the first run is always the first target's. A
+      // message waking no bot still reaches the group's people, fed as its lead's.
+      const eventBotId =
+        targetBotIds[0] ??
+        groupLeadBotId(
+          members.map((member) => ({ id: member.botId })),
+          group.leadBotId,
+        );
       if (!eventBotId) throw new IsolationError("Group send did not resolve a target");
       await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
       const activeRuns = await tx.run.findMany({

@@ -112,6 +112,7 @@ import {
   AttachmentValidationError,
   containsSecret,
   expandSkillReferencesInPrompt,
+  groupLeadBotId,
   hasMixedOneShotSchedule,
   isOneShotRoutineCrons,
   MODEL_PROVIDER_NOT_CONNECTED_MESSAGE,
@@ -182,6 +183,7 @@ import {
   sharedBotThread,
   threadEventSeq,
   touchGroupUpdatedAt,
+  usableBotIds,
   usageBreakdown,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -1897,9 +1899,15 @@ export function createRouter(deps: RouterDeps) {
               archivedAt: null,
               thread: { id: target.threadId },
             },
-            include: { members: { orderBy: { createdAt: "asc" } } },
+            include: {
+              members: { where: { bot: { archivedAt: null } }, orderBy: { createdAt: "asc" } },
+            },
           });
-          const botId = group?.members[0]?.botId;
+          if (!group) throw new IsolationError();
+          const botId = groupLeadBotId(
+            group.members.map((member) => ({ id: member.botId })),
+            group.leadBotId,
+          );
           if (!botId) throw new IsolationError();
           const blocks = buildFollowUpBlocks(input.text, { linkPreview: input.linkPreview });
           const message = await createThreadMessageInTransaction(tx, {
@@ -1909,6 +1917,18 @@ export function createRouter(deps: RouterDeps) {
             feedBotId: botId,
             authorId: context.actor.userId,
           });
+          // The lead runs as the sender: a lead they cannot use leaves the message unanswered.
+          const usable = await usableBotIds(tx, context.actor.userId, context.actor.spaceId, [
+            botId,
+          ]);
+          if (!usable.has(botId)) {
+            await touchGroupUpdatedAt(tx, target.groupId);
+            return {
+              runId: undefined,
+              eventSeq: await threadEventSeq(tx, target.threadId),
+              messageId: message.id,
+            };
+          }
           const active = await tx.run.findFirst({
             where: {
               threadId: target.threadId,
