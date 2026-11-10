@@ -145,6 +145,7 @@ import {
   findSpaceDecisionConfig,
   findSpaceMemoryConfig,
   formatMessagingLinkCode,
+  GroupCreatorCannotLeaveError,
   getBotSharing,
   InvalidAnswerError,
   InvalidSpaceNameError,
@@ -1663,6 +1664,20 @@ export function createRouter(deps: RouterDeps) {
       }),
       restore: authed.groups.restore.handler(async ({ context, input }) => {
         await groupRepos.restoreGroup(context.actor, input.groupId);
+        return { ok: true as const };
+      }),
+      leave: authed.groups.leave.handler(async ({ context, input }) => {
+        const left = await groupRepos.leaveGroup(context.actor, input.groupId).catch((error) => {
+          if (error instanceof GroupCreatorCannotLeaveError) {
+            throw new ORPCError("BAD_REQUEST", { message: error.message });
+          }
+          throw error;
+        });
+        await Promise.all(
+          left.cancelledRunIds.map((runId) =>
+            deps.jobs.cancel(runJobKey(runId)).catch(() => undefined),
+          ),
+        );
         return { ok: true as const };
       }),
       remove: authed.groups.remove.handler(async ({ context, input }) => {

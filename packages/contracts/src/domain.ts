@@ -148,6 +148,12 @@ export const GroupSchema = z.object({
   sectionId: Id.nullable(),
   archivedAt: z.string().nullable(),
   members: z.array(GroupMemberSchema),
+  /** Everyone in the group, its creator first. */
+  people: z.array(GroupPersonSchema),
+  /** Whether the actor created the group: only they change its people, bots, name and lead. */
+  canManage: z.boolean(),
+  /** The bot that answers a message naming no bot; null is the first bot. */
+  leadBotId: Id.nullable(),
   threadId: Id,
   preview: z.string(),
   unread: z.boolean(),
@@ -162,10 +168,16 @@ const GroupBotIds = z
   .max(GROUP_MEMBER_MAX)
   .refine((ids) => new Set(ids).size === ids.length, { error: "botIds must be distinct" });
 
+/** The Space's other people in a group; its creator is always in it. */
+const GroupUserIds = z
+  .array(Id)
+  .refine((ids) => new Set(ids).size === ids.length, { error: "userIds must be distinct" });
+
 export const CreateGroupInput = z.object({
   name: z.string().trim().min(1).max(80),
   description: z.string().trim().max(GROUP_DESCRIPTION_MAX_LENGTH).default(""),
   botIds: GroupBotIds,
+  userIds: GroupUserIds.optional(),
 });
 export type CreateGroupInput = z.infer<typeof CreateGroupInput>;
 
@@ -174,6 +186,8 @@ export const UpdateGroupInput = z.object({
   name: z.string().trim().min(1).max(80).optional(),
   description: z.string().trim().max(GROUP_DESCRIPTION_MAX_LENGTH).optional(),
   botIds: GroupBotIds.optional(),
+  userIds: GroupUserIds.optional(),
+  leadBotId: Id.nullable().optional(),
   pinned: z.boolean().optional(),
   sectionId: Id.nullable().optional(),
 });
