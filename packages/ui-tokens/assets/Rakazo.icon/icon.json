@@ -1,36 +1,16 @@
 {
-  "fill-specializations": [
-    {
-      "value": {
-        "linear-gradient": [
-          "srgb:0.87451,0.85882,0.81569,1.00000",
-          "srgb:0.94510,0.93333,0.90588,1.00000"
-        ]
-      }
-    },
-    {
-      "appearance": "dark",
-      "value": {
-        "linear-gradient": [
-          "srgb:0.87451,0.85882,0.81569,1.00000",
-          "srgb:0.94510,0.93333,0.90588,1.00000"
-        ]
-      }
-    }
-  ],
+  "fill": {
+    "solid": "srgb:0.08235,0.08235,0.09020,1.00000"
+  },
   "groups": [
     {
       "layers": [
         {
           "glass": false,
-          "image-name": "clay-bot.png",
-          "name": "clay-bot"
+          "image-name": "tw.png",
+          "name": "tw"
         }
       ],
-      "position": {
-        "scale": 0.6,
-        "translation-in-points": [0, 30]
-      },
       "shadow": {
         "kind": "neutral",
         "opacity": 0.5
