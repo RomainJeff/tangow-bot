@@ -17,10 +17,13 @@ describe("appConnectPresentation", () => {
     expect(view.actionLabel).toBe("Authorize");
   });
 
-  it("offers no authorize control for an MCP server a shared bot needs", () => {
-    const view = appConnectPresentation({ ...block, connectorId: "mcp", provider: "server-1" });
+  it("says where to add an MCP server a shared bot needs, which mobile has no form for", () => {
+    const mcp = { ...block, connectorId: "mcp", provider: "server-1" };
+    const view = appConnectPresentation(mcp);
     expect(view.showAuthorize).toBe(false);
-    expect(view.connected).toBe(false);
+    expect(view.hint).toBe("Add it on web or desktop");
+    expect(appConnectPresentation({ ...mcp, status: "connected" }).hint).toBeNull();
+    expect(appConnectPresentation(block).hint).toBeNull();
   });
 
   it("hides authorize once connected", () => {

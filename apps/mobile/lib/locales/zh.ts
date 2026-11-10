@@ -863,6 +863,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Skill updated · {name}": "技能已更新 · {name}",
   "Skill deleted · {name}": "技能已删除 · {name}",
   "Saved for the team": "已为团队保存",
+  "Add it on web or desktop": "请在网页版或桌面版中添加",
   "Earlier messages summarized": "较早的消息已总结",
   "Message edited": "消息已编辑",
   "Conversation cleared": "对话已清除",
