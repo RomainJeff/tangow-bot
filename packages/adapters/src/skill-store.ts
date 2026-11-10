@@ -47,6 +47,11 @@ export function userSkillsRoot(
   return path.join(dataDir, "skills", "user", owner.spaceId, owner.userId);
 }
 
+/** A shared bot's copy of the skills its owner turned on for it, mounted on its computer. */
+export function botSkillsRoot(dataDir: string, bot: { spaceId: string; id: string }): string {
+  return path.join(dataDir, "skills", "bot", bot.spaceId, bot.id);
+}
+
 /** Directory name: same identity as SkillSetting/BotSkill (lower(name)), made FS-safe. */
 // ponytail: URL-encoding is bijective and safe on every FS; readable slugs need a collision table.
 export function skillDirName(name: string): string {

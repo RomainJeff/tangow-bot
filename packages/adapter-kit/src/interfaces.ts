@@ -94,6 +94,8 @@ export interface SandboxProvider {
       providerRef?: string;
       releaseRef?: string | null;
       providerKind?: ComputerRef["kind"];
+      /** A shared bot's computer mounts this bot's copy of its skills, whoever runs it. */
+      skillsBotId?: string;
       /**
        * A home kept on worker volumes: mount each at its path and serve the workspace from `root`.
        * Only a provider that supports worker volumes receives one. A machine that mounts another
