@@ -176,15 +176,20 @@ function sandboxUser(supervisorContainer: unknown): string {
   return supervisorContainer ? COMPUTER_USER : hostComputerUser();
 }
 
-/** Skills mounts are derived from ids + dataDir, never from client paths (design Q10). */
+/**
+ * Skills mounts are derived from ids + dataDir, never from client paths (design Q10). A shared
+ * bot's computer mounts the bot's copy, the same whoever runs it; any other the person's library.
+ */
 export function skillsBindsFor(
   dataDir: string,
-  spaceId: string,
-  userId: string,
+  owner: { spaceId: string; userId: string; skillsBotId?: string },
   translate: (p: string) => string,
 ): string[] {
+  const skills = owner.skillsBotId
+    ? path.join(dataDir, "skills", "bot", owner.spaceId, owner.skillsBotId)
+    : path.join(dataDir, "skills", "user", owner.spaceId, owner.userId);
   return [
-    `${translate(path.join(dataDir, "skills", "user", spaceId, userId))}:${SANDBOX_SKILL_MOUNTS.user}:ro`,
+    `${translate(skills)}:${SANDBOX_SKILL_MOUNTS.user}:ro`,
     `${translate(path.join(dataDir, "managed-skills"))}:${SANDBOX_SKILL_MOUNTS.managed}:ro`,
   ];
 }
@@ -196,6 +201,7 @@ app.post("/computers", async (c) => {
       homePath: z.string().min(1),
       spaceId: PathSegment,
       userId: PathSegment,
+      skillsBotId: PathSegment.optional(),
       volumeHome: z
         .object({
           root: z.string(),
@@ -234,9 +240,7 @@ app.post("/computers", async (c) => {
       }
       const computerUser = sandboxUser(runtimeInfo);
       // Bind sources are created by the worker before provision; a root supervisor never mkdirs them.
-      const skillsBinds = skillsBindsFor(dataDir, body.spaceId, body.userId, (p) =>
-        hostHomePath(p, runtimeInfo),
-      );
+      const skillsBinds = skillsBindsFor(dataDir, body, (p) => hostHomePath(p, runtimeInfo));
       const existing = await findBotContainer(body.botId, body.spaceId);
       if (existing) {
         const info = await existing.inspect();

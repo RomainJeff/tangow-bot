@@ -167,6 +167,7 @@ export class DockerSandboxProvider implements SandboxProvider {
         homePath: request.homePath,
         spaceId: context.spaceId,
         userId: context.userId,
+        ...(request.skillsBotId && { skillsBotId: request.skillsBotId }),
         ...(volumeHome && {
           volumeHome: {
             root: volumeHome.root,

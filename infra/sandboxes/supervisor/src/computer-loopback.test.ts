@@ -205,7 +205,11 @@ describe("computer loopback provision lifecycle", () => {
     const { skillsBindsFor, supervisorApp } = await import("./index.js");
     const homePath = path.join(process.env.DATA_DIR!, "homes", "bot");
     // Reuse also requires the read-only skills mounts to be already bound.
-    const skillsBinds = skillsBindsFor(process.env.DATA_DIR!, "space", "user", (p) => p);
+    const skillsBinds = skillsBindsFor(
+      process.env.DATA_DIR!,
+      { spaceId: "space", userId: "user" },
+      (p) => p,
+    );
     const info = {
       Image: "test-image-id",
       Config: {
@@ -545,7 +549,11 @@ describe("space computer limit enforcement", () => {
 
     const { skillsBindsFor } = await import("./index.js");
     // Reuse also requires the read-only skills mounts to be already bound.
-    const skillsBinds = skillsBindsFor(process.env.DATA_DIR!, "space-1", "user", (p) => p);
+    const skillsBinds = skillsBindsFor(
+      process.env.DATA_DIR!,
+      { spaceId: "space-1", userId: "user" },
+      (p) => p,
+    );
     const existing = {
       id: "existing-container",
       inspect: vi.fn().mockResolvedValue({
@@ -600,6 +608,62 @@ describe("space computer limit enforcement", () => {
     expect(mocks.docker.createContainer).not.toHaveBeenCalled();
   });
 
+  it("keeps a shared bot's computer and skills when a member runs it after its owner", async () => {
+    const { container } = setupContainerFixture();
+    const { supervisorApp } = await import("./index.js");
+    const provision = (userId: string) =>
+      supervisorApp.request("/computers", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${resolveSupervisorToken(process.env)}`,
+          "content-type": "application/json",
+          "x-rakazo-bot-id": "bot-shared",
+          "x-rakazo-space-id": "space-1",
+        },
+        body: JSON.stringify({
+          botId: "bot-shared",
+          spaceId: "space-1",
+          userId,
+          skillsBotId: "bot-shared",
+          homePath: path.join(process.env.DATA_DIR!, "homes", "bot-shared"),
+        }),
+      });
+    const labels = {
+      "rakazo.managed": "true",
+      "rakazo.botId": "bot-shared",
+      "rakazo.spaceId": "space-1",
+    };
+    let created = false;
+    mocks.docker.listContainers.mockImplementation(async () =>
+      created ? [{ Id: container.id, Labels: labels }] : [],
+    );
+    mocks.docker.getContainer.mockReturnValue(container);
+
+    expect((await provision("owner")).status).toBe(200);
+    const [{ HostConfig: ownerConfig }] = mocks.docker.createContainer.mock.calls[0]!;
+    expect(ownerConfig.Binds).toContain(
+      `${path.join(process.env.DATA_DIR!, "skills", "bot", "space-1", "bot-shared")}:/skills/user:ro`,
+    );
+    created = true;
+    container.inspect.mockResolvedValue({
+      Image: "image",
+      Config: { User: hostComputerUser(process.getuid?.(), process.getgid?.()), Labels: labels },
+      State: { Running: true },
+      HostConfig: {
+        NetworkMode: computerNetworkNameFor("bot-shared"),
+        PortBindings: {},
+        Mounts: [],
+        Binds: ownerConfig.Binds,
+      },
+    });
+
+    const member = await provision("member");
+    expect(member.status).toBe(200);
+    expect(await member.json()).toMatchObject({ id: container.id, resumed: true });
+    expect(mocks.docker.createContainer).toHaveBeenCalledOnce();
+    expect(container.remove).not.toHaveBeenCalled();
+  });
+
   it("replaces an existing container that predates the /managed-skills bind", async () => {
     const { container } = setupContainerFixture();
 
@@ -621,9 +685,11 @@ describe("space computer limit enforcement", () => {
           NetworkMode: computerNetworkNameFor("bot-existing"),
           PortBindings: {},
           Mounts: [],
-          Binds: skillsBindsFor(process.env.DATA_DIR!, "space-1", "user", (p) => p).filter(
-            (bind) => !bind.includes("/managed-skills"),
-          ),
+          Binds: skillsBindsFor(
+            process.env.DATA_DIR!,
+            { spaceId: "space-1", userId: "user" },
+            (p) => p,
+          ).filter((bind) => !bind.includes("/managed-skills")),
         },
       }),
       start: vi.fn().mockResolvedValue(undefined),

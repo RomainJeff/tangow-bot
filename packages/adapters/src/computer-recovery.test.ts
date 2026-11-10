@@ -64,6 +64,7 @@ async function fixture() {
   };
   const deps = {
     prisma: {
+      bot: { findFirst: vi.fn(async () => null) },
       computer,
       computerExecutionLease: { findFirst: vi.fn().mockResolvedValue(null) },
       run: { findFirst: vi.fn().mockResolvedValue(null) },

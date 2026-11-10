@@ -204,8 +204,10 @@ function fixture(
       }),
     },
     bot: {
+      findFirst: vi.fn(async () => ({ visibility: "private" })),
       findUniqueOrThrow: vi.fn(async () => ({
         id: BOT,
+        userId: "user-1",
         parentBotId: options.parentBotId,
         name: "Assistant",
         title: "Assistant",

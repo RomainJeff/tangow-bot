@@ -97,6 +97,7 @@ export const BOT_SKILL_DESCRIPTION_MAX_LENGTH = 300;
 const SKILL_WRITE_ERROR =
   "Skills can't be saved in this run: only a conversation the user started, one of their routines or a sub-bot they created can save one.";
 const SKILL_DELETE_ERROR = "Delete a skill only when the user asks you to in this conversation.";
+const SKILL_MEMBER_ERROR = "Only the owner of this bot can save or change its skills.";
 
 /**
  * Whether a run may have its bot write skills, by what woke it. A skill saved on someone else's
@@ -105,7 +106,8 @@ const SKILL_DELETE_ERROR = "Delete a skill only when the user asks you to in thi
  * task save one; a delete needs the user. A routine counts as the user's only while its prompt
  * is (`trustedRoutine`): one a bot set up from a webhook would otherwise save on its word a
  * minute later. A run that read a message someone else sent into it (`steeredByOthers`) is no
- * longer the user's alone. A resumed run keeps the trigger it started with.
+ * longer the user's alone. A resumed run keeps the trigger it started with. On a shared bot the
+ * skills are its owner's, which steer every person's runs, so a member's run never writes them.
  */
 export function skillWriteRefusal(
   run: {
@@ -113,12 +115,14 @@ export function skillWriteRefusal(
     sourceRole?: string | null;
     trustedRoutine?: boolean;
     steeredByOthers?: boolean;
+    memberRun?: boolean;
   },
   tool: string,
 ): string | undefined {
   if (tool !== "skill_create" && tool !== "skill_update" && tool !== "skill_delete") {
     return undefined;
   }
+  if (run.memberRun) return SKILL_MEMBER_ERROR;
   if (run.steeredByOthers) return tool === "skill_delete" ? SKILL_DELETE_ERROR : SKILL_WRITE_ERROR;
   if (tool === "skill_delete") return runStartedByUser(run) ? undefined : SKILL_DELETE_ERROR;
   return runStartedByUser(run) ||

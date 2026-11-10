@@ -587,6 +587,7 @@ describe("createRunExecutor", () => {
         })),
       },
       bot: {
+        findFirst: vi.fn(async () => ({ visibility: "private" })),
         findUnique: vi.fn(async () => ({
           id: "bot-1",
           userId: "user-1",
@@ -659,6 +660,7 @@ describe("createRunExecutor", () => {
         })),
       },
       bot: {
+        findFirst: vi.fn(async () => ({ visibility: "private" })),
         findUnique: vi.fn(async () => ({
           id: "bot-1",
           userId: "user-1",
@@ -726,6 +728,7 @@ describe("createRunExecutor", () => {
         })),
       },
       bot: {
+        findFirst: vi.fn(async () => ({ visibility: "private" })),
         findUnique: vi.fn(async () => ({
           id: "bot-1",
           userId: "user-1",
@@ -808,6 +811,7 @@ description: Prepare standup notes
         })),
       },
       bot: {
+        findFirst: vi.fn(async () => ({ visibility: "private" })),
         findUnique: vi.fn(async () => ({
           id: "bot-1",
           userId: "user-1",
@@ -866,6 +870,7 @@ description: Prepare standup notes
         })),
       },
       bot: {
+        findFirst: vi.fn(async () => ({ visibility: "private" })),
         findUnique: vi.fn(async () => ({
           id: "bot-1",
           userId: "user-1",
@@ -922,6 +927,7 @@ description: Prepare standup notes
         })),
       },
       bot: {
+        findFirst: vi.fn(async () => ({ visibility: "private" })),
         findUnique: vi.fn(async () => ({
           id: "bot-1",
           userId: "user-1",
@@ -1247,6 +1253,7 @@ description: Prepare standup notes
         ? { computerId: "computer-1", computerSwitching: false }
         : {
             id: "bot-1",
+            userId: "user-1",
             name: "Assistant",
             modelProvider: null,
             modelId: null,
@@ -1261,7 +1268,7 @@ description: Prepare standup notes
         findUniqueOrThrow: vi.fn(async () => ({ status: "leased", startedAt: null })),
         updateMany: vi.fn(async () => ({ count: 1 })),
       },
-      bot: { findUniqueOrThrow: botLookup },
+      bot: { findUniqueOrThrow: botLookup, findFirst: vi.fn(async () => null) },
       computer: {
         findUniqueOrThrow: vi.fn(async () => ({ scope: "private", state: "running" })),
       },

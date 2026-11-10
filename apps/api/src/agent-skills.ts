@@ -208,7 +208,7 @@ export function createAgentSkillsService(
     const [bots, settings, overrides] = await Promise.all([
       prisma.bot.findMany({
         where: { ...scope, archivedAt: null },
-        select: { id: true },
+        select: { id: true, visibility: true },
         orderBy: { position: "asc" },
       }),
       prisma.skillSetting.findMany({ where: scope }),
@@ -225,12 +225,15 @@ export function createAgentSkillsService(
         const skillAvailability = availability.get(key) ?? "all";
         return {
           availability: skillAvailability,
-          visibleBotIds: botIds.filter((botId) =>
-            isSkillVisible({
-              availability: skillAvailability,
-              override: override.get(`${botId}\n${key}`),
-            }),
-          ),
+          visibleBotIds: bots
+            .filter((bot) =>
+              isSkillVisible({
+                availability: skillAvailability,
+                override: override.get(`${bot.id}\n${key}`),
+                sharedBot: bot.visibility !== "private",
+              }),
+            )
+            .map((bot) => bot.id),
         };
       },
     };

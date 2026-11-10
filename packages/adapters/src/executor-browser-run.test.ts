@@ -105,8 +105,10 @@ async function runWithDecisionProvider(
       }),
     },
     bot: {
+      findFirst: vi.fn(async () => ({ visibility: "private" })),
       findUniqueOrThrow: vi.fn(async () => ({
         id: run.botId,
+        userId: "user-1",
         name: "Assistant",
         computerId: "computer-1",
         computer: { id: "computer-1", scope: "dedicated" },

@@ -25,6 +25,7 @@ import { releaseBotScreen } from "./computer-lifecycle.js";
 import { toComputerRef } from "./computer-support.js";
 import { checkpointAndRecordComputerWorkspace } from "./computer-workspace.js";
 import { resolveAgentHomePath } from "./home.js";
+import { botSkillsRoot } from "./skill-store.js";
 import type { WorkerLifecycle } from "./worker-lifecycle.js";
 
 export function confirmSpawnedBotName(confirmName: string, botName: string) {
@@ -467,6 +468,12 @@ export async function destroyBot(
       recursive: true,
       force: true,
     }).catch(() => undefined);
+  }
+  // A shared bot's copy of its owner's skills goes with it; account deletion goes through here too.
+  if (deps.dataDir) {
+    await rm(botSkillsRoot(deps.dataDir, bot), { recursive: true, force: true }).catch(
+      () => undefined,
+    );
   }
   const artifactStore = deps.artifacts;
   if (artifactStore) {

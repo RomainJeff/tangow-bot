@@ -1,4 +1,4 @@
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type {
@@ -8,6 +8,7 @@ import type {
   JobPublisher,
   SandboxProvider,
 } from "@rakazo/adapter-kit";
+import { buildSkillMd } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import { clearThread } from "@rakazo/db";
 import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
@@ -26,6 +27,7 @@ import {
 import { checkpointComputerWorkspace } from "./computer-workspace.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { LocalAgentHomeStore } from "./home.js";
+import { botSkillsRoot, skillDirName, userSkillsRoot, writeUserSkill } from "./skill-store.js";
 import { workerFixture } from "./worker-fixture.test-support.js";
 
 vi.mock("../../db/src/sessions.js", async () =>
@@ -62,6 +64,7 @@ describe("computer provisioning", () => {
       updatedAt: new Date("2024-01-01T00:00:00.000Z"),
     };
     const prisma = {
+      bot: { findFirst: vi.fn(async () => null) },
       computer: {
         findUniqueOrThrow: vi.fn(async () => ({ ...computerRow })),
         updateMany: vi.fn(async (args) => {
@@ -170,6 +173,7 @@ describe("computer provisioning", () => {
       updatedAt: new Date("2024-01-01T00:00:00.000Z"),
     };
     const prisma = {
+      bot: { findFirst: vi.fn(async () => null) },
       computer: {
         findUniqueOrThrow: vi.fn(async () => ({ ...row })),
         updateMany,
@@ -282,6 +286,7 @@ describe("computer provisioning", () => {
       },
     );
     const prisma = {
+      bot: { findFirst: vi.fn(async () => null) },
       computer: {
         findUniqueOrThrow: vi.fn(async () => ({ ...row })),
         updateMany,
@@ -325,6 +330,7 @@ describe("computer provisioning", () => {
     const ttlMs = 5 * 60_000;
     const updateMany = vi.fn();
     const prisma = {
+      bot: { findFirst: vi.fn(async () => null) },
       computer: {
         findUniqueOrThrow: vi.fn(async () => ({
           id: "computer-1",
@@ -377,6 +383,7 @@ describe("computer provisioning", () => {
     const nowMs = Date.parse("2024-06-01T12:00:00.000Z");
     const updateMany = vi.fn();
     const prisma = {
+      bot: { findFirst: vi.fn(async () => null) },
       computer: {
         findUniqueOrThrow: vi.fn(async () => ({
           id: "computer-1",
@@ -439,6 +446,7 @@ describe("computer provisioning", () => {
     };
     let reads = 0;
     const prisma = {
+      bot: { findFirst: vi.fn(async () => null) },
       computer: {
         findUniqueOrThrow: vi.fn(async () => {
           reads += 1;
@@ -498,6 +506,7 @@ describe("computer provisioning", () => {
     );
     const findUniqueOrThrow = vi.fn(async () => ({ ...row }));
     const prisma = {
+      bot: { findFirst: vi.fn(async () => null) },
       computer: { findUniqueOrThrow, updateMany },
     } as unknown as PrismaClient;
     const sandbox = new FakeSandboxProvider();
@@ -556,6 +565,7 @@ describe("computer provisioning", () => {
       },
     );
     const prisma = {
+      bot: { findFirst: vi.fn(async () => null) },
       computer: {
         findUniqueOrThrow: vi.fn(async () => ({ ...row })),
         updateMany,
@@ -625,6 +635,7 @@ describe("computer provisioning", () => {
     const updateMany = vi.fn();
     const findUniqueOrThrow = vi.fn(async () => ({ ...row }));
     const prisma = {
+      bot: { findFirst: vi.fn(async () => null) },
       computer: {
         findUniqueOrThrow,
         updateMany,
@@ -679,6 +690,7 @@ describe("computer provisioning", () => {
     };
     const updateMany = vi.fn();
     const prisma = {
+      bot: { findFirst: vi.fn(async () => null) },
       computer: {
         findUniqueOrThrow: vi.fn(async () => ({ ...row })),
         updateMany,
@@ -755,6 +767,7 @@ describe("computer provisioning", () => {
       },
     );
     const prisma = {
+      bot: { findFirst: vi.fn(async () => null) },
       computer: {
         findUniqueOrThrow: vi.fn(async () => ({ ...row })),
         updateMany,
@@ -823,6 +836,7 @@ describe("computer provisioning", () => {
         fresh: true,
       };
       const prisma = {
+        bot: { findFirst: vi.fn(async () => null) },
         computer: {
           findUniqueOrThrow: vi.fn().mockResolvedValue(original),
           updateMany:
@@ -908,6 +922,7 @@ describe("computer provisioning", () => {
       fresh: false,
     };
     const prisma = {
+      bot: { findFirst: vi.fn(async () => null) },
       computer: {
         findUniqueOrThrow: vi.fn().mockResolvedValue(original),
         update: vi.fn(),
@@ -969,6 +984,7 @@ describe("computer provisioning", () => {
       const stop = vi.spyOn(sandbox, "stop");
       const saved = new TextEncoder().encode("saved work");
       const prisma = {
+        bot: { findFirst: vi.fn(async () => null) },
         computer: {
           findUniqueOrThrow: vi.fn().mockResolvedValue({
             id: "computer-1",
@@ -1050,6 +1066,7 @@ describe("computer provisioning", () => {
     const releaseScreen = vi.fn().mockResolvedValue(undefined);
     const prepare = vi.fn().mockRejectedValue(new Error("provider preparation failed"));
     const prisma = {
+      bot: { findFirst: vi.fn(async () => null) },
       computer: {
         findUniqueOrThrow: vi.fn().mockResolvedValue({
           id: "computer-1",
@@ -1113,6 +1130,7 @@ describe("computer provisioning", () => {
       .mockResolvedValueOnce({ count: 0 })
       .mockResolvedValueOnce({ count: 0 });
     const prisma = {
+      bot: { findFirst: vi.fn(async () => null) },
       computer: {
         findUniqueOrThrow: vi.fn().mockResolvedValue({
           id: "computer-1",
@@ -1173,6 +1191,7 @@ describe("computer provisioning", () => {
     };
     const updateMany = vi.fn().mockResolvedValue({ count: 1 });
     const prisma = {
+      bot: { findFirst: vi.fn(async () => null) },
       computer: {
         findUniqueOrThrow: vi.fn().mockResolvedValue({
           id: "computer-1",
@@ -1244,6 +1263,7 @@ describe("computer provisioning", () => {
         ? vi.fn().mockRejectedValue(new Error("provider preparation failed"))
         : vi.fn().mockResolvedValue(undefined);
       const prisma = {
+        bot: { findFirst: vi.fn(async () => null) },
         computer: {
           findUniqueOrThrow: vi.fn().mockResolvedValue({
             id: "computer-1",
@@ -1818,6 +1838,55 @@ describe("a shared bot's dedicated computer", () => {
       await database.close();
     }
   });
+
+  it("mounts the skills its owner turned on for it, whoever runs it", async () => {
+    const database = await openPgliteDatabase();
+    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-shared-skills-"));
+    try {
+      const { prisma } = database;
+      const fixture = workerFixture(prisma);
+      await fixture.seedOwner();
+      const spaceId = await fixture.seedSpace();
+      const computer = await fixture.seedComputer(spaceId, { scope: "dedicated", kind: "fake" });
+      const bot = await fixture.seedBot(spaceId, computer.id);
+      await prisma.bot.update({ where: { id: bot.id }, data: { visibility: "space" } });
+      const library = (userId: string) => userSkillsRoot(dataDir, { spaceId, userId });
+      const skill = (name: string) => ({
+        name,
+        content: buildSkillMd({ name, description: "d", body: "" }),
+      });
+      await writeUserSkill(library(bot.userId), skill("Release steps"), "create");
+      await writeUserSkill(library(bot.userId), skill("Expenses"), "create");
+      await writeUserSkill(library("member-1"), skill("Dana's own"), "create");
+      await prisma.botSkill.create({
+        data: { spaceId, userId: bot.userId, botId: bot.id, skillKey: "user:release steps" },
+      });
+      const sandbox = new FakeSandboxProvider();
+      const provision = vi.spyOn(sandbox as SandboxProvider, "provision");
+      const deps = {
+        prisma,
+        sandbox,
+        home: new LocalAgentHomeStore(path.join(dataDir, "homes")),
+        jobs: {} as JobPublisher,
+        events: {} as ThreadEvents,
+        dataDir,
+      };
+      const runFor = (userId: string) =>
+        provisionComputer(deps, computer.id, { ...context, spaceId, userId, botId: bot.id });
+
+      await runFor(bot.userId);
+      await runFor("member-1");
+
+      expect(provision.mock.calls.map(([request]) => request.skillsBotId)).toEqual([
+        bot.id,
+        bot.id,
+      ]);
+      expect(await readdir(botSkillsRoot(dataDir, bot))).toEqual([skillDirName("Release steps")]);
+    } finally {
+      await database.close();
+      await rm(dataDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("computer replacement", () => {
@@ -1867,6 +1936,7 @@ describe("computer replacement", () => {
       .mockResolvedValue({ count: 1 });
     const update = vi.fn().mockResolvedValue({});
     const prisma = {
+      bot: { findFirst: vi.fn(async () => null) },
       computer: { findUniqueOrThrow, updateMany, update },
       computerExecutionLease: { deleteMany: vi.fn().mockResolvedValue({ count: 1 }) },
       run: { findFirst: vi.fn().mockResolvedValue(null) },
@@ -2661,6 +2731,7 @@ describe("computer replacement", () => {
         updatedAt: new Date("2024-01-01T00:00:00.000Z"),
       });
     const prisma = {
+      bot: { findFirst: vi.fn(async () => null) },
       computer: { findUniqueOrThrow, updateMany, update },
       run: { findFirst: vi.fn().mockResolvedValue(null) },
     } as unknown as PrismaClient;
@@ -2758,6 +2829,7 @@ describe("computer replacement", () => {
     const updateMany = vi.fn().mockResolvedValue({ count: 1 });
     const update = vi.fn().mockResolvedValue({});
     const prisma = {
+      bot: { findFirst: vi.fn(async () => null) },
       computer: { findUniqueOrThrow, updateMany, update },
       run: { findFirst: vi.fn().mockResolvedValue(null) },
     } as unknown as PrismaClient;

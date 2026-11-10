@@ -13,6 +13,11 @@ test("a bot shared with one person gives them their own thread until it is unsha
   await rpc(page, "spaces/rename", { spaceId, name: "Studio" });
   const { url: inviteUrl } = await rpc<{ url: string }>(page, "spaces/createInvite", { spaceId });
   await createNamedBot(page, "Release notes");
+  await rpc(page, "agentSkills/create", {
+    name: "Changelog",
+    description: "Write the changelog",
+    body: "Steps",
+  });
 
   const guestContext = await browser.newContext({ baseURL });
   const guest = await guestContext.newPage();
@@ -36,11 +41,18 @@ test("a bot shared with one person gives them their own thread until it is unsha
   const filesNote = sheet.getByText(
     "Everyone who uses this bot can see its files and browser sign-ins.",
   );
+  const skillsHeading = sheet.getByRole("heading", { name: "Skills this bot can use" });
+  const changelog = sheet.getByRole("checkbox", { name: "Changelog" });
   await expect(filesNote).toHaveCount(0);
+  await expect(skillsHeading).toHaveCount(0);
   await grace.click();
   await expect(grace).toBeChecked();
   await expect(filesNote).toBeVisible();
   await expect(sheet.getByRole("switch", { name: "Everyone in Studio" })).not.toBeChecked();
+  await expect(skillsHeading).toBeVisible();
+  await expect(changelog).not.toBeChecked();
+  await changelog.click();
+  await expect(changelog).toBeChecked();
   await captureScreenshot(page, testInfo, "share-sheet");
   await page.setViewportSize({ width: 390, height: 844 });
   await captureScreenshot(page, testInfo, "share-sheet-phone");
