@@ -1695,6 +1695,33 @@ describeWithDatabase("API authorization and resource isolation", () => {
       ),
     ).resolves.toMatchObject({ status: 404 });
 
+    // Their copy keeps the owner's endpoint: only its credentials change. The owner's server
+    // stays theirs to edit.
+    const repoint = (cookie: string, id: string) =>
+      raw(
+        app,
+        cookie,
+        "mcp/servers/update",
+        {
+          id,
+          config: {
+            slug: "linear",
+            name: "Linear",
+            transport: "streamable_http",
+            endpoint: "https://mcp.elsewhere.example/mcp",
+          },
+        },
+        space,
+      );
+    await expect(repoint(dana.cookie, mine.id)).resolves.toMatchObject({ status: 400 });
+    expect(await handles.prisma.mcpServer.findUnique({ where: { id: mine.id } })).toMatchObject({
+      endpoint: "https://mcp.linear.example/mcp",
+    });
+    await expect(
+      rpc(app, dana.cookie, "mcp/servers/update", { id: mine.id, secret: "dana-token" }, space),
+    ).resolves.toMatchObject({ hasSecret: true });
+    await expect(repoint(owner, linear.id)).resolves.toMatchObject({ status: 200 });
+
     await rpc(app, owner, "mcp/servers/remove", { id: linear.id }, space);
     await expect(
       raw(app, dana.cookie, "bots/addDeclaredMcp", { botId: bot.id, serverId: linear.id }, space),

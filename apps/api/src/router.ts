@@ -3231,6 +3231,18 @@ export function createRouter(deps: RouterDeps) {
               },
             });
             if (!existing) throw new IsolationError();
+            // A copy of a server a shared bot declares keeps its owner's endpoint and command:
+            // only its credentials change, so a member can't point the bot somewhere else.
+            if (
+              "config" in input &&
+              (await tx.botMcpServer.count({
+                where: { serverId: existing.id, declaredServerId: { not: null } },
+              }))
+            ) {
+              throw new ORPCError("BAD_REQUEST", {
+                message: "Only the credentials of this server can change",
+              });
+            }
             const existingSecret = existing.secretId
               ? await tx.secret.findFirst({
                   where: {
