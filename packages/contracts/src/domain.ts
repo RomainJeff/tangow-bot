@@ -773,6 +773,27 @@ export const McpServerSchema = z.object({
 });
 export type McpServer = z.infer<typeof McpServerSchema>;
 
+/**
+ * The public half of an MCP server a shared bot declares, as a member sees it: header and
+ * environment names only, never a value, token or secret.
+ */
+export const DeclaredMcpSchema = McpServerSchema.pick({
+  slug: true,
+  name: true,
+  description: true,
+  transport: true,
+  endpoint: true,
+  command: true,
+  args: true,
+  headerKeys: true,
+  envKeys: true,
+}).extend({
+  serverId: Id,
+  /** The tools the owner allows on the bot; null allows them all. */
+  allowedTools: z.array(z.string()).nullable(),
+});
+export type DeclaredMcp = z.infer<typeof DeclaredMcpSchema>;
+
 export const BotMcpServerSchema = z.object({
   id: Id,
   botId: Id,

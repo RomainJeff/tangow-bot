@@ -34,7 +34,6 @@ import {
   acquireComputerExecutionLease,
   applyTeachingDesktopInput,
   archiveBot,
-  buildMcpCredentialBlob,
   buildModelConnectPlaintext,
   ComputerBusyError,
   cancelComputerRunWork,
@@ -95,7 +94,6 @@ import type {
   ComputerMode,
   ComputerStatus,
   ComputerUpdateAllResult,
-  McpServer,
   Me,
   SpaceNavigation,
 } from "@rakazo/contracts";
@@ -203,10 +201,12 @@ import {
   persistDecisionProviderConfig,
   serializeSpaceDecisionConfig,
 } from "./decision-provider-config.js";
+import { addDeclaredMcp, getDeclaredMcp } from "./declared-mcp.js";
 import { searchIntegrationCatalog } from "./integration-catalog.js";
 import type { LinkPreviewApiDeps } from "./link-preview.js";
 import { previewLinkForComposer, removeMessageLinkPreview } from "./link-preview.js";
 import { buildMcpUpdateMaterial } from "./mcp-material.js";
+import { createMcpServer, mcpServerDto } from "./mcp-servers.js";
 import {
   disconnectMemoryProvider,
   persistMemoryProviderConfig,
@@ -433,57 +433,6 @@ async function purgeCompactedHistoryMemory(
   }
 }
 
-function mcpServerDto(
-  row: {
-    id: string;
-    spaceId: string;
-    slug: string;
-    name: string;
-    description: string;
-    transport: string;
-    endpoint: string | null;
-    command: string | null;
-    args: unknown;
-    env: unknown;
-    headers: unknown;
-    secretId: string | null;
-    enabled: boolean;
-    revision: number;
-    createdAt: Date;
-    updatedAt: Date;
-  },
-  oauthStatus: McpServer["oauthStatus"] = "none",
-): McpServer {
-  const args = Array.isArray(row.args)
-    ? row.args.filter((item): item is string => typeof item === "string")
-    : [];
-  const envKeys =
-    row.env && typeof row.env === "object" && !Array.isArray(row.env) ? Object.keys(row.env) : [];
-  const headerKeys =
-    row.headers && typeof row.headers === "object" && !Array.isArray(row.headers)
-      ? Object.keys(row.headers)
-      : [];
-  return {
-    id: row.id,
-    spaceId: row.spaceId,
-    slug: row.slug,
-    name: row.name,
-    description: row.description,
-    transport: row.transport as McpServer["transport"],
-    endpoint: row.endpoint,
-    command: row.command,
-    args,
-    envKeys,
-    headerKeys,
-    hasSecret: row.secretId !== null,
-    oauthStatus,
-    enabled: row.enabled,
-    revision: row.revision,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  };
-}
-
 function connectionContext(
   actor: Pick<Actor, "spaceId" | "userId">,
   operationId: string,
@@ -561,6 +510,8 @@ export interface RouterDeps {
     updaterToken?: string;
     imageTag?: string;
     integrationsCatalogUrl?: string;
+    mcpStdioEnabled?: boolean;
+    mcpStdioAllowedCommands?: string[];
   };
 }
 
@@ -622,7 +573,12 @@ export function createRouter(deps: RouterDeps) {
       }
     });
   const repos = createRepos(deps.prisma);
-  const onboardingDeps = { prisma: deps.prisma, events: deps.events, connectors: deps.connectors };
+  const onboardingDeps = {
+    prisma: deps.prisma,
+    events: deps.events,
+    connectors: deps.connectors,
+    mcpStdio: deps.env,
+  };
   const mcpOAuth = deps.mcpOAuth ?? new McpOAuthBroker(deps.prisma, deps.secrets);
   const groupRepos = createGroupRepos(deps.prisma);
   const taughtSkills = createTaughtSkillsService({
@@ -1579,6 +1535,14 @@ export function createRouter(deps: RouterDeps) {
         // A shared bot runs on its own computer, restarted without the owner's /workspace/shared.
         const bot = await repos.getBot(context.actor, input.botId);
         return switchBotComputer(context.actor, bot, "dedicated", share);
+      }),
+      declaredMcp: authed.bots.declaredMcp.handler(({ context, input }) =>
+        getDeclaredMcp(deps.prisma, context.actor, input, deps.env),
+      ),
+      addDeclaredMcp: authed.bots.addDeclaredMcp.handler(async ({ context, input }) => {
+        const row = await addDeclaredMcp(deps, context.actor, input, deps.env);
+        await markAppConnected(onboardingDeps, context.actor, input.botId, input.serverId, "mcp");
+        return mcpServerDto(row, await mcpOAuth.statusFor(row, context.actor));
       }),
     },
     groups: {
@@ -3251,47 +3215,7 @@ export function createRouter(deps: RouterDeps) {
           );
         }),
         create: authed.mcp.servers.create.handler(async ({ context, input }) => {
-          const secretPayload = buildMcpCredentialBlob(input);
-          const stored = secretPayload
-            ? await deps.secrets.put(
-                secretPayload,
-                computerContext(context.actor, "mcp", "mcp.create"),
-              )
-            : null;
-          const row = await deps.prisma.$transaction(async (tx) => {
-            if (stored) {
-              await tx.secret.create({
-                data: {
-                  id: stored.id,
-                  userId: context.actor.userId,
-                  spaceId: context.actor.spaceId,
-                  kind: "mcp",
-                  ciphertext: stored.ciphertext,
-                },
-              });
-            }
-            return tx.mcpServer.create({
-              data: {
-                spaceId: context.actor.spaceId,
-                userId: context.actor.userId,
-                slug: input.slug,
-                name: input.name,
-                description: input.description,
-                transport: input.transport,
-                endpoint: "endpoint" in input ? input.endpoint : null,
-                command: "command" in input ? input.command : null,
-                args: ("args" in input ? input.args : []) as Prisma.InputJsonValue,
-                env: ("env" in input
-                  ? Object.fromEntries(Object.keys(input.env).map((key) => [key, true]))
-                  : {}) as Prisma.InputJsonValue,
-                headers: ("headers" in input
-                  ? Object.fromEntries(Object.keys(input.headers).map((key) => [key, true]))
-                  : {}) as Prisma.InputJsonValue,
-                secretId: stored?.id,
-                enabled: input.enabled,
-              },
-            });
-          });
+          const row = await createMcpServer(deps, context.actor, input);
           return mcpServerDto(row, await mcpOAuth.statusFor(row, context.actor));
         }),
         update: authed.mcp.servers.update.handler(async ({ context, input }) => {

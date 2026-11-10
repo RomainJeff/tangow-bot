@@ -13,6 +13,7 @@ import {
   type ThreadEvents,
   threadEventSeq,
 } from "@rakazo/db";
+import { type McpStdioRule, missingDeclaredMcpCards } from "./declared-mcp.js";
 import { resolveThreadTarget, type ThreadTarget } from "./thread-target.js";
 
 /**
@@ -25,6 +26,7 @@ type OnboardingDeps = {
   prisma: PrismaClient;
   events: ThreadEvents;
   connectors: ConnectorRegistry;
+  mcpStdio?: McpStdioRule;
 };
 
 type FocusOption = {
@@ -381,8 +383,8 @@ async function offeredApps(db: PrismaClient | Prisma.TransactionClient, sessionI
 
 /**
  * On a bot shared with them, a member's message brings a card for each app the owner declared that
- * the member has not connected. Each app is offered once in the thread, so a member who leaves it
- * unconnected is not asked again.
+ * the member has not connected, and each declared MCP server they have not added. Each is offered
+ * once in the thread, so a member who leaves it aside is not asked again.
  */
 export async function offerMissingApps(
   deps: OnboardingDeps,
@@ -397,22 +399,43 @@ export async function offerMissingApps(
     threadId: target.threadId,
     sessionId: bot.thread.sessionId,
   };
+  if (botConnectors(bot.connectors).length === 0) return;
+  const offered = await offeredApps(deps.prisma, thread.sessionId);
+  const [apps, servers] = await Promise.all([
+    missingAppCards(deps, actor, bot, offered),
+    missingDeclaredMcpCards(deps.prisma, actor, bot.id, deps.mcpStdio ?? {}),
+  ]);
+  const cards = [...apps, ...servers].filter((card) => !offered.has(appConnectAnswerId(card)));
+  if (cards.length === 0) return;
+  const seq = await deps.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await tx.$executeRaw`SELECT id FROM threads WHERE id = ${thread.threadId} FOR UPDATE`;
+    const offeredNow = await offeredApps(tx, thread.sessionId);
+    const fresh = cards.filter((card) => !offeredNow.has(appConnectAnswerId(card)));
+    return fresh.length > 0 ? postInTransaction(tx, thread, fresh) : null;
+  });
+  if (seq !== null) await deps.events.notify(thread.threadId, seq);
+}
+
+/** A card for each declared app the actor has not connected and was not offered yet. */
+async function missingAppCards(
+  deps: OnboardingDeps,
+  actor: Actor,
+  bot: { id: string; connectors: Prisma.JsonValue },
+  offered: Set<string>,
+): Promise<AppConnectBlock[]> {
   const declared = botConnectors(bot.connectors).flatMap((need) =>
     need.kind === "app" ? [need] : [],
   );
-  if (declared.length === 0) return;
-  const [connected, offered] = await Promise.all([
-    deps.prisma.connection.findMany({
-      where: { spaceId: actor.spaceId, userId: actor.userId, status: "connected" },
-      select: { connectorId: true, provider: true },
-    }),
-    offeredApps(deps.prisma, thread.sessionId),
-  ]);
+  if (declared.length === 0) return [];
+  const connected = await deps.prisma.connection.findMany({
+    where: { spaceId: actor.spaceId, userId: actor.userId, status: "connected" },
+    select: { connectorId: true, provider: true },
+  });
   const have = new Set([...connected.map(appConnectAnswerId), ...offered]);
   const missing = declared.filter((need) => !have.has(appConnectAnswerId(need)));
-  if (missing.length === 0) return;
+  if (missing.length === 0) return [];
   const catalog = await appCatalog(deps, actor, bot.id, "onboarding.missingApps");
-  const cards = missing.flatMap((need): AppConnectBlock[] => {
+  return missing.flatMap((need): AppConnectBlock[] => {
     const entry = catalog.find(
       (item) =>
         (item.connectorId ?? "composio") === need.connectorId &&
@@ -431,14 +454,6 @@ export async function offerMissingApps(
       },
     ];
   });
-  if (cards.length === 0) return;
-  const seq = await deps.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    await tx.$executeRaw`SELECT id FROM threads WHERE id = ${thread.threadId} FOR UPDATE`;
-    const offeredNow = await offeredApps(tx, thread.sessionId);
-    const fresh = cards.filter((card) => !offeredNow.has(appConnectAnswerId(card)));
-    return fresh.length > 0 ? postInTransaction(tx, thread, fresh) : null;
-  });
-  if (seq !== null) await deps.events.notify(thread.threadId, seq);
 }
 
 export async function markAppConnected(
