@@ -197,13 +197,26 @@ export async function copySharedSkills(
   try {
     for (const name of names) {
       // Plain files and folders only, as the store reads them: a link is never followed.
-      await cp(path.join(from, name), path.join(staging, name), {
+      const copied = await cp(path.join(from, name), path.join(staging, name), {
         recursive: true,
         filter: async (source) => {
           const info = await lstat(source);
           return info.isDirectory() || isStorableFile(info, { hardLinks: true });
         },
-      });
+      }).then(
+        () => true,
+        (error: unknown) => {
+          // A skill whose folder is not named after it (renamed from a shell) is listed but has
+          // no folder here; it is left out rather than keep the bot's computer from starting.
+          if (!hasCode(error, "ENOENT")) throw error;
+          getLogger().warn("[skills] shared bot skill left out: its folder has another name", {
+            botId: bot.id,
+            folder: name,
+          });
+          return false;
+        },
+      );
+      if (!copied) continue;
       await rm(path.join(to, name), { recursive: true, force: true });
       await rename(path.join(staging, name), path.join(to, name));
     }

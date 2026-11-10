@@ -24,9 +24,10 @@ import { agentConnectionTools, builtinAgentTools } from "./builtin-tools.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { loadManagedSkills, MANAGED_SKILLS_ROOT } from "./managed-skills.js";
 import { createInMemorySkillLock } from "./skill-lock.js";
-import { listUserSkills, skillDirName, userSkillsRoot } from "./skill-store.js";
+import { botSkillsRoot, listUserSkills, skillDirName, userSkillsRoot } from "./skill-store.js";
 import type { SkillToolDeps } from "./skill-tools.js";
 import {
+  copySharedSkills,
   listAgentSkillRecords,
   readSkillDraft,
   SKILL_TOOL_NAMES,
@@ -415,6 +416,28 @@ describe("skill tools", () => {
     expect(
       await skillReadFromTool(deps, { ...owner, botId: "botA" }, { name: "Everyone" }),
     ).toEqual({ error: "Skill not found." });
+  });
+
+  it("copies a shared bot's skills without the one whose folder has another name", async () => {
+    const root = userSkillsRoot(dataDir, owner);
+    await seed("Release steps", "d");
+    await mkdir(path.join(root, "renamed-in-shell"), { recursive: true });
+    await writeFile(
+      path.join(root, "renamed-in-shell", "SKILL.md"),
+      buildSkillMd({ name: "Expenses", description: "d", body: "" }),
+    );
+    await prisma.botSkill.createMany({
+      data: [
+        { ...owner, botId: "botA", skillKey: "user:release steps", enabled: true },
+        { ...owner, botId: "botA", skillKey: "user:expenses", enabled: true },
+      ],
+    });
+    await prisma.bot.createMany({ data: [{ id: "botA", visibility: "space" }] });
+    const bot = { ...owner, id: "botA" };
+
+    await copySharedSkills(deps, bot);
+
+    expect(await fs.readdir(botSkillsRoot(dataDir, bot))).toEqual([skillDirName("Release steps")]);
   });
 
   it("filters the catalog by bot visibility when botId is given", async () => {
