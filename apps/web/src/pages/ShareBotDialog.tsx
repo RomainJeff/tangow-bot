@@ -32,20 +32,28 @@ type App = { key: string; name: string; need: BotConnector };
 const appKey = (app: { connectorId: string; provider: string }) =>
   `${app.connectorId}:${app.provider}`;
 
-/** The owner's connected apps, one per app however many accounts, named as in the catalog. */
-function connectedApps(rows: Connection[], catalog: ConnectionCatalogItem[]): App[] {
+/**
+ * The owner's connected apps, one per app however many accounts, named as in the catalog, then
+ * the apps already declared, so one the owner has since disconnected can still be unticked.
+ */
+function shareableApps(
+  rows: Connection[],
+  catalog: ConnectionCatalogItem[],
+  declared: BotConnector[],
+): App[] {
   const apps = new Map<string, App>();
-  for (const row of rows) {
-    if (row.status !== "connected" || apps.has(appKey(row))) continue;
+  const add = (need: BotConnector, fallbackName: string) => {
+    if (apps.has(appKey(need))) return;
     const item = catalog.find(
-      (entry) => entry.connectorId === row.connectorId && entry.slug === row.provider,
+      (entry) => entry.connectorId === need.connectorId && entry.slug === need.provider,
     );
-    apps.set(appKey(row), {
-      key: appKey(row),
-      name: item?.name ?? row.displayName,
-      need: { kind: "app", connectorId: row.connectorId, provider: row.provider },
-    });
+    apps.set(appKey(need), { key: appKey(need), name: item?.name ?? fallbackName, need });
+  };
+  for (const row of rows) {
+    if (row.status !== "connected") continue;
+    add({ kind: "app", connectorId: row.connectorId, provider: row.provider }, row.displayName);
   }
+  for (const need of declared) add(need, need.provider);
   return [...apps.values()];
 }
 
@@ -75,8 +83,9 @@ export function ShareBotDialog({
 
   useEffect(() => {
     let live = true;
+    const opening = rpc.bots.sharing({ botId: bot.id });
     Promise.all([
-      rpc.bots.sharing({ botId: bot.id }),
+      opening,
       rpc.spaces.members({ spaceId: bot.spaceId }),
       rpc.agentSkills.list(),
     ]).then(
@@ -88,12 +97,15 @@ export function ShareBotDialog({
       },
       () => live && setError(t`Couldn't load`),
     );
-    // The catalog only names the apps, and can be slow: the sheet doesn't wait for it.
+    // The catalog only names the apps, and can be slow: the sheet doesn't wait for it. The apps
+    // declared on opening stay listed, so unticking one never makes it vanish.
     Promise.all([
       rpc.connections.list(),
       rpc.connections.catalog({}).catch(() => [] as ConnectionCatalogItem[]),
+      opening,
     ]).then(
-      ([rows, catalog]) => live && setApps(connectedApps(rows, catalog)),
+      ([rows, catalog, current]) =>
+        live && setApps(shareableApps(rows, catalog, current.connectors)),
       () => undefined,
     );
     return () => {

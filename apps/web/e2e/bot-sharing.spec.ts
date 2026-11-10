@@ -1,3 +1,4 @@
+import type { BotSharing } from "@rakazo/contracts";
 import { captureScreenshot, completeOnboarding, createNamedBot, rpc, signup } from "./helpers";
 import { expect, test } from "./test";
 
@@ -12,13 +13,13 @@ test("a bot shared with one person gives them their own thread until it is unsha
   const { spaceId } = await rpc<{ spaceId: string }>(page, "me", undefined);
   await rpc(page, "spaces/rename", { spaceId, name: "Studio" });
   const { url: inviteUrl } = await rpc<{ url: string }>(page, "spaces/createInvite", { spaceId });
-  await createNamedBot(page, "Release notes");
+  const botId = await createNamedBot(page, "Release notes");
   await rpc(page, "agentSkills/create", {
     name: "Changelog",
     description: "Write the changelog",
     body: "Steps",
   });
-  await rpc(page, "connections/begin", {
+  const ownerGmail = await rpc<{ connectionId: string }>(page, "connections/begin", {
     connectorId: "composio",
     provider: "GMAIL",
     displayName: "Gmail",
@@ -90,8 +91,16 @@ test("a bot shared with one person gives them their own thread until it is unsha
   await expect(page.getByPlaceholder("Message Release notes")).toBeVisible();
   await expect(page.getByText("Hello from Grace")).toHaveCount(0);
 
+  // A declared app the owner has since disconnected stays listed, so it can still be unticked.
+  await rpc(page, "connections/revoke", { connectionId: ownerGmail.connectionId });
   await ownerRow.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Share", exact: true }).click();
+  await expect(gmail).toBeChecked();
+  await gmail.click();
+  await expect(gmail).not.toBeChecked();
+  await expect
+    .poll(async () => (await rpc<BotSharing>(page, "bots/sharing", { botId })).connectors)
+    .toEqual([]);
   await grace.click();
   await expect(grace).not.toBeChecked();
   await expect(filesNote).toHaveCount(0);
