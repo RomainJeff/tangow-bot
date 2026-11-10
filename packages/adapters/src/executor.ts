@@ -2650,6 +2650,24 @@ export function createRunExecutor(deps: ExecutorDeps) {
         const unansweredCalls = new Map<string, string>();
         const logEntry = (draft: SessionEntryDraft) =>
           deps.prisma.$transaction((tx) => deps.sessionLog.append(tx, draft));
+        // Facts this run saved for a shared bot's team: one line says so under its message.
+        const teamFacts: string[] = [];
+        const writeTeamSaveLine = async () => {
+          if (teamFacts.length === 0) return;
+          const seq = await deps.prisma.$transaction(async (tx) => {
+            await deps.sessionLog.append(tx, {
+              type: "memory.revised",
+              sessionId: runLog.sessionId,
+              botId: bot.id,
+              runId,
+              payload: { facts: teamFacts, team: true },
+            });
+            return threadEventSeq(tx, thread.id);
+          });
+          await deps.events.notify(thread.id, seq).catch((error) => {
+            getLogger().error("team memory line", error);
+          });
+        };
         const announcesTools = runtime.describe().capabilities.streaming;
         const toolAnnouncements = new Map<string, ReturnType<typeof deferred>>();
         const toolAnnounced = (executionId: string) => {
@@ -4434,6 +4452,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               },
               team ? { ...context, userId: bot.userId } : context,
             );
+            if (team) teamFacts.push(fact);
             return finish({ ok: true });
           }
           if (name === "web_search") {
@@ -6730,6 +6749,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           });
           if (!completed) return;
           if (savedSkill) await writeRunSkillLines(runId);
+          await writeTeamSaveLine().catch((error) => getLogger().error("team memory line", error));
           // After the commit, never inside it. Delegated runs report back to the ordering bot:
           // no preview for them.
           if (run.trigger !== "bot_message") {
@@ -6822,6 +6842,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           });
           if (!failed) return;
           if (savedSkill) await writeRunSkillLines(runId);
+          await writeTeamSaveLine().catch((error) => getLogger().error("team memory line", error));
           await settleStrandedCards();
           if (failed.continuationRunId) {
             await deps.jobs

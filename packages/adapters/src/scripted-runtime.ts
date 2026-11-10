@@ -520,6 +520,13 @@ export function inferScript(
       },
     ];
   }
+  if (lower.includes("remember for the team")) {
+    const fact = prompt.replace(/^.*remember for the team( that)?\s*/i, "").trim() || prompt;
+    return [
+      { toolCalls: [{ name: "remember", args: { content: fact, team: true } }] },
+      { assistant: "noted for the team.", complete: true },
+    ];
+  }
   if (lower.includes("remember")) {
     return [
       {

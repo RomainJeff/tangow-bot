@@ -3865,6 +3865,10 @@ msgstr "Save"
 msgid "Saved"
 msgstr "Saved"
 
+#: src/pages/shell/thread-row.tsx:479
+msgid "Saved for the team"
+msgstr "Saved for the team"
+
 #: src/pages/ScratchpadSection.tsx:53
 #: src/pages/ScratchpadSection.tsx:75
 msgid "Saved, but list refresh failed"
