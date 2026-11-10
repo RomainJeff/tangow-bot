@@ -396,6 +396,9 @@ async function truncateThreadInTransaction(
   tx: Prisma.TransactionClient,
   input: TruncateThreadInput,
 ): Promise<TruncateThreadResult> {
+  // Thread row first, as every send and finalizeRun take it: a group's update below writes no
+  // column, so Prisma only reads the row and the person rows would be locked ahead of it.
+  await tx.$queryRaw`SELECT id FROM threads WHERE id = ${input.threadId} FOR UPDATE`;
   const thread = await tx.thread.update({
     where: {
       id: input.threadId,
