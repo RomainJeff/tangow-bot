@@ -1,7 +1,7 @@
 {
   "name": "@rakazo/desktop-new",
   "productName": "Tangow",
-  "version": "2026.11.3",
+  "version": "2026.11.4",
   "license": "Apache-2.0",
   "type": "module",
   "main": "dist/main.js",
