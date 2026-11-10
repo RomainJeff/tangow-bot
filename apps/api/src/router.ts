@@ -4825,8 +4825,13 @@ export function createRouter(deps: RouterDeps) {
           signal: new AbortController().signal,
         };
         const [memory, routines, files, history] = await Promise.all([
+          // The owner's own memory of the bot and its team memory, never a member's.
           deps.prisma.memoryDocument.findMany({
-            where: { botId: input.botId, spaceId: context.actor.spaceId },
+            where: {
+              botId: input.botId,
+              spaceId: context.actor.spaceId,
+              userId: context.actor.userId,
+            },
           }),
           deps.prisma.routine.findMany({
             where: {
@@ -4860,7 +4865,10 @@ export function createRouter(deps: RouterDeps) {
             description: bot.description,
             instructions: bot.instructions,
           },
-          memory: memory.map((m) => ({ path: m.path, content: m.content })),
+          memory: memory.map((m) => ({
+            path: m.scope === "team" ? `team/${m.path}` : m.path,
+            content: m.content,
+          })),
           routines: routines.map((r) => ({
             name: r.name,
             prompt: r.prompt,

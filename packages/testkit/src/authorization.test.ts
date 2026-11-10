@@ -1390,6 +1390,49 @@ describeWithDatabase("API authorization and resource isolation", () => {
     expect(JSON.stringify(exported)).not.toContain("Dana's");
   });
 
+  it("keeps each person's memory of a shared bot their own, and exports the owner's and the team's", async () => {
+    const { owner, space, dana, bot } = await sharedBotSpace("bot-share-memory");
+    await rpc(app, owner, "bots/share", { botId: bot.id, visibility: "space", userIds: [] }, space);
+    const ownerId = (await rpc<Actor>(app, owner, "me", {}, space)).userId;
+    const row = (userId: string, scope: string, content: string) =>
+      handles.prisma.memoryDocument.create({
+        data: { spaceId: space, botId: bot.id, userId, scope, path: "MEMORY.md", content },
+      });
+    // What runs on the bot saved: the team's under the owner, and Dana's own.
+    const team = await row(ownerId, "team", "- Team fact");
+    await row(dana.userId, "bot", "- Dana's private fact");
+    const ownerBot = await handles.prisma.memoryDocument.findFirstOrThrow({
+      where: { botId: bot.id, userId: ownerId, scope: "bot" },
+    });
+
+    const listed = async (cookie: string) =>
+      (
+        await rpc<Array<{ content: string }>>(app, cookie, "memory/list", { botId: bot.id }, space)
+      ).map((doc) => doc.content);
+    expect(await listed(dana.cookie)).toEqual(["- Dana's private fact"]);
+    expect(await listed(owner)).not.toContain("- Dana's private fact");
+    for (const documentId of [ownerBot.id, team.id]) {
+      await expect(
+        raw(app, dana.cookie, "memory/update", { documentId, content: "overwritten" }, space),
+      ).resolves.toMatchObject({ status: 404 });
+    }
+
+    const exported = await rpc<{ memory: Array<{ path: string; content: string }> }>(
+      app,
+      owner,
+      "export/bot",
+      { botId: bot.id },
+      space,
+    );
+    expect(exported.memory).toEqual(
+      expect.arrayContaining([
+        { path: "MEMORY.md", content: ownerBot.content },
+        { path: "team/MEMORY.md", content: "- Team fact" },
+      ]),
+    );
+    expect(exported.memory).toHaveLength(2);
+  });
+
   it("shows each person the status of their own thread with a shared bot", async () => {
     const { owner, space, dana, bot, listed } = await sharedBotSpace("bot-share-status");
     await rpc(app, owner, "bots/share", { botId: bot.id, visibility: "space", userIds: [] }, space);
