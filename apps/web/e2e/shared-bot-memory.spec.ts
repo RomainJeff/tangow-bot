@@ -70,10 +70,21 @@ test("a member's run saves for a shared bot's team, and its owner reads and edit
   await expect(teamRow).toBeVisible();
   await captureScreenshot(page, testInfo, "team-memory-section-phone");
 
-  // A private bot has no team memory to show.
+  // Unsharing keeps what the team saved, on screen as in the prompt.
   await rpc(page, "bots/share", { botId, visibility: "private", userIds: [] });
   await page.reload();
   await openBotTab(page, "Knowledge");
+  await expect(teamRow).toBeVisible();
+
+  // A private bot that never had team memory shows no section for it.
+  await createNamedBot(page, "Drafts");
+  const teamRead = page.waitForResponse(
+    (response) =>
+      response.url().includes("/rpc/memory/list") &&
+      Boolean(response.request().postData()?.includes('"team"')),
+  );
+  await openBotTab(page, "Knowledge");
+  await teamRead;
   await expect(knowledge.getByTestId("bot-knowledge-memory")).toBeVisible();
   await expect(team).toHaveCount(0);
 });

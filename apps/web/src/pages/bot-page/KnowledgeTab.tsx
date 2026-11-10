@@ -31,7 +31,7 @@ export function KnowledgeTab({
 }) {
   const { t } = useLingui();
   const { bot } = page;
-  const shared = useShared(bot.id, epoch);
+  const showsTeam = useShowsTeamMemory(bot.id, epoch);
   return (
     <div data-testid="bot-knowledge" className="flex flex-col gap-6">
       <KnowledgeGroup label={t`Memory`}>
@@ -45,7 +45,7 @@ export function KnowledgeTab({
           onOpen={(doc) => onOpen({ kind: "memory", documentId: doc.id })}
         />
       </KnowledgeGroup>
-      {shared ? (
+      {showsTeam ? (
         <KnowledgeGroup label={t`Team memory`}>
           <MemoryDocumentList
             key={bot.id}
@@ -79,22 +79,21 @@ export function KnowledgeTab({
   );
 }
 
-/** Whether the bot is shared, so it has team memory beside the owner's own. */
-function useShared(botId: string, epoch: number): boolean {
-  const [shared, setShared] = useState(false);
+/** Team memory shows on a shared bot, and on any bot that still has some: unsharing keeps it. */
+function useShowsTeamMemory(botId: string, epoch: number): boolean {
+  const [shows, setShows] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    rpc.bots
-      .sharing({ botId })
-      .then((sharing) => {
-        if (!cancelled) setShared(sharing.visibility !== "private");
+    Promise.all([rpc.bots.sharing({ botId }), rpc.memory.list({ botId, scope: "team" })])
+      .then(([sharing, team]) => {
+        if (!cancelled) setShows(sharing.visibility !== "private" || team.length > 0);
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
   }, [botId, epoch]);
-  return shared;
+  return shows;
 }
 
 function KnowledgeGroup({
@@ -158,7 +157,7 @@ export function MemoryDetail({
   >({ kind: "loading" });
   useEffect(() => {
     let cancelled = false;
-    // The owner's memory of the bot or, on a shared bot, its team memory.
+    // The owner's memory of the bot, or its team memory.
     rpc.memory
       .list({ botId })
       .then((docs) => {

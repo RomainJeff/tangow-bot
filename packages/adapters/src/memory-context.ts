@@ -13,21 +13,19 @@ type ScopedMemoryDocument = MemorySnapshot["documents"][number] & {
 };
 
 /**
- * The person's own memory of the bot and their user memory, and on a shared bot its team memory,
- * which is stored under the bot's owner.
+ * The person's own memory of the bot and their user memory, and the bot's team memory, stored
+ * under its owner. Team memory is read whenever it exists: unsharing a bot keeps what was saved.
  */
 export async function loadAgentMemoryContext(
   memory: MemoryStore,
-  bot: { id: string; userId: string; visibility: string },
+  bot: { id: string; userId: string },
   context: AdapterContext,
   maxBytes = MAX_AGENT_MEMORY_BYTES,
 ): Promise<string | undefined> {
   const [botMemory, userMemory, teamMemory] = await Promise.all([
     memory.read({ scope: "bot", botId: bot.id }, context),
     memory.read({ scope: "user" }, context),
-    bot.visibility === "private"
-      ? { documents: [] }
-      : memory.read({ scope: "team", botId: bot.id }, { ...context, userId: bot.userId }),
+    memory.read({ scope: "team", botId: bot.id }, { ...context, userId: bot.userId }),
   ]);
   const documents: ScopedMemoryDocument[] = [
     ...botMemory.documents.map((document) => ({ ...document, scope: "bot" as const })),

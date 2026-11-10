@@ -359,8 +359,8 @@ Output one Markdown bullet per fact ("- the fact"), each a single self-contained
 type CompactionThread = {
   id: string;
   botId: string;
-  /** Who owns the bot, and whether it is shared: a shared bot's team memory is the owner's. */
-  bot: { userId: string; visibility: string };
+  /** Who owns the bot: its team memory is stored under them. */
+  bot: { userId: string };
   spaceId: string;
   userId: string;
   sessionId: string;
@@ -699,7 +699,7 @@ export async function compactHistory(
     botId,
     bot: await deps.prisma.bot.findUniqueOrThrow({
       where: { id: botId },
-      select: { userId: true, visibility: true },
+      select: { userId: true },
     }),
     spaceId: thread.spaceId,
     userId: thread.userId,
