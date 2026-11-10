@@ -12,6 +12,7 @@ import {
   shareableApps,
   shareWithPerson,
   shareWithSpace,
+  showsTeamMemory,
 } from "./bot-sharing.js";
 
 const gmail = { kind: "app", connectorId: "composio", provider: "GMAIL" } as const;
@@ -94,5 +95,13 @@ describe("givableSkills", () => {
       skill({ name: "builtin", source: "builtin" }),
     ];
     expect(givableSkills(skills).map((entry) => entry.name)).toEqual(["changelog"]);
+  });
+});
+
+describe("showsTeamMemory", () => {
+  it("shows on a shared bot, and on a private one only while it still has team documents", () => {
+    expect(showsTeamMemory({ visibility: "space" }, [])).toBe(true);
+    expect(showsTeamMemory({ visibility: "private" }, [{}])).toBe(true);
+    expect(showsTeamMemory({ visibility: "private" }, [])).toBe(false);
   });
 });

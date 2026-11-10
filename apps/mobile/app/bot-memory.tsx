@@ -51,7 +51,8 @@ export default function BotMemoryScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    rpc<MemoryDocument[]>("memory/list", { botId, scope: "bot" })
+    // The owner's memory of the bot, or its team memory.
+    rpc<MemoryDocument[]>("memory/list", { botId })
       .then((docs) => {
         if (cancelled) return;
         const doc = docs.find((item) => item.id === documentId);

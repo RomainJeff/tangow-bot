@@ -75,3 +75,11 @@ export function declareApp(sharing: BotSharing, app: ShareableApp, checked: bool
     : sharing.connectors.filter((need) => connectorKey(need) !== app.key);
   return { ...sharing, connectors };
 }
+
+/** Team memory shows on a shared bot, and on any bot that still has some: unsharing keeps it. */
+export function showsTeamMemory(
+  sharing: Pick<BotSharing, "visibility">,
+  teamDocuments: readonly unknown[],
+): boolean {
+  return sharing.visibility !== "private" || teamDocuments.length > 0;
+}

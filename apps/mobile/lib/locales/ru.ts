@@ -885,6 +885,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Skill updated · {name}": "Навык обновлён · {name}",
   "Skill deleted · {name}": "Навык удалён · {name}",
   "Saved for the team": "Сохранено для команды",
+  "Team memory": "Память команды",
   "Add it on web or desktop": "Добавьте его в веб- или десктоп-версии",
   "Earlier messages summarized": "Ранние сообщения обобщены",
   "Message edited": "Сообщение изменено",
