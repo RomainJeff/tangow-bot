@@ -38,7 +38,10 @@ test("a member's run saves for a shared bot's team, and its owner reads and edit
     .getByPlaceholder("Message Release notes")
     .fill("Remember for the team that release notes go out on Thursdays");
   await guest.keyboard.press("Enter");
-  await expect(guest.getByText("noted for the team.")).toBeVisible();
+  // The reply in the thread, not its preview in the sidebar row.
+  await expect(
+    guest.getByTestId("message-bot-bubble").getByText("noted for the team."),
+  ).toBeVisible();
   await expect(guest.getByText("Saved for the team", { exact: true })).toBeVisible();
   await guest.mouse.move(1, 1);
   await captureScreenshot(guest, testInfo, "team-memory-thread-line");
