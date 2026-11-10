@@ -95,6 +95,7 @@ import type {
   ComputerStatus,
   ComputerUpdateAllResult,
   Me,
+  MemoryScope,
   SpaceNavigation,
 } from "@rakazo/contracts";
 import {
@@ -2640,7 +2641,7 @@ export function createRouter(deps: RouterDeps) {
         });
         return docs.map((doc) => ({
           id: doc.id,
-          scope: doc.scope as "bot" | "user",
+          scope: doc.scope as MemoryScope,
           botId: doc.botId,
           path: doc.path,
           content: doc.content,
@@ -2659,7 +2660,7 @@ export function createRouter(deps: RouterDeps) {
         if (!doc) throw new IsolationError();
         const updated = await deps.memory.commit(
           {
-            scope: doc.scope as "bot" | "user",
+            scope: doc.scope as MemoryScope,
             botId: doc.botId ?? undefined,
             path: doc.path,
             content: input.content,
@@ -2674,7 +2675,7 @@ export function createRouter(deps: RouterDeps) {
         );
         return {
           id: updated.id,
-          scope: doc.scope as "bot" | "user",
+          scope: doc.scope as MemoryScope,
           botId: doc.botId,
           path: updated.path,
           content: updated.content,

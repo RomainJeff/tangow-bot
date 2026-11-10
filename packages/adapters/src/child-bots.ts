@@ -409,7 +409,8 @@ export async function destroyBot(
           UPDATE "memory_documents"
           SET "botId" = NULL,
               "scope" = 'user',
-              "path" = ${directory} || '/' || "path",
+              -- A shared bot's team memory keeps its own folder beside the owner's bot memory.
+              "path" = ${directory} || CASE WHEN "scope" = 'team' THEN '/team/' ELSE '/' END || "path",
               "updatedAt" = CURRENT_TIMESTAMP
           WHERE "botId" = ${bot.id}
         `;

@@ -1588,6 +1588,9 @@ describeJourneys("required product journeys", () => {
       where: { id: goneMemory.id },
       data: { content: "important retained context" },
     });
+    const goneTeamMemory = await prisma.memoryDocument.create({
+      data: { ...goneMemory, id: undefined, scope: "team", content: "team context" },
+    });
     await sendAndWait(
       app,
       ada,
@@ -1698,6 +1701,13 @@ describeJourneys("required product journeys", () => {
       scope: "user",
       content: "important retained context",
     });
+    const [kept, keptTeam] = await Promise.all(
+      [goneMemory.id, goneTeamMemory.id].map((id) =>
+        prisma.memoryDocument.findUniqueOrThrow({ where: { id } }),
+      ),
+    );
+    expect(keptTeam).toMatchObject({ botId: null, scope: "user", content: "team context" });
+    expect(keptTeam!.path).toBe(kept!.path.replace(/\/MEMORY\.md$/, "/team/MEMORY.md"));
     // The name is the half that makes a detached usage row readable: bot_deletions is keyed by
     // the bot id, so a per-bot spend report can still label spend that belongs to a bot that
     // no longer exists.
