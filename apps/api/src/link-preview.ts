@@ -150,7 +150,8 @@ export async function previewLinkForComposer(
 /**
  * `messages.removeLinkPreview`: removes the message's card under the thread lock, deletes the card
  * image, and tells every open surface. Calling it again changes nothing and emits nothing. A
- * message outside the actor's own threads is the usual isolation error.
+ * message outside the actor's own threads, or another person's in a group, is the usual isolation
+ * error.
  */
 export async function removeMessageLinkPreview(
   deps: LinkPreviewApiDeps,
@@ -159,10 +160,20 @@ export async function removeMessageLinkPreview(
 ): Promise<void> {
   const message = await deps.prisma.sessionEntry.findFirst({
     where: { id: input.messageId, session: { kind: "thread", thread: writableThread(actor) } },
-    select: { id: true, session: { select: { threadId: true } } },
+    select: {
+      id: true,
+      payload: true,
+      session: { select: { threadId: true, thread: { select: { groupId: true, userId: true } } } },
+    },
   });
   const threadId = message?.session.threadId;
   if (!message || !threadId) throw new IsolationError();
+  // In a group, only a message's author removes its card; a bot's is the creator's.
+  const thread = message.session.thread;
+  if (thread?.groupId) {
+    const authorId = (message.payload as { authorId?: string } | null)?.authorId ?? thread.userId;
+    if (authorId !== actor.userId) throw new IsolationError();
+  }
   const removed = await removeLinkPreviewBlock(deps.prisma, {
     spaceId: actor.spaceId,
     threadId,

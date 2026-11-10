@@ -1291,6 +1291,29 @@ describeWithDatabase("API authorization and resource isolation", () => {
     ).resolves.toMatchObject({ status: 404 });
   });
 
+  it("lets only a group message's author remove its link preview", async () => {
+    const { owner, space, dana, bot } = await sharedBotSpace("group-links");
+    const group = await rpc<{ id: string }>(
+      app,
+      owner,
+      "groups/create",
+      { name: "Crew", botIds: [bot.id], userIds: [dana.userId] },
+      space,
+    );
+    await rpc(app, dana.cookie, "threads/send", { groupId: group.id, text: "Hello" }, space);
+    const message = await handles.prisma.sessionEntry.findFirstOrThrow({
+      where: { session: { thread: { groupId: group.id } }, type: "user.message" },
+      select: { id: true },
+    });
+
+    await expect(
+      raw(app, owner, "messages/removeLinkPreview", { messageId: message.id }, space),
+    ).resolves.toMatchObject({ status: 404 });
+    await expect(
+      rpc(app, dana.cookie, "messages/removeLinkPreview", { messageId: message.id }, space),
+    ).resolves.toEqual({ ok: true });
+  });
+
   it("searches a member's own thread with a shared bot, never anyone else's", async () => {
     const { owner, space, dana, sam, bot } = await sharedBotSpace("bot-share-search");
     const share = { botId: bot.id, visibility: "space", userIds: [] };

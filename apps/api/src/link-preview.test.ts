@@ -587,23 +587,24 @@ describe("messages.removeLinkPreview (CA 16, CA 19, CA 54)", () => {
       removeMessageLinkPreview(deps, actor, { messageId: "message-x" }),
     ).rejects.toBeInstanceOf(IsolationError);
 
-    expect(prisma.sessionEntry.findFirst).toHaveBeenCalledWith({
-      where: {
-        id: "message-x",
-        session: {
-          kind: "thread",
-          thread: {
-            spaceId: "space-1",
-            OR: [
-              { userId: "user-1", bot: { archivedAt: null } },
-              { userId: "user-1", memberBot: sharedWithFilter("user-1", "space-1") },
-              { group: { archivedAt: null, people: { some: { userId: "user-1" } } } },
-            ],
+    expect(prisma.sessionEntry.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: "message-x",
+          session: {
+            kind: "thread",
+            thread: {
+              spaceId: "space-1",
+              OR: [
+                { userId: "user-1", bot: { archivedAt: null } },
+                { userId: "user-1", memberBot: sharedWithFilter("user-1", "space-1") },
+                { group: { archivedAt: null, people: { some: { userId: "user-1" } } } },
+              ],
+            },
           },
         },
-      },
-      select: { id: true, session: { select: { threadId: true } } },
-    });
+      }),
+    );
     expect(appendCardStateInTransaction).not.toHaveBeenCalled();
     expect(artifacts.remove).not.toHaveBeenCalled();
     expect(notify).not.toHaveBeenCalled();
