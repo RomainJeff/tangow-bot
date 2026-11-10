@@ -403,6 +403,8 @@ model Bot {
   teamChatRules          String  @default("")
   /// Who besides the owner uses the bot: `private`, `space` (every member) or `people` (BotShare rows).
   visibility        String            @default("private")
+  /// The apps a shared bot needs (`BotConnector[]`): a member's run sees only these, with their own accounts.
+  connectors        Json              @default("[]")
   shares            BotShare[]
   /// One per person the bot is shared with; `thread` stays the owner's.
   memberThreads     Thread[]          @relation("MemberBotThreads")

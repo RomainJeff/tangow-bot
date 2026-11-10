@@ -63,9 +63,9 @@ export function ShareBotDialog({
     };
   }, [bot.id, bot.spaceId, userId, t]);
 
-  async function save(next: BotSharing) {
+  async function save(next: Omit<BotSharing, "connectors">) {
     const previous = sharing;
-    setSharing(next);
+    setSharing(previous && { ...previous, ...next });
     setPending(true);
     setError(null);
     try {

@@ -1067,6 +1067,7 @@ describeWithDatabase("API authorization and resource isolation", () => {
     await expect(rpc(app, owner, "bots/share", share, space)).resolves.toEqual({
       visibility: "people",
       userIds: [dana.userId],
+      connectors: [],
     });
     expect(await listed(dana.cookie)).toMatchObject({ isOwner: false });
     expect(await listed(sam.cookie)).toBeUndefined();
@@ -1086,8 +1087,12 @@ describeWithDatabase("API authorization and resource isolation", () => {
       teamChatRules: "",
     });
 
-    await expect(raw(app, dana.cookie, "bots/share", share, space)).resolves.toMatchObject({
-      status: 403,
+    const gmail = { kind: "app", connectorId: "composio", provider: "gmail" };
+    await expect(
+      raw(app, dana.cookie, "bots/share", { ...share, connectors: [gmail] }, space),
+    ).resolves.toMatchObject({ status: 403 });
+    await expect(rpc(app, owner, "bots/sharing", { botId: bot.id }, space)).resolves.toMatchObject({
+      connectors: [],
     });
     await expect(
       raw(app, dana.cookie, "bots/sharing", { botId: bot.id }, space),
