@@ -278,7 +278,10 @@ describe("finalizeComputerControlRelease", () => {
         findUnique: vi.fn().mockResolvedValue({ status: "waiting_takeover" }),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
-      thread: { update: vi.fn().mockResolvedValue({ nextEventSeq: 8 }) },
+      thread: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        update: vi.fn().mockResolvedValue({ nextEventSeq: 8 }),
+      },
       event: {
         create: vi.fn().mockResolvedValue({
           ...event(7),
@@ -352,7 +355,10 @@ describe("finalizeComputerControlRelease", () => {
         findUnique: vi.fn().mockResolvedValue({ status: "running" }),
         updateMany: vi.fn().mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 1 }),
       },
-      thread: { update: vi.fn().mockResolvedValue({ nextEventSeq: 8 }) },
+      thread: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        update: vi.fn().mockResolvedValue({ nextEventSeq: 8 }),
+      },
       event: {
         create: vi.fn().mockResolvedValue({
           ...event(7),
