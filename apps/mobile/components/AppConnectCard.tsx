@@ -141,11 +141,11 @@ export function AppConnectCard({
               </Text>
             )}
           </Pressable>
-        ) : (
+        ) : view.connected ? (
           <Text style={{ color: tokens.success, ...nativeTextStyle("label", { weight: 600 }) }}>
             {view.actionLabel}
           </Text>
-        )}
+        ) : null}
       </View>
       {error ? (
         <Text style={{ color: tokens.destructive, ...nativeTextStyle("meta") }}>{error}</Text>

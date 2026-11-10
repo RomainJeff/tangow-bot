@@ -17,6 +17,12 @@ describe("appConnectPresentation", () => {
     expect(view.actionLabel).toBe("Authorize");
   });
 
+  it("offers no authorize control for an MCP server a shared bot needs", () => {
+    const view = appConnectPresentation({ ...block, connectorId: "mcp", provider: "server-1" });
+    expect(view.showAuthorize).toBe(false);
+    expect(view.connected).toBe(false);
+  });
+
   it("hides authorize once connected", () => {
     const view = appConnectPresentation({ ...block, status: "connected" });
     expect(view.showAuthorize).toBe(false);

@@ -8,7 +8,8 @@ export function appConnectPresentation(block: AppConnectBlock, busy = false) {
   return {
     title: block.name,
     description: block.description,
-    showAuthorize: !connected,
+    // An MCP server a shared bot needs is added from the web app, with its form.
+    showAuthorize: !connected && block.connectorId !== "mcp",
     actionLabel: connected ? t("Connected") : busy ? t("Waiting…") : t("Authorize"),
     connected,
   };
