@@ -1,5 +1,11 @@
 import type { EncryptedSecretStore } from "@rakazo/adapters";
-import type { Actor, DeclaredMcp, McpServerConfigInput, MessageBlock } from "@rakazo/contracts";
+import type {
+  Actor,
+  BotConnector,
+  DeclaredMcp,
+  McpServerConfigInput,
+  MessageBlock,
+} from "@rakazo/contracts";
 import {
   botConnectors,
   IsolationError,
@@ -20,11 +26,53 @@ function runnable(server: { transport: string; command: string | null }, stdio: 
   );
 }
 
+/** A credential-looking flag, as `--token=value` or `--token value`; `-` or `_` both work. */
+const SECRET_FLAG = /^--(token|api[-_]?key|key|secret|password)(=|$)/i;
+
+/**
+ * Whether a server's address may hold a secret, so it can't be shared: a remote endpoint with a
+ * query string or user info, or a stdio arg that is a credential flag. A secret inside the path
+ * is not caught.
+ */
+export function addressHoldsSecret(server: {
+  transport: string;
+  endpoint: string | null;
+  args: Prisma.JsonValue;
+}): boolean {
+  if (server.transport === "stdio") {
+    const args = Array.isArray(server.args) ? server.args : [];
+    return args.some((arg) => typeof arg === "string" && SECRET_FLAG.test(arg));
+  }
+  if (!URL.canParse(server.endpoint ?? "")) return false;
+  const url = new URL(server.endpoint ?? "");
+  return url.search !== "" || url.username !== "" || url.password !== "";
+}
+
+/** Whether a share newly declares one of the actor's servers whose address may hold a secret. */
+export async function declaresSecretAddress(
+  prisma: PrismaClient,
+  actor: Actor,
+  connectors: BotConnector[],
+  stored: BotConnector[],
+): Promise<boolean> {
+  const mcp = (list: BotConnector[]) =>
+    list.flatMap((need) => (need.kind === "mcp" ? [need.serverId] : []));
+  const kept = new Set(mcp(stored));
+  const added = mcp(connectors).filter((id) => !kept.has(id));
+  if (added.length === 0) return false;
+  const servers = await prisma.mcpServer.findMany({
+    where: { id: { in: added }, spaceId: actor.spaceId, userId: actor.userId },
+    select: { transport: true, endpoint: true, args: true },
+  });
+  return servers.some(addressHoldsSecret);
+}
+
 type OwnerAssignment = Prisma.BotMcpServerGetPayload<{ include: { server: true } }>;
 
 /**
  * The owner's MCP servers a bot shared with the actor declares, as the owner gave them to the bot.
- * A server deleted, taken off the bot, or that this deployment can't run is left out.
+ * A server deleted, taken off the bot, that this deployment can't run, or whose address now may
+ * hold a secret is left out.
  */
 async function declaredServers(
   prisma: PrismaClient,
@@ -46,7 +94,12 @@ async function declaredServers(
         include: { server: true },
       })
     : [];
-  return { bot, servers: assignments.filter((row) => runnable(row.server, stdio)) };
+  return {
+    bot,
+    servers: assignments.filter(
+      (row) => runnable(row.server, stdio) && !addressHoldsSecret(row.server),
+    ),
+  };
 }
 
 async function declaredServer(

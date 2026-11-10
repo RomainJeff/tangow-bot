@@ -201,7 +201,7 @@ import {
   persistDecisionProviderConfig,
   serializeSpaceDecisionConfig,
 } from "./decision-provider-config.js";
-import { addDeclaredMcp, getDeclaredMcp } from "./declared-mcp.js";
+import { addDeclaredMcp, declaresSecretAddress, getDeclaredMcp } from "./declared-mcp.js";
 import { searchIntegrationCatalog } from "./integration-catalog.js";
 import type { LinkPreviewApiDeps } from "./link-preview.js";
 import { previewLinkForComposer, removeMessageLinkPreview } from "./link-preview.js";
@@ -1528,9 +1528,19 @@ export function createRouter(deps: RouterDeps) {
       share: authed.bots.share.handler(async ({ context, input }) => {
         const share = () =>
           setBotSharing(deps.prisma, context.actor, input).catch(mapBotSharingError);
-        const { visibility } = await getBotSharing(deps.prisma, context.actor, input.botId).catch(
-          mapBotSharingError,
-        );
+        const { visibility, connectors } = await getBotSharing(
+          deps.prisma,
+          context.actor,
+          input.botId,
+        ).catch(mapBotSharingError);
+        if (
+          input.connectors &&
+          (await declaresSecretAddress(deps.prisma, context.actor, input.connectors, connectors))
+        ) {
+          throw new ORPCError("BAD_REQUEST", {
+            message: "This server's address holds a secret, so it can't be shared",
+          });
+        }
         if (visibility !== "private" || input.visibility === "private") return share();
         // A shared bot runs on its own computer, restarted without the owner's /workspace/shared.
         const bot = await repos.getBot(context.actor, input.botId);

@@ -1737,6 +1737,71 @@ describeWithDatabase("API authorization and resource isolation", () => {
     ).resolves.toMatchObject({ status: 404 });
   });
 
+  it("never shares an MCP server whose address may hold a secret", async () => {
+    const { owner, space, dana, bot } = await sharedBotSpace("bot-share-mcp-secret");
+    const create = (config: Record<string, unknown>) =>
+      rpc<{ id: string }>(app, owner, "mcp/servers/create", { enabled: true, ...config }, space);
+    const remote = (slug: string, endpoint: string) => ({
+      slug,
+      name: slug,
+      transport: "streamable_http",
+      endpoint,
+    });
+    const keyed = await create(remote("keyed", "https://mcp.keyed.example/mcp?key=abc"));
+    const flagged = await create({
+      slug: "flagged",
+      name: "Flagged",
+      transport: "stdio",
+      command: "/opt/notes-mcp",
+      args: ["--token=abc"],
+    });
+    const clean = await create(remote("clean", "https://mcp.clean.example/mcp"));
+    await rpc(
+      app,
+      owner,
+      "mcp/assignments/replace",
+      { botId: bot.id, assignments: [keyed, flagged, clean].map(({ id }) => ({ serverId: id })) },
+      space,
+    );
+    const declare = (...servers: Array<{ id: string }>) =>
+      raw(
+        app,
+        owner,
+        "bots/share",
+        {
+          botId: bot.id,
+          visibility: "space",
+          userIds: [],
+          connectors: servers.map(({ id }) => ({ kind: "mcp", serverId: id })),
+        },
+        space,
+      );
+
+    for (const server of [keyed, flagged]) {
+      const refused = await declare(server);
+      expect(refused.status).toBe(400);
+      expect(await refused.text()).toContain(
+        "This server's address holds a secret, so it can't be shared",
+      );
+    }
+    await expect(declare(clean)).resolves.toMatchObject({ status: 200 });
+
+    // An address the owner edits to hold a secret after declaring it is gone for members.
+    await rpc(
+      app,
+      owner,
+      "mcp/servers/update",
+      { id: clean.id, config: remote("clean", "https://mcp.clean.example/mcp?key=abc") },
+      space,
+    );
+    await expect(
+      raw(app, dana.cookie, "bots/declaredMcp", { botId: bot.id, serverId: clean.id }, space),
+    ).resolves.toMatchObject({ status: 404 });
+    await rpc(app, dana.cookie, "threads/send", { botId: bot.id, text: "Plan the week." }, space);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect((await appCards(dana.cookie, bot.id, space)).offered).toEqual([]);
+  });
+
   it("keeps a shared bot off the team computer until it is unshared", async () => {
     const { owner, space, bot, listed } = await sharedBotSpace("bot-share-team");
     const share = { botId: bot.id, visibility: "space", userIds: [] };
