@@ -43,21 +43,19 @@ export async function readShareSheet(botId: string): Promise<ShareSheet> {
 
 /**
  * The apps and MCP servers the owner can declare, read apart from the sheet: the catalog only
- * names the apps and can be slow, and a failed one leaves the account names.
+ * names the apps and can be slow, and a failed one leaves the account names. A failed read of the
+ * servers fails the list, since without them a declared server would read as deleted.
  */
 export async function readShareableApps(
   botId: string,
   declared: BotSharing["connectors"],
 ): Promise<ShareableApp[]> {
-  const [rows, catalog, servers] = await Promise.all([
+  const [rows, catalog, all, assignments] = await Promise.all([
     rpc<Connection[]>("connections/list"),
     rpc<ConnectionCatalogItem[]>("connections/catalog", {}).catch(() => []),
-    Promise.all([
-      rpc<McpServer[]>("mcp/servers/list"),
-      rpc<BotMcpServer[]>("mcp/assignments/list", { botId }),
-    ]).catch((): [McpServer[], BotMcpServer[]] => [[], []]),
+    rpc<McpServer[]>("mcp/servers/list"),
+    rpc<BotMcpServer[]>("mcp/assignments/list", { botId }),
   ]);
-  const [all, assignments] = servers;
   const given = new Set(assignments.map((assignment) => assignment.serverId));
   return shareableApps(rows, catalog, { all, given }, declared, t("Deleted"));
 }

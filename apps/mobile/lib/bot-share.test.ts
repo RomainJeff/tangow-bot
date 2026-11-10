@@ -86,4 +86,12 @@ describe("the mobile share sheet", () => {
     const apps = await readShareableApps("bot-1", []);
     expect(apps.map((app) => app.name)).toEqual(["me@gmail", "Linear"]);
   });
+
+  it("builds no list when the MCP servers can't be read, rather than calling a declared one deleted", async () => {
+    server.answers["connections/list"] = () => [];
+    server.answers["mcp/assignments/list"] = () => [{ serverId: "server-linear" }];
+    await expect(
+      readShareableApps("bot-1", [{ kind: "mcp", serverId: "server-linear" }]),
+    ).rejects.toThrow("unexpected mcp/servers/list");
+  });
 });
