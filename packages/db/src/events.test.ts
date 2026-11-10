@@ -265,6 +265,21 @@ describe("followThreadEvents", () => {
     abort.abort();
     await stream.return(undefined);
   });
+
+  it("ends without the new events once the follower is no longer allowed", async () => {
+    const findMany = vi
+      .fn()
+      .mockResolvedValueOnce([event(0)])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([event(1)]);
+    const prisma = { event: { findMany } } as unknown as PrismaClient;
+    const allowed = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    const stream = followThreadEvents(prisma, "thread-1", -1, undefined, undefined, 1, allowed);
+
+    await expect(stream.next()).resolves.toMatchObject({ value: { seq: 0 }, done: false });
+    await expect(stream.next()).resolves.toEqual({ value: undefined, done: true });
+    expect(allowed).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("finalizeComputerControlRelease", () => {

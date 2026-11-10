@@ -91,7 +91,13 @@ export interface ThreadEvents {
   startInboundRoutineRuns(
     input: StartInboundRoutineRunsInput,
   ): Promise<StartInboundRoutineRunsResult>;
-  follow(threadId: string, cursor: number, signal?: AbortSignal): AsyncGenerator<ProductEvent>;
+  /** `allowed` is asked again whenever new events arrive; once false, the stream ends. */
+  follow(
+    threadId: string,
+    cursor: number,
+    signal?: AbortSignal,
+    allowed?: () => Promise<boolean>,
+  ): AsyncGenerator<ProductEvent>;
 }
 
 export interface ClearThreadInput {
@@ -368,8 +374,8 @@ export function createThreadEvents(
     pauseRunForTakeover: (input) => pauseRunForTakeover(prisma, input, realtime),
     sendUserMessage: (input) => sendUserMessage(prisma, input, realtime),
     startInboundRoutineRuns: (input) => startInboundRoutineRuns(prisma, input, realtime),
-    follow: (threadId, cursor, signal) =>
-      followThreadEvents(prisma, threadId, cursor, realtime, signal, options.catchUpMs),
+    follow: (threadId, cursor, signal, allowed) =>
+      followThreadEvents(prisma, threadId, cursor, realtime, signal, options.catchUpMs, allowed),
   };
 }
 
@@ -2534,6 +2540,7 @@ export async function* followThreadEvents(
   realtime?: RealtimeFanout,
   signal?: AbortSignal,
   catchUpMs = realtime ? PUSH_CATCH_UP_MS : POLL_ONLY_CATCH_UP_MS,
+  allowed?: () => Promise<boolean>,
 ): AsyncGenerator<ProductEvent> {
   let seq = cursor;
   const latch = new ChangeLatch();
@@ -2549,6 +2556,7 @@ export async function* followThreadEvents(
       do {
         const events = await eventsAfter(prisma, threadId, seq, EVENT_BATCH_SIZE);
         batchSize = events.length;
+        if (batchSize > 0 && allowed && !(await allowed())) return;
         for (const event of events) {
           seq = event.seq;
           yield mapProductEvent(event);

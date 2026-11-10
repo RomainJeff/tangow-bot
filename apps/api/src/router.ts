@@ -147,6 +147,7 @@ import {
   formatMessagingLinkCode,
   GroupCreatorCannotLeaveError,
   getBotSharing,
+  groupMembershipFilter,
   InvalidAnswerError,
   InvalidSpaceNameError,
   IsolationError,
@@ -1732,10 +1733,22 @@ export function createRouter(deps: RouterDeps) {
       subscribe: authed.threads.subscribe.handler(async function* ({ context, input }) {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
         const peerRuns = new Map<string, Promise<boolean>>();
+        // A person removed from a group, or who left it, stops seeing it at once.
+        const allowed =
+          target.kind === "group"
+            ? async () =>
+                (await deps.prisma.chatGroup.count({
+                  where: {
+                    id: target.groupId,
+                    ...groupMembershipFilter(context.actor.userId, context.actor.spaceId),
+                  },
+                })) > 0
+            : undefined;
         for await (const event of deps.events.follow(
           target.threadId,
           input.cursor,
           context.signal,
+          allowed,
         )) {
           const forwarded = await forwardedThreadEvent(deps.prisma, event, peerRuns);
           if (forwarded) yield forwarded;
