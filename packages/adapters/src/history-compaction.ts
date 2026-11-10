@@ -21,6 +21,7 @@ import type {
   ConfiguredMemoryProvider,
   MemoryProviderResolver,
 } from "./memory-provider-factory.js";
+import { onOwnBot } from "./memory-provider-factory.js";
 
 export const DEFAULT_COMPACTION_SETTINGS = { reserveTokens: 16_384, keepRecentTokens: 20_000 };
 
@@ -791,7 +792,10 @@ export async function compactHistory(
   // Local compaction is first-party behavior and must not depend on an optional external store.
   let semanticMemory: ConfiguredMemoryProvider | null = null;
   try {
-    semanticMemory = await deps.memoryProviders.resolve(thread.spaceId, thread.userId);
+    semanticMemory = await onOwnBot(
+      { userId: thread.userId, botUserId: botThread.bot.userId },
+      () => deps.memoryProviders.resolve(thread.spaceId, thread.userId),
+    );
   } catch (error) {
     getLogger().error("Failed to load semantic memory provider for history compaction", error);
   }

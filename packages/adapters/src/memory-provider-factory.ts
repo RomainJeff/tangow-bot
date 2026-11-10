@@ -43,6 +43,18 @@ export interface MemoryProviderResolver {
   resolve(spaceId: string, userId: string): Promise<ConfiguredMemoryProvider | null>;
 }
 
+/**
+ * Semantic memory and decisions serve a person on their own bots only. A member's run on a shared
+ * bot gets neither, even with a connection they set up themselves: its Markdown memory covers it.
+ * Runs, routines, compaction and the purge after a clear all resolve through this.
+ */
+export function onOwnBot<T>(
+  scope: { userId: string; botUserId: string },
+  resolve: () => Promise<T | null>,
+): Promise<T | null> {
+  return scope.userId === scope.botUserId ? resolve() : Promise.resolve(null);
+}
+
 interface MemoryProviderAdapter {
   requiresDeploymentOwner(settings: Record<string, string>): boolean;
   /** Async trust classification (e.g. DNS) without probing credentials. */

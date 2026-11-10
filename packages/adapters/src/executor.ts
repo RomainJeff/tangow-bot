@@ -357,6 +357,7 @@ import {
 } from "./mcp-server-tool.js";
 import { loadAgentMemoryContext } from "./memory-context.js";
 import type { MemoryProviderResolver } from "./memory-provider-factory.js";
+import { onOwnBot } from "./memory-provider-factory.js";
 import { selectMemoryTools } from "./memory-tools.js";
 import { catalogContextWindow, catalogModel } from "./model-catalog.js";
 import { classifyModelRoute } from "./model-route-classification.js";
@@ -1835,7 +1836,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
           }),
           findDefaultModelCredential(deps.prisma, run),
           deps.prisma.deploymentSettings.findUnique({ where: { id: "default" } }),
-          deps.memoryProviders.resolve(run.spaceId, run.userId),
+          botLoad.then((loaded) =>
+            onOwnBot({ userId: run.userId, botUserId: loaded.userId }, () =>
+              deps.memoryProviders.resolve(run.spaceId, run.userId),
+            ),
+          ),
           deps.prisma.taughtSkill.findMany({
             where: { botId: run.botId, spaceId: run.spaceId, status: "saved" },
             orderBy: { id: "asc" },
@@ -1855,7 +1860,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
             },
           }),
           // Optional: a broken decision connection must never fail the run.
-          deps.decisionProviders?.resolve(run.spaceId, run.userId).catch(() => null) ?? null,
+          botLoad.then((loaded) =>
+            onOwnBot(
+              { userId: run.userId, botUserId: loaded.userId },
+              async () =>
+                (await deps.decisionProviders
+                  ?.resolve(run.spaceId, run.userId)
+                  .catch(() => null)) ?? null,
+            ),
+          ),
           deps.prisma.spaceMember.findUnique({
             where: { spaceId_userId: { spaceId: run.spaceId, userId: run.userId } },
             select: { modelAuto: true },
