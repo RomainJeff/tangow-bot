@@ -2398,6 +2398,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             browserRunAllowed: Boolean(decisionProvider),
             messageUserExposed,
             feedbackAvailable: Boolean(deps.feedback),
+            sharedBot: bot.visibility !== "private",
           }),
           // Cross-owner agent connections only exist for chat-linked bots.
           ...(hasMessagingIdentity ? agentConnectionTools : []),
@@ -4418,9 +4419,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
           if (name === "remember") {
             const fact = String(args.content ?? "").trim();
             if (!fact) return finish({ error: "remember needs a fact to store." });
+            // Any person's run on a shared bot may save for the team, stored under the owner.
+            const team = bot.visibility !== "private" && args.team === true;
             await deps.memory.commit(
               {
-                scope: "bot",
+                scope: team ? "team" : "bot",
                 botId: bot.id,
                 path: String(args.path ?? "MEMORY.md"),
                 // One bullet per fact; the store adds the separator and keeps what is there.
@@ -4429,7 +4432,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 sourceRunId: runId,
                 sourceThreadId: thread.id,
               },
-              context,
+              team ? { ...context, userId: bot.userId } : context,
             );
             return finish({ ok: true });
           }
@@ -7152,6 +7155,8 @@ export function selectBuiltinToolsForRun(options: {
   messageUserExposed?: boolean;
   /** The deployment has somewhere to file feedback. */
   feedbackAvailable?: boolean;
+  /** The bot is shared, so it has team memory beside each person's own. */
+  sharedBot?: boolean;
 }) {
   const selected = selectMemoryTools(
     filterBuiltinToolsForRun(
@@ -7177,7 +7182,27 @@ export function selectBuiltinToolsForRun(options: {
         (!["remember", "save_memory", "recall_memory", "forget_memory"].includes(tool.name) &&
           !tool.name.startsWith("scratchpad_"))),
   );
-  return selected;
+  return options.sharedBot ? selected.map(rememberForTeam) : selected;
+}
+
+/** On a shared bot, `remember` can save a fact for everyone the bot is shared with. */
+function rememberForTeam(tool: ConnectorTool): ConnectorTool {
+  if (tool.name !== "remember") return tool;
+  const schema = tool.inputSchema as { properties: Record<string, unknown> };
+  return {
+    ...tool,
+    inputSchema: {
+      ...schema,
+      properties: {
+        ...schema.properties,
+        team: {
+          type: "boolean",
+          description:
+            "Save it for everyone this bot is shared with. Leave it off for what concerns only the person you are talking to.",
+        },
+      },
+    },
+  };
 }
 
 export const PAGE_BROWSER_TOOL_NAMES = new Set([
