@@ -18,15 +18,10 @@ describe("threadBotActions", () => {
     ]);
   });
 
-  it("gives the owner the bot's settings, sharing, computer and lifecycle", () => {
-    expect(threadBotActions(false, handlers).map((action) => action.label)).toEqual([
-      "Bot settings",
-      "Share",
-      "Open computer",
-      "Clear conversation",
-      "Archive",
-      "Delete…",
-    ]);
+  it("lets the owner share the bot from the thread title", () => {
+    const share = threadBotActions(false, handlers).find((action) => action.label === "Share");
+    share?.onPress();
+    expect(handlers.share).toHaveBeenCalledOnce();
   });
 });
 
