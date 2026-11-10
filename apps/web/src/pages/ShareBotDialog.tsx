@@ -3,9 +3,11 @@ import type {
   AgentSkillCatalogEntry,
   Bot,
   BotConnector,
+  BotMcpServer,
   BotSharing,
   Connection,
   ConnectionCatalogItem,
+  McpServer,
   SpaceMembers,
 } from "@rakazo/contracts";
 import {
@@ -29,38 +31,57 @@ const givable = (skills: AgentSkillCatalogEntry[]) =>
   skills.filter((skill) => skill.source === "user" && skill.availability !== "disabled");
 
 type App = { key: string; name: string; need: BotConnector };
-const appKey = (app: { connectorId: string; provider: string }) =>
-  `${app.connectorId}:${app.provider}`;
+const appKey = (need: BotConnector) =>
+  need.kind === "mcp" ? `mcp:${need.serverId}` : `${need.connectorId}:${need.provider}`;
 
 /**
- * The owner's connected apps, one per app however many accounts, named as in the catalog, then
- * the apps already declared, so one the owner has since disconnected can still be unticked.
+ * The owner's connected apps, one per app however many accounts, named as in the catalog, and the
+ * MCP servers they gave the bot, then everything already declared, so an app the owner has since
+ * disconnected or a server they deleted can still be unticked.
  */
 function shareableApps(
   rows: Connection[],
   catalog: ConnectionCatalogItem[],
+  servers: { all: McpServer[]; given: Set<string> },
   declared: BotConnector[],
+  deleted: string,
 ): App[] {
   const apps = new Map<string, App>();
-  const add = (need: BotConnector, fallbackName: string) => {
-    if (apps.has(appKey(need))) return;
-    const item = catalog.find(
-      (entry) => entry.connectorId === need.connectorId && entry.slug === need.provider,
-    );
-    apps.set(appKey(need), { key: appKey(need), name: item?.name ?? fallbackName, need });
+  const add = (need: BotConnector, name: string) => {
+    if (!apps.has(appKey(need))) apps.set(appKey(need), { key: appKey(need), name, need });
   };
+  const nameOf = (need: BotConnector, fallback: string) =>
+    need.kind === "mcp"
+      ? (servers.all.find((server) => server.id === need.serverId)?.name ?? deleted)
+      : (catalog.find(
+          (entry) => entry.connectorId === need.connectorId && entry.slug === need.provider,
+        )?.name ?? fallback);
   for (const row of rows) {
     if (row.status !== "connected") continue;
-    add({ kind: "app", connectorId: row.connectorId, provider: row.provider }, row.displayName);
+    const need = { kind: "app", connectorId: row.connectorId, provider: row.provider } as const;
+    add(need, nameOf(need, row.displayName));
   }
-  for (const need of declared) add(need, need.provider);
+  for (const server of servers.all) {
+    if (servers.given.has(server.id)) add({ kind: "mcp", serverId: server.id }, server.name);
+  }
+  for (const need of declared) add(need, nameOf(need, need.kind === "app" ? need.provider : ""));
   return [...apps.values()];
+}
+
+/** The owner's MCP servers, and those given to the bot: the only ones it can declare. */
+async function givenServers(botId: string) {
+  const [all, assignments] = await Promise.all([
+    rpc.mcp.servers.list(),
+    rpc.mcp.assignments.list({ botId }),
+  ]).catch(() => [[], []] as [McpServer[], BotMcpServer[]]);
+  return { all, given: new Set(assignments.map((assignment) => assignment.serverId)) };
 }
 
 /**
  * Who besides its owner uses the bot: everyone in the Space, or the people ticked. Each change
  * saves itself; no one ticked means only the owner. Once shared, the bot uses only the skills
- * ticked for it, and a member's run only the apps ticked, with the member's own accounts.
+ * ticked for it, and a member's run only the apps and MCP servers ticked, with the member's own
+ * accounts and credentials.
  */
 export function ShareBotDialog({
   bot,
@@ -102,10 +123,11 @@ export function ShareBotDialog({
     Promise.all([
       rpc.connections.list(),
       rpc.connections.catalog({}).catch(() => [] as ConnectionCatalogItem[]),
+      givenServers(bot.id),
       opening,
     ]).then(
-      ([rows, catalog, current]) =>
-        live && setApps(shareableApps(rows, catalog, current.connectors)),
+      ([rows, catalog, servers, current]) =>
+        live && setApps(shareableApps(rows, catalog, servers, current.connectors, t`Deleted`)),
       () => undefined,
     );
     return () => {

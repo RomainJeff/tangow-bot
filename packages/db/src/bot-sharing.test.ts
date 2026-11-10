@@ -4,6 +4,7 @@ import { getBotSharing, setBotSharing, sharedBotThread } from "./bot-sharing.js"
 import type { PrismaClient } from "./client.js";
 import { openPgliteDatabase, type PgliteDatabase } from "./pglite.test-support.js";
 import { createRepos } from "./repos.js";
+import { IsolationError } from "./scope.js";
 import {
   acceptSpaceInvitation,
   createSpaceForMember,
@@ -129,6 +130,39 @@ describe("sharing a bot", () => {
       visibility: "people",
       userIds: ["dana"],
       connectors: [gmail],
+    });
+  });
+
+  it("declares only the MCP servers its owner gave it, and keeps one its owner deleted", async () => {
+    const server = async (userId: string, slug: string, given = true) => {
+      const row = await prisma.mcpServer.create({
+        data: { spaceId: space, userId, slug, name: slug, transport: "streamable_http" },
+      });
+      if (given) {
+        await prisma.botMcpServer.create({
+          data: { spaceId: space, userId, botId, serverId: row.id },
+        });
+      }
+      return row;
+    };
+    const mine = await server("owner", `linear-${botId}`);
+    const notGiven = await server("owner", `github-${botId}`, false);
+    const danas = await server("dana", `notion-${botId}`);
+    const share = (serverIds: string[]) =>
+      setBotSharing(prisma, actor("owner"), {
+        botId,
+        visibility: "space",
+        userIds: [],
+        connectors: serverIds.map((serverId) => ({ kind: "mcp" as const, serverId })),
+      });
+
+    await expect(share([danas.id])).rejects.toBeInstanceOf(IsolationError);
+    await expect(share([notGiven.id])).rejects.toBeInstanceOf(IsolationError);
+    await share([mine.id]);
+    await prisma.mcpServer.delete({ where: { id: mine.id } });
+    await setBotSharing(prisma, actor("owner"), { botId, visibility: "people", userIds: ["dana"] });
+    await expect(share([mine.id])).resolves.toMatchObject({
+      connectors: [{ kind: "mcp", serverId: mine.id }],
     });
   });
 

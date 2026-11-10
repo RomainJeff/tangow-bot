@@ -104,6 +104,28 @@ export async function getBotSharing(
   };
 }
 
+/**
+ * An owner declares only the MCP servers they gave the bot. One declared before stays declared
+ * after its owner deletes it, so it can still be unticked.
+ */
+async function requireOwnServers(
+  tx: Prisma.TransactionClient,
+  actor: Actor,
+  botId: string,
+  connectors: BotSharing["connectors"],
+  stored: BotSharing["connectors"],
+) {
+  const serverIds = (list: BotSharing["connectors"]) =>
+    list.flatMap((need) => (need.kind === "mcp" ? [need.serverId] : []));
+  const kept = new Set(serverIds(stored));
+  const added = [...new Set(serverIds(connectors).filter((id) => !kept.has(id)))];
+  if (added.length === 0) return;
+  const given = await tx.botMcpServer.count({
+    where: { botId, serverId: { in: added }, spaceId: actor.spaceId, userId: actor.userId },
+  });
+  if (given !== added.length) throw new IsolationError();
+}
+
 /** The apps a bot declares; a stored value that no longer parses declares none. */
 export function botConnectors(value: Prisma.JsonValue): BotSharing["connectors"] {
   return BotSharingSchema.shape.connectors.catch([]).parse(value);
@@ -126,7 +148,9 @@ export async function setBotSharing(
       where: { spaceId: actor.spaceId, userId: { in: userIds, not: actor.userId } },
     });
     if (members !== userIds.length) throw new NotSpaceMemberError();
-    const connectors = input.connectors ?? botConnectors(bot.connectors);
+    const stored = botConnectors(bot.connectors);
+    const connectors = input.connectors ?? stored;
+    await requireOwnServers(tx, actor, input.botId, connectors, stored);
     await tx.bot.update({
       where: { id: input.botId },
       data: { visibility: input.visibility, connectors },

@@ -47,6 +47,8 @@ describeWithDatabase("API authorization and resource isolation", () => {
       wakeupDriver: "memory",
       signupsEnabled: "true",
       composio: new ComposioEmulator(),
+      mcpStdioEnabled: true,
+      mcpStdioAllowedCommands: ["/opt/notes-mcp"],
     });
     app = handles.app;
   });
@@ -96,6 +98,8 @@ describeWithDatabase("API authorization and resource isolation", () => {
       ["bots/rotateWebhookSecret", { botId: "missing-bot" }],
       ["bots/sharing", { botId: "missing-bot" }],
       ["bots/share", { botId: "missing-bot", visibility: "space", userIds: [] }],
+      ["bots/declaredMcp", { botId: "missing-bot", serverId: "missing-server" }],
+      ["bots/addDeclaredMcp", { botId: "missing-bot", serverId: "missing-server" }],
       ["groups/create", { name: "Nope", botIds: ["missing-a", "missing-b"] }],
       ["groups/list"],
       ["groups/get", { groupId: "missing-group" }],
@@ -1034,6 +1038,36 @@ describeWithDatabase("API authorization and resource isolation", () => {
   });
 
   /** An owner's Space with two members, Dana and Sam, and a bot of the owner's in it. */
+  /** The caller's own thread with the bot: the apps its connect cards offer, and those answered. */
+  async function appCards(cookie: string, botId: string, space: string) {
+    const { threadId } = await rpc<{ threadId: string }>(
+      app,
+      cookie,
+      "threads/get",
+      { botId },
+      space,
+    );
+    const { sessionId } = await handles.prisma.thread.findUniqueOrThrow({
+      where: { id: threadId },
+    });
+    const entries = await handles.prisma.sessionEntry.findMany({
+      where: { sessionId, type: { in: ["bot.text", "card.answered"] } },
+      orderBy: { seq: "asc" },
+    });
+    const payload = (entry: (typeof entries)[number]) =>
+      entry.payload as { blocks?: Array<{ kind: string; provider?: string }>; answerId?: string };
+    return {
+      offered: entries.flatMap((entry) =>
+        (payload(entry).blocks ?? [])
+          .filter((block) => block.kind === "app_connect")
+          .map((block) => block.provider),
+      ),
+      answered: entries.flatMap((entry) =>
+        entry.type === "card.answered" ? [payload(entry).answerId] : [],
+      ),
+    };
+  }
+
   async function sharedBotSpace(prefix: string) {
     const owner = await signup(app, `${prefix}-owner-${stamp}@rakazo.test`, "Ada");
     const space = (await rpc<Space>(app, owner, "spaces/create", { name: "Studio" })).id;
@@ -1517,26 +1551,7 @@ describeWithDatabase("API authorization and resource isolation", () => {
       { connectorId: "composio", provider: "SLACK", displayName: "Slack" },
       space,
     );
-    const cards = async (cookie: string) => {
-      const { threadId } = await rpc<{ threadId: string }>(
-        app,
-        cookie,
-        "threads/get",
-        { botId: bot.id },
-        space,
-      );
-      const { sessionId } = await handles.prisma.thread.findUniqueOrThrow({
-        where: { id: threadId },
-      });
-      const entries = await handles.prisma.sessionEntry.findMany({
-        where: { sessionId, type: "bot.text" },
-      });
-      return entries.flatMap((entry) =>
-        ((entry.payload as { blocks?: Array<{ kind: string; provider?: string }> }).blocks ?? [])
-          .filter((block) => block.kind === "app_connect")
-          .map((block) => block.provider),
-      );
-    };
+    const cards = async (cookie: string) => (await appCards(cookie, bot.id, space)).offered;
     const say = (text: string) =>
       rpc(app, dana.cookie, "threads/send", { botId: bot.id, text }, space);
 
@@ -1555,6 +1570,236 @@ describeWithDatabase("API authorization and resource isolation", () => {
         space,
       ),
     ).resolves.toEqual({ ok: true });
+  });
+
+  it("gives a member a declared MCP server's public half and their own copy of it", async () => {
+    const { owner, space, dana, bot } = await sharedBotSpace("bot-share-mcp");
+    const create = (config: Record<string, unknown>) =>
+      rpc<{ id: string }>(app, owner, "mcp/servers/create", { enabled: true, ...config }, space);
+    const linear = await create({
+      slug: "linear",
+      name: "Linear",
+      transport: "streamable_http",
+      endpoint: "https://mcp.linear.example/mcp",
+      headers: { "X-Api-Key": "owner-header-value" },
+      secret: "owner-token-value",
+    });
+    const notes = await create({
+      slug: "notes",
+      name: "Notes",
+      transport: "stdio",
+      command: "/opt/notes-mcp",
+      args: ["--stdio"],
+      env: { NOTES_TOKEN: "owner-env-value" },
+    });
+    const elsewhere = await create({
+      slug: "elsewhere",
+      name: "Elsewhere",
+      transport: "stdio",
+      command: "/bin/other",
+    });
+    const undeclared = await create({
+      slug: "wiki",
+      name: "Wiki",
+      transport: "streamable_http",
+      endpoint: "https://mcp.wiki.example/mcp",
+    });
+    await rpc(
+      app,
+      owner,
+      "mcp/assignments/replace",
+      {
+        botId: bot.id,
+        assignments: [
+          { serverId: linear.id, allowAllTools: false, allowedTools: ["list_issues"] },
+          { serverId: notes.id },
+          { serverId: elsewhere.id },
+          { serverId: undeclared.id },
+        ],
+      },
+      space,
+    );
+    await rpc(
+      app,
+      owner,
+      "bots/share",
+      {
+        botId: bot.id,
+        visibility: "space",
+        userIds: [],
+        connectors: [linear, notes, elsewhere].map(({ id }) => ({ kind: "mcp", serverId: id })),
+      },
+      space,
+    );
+    const declared = (serverId: string) =>
+      raw(app, dana.cookie, "bots/declaredMcp", { botId: bot.id, serverId }, space);
+
+    const linearHalf = await (await declared(linear.id)).text();
+    const notesHalf = await (await declared(notes.id)).text();
+    for (const secret of ["owner-header-value", "owner-token-value", "owner-env-value"]) {
+      expect(linearHalf + notesHalf).not.toContain(secret);
+    }
+    expect(JSON.parse(linearHalf).json).toMatchObject({
+      endpoint: "https://mcp.linear.example/mcp",
+      headerKeys: ["X-Api-Key"],
+      allowedTools: ["list_issues"],
+    });
+    expect(JSON.parse(notesHalf).json).toMatchObject({
+      command: "/opt/notes-mcp",
+      args: ["--stdio"],
+      envKeys: ["NOTES_TOKEN"],
+      allowedTools: null,
+    });
+    // Not declared, or a stdio command this deployment doesn't run: nothing to add.
+    for (const server of [undeclared, elsewhere]) {
+      await expect(declared(server.id)).resolves.toMatchObject({ status: 404 });
+    }
+
+    await rpc(app, dana.cookie, "threads/send", { botId: bot.id, text: "Plan the week." }, space);
+    await vi.waitFor(async () =>
+      expect((await appCards(dana.cookie, bot.id, space)).offered.sort()).toEqual(
+        [linear.id, notes.id].sort(),
+      ),
+    );
+
+    const mine = await rpc<{ id: string; headerKeys: string[] }>(
+      app,
+      dana.cookie,
+      "bots/addDeclaredMcp",
+      { botId: bot.id, serverId: linear.id, headers: { "X-Api-Key": "dana-key", "X-Extra": "x" } },
+      space,
+    );
+    expect(mine.headerKeys).toEqual(["X-Api-Key"]);
+    expect(
+      await handles.prisma.botMcpServer.findFirst({ where: { serverId: mine.id } }),
+    ).toMatchObject({
+      botId: bot.id,
+      userId: dana.userId,
+      declaredServerId: linear.id,
+      allowAllTools: false,
+      allowedTools: ["list_issues"],
+    });
+    expect((await appCards(dana.cookie, bot.id, space)).answered).toEqual([`mcp:${linear.id}`]);
+    // Adding it again, say after a failed response, gives back the same copy.
+    await expect(
+      rpc(app, dana.cookie, "bots/addDeclaredMcp", { botId: bot.id, serverId: linear.id }, space),
+    ).resolves.toMatchObject({ id: mine.id });
+    expect(
+      await handles.prisma.botMcpServer.count({
+        where: { botId: bot.id, userId: dana.userId, declaredServerId: linear.id },
+      }),
+    ).toBe(1);
+
+    // The existing assignment endpoints stay the owner's: a member attaches nothing through them.
+    await expect(
+      raw(app, dana.cookie, "mcp/assignments/approve", { botId: bot.id, serverId: mine.id }, space),
+    ).resolves.toMatchObject({ status: 404 });
+    await expect(
+      raw(
+        app,
+        dana.cookie,
+        "mcp/assignments/replace",
+        { botId: bot.id, assignments: [{ serverId: mine.id }] },
+        space,
+      ),
+    ).resolves.toMatchObject({ status: 404 });
+
+    // Their copy keeps the owner's endpoint: only its credentials change. The owner's server
+    // stays theirs to edit.
+    const repoint = (cookie: string, id: string) =>
+      raw(
+        app,
+        cookie,
+        "mcp/servers/update",
+        {
+          id,
+          config: {
+            slug: "linear",
+            name: "Linear",
+            transport: "streamable_http",
+            endpoint: "https://mcp.elsewhere.example/mcp",
+          },
+        },
+        space,
+      );
+    await expect(repoint(dana.cookie, mine.id)).resolves.toMatchObject({ status: 400 });
+    expect(await handles.prisma.mcpServer.findUnique({ where: { id: mine.id } })).toMatchObject({
+      endpoint: "https://mcp.linear.example/mcp",
+    });
+    await expect(
+      rpc(app, dana.cookie, "mcp/servers/update", { id: mine.id, secret: "dana-token" }, space),
+    ).resolves.toMatchObject({ hasSecret: true });
+    await expect(repoint(owner, linear.id)).resolves.toMatchObject({ status: 200 });
+
+    await rpc(app, owner, "mcp/servers/remove", { id: linear.id }, space);
+    await expect(
+      raw(app, dana.cookie, "bots/addDeclaredMcp", { botId: bot.id, serverId: linear.id }, space),
+    ).resolves.toMatchObject({ status: 404 });
+  });
+
+  it("never shares an MCP server whose address may hold a secret", async () => {
+    const { owner, space, dana, bot } = await sharedBotSpace("bot-share-mcp-secret");
+    const create = (config: Record<string, unknown>) =>
+      rpc<{ id: string }>(app, owner, "mcp/servers/create", { enabled: true, ...config }, space);
+    const remote = (slug: string, endpoint: string) => ({
+      slug,
+      name: slug,
+      transport: "streamable_http",
+      endpoint,
+    });
+    const keyed = await create(remote("keyed", "https://mcp.keyed.example/mcp?key=abc"));
+    const flagged = await create({
+      slug: "flagged",
+      name: "Flagged",
+      transport: "stdio",
+      command: "/opt/notes-mcp",
+      args: ["--token=abc"],
+    });
+    const clean = await create(remote("clean", "https://mcp.clean.example/mcp"));
+    await rpc(
+      app,
+      owner,
+      "mcp/assignments/replace",
+      { botId: bot.id, assignments: [keyed, flagged, clean].map(({ id }) => ({ serverId: id })) },
+      space,
+    );
+    const declare = (...servers: Array<{ id: string }>) =>
+      raw(
+        app,
+        owner,
+        "bots/share",
+        {
+          botId: bot.id,
+          visibility: "space",
+          userIds: [],
+          connectors: servers.map(({ id }) => ({ kind: "mcp", serverId: id })),
+        },
+        space,
+      );
+
+    for (const server of [keyed, flagged]) {
+      const refused = await declare(server);
+      expect(refused.status).toBe(400);
+      expect(await refused.text()).toContain(
+        "This server's address holds a secret, so it can't be shared",
+      );
+    }
+    await expect(declare(clean)).resolves.toMatchObject({ status: 200 });
+
+    // An address the owner edits to hold a secret after declaring it is gone for members.
+    await rpc(
+      app,
+      owner,
+      "mcp/servers/update",
+      { id: clean.id, config: remote("clean", "https://mcp.clean.example/mcp?key=abc") },
+      space,
+    );
+    await expect(
+      raw(app, dana.cookie, "bots/declaredMcp", { botId: bot.id, serverId: clean.id }, space),
+    ).resolves.toMatchObject({ status: 404 });
+    await rpc(app, dana.cookie, "threads/send", { botId: bot.id, text: "Plan the week." }, space);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect((await appCards(dana.cookie, bot.id, space)).offered).toEqual([]);
   });
 
   it("keeps a shared bot off the team computer until it is unshared", async () => {

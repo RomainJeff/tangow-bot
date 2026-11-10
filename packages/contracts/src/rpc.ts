@@ -30,6 +30,7 @@ import {
   CreateGroupInput,
   CreateRoutineInput,
   CreateScratchpadItemInput,
+  DeclaredMcpSchema,
   DeploymentSettingsSchema,
   ExportManifestSchema,
   ExternalConversationPolicySchema,
@@ -97,6 +98,7 @@ import {
   LINK_PREVIEW_URL_MAX_LENGTH,
   LinkPreviewDraftSchema,
 } from "./link-preview.js";
+import { McpHeadersSchema } from "./mcp.js";
 import { ModelCategoryAssignmentSchema, ModelCategorySchema } from "./model-routing.js";
 import { MessageReactionSchema } from "./reactions.js";
 import {
@@ -330,6 +332,22 @@ export const appContract = {
         }),
       )
       .output(BotSharingSchema),
+    /** An MCP server declared on a bot shared with the caller, without its credentials. */
+    declaredMcp: oc.input(botId.extend({ serverId: Id })).output(DeclaredMcpSchema),
+    /**
+     * Adds a declared MCP server to the caller's own servers with their own credentials, keyed by
+     * the declared names, and gives it to the shared bot for the caller only.
+     */
+    addDeclaredMcp: oc
+      .input(
+        botId.extend({
+          serverId: Id,
+          headers: McpHeadersSchema.default({}),
+          env: z.record(z.string(), z.string().max(4096)).default({}),
+          secret: z.string().max(16384).optional(),
+        }),
+      )
+      .output(McpServerSchema),
   },
   groups: {
     create: oc.input(CreateGroupInput).output(GroupSchema),
