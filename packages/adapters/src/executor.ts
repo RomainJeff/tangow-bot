@@ -196,6 +196,7 @@ import {
   findDefaultModelCredential,
   findModelCategories,
   findModelCredential,
+  groupMembershipFilter,
   historyGeneration,
   InvalidSpaceNameError,
   isTooManyDatabaseConnections,
@@ -7142,7 +7143,12 @@ async function notifyRun(
     }),
     deps.prisma.thread
       .findFirst({
-        where: { id: run.threadId, spaceId: run.spaceId, userId: run.userId },
+        where: {
+          id: run.threadId,
+          spaceId: run.spaceId,
+          // A group's thread belongs to its creator; any of its people can be the one paged.
+          OR: [{ userId: run.userId }, { group: groupMembershipFilter(run.userId) }],
+        },
         select: { groupId: true },
       })
       .catch((error) => {
