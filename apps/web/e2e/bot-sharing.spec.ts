@@ -18,6 +18,11 @@ test("a bot shared with one person gives them their own thread until it is unsha
     description: "Write the changelog",
     body: "Steps",
   });
+  await rpc(page, "connections/begin", {
+    connectorId: "composio",
+    provider: "GMAIL",
+    displayName: "Gmail",
+  });
 
   const guestContext = await browser.newContext({ baseURL });
   const guest = await guestContext.newPage();
@@ -43,8 +48,11 @@ test("a bot shared with one person gives them their own thread until it is unsha
   );
   const skillsHeading = sheet.getByRole("heading", { name: "Skills this bot can use" });
   const changelog = sheet.getByRole("checkbox", { name: "Changelog" });
+  const appsHeading = sheet.getByRole("heading", { name: "Apps this bot can use" });
+  const gmail = sheet.getByRole("checkbox", { name: "Gmail" });
   await expect(filesNote).toHaveCount(0);
   await expect(skillsHeading).toHaveCount(0);
+  await expect(appsHeading).toHaveCount(0);
   await grace.click();
   await expect(grace).toBeChecked();
   await expect(filesNote).toBeVisible();
@@ -53,6 +61,10 @@ test("a bot shared with one person gives them their own thread until it is unsha
   await expect(changelog).not.toBeChecked();
   await changelog.click();
   await expect(changelog).toBeChecked();
+  await expect(appsHeading).toBeVisible();
+  await expect(gmail).not.toBeChecked();
+  await gmail.click();
+  await expect(gmail).toBeChecked();
   await captureScreenshot(page, testInfo, "share-sheet");
   await page.setViewportSize({ width: 390, height: 844 });
   await captureScreenshot(page, testInfo, "share-sheet-phone");
@@ -66,7 +78,13 @@ test("a bot shared with one person gives them their own thread until it is unsha
   await guest.getByPlaceholder("Message Release notes").fill("Hello from Grace");
   await guest.keyboard.press("Enter");
   await expect(guest.getByText("Hello from Grace")).toBeVisible();
+  const gmailCard = guest.getByRole("group", { name: "Gmail connection" });
+  await expect(gmailCard.getByRole("button", { name: "Authorize" })).toBeVisible();
+  await guest.mouse.move(1, 1);
   await captureScreenshot(guest, testInfo, "shared-bot-member-thread");
+  await guest.setViewportSize({ width: 390, height: 844 });
+  await captureScreenshot(guest, testInfo, "shared-bot-member-thread-phone");
+  await guest.setViewportSize({ width: 1280, height: 720 });
 
   await page.reload();
   await expect(page.getByPlaceholder("Message Release notes")).toBeVisible();
