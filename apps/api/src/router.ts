@@ -90,7 +90,9 @@ import {
 import type { Auth } from "@rakazo/auth";
 import type {
   Actor,
+  Bot,
   ComputerListItem,
+  ComputerMode,
   ComputerStatus,
   ComputerUpdateAllResult,
   McpServer,
@@ -631,6 +633,82 @@ export function createRouter(deps: RouterDeps) {
     dataDir: deps.dataDir,
   });
   const agentSkills = createAgentSkillsService(deps.prisma, deps.dataDir, deps.skillLock);
+
+  /**
+   * Moves a bot to a computer of `mode` while nothing runs on it: runs that start meanwhile wait,
+   * and leaving a dedicated computer saves its workspace and stops it. `then` runs before runs may
+   * start again.
+   */
+  async function switchBotComputer<T>(
+    actor: Actor,
+    bot: Awaited<ReturnType<typeof repos.getBot>>,
+    mode: ComputerMode,
+    then: (moved: Bot) => Promise<T> | T,
+  ): Promise<T> {
+    const computer = bot.computer;
+    if (!computer) throw new IsolationError();
+    const claimed = await deps.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM computers WHERE id = ${bot.computerId} FOR UPDATE`;
+      return tx.bot.updateMany({
+        where: { id: bot.id, computerSwitching: false, computer: { maintenanceId: null } },
+        data: { computerSwitching: true },
+      });
+    });
+    if (claimed.count !== 1) throw new ORPCError("CONFLICT");
+    try {
+      // Read under the claim, which sharing a private bot also takes.
+      const { visibility } = await deps.prisma.bot.findUniqueOrThrow({
+        where: { id: bot.id },
+        select: { visibility: true },
+      });
+      if (mode === "team" && visibility !== "private") {
+        throw new ORPCError("BAD_REQUEST", { message: "Stop sharing this bot first" });
+      }
+      // Unsharing cancels the other people's runs, so on a bot that may move every run is the
+      // owner's, one they see and can stop.
+      const active = await deps.prisma.run.findFirst({
+        where: { botId: bot.id, status: { in: [...ACTIVE_RUN_STATUSES] } },
+        select: { id: true },
+      });
+      if (active) {
+        throw new ORPCError("BAD_REQUEST", { message: "Stop the bot first" });
+      }
+      if (computer.controlBotId === bot.id && hasActiveComputerControl(computer)) {
+        throw new ORPCError("BAD_REQUEST", { message: "Release the computer first" });
+      }
+      if (computer.scope === "dedicated" && computer.providerRef) {
+        const ctx = computerContext(actor, bot.id, "computer.switch");
+        const ref = toComputerRef(computer);
+        if (computer.state === "running") {
+          await checkpointAndRecordComputerWorkspace(deps, computer, ref, ctx);
+          await deps.sandbox.stop(ref, ctx);
+        }
+        await deps.prisma.computerExecutionLease.deleteMany({
+          where: { computerId: computer.id, botId: bot.id },
+        });
+        await deps.prisma.computer.update({
+          where: { id: computer.id },
+          data: {
+            state: "stopped",
+            controlHolder: "none",
+            controlLeaseId: null,
+            controlLeaseExpiresAt: null,
+            controlBotId: null,
+            controlRunId: null,
+            executionRunId: null,
+            executionBotId: null,
+            executionLeaseExpiresAt: null,
+          },
+        });
+      }
+      return await then(await repos.setBotComputer(actor, bot.id, mode));
+    } finally {
+      await deps.prisma.bot.updateMany({
+        where: { id: bot.id },
+        data: { computerSwitching: false },
+      });
+    }
+  }
 
   const authed = os.use(async ({ context, next }) => {
     if (!context.actor) throw new ORPCError("UNAUTHORIZED");
@@ -1405,57 +1483,7 @@ export function createRouter(deps: RouterDeps) {
         if (currentMode === input.mode) {
           return repos.setBotComputer(context.actor, bot.id, input.mode);
         }
-        const claimed = await deps.prisma.$transaction(async (tx) => {
-          await tx.$queryRaw`SELECT id FROM computers WHERE id = ${bot.computerId} FOR UPDATE`;
-          return tx.bot.updateMany({
-            where: { id: bot.id, computerSwitching: false, computer: { maintenanceId: null } },
-            data: { computerSwitching: true },
-          });
-        });
-        if (claimed.count !== 1) throw new ORPCError("CONFLICT");
-        try {
-          const active = await deps.prisma.run.findFirst({
-            where: { botId: bot.id, status: { in: [...ACTIVE_RUN_STATUSES] } },
-            select: { id: true },
-          });
-          if (active) {
-            throw new ORPCError("BAD_REQUEST", { message: "Stop the bot first" });
-          }
-          if (bot.computer.controlBotId === bot.id && hasActiveComputerControl(bot.computer)) {
-            throw new ORPCError("BAD_REQUEST", { message: "Release the computer first" });
-          }
-          if (bot.computer.scope === "dedicated" && bot.computer.providerRef) {
-            const ctx = computerContext(context.actor, bot.id, "computer.switch");
-            const ref = toComputerRef(bot.computer);
-            if (bot.computer.state === "running") {
-              await checkpointAndRecordComputerWorkspace(deps, bot.computer, ref, ctx);
-              await deps.sandbox.stop(ref, ctx);
-            }
-            await deps.prisma.computerExecutionLease.deleteMany({
-              where: { computerId: bot.computer.id, botId: bot.id },
-            });
-            await deps.prisma.computer.update({
-              where: { id: bot.computer.id },
-              data: {
-                state: "stopped",
-                controlHolder: "none",
-                controlLeaseId: null,
-                controlLeaseExpiresAt: null,
-                controlBotId: null,
-                controlRunId: null,
-                executionRunId: null,
-                executionBotId: null,
-                executionLeaseExpiresAt: null,
-              },
-            });
-          }
-          return await repos.setBotComputer(context.actor, bot.id, input.mode);
-        } finally {
-          await deps.prisma.bot.updateMany({
-            where: { id: bot.id },
-            data: { computerSwitching: false },
-          });
-        }
+        return switchBotComputer(context.actor, bot, input.mode, (moved) => moved);
       }),
       archive: authed.bots.archive.handler(async ({ context, input }) => {
         const bot = await repos.getBot(context.actor, input.botId, { includeArchived: true });
@@ -1540,9 +1568,17 @@ export function createRouter(deps: RouterDeps) {
       sharing: authed.bots.sharing.handler(({ context, input }) =>
         getBotSharing(deps.prisma, context.actor, input.botId).catch(mapBotSharingError),
       ),
-      share: authed.bots.share.handler(({ context, input }) =>
-        setBotSharing(deps.prisma, context.actor, input).catch(mapBotSharingError),
-      ),
+      share: authed.bots.share.handler(async ({ context, input }) => {
+        const share = () =>
+          setBotSharing(deps.prisma, context.actor, input).catch(mapBotSharingError);
+        const { visibility } = await getBotSharing(deps.prisma, context.actor, input.botId).catch(
+          mapBotSharingError,
+        );
+        if (visibility !== "private" || input.visibility === "private") return share();
+        // A shared bot runs on its own computer, restarted without the owner's /workspace/shared.
+        const bot = await repos.getBot(context.actor, input.botId);
+        return switchBotComputer(context.actor, bot, "dedicated", share);
+      }),
     },
     groups: {
       create: authed.groups.create.handler(async ({ context, input }) => {

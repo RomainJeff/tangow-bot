@@ -33,8 +33,13 @@ test("a bot shared with one person gives them their own thread until it is unsha
   const sheet = page.getByTestId("share-bot-dialog");
   await expect(sheet.getByRole("heading", { name: "Share Release notes" })).toBeVisible();
   const grace = sheet.getByRole("checkbox", { name: "Grace Guest" });
+  const filesNote = sheet.getByText(
+    "Everyone who uses this bot can see its files and browser sign-ins.",
+  );
+  await expect(filesNote).toHaveCount(0);
   await grace.click();
   await expect(grace).toBeChecked();
+  await expect(filesNote).toBeVisible();
   await expect(sheet.getByRole("switch", { name: "Everyone in Studio" })).not.toBeChecked();
   await captureScreenshot(page, testInfo, "share-sheet");
   await page.setViewportSize({ width: 390, height: 844 });
@@ -59,6 +64,7 @@ test("a bot shared with one person gives them their own thread until it is unsha
   await page.getByRole("menuitem", { name: "Share", exact: true }).click();
   await grace.click();
   await expect(grace).not.toBeChecked();
+  await expect(filesNote).toHaveCount(0);
   await page.keyboard.press("Escape");
 
   await guest.reload();

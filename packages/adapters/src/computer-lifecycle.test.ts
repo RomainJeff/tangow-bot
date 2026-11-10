@@ -10,6 +10,7 @@ import type {
 } from "@rakazo/adapter-kit";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import { clearThread } from "@rakazo/db";
+import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
 import { describe, expect, it, vi } from "vitest";
 import {
   acquireComputerExecutionLease,
@@ -25,6 +26,7 @@ import {
 import { checkpointComputerWorkspace } from "./computer-workspace.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 import { LocalAgentHomeStore } from "./home.js";
+import { workerFixture } from "./worker-fixture.test-support.js";
 
 vi.mock("../../db/src/sessions.js", async () =>
   (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
@@ -1779,6 +1781,7 @@ function leasePrisma(options: {
       computer: {
         findUniqueOrThrow,
       },
+      bot: { findFirst: vi.fn().mockResolvedValue(null) },
       computerExecutionLease: {
         updateManyAndReturn,
         create,
@@ -1793,6 +1796,29 @@ function leasePrisma(options: {
     findUniqueOrThrow,
   };
 }
+
+describe("a shared bot's dedicated computer", () => {
+  it("takes one run at a time", async () => {
+    const database = await openPgliteDatabase();
+    try {
+      const { prisma } = database;
+      const fixture = workerFixture(prisma);
+      await fixture.seedOwner();
+      const spaceId = await fixture.seedSpace();
+      const computer = await fixture.seedComputer(spaceId, { scope: "dedicated" });
+      const bot = await fixture.seedBot(spaceId, computer.id);
+      await prisma.bot.update({ where: { id: bot.id }, data: { visibility: "space" } });
+      const [first, second] = [await fixture.seedRun(bot), await fixture.seedRun(bot)];
+      const acquire = (runId: string) =>
+        acquireComputerExecutionLease(prisma, { computerId: computer.id, runId, botId: bot.id });
+
+      await expect(acquire(first.id)).resolves.toMatchObject({ runId: first.id });
+      await expect(acquire(second.id)).rejects.toThrow("Computer is busy");
+    } finally {
+      await database.close();
+    }
+  });
+});
 
 describe("computer replacement", () => {
   it("replaces a wedged computer and restores the durable home", async () => {

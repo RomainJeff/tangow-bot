@@ -12,6 +12,7 @@ import {
 } from "@rakazo/ui-web";
 import { useEffect, useState } from "react";
 import { rpc } from "../lib/rpc";
+import { saveFailureReason } from "../lib/save-store";
 import { userInitials } from "../lib/user-initials";
 import { SettingsGroup } from "./bot-page/page-kit";
 
@@ -61,9 +62,10 @@ export function ShareBotDialog({
     setError(null);
     try {
       setSharing(await rpc.bots.share({ botId: bot.id, ...next }));
-    } catch {
+    } catch (failure) {
       setSharing(previous);
-      setError(t`Couldn't save`);
+      // A refusal the API explains, such as a bot still running, says why.
+      setError(saveFailureReason(failure) || t`Couldn't save`);
     } finally {
       setPending(false);
     }
@@ -128,6 +130,11 @@ export function ShareBotDialog({
                 ))}
               </SettingsGroup>
             ) : null}
+            {sharing.visibility === "private" ? null : (
+              <p className="text-meta text-muted-foreground">
+                <Trans>Everyone who uses this bot can see its files and browser sign-ins.</Trans>
+              </p>
+            )}
           </div>
         ) : null}
         {error ? (

@@ -1907,6 +1907,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           spaceId: run.spaceId,
           userId: run.userId,
           botId: bot.id,
+          ...(run.userId === bot.userId ? {} : { memberId: run.userId }),
           runId,
           screenLeaseId: screenLeaseIdForRun(null, runId, fence),
           signal: runAbortController.signal,

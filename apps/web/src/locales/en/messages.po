@@ -1673,7 +1673,7 @@ msgstr "Couldn't create"
 msgid "Couldn't create an invite link"
 msgstr "Couldn't create an invite link"
 
-#: src/pages/ShareBotDialog.tsx:50
+#: src/pages/ShareBotDialog.tsx:51
 msgid "Couldn't load"
 msgstr "Couldn't load"
 
@@ -1698,7 +1698,7 @@ msgstr "Couldn't rename the space"
 msgid "Couldn't revoke the invite link"
 msgstr "Couldn't revoke the invite link"
 
-#: src/pages/ShareBotDialog.tsx:66
+#: src/pages/ShareBotDialog.tsx:68
 msgid "Couldn't save"
 msgstr "Couldn't save"
 
@@ -2170,10 +2170,14 @@ msgstr "Every week"
 msgid "Everyday"
 msgstr "Everyday"
 
-#: src/pages/ShareBotDialog.tsx:92
 #: src/pages/ShareBotDialog.tsx:94
+#: src/pages/ShareBotDialog.tsx:96
 msgid "Everyone in {spaceName}"
 msgstr "Everyone in {spaceName}"
+
+#: src/pages/ShareBotDialog.tsx:135
+msgid "Everyone who uses this bot can see its files and browser sign-ins."
+msgstr "Everyone who uses this bot can see its files and browser sign-ins."
 
 #: src/pages/plugins/advanced-integrations.tsx:304
 msgid "Executor token"
@@ -4012,7 +4016,7 @@ msgid "Share"
 msgstr "Share"
 
 #. placeholder {0}: bot.name
-#: src/pages/ShareBotDialog.tsx:86
+#: src/pages/ShareBotDialog.tsx:88
 msgid "Share {0}"
 msgstr "Share {0}"
 

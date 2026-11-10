@@ -16,6 +16,8 @@ export interface AdapterContext {
   spaceId: string;
   userId: string;
   botId?: string;
+  /** Someone the bot is shared with, whose run this is; unset for the owner's own runs. */
+  memberId?: string;
   runId?: string;
   /** Opaque fence for releasing a graphical screen without tearing down its replacement. */
   screenLeaseId?: string;

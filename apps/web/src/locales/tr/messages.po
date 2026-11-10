@@ -1673,7 +1673,7 @@ msgstr "Oluşturulamadı"
 msgid "Couldn't create an invite link"
 msgstr ""
 
-#: src/pages/ShareBotDialog.tsx:50
+#: src/pages/ShareBotDialog.tsx:51
 msgid "Couldn't load"
 msgstr ""
 
@@ -1698,7 +1698,7 @@ msgstr "Alan yeniden adlandırılamadı"
 msgid "Couldn't revoke the invite link"
 msgstr ""
 
-#: src/pages/ShareBotDialog.tsx:66
+#: src/pages/ShareBotDialog.tsx:68
 msgid "Couldn't save"
 msgstr ""
 
@@ -2170,9 +2170,13 @@ msgstr "Her hafta"
 msgid "Everyday"
 msgstr "Günlük"
 
-#: src/pages/ShareBotDialog.tsx:92
 #: src/pages/ShareBotDialog.tsx:94
+#: src/pages/ShareBotDialog.tsx:96
 msgid "Everyone in {spaceName}"
+msgstr ""
+
+#: src/pages/ShareBotDialog.tsx:135
+msgid "Everyone who uses this bot can see its files and browser sign-ins."
 msgstr ""
 
 #: src/pages/plugins/advanced-integrations.tsx:304
@@ -4012,7 +4016,7 @@ msgid "Share"
 msgstr ""
 
 #. placeholder {0}: bot.name
-#: src/pages/ShareBotDialog.tsx:86
+#: src/pages/ShareBotDialog.tsx:88
 msgid "Share {0}"
 msgstr ""
 

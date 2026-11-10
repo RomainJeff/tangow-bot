@@ -19,6 +19,7 @@ import type {
 import { boundedSandboxCommandTimeoutMs, resolveSupervisorToken } from "@rakazo/core";
 import { outgoingCorrelationHeaders } from "@rakazo/logging";
 import { z } from "zod";
+import { screenSessionKey } from "./computer-screens.js";
 import {
   boundedComputerActions,
   clampRounded,
@@ -129,7 +130,8 @@ export class DockerSandboxProvider implements SandboxProvider {
       "x-rakazo-space-id": context.spaceId,
       ...outgoingCorrelationHeaders(),
       ...(botId ? { "x-rakazo-bot-id": botId } : {}),
-      ...(context.botId ? { "x-rakazo-screen-id": context.botId } : {}),
+      // The supervisor picks the screen and its browser profile by this key.
+      ...(context.botId ? { "x-rakazo-screen-id": screenSessionKey(context) } : {}),
       ...(context.screenLeaseId ? { "x-rakazo-screen-lease-id": context.screenLeaseId } : {}),
       ...(context.cancelRunWork ? { "x-rakazo-cancel-run-work": "1" } : {}),
     };

@@ -1259,6 +1259,7 @@ export async function stopThreadRuns(
         spaceId: actor.spaceId,
         userId: actor.userId,
         botId,
+        ...(hold.memberId ? { memberId: hold.memberId } : {}),
         runId,
         screenLeaseId: hold.screenLeaseId,
         cancelRunWork: true,
