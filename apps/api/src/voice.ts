@@ -21,6 +21,7 @@ import {
   Prisma,
   type PrismaClient,
   selectSpaceVoicePreference,
+  sharedWithFilter,
 } from "@rakazo/db";
 import type { Context, Hono } from "hono";
 import { readBoundedBody } from "./http-body.js";
@@ -101,8 +102,13 @@ export async function resolveVoiceTarget(
 ) {
   let botVoiceId: string | null = null;
   if (input.botId) {
+    // Its owner, or someone it is shared with: the bot speaks in its own voice to everyone.
     const bot = await deps.prisma.bot.findFirst({
-      where: { id: input.botId, spaceId: actor.spaceId, userId: actor.userId },
+      where: {
+        id: input.botId,
+        spaceId: actor.spaceId,
+        OR: [{ userId: actor.userId }, sharedWithFilter(actor.userId)],
+      },
       select: { voiceId: true },
     });
     if (!bot) throw new IsolationError();

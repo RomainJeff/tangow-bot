@@ -1,5 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { MemoryDocument } from "@rakazo/contracts";
+import { showsTeamMemory } from "@rakazo/core";
 import { NativeSelect, NativeSelectOption, SaveMeta, SettingRow } from "@rakazo/ui-web";
 import { type ReactNode, useEffect, useState } from "react";
 import { rpc } from "../../lib/rpc";
@@ -79,14 +80,13 @@ export function KnowledgeTab({
   );
 }
 
-/** Team memory shows on a shared bot, and on any bot that still has some: unsharing keeps it. */
 function useShowsTeamMemory(botId: string, epoch: number): boolean {
   const [shows, setShows] = useState(false);
   useEffect(() => {
     let cancelled = false;
     Promise.all([rpc.bots.sharing({ botId }), rpc.memory.list({ botId, scope: "team" })])
       .then(([sharing, team]) => {
-        if (!cancelled) setShows(sharing.visibility !== "private" || team.length > 0);
+        if (!cancelled) setShows(showsTeamMemory(sharing, team));
       })
       .catch(() => undefined);
     return () => {

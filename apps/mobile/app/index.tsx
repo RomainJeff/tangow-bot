@@ -35,6 +35,7 @@ import { native, useThemedStyles } from "../lib/native";
 import type { MenuAction } from "../lib/native-menu";
 import { useProfilePhoto } from "../lib/profile-photo";
 import { mobileSearchDestination } from "../lib/search-destination";
+import { sharedWithMe } from "../lib/shared-bot";
 import { openSheet } from "../lib/sheet";
 import type { InboxItem } from "../lib/use-home-inbox";
 import { useHomeInbox } from "../lib/use-home-inbox";
@@ -277,7 +278,12 @@ export default function Home() {
               onPress={() => {
                 setQuery("");
                 setSearchHits([]);
-                router.push(mobileSearchDestination(item.hit));
+                router.push(
+                  mobileSearchDestination(
+                    item.hit,
+                    sharedWithMe(bots.find((bot) => bot.id === item.hit.botId)),
+                  ),
+                );
               }}
             />
           ) : item.type === "heading" ? (
@@ -358,7 +364,10 @@ export default function Home() {
                 );
               }}
               onLongPress={
-                item.bot.spaceId === me?.spaceId ? () => organize("bot", item.bot.id) : undefined
+                // A bot shared with you keeps its owner's pin, section and notifications.
+                item.bot.spaceId === me?.spaceId && !sharedWithMe(item.bot)
+                  ? () => organize("bot", item.bot.id)
+                  : undefined
               }
             />
           )
