@@ -221,6 +221,7 @@ import {
 import { messageArrivalStaggerMs, useMessageArrivals } from "../lib/message-arrivals";
 import {
   hasVisibleMessagePresentation,
+  memoryNoteLine,
   messagePresentationSegments,
   skillLineRoute,
   skillLineSegment,
@@ -562,9 +563,7 @@ function Thread() {
   const drawnRows = useRef<ReadonlyMap<string, ThreadRow>>(new Map());
   const liveView = useMemo((): ThreadView => {
     const projected = projectThreadView(snap?.entries ?? [], {
-      // ponytail: no team memory line on mobile until shared bots reach it; the row stays out.
       rendersNothing: (item) =>
-        (item.kind === "note" && item.type === "memory.revised") ||
         drawsNothing(item, (blocks) => hasVisibleMessagePresentation(blocks, showSteps)),
       progress: snap?.layer,
       imageStacks: true,
@@ -4328,6 +4327,22 @@ function NoteRow({ item, isNew }: { item: NoteItem; isNew: boolean }) {
     const { skillId, name, change } = item.payload;
     return (
       <BubbleMeta lines={[skillLineMeta({ skillId, name, change }, isNew, router)]} standalone />
+    );
+  }
+  const memory = memoryNoteLine(item);
+  if (memory) {
+    return (
+      <BubbleMeta
+        lines={[
+          {
+            id: item.id,
+            label: memory,
+            icon: { ios: "person.2", android: "people-outline" },
+            live: isNew,
+          },
+        ]}
+        standalone
+      />
     );
   }
   return null;

@@ -879,6 +879,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Skill learned · {name}": "Навык освоен · {name}",
   "Skill updated · {name}": "Навык обновлён · {name}",
   "Skill deleted · {name}": "Навык удалён · {name}",
+  "Saved for the team": "Сохранено для команды",
   "Earlier messages summarized": "Ранние сообщения обобщены",
   "Message edited": "Сообщение изменено",
   "Conversation cleared": "Разговор очищен",

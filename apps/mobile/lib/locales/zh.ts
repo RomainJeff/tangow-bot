@@ -862,6 +862,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Skill learned · {name}": "技能已学会 · {name}",
   "Skill updated · {name}": "技能已更新 · {name}",
   "Skill deleted · {name}": "技能已删除 · {name}",
+  "Saved for the team": "已为团队保存",
   "Earlier messages summarized": "较早的消息已总结",
   "Message edited": "消息已编辑",
   "Conversation cleared": "对话已清除",
