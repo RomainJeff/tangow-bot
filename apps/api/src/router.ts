@@ -390,7 +390,7 @@ async function lockProviderConnectionScope(
 }
 
 function computerContext(
-  actor: Actor,
+  actor: Pick<Actor, "spaceId" | "userId">,
   botId: string,
   operationId: string,
   memberId?: string,
@@ -936,6 +936,7 @@ export function createRouter(deps: RouterDeps) {
           userId: context.actor.userId,
           memberUserId: input.userId,
         }).catch(mapSpaceMembershipError);
+        await endCancelledRunControl(deps, input.spaceId);
         return { ok: true as const };
       }),
       invitation: authed.spaces.invitation.handler(({ input }) =>
@@ -1553,7 +1554,11 @@ export function createRouter(deps: RouterDeps) {
             message: "This server's address holds a secret, so it can't be shared",
           });
         }
-        if (visibility !== "private" || input.visibility === "private") return share();
+        if (visibility !== "private" || input.visibility === "private") {
+          const sharing = await share();
+          await endCancelledRunControl(deps, context.actor.spaceId);
+          return sharing;
+        }
         // A shared bot runs on its own computer, restarted without the owner's /workspace/shared.
         const bot = await repos.getBot(context.actor, input.botId);
         return switchBotComputer(context.actor, bot, "dedicated", share);
@@ -5397,6 +5402,58 @@ async function computerBot(deps: RouterDeps, actor: Actor, botId: string) {
   const shared = await sharedBotThread(deps.prisma, actor, botId);
   if (!shared) throw new IsolationError();
   return { bot: { ...shared.bot, thread: shared.thread }, memberId: actor.userId };
+}
+
+/**
+ * A takeover whose run was just cancelled, because its person lost the bot or left the Space,
+ * ends at once: the provider revokes that person's screen, and its control lease stops matching
+ * any screen capability.
+ */
+async function endCancelledRunControl(deps: RouterDeps, spaceId: string) {
+  const computers = await deps.prisma.computer.findMany({
+    where: {
+      spaceId,
+      controlHolder: "user",
+      controlBotId: { not: null },
+      controlLeaseId: { not: null },
+      controlRunId: { not: null },
+    },
+  });
+  for (const computer of computers) {
+    const run = await deps.prisma.run.findUnique({
+      where: { id: computer.controlRunId! },
+      select: { status: true, userId: true },
+    });
+    if (run?.status !== "cancelled") continue;
+    const botId = computer.controlBotId!;
+    const leaseId = computer.controlLeaseId!;
+    if (computer.providerRef) {
+      await deps.sandbox.setScreenControl?.(
+        toComputerRef(computer),
+        false,
+        computerContext(
+          computer,
+          botId,
+          "screen.release",
+          run.userId === computer.userId ? undefined : run.userId,
+        ),
+        leaseId,
+      );
+    }
+    const released = await deps.events.finalizeComputerControlRelease({
+      spaceId: computer.spaceId,
+      computerId: computer.id,
+      botId,
+      runId: computer.controlRunId,
+      leaseId,
+      holder: "none",
+      reason: "released",
+    });
+    if (!released) continue;
+    await deps.jobs
+      .cancel(computerControlExpireJobKey(computer.id, leaseId))
+      .catch((error) => getLogger().error("computer control expiry cancellation", error));
+  }
 }
 
 /** The member's own run, in their own thread, that holds the shared bot's computer right now. */

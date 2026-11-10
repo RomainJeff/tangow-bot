@@ -3,6 +3,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { ComposioEmulator, ScriptedVoiceProvider } from "@rakazo/adapters";
 import type { appContract, Space, SpaceNavigation } from "@rakazo/contracts";
+import { resolveScreenProxySecret } from "@rakazo/core";
+import { SCREEN_TARGET_ENDPOINT } from "@rakazo/core/node/screen-capability";
 import {
   claimEmptySpaceDeletionForMember,
   deleteEmptySpaceForMember,
@@ -12,6 +14,7 @@ import {
 } from "@rakazo/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
+import { addScreenProxyCapability } from "../../../apps/api/src/screen-proxy.ts";
 import { sessionCookieHeader } from "./index.js";
 
 type App = { request: (input: string, init?: RequestInit) => Response | Promise<Response> };
@@ -2125,6 +2128,50 @@ describeWithDatabase("API authorization and resource isolation", () => {
     expect((await screen(dana.cookie)).url?.split("/").at(-1)).toBe(
       `${bot.id}:${dana.userId}?view_only=false`,
     );
+  });
+
+  it("ends an unshared member's takeover at once, screen included", async () => {
+    const fixture = await sharedBotComputer("bot-share-unshared-control");
+    const { owner, space, dana, sam, bot, share, computerId } = fixture;
+    const run = await fixture.danaRun("waiting_takeover");
+    await handles.prisma.computer.update({
+      where: { id: computerId },
+      data: { controlRunId: run.id },
+    });
+    const { leaseId } = await fixture.takeover(dana.cookie);
+    const generations = await handles.prisma.bot.findUniqueOrThrow({
+      where: { id: bot.id },
+      select: { screenGeneration: true, computer: { select: { screenGeneration: true } } },
+    });
+    const secret = resolveScreenProxySecret();
+    const capability = new URL(
+      addScreenProxyCapability(
+        "http://127.0.0.1:49152/embed.html?view_only=false",
+        secret,
+        "http://127.0.0.1:5173",
+        {
+          botId: bot.id,
+          computerId,
+          botGeneration: generations.screenGeneration,
+          computerGeneration: generations.computer!.screenGeneration,
+          controlLeaseId: leaseId,
+        },
+      ),
+    ).pathname;
+    const target = () =>
+      app.request(SCREEN_TARGET_ENDPOINT, {
+        method: "POST",
+        headers: { authorization: `Bearer ${secret}`, "content-type": "application/json" },
+        body: JSON.stringify({ path: capability }),
+      });
+    expect((await target()).status).toBe(200);
+
+    await rpc(app, owner, "bots/share", { ...share, userIds: [sam.userId] }, space);
+    expect((await target()).status).toBe(403);
+    expect(await fixture.status(owner)).toMatchObject({ controlHolder: "none", busyBotName: null });
+    await expect(fixture.takeover(owner)).resolves.toMatchObject({
+      leaseId: expect.any(String),
+    });
   });
 
   it("renames a space only for its owner", async () => {
