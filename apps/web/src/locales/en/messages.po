@@ -1673,7 +1673,7 @@ msgstr "Couldn't create"
 msgid "Couldn't create an invite link"
 msgstr "Couldn't create an invite link"
 
-#: src/pages/ShareBotDialog.tsx:51
+#: src/pages/ShareBotDialog.tsx:59
 msgid "Couldn't load"
 msgstr "Couldn't load"
 
@@ -1698,7 +1698,8 @@ msgstr "Couldn't rename the space"
 msgid "Couldn't revoke the invite link"
 msgstr "Couldn't revoke the invite link"
 
-#: src/pages/ShareBotDialog.tsx:68
+#: src/pages/ShareBotDialog.tsx:78
+#: src/pages/ShareBotDialog.tsx:93
 msgid "Couldn't save"
 msgstr "Couldn't save"
 
@@ -2170,12 +2171,12 @@ msgstr "Every week"
 msgid "Everyday"
 msgstr "Everyday"
 
-#: src/pages/ShareBotDialog.tsx:94
-#: src/pages/ShareBotDialog.tsx:96
+#: src/pages/ShareBotDialog.tsx:117
+#: src/pages/ShareBotDialog.tsx:119
 msgid "Everyone in {spaceName}"
 msgstr "Everyone in {spaceName}"
 
-#: src/pages/ShareBotDialog.tsx:135
+#: src/pages/ShareBotDialog.tsx:171
 msgid "Everyone who uses this bot can see its files and browser sign-ins."
 msgstr "Everyone who uses this bot can see its files and browser sign-ins."
 
@@ -4016,7 +4017,7 @@ msgid "Share"
 msgstr "Share"
 
 #. placeholder {0}: bot.name
-#: src/pages/ShareBotDialog.tsx:88
+#: src/pages/ShareBotDialog.tsx:111
 msgid "Share {0}"
 msgstr "Share {0}"
 
@@ -4106,6 +4107,10 @@ msgstr "Skill updated · {name}"
 #: src/pages/CustomizeOverlay.tsx:103
 msgid "Skills"
 msgstr "Skills"
+
+#: src/pages/ShareBotDialog.tsx:157
+msgid "Skills this bot can use"
+msgstr "Skills this bot can use"
 
 #: src/components/ask/QuestionCard.tsx:194
 #: src/components/integrations/IntegrationSetup.tsx:359

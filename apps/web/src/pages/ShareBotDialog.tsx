@@ -1,5 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { Bot, BotSharing, SpaceMembers } from "@rakazo/contracts";
+import type { AgentSkillCatalogEntry, Bot, BotSharing, SpaceMembers } from "@rakazo/contracts";
 import {
   Checkbox,
   Dialog,
@@ -16,9 +16,14 @@ import { saveFailureReason } from "../lib/save-store";
 import { userInitials } from "../lib/user-initials";
 import { SettingsGroup } from "./bot-page/page-kit";
 
+/** The owner's own skills a bot can be given; a disabled one is given to no bot. */
+const givable = (skills: AgentSkillCatalogEntry[]) =>
+  skills.filter((skill) => skill.source === "user" && skill.availability !== "disabled");
+
 /**
  * Who besides its owner uses the bot: everyone in the Space, or the people ticked. Each change
- * saves itself; no one ticked means only the owner.
+ * saves itself; no one ticked means only the owner. Once shared, the bot uses only the skills
+ * ticked for it.
  */
 export function ShareBotDialog({
   bot,
@@ -34,6 +39,7 @@ export function ShareBotDialog({
   const { t } = useLingui();
   const [sharing, setSharing] = useState<BotSharing | null>(null);
   const [people, setPeople] = useState<SpaceMembers["members"]>([]);
+  const [skills, setSkills] = useState<AgentSkillCatalogEntry[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,11 +48,13 @@ export function ShareBotDialog({
     Promise.all([
       rpc.bots.sharing({ botId: bot.id }),
       rpc.spaces.members({ spaceId: bot.spaceId }),
+      rpc.agentSkills.list(),
     ]).then(
-      ([current, view]) => {
+      ([current, view, catalog]) => {
         if (!live) return;
         setSharing(current);
         setPeople(view.members.filter((member) => member.userId !== userId));
+        setSkills(givable(catalog));
       },
       () => live && setError(t`Couldn't load`),
     );
@@ -62,12 +70,27 @@ export function ShareBotDialog({
     setError(null);
     try {
       setSharing(await rpc.bots.share({ botId: bot.id, ...next }));
+      // Sharing changes which skills count for the bot.
+      setSkills(givable(await rpc.agentSkills.list()));
     } catch (failure) {
       setSharing(previous);
       // A refusal the API explains, such as a bot still running, says why.
       setError(saveFailureReason(failure) || t`Couldn't save`);
     } finally {
       setPending(false);
+    }
+  }
+
+  async function giveSkill(skill: AgentSkillCatalogEntry, enabled: boolean) {
+    setError(null);
+    try {
+      const updated = await rpc.agentSkills.setAccess({
+        skillId: skill.id,
+        bots: [{ botId: bot.id, enabled }],
+      });
+      setSkills((list) => list.map((entry) => (entry.id === updated.id ? updated : entry)));
+    } catch {
+      setError(t`Couldn't save`);
     }
   }
 
@@ -125,6 +148,19 @@ export function ShareBotDialog({
                       checked={chosen.includes(member.userId)}
                       disabled={pending}
                       onCheckedChange={(checked) => toggle(member.userId, checked)}
+                    />
+                  </SettingRow>
+                ))}
+              </SettingsGroup>
+            ) : null}
+            {sharing.visibility !== "private" && skills.length > 0 ? (
+              <SettingsGroup label={t`Skills this bot can use`}>
+                {skills.map((skill) => (
+                  <SettingRow key={skill.id} label={skill.name}>
+                    <Checkbox
+                      aria-label={skill.name}
+                      checked={skill.visibleBotIds.includes(bot.id)}
+                      onCheckedChange={(checked) => void giveSkill(skill, checked)}
                     />
                   </SettingRow>
                 ))}
