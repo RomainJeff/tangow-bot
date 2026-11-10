@@ -415,6 +415,7 @@ describe("finalizeComputerControlRelease", () => {
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([]),
       computer: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      computerExecutionLease: { findUnique: vi.fn().mockResolvedValue(null) },
     };
     const prisma = {
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
@@ -678,8 +679,10 @@ describe("pauseRunForTakeover", () => {
       $queryRaw: vi.fn().mockResolvedValue([{ id: "thread-1" }]),
       run: {
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
-        findUnique: vi.fn().mockResolvedValue({ status: "waiting_takeover" }),
+        findUnique: vi.fn().mockResolvedValue({ status: "waiting_takeover", userId: "owner" }),
       },
+      // The bot's owner took the screen by hand and their own run pauses.
+      bot: { findUnique: vi.fn().mockResolvedValue({ userId: "owner" }) },
       attempt: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       computer: {
         findFirst: vi.fn().mockResolvedValue({
@@ -687,6 +690,7 @@ describe("pauseRunForTakeover", () => {
           controlBotId: "bot-1",
           controlLeaseId: "lease-1",
           controlLeaseExpiresAt: expiresAt,
+          controlRunId: null,
         }),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },

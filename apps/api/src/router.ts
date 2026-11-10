@@ -2239,11 +2239,12 @@ export function createRouter(deps: RouterDeps) {
           // A member takes the screen only when their own run asks them to, or holds it already.
           const run = await memberComputerRun(deps.prisma, bot, memberId);
           const controlled = hasActiveComputerControl(bot.computer);
-          if (
-            !run ||
-            (controlled ? bot.computer.controlRunId !== run.id : run.status !== "waiting_takeover")
-          ) {
+          if (!run || (!controlled && run.status !== "waiting_takeover")) {
             throw new ORPCError("FORBIDDEN");
+          }
+          // Someone else has the screen; the member takes over once it is released.
+          if (controlled && bot.computer.controlRunId !== run.id) {
+            throw new ORPCError("CONFLICT", { message: "Computer is busy" });
           }
         }
         if (await holdsComputerControl(deps.prisma, bot.computer, bot, context.actor.userId)) {
@@ -5370,11 +5371,12 @@ async function computerStatus(
     botName: bot.name,
     userId: actor.userId,
   });
+  const seen = await computerSeenBy(deps.prisma, bot, actor.userId);
   return toComputerStatus(
     botId,
     bot.screenGeneration,
-    await computerSeenBy(deps.prisma, bot, actor.userId),
-    busyBotName,
+    seen.computer,
+    busyBotName ?? (seen.heldByOther ? bot.name : null),
     // A computer's updates are its owner's to apply.
     memberId ? null : await currentComputerRelease(deps.sandbox, actor),
   );

@@ -491,7 +491,7 @@ export async function threadSnapshot(
   if (target.kind === "bot") {
     // Whose thread this is: the owner's, or a member's own thread with a shared bot.
     const viewerId = target.bot.thread?.userId ?? target.bot.userId;
-    const [busyBotName, computer, core] = await Promise.all([
+    const [busyBotName, seen, core] = await Promise.all([
       resolveBusyBotName(deps.prisma, {
         computerId: target.bot.computer?.id,
         botId: target.botId,
@@ -587,8 +587,8 @@ export async function threadSnapshot(
       computer: toComputerStatus(
         target.botId,
         target.bot.screenGeneration,
-        computer,
-        busyBotName,
+        seen.computer,
+        busyBotName ?? (seen.heldByOther ? target.bot.name : null),
         // A computer's updates are its owner's to apply.
         viewerId === target.bot.userId
           ? await currentComputerRelease(deps.sandbox, target.bot)

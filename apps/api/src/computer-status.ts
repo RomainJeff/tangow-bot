@@ -111,18 +111,28 @@ export async function holdsComputerControl(
   return run ? run.userId === userId : bot.userId === userId;
 }
 
-/** The bot's computer as `userId` sees it: control another person holds on it is not theirs. */
+/**
+ * The bot's computer as `userId` sees it: control another person holds on it is not theirs, and
+ * keeps the computer busy for them.
+ */
 export async function computerSeenBy<T extends ControlledComputer>(
   prisma: PrismaClient,
   bot: { id: string; userId: string; computer: T | null },
   userId: string,
-): Promise<T | null> {
+): Promise<{ computer: T | null; heldByOther: boolean }> {
   const computer = bot.computer;
-  if (!computer || computer.controlBotId !== bot.id || !hasActiveComputerControl(computer)) {
-    return computer;
+  if (
+    !computer ||
+    computer.controlBotId !== bot.id ||
+    !hasActiveComputerControl(computer) ||
+    (await holdsComputerControl(prisma, computer, bot, userId))
+  ) {
+    return { computer, heldByOther: false };
   }
-  if (await holdsComputerControl(prisma, computer, bot, userId)) return computer;
-  return { ...computer, controlHolder: "none", controlBotId: null, controlRunId: null };
+  return {
+    computer: { ...computer, controlHolder: "none", controlBotId: null, controlRunId: null },
+    heldByOther: true,
+  };
 }
 
 /** Changes exactly when the capability sealed by `computer.screenUrl` stops matching the proxy's checks. */

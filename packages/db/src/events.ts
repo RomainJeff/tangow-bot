@@ -1839,6 +1839,21 @@ export async function messageHelper(
   });
 }
 
+/** Whether the bot's computer control belongs to the person whose run is pausing. */
+async function controlIsRunPersons(
+  tx: Prisma.TransactionClient,
+  controlRunId: string | null,
+  input: { runId: string; botId: string },
+): Promise<boolean> {
+  const [run, holder] = await Promise.all([
+    tx.run.findUnique({ where: { id: input.runId }, select: { userId: true } }),
+    controlRunId
+      ? tx.run.findUnique({ where: { id: controlRunId }, select: { userId: true } })
+      : tx.bot.findUnique({ where: { id: input.botId }, select: { userId: true } }),
+  ]);
+  return Boolean(run && run.userId === holder?.userId);
+}
+
 export async function pauseRunForTakeover(
   prisma: PrismaClient,
   input: PauseRunForTakeover,
@@ -1887,6 +1902,7 @@ export async function pauseRunForTakeover(
         controlBotId: true,
         controlLeaseId: true,
         controlLeaseExpiresAt: true,
+        controlRunId: true,
       },
     });
     const activeUserLease = Boolean(
@@ -1895,14 +1911,18 @@ export async function pauseRunForTakeover(
         computer.controlLeaseExpiresAt &&
         computer.controlLeaseExpiresAt.getTime() > now.getTime(),
     );
-    // Keep an active same-bot user lease so Skip / I'm done appear immediately.
+    // Keep an active same-bot user lease so Skip / I'm done appear immediately, when it is the
+    // pausing run's person's: control taken by hand is the owner's, control taken for a run is
+    // that run's person's. On a shared bot, another person's lease is kept like another bot's.
     // Preserve another bot's active lease — computer/takeover owns revocation. Do not attach
     // this run to that lease: release validates controlBotId and could clear the binding without
     // resuming the waiting run. The requesting bot's takeover flow binds it after revocation.
     // Otherwise clear stale control, but bind controlRunId so takeoverRequested is true.
-    const retainControl = Boolean(activeUserLease && computer?.controlBotId === input.botId);
+    const sameBotLease = Boolean(activeUserLease && computer?.controlBotId === input.botId);
+    const retainControl =
+      sameBotLease && (await controlIsRunPersons(tx, computer?.controlRunId ?? null, input));
     const preserveForeignLease = Boolean(
-      activeUserLease && computer?.controlBotId && computer.controlBotId !== input.botId,
+      activeUserLease && computer?.controlBotId && !retainControl,
     );
     const marked = await tx.computer.updateMany({
       where: { id: input.computerId, spaceId: input.spaceId },
@@ -1963,6 +1983,9 @@ export async function finalizeComputerControlRelease(
           SELECT threads.id, threads."sessionId" FROM threads JOIN bots ON bots.id = threads."botId"
           WHERE bots.id = ${input.botId} AND bots."spaceId" = ${input.spaceId}
           FOR UPDATE OF threads`;
+    // Control taken by hand gives the screen to a run of the bot that already waits for a
+    // takeover: on a shared bot, a member's run that paused while its owner had the screen.
+    const waiting = input.runId ? null : await waitingTakeoverRun(tx, input);
     const cleared = await tx.computer.updateMany({
       where: {
         id: input.computerId,
@@ -1976,7 +1999,7 @@ export async function finalizeComputerControlRelease(
         controlLeaseId: null,
         controlLeaseExpiresAt: null,
         controlBotId: null,
-        controlRunId: null,
+        controlRunId: waiting?.id ?? null,
       },
     });
     if (cleared.count !== 1) return null;
@@ -2013,7 +2036,7 @@ export async function finalizeComputerControlRelease(
         : { count: 0 };
     const runId = resumed.count === 1 || stamped.count === 1 ? input.runId : null;
 
-    if (!thread) return { threadId: null, seq: null, runId };
+    if (!thread) return { threadId: null, seq: null, runId, waiting };
     await appendComputerControlInTransaction(tx, {
       sessionId: thread.sessionId as SessionId,
       botId: input.botId,
@@ -2031,14 +2054,50 @@ export async function finalizeComputerControlRelease(
         reason: input.reason,
       },
     });
-    return { threadId: event.threadId, seq: event.seq, runId };
+    return { threadId: event.threadId, seq: event.seq, runId, waiting };
   });
 
   if (!committed) return false;
   if (committed.threadId && committed.seq !== null) {
     await notifyRealtime(realtime, committed.threadId, committed.seq);
   }
+  // After the commit, so this thread's lock never waits behind the computer's.
+  if (committed.waiting && committed.waiting.threadId !== committed.threadId) {
+    await appendEvent(
+      prisma,
+      {
+        spaceId: input.spaceId,
+        threadId: committed.waiting.threadId,
+        botId: input.botId,
+        runId: committed.waiting.id,
+        type: "computer.status",
+        payload: { status: "running" },
+      },
+      realtime,
+    );
+  }
   return { runId: committed.runId };
+}
+
+/** The bot's run that holds its computer and waits for someone to take over the screen. */
+async function waitingTakeoverRun(
+  tx: Prisma.TransactionClient,
+  input: { computerId: string; botId: string; spaceId: string },
+) {
+  const lease = await tx.computerExecutionLease.findUnique({
+    where: { computerId_botId: { computerId: input.computerId, botId: input.botId } },
+    select: { runId: true },
+  });
+  if (!lease) return null;
+  return tx.run.findFirst({
+    where: {
+      id: lease.runId,
+      spaceId: input.spaceId,
+      botId: input.botId,
+      status: "waiting_takeover",
+    },
+    select: { id: true, threadId: true },
+  });
 }
 
 export async function appendEvent(
