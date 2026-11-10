@@ -24,6 +24,15 @@ test("a bot shared with one person gives them their own thread until it is unsha
     provider: "GMAIL",
     displayName: "Gmail",
   });
+  const linear = await rpc<{ id: string }>(page, "mcp/servers/create", {
+    slug: "linear",
+    name: "Linear",
+    transport: "streamable_http",
+    endpoint: "https://mcp.linear.example/mcp",
+    headers: { "X-Api-Key": "owner-key" },
+    enabled: true,
+  });
+  await rpc(page, "mcp/assignments/replace", { botId, assignments: [{ serverId: linear.id }] });
 
   const guestContext = await browser.newContext({ baseURL });
   const guest = await guestContext.newPage();
@@ -51,6 +60,7 @@ test("a bot shared with one person gives them their own thread until it is unsha
   const changelog = sheet.getByRole("checkbox", { name: "Changelog" });
   const appsHeading = sheet.getByRole("heading", { name: "Apps this bot can use" });
   const gmail = sheet.getByRole("checkbox", { name: "Gmail" });
+  const linearBox = sheet.getByRole("checkbox", { name: "Linear" });
   await expect(filesNote).toHaveCount(0);
   await expect(skillsHeading).toHaveCount(0);
   await expect(appsHeading).toHaveCount(0);
@@ -66,6 +76,8 @@ test("a bot shared with one person gives them their own thread until it is unsha
   await expect(gmail).not.toBeChecked();
   await gmail.click();
   await expect(gmail).toBeChecked();
+  await linearBox.click();
+  await expect(linearBox).toBeChecked();
   await captureScreenshot(page, testInfo, "share-sheet");
   await page.setViewportSize({ width: 390, height: 844 });
   await captureScreenshot(page, testInfo, "share-sheet-phone");
@@ -87,17 +99,44 @@ test("a bot shared with one person gives them their own thread until it is unsha
   await captureScreenshot(guest, testInfo, "shared-bot-member-thread-phone");
   await guest.setViewportSize({ width: 1280, height: 720 });
 
+  // The member adds the declared MCP server with their own key, in the form filled in for them.
+  const linearCard = guest.getByRole("group", { name: "Linear connection" });
+  await linearCard.getByRole("button", { name: "Add" }).click();
+  const serverUrl = guest.getByLabel("Server URL");
+  await expect(serverUrl).toHaveValue("https://mcp.linear.example/mcp");
+  await expect(serverUrl).toBeDisabled();
+  await expect(guest.getByLabel("Server name")).toHaveValue("Linear");
+  const memberKey = guest.getByLabel("X-Api-Key");
+  await expect(memberKey).toHaveValue("");
+  await captureScreenshot(guest, testInfo, "declared-mcp-form");
+  await guest.setViewportSize({ width: 390, height: 844 });
+  await captureScreenshot(guest, testInfo, "declared-mcp-form-phone");
+  await guest.setViewportSize({ width: 1280, height: 720 });
+  await memberKey.fill("grace-key");
+  await guest.getByRole("button", { name: "Add server" }).click();
+  await expect(serverUrl).toBeHidden();
+  // Their own copy, with the key they typed.
+  await expect(guest.getByText("credential saved")).toBeVisible();
+  await guest.keyboard.press("Escape");
+  await expect(linearCard.getByText("Connected")).toBeVisible();
+
   await page.reload();
   await expect(page.getByPlaceholder("Message Release notes")).toBeVisible();
   await expect(page.getByText("Hello from Grace")).toHaveCount(0);
 
-  // A declared app the owner has since disconnected stays listed, so it can still be unticked.
+  // A declared app the owner has since disconnected, or a server they deleted, stays listed, so
+  // it can still be unticked.
   await rpc(page, "connections/revoke", { connectionId: ownerGmail.connectionId });
+  await rpc(page, "mcp/servers/remove", { id: linear.id });
   await ownerRow.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Share", exact: true }).click();
+  const deleted = sheet.getByRole("checkbox", { name: "Deleted" });
   await expect(gmail).toBeChecked();
+  await expect(deleted).toBeChecked();
   await gmail.click();
   await expect(gmail).not.toBeChecked();
+  await deleted.click();
+  await expect(deleted).not.toBeChecked();
   await expect
     .poll(async () => (await rpc<BotSharing>(page, "bots/sharing", { botId })).connectors)
     .toEqual([]);

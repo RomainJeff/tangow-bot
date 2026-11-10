@@ -83,7 +83,7 @@ msgid "{0} <0>out</0>"
 msgstr ""
 
 #. placeholder {0}: block.name
-#: src/pages/shell/message-cards.tsx:164
+#: src/pages/shell/message-cards.tsx:171
 msgid "{0} connection"
 msgstr "Conexão {0}"
 
@@ -268,7 +268,7 @@ msgstr ""
 msgid "Access token"
 msgstr ""
 
-#: src/pages/McpServersOverlay.tsx:355
+#: src/pages/McpServersOverlay.tsx:437
 msgid "Access token (optional)"
 msgstr "Token de acesso (opcional)"
 
@@ -339,6 +339,7 @@ msgstr "Atividade, a última execução falhou"
 #: src/pages/plugins/advanced-integrations.tsx:171
 #: src/pages/PluginsOverlay.tsx:83
 #: src/pages/ScratchpadSection.tsx:196
+#: src/pages/shell/message-cards.tsx:201
 msgid "Add"
 msgstr "Adicionar"
 
@@ -354,15 +355,15 @@ msgstr "Defina um horário de execução para esta execução única."
 msgid "Add a schedule, webhook, GitHub, or message trigger"
 msgstr ""
 
-#: src/pages/McpServersOverlay.tsx:108
+#: src/pages/McpServersOverlay.tsx:166
 msgid "Add a server name."
 msgstr "Adicione um nome de servidor."
 
-#: src/pages/McpServersOverlay.tsx:116
+#: src/pages/McpServersOverlay.tsx:174
 msgid "Add a stdio command."
 msgstr "Adicione um comando stdio."
 
-#: src/pages/McpServersOverlay.tsx:112
+#: src/pages/McpServersOverlay.tsx:170
 msgid "Add an HTTPS server URL."
 msgstr "Adicione um URL do servidor HTTPS."
 
@@ -403,8 +404,8 @@ msgstr ""
 msgid "Add remote MCP server"
 msgstr "Adicionar servidor MCP remoto"
 
-#: src/pages/McpServersOverlay.tsx:276
-#: src/pages/McpServersOverlay.tsx:416
+#: src/pages/McpServersOverlay.tsx:334
+#: src/pages/McpServersOverlay.tsx:498
 msgid "Add server"
 msgstr "Adicionar servidor"
 
@@ -428,7 +429,7 @@ msgstr "Adicionar gatilho"
 msgid "Added"
 msgstr ""
 
-#: src/pages/McpServersOverlay.tsx:416
+#: src/pages/McpServersOverlay.tsx:498
 #: src/pages/plugins/connection-detail.tsx:122
 #: src/pages/PluginsOverlay.tsx:67
 #: src/pages/PluginsOverlay.tsx:83
@@ -436,7 +437,7 @@ msgid "Adding…"
 msgstr "Adicionando"
 
 #: src/pages/DecisionModelSettingsPanel.tsx:132
-#: src/pages/McpServersOverlay.tsx:343
+#: src/pages/McpServersOverlay.tsx:425
 #: src/pages/model-settings/model-detail.tsx:168
 #: src/pages/model-settings/routing-settings.tsx:118
 #: src/pages/Onboarding.tsx:496
@@ -458,8 +459,8 @@ msgstr "Conexões de agentes"
 msgid "Agents"
 msgstr "Agentes"
 
-#: src/pages/McpServersOverlay.tsx:386
-#: src/pages/McpServersOverlay.tsx:453
+#: src/pages/McpServersOverlay.tsx:468
+#: src/pages/McpServersOverlay.tsx:535
 msgid "Agents:"
 msgstr "Agentes:"
 
@@ -541,7 +542,7 @@ msgid "Answered"
 msgstr "Respondido"
 
 #. placeholder {0}: answeredOption?.label ?? block.answerId
-#: src/pages/shell/message-cards.tsx:68
+#: src/pages/shell/message-cards.tsx:72
 msgid "Answered: {0}"
 msgstr "Respondido: {0}"
 
@@ -583,7 +584,7 @@ msgstr "Limites de aprovação"
 
 #: src/pages/MessagingSettingsOverlay.tsx:224
 #: src/pages/MessagingSettingsOverlay.tsx:297
-#: src/pages/shell/message-cards.tsx:275
+#: src/pages/shell/message-cards.tsx:294
 msgid "Approve"
 msgstr "Aprovar"
 
@@ -592,11 +593,11 @@ msgstr "Aprovar"
 msgid "Approve it in the chat, or say no to cancel."
 msgstr "Aprove no chat ou diga não para cancelar."
 
-#: src/pages/shell/message-cards.tsx:266
+#: src/pages/shell/message-cards.tsx:285
 msgid "Approve this server to let your agent use its tools."
 msgstr "Aprove este servidor para permitir que seu agente use suas ferramentas."
 
-#: src/pages/ShareBotDialog.tsx:219
+#: src/pages/ShareBotDialog.tsx:253
 msgid "Apps this bot can use"
 msgstr ""
 
@@ -613,7 +614,7 @@ msgstr "Arquivado"
 msgid "Archived. Chat, memory, and files kept."
 msgstr "Arquivado. Chat, memória e arquivos mantidos."
 
-#: src/pages/McpServersOverlay.tsx:317
+#: src/pages/McpServersOverlay.tsx:383
 msgid "Arguments"
 msgstr "Argumentos:"
 
@@ -683,16 +684,16 @@ msgstr "Anexo"
 msgid "Authorization code or callback URL"
 msgstr "Código de autorização ou URL de retorno de chamada"
 
-#: src/pages/shell/message-cards.tsx:149
+#: src/pages/shell/message-cards.tsx:156
 msgid "Authorization timed out. Please try again."
 msgstr "A autorização expirou. Tente novamente."
 
-#: src/pages/shell/message-cards.tsx:194
-#: src/pages/shell/message-cards.tsx:275
+#: src/pages/shell/message-cards.tsx:201
+#: src/pages/shell/message-cards.tsx:294
 msgid "Authorize"
 msgstr "Autorizar"
 
-#: src/pages/shell/message-cards.tsx:265
+#: src/pages/shell/message-cards.tsx:284
 msgid "Authorize this server so agents can use its tools. A popup opens."
 msgstr "Autorize este servidor para que os agentes usem suas ferramentas. Uma janela pop-up será aberta."
 
@@ -1016,7 +1017,7 @@ msgstr "Fechar visualização da imagem"
 msgid "Close integrations"
 msgstr "Fechar integrações"
 
-#: src/pages/McpServersOverlay.tsx:259
+#: src/pages/McpServersOverlay.tsx:317
 msgid "Close MCP servers"
 msgstr "Fechar servidores MCP"
 
@@ -1074,7 +1075,7 @@ msgstr "Recolher {0}"
 msgid "Color {0}"
 msgstr "Cor {0}"
 
-#: src/pages/McpServersOverlay.tsx:306
+#: src/pages/McpServersOverlay.tsx:371
 msgid "Command"
 msgstr "Comando"
 
@@ -1127,12 +1128,12 @@ msgstr "Computador indisponível"
 msgid "Computer updated"
 msgstr ""
 
-#: src/pages/McpServersOverlay.tsx:422
+#: src/pages/McpServersOverlay.tsx:504
 msgid "Configured servers"
 msgstr "Servidores configurados"
 
 #: src/pages/KnowledgeSection.tsx:687
-#: src/pages/McpServersOverlay.tsx:507
+#: src/pages/McpServersOverlay.tsx:589
 msgid "Confirm delete"
 msgstr "Confirmar exclusão"
 
@@ -1168,7 +1169,7 @@ msgstr "Conecte-se com a chave API"
 msgid "Connect Executor"
 msgstr "Conectar Executor"
 
-#: src/pages/shell/message-cards.tsx:257
+#: src/pages/shell/message-cards.tsx:276
 msgid "Connect MCP server “{name}”"
 msgstr "Conecte o servidor MCP “{name}”"
 
@@ -1191,7 +1192,7 @@ msgstr "Conectar Treg"
 #: src/pages/MemorySettingsOverlay.tsx:191
 #: src/pages/ProvidersSettings.tsx:145
 #: src/pages/ProvidersSettings.tsx:195
-#: src/pages/shell/message-cards.tsx:186
+#: src/pages/shell/message-cards.tsx:193
 msgid "Connected"
 msgstr "Conectado"
 
@@ -1212,7 +1213,7 @@ msgstr "Conectado {0}."
 msgid "Connected and using {0}."
 msgstr "Conectado e usando {0}."
 
-#: src/pages/shell/message-cards.tsx:289
+#: src/pages/shell/message-cards.tsx:308
 msgid "Connected. Its tools are available from your next message."
 msgstr "Conectado. Suas ferramentas estão disponíveis na sua próxima mensagem."
 
@@ -1223,7 +1224,7 @@ msgstr "Conectado. Suas ferramentas estão disponíveis na sua próxima mensagem
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
 #: src/pages/ProvidersSettings.tsx:235
-#: src/pages/shell/message-cards.tsx:275
+#: src/pages/shell/message-cards.tsx:294
 #: src/pages/shell/screen-frame.tsx:44
 msgid "Connecting…"
 msgstr "Conectando…"
@@ -1283,15 +1284,16 @@ msgstr ""
 msgid "Could not add"
 msgstr "Não foi possível adicionar."
 
-#: src/pages/McpServersOverlay.tsx:170
+#: src/pages/McpServersOverlay.tsx:157
+#: src/pages/McpServersOverlay.tsx:228
 msgid "Could not add MCP server"
 msgstr "Não foi possível adicionar o servidor MCP"
 
-#: src/pages/shell/message-cards.tsx:244
+#: src/pages/shell/message-cards.tsx:263
 msgid "Could not approve this server"
 msgstr "Não foi possível aprovar este servidor"
 
-#: src/pages/shell/message-cards.tsx:152
+#: src/pages/shell/message-cards.tsx:159
 msgid "Could not authorize this app"
 msgstr "Não foi possível autorizar este aplicativo"
 
@@ -1384,7 +1386,7 @@ msgstr "Não foi possível apagar"
 msgid "Could not delete group"
 msgstr "Não foi possível excluir o grupo"
 
-#: src/pages/McpServersOverlay.tsx:225
+#: src/pages/McpServersOverlay.tsx:283
 msgid "Could not delete MCP server"
 msgstr "Não foi possível excluir o servidor MCP"
 
@@ -1404,7 +1406,7 @@ msgstr ""
 msgid "Could not disconnect memory provider"
 msgstr "Não foi possível desconectar o provedor de memória"
 
-#: src/pages/McpServersOverlay.tsx:236
+#: src/pages/McpServersOverlay.tsx:294
 msgid "Could not disconnect OAuth"
 msgstr "Não foi possível desconectar o OAuth"
 
@@ -1416,7 +1418,7 @@ msgstr ""
 msgid "Could not disconnect this voice provider"
 msgstr ""
 
-#: src/pages/shell/message-cards.tsx:52
+#: src/pages/shell/message-cards.tsx:56
 msgid "Could not dismiss"
 msgstr "Não foi possível dispensar"
 
@@ -1474,7 +1476,8 @@ msgstr ""
 msgid "Could not load integrations"
 msgstr "Não foi possível carregar as integrações"
 
-#: src/pages/McpServersOverlay.tsx:82
+#: src/pages/McpServersOverlay.tsx:95
+#: src/pages/McpServersOverlay.tsx:113
 msgid "Could not load MCP servers"
 msgstr "Não foi possível carregar os servidores MCP"
 
@@ -1603,7 +1606,7 @@ msgstr "Não foi possível salvar a habilidade"
 msgid "Could not save that voice"
 msgstr "Não foi possível salvar essa voz"
 
-#: src/pages/shell/message-cards.tsx:38
+#: src/pages/shell/message-cards.tsx:42
 msgid "Could not save this choice"
 msgstr "Não foi possível salvar esta opção"
 
@@ -1620,7 +1623,7 @@ msgstr "Não foi possível enviar o e-mail de redefinição"
 msgid "Could not send that"
 msgstr "Não foi possível enviar"
 
-#: src/pages/McpServersOverlay.tsx:194
+#: src/pages/McpServersOverlay.tsx:252
 msgid "Could not start OAuth"
 msgstr "Não foi possível iniciar o OAuth"
 
@@ -1643,7 +1646,7 @@ msgid "Could not update"
 msgstr "Não foi possível atualizar"
 
 #: src/pages/KnowledgeSection.tsx:344
-#: src/pages/McpServersOverlay.tsx:210
+#: src/pages/McpServersOverlay.tsx:268
 msgid "Could not update agent access"
 msgstr "Não foi possível atualizar o acesso do agente"
 
@@ -1677,7 +1680,7 @@ msgstr "Não foi possível criar"
 msgid "Couldn't create an invite link"
 msgstr ""
 
-#: src/pages/ShareBotDialog.tsx:89
+#: src/pages/ShareBotDialog.tsx:119
 msgid "Couldn't load"
 msgstr ""
 
@@ -1702,8 +1705,8 @@ msgstr "Não foi possível renomear o espaço"
 msgid "Couldn't revoke the invite link"
 msgstr ""
 
-#: src/pages/ShareBotDialog.tsx:118
-#: src/pages/ShareBotDialog.tsx:133
+#: src/pages/ShareBotDialog.tsx:152
+#: src/pages/ShareBotDialog.tsx:167
 msgid "Couldn't save"
 msgstr ""
 
@@ -1867,7 +1870,7 @@ msgstr "Escopo padrão"
 #: src/pages/bot-page/BotPage.tsx:386
 #: src/pages/BotContextMenu.tsx:165
 #: src/pages/KnowledgeSection.tsx:687
-#: src/pages/McpServersOverlay.tsx:509
+#: src/pages/McpServersOverlay.tsx:591
 #: src/pages/shell/dialogs.tsx:409
 #: src/pages/shell/dialogs.tsx:470
 #: src/pages/shell/sidebar-footer.tsx:97
@@ -1905,6 +1908,7 @@ msgstr "Excluir rotina"
 msgid "Delete space"
 msgstr ""
 
+#: src/pages/ShareBotDialog.tsx:130
 #: src/pages/usage-settings.tsx:197
 msgid "Deleted"
 msgstr ""
@@ -1978,7 +1982,7 @@ msgid "Discarded"
 msgstr ""
 
 #: src/pages/DecisionModelSettingsPanel.tsx:111
-#: src/pages/McpServersOverlay.tsx:494
+#: src/pages/McpServersOverlay.tsx:576
 #: src/pages/MemorySettingsOverlay.tsx:211
 #: src/pages/ProvidersSettings.tsx:252
 msgid "Disconnect"
@@ -1992,7 +1996,7 @@ msgstr "Desconectando…"
 
 #: src/components/ComputerUpdateProgress.tsx:215
 #: src/components/teach/TeachComputerOverlay.tsx:285
-#: src/pages/shell/message-cards.tsx:79
+#: src/pages/shell/message-cards.tsx:83
 msgid "Dismiss"
 msgstr "Dispensar"
 
@@ -2000,7 +2004,7 @@ msgstr "Dispensar"
 msgid "Dismiss error"
 msgstr "Dispensar o erro"
 
-#: src/pages/shell/message-cards.tsx:294
+#: src/pages/shell/message-cards.tsx:313
 msgid "Dismissed. Reconnect anytime from MCP settings."
 msgstr "Dispensado. Reconecte a qualquer momento a partir das configurações do MCP."
 
@@ -2175,12 +2179,12 @@ msgstr "A cada semana"
 msgid "Everyday"
 msgstr "Cotidiano"
 
-#: src/pages/ShareBotDialog.tsx:166
-#: src/pages/ShareBotDialog.tsx:168
+#: src/pages/ShareBotDialog.tsx:200
+#: src/pages/ShareBotDialog.tsx:202
 msgid "Everyone in {spaceName}"
 msgstr ""
 
-#: src/pages/ShareBotDialog.tsx:234
+#: src/pages/ShareBotDialog.tsx:268
 msgid "Everyone who uses this bot can see its files and browser sign-ins."
 msgstr ""
 
@@ -2370,12 +2374,12 @@ msgstr "Desligue e depois digite o código na tela."
 msgid "header"
 msgstr "cabeçalho"
 
-#: src/pages/McpServersOverlay.tsx:368
+#: src/pages/McpServersOverlay.tsx:450
 #: src/pages/plugins/advanced-integrations.tsx:291
 msgid "Header name"
 msgstr "Nome do Cabeçalho"
 
-#: src/pages/McpServersOverlay.tsx:373
+#: src/pages/McpServersOverlay.tsx:455
 msgid "Header value"
 msgstr "Valor do cabeçalho"
 
@@ -2731,7 +2735,7 @@ msgstr "Máximo de tokens de saída"
 msgid "MCP endpoint"
 msgstr ""
 
-#: src/pages/McpServersOverlay.tsx:256
+#: src/pages/McpServersOverlay.tsx:314
 msgid "MCP servers"
 msgstr "Servidores MCP"
 
@@ -3075,7 +3079,7 @@ msgstr "Nenhum modelo corresponde"
 msgid "No MCP or API tool sources installed yet."
 msgstr "Nenhuma fonte de ferramenta MCP ou API instalada ainda."
 
-#: src/pages/McpServersOverlay.tsx:427
+#: src/pages/McpServersOverlay.tsx:509
 msgid "No MCP servers yet."
 msgstr "Ainda não há servidores MCP."
 
@@ -3146,7 +3150,7 @@ msgstr "Não está no catálogo de plugins"
 
 #: src/components/AskCard.tsx:63
 #: src/lib/approval-labels.ts:18
-#: src/pages/shell/message-cards.tsx:282
+#: src/pages/shell/message-cards.tsx:301
 msgid "Not now"
 msgstr "Agora não"
 
@@ -3289,7 +3293,7 @@ msgstr "Opcional"
 msgid "Optional controls most people never need"
 msgstr "Controles opcionais que a maioria das pessoas nunca precisa"
 
-#: src/pages/McpServersOverlay.tsx:377
+#: src/pages/McpServersOverlay.tsx:459
 msgid "Optional header value"
 msgstr "Valor de cabeçalho opcional"
 
@@ -3977,13 +3981,13 @@ msgstr ""
 msgid "Server integrations"
 msgstr ""
 
-#: src/pages/McpServersOverlay.tsx:283
+#: src/pages/McpServersOverlay.tsx:341
 msgid "Server name"
 msgstr "Nome do servidor"
 
 #: src/components/integrations/IntegrationSetup.tsx:277
 #: src/components/integrations/IntegrationSetup.tsx:295
-#: src/pages/McpServersOverlay.tsx:330
+#: src/pages/McpServersOverlay.tsx:397
 #: src/pages/model-settings/model-detail.tsx:77
 #: src/pages/Onboarding.tsx:411
 msgid "Server URL"
@@ -4021,7 +4025,7 @@ msgid "Share"
 msgstr ""
 
 #. placeholder {0}: bot.name
-#: src/pages/ShareBotDialog.tsx:160
+#: src/pages/ShareBotDialog.tsx:194
 msgid "Share {0}"
 msgstr ""
 
@@ -4112,7 +4116,7 @@ msgstr ""
 msgid "Skills"
 msgstr "Habilidades"
 
-#: src/pages/ShareBotDialog.tsx:206
+#: src/pages/ShareBotDialog.tsx:240
 msgid "Skills this bot can use"
 msgstr ""
 
@@ -4220,7 +4224,8 @@ msgstr "Parar de ensinar"
 msgid "Stopped."
 msgstr "Interrompido."
 
-#: src/pages/McpServersOverlay.tsx:362
+#: src/pages/McpServersOverlay.tsx:418
+#: src/pages/McpServersOverlay.tsx:444
 msgid "Stored encrypted"
 msgstr "Armazenado criptografado"
 
@@ -4355,15 +4360,15 @@ msgstr "Isso remove permanentemente todas as mensagens e interrompe o trabalho e
 msgid "This reset link is invalid or expired"
 msgstr "Este link de redefinição é inválido ou expirou"
 
-#: src/pages/shell/message-cards.tsx:228
+#: src/pages/shell/message-cards.tsx:247
 msgid "This server cannot be assigned without a bot."
 msgstr "Este servidor não pode ser atribuído sem um bot."
 
-#: src/pages/McpServersOverlay.tsx:189
+#: src/pages/McpServersOverlay.tsx:247
 msgid "This server did not request browser authorization."
 msgstr "Este servidor não solicitou autorização do navegador."
 
-#: src/pages/McpServersOverlay.tsx:185
+#: src/pages/McpServersOverlay.tsx:243
 msgid "This server is already connected. Disconnect it first to authorize again."
 msgstr "Este servidor já está conectado. Desconecte-o primeiro para autorizar novamente."
 
@@ -4601,7 +4606,7 @@ msgstr "Aguardando a API voltar…"
 msgid "Waiting for you"
 msgstr ""
 
-#: src/pages/shell/message-cards.tsx:194
+#: src/pages/shell/message-cards.tsx:201
 msgid "Waiting…"
 msgstr "Aguardando…"
 
