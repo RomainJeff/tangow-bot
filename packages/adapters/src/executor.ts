@@ -3420,7 +3420,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const skillRefusal = viaConnector
             ? undefined
             : skillWriteRefusal(
-                { trigger: run.trigger, sourceRole, trustedRoutine, steeredByOthers },
+                {
+                  trigger: run.trigger,
+                  sourceRole,
+                  trustedRoutine,
+                  steeredByOthers,
+                  memberRun: run.userId !== bot.userId,
+                },
                 name,
               );
           if (skillRefusal) return { error: skillRefusal };

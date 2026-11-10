@@ -146,6 +146,8 @@ function fixture(
     ask?: Extract<AgentRuntimeEvent, { type: "ask" }>;
     /** Values the run redacts. */
     secrets?: string[];
+    /** The run is for someone the bot is shared with, not its owner. */
+    member?: boolean;
   } = {},
 ) {
   const effects: Effect[] = [...(options.effects ?? [])];
@@ -159,7 +161,7 @@ function fixture(
     threadId: "thread-1",
     taskId: "task-1",
     spaceId: "space-1",
-    userId: "user-1",
+    userId: options.member ? "member-1" : "user-1",
     status: "queued",
     trigger: options.trigger ?? "user",
     sourceMessageId: null,
@@ -1588,6 +1590,15 @@ describe("a skill the bot saves on its own", () => {
         hint: "Created skill, available to this agent until the user shares it. The app shows the user a line for it: do not announce it.",
       }),
     ]);
+  });
+
+  it("refuses it in the run of someone the bot is shared with", async () => {
+    const f = fixture({ member: true });
+    await f.play([[save]]);
+    expect(f.results).toEqual([
+      { error: "Only the owner of this bot can save or change its skills." },
+    ]);
+    expect(f.askBlock()).toBeUndefined();
   });
 
   it("refuses it once a webhook steers into the user's run, and saves it when they steer", async () => {
