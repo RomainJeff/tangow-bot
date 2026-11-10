@@ -52,6 +52,7 @@ import {
   threadEventSeq,
   threadOfSession,
   touchGroupUpdatedAt,
+  usableBotIds,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import {
@@ -412,12 +413,19 @@ export async function resolveThreadTarget(
   if (input.groupId) {
     const group = await groupRepos.getGroupTarget(actor, input.groupId);
     if (!group.thread) throw new IsolationError();
+    const usable = await usableBotIds(
+      prisma,
+      actor.userId,
+      actor.spaceId,
+      group.members.map((member) => member.bot.id),
+    );
     const members = group.members.map((member) => ({
       botId: member.bot.id,
       name: member.bot.name,
       color: member.bot.color,
       shapeSeed: member.bot.shapeSeed,
       status: member.bot.runs[0]?.status ?? "idle",
+      canUse: usable.has(member.bot.id),
     }));
     return {
       kind: "group",

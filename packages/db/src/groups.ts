@@ -7,7 +7,7 @@ import {
   type GroupPerson,
   type SpaceGroup,
 } from "@rakazo/contracts";
-import { sharedWithFilter } from "./bot-sharing.js";
+import { usableBotIds } from "./bot-sharing.js";
 import { cancelRunsInTransaction } from "./cancel-runs.js";
 import { Prisma, type PrismaClient } from "./client.js";
 import { expireComputerExecutionLeases } from "./computers.js";
@@ -68,17 +68,33 @@ function byPinThenActivity(
   return Number(b.pinned) - Number(a.pinned) || b.updatedAt.localeCompare(a.updatedAt);
 }
 
-function mapGroupMembers(members: GroupRecord["members"]): GroupMember[] {
+function mapGroupMembers(members: GroupRecord["members"], usable: Set<string>): GroupMember[] {
   return members.map((member) => ({
     botId: member.bot.id,
     name: member.bot.name,
     color: member.bot.color,
     shapeSeed: member.bot.shapeSeed,
     status: member.bot.runs[0]?.status ?? "idle",
+    canUse: usable.has(member.bot.id),
   }));
 }
 
-function mapGroup(group: GroupRecord, preview: string, userId: string): Group {
+/** The bots of `groups` the actor may wake, for each member's `canUse`. */
+function usableGroupBotIds(
+  prisma: Pick<PrismaClient, "bot">,
+  userId: string,
+  spaceId: string | { in: string[] },
+  groups: ReadonlyArray<{ members: ReadonlyArray<{ bot: { id: string } }> }>,
+) {
+  return usableBotIds(
+    prisma,
+    userId,
+    spaceId,
+    groups.flatMap((group) => group.members.map((member) => member.bot.id)),
+  );
+}
+
+function mapGroup(group: GroupRecord, preview: string, userId: string, usable: Set<string>): Group {
   if (!group.thread) throw new IsolationError("Group is missing its thread");
   const { unread, ...organization } = personState(group.people, userId);
   return {
@@ -88,7 +104,7 @@ function mapGroup(group: GroupRecord, preview: string, userId: string): Group {
     description: group.description,
     ...organization,
     archivedAt: group.archivedAt?.toISOString() ?? null,
-    members: mapGroupMembers(group.members),
+    members: mapGroupMembers(group.members, usable),
     // The creator first, then everyone else as they joined.
     people: [...group.people]
       .sort((a, b) => Number(b.userId === group.userId) - Number(a.userId === group.userId))
@@ -107,14 +123,19 @@ function mapGroup(group: GroupRecord, preview: string, userId: string): Group {
   };
 }
 
-function mapSpaceGroup(group: SpaceGroupRecord, preview: string, userId: string): SpaceGroup {
+function mapSpaceGroup(
+  group: SpaceGroupRecord,
+  preview: string,
+  userId: string,
+  usable: Set<string>,
+): SpaceGroup {
   if (!group.thread) throw new IsolationError("Group is missing its thread");
   return {
     id: group.id,
     spaceId: group.spaceId,
     name: group.name,
     ...personState(group.people, userId),
-    members: mapGroupMembers(group.members),
+    members: mapGroupMembers(group.members, usable),
     preview,
     updatedAt: group.updatedAt.toISOString(),
   };
@@ -125,34 +146,16 @@ function hasMinimumActiveMembers(members: readonly unknown[]) {
 }
 
 /** The bots a group's creator puts in it: their own, or ones shared with them. */
-async function assertUsableBots(
-  prisma: PrismaClient,
-  actor: Actor,
-  botIds: string[],
-): Promise<GroupMember[]> {
+async function assertUsableBots(prisma: PrismaClient, actor: Actor, botIds: string[]) {
   const unique = [...new Set(botIds)];
   if (unique.length < GROUP_MEMBER_MIN || unique.length > GROUP_MEMBER_MAX) {
     throw new IsolationError(
       `Groups require ${GROUP_MEMBER_MIN} to ${GROUP_MEMBER_MAX} distinct bots`,
     );
   }
-  const bots = await prisma.bot.findMany({
-    where: {
-      id: { in: unique },
-      OR: [
-        { spaceId: actor.spaceId, userId: actor.userId, archivedAt: null },
-        sharedWithFilter(actor.userId, actor.spaceId),
-      ],
-    },
-    select: { id: true, name: true, color: true, shapeSeed: true },
-  });
-  if (bots.length !== unique.length) throw new IsolationError();
-  const botsById = new Map(bots.map((bot) => [bot.id, bot]));
-  return unique.map((botId) => {
-    const bot = botsById.get(botId);
-    if (!bot) throw new IsolationError();
-    return { botId: bot.id, name: bot.name, color: bot.color, shapeSeed: bot.shapeSeed };
-  });
+  const usable = await usableBotIds(prisma, actor.userId, actor.spaceId, unique);
+  if (usable.size !== unique.length) throw new IsolationError();
+  return unique.map((botId) => ({ botId }));
 }
 
 /** The Space's other people a creator puts in a group: each must still be in the Space. */
@@ -260,8 +263,16 @@ async function groupPreviews(
 
 export function createGroupRepos(prisma: PrismaClient) {
   async function presentGroup(group: GroupRecord, userId: string): Promise<Group> {
-    const previews = await groupPreviews(prisma, [group]);
-    return mapGroup(group, (group.thread && previews.get(group.thread.sessionId)) ?? "", userId);
+    const [previews, usable] = await Promise.all([
+      groupPreviews(prisma, [group]),
+      usableGroupBotIds(prisma, userId, group.spaceId, [group]),
+    ]);
+    return mapGroup(
+      group,
+      (group.thread && previews.get(group.thread.sessionId)) ?? "",
+      userId,
+      usable,
+    );
   }
 
   async function listSpaceGroupsForSpaces(actor: Actor, spaceIds: string[]): Promise<SpaceGroup[]> {
@@ -283,13 +294,17 @@ export function createGroupRepos(prisma: PrismaClient) {
       },
     });
     const listed = groups.filter((group) => hasMinimumActiveMembers(group.members));
-    const previews = await groupPreviews(prisma, listed);
+    const [previews, usable] = await Promise.all([
+      groupPreviews(prisma, listed),
+      usableGroupBotIds(prisma, actor.userId, { in: spaceIds }, listed),
+    ]);
     return listed
       .map((group) =>
         mapSpaceGroup(
           group,
           (group.thread && previews.get(group.thread.sessionId)) ?? "",
           actor.userId,
+          usable,
         ),
       )
       .sort(byPinThenActivity);
@@ -308,13 +323,17 @@ export function createGroupRepos(prisma: PrismaClient) {
       const listed = options.archived
         ? groups
         : groups.filter((group) => hasMinimumActiveMembers(group.members));
-      const previews = await groupPreviews(prisma, listed);
+      const [previews, usable] = await Promise.all([
+        groupPreviews(prisma, listed),
+        usableGroupBotIds(prisma, actor.userId, actor.spaceId, listed),
+      ]);
       return listed
         .map((group) =>
           mapGroup(
             group,
             (group.thread && previews.get(group.thread.sessionId)) ?? "",
             actor.userId,
+            usable,
           ),
         )
         .sort(byPinThenActivity);
@@ -385,7 +404,8 @@ export function createGroupRepos(prisma: PrismaClient) {
           include: groupInclude,
         });
       });
-      return mapGroup(created, "", actor.userId);
+      // The creator can use every bot they put in it.
+      return mapGroup(created, "", actor.userId, new Set(members.map((member) => member.botId)));
     },
 
     async updateGroup(

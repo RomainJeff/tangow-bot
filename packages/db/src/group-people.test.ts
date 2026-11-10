@@ -104,6 +104,22 @@ describe("a group's people, bots and lead", () => {
     ).rejects.toBeInstanceOf(IsolationError);
   });
 
+  it("tells each person which of the group's bots they can wake", async () => {
+    const groups = createGroupRepos(prisma);
+    const group = await newGroup(["ben"]);
+    const usable = async (userId: string) =>
+      (await groups.mapGroup(await groups.getGroup(actor(userId), group.id), userId)).members.map(
+        (member) => [member.botId, member.canUse],
+      );
+    expect(group.members.every((member) => member.canUse)).toBe(true);
+    expect(await usable("ben")).toEqual([
+      [creatorBot, false],
+      [sharedBot, true],
+    ]);
+    const [listed] = await groups.listSpaceGroupsForSpaces(actor("ben"), [space]);
+    expect(listed?.members.map((member) => member.canUse)).toEqual([false, true]);
+  });
+
   it("keeps the lead among the group's bots, and drops it when its bot leaves", async () => {
     const groups = createGroupRepos(prisma);
     const { id: groupId } = await newGroup([]);

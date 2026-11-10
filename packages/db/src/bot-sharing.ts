@@ -37,6 +37,24 @@ export function sharedWithFilter(
   };
 }
 
+/** Of `botIds`, the ones `userId` may wake in `spaceId`: their own, or ones shared with them. */
+export async function usableBotIds(
+  db: Pick<Prisma.TransactionClient, "bot">,
+  userId: string,
+  spaceId: string | { in: string[] },
+  botIds: readonly string[],
+): Promise<Set<string>> {
+  if (botIds.length === 0) return new Set();
+  const bots = await db.bot.findMany({
+    where: {
+      id: { in: [...new Set(botIds)] },
+      OR: [{ spaceId, userId, archivedAt: null }, sharedWithFilter(userId, spaceId)],
+    },
+    select: { id: true },
+  });
+  return new Set(bots.map((bot) => bot.id));
+}
+
 /** A bot shared with the actor and the actor's own thread with it, created on first use. */
 export async function sharedBotThread(prisma: PrismaClient, actor: Actor, botId: string) {
   const bot = await prisma.bot.findFirst({
