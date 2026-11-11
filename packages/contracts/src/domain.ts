@@ -987,6 +987,11 @@ export type MessagingAgentConnection = z.infer<typeof MessagingAgentConnectionSc
 export const RunSchema = z.object({
   id: Id,
   botId: Id,
+  /**
+   * The person the run acts for: in a group, only they answer its asks, approvals and takeover.
+   * Absent from older servers and from a run the client has only seen start.
+   */
+  userId: Id.optional(),
   threadId: Id,
   taskId: Id,
   status: RunStatus,

@@ -724,6 +724,7 @@ function pickLatestTerminalRun<T extends { id: string; createdAt: Date; complete
 function mapRun(run: {
   id: string;
   botId: string;
+  userId: string;
   threadId: string;
   taskId: string;
   status: string;
@@ -739,6 +740,7 @@ function mapRun(run: {
   return {
     id: run.id,
     botId: run.botId,
+    userId: run.userId,
     threadId: run.threadId,
     taskId: run.taskId,
     status: run.status as never,
