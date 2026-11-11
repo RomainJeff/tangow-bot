@@ -240,6 +240,7 @@ export function ShellPage() {
         onOpenArchivedBot={panels.showArchivedBotPage}
         onRestoreBot={(botId) => runBotAction(botId, "restore")}
         setDeleteGroupTarget={overlays.setDeleteGroupTarget}
+        setLeaveGroupTarget={overlays.setLeaveGroupTarget}
         setCustomizeOpen={overlays.setCustomizeOpen}
         menuOpen={overlays.menuOpen}
         setMenuOpen={overlays.setMenuOpen}
