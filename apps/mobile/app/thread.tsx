@@ -567,6 +567,8 @@ function Thread() {
   const currentGroup = groupId ? mentionGroups.find((group) => group.id === groupId) : undefined;
   // A message carrying no author is the creator's, who comes first among the group's people.
   const creatorId = currentGroup?.people[0]?.userId;
+  // Several people share a group's history: nobody rewinds it under the others.
+  const sharedHistory = (currentGroup?.people.length ?? 0) > 1;
   const drawnRows = useRef<ReadonlyMap<string, ThreadRow>>(new Map());
   const liveView = useMemo((): ThreadView => {
     const projected = projectThreadView(snap?.entries ?? [], {
@@ -1929,7 +1931,7 @@ function Thread() {
               },
             ]
           : []),
-        ...(message.role === "user"
+        ...(message.role === "user" && !sharedHistory
           ? [
               {
                 name: "rewind",
