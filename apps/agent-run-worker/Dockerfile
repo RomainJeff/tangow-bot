@@ -27,7 +27,7 @@ RUN usermod -l user -d /home/user -m node && groupmod -n user node \
 ARG GIT_SHA
 LABEL org.opencontainers.image.revision=$GIT_SHA
 
-ENV RAKAZO_WORKER_HOME=/home/user RAKAZO_WORKER_HARNESS=pi-native
+ENV TANGOW_WORKER_HOME=/home/user TANGOW_WORKER_HARNESS=pi-native
 
 COPY --from=bundle /app/apps/agent-run-worker/dist/managed-skills /managed-skills
 RUN chown -R root:root /managed-skills && chmod -R a+rX,a-w /managed-skills

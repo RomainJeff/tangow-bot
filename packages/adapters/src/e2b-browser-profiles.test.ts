@@ -209,7 +209,7 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1").each([
         "0:0",
         "--entrypoint",
         "bash",
-        process.env.RAKAZO_COMPUTER_IMAGE ?? "rakazo/computer:local",
+        process.env.TANGOW_COMPUTER_IMAGE ?? "rakazo/computer:local",
         "-eu",
         "-c",
         [

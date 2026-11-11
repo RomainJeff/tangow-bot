@@ -74,7 +74,7 @@ export function useDockerSupervisor() {
     state.url = `http://127.0.0.1:${state.port}`;
     child = spawn(process.execPath, ["--import", "tsx", SUPERVISOR], {
       cwd: path.dirname(path.dirname(SUPERVISOR)),
-      stdio: ["ignore", "ignore", process.env.RAKAZO_WORKER_DEBUG ? "inherit" : "ignore"],
+      stdio: ["ignore", "ignore", process.env.TANGOW_WORKER_DEBUG ? "inherit" : "ignore"],
       env: {
         ...process.env,
         DATA_DIR: state.dataDir,

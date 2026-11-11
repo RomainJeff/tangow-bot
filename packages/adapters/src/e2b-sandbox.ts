@@ -367,7 +367,7 @@ export class E2BSandboxProvider implements SandboxProvider {
   }
 
   private async stopBrowsers(computer: ComputerRef, context: AdapterContext) {
-    const profiles = "RAKAZO_INTERNAL_PROFILES";
+    const profiles = "TANGOW_INTERNAL_PROFILES";
     const stop = stopAllDesktopBrowsersCommand({
       ...E2B_DESKTOP_ENV,
       browserProfilesDir: profiles,

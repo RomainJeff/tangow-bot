@@ -18,7 +18,7 @@ mkdir -p "$AGENT_HOME/.config/opencode"
 [[ -e "$AGENT_HOME/.config/opencode/skills" || -L "$AGENT_HOME/.config/opencode/skills" ]] \
   || ln -s /managed-skills/computer "$AGENT_HOME/.config/opencode/skills"
 
-if [[ -n "${RAKAZO_COMPUTER_CONTROL_TOKEN:-}" ]]; then
+if [[ -n "${TANGOW_COMPUTER_CONTROL_TOKEN:-}" ]]; then
   /usr/local/bin/rakazo-computer-control >/tmp/rakazo/control.log 2>&1 &
 fi
 

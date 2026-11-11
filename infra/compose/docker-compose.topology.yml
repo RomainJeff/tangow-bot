@@ -56,11 +56,11 @@ services:
       SUPERVISOR_PORT: "7091"
       SANDBOX_SUPERVISOR_TOKEN: topology-only-supervisor-token-at-least-32-characters
       DOCKER_SOCKET: /var/run/docker.sock
-      RAKAZO_COMPUTER_IMAGE: ${TOPOLOGY_COMPUTER_IMAGE:-rakazo/computer:topology}
-      RAKAZO_WORKER_IMAGE: ${TOPOLOGY_WORKER_IMAGE:-rakazo/worker:topology}
-      RAKAZO_COMPUTER_MEMORY: ${RAKAZO_COMPUTER_MEMORY:-8g}
-      RAKAZO_COMPUTER_CPUS: ${RAKAZO_COMPUTER_CPUS:-4}
-      RAKAZO_COMPUTER_PIDS_LIMIT: ${RAKAZO_COMPUTER_PIDS_LIMIT:-2048}
+      TANGOW_COMPUTER_IMAGE: ${TOPOLOGY_COMPUTER_IMAGE:-rakazo/computer:topology}
+      TANGOW_WORKER_IMAGE: ${TOPOLOGY_WORKER_IMAGE:-rakazo/worker:topology}
+      TANGOW_COMPUTER_MEMORY: ${TANGOW_COMPUTER_MEMORY:-8g}
+      TANGOW_COMPUTER_CPUS: ${TANGOW_COMPUTER_CPUS:-4}
+      TANGOW_COMPUTER_PIDS_LIMIT: ${TANGOW_COMPUTER_PIDS_LIMIT:-2048}
       SANDBOX_SCREEN_NETWORK: isolated
       LOG_LEVEL: info
     volumes:
@@ -139,7 +139,7 @@ services:
     environment:
       NODE_ENV: production
       API_PROXY_TARGET: http://api:3100
-      RAKAZO_HOST: localhost
+      TANGOW_HOST: localhost
       SCREEN_PROXY_SECRET: topology-only-screen-proxy-secret-at-least-32-characters
     depends_on:
       api:

@@ -28,8 +28,8 @@ export const OFFICIAL_UPDATER_IMAGE = `ghcr.io/${PUBLISHED_IMAGE_REPO}/updater`;
  */
 export const LOCAL_IMAGE_TAG = "local";
 export const DEFAULT_IMAGE_TAG = LOCAL_IMAGE_TAG;
-export const IMAGE_TAG_ENV = "RAKAZO_IMAGE_TAG";
-export const PREVIOUS_IMAGE_TAG_ENV = "RAKAZO_IMAGE_TAG_PREVIOUS";
+export const IMAGE_TAG_ENV = "TANGOW_IMAGE_TAG";
+export const PREVIOUS_IMAGE_TAG_ENV = "TANGOW_IMAGE_TAG_PREVIOUS";
 
 /**
  * Matches the `name:` pinned in `infra/compose/docker-compose.prod.yml`. Used when Compose has not
@@ -37,7 +37,7 @@ export const PREVIOUS_IMAGE_TAG_ENV = "RAKAZO_IMAGE_TAG_PREVIOUS";
  */
 export const DEFAULT_COMPOSE_PROJECT_NAME = "rakazo-prod";
 export const COMPOSE_PROJECT_NAME_ENV = "COMPOSE_PROJECT_NAME";
-export const COMPOSE_PROJECT_NAME_OVERRIDE_ENV = "RAKAZO_COMPOSE_PROJECT_NAME";
+export const COMPOSE_PROJECT_NAME_OVERRIDE_ENV = "TANGOW_COMPOSE_PROJECT_NAME";
 
 /**
  * The services a recreate replaces. `updater` is deliberately absent: it is the process running
@@ -297,7 +297,7 @@ export interface InstallKindDecision {
 }
 
 /**
- * `updaterUrlConfigured` means the API was given `RAKAZO_UPDATER_URL` (Compose prod always sets
+ * `updaterUrlConfigured` means the API was given `TANGOW_UPDATER_URL` (Compose prod always sets
  * this). Reachability requires both URL and token and a live sidecar. A source checkout is only
  * claimed when there is no Compose updater wiring and `.git` is present on disk.
  */

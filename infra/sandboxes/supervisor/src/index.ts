@@ -100,7 +100,7 @@ loadRootEnv();
 const dockerSocketPath = resolveDockerSocketPath();
 const docker = dockerSocketPath ? new Docker({ socketPath: dockerSocketPath }) : new Docker();
 const computerContext =
-  process.env.RAKAZO_COMPUTER_CONTEXT ??
+  process.env.TANGOW_COMPUTER_CONTEXT ??
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../computer");
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const dataDir = path.resolve(repositoryRoot, process.env.DATA_DIR ?? "./data");
@@ -459,9 +459,9 @@ app.post("/computers/:id/browser", async (c) => {
       {
         env: [
           `DISPLAY=${layout.display}`,
-          `RAKAZO_CDP_PORT=${layout.debugPort}`,
+          `TANGOW_CDP_PORT=${layout.debugPort}`,
           "HOME=/home/rakazo",
-          "RAKAZO_BROWSER_WATCH_STDIN=1",
+          "TANGOW_BROWSER_WATCH_STDIN=1",
         ],
         timeoutMs: 25_000,
         signal,
@@ -1015,7 +1015,7 @@ export async function upgradeWorkerGuest(
       Tty: false,
       User: info.Config.User || COMPUTER_USER,
       WorkingDir: "/workspace",
-      Env: [`RAKAZO_WORKER_CAPABILITY=${capability}`],
+      Env: [`TANGOW_WORKER_CAPABILITY=${capability}`],
     });
     const stream = await exec.start({ hijack: true, stdin: true });
     // The client left while the exec was starting: closing stdin ends the guest.
@@ -1095,7 +1095,7 @@ async function startSupervisor() {
   // Repo skills are published to DATA_DIR so computers see them via the /managed-skills bind.
   await syncManagedSkills(repositoryRoot, dataDir, logger);
   // Resolve the ceilings before binding the port. They are otherwise parsed inside
-  // containerCreateOptions, so a malformed RAKAZO_COMPUTER_* value would let the supervisor start
+  // containerCreateOptions, so a malformed TANGOW_COMPUTER_* value would let the supervisor start
   // and pass its healthcheck, then fail the first POST /computers with a 500 that reads like a
   // Docker problem. Failing here names the variable while the deployment is still coming up.
   computerResourceLimits();
@@ -1334,8 +1334,8 @@ function hostHomePath(serviceHomePath: string, info: Docker.ContainerInspectInfo
 
 function computerControlEndpoint(info: Docker.ContainerInspectInfo) {
   const token = info.Config.Env?.find((value) =>
-    value.startsWith("RAKAZO_COMPUTER_CONTROL_TOKEN="),
-  )?.slice("RAKAZO_COMPUTER_CONTROL_TOKEN=".length);
+    value.startsWith("TANGOW_COMPUTER_CONTROL_TOKEN="),
+  )?.slice("TANGOW_COMPUTER_CONTROL_TOKEN=".length);
   const publishedHostPort = controlViaLoopback
     ? publishedLoopbackControlHostPort(info.NetworkSettings?.Ports)
     : undefined;
@@ -1484,7 +1484,7 @@ async function setInteractiveScreen(
     interactiveScreenCommand(interactive, controlToken, layout),
   ]);
   if (result.code !== 0) throw new Error(result.stderr || "control screen failed to start");
-  return interactive || !controlToken || result.stdout.includes("RAKAZO_CONTROL_RELEASED\n");
+  return interactive || !controlToken || result.stdout.includes("TANGOW_CONTROL_RELEASED\n");
 }
 
 // Each bot's computer gets its own Docker network so containers cannot reach

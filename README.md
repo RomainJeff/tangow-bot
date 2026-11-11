@@ -123,8 +123,8 @@ loopback and private LAN addresses (not link-local). The app verifies Rakazo's h
 before saving, and later launches go straight to that instance.
 
 Use **Change Rakazo Server…** in the application menu to reconnect. Closing that window without
-saving returns to the previous instance. For development automation, set `RAKAZO_WEB_URL` to point
-the shell somewhere else without changing the saved instance, or `RAKAZO_FORCE_SETUP=1` to run
+saving returns to the previous instance. For development automation, set `TANGOW_WEB_URL` to point
+the shell somewhere else without changing the saved instance, or `TANGOW_FORCE_SETUP=1` to run
 setup again.
 
 Mobile build and release instructions live in [docs/mobile-release.md](./docs/mobile-release.md).

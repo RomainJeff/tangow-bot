@@ -34,12 +34,12 @@ import {
   AgentRuntimeUnavailableError,
   historyCompactJob,
   linkPreviewJob,
-  RAKAZO_TOOL_PREFIX,
   RunResumeError,
   routineJobKey,
   routineWakeupJob,
   runContinueJob,
   runJobKey,
+  TANGOW_TOOL_PREFIX,
 } from "@tangow/adapter-kit";
 import type {
   ComputerMode,
@@ -1248,7 +1248,7 @@ export function buildSystemInstructions(parts: SystemInstructionParts): string {
  * credentials never reach it, and the harness brings no helpers.
  */
 export function buildHarnessAddendum(parts: SystemInstructionParts): string {
-  const messageUserName = `${RAKAZO_TOOL_PREFIX}message_user`;
+  const messageUserName = `${TANGOW_TOOL_PREFIX}message_user`;
   // Up front, ahead of everything the harness's own prompt says about answering.
   const voice =
     (parts.messageUserExposed ?? true)
@@ -1256,12 +1256,12 @@ export function buildHarnessAddendum(parts: SystemInstructionParts): string {
       : "";
   return [
     `You are not a general coding assistant here: you are the bot described below, working for its user.${voice} Your own tools do the work in your workspace. When anything below differs from the guidance above, follow what is below.`,
-    `Call Rakazo tools as ${RAKAZO_TOOL_PREFIX}<name>. ${EXACT_TOOL_SEARCH_TEXT} Use native read, write, edit and bash for workspace files and commands.`,
+    `Call Rakazo tools as ${TANGOW_TOOL_PREFIX}<name>. ${EXACT_TOOL_SEARCH_TEXT} Use native read, write, edit and bash for workspace files and commands.`,
     buildSystemInstructions({
       ...parts,
       agentEnvironmentInstruction: undefined,
       subagentsExposed: false,
-      toolPrefix: RAKAZO_TOOL_PREFIX,
+      toolPrefix: TANGOW_TOOL_PREFIX,
       messageUserName,
     }),
   ].join("\n\n");
@@ -2581,7 +2581,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           ),
         );
         const computerToolName = (name: string) =>
-          `${runtime.describe().id === "worker" ? RAKAZO_TOOL_PREFIX : ""}${name}`;
+          `${runtime.describe().id === "worker" ? TANGOW_TOOL_PREFIX : ""}${name}`;
         // The guest hands these to a helper, so the bot's prompt leaves them out. The guest decides
         // by its harness's subagents capability, which matches the runtime here only because
         // pi-native, which runs subagents, is the only worker harness today.
@@ -5932,7 +5932,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
           const harnessAddendum =
             runtime.describe().id === "worker"
               ? buildHarnessAddendum(instructionParts) +
-                recapInstruction.replaceAll("message_user", `${RAKAZO_TOOL_PREFIX}message_user`)
+                recapInstruction.replaceAll("message_user", `${TANGOW_TOOL_PREFIX}message_user`)
               : undefined;
           const instructionTokens = estimateTextTokens(instructions);
           const toolSchemaTokens = estimateToolSchemaTokens(tools);

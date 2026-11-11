@@ -38,7 +38,7 @@ secret into multiple keys):
 - `ENCRYPTION_KEY`
 - `SCREEN_PROXY_SECRET`
 - `SANDBOX_SUPERVISOR_TOKEN`
-- `RAKAZO_UPDATER_TOKEN` (only if the updater profile is enabled; ≥32 chars,
+- `TANGOW_UPDATER_TOKEN` (only if the updater profile is enabled; ≥32 chars,
   also distinct from the four above)
 
 Rotating `ENCRYPTION_KEY` after credentials were stored makes old ciphertext

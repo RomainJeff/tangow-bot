@@ -61,29 +61,29 @@ function fixture() {
 describe("shared Linux desktop lifecycle", () => {
   it("allocates live slots past 1000 bots, keeps assignments across callers, and rejects stale leases", () => {
     const f = fixture();
-    expect(f.ensure("a").stdout).toContain("RAKAZO_DESKTOP=0:view-a");
-    expect(f.ensure("b").stdout).toContain("RAKAZO_DESKTOP=1:view-b");
-    expect(f.ensure("a", "new:2").stdout).toContain("RAKAZO_DESKTOP=0:view-a");
+    expect(f.ensure("a").stdout).toContain("TANGOW_DESKTOP=0:view-a");
+    expect(f.ensure("b").stdout).toContain("TANGOW_DESKTOP=1:view-b");
+    expect(f.ensure("a", "new:2").stdout).toContain("TANGOW_DESKTOP=0:view-a");
     expect(f.ensure("a", "run:1").status).toBe(75);
     expect(f.release("a", "run:3").status).toBe(75);
     expect(f.release("a", "new:1").status).toBe(75);
     for (let i = 2; i < 1000; i++)
       writeFileSync(path.join(f.root, `seed-${i}.slot`), `${i}\nseed:1\nunused\n`);
-    expect(f.ensure("bot-1000").stdout).toContain("RAKAZO_DESKTOP=1000:view-bot-1000");
+    expect(f.ensure("bot-1000").stdout).toContain("TANGOW_DESKTOP=1000:view-bot-1000");
     expect(f.release("a", "new:2").status).toBe(0);
-    expect(f.ensure("c").stdout).toContain("RAKAZO_DESKTOP=0:view-c");
-    expect(f.ensure("b").stdout).toContain("RAKAZO_DESKTOP=1:view-b");
+    expect(f.ensure("c").stdout).toContain("TANGOW_DESKTOP=0:view-c");
+    expect(f.ensure("b").stdout).toContain("TANGOW_DESKTOP=1:view-b");
   });
 
   it("reserves failed startup and teardown slots until a successful retry", () => {
     const f = fixture();
     expect(f.ensure("a", "run:1", true).status).toBe(1);
-    expect(f.ensure("b").stdout).toContain("RAKAZO_DESKTOP=1:view-b");
-    expect(f.ensure("a").stdout).toContain("RAKAZO_DESKTOP=0:view-a");
+    expect(f.ensure("b").stdout).toContain("TANGOW_DESKTOP=1:view-b");
+    expect(f.ensure("a").stdout).toContain("TANGOW_DESKTOP=0:view-a");
     expect(f.release("a", "run:1", true).status).toBe(1);
-    expect(f.ensure("c").stdout).toContain("RAKAZO_DESKTOP=2:view-c");
+    expect(f.ensure("c").stdout).toContain("TANGOW_DESKTOP=2:view-c");
     expect(f.release("a").status).toBe(0);
-    expect(f.ensure("d").stdout).toContain("RAKAZO_DESKTOP=0:view-d");
+    expect(f.ensure("d").stdout).toContain("TANGOW_DESKTOP=0:view-d");
   });
 
   it("prepares only admitted leases under the lifecycle lock and retains failed cleanup reservations", () => {
@@ -107,10 +107,10 @@ describe("shared Linux desktop lifecycle", () => {
     expect(readFileSync(record, "utf8")).toBe(
       "prepare\nbrowser lifecycle\nfailed prepare\nbrowser lifecycle\ncleanup\n",
     );
-    expect(f.ensure("b").stdout).toContain("RAKAZO_DESKTOP=1:view-b");
+    expect(f.ensure("b").stdout).toContain("TANGOW_DESKTOP=1:view-b");
     commands.release = append("cleanup retry");
     expect(run(releaseDesktopCommand("a", "run:2", env, render)).status).toBe(0);
-    expect(f.ensure("c").stdout).toContain("RAKAZO_DESKTOP=0:view-c");
+    expect(f.ensure("c").stdout).toContain("TANGOW_DESKTOP=0:view-c");
   });
 
   it("quiesces each exported profile under its lifecycle lock and propagates cleanup failure", () => {
@@ -178,9 +178,9 @@ describe("shared Linux desktop lifecycle", () => {
       path.join(f.root, "browser-profile-20"),
       "/home/user/work/.browser-profiles/live",
     );
-    expect(f.ensure("a").stdout).toContain("RAKAZO_DESKTOP=1:view-a");
-    expect(f.ensure("b").stdout).toContain("RAKAZO_DESKTOP=2:view-b");
-    expect(f.ensure("a").stdout).toContain("RAKAZO_DESKTOP=1:view-a");
+    expect(f.ensure("a").stdout).toContain("TANGOW_DESKTOP=1:view-a");
+    expect(f.ensure("b").stdout).toContain("TANGOW_DESKTOP=2:view-b");
+    expect(f.ensure("a").stdout).toContain("TANGOW_DESKTOP=1:view-a");
   });
 
   it("continues resetting valid displays after invalid or out-of-range markers", () => {

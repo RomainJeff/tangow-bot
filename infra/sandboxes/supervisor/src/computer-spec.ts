@@ -3,7 +3,7 @@ import path from "node:path";
 import { MAX_DESKTOP_DISPLAY, screenPorts } from "@tangow/core/node/desktop-runtime";
 import type Docker from "dockerode";
 
-export const COMPUTER_IMAGE = process.env.RAKAZO_COMPUTER_IMAGE ?? "rakazo/computer:local";
+export const COMPUTER_IMAGE = process.env.TANGOW_COMPUTER_IMAGE ?? "rakazo/computer:local";
 export const COMPUTER_UID = 1000;
 export const COMPUTER_GID = 1000;
 export const COMPUTER_USER = `${COMPUTER_UID}:${COMPUTER_GID}`;
@@ -116,16 +116,16 @@ function parsePidsLimit(name: string, raw: string): number {
 /** The host resource ceilings applied to every bot computer. */
 export function computerResourceLimits() {
   const memoryBytes = parseMemoryBytes(
-    "RAKAZO_COMPUTER_MEMORY",
-    process.env.RAKAZO_COMPUTER_MEMORY ?? DEFAULT_COMPUTER_MEMORY,
+    "TANGOW_COMPUTER_MEMORY",
+    process.env.TANGOW_COMPUTER_MEMORY ?? DEFAULT_COMPUTER_MEMORY,
   );
   const nanoCpus = parseNanoCpus(
-    "RAKAZO_COMPUTER_CPUS",
-    process.env.RAKAZO_COMPUTER_CPUS ?? DEFAULT_COMPUTER_CPUS,
+    "TANGOW_COMPUTER_CPUS",
+    process.env.TANGOW_COMPUTER_CPUS ?? DEFAULT_COMPUTER_CPUS,
   );
   const pidsLimit = parsePidsLimit(
-    "RAKAZO_COMPUTER_PIDS_LIMIT",
-    process.env.RAKAZO_COMPUTER_PIDS_LIMIT ?? DEFAULT_COMPUTER_PIDS_LIMIT,
+    "TANGOW_COMPUTER_PIDS_LIMIT",
+    process.env.TANGOW_COMPUTER_PIDS_LIMIT ?? DEFAULT_COMPUTER_PIDS_LIMIT,
   );
   return {
     // Memory and MemorySwap are set together: leaving MemorySwap unset lets the
@@ -323,7 +323,7 @@ export function containerCreateOptions(input: ComputerCreateInput) {
       "PATH=/home/rakazo/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
       "NPM_CONFIG_PREFIX=/home/rakazo/.local",
       "PIP_USER=1",
-      ...(input.controlToken ? [`RAKAZO_COMPUTER_CONTROL_TOKEN=${input.controlToken}`] : []),
+      ...(input.controlToken ? [`TANGOW_COMPUTER_CONTROL_TOKEN=${input.controlToken}`] : []),
     ],
     Labels: {
       "rakazo.managed": "true",
@@ -542,7 +542,7 @@ function mapKey(key: string) {
   return key;
 }
 
-export const WORKER_IMAGE = process.env.RAKAZO_WORKER_IMAGE ?? "rakazo/worker:local";
+export const WORKER_IMAGE = process.env.TANGOW_WORKER_IMAGE ?? "rakazo/worker:local";
 export const WORKER_NETWORK = "rakazo-workers";
 export const WORKER_GUEST_ENTRY = "/opt/rakazo/agent-run-worker.mjs";
 /** The E2B worker profile (`apps/agent-run-worker/template/template.ts`), and #343's pids ceiling. */

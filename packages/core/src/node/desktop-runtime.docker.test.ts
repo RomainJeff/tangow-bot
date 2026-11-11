@@ -29,7 +29,7 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
         "none",
         "--entrypoint",
         "sleep",
-        process.env.RAKAZO_COMPUTER_IMAGE ?? "rakazo/computer:local",
+        process.env.TANGOW_COMPUTER_IMAGE ?? "rakazo/computer:local",
         "infinity",
       );
       docker(

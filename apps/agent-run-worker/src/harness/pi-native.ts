@@ -12,7 +12,7 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type { GuestBody, GuestImage, GuestRunInput, ReplyFinal } from "@tangow/adapter-kit";
-import { PI_NATIVE_HARNESS, RAKAZO_TOOL_PREFIX } from "@tangow/adapter-kit";
+import { PI_NATIVE_HARNESS, TANGOW_TOOL_PREFIX } from "@tangow/adapter-kit";
 import {
   createAgentTextPolicy,
   describeToolActivity,
@@ -72,7 +72,7 @@ function rakazoExtension(
   // The same reminders as Rakazo's own loop, worded with the name this model knows.
   const textPolicy = createAgentTextPolicy({
     ...run,
-    messageUserName: `${RAKAZO_TOOL_PREFIX}message_user`,
+    messageUserName: `${TANGOW_TOOL_PREFIX}message_user`,
   });
   return (pi: ExtensionAPI) => {
     pi.on("message_update", async (event) => {
@@ -207,7 +207,7 @@ export const piNativeHarness: GuestHarness = {
           exactToolSearchExtension(
             (term) =>
               assignedNames.get(
-                term.startsWith(RAKAZO_TOOL_PREFIX) ? term.slice(RAKAZO_TOOL_PREFIX.length) : term,
+                term.startsWith(TANGOW_TOOL_PREFIX) ? term.slice(TANGOW_TOOL_PREFIX.length) : term,
               ) ?? term,
           ),
           (pi) =>
@@ -377,7 +377,7 @@ export const piNativeHarness: GuestHarness = {
         settingsManager,
         tools: [
           ...run.tools.filter((tool) => tool.where === "guest").map((tool) => tool.name),
-          `${RAKAZO_TOOL_PREFIX}*`,
+          `${TANGOW_TOOL_PREFIX}*`,
           ...(controllerTools.some((tool) => typeof tool.catalog === "object")
             ? ["tool_search"]
             : []),
@@ -463,7 +463,7 @@ export const piNativeHarness: GuestHarness = {
                       {
                         type: "text" as const,
                         text:
-                          receipt || !block.name.startsWith(RAKAZO_TOOL_PREFIX)
+                          receipt || !block.name.startsWith(TANGOW_TOOL_PREFIX)
                             ? "The interrupted call has an unknown outcome. It was not replayed."
                             : "This call was not started before interruption. It was not replayed.",
                       },

@@ -93,7 +93,7 @@ function e2bIgnoringCancel(root: string): Worker<E2BWorkerProvider> {
       }
       const exited = runGuest({
         channels: channels(),
-        capability: envs.RAKAZO_WORKER_CAPABILITY!,
+        capability: envs.TANGOW_WORKER_CAPABILITY!,
         harness: HARNESSES["pi-native"]!,
         root,
         home: path.join(root, "home/user"),

@@ -142,7 +142,7 @@ export async function configureSetup({ root, values, provider, run, dock, git, w
       WEB_ORIGIN: chosen.origin,
       BETTER_AUTH_URL: chosen.origin,
       API_URL: chosen.loopback ? "http://127.0.0.1:3100" : chosen.origin,
-      RAKAZO_HOST: chosen.hostname,
+      TANGOW_HOST: chosen.hostname,
     });
     if (!chosen.loopback) {
       console.log(

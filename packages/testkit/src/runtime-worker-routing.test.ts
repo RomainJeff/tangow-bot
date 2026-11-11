@@ -620,8 +620,8 @@ describe("where a product run executes", () => {
       },
       ...offeredShellTools([]),
     ]);
-    vi.stubEnv("RAKAZO_AUTO_REVIEW_PROVIDER", run.model.model.provider);
-    vi.stubEnv("RAKAZO_AUTO_REVIEW_MODEL", run.model.model.id);
+    vi.stubEnv("TANGOW_AUTO_REVIEW_PROVIDER", run.model.model.provider);
+    vi.stubEnv("TANGOW_AUTO_REVIEW_MODEL", run.model.model.id);
     await run.prisma.actionAutoReviewPreference.create({
       data: { spaceId: run.spaceId, userId: run.userId, enabled: true },
     });

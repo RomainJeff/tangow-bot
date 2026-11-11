@@ -199,7 +199,7 @@ describe("graphical computer spec", () => {
     expect(browser).toMatch(/\.browser-profiles\/chrome"/);
     expect(browser).toMatch(/chrome-screen-\$DISPLAY_NUM/);
     expect(browser).toMatch(/USER_DATA_DIR_SET/);
-    expect(browser).toMatch(/RAKAZO_BROWSER_PROFILE/);
+    expect(browser).toMatch(/TANGOW_BROWSER_PROFILE/);
     expect(desktop).toMatch(/Exec=\/usr\/local\/bin\/rakazo-browser %U/);
     const terminal = readFileSync(path.join(root, "rakazo-terminal"), "utf8");
     const menu = readFileSync(path.join(root, "fluxbox.menu"), "utf8");
@@ -245,7 +245,7 @@ describe("graphical computer spec", () => {
       const home = path.join(temp, "home");
       const chrome = path.join(bin, "google-chrome-stable");
       mkdirSync(bin);
-      writeFileSync(chrome, '#!/bin/sh\nprintf "%s\\n" "$@" > "$RAKAZO_TEST_ARGS"\n');
+      writeFileSync(chrome, '#!/bin/sh\nprintf "%s\\n" "$@" > "$TANGOW_TEST_ARGS"\n');
       chmodSync(chrome, 0o755);
 
       const run = (display: string, args: string[] = []) => {
@@ -255,7 +255,7 @@ describe("graphical computer spec", () => {
             DISPLAY: display,
             HOME: home,
             PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`,
-            RAKAZO_TEST_ARGS: capture,
+            TANGOW_TEST_ARGS: capture,
           },
           encoding: "utf8",
         });
@@ -296,7 +296,7 @@ describe("graphical computer spec", () => {
       const chrome = path.join(bin, "google-chrome-stable");
       const capture = path.join(temp, "args");
       mkdirSync(bin);
-      writeFileSync(chrome, '#!/bin/sh\nprintf "%s\\n" "$@" > "$RAKAZO_TEST_ARGS"\n');
+      writeFileSync(chrome, '#!/bin/sh\nprintf "%s\\n" "$@" > "$TANGOW_TEST_ARGS"\n');
       chmodSync(chrome, 0o755);
 
       const profile = path.join(home, ".browser-profiles/chrome");
@@ -317,7 +317,7 @@ describe("graphical computer spec", () => {
             DISPLAY: ":1",
             HOME: home,
             PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`,
-            RAKAZO_TEST_ARGS: capture,
+            TANGOW_TEST_ARGS: capture,
           },
           encoding: "utf8",
         });
@@ -345,7 +345,7 @@ describe("graphical computer spec", () => {
             DISPLAY: ":1",
             HOME: home,
             PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`,
-            RAKAZO_TEST_ARGS: capture,
+            TANGOW_TEST_ARGS: capture,
           },
           encoding: "utf8",
         });
@@ -703,9 +703,9 @@ describe("graphical computer spec", () => {
 
 describe("computer resource limits", () => {
   const KEYS = [
-    "RAKAZO_COMPUTER_MEMORY",
-    "RAKAZO_COMPUTER_CPUS",
-    "RAKAZO_COMPUTER_PIDS_LIMIT",
+    "TANGOW_COMPUTER_MEMORY",
+    "TANGOW_COMPUTER_CPUS",
+    "TANGOW_COMPUTER_PIDS_LIMIT",
   ] as const;
   const saved = new Map<string, string | undefined>();
 
@@ -740,21 +740,21 @@ describe("computer resource limits", () => {
   });
 
   it("pins MemorySwap to Memory so the ceiling cannot be swapped past", () => {
-    process.env.RAKAZO_COMPUTER_MEMORY = "1536m";
+    process.env.TANGOW_COMPUTER_MEMORY = "1536m";
     const { HostConfig } = containerCreateOptions(createInput);
     expect(HostConfig.Memory).toBe(1536 * 1024 ** 2);
     expect(HostConfig.MemorySwap).toBe(1536 * 1024 ** 2);
   });
 
   it("accepts fractional CPUs", () => {
-    process.env.RAKAZO_COMPUTER_CPUS = "1.5";
+    process.env.TANGOW_COMPUTER_CPUS = "1.5";
     expect(containerCreateOptions(createInput).HostConfig.NanoCpus).toBe(1_500_000_000);
   });
 
   it("lets an operator opt out explicitly", () => {
-    process.env.RAKAZO_COMPUTER_MEMORY = "unlimited";
-    process.env.RAKAZO_COMPUTER_CPUS = "0";
-    process.env.RAKAZO_COMPUTER_PIDS_LIMIT = "none";
+    process.env.TANGOW_COMPUTER_MEMORY = "unlimited";
+    process.env.TANGOW_COMPUTER_CPUS = "0";
+    process.env.TANGOW_COMPUTER_PIDS_LIMIT = "none";
     const { HostConfig } = containerCreateOptions(createInput);
     expect(HostConfig.Memory).toBe(0);
     expect(HostConfig.NanoCpus).toBe(0);
@@ -762,44 +762,44 @@ describe("computer resource limits", () => {
   });
 
   it("rejects a malformed size instead of silently falling back", () => {
-    process.env.RAKAZO_COMPUTER_MEMORY = "2 gigs";
-    expect(() => containerCreateOptions(createInput)).toThrow(/RAKAZO_COMPUTER_MEMORY/);
+    process.env.TANGOW_COMPUTER_MEMORY = "2 gigs";
+    expect(() => containerCreateOptions(createInput)).toThrow(/TANGOW_COMPUTER_MEMORY/);
   });
 
   it("rejects a negative cpu count", () => {
-    process.env.RAKAZO_COMPUTER_CPUS = "-1";
-    expect(() => containerCreateOptions(createInput)).toThrow(/RAKAZO_COMPUTER_CPUS/);
+    process.env.TANGOW_COMPUTER_CPUS = "-1";
+    expect(() => containerCreateOptions(createInput)).toThrow(/TANGOW_COMPUTER_CPUS/);
   });
 
   it("rejects a pids limit that is not a positive integer", () => {
-    process.env.RAKAZO_COMPUTER_PIDS_LIMIT = "12.5";
-    expect(() => containerCreateOptions(createInput)).toThrow(/RAKAZO_COMPUTER_PIDS_LIMIT/);
+    process.env.TANGOW_COMPUTER_PIDS_LIMIT = "12.5";
+    expect(() => containerCreateOptions(createInput)).toThrow(/TANGOW_COMPUTER_PIDS_LIMIT/);
   });
 
   it("rejects a memory limit below Docker's 6 MiB minimum", () => {
     // The daemon refuses these at container creation, so accepting them here would turn a typo
     // into a 500 on the first bot rather than a startup failure naming the variable.
     for (const value of ["1", "1m", "5m", "5242880"]) {
-      process.env.RAKAZO_COMPUTER_MEMORY = value;
-      expect(() => containerCreateOptions(createInput)).toThrow(/RAKAZO_COMPUTER_MEMORY/);
+      process.env.TANGOW_COMPUTER_MEMORY = value;
+      expect(() => containerCreateOptions(createInput)).toThrow(/TANGOW_COMPUTER_MEMORY/);
     }
-    process.env.RAKAZO_COMPUTER_MEMORY = "6m";
+    process.env.TANGOW_COMPUTER_MEMORY = "6m";
     expect(containerCreateOptions(createInput).HostConfig.Memory).toBe(6 * 1024 ** 2);
   });
 
   it("rejects a CPU count that would floor to Docker's unlimited", () => {
     // Math.floor(1e-10 * 1e9) is 0, and 0 NanoCpus means uncapped. An accepted value must never
     // turn a ceiling into no ceiling.
-    process.env.RAKAZO_COMPUTER_CPUS = "0.0000000001";
-    expect(() => containerCreateOptions(createInput)).toThrow(/RAKAZO_COMPUTER_CPUS/);
+    process.env.TANGOW_COMPUTER_CPUS = "0.0000000001";
+    expect(() => containerCreateOptions(createInput)).toThrow(/TANGOW_COMPUTER_CPUS/);
   });
 
   it("rejects a CPU count that leaves the safe-integer NanoCpus range", () => {
     // 1e300 is finite, but Math.floor(1e300 * 1e9) is Infinity. 1e7 CPUs yields a non-safe
     // integer. Both must fail closed rather than reach HostConfig.NanoCpus.
     for (const value of ["1e300", "10000000"]) {
-      process.env.RAKAZO_COMPUTER_CPUS = value;
-      expect(() => containerCreateOptions(createInput)).toThrow(/RAKAZO_COMPUTER_CPUS/);
+      process.env.TANGOW_COMPUTER_CPUS = value;
+      expect(() => containerCreateOptions(createInput)).toThrow(/TANGOW_COMPUTER_CPUS/);
     }
   });
 

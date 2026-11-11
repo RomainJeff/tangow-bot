@@ -228,10 +228,10 @@ export class LocalWorkerProvider implements WorkerProvider, GuestConnector {
       // Like a VM, the guest gets none of this process's keys: live runs let a model run commands.
       env: {
         PATH: process.env.PATH,
-        RAKAZO_WORKER_CAPABILITY: capability,
-        RAKAZO_WORKER_HARNESS: this.harness.declaration.name,
-        RAKAZO_WORKER_ROOT: vm.root,
-        RAKAZO_WORKER_HOME: path.join(vm.root, "home/user"),
+        TANGOW_WORKER_CAPABILITY: capability,
+        TANGOW_WORKER_HARNESS: this.harness.declaration.name,
+        TANGOW_WORKER_ROOT: vm.root,
+        TANGOW_WORKER_HOME: path.join(vm.root, "home/user"),
       },
     });
     const exited = new Promise<void>((resolve) => {

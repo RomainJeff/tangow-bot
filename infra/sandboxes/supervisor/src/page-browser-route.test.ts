@@ -65,9 +65,9 @@ it("resolves the owned display and refuses an older fence before running the hel
   expect(mock.exec.mock.calls.at(-1)?.[0]).toMatchObject({
     Env: [
       "DISPLAY=:2",
-      "RAKAZO_CDP_PORT=9223",
+      "TANGOW_CDP_PORT=9223",
       "HOME=/home/rakazo",
-      "RAKAZO_BROWSER_WATCH_STDIN=1",
+      "TANGOW_BROWSER_WATCH_STDIN=1",
     ],
   });
   mock.exec.mockClear();

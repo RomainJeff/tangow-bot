@@ -190,7 +190,7 @@ export function stopAllDesktopBrowsersCommand(
   env = DEFAULT_DESKTOP_ENV,
   profileCommands?: DesktopProfileCommands,
 ) {
-  const placeholder = "RAKAZO_INTERNAL_PROFILE";
+  const placeholder = "TANGOW_INTERNAL_PROFILE";
   const stop = [
     ...(profileCommands
       ? [
@@ -460,7 +460,7 @@ export function interactiveScreenCommand(
     return [
       `if [ -f ${tokenFile} ] && [ "$(cat ${tokenFile})" = ${shellQuote(controlToken)} ]; then`,
       stopProcesses,
-      "printf 'RAKAZO_CONTROL_RELEASED\\n'",
+      "printf 'TANGOW_CONTROL_RELEASED\\n'",
       "fi",
     ].join("\n");
   }
@@ -481,7 +481,7 @@ export function interactiveScreenCommand(
 }
 
 const REGISTRY = "/tmp/rakazo/desktop-assignments";
-const TOKEN_PLACEHOLDER = "RAKAZO_INTERNAL_VIEW_TOKEN";
+const TOKEN_PLACEHOLDER = "TANGOW_INTERNAL_VIEW_TOKEN";
 
 function registryLockCommand(screenId: string, waitSeconds = 120) {
   return [
@@ -496,7 +496,7 @@ function registryLockCommand(screenId: string, waitSeconds = 120) {
   ];
 }
 
-export const DESKTOP_OPERATION_PERMIT = "RAKAZO_DESKTOP_OPERATION";
+export const DESKTOP_OPERATION_PERMIT = "TANGOW_DESKTOP_OPERATION";
 
 /** Recheck the admitted lease under the lifecycle lock and retain it through execution. */
 export function managedDesktopOperationCommand(
@@ -519,7 +519,7 @@ export function managedDesktopOperationCommand(
     'set -- "$index"',
     ...layoutVariables(undefined, env),
     "flock -u 9; exec 9>&-",
-    `export DISPLAY=":$desktop_display" RAKAZO_CDP_PORT="$desktop_debug" HOME=${shellQuote(env.homeDir)} RAKAZO_BROWSER_WATCH_STDIN=1`,
+    `export DISPLAY=":$desktop_display" TANGOW_CDP_PORT="$desktop_debug" HOME=${shellQuote(env.homeDir)} TANGOW_BROWSER_WATCH_STDIN=1`,
     `exec ${argv.map(shellQuote).join(" ")}`,
   ].join("\n");
   // timeout owns a process group. Killing only its PID would leave the operation alive.
@@ -581,7 +581,7 @@ print(index)
     "flock -u 9; exec 9>&-",
     profileCommands?.(browserProfilePathForScreen(screenId, env)).ensure ?? "",
     `bash -eu -c ${shellQuote(renderEnsureScreenCommand(undefined, screenId, TOKEN_PLACEHOLDER, env).replace(shellQuote(TOKEN_PLACEHOLDER), '"$2"'))} desktop "$index" "$view_token"`,
-    'printf "RAKAZO_DESKTOP=%s:%s\\n" "$index" "$view_token"',
+    'printf "TANGOW_DESKTOP=%s:%s\\n" "$index" "$view_token"',
   ].join("\n");
 }
 
@@ -602,7 +602,7 @@ export function releaseDesktopCommand(
     profileCommands?.(browserProfilePathForScreen(screenId, env)).release ?? "",
     'exec 9>"$dir/.lock"; flock -w 120 9',
     'rm -f "$slot"',
-    'printf "RAKAZO_DESKTOP_RELEASED=%s\\n" "$index"',
+    'printf "TANGOW_DESKTOP_RELEASED=%s\\n" "$index"',
   ].join("\n");
 }
 

@@ -10,7 +10,7 @@ import { resolveSupervisorToken } from "@tangow/core";
 import { createLogger, createTestSink, installLogger } from "@tangow/logging";
 import { expect, it } from "vitest";
 
-// Build the worker image first (rakazo/worker:local, or RAKAZO_WORKER_IMAGE). Needs Docker only.
+// Build the worker image first (rakazo/worker:local, or TANGOW_WORKER_IMAGE). Needs Docker only.
 it.skipIf(process.env.VERIFY_DOCKER_WORKERS !== "1")(
   "creates a hardened worker on its volume, relays the guest, and removes it",
   async () => {

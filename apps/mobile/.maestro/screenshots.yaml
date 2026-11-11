@@ -31,9 +31,9 @@ tags:
 - tapOn: "Cancel"
 
 - tapOn: "Email"
-- inputText: ${RAKAZO_SCREENSHOT_EMAIL}
+- inputText: ${TANGOW_SCREENSHOT_EMAIL}
 - tapOn: "Password"
-- inputText: ${RAKAZO_SCREENSHOT_PASSWORD}
+- inputText: ${TANGOW_SCREENSHOT_PASSWORD}
 - hideKeyboard
 - tapOn: "Sign in"
 - tapOn:
@@ -94,7 +94,7 @@ tags:
 - takeScreenshot: "10c-computer-settings"
 - back
 
-- tapOn: ${RAKAZO_SCREENSHOT_EMAIL}
+- tapOn: ${TANGOW_SCREENSHOT_EMAIL}
 - extendedWaitUntil:
     visible: "Change password"
     timeout: 10000
@@ -159,7 +159,7 @@ tags:
 - assertVisible: "Content lives on the shared volume."
 - takeScreenshot: "14c-shared-skill"
 
-- openLink: "rakazo:///thread?botId=${RAKAZO_SCREENSHOT_BOT_ID}&name=Researcher"
+- openLink: "rakazo:///thread?botId=${TANGOW_SCREENSHOT_BOT_ID}&name=Researcher"
 - extendedWaitUntil:
     visible: "The fixture workspace is ready."
     timeout: 10000
@@ -202,7 +202,7 @@ tags:
     commands:
       - back
 
-- openLink: "rakazo:///bot?botId=${RAKAZO_SCREENSHOT_BOT_ID}&tab=settings"
+- openLink: "rakazo:///bot?botId=${TANGOW_SCREENSHOT_BOT_ID}&tab=settings"
 - extendedWaitUntil:
     visible: "Instructions"
     timeout: 10000
@@ -211,13 +211,13 @@ tags:
 - assertVisible: "Space default.*"
 - takeScreenshot: "17-bot-settings"
 
-- openLink: "rakazo:///computer?botId=${RAKAZO_SCREENSHOT_BOT_ID}&name=Researcher"
+- openLink: "rakazo:///computer?botId=${TANGOW_SCREENSHOT_BOT_ID}&name=Researcher"
 - extendedWaitUntil:
     visible: "Take control"
     timeout: 10000
 - takeScreenshot: "18-computer"
 
-- openLink: "rakazo:///group-thread?groupId=${RAKAZO_SCREENSHOT_GROUP_ID}&name=Launch%20team"
+- openLink: "rakazo:///group-thread?groupId=${TANGOW_SCREENSHOT_GROUP_ID}&name=Launch%20team"
 - extendedWaitUntil:
     visible: "The fixture launch plan is ready."
     timeout: 10000
@@ -237,7 +237,7 @@ tags:
 - assertVisible: "Grace Hopper"
 - takeScreenshot: "19c-group-thread-people"
 
-- openLink: "rakazo:///group-settings?groupId=${RAKAZO_SCREENSHOT_GROUP_ID}"
+- openLink: "rakazo:///group-settings?groupId=${TANGOW_SCREENSHOT_GROUP_ID}"
 - extendedWaitUntil:
     visible: "Delete group"
     timeout: 10000
@@ -245,7 +245,7 @@ tags:
 - assertVisible: "Lead bot"
 - takeScreenshot: "20-group-settings"
 
-- openLink: "rakazo:///bot-routine?botId=${RAKAZO_SCREENSHOT_BOT_ID}&routineId=${RAKAZO_SCREENSHOT_ROUTINE_ID}"
+- openLink: "rakazo:///bot-routine?botId=${TANGOW_SCREENSHOT_BOT_ID}&routineId=${TANGOW_SCREENSHOT_ROUTINE_ID}"
 - extendedWaitUntil:
     visible: "Weekly fixture review"
     timeout: 10000
@@ -253,7 +253,7 @@ tags:
 
 # A bot shared with this user: their own thread, the team save under the reply, the MCP card
 # pointing to web or desktop, and a title menu without the owner's screens.
-- openLink: "rakazo:///thread?botId=${RAKAZO_SCREENSHOT_SHARED_BOT_ID}&name=Release%20notes"
+- openLink: "rakazo:///thread?botId=${TANGOW_SCREENSHOT_SHARED_BOT_ID}&name=Release%20notes"
 # iOS asks before opening its own link.
 - tapOn:
     text: "Open"
@@ -282,7 +282,7 @@ tags:
 
 # The shared bot's computer as the member sees it: no mode picker, and no Take control until
 # their own run asks for them.
-- openLink: "rakazo:///computer?botId=${RAKAZO_SCREENSHOT_SHARED_BOT_ID}&name=Release%20notes&shared=1"
+- openLink: "rakazo:///computer?botId=${TANGOW_SCREENSHOT_SHARED_BOT_ID}&name=Release%20notes&shared=1"
 # iOS asks before opening its own link.
 - tapOn:
     text: "Open"
@@ -295,7 +295,7 @@ tags:
 - takeScreenshot: "32b-shared-bot-computer"
 
 # The owner's share sheet for Writer, shared with the teammate, then its team memory.
-- openLink: "rakazo:///bot-share?botId=${RAKAZO_SCREENSHOT_SHARE_BOT_ID}"
+- openLink: "rakazo:///bot-share?botId=${TANGOW_SCREENSHOT_SHARE_BOT_ID}"
 # iOS asks before opening its own link.
 - tapOn:
     text: "Open"
@@ -309,7 +309,7 @@ tags:
 - takeScreenshot: "33-share-sheet"
 - tapOn: "Done"
 
-- openLink: "rakazo:///bot?botId=${RAKAZO_SCREENSHOT_SHARE_BOT_ID}"
+- openLink: "rakazo:///bot?botId=${TANGOW_SCREENSHOT_SHARE_BOT_ID}"
 # iOS asks before opening its own link.
 - tapOn:
     text: "Open"
@@ -324,7 +324,7 @@ tags:
 - takeScreenshot: "34-team-memory"
 
 # A group the teammate created with the user: who is in it, read-only, and Leave group.
-- openLink: "rakazo:///group-settings?groupId=${RAKAZO_SCREENSHOT_MEMBER_GROUP_ID}"
+- openLink: "rakazo:///group-settings?groupId=${TANGOW_SCREENSHOT_MEMBER_GROUP_ID}"
 # iOS asks before opening its own link.
 - tapOn:
     text: "Open"
@@ -356,25 +356,25 @@ tags:
 - assertVisible: "Customer support"
 - takeScreenshot: "25-new-space-dark"
 
-- openLink: "rakazo:///thread?botId=${RAKAZO_SCREENSHOT_BOT_ID}&name=Researcher"
+- openLink: "rakazo:///thread?botId=${TANGOW_SCREENSHOT_BOT_ID}&name=Researcher"
 - extendedWaitUntil:
     visible: "The fixture workspace is ready."
     timeout: 10000
 - takeScreenshot: "26-thread-dark"
 
-- openLink: "rakazo:///group-thread?groupId=${RAKAZO_SCREENSHOT_GROUP_ID}&name=Launch%20team"
+- openLink: "rakazo:///group-thread?groupId=${TANGOW_SCREENSHOT_GROUP_ID}&name=Launch%20team"
 - extendedWaitUntil:
     visible: "The fixture launch plan is ready."
     timeout: 10000
 - takeScreenshot: "27-group-thread-dark"
 
-- openLink: "rakazo:///group-settings?groupId=${RAKAZO_SCREENSHOT_GROUP_ID}"
+- openLink: "rakazo:///group-settings?groupId=${TANGOW_SCREENSHOT_GROUP_ID}"
 - assertVisible: "Delete group"
 - takeScreenshot: "28-group-settings-dark"
 
 - openLink: "rakazo:///account"
 - tapOn: "Light"
-- openLink: "rakazo:///thread?botId=${RAKAZO_SCREENSHOT_BOT_ID}&name=Researcher"
+- openLink: "rakazo:///thread?botId=${TANGOW_SCREENSHOT_BOT_ID}&name=Researcher"
 - assertVisible: "The fixture workspace is ready."
 - takeScreenshot: "29-thread-light-restored"
 

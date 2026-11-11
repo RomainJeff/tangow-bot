@@ -272,7 +272,7 @@ describe("computer loopback provision lifecycle", () => {
       );
       expect(options.HostConfig.Binds).toEqual([`${homePath}:/home/rakazo`, ...skillsBinds]);
       expect(options.Env).toContainEqual(
-        expect.stringMatching(/^RAKAZO_COMPUTER_CONTROL_TOKEN=.+/),
+        expect.stringMatching(/^TANGOW_COMPUTER_CONTROL_TOKEN=.+/),
       );
     }
   });

@@ -366,7 +366,7 @@ export function containerActionStep(
     argv = [
       "env",
       `DISPLAY=${display}`,
-      ...(browserProfile ? [`RAKAZO_BROWSER_PROFILE=${browserProfile}`] : []),
+      ...(browserProfile ? [`TANGOW_BROWSER_PROFILE=${browserProfile}`] : []),
       "xdg-open",
       target,
     ];
@@ -375,7 +375,7 @@ export function containerActionStep(
     argv = [
       "env",
       `DISPLAY=${display}`,
-      ...(browser && browserProfile ? [`RAKAZO_BROWSER_PROFILE=${browserProfile}`] : []),
+      ...(browser && browserProfile ? [`TANGOW_BROWSER_PROFILE=${browserProfile}`] : []),
       browser ? "rakazo-browser" : action.application,
       ...(action.uri ? [action.uri] : []),
     ];

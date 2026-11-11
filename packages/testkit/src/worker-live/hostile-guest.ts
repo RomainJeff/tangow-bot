@@ -35,7 +35,7 @@ const REQUESTS: Record<string, GuestBody> = {
   unknown_tool: { type: "tool", name: "drop_tables", args: {}, executionId: "x1" },
 };
 
-const capability = process.env.RAKAZO_WORKER_CAPABILITY ?? "";
+const capability = process.env.TANGOW_WORKER_CAPABILITY ?? "";
 const worker = capabilityWorker(capability);
 const request = REQUESTS[process.argv[2] ?? ""];
 if (!worker || !request) {
@@ -50,7 +50,7 @@ await channel.send(
     kind: "worker.hello",
     worker,
     capability,
-    harness: workerHarness(process.env.RAKAZO_WORKER_HARNESS ?? "pi-native"),
+    harness: workerHarness(process.env.TANGOW_WORKER_HARNESS ?? "pi-native"),
   }),
 );
 const received: string[] = [];

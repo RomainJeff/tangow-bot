@@ -53,7 +53,7 @@ import {
   warmWindowTtlMs,
 } from "./window-options.js";
 
-const PERFORMANCE_USER_DATA = process.env.RAKAZO_PERFORMANCE_USER_DATA;
+const PERFORMANCE_USER_DATA = process.env.TANGOW_PERFORMANCE_USER_DATA;
 const PROBE_TIMEOUT_MS = 8_000;
 let mainWindow: BrowserWindow | null = null;
 const appWindowTargets = new WeakMap<BrowserWindow, string>();
@@ -74,12 +74,12 @@ let warmWindowTimer: NodeJS.Timeout | undefined;
 // destroying the last window fires "window-all-closed" -> app.quit(); a probe
 // that runs before the first real window exists must not count as "all closed".
 let liveProbeWindows = 0;
-const WARM_WINDOW_TTL_MS = warmWindowTtlMs(process.env.RAKAZO_WARM_WINDOW_TTL_MS);
+const WARM_WINDOW_TTL_MS = warmWindowTtlMs(process.env.TANGOW_WARM_WINDOW_TTL_MS);
 
 const updaterEnvironment = {
   packaged: app.isPackaged,
   version: app.getVersion(),
-  disabled: process.env.RAKAZO_DISABLE_AUTO_UPDATE === "1",
+  disabled: process.env.TANGOW_DISABLE_AUTO_UPDATE === "1",
 };
 const desktopUpdater = new DesktopUpdateController(
   updaterEnvironment,
@@ -293,7 +293,7 @@ function createWindow(url: string, partition: string | null) {
     if (
       process.platform === "darwin" &&
       !quitting &&
-      process.env.RAKAZO_DISABLE_WARM_WINDOW !== "1"
+      process.env.TANGOW_DISABLE_WARM_WINDOW !== "1"
     ) {
       event.preventDefault();
       win.hide();
@@ -524,7 +524,7 @@ async function installBundledRenderer(
   targetSession: Session,
   partition: string | null,
 ) {
-  if (!app.isPackaged || process.env.RAKAZO_DISABLE_BUNDLED_RENDERER === "1") return;
+  if (!app.isPackaged || process.env.TANGOW_DISABLE_BUNDLED_RENDERER === "1") return;
   if (!servesBundledRenderer(targetUrl)) return;
   const webUrl = new URL(targetUrl);
   const installationKey = `${partition ?? "default"}:${webUrl.protocol}`;
@@ -903,11 +903,11 @@ app.whenReady().then(async () => {
   currentSetup = await readSetup(userDataDir);
   currentAccess = await readAccess(userDataDir);
   const target = resolveStartupTarget({
-    envUrl: process.env.RAKAZO_WEB_URL,
+    envUrl: process.env.TANGOW_WEB_URL,
     saved: currentSetup,
-    forceSetup: process.env.RAKAZO_FORCE_SETUP === "1",
+    forceSetup: process.env.TANGOW_FORCE_SETUP === "1",
   });
-  if (process.env.RAKAZO_PERFORMANCE_CLEAR_CACHE === "1") {
+  if (process.env.TANGOW_PERFORMANCE_CLEAR_CACHE === "1") {
     const cacheSessions = new Set<Session>([session.defaultSession]);
     if (target.kind === "app") {
       cacheSessions.add((await resolveSessionForTarget(target.url)).value);

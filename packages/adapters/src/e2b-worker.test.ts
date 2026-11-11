@@ -145,8 +145,8 @@ describe("E2BWorkerProvider", () => {
       secure: true,
       metadata: { rakazo: "worker", attemptId: "attempt_1" },
       envs: {
-        RAKAZO_WORKER_HARNESS: "pi-native",
-        RAKAZO_WORKER_HOME: "/home/user",
+        TANGOW_WORKER_HARNESS: "pi-native",
+        TANGOW_WORKER_HOME: "/home/user",
       },
       volumeMounts: {
         "/workspace/bots/bot_1": "rakazo-vol_bot",
@@ -201,7 +201,7 @@ describe("E2BWorkerProvider", () => {
 
     const { envs, volumeMounts } = e2b.sandboxes.get("sbx_1")!;
     expect({ envs, volumeMounts }).toEqual({
-      envs: { RAKAZO_WORKER_HARNESS: "pi-native", RAKAZO_WORKER_HOME: "/home/user" },
+      envs: { TANGOW_WORKER_HARNESS: "pi-native", TANGOW_WORKER_HOME: "/home/user" },
       volumeMounts: {},
     });
   });
@@ -310,7 +310,7 @@ describe("E2BWorkerProvider", () => {
     expect(guest).toMatchObject({
       sandboxId: "sbx_1",
       command: "node /opt/rakazo/agent-run-worker.mjs",
-      envs: { RAKAZO_WORKER_CAPABILITY: "rkw1.claims.mac" },
+      envs: { TANGOW_WORKER_CAPABILITY: "rkw1.claims.mac" },
     });
     expect(Buffer.from(hello.value!).toString()).toBe('{"kind":"worker.hello"}');
     expect(guest!.stdin.map((sent) => Buffer.from(sent, "base64").toString())).toEqual([

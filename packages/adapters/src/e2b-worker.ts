@@ -238,8 +238,8 @@ export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
       secure: true,
       metadata,
       envs: {
-        RAKAZO_WORKER_HARNESS: this.expectedHarness.name,
-        RAKAZO_WORKER_HOME: "/home/user",
+        TANGOW_WORKER_HARNESS: this.expectedHarness.name,
+        TANGOW_WORKER_HOME: "/home/user",
       },
       volumeMounts: Object.fromEntries(spec.mounts.map((mount) => [mount.path, mount.volumeRef])),
       timeoutMs: this.sandboxTimeoutMs(spec),
@@ -349,7 +349,7 @@ export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
       target.providerRef,
       `node ${this.config.guestEntry ?? E2B_WORKER_GUEST_ENTRY}`,
       {
-        envs: { RAKAZO_WORKER_CAPABILITY: capability },
+        envs: { TANGOW_WORKER_CAPABILITY: capability },
         onStdout: (data) => stdout.push(data),
         onStderr: (data) => {
           stderr = (stderr + data).slice(-LOG_TEXT_CHARS);

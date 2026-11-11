@@ -58,7 +58,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store,sharing=locked \
 COPY --chmod=755 . .
 # After the sources: the prisma schema arrives with them.
 RUN pnpm --filter @tangow/db generate
-RUN RAKAZO_ALLOW_DEV_SECRETS=1 pnpm --filter @tangow/web build
+RUN TANGOW_ALLOW_DEV_SECRETS=1 pnpm --filter @tangow/web build
 RUN install -d -m 750 -o node -g node /data /app/apps/web/node_modules/.vite-temp
 ARG GIT_SHA
 ENV NODE_ENV=production

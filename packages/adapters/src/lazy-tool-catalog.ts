@@ -4,7 +4,7 @@ import type {
   ConnectorRoute,
   ConnectorTool,
 } from "@tangow/adapter-kit";
-import { RAKAZO_TOOL_PREFIX } from "@tangow/adapter-kit";
+import { TANGOW_TOOL_PREFIX } from "@tangow/adapter-kit";
 import { z } from "zod";
 import { ConnectorError } from "./connector-error.js";
 
@@ -23,7 +23,7 @@ export const CATALOG_LOAD = "__catalog_load";
 export const CATALOG_EXECUTE = "__catalog_execute";
 
 /** Only for a `native-loop` worker harness, whose tool_search loads exact names. */
-export const EXACT_TOOL_SEARCH_TEXT = `tool_search loads a deferred tool when given its exact name, with or without the ${RAKAZO_TOOL_PREFIX} prefix, and searches by keyword otherwise; a catalog it cannot reach offers its own search, load and execute tools.`;
+export const EXACT_TOOL_SEARCH_TEXT = `tool_search loads a deferred tool when given its exact name, with or without the ${TANGOW_TOOL_PREFIX} prefix, and searches by keyword otherwise; a catalog it cannot reach offers its own search, load and execute tools.`;
 
 type CatalogEntry = { id: string; tool: ConnectorTool; group: string };
 

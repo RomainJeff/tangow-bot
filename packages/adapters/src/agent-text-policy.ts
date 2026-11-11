@@ -1,5 +1,5 @@
 import type { AgentRunRequest, HarnessTranscriptEntry } from "@tangow/adapter-kit";
-import { RAKAZO_TOOL_PREFIX } from "@tangow/adapter-kit";
+import { TANGOW_TOOL_PREFIX } from "@tangow/adapter-kit";
 import { TOOL_FINAL_RESPONSE_FALLBACK } from "./user-progress.js";
 
 // Some OpenAI-compatible models return EOS immediately after a tool result
@@ -267,8 +267,8 @@ const TOOL_ACTIVITY = new Map<string, string>([
  */
 export function describeToolActivity(toolName: string, appName?: string): string {
   if (appName) return `Stepping into ${appName}`;
-  const name = toolName.startsWith(RAKAZO_TOOL_PREFIX)
-    ? toolName.slice(RAKAZO_TOOL_PREFIX.length)
+  const name = toolName.startsWith(TANGOW_TOOL_PREFIX)
+    ? toolName.slice(TANGOW_TOOL_PREFIX.length)
     : toolName;
   return TOOL_ACTIVITY.get(name) ?? "Seeing to it";
 }

@@ -58,9 +58,9 @@ vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
 }));
 
 beforeAll(() => {
-  vi.stubEnv("RAKAZO_LOCAL_MODELS", "capacity-local");
-  vi.stubEnv("RAKAZO_LOCAL_CONTEXT_WINDOW", "32768");
-  vi.stubEnv("RAKAZO_LOCAL_MAX_TOKENS", "32768");
+  vi.stubEnv("TANGOW_LOCAL_MODELS", "capacity-local");
+  vi.stubEnv("TANGOW_LOCAL_CONTEXT_WINDOW", "32768");
+  vi.stubEnv("TANGOW_LOCAL_MAX_TOKENS", "32768");
 });
 afterAll(() => vi.unstubAllEnvs());
 

@@ -14,7 +14,7 @@ function base(bundle: string): TemplateBuilder {
   return (
     Template({ fileContextPath: path.dirname(bundle) })
       .fromNodeImage("24-bookworm")
-      .setEnvs({ RAKAZO_WORKER_HOME: "/home/user" })
+      .setEnvs({ TANGOW_WORKER_HOME: "/home/user" })
       .aptInstall(["bash", "ca-certificates", "git", "procps"])
       .makeDir("/workspace", { user: "root" })
       // The guest runs as the sandbox user, and a run without volumes works in /workspace itself.
@@ -35,7 +35,7 @@ export function workerTemplate(harness: string, bundle: string): TemplateBuilder
   if (!layer) throw new Error(`No worker template layer for the harness "${harness}"`);
   // The bundle changes most often, so it comes last and keeps the layers above cached.
   return layer(base(bundle))
-    .setEnvs({ RAKAZO_WORKER_HARNESS: harness })
+    .setEnvs({ TANGOW_WORKER_HARNESS: harness })
     .copy("managed-skills", "/managed-skills", { user: "root" })
     .runCmd("chown -R root:root /managed-skills && chmod -R a+rX,a-w /managed-skills", {
       user: "root",

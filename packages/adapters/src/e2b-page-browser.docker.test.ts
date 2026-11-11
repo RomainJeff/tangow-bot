@@ -19,7 +19,7 @@ const context = {
   signal: new AbortController().signal,
 };
 const computer = { id: "machine", providerRef: "machine", kind: "e2b" as const, botId: "home" };
-const image = process.env.RAKAZO_COMPUTER_IMAGE ?? "rakazo/computer:local";
+const image = process.env.TANGOW_COMPUTER_IMAGE ?? "rakazo/computer:local";
 const environment = {
   homeDir: "/home/user",
   workspaceDir: "/home/user/rakazo-home",
@@ -134,7 +134,7 @@ describe.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
             1000,
           );
           const denied = await f.exec(
-            `printf 'RAKAZO_DESKTOP_OPERATION\n' | bash -c ${shellQuote(operation)}`,
+            `printf 'TANGOW_DESKTOP_OPERATION\n' | bash -c ${shellQuote(operation)}`,
           );
           expect(denied.exitCode).toBe(75);
         }

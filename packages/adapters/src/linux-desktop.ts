@@ -114,7 +114,7 @@ export class LinuxDesktop {
       ),
       context,
     );
-    const match = output.match(/RAKAZO_DESKTOP=(\d+):([a-zA-Z0-9_-]+)/);
+    const match = output.match(/TANGOW_DESKTOP=(\d+):([a-zA-Z0-9_-]+)/);
     if (!match) throw new ComputerScreenUnavailableError();
     const index = Number(match[1]);
     const ports = screenPorts(index, env);

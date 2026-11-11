@@ -141,10 +141,10 @@ describe("E2B computer backend", () => {
 
   it("revokes an extra display's control without starting or waiting for its view", async () => {
     const command = vi.fn(async (value: string) => {
-      if (value.includes("RAKAZO_SCREEN_INDEX=")) {
-        return { stdout: "RAKAZO_SCREEN_INDEX=1\n", stderr: "", exitCode: 0 };
+      if (value.includes("TANGOW_SCREEN_INDEX=")) {
+        return { stdout: "TANGOW_SCREEN_INDEX=1\n", stderr: "", exitCode: 0 };
       }
-      if (value.includes("RAKAZO_SCREEN_PASSWORD=") || value.includes("flock 8")) {
+      if (value.includes("TANGOW_SCREEN_PASSWORD=") || value.includes("flock 8")) {
         throw new Error("extra view is unavailable");
       }
       return { stdout: "", stderr: "", exitCode: 0 };
@@ -185,7 +185,7 @@ describe("E2B computer backend", () => {
         display: ":0",
         getHost: () => host,
         commands: {
-          run: vi.fn(async () => ({ stdout: "RAKAZO_DESKTOP=0:key\n", stderr: "", exitCode: 0 })),
+          run: vi.fn(async () => ({ stdout: "TANGOW_DESKTOP=0:key\n", stderr: "", exitCode: 0 })),
         },
       })),
     } as unknown as E2BSandboxSdk;
@@ -214,7 +214,7 @@ describe("E2B computer backend", () => {
           display: ":0",
           getHost: (port: number) => `${port}-existing.e2b.example.com`,
           commands: {
-            run: vi.fn(async () => ({ stdout: "RAKAZO_DESKTOP=0:key\n", stderr: "", exitCode: 0 })),
+            run: vi.fn(async () => ({ stdout: "TANGOW_DESKTOP=0:key\n", stderr: "", exitCode: 0 })),
           },
         })),
       } as unknown as E2BSandboxSdk;
@@ -236,7 +236,7 @@ describe("E2B computer backend", () => {
 
   it("reconnects concurrent primary viewers without using the SDK's global VNC lifecycle", async () => {
     const command = vi.fn(async (_value: string) => ({
-      stdout: "RAKAZO_DESKTOP=0:savedkey\n",
+      stdout: "TANGOW_DESKTOP=0:savedkey\n",
       stderr: "",
       exitCode: 0,
     }));
