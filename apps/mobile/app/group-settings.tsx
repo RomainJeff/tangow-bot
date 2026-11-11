@@ -13,6 +13,7 @@ import { NativeSymbol } from "../components/native-symbol";
 import { type MobileBot, type MobileGroup, rpc } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
+import { serverMessage } from "../lib/server-error";
 
 export default function GroupSettingsScreen() {
   const { t } = useI18n();
@@ -107,6 +108,21 @@ export default function GroupSettingsScreen() {
     ]);
   }
 
+  function leave() {
+    if (!groupId || !group) return;
+    Alert.alert(group.name, undefined, [
+      { text: t("Cancel"), style: "cancel" },
+      {
+        text: t("Leave group"),
+        style: "destructive",
+        onPress: () =>
+          void rpc("groups/leave", { groupId })
+            .then(() => router.replace("/"))
+            .catch((err) => setError(serverMessage(err) || t("Try again."))),
+      },
+    ]);
+  }
+
   const label = { color: tokens.mutedForeground, fontSize: 14, marginTop: 20 };
   const field = {
     marginTop: 8,
@@ -116,6 +132,49 @@ export default function GroupSettingsScreen() {
     color: tokens.foreground,
     fontSize: 16,
   };
+
+  // Only its creator changes a group; everyone else sees who is in it and may leave.
+  if (group && !group.canManage) {
+    return (
+      <>
+        <Stack.Screen options={{ title: t("Group settings") }} />
+        <ScrollView
+          testID="group-settings"
+          style={{ flex: 1, backgroundColor: tokens.background }}
+          contentContainerStyle={{ padding: 24 }}
+        >
+          <Text style={{ color: tokens.foreground, fontSize: 20, fontWeight: "600" }}>
+            {group.name}
+          </Text>
+          {group.description ? (
+            <Text style={{ color: tokens.mutedForeground, fontSize: 16, marginTop: 6 }}>
+              {group.description}
+            </Text>
+          ) : null}
+          <Text style={label}>{t("People")}</Text>
+          <PersonPicker people={group.people} />
+          <Text style={label}>{t("Bots")}</Text>
+          <BotMemberPicker
+            bots={group.members.map((member) => ({ ...member, id: member.botId }))}
+          />
+          {error ? <Text style={{ color: tokens.destructive, marginTop: 12 }}>{error}</Text> : null}
+          <Pressable
+            onPress={leave}
+            style={{
+              marginTop: 24,
+              borderRadius: 11,
+              borderWidth: 1,
+              borderColor: tokens.border,
+              padding: 14,
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: tokens.destructive, fontSize: 16 }}>{t("Leave group")}</Text>
+          </Pressable>
+        </ScrollView>
+      </>
+    );
+  }
 
   return (
     <>
