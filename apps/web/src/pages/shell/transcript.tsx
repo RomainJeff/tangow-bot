@@ -406,7 +406,7 @@ export const Transcript = memo(function Transcript({
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         onReply={onReply}
-        onEdit={onEdit}
+        onEdit={sheetMessage && isMine(sheetMessage) ? onEdit : undefined}
         onReact={onReact}
         voiceReady={voiceReady}
         speaking={sheetMessage !== null && speakingMessageId === sheetMessage.id}
