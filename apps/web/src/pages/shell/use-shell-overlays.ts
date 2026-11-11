@@ -49,6 +49,7 @@ export function useShellOverlays(sessionUser: unknown, spaceId: string | undefin
   const closeBotMenu = useCallback(() => setBotMenu(null), []);
   const [deleteTarget, setDeleteTarget] = useState<Bot | null>(null);
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<Group | null>(null);
+  const [leaveGroupTarget, setLeaveGroupTarget] = useState<Group | null>(null);
   const [deleteSpaceTarget, setDeleteSpaceTarget] = useState<Space | null>(null);
   const [spaceMenu, setSpaceMenu] = useState<{
     id: string;
@@ -176,6 +177,8 @@ export function useShellOverlays(sessionUser: unknown, spaceId: string | undefin
     setDeleteTarget,
     deleteGroupTarget,
     setDeleteGroupTarget,
+    leaveGroupTarget,
+    setLeaveGroupTarget,
     deleteSpaceTarget,
     setDeleteSpaceTarget,
     spaceMenu,

@@ -80,6 +80,7 @@ function StateMark({ tone, children }: { tone: "ink" | "destructive"; children: 
 export function DraftCard({
   block,
   canAnswer,
+  waitingOn,
   viewerUserId,
   onAnswer,
   onReconnect,
@@ -87,6 +88,8 @@ export function DraftCard({
 }: {
   block: DraftCardBlock;
   canAnswer: boolean;
+  /** The person who sends or discards it instead, when it waits on someone else's run. */
+  waitingOn?: string;
   viewerUserId?: string;
   onAnswer: (text: string, edits?: CardEdits) => Promise<void>;
   onReconnect?: () => void;
@@ -236,7 +239,7 @@ export function DraftCard({
         state = t`Replaced`;
         break;
       case "inactive":
-        state = t`No longer active`;
+        state = waitingOn !== undefined ? t`Waiting for ${waitingOn}` : t`No longer active`;
         break;
     }
     return (

@@ -1,7 +1,7 @@
 import { i18n } from "@lingui/core";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown, truncateMarkdownForRender } from "@rakazo/chat-ui/web";
-import type { MessageBlock, ThreadItem } from "@rakazo/contracts";
+import type { GroupPerson, MessageBlock, ThreadItem } from "@rakazo/contracts";
 import { isLinkPreviewCard } from "@rakazo/contracts";
 import type { RoutineItem, SkillSourceBlock, ThreadRow, WaitingCard } from "@rakazo/core";
 import {
@@ -46,7 +46,11 @@ export type RowContext = {
   artifactTarget: ArtifactTarget;
   inGroup: boolean;
   viewerUserId?: string;
+  /** Who wrote a message, when it is someone else's in a group. */
+  personOf?: (message: MessageItem) => GroupPerson | undefined;
   waiting: WaitingCard | null;
+  /** The card another person's run waits on, and their name: shown, answered by them alone. */
+  waitingOn?: { itemId: string; name: string } | null;
   /** The item whose computer card is live and opens the bot's screen. */
   takeoverItemId?: string | null;
   onOpenComputer?: () => void;
@@ -218,6 +222,7 @@ function MessageRowView({
       artifactTarget={context.artifactTarget}
       chrome={chrome}
       message={item}
+      person={context.personOf?.(item)}
       inGroup={context.inGroup}
       showAuthor={context.inGroup && showAuthor}
       showAvatar={context.inGroup && showAvatar}
@@ -236,6 +241,7 @@ function MessageRowView({
               )
           : undefined
       }
+      waitingOn={context.waitingOn?.itemId === item.id ? context.waitingOn.name : undefined}
       onOpenComputer={context.takeoverItemId === item.id ? context.onOpenComputer : undefined}
       onOpenBot={context.onOpenBot}
       speakerName={
@@ -449,6 +455,7 @@ function EffectCard({ item, context }: { item: ItemOf<"effect">; context: RowCon
     <AskCard
       block={item.card}
       canAnswer={Boolean(answer)}
+      waitingOn={context.waitingOn?.itemId === item.id ? context.waitingOn.name : undefined}
       viewerUserId={context.viewerUserId}
       onAnswer={answer ?? noAnswer}
       onReconnect={context.onOpenIntegrations}
