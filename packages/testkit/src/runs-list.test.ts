@@ -21,7 +21,7 @@ describeRunsList("runs.list activity tracker", () => {
   let prisma: PrismaClient;
   let stop: () => Promise<void>;
   const stamp = Date.now();
-  const dataDir = mkdtempSync(path.join(tmpdir(), "rakazo-runs-list-"));
+  const dataDir = mkdtempSync(path.join(tmpdir(), "tangow-runs-list-"));
 
   beforeAll(async () => {
     const { createApp } = await import("../../../apps/api/src/app.ts");
@@ -41,7 +41,7 @@ describeRunsList("runs.list activity tracker", () => {
   });
 
   it("lists active runs from two bots and keeps completed runs under recent", async () => {
-    const cookie = await signup(app, `runs-${stamp}@rakazo.test`, "Runs User");
+    const cookie = await signup(app, `runs-${stamp}@tangow.test`, "Runs User");
     const alpha = await rpc<{ id: string }>(app, cookie, "bots/create", {
       name: "Alpha",
       title: "Alpha",
@@ -79,7 +79,7 @@ describeRunsList("runs.list activity tracker", () => {
   });
 
   it("never returns runs from another workspace", async () => {
-    const ownerCookie = await signup(app, `runs-owner-${stamp}@rakazo.test`, "Owner");
+    const ownerCookie = await signup(app, `runs-owner-${stamp}@tangow.test`, "Owner");
     const ownerBot = await rpc<{ id: string }>(app, ownerCookie, "bots/create", {
       name: "OwnerBot",
       title: "OwnerBot",
@@ -89,7 +89,7 @@ describeRunsList("runs.list activity tracker", () => {
     });
     await seedRun(prisma, ownerBot.id, "running", "owner active run");
 
-    const intruderCookie = await signup(app, `runs-intruder-${stamp}@rakazo.test`, "Intruder");
+    const intruderCookie = await signup(app, `runs-intruder-${stamp}@tangow.test`, "Intruder");
     const active = await rpc<{ runs: RunActivityRow[] }>(app, intruderCookie, "runs/list", {
       filter: "active",
     });
@@ -97,7 +97,7 @@ describeRunsList("runs.list activity tracker", () => {
   });
 
   it("excludes archived bots from recent before applying the limit", async () => {
-    const cookie = await signup(app, `runs-archived-${stamp}@rakazo.test`, "Archive User");
+    const cookie = await signup(app, `runs-archived-${stamp}@tangow.test`, "Archive User");
     const archivedBot = await rpc<{ id: string }>(app, cookie, "bots/create", {
       name: "Archived",
       title: "Archived",
@@ -134,7 +134,7 @@ describeRunsList("runs.list activity tracker", () => {
   });
 
   it("lists each routine with how its latest finished run ended, by completion time", async () => {
-    const cookie = await signup(app, `runs-last-${stamp}@rakazo.test`, "Last Run User");
+    const cookie = await signup(app, `runs-last-${stamp}@tangow.test`, "Last Run User");
     const bot = await rpc<{ id: string }>(app, cookie, "bots/create", {
       name: "Digest",
       title: "Digest",
@@ -196,7 +196,7 @@ describeRunsList("runs.list activity tracker", () => {
   });
 
   it("never returns another user's activity or recap for a foreign bot or run", async () => {
-    const ownerCookie = await signup(app, `runs-scope-owner-${stamp}@rakazo.test`, "Owner");
+    const ownerCookie = await signup(app, `runs-scope-owner-${stamp}@tangow.test`, "Owner");
     const ownerBot = await createBot(app, ownerCookie, "ScopeBot");
     const routine = await prisma.routine.create({
       data: await routineData(prisma, ownerBot.id, "Owner digest"),
@@ -214,7 +214,7 @@ describeRunsList("runs.list activity tracker", () => {
 
     const intruderCookie = await signup(
       app,
-      `runs-scope-intruder-${stamp}@rakazo.test`,
+      `runs-scope-intruder-${stamp}@tangow.test`,
       "Intruder",
     );
     const ownBot = await createBot(app, intruderCookie, "IntruderBot");
@@ -255,7 +255,7 @@ describeRunsList("runs.list activity tracker", () => {
   });
 
   it("reads an archived bot's activity for its owner only, and refuses its edits until restored", async () => {
-    const ownerCookie = await signup(app, `archived-page-owner-${stamp}@rakazo.test`, "Owner");
+    const ownerCookie = await signup(app, `archived-page-owner-${stamp}@tangow.test`, "Owner");
     const bot = await createBot(app, ownerCookie, "Shelved");
     const routine = await prisma.routine.create({
       data: await routineData(prisma, bot.id, "Inbox sweep"),
@@ -279,7 +279,7 @@ describeRunsList("runs.list activity tracker", () => {
 
     const intruderCookie = await signup(
       app,
-      `archived-page-intruder-${stamp}@rakazo.test`,
+      `archived-page-intruder-${stamp}@tangow.test`,
       "Intruder",
     );
     const foreign = await raw(app, intruderCookie, "bots/activity", { botId: bot.id });
@@ -302,7 +302,7 @@ describeRunsList("runs.list activity tracker", () => {
   });
 
   it("lists a bot's routine runs, routine creations and its own creation, never other runs", async () => {
-    const cookie = await signup(app, `activity-feed-${stamp}@rakazo.test`, "Feed User");
+    const cookie = await signup(app, `activity-feed-${stamp}@tangow.test`, "Feed User");
     const bot = await createBot(app, cookie, "Feed Bot");
     const botRow = await prisma.bot.update({
       where: { id: bot.id },
@@ -373,7 +373,7 @@ describeRunsList("runs.list activity tracker", () => {
   });
 
   it("lists one routine's runs only for its own bot and owner", async () => {
-    const ownerCookie = await signup(app, `routine-runs-owner-${stamp}@rakazo.test`, "Owner");
+    const ownerCookie = await signup(app, `routine-runs-owner-${stamp}@tangow.test`, "Owner");
     const bot = await createBot(app, ownerCookie, "Digest Bot");
     const otherBot = await createBot(app, ownerCookie, "Other Bot");
     const digest = await prisma.routine.create({
@@ -406,7 +406,7 @@ describeRunsList("runs.list activity tracker", () => {
 
     const intruderCookie = await signup(
       app,
-      `routine-runs-intruder-${stamp}@rakazo.test`,
+      `routine-runs-intruder-${stamp}@tangow.test`,
       "Intruder",
     );
     const intruderBot = await createBot(app, intruderCookie, "Intruder Bot");
@@ -424,7 +424,7 @@ describeRunsList("runs.list activity tracker", () => {
   });
 
   it("leaves a plain webhook message out of a bot's activity", async () => {
-    const cookie = await signup(app, `activity-hook-${stamp}@rakazo.test`, "Hook User");
+    const cookie = await signup(app, `activity-hook-${stamp}@tangow.test`, "Hook User");
     const bot = await createBot(app, cookie, "Hooked");
     const { secret, path: hookPath } = await rpc<{ secret: string; path: string }>(
       app,
@@ -453,7 +453,7 @@ describeRunsList("runs.list activity tracker", () => {
   });
 
   it("returns group runs with groupId for navigation", async () => {
-    const cookie = await signup(app, `runs-group-${stamp}@rakazo.test`, "Group User");
+    const cookie = await signup(app, `runs-group-${stamp}@tangow.test`, "Group User");
     const botA = await rpc<{ id: string }>(app, cookie, "bots/create", {
       name: "Worker",
       title: "Worker",

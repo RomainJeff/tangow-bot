@@ -69,7 +69,7 @@ describe("a traced worker run", () => {
     const attributes = (span: ExportedSpan) =>
       Object.fromEntries(span.attributes.map(({ key, value }) => [key, value.stringValue]));
     const [root, ...children] = spans;
-    expect(root?.name).toBe("rakazo.run");
+    expect(root?.name).toBe("tangow.run");
     const named = new Map(children.map((span) => [span.name, span]));
     expect([...named.keys()].sort()).toEqual([
       "generation 1",

@@ -273,7 +273,7 @@ describe("skill owner lock", () => {
   it("lets more owners write at once than the app's pool has connections", {
     timeout: 120_000,
   }, async () => {
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-skill-lock-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-skill-lock-"));
     dirs.push(dataDir);
     const deps = {
       prisma: pooledPrisma(4, 10_000) as unknown as PrismaClient,

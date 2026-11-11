@@ -183,7 +183,7 @@ export class DockerWorkerProvider implements WorkerProvider, GuestConnector {
             authorization: `Bearer ${this.config.supervisorToken}`,
             "x-tangow-worker-capability": capability,
             connection: "Upgrade",
-            upgrade: "rakazo-guest",
+            upgrade: "tangow-guest",
           },
         },
       );

@@ -8,7 +8,7 @@ import { computerNetworkNameFor } from "../../../../infra/sandboxes/supervisor/s
 const composeFile = path.resolve("infra/compose/docker-compose.topology.yml");
 const keep = process.argv.includes("--keep");
 const skipBuild = process.argv.includes("--skip-build");
-const project = `rakazo-topology-${process.pid}-${Date.now().toString(36)}`;
+const project = `tangow-topology-${process.pid}-${Date.now().toString(36)}`;
 
 async function main() {
   docker(["info", "--format", "{{.ServerVersion}}"]);
@@ -146,7 +146,7 @@ async function signup(baseUrl: string) {
     method: "POST",
     headers: { "content-type": "application/json", origin: baseUrl },
     body: JSON.stringify({
-      email: `topology-${Date.now()}@rakazo.test`,
+      email: `topology-${Date.now()}@tangow.test`,
       password: "password12",
       name: "Topology",
     }),
@@ -226,7 +226,7 @@ async function waitForWorker(
     const logs = compose(["logs", "--no-color", "--tail", "100", "worker"], true);
     // apps/worker logs readiness via the structured logger (packages/logging) as
     // {"timestamp":...,"level":"info","message":"worker ready","service.name":"tangow-worker"},
-    // not the old plain "rakazo worker ready" console.log line -- match the JSON field directly
+    // not the old plain "tangow worker ready" console.log line -- match the JSON field directly
     // rather than a substring that depends on the sink's exact key order.
     if (logs.includes('"message":"worker ready"')) return;
     await delay(500);
@@ -334,9 +334,9 @@ function removeManagedComputers(
           "postgres",
           "psql",
           "-U",
-          "rakazo",
+          "tangow",
           "-d",
-          "rakazo",
+          "tangow",
           "-Atc",
           'SELECT "homeKey" FROM computers',
         ],

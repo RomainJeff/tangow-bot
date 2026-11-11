@@ -16,16 +16,16 @@ describe("widget document", () => {
   });
 
   it("accepts only finite positive height messages encoded as JSON strings", () => {
-    expect(parseWidgetHeightMessage('{"rakazoWidgetHeight":215}')).toBe(215);
+    expect(parseWidgetHeightMessage('{"tangowWidgetHeight":215}')).toBe(215);
     for (const message of [
       null,
       {},
       "invalid",
       "null",
-      '{"rakazoWidgetHeight":0}',
-      '{"rakazoWidgetHeight":-2}',
-      '{"rakazoWidgetHeight":"20"}',
-      '{"rakazoWidgetHeight":1e999}',
+      '{"tangowWidgetHeight":0}',
+      '{"tangowWidgetHeight":-2}',
+      '{"tangowWidgetHeight":"20"}',
+      '{"tangowWidgetHeight":1e999}',
     ]) {
       expect(parseWidgetHeightMessage(message)).toBeNull();
     }

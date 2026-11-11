@@ -42,7 +42,7 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
   it.each(["docker", "e2b"])(
     "refuses %s provider cutover after database expiry despite a slow process clock",
     async (kind) => {
-      const root = await mkdtemp(path.join(tmpdir(), "rakazo-cutover-clock-"));
+      const root = await mkdtemp(path.join(tmpdir(), "tangow-cutover-clock-"));
       const spaceId = await fixture.seedSpace();
       const computer = await fixture.seedComputer(spaceId, {
         kind,

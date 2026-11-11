@@ -95,7 +95,7 @@ describePiApp("live OpenRouter product journey", () => {
 
   it("completes a bot turn in a worker with the live model", async () => {
     const { createApp } = await import("../../../apps/api/src/app.ts");
-    dataDir = mkdtempSync(path.join(tmpdir(), "rakazo-canary-"));
+    dataDir = mkdtempSync(path.join(tmpdir(), "tangow-canary-"));
     const local = localWorkerApp(path.join(dataDir, "workers"));
     const handles = await createApp({
       databaseUrl: process.env.DATABASE_URL!,
@@ -111,7 +111,7 @@ describePiApp("live OpenRouter product journey", () => {
       }
     };
     const stamp = Date.now();
-    const email = `pi-${stamp}@rakazo.test`;
+    const email = `pi-${stamp}@tangow.test`;
     const signup = await handles.app.request("/api/auth/sign-up/email", {
       method: "POST",
       headers: { "content-type": "application/json", origin: "http://127.0.0.1:5173" },

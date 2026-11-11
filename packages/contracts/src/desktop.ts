@@ -104,7 +104,7 @@ export interface DesktopReachability {
 
 /**
  * Bridge exposed only to the first-run setup window. The app window keeps the
- * narrower `rakazoDesktop` bridge so a connected server can never re-point the app.
+ * narrower `tangowDesktop` bridge so a connected server can never re-point the app.
  */
 export interface TangowSetup {
   /** Used only to reserve space for native window controls in the local setup UI. */

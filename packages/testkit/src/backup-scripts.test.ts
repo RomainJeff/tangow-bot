@@ -157,7 +157,7 @@ describe("development backup failures", () => {
     write(path.join(f.checkout, "data/home.txt"), "example home");
     expect(f.run("scripts/backup.sh", ["example"]).status).toBe(0);
     const output = path.join(f.checkout, "backups/example");
-    expect(readFileSync(path.join(output, "rakazo.sql"), "utf8")).toContain("CREATE TABLE");
+    expect(readFileSync(path.join(output, "tangow.sql"), "utf8")).toContain("CREATE TABLE");
     expect(contents(path.join(output, "homes.tgz"))).toContain("data/home.txt");
     expect(f.commands()[0].includes("--env-file")).toBe(hasEnv);
     if (hasEnv) expect(f.commands()[0]).toContain(path.join(f.checkout, ".env"));

@@ -213,7 +213,7 @@ describe("E2B volume files", () => {
     const { files, dirs } = await localVolumes();
     await files.write("vol", { path: "seed.txt", content: text("seed") }, context);
     const dir = dirs.get("vol")!;
-    const outside = await mkdtemp(path.join(tmpdir(), "rakazo-outside-"));
+    const outside = await mkdtemp(path.join(tmpdir(), "tangow-outside-"));
     roots.push(outside);
     await writeFile(path.join(outside, "victim.txt"), "untouched");
     await run("bash", ["-c", `ln -s ${outside}/victim.txt ${dir}/notes.md`]);

@@ -24,7 +24,7 @@ describe("account preferences", () => {
       user: {
         update,
         findUniqueOrThrow: vi.fn().mockResolvedValue({
-          email: "user@rakazo.test",
+          email: "user@tangow.test",
           name: "Test User",
           avatarStyle,
         }),
@@ -46,7 +46,7 @@ describe("account preferences", () => {
     const actor = {
       spaceId: "workspace-1",
       userId: "user-1",
-      email: "user@rakazo.test",
+      email: "user@tangow.test",
       isDeploymentOwner: true,
     } satisfies Actor;
     return { update, deps, actor, handler: new RPCHandler(createRouter(deps)) };
@@ -143,7 +143,7 @@ describe("model setup gate", () => {
     const prisma = {
       user: {
         findUniqueOrThrow: vi.fn().mockResolvedValue({
-          email: "user@rakazo.test",
+          email: "user@tangow.test",
           name: "Test User",
           avatarStyle: "robot",
         }),
@@ -175,7 +175,7 @@ describe("model setup gate", () => {
     const actor = {
       spaceId: "workspace-1",
       userId: "user-1",
-      email: "user@rakazo.test",
+      email: "user@tangow.test",
       isDeploymentOwner: true,
     } satisfies Actor;
     return { actor, handler: new RPCHandler(createRouter(deps)) };
@@ -294,7 +294,7 @@ describe("thread answer delivery", () => {
     const answerRunInput = vi.fn().mockResolvedValue(true);
     const enqueue = vi.fn().mockRejectedValue(new Error("job broker unavailable"));
     const sink = createTestSink();
-    installLogger(createLogger({ service: "rakazo-api", sinks: [sink] }));
+    installLogger(createLogger({ service: "tangow-api", sinks: [sink] }));
     const prisma = {
       bot: {
         findFirst: vi.fn().mockResolvedValue({
@@ -320,7 +320,7 @@ describe("thread answer delivery", () => {
     const actor = {
       spaceId: "workspace-1",
       userId: "user-1",
-      email: "user@rakazo.test",
+      email: "user@tangow.test",
       isDeploymentOwner: true,
     } satisfies Actor;
     const handler = new RPCHandler(createRouter(deps));
@@ -353,14 +353,14 @@ describe("thread answer delivery", () => {
     );
     expect(enqueue).toHaveBeenCalledOnce();
     expect(sink.events.some((event) => event.message === "thread answer enqueue")).toBe(true);
-    installLogger(createLogger({ service: "rakazo-api", level: "off", sinks: [] }));
+    installLogger(createLogger({ service: "tangow-api", level: "off", sinks: [] }));
   });
 
   describe("edits on a Create bot card", () => {
     const actor = {
       spaceId: "workspace-1",
       userId: "user-1",
-      email: "user@rakazo.test",
+      email: "user@tangow.test",
       isDeploymentOwner: true,
     } satisfies Actor;
 
@@ -478,7 +478,7 @@ describe("MCP server deletion", () => {
     const actor = {
       spaceId: "workspace-1",
       userId: "user-1",
-      email: "user@rakazo.test",
+      email: "user@tangow.test",
       isDeploymentOwner: true,
     } satisfies Actor;
     const handler = new RPCHandler(createRouter(deps));
@@ -575,7 +575,7 @@ describe("connections.complete", () => {
     const actor = {
       spaceId: "workspace-1",
       userId: "user-1",
-      email: "user@rakazo.test",
+      email: "user@tangow.test",
       isDeploymentOwner: true,
     } satisfies Actor;
     const handler = new RPCHandler(createRouter(deps));
@@ -609,7 +609,7 @@ describe("updater owner gate", () => {
     const prisma = {
       user: {
         findUniqueOrThrow: vi.fn().mockResolvedValue({
-          email: "user@rakazo.test",
+          email: "user@tangow.test",
           name: "Test User",
           avatarStyle: "robot",
         }),
@@ -639,7 +639,7 @@ describe("updater owner gate", () => {
     const actor = {
       spaceId: "workspace-1",
       userId: "user-2",
-      email: "member@rakazo.test",
+      email: "member@tangow.test",
       isDeploymentOwner: false,
     } satisfies Actor;
 
@@ -660,7 +660,7 @@ describe("updater owner gate", () => {
     const actor = {
       spaceId: "workspace-1",
       userId: "user-1",
-      email: "owner@rakazo.test",
+      email: "owner@tangow.test",
       isDeploymentOwner: true,
     } satisfies Actor;
 
@@ -685,7 +685,7 @@ describe("updater owner gate", () => {
     const actor = {
       spaceId: "workspace-1",
       userId: "user-1",
-      email: "owner@rakazo.test",
+      email: "owner@tangow.test",
       isDeploymentOwner: true,
     } satisfies Actor;
 
@@ -710,7 +710,7 @@ describe("computer screen url", () => {
   const actor = {
     spaceId: "workspace-1",
     userId: "user-1",
-    email: "user@rakazo.test",
+    email: "user@tangow.test",
     isDeploymentOwner: true,
   } satisfies Actor;
   const computerRow = {
@@ -874,7 +874,7 @@ describe("thread rewind", () => {
     const actor = {
       spaceId: "workspace-1",
       userId: "user-1",
-      email: "user@rakazo.test",
+      email: "user@tangow.test",
       isDeploymentOwner: true,
     } satisfies Actor;
     return {
@@ -1051,7 +1051,7 @@ describe("thread stop", () => {
     const actor = {
       spaceId: "workspace-1",
       userId: "user-1",
-      email: "user@rakazo.test",
+      email: "user@tangow.test",
       isDeploymentOwner: true,
     } satisfies Actor;
     const stop = async () =>
@@ -1154,7 +1154,7 @@ describe("integration setup authorization", () => {
             actor: {
               userId: "user",
               spaceId: "space",
-              email: "user@rakazo.test",
+              email: "user@tangow.test",
               isDeploymentOwner: owner,
             },
           },
@@ -1189,7 +1189,7 @@ describe("integration setup authorization", () => {
           actor: {
             userId: "member",
             spaceId: "space",
-            email: "member@rakazo.test",
+            email: "member@tangow.test",
             isDeploymentOwner: false,
           },
         },
@@ -1233,7 +1233,7 @@ describe("interrupted computer reservation release", () => {
             actor: {
               spaceId: "space-1",
               userId: "user-1",
-              email: "user@rakazo.test",
+              email: "user@tangow.test",
               isDeploymentOwner: owner,
             },
           },
@@ -1326,7 +1326,7 @@ describe("routine update triggers", () => {
     const actor = {
       spaceId: "workspace-1",
       userId: "user-1",
-      email: "user@rakazo.test",
+      email: "user@tangow.test",
       isDeploymentOwner: true,
     } satisfies Actor;
     const handler = new RPCHandler(createRouter(deps));
@@ -1637,7 +1637,7 @@ describe("an archived bot's page", () => {
     const actor = {
       spaceId: "workspace-1",
       userId,
-      email: `${userId}@rakazo.test`,
+      email: `${userId}@tangow.test`,
       isDeploymentOwner: false,
     } satisfies Actor;
     const { response } = await archivedDeps().handle(

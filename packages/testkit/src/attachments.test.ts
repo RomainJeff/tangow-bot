@@ -18,7 +18,7 @@ describeAttachments("chat attachments", () => {
   let app: App;
   let stop: () => Promise<void>;
   const stamp = Date.now();
-  const dataDir = mkdtempSync(path.join(tmpdir(), "rakazo-attachments-"));
+  const dataDir = mkdtempSync(path.join(tmpdir(), "tangow-attachments-"));
   const tinyPng = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
     "base64",
@@ -41,7 +41,7 @@ describeAttachments("chat attachments", () => {
   });
 
   it("uploads, sends with image/file, and rejects invalid attachments", async () => {
-    const cookie = await signup(app, `attachments-${stamp}@rakazo.test`, "Attachment User");
+    const cookie = await signup(app, `attachments-${stamp}@tangow.test`, "Attachment User");
     const bot = await rpc<{ id: string }>(app, cookie, "bots/create", {
       name: "Attacher",
       title: "Attacher",
@@ -110,7 +110,7 @@ describeAttachments("chat attachments", () => {
   });
 
   it("attaches a workspace file into the thread", async () => {
-    const cookie = await signup(app, `attach-thread-${stamp}@rakazo.test`, "Attach Thread User");
+    const cookie = await signup(app, `attach-thread-${stamp}@tangow.test`, "Attach Thread User");
     const bot = await rpc<{ id: string }>(app, cookie, "bots/create", {
       name: "Attacher",
       title: "Attacher",
@@ -138,7 +138,7 @@ describeAttachments("chat attachments", () => {
   });
 
   it("posts the computer's current screen into the thread", async () => {
-    const cookie = await signup(app, `attach-screen-${stamp}@rakazo.test`, "Attach Screen User");
+    const cookie = await signup(app, `attach-screen-${stamp}@tangow.test`, "Attach Screen User");
     const bot = await rpc<{ id: string }>(app, cookie, "bots/create", {
       name: "Screener",
       title: "Screener",

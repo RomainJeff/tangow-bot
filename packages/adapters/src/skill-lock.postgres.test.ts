@@ -43,7 +43,7 @@ describePostgres("skill owner lock (PostgreSQL contract)", () => {
   });
 
   it("orders two processes editing one skill, losing neither edit", async () => {
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-skill-lock-pg-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-skill-lock-pg-"));
     const owner = { spaceId: "skill-lock-test", userId: `pid-${process.pid}` };
     const root = userSkillsRoot(dataDir, owner);
     const pools = ["api", "worker"].map((name) =>

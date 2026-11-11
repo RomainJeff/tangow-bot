@@ -789,7 +789,7 @@ description: Prepare standup notes
 
 1. Summarize wins.
 `;
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-executor-skills-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-executor-skills-"));
     const skillDir = path.join(
       userSkillsRoot(dataDir, { spaceId: "ws-1", userId: "user-1" }),
       skillDirName("Daily standup"),
@@ -1501,7 +1501,7 @@ description: Prepare standup notes
     const fromCatalog = await executor.resolveModel(scope);
     expect(fromCatalog.contextWindow).toBe(1_000_000);
 
-    bot.modelId = "rakazo-test/unknown-future-model";
+    bot.modelId = "tangow-test/unknown-future-model";
     const unknown = await executor.resolveModel(scope);
     expect(unknown.contextWindow).toBeUndefined();
   });

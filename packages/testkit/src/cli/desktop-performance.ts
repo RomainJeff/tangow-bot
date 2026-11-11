@@ -56,7 +56,7 @@ if (webPort === apiPort) {
 const webOrigin = `http://127.0.0.1:${webPort}`;
 const apiOrigin = `http://127.0.0.1:${apiPort}`;
 const reportDirectory = path.join(root, ".context/performance");
-const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "rakazo-desktop-performance-"));
+const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "tangow-desktop-performance-"));
 
 const container = await new PostgreSqlContainer("postgres:16-alpine").start();
 let preview: ChildProcess | undefined;
@@ -167,10 +167,10 @@ function performanceEnvironment(databaseUrl: string): NodeJS.ProcessEnv {
     COMPOSIO_API_KEY: "",
     OPENROUTER_API_KEY: "",
     E2B_API_KEY: "",
-    BETTER_AUTH_SECRET: "rakazo-benchmark-auth-secret-over-32-characters",
-    ENCRYPTION_KEY: "rakazo-benchmark-encryption-key-over-32-characters",
-    SANDBOX_SUPERVISOR_TOKEN: "rakazo-benchmark-supervisor-token-over-32-characters",
-    SCREEN_PROXY_SECRET: "rakazo-benchmark-screen-proxy-secret-over-32-characters",
+    BETTER_AUTH_SECRET: "tangow-benchmark-auth-secret-over-32-characters",
+    ENCRYPTION_KEY: "tangow-benchmark-encryption-key-over-32-characters",
+    SANDBOX_SUPERVISOR_TOKEN: "tangow-benchmark-supervisor-token-over-32-characters",
+    SCREEN_PROXY_SECRET: "tangow-benchmark-screen-proxy-secret-over-32-characters",
     BETTER_AUTH_URL: webOrigin,
     WEB_ORIGIN: webOrigin,
     API_PORT: String(apiPort),
@@ -264,7 +264,7 @@ async function prepareAuthenticatedProfile(benchmark: BenchmarkContext, profile:
     const stamp = Date.now();
     await page.goto(`${webOrigin}/sign-up`);
     await page.getByPlaceholder("Your name").fill("Benchmark User");
-    await page.getByPlaceholder("Your email address").fill(`benchmark-${stamp}@rakazo.test`);
+    await page.getByPlaceholder("Your email address").fill(`benchmark-${stamp}@tangow.test`);
     await page.getByPlaceholder("Password").fill("password12");
     await page.getByRole("button", { name: "Create account" }).click();
     await page
@@ -530,7 +530,7 @@ async function measureInteractions(app: ElectronApplication, page: Page) {
     const target = document.querySelector<HTMLInputElement>('input[placeholder^="Message "]');
     if (!target) throw new Error("Composer is missing");
     const samples: number[] = [];
-    (window as typeof window & { __rakazoKeyPaintSamples?: number[] }).__rakazoKeyPaintSamples =
+    (window as typeof window & { __tangowKeyPaintSamples?: number[] }).__tangowKeyPaintSamples =
       samples;
     target.addEventListener("keydown", () => {
       const started = performance.now();
@@ -540,13 +540,13 @@ async function measureInteractions(app: ElectronApplication, page: Page) {
   await page.keyboard.type("a".repeat(characterCount), { delay: 16 });
   await page.waitForFunction(
     (count) =>
-      ((window as typeof window & { __rakazoKeyPaintSamples?: number[] }).__rakazoKeyPaintSamples
+      ((window as typeof window & { __tangowKeyPaintSamples?: number[] }).__tangowKeyPaintSamples
         ?.length ?? 0) >= count,
     characterCount,
   );
   const keyPaintMs = await page.evaluate(
     () =>
-      (window as typeof window & { __rakazoKeyPaintSamples?: number[] }).__rakazoKeyPaintSamples ??
+      (window as typeof window & { __tangowKeyPaintSamples?: number[] }).__tangowKeyPaintSamples ??
       [],
   );
   const typingAfter = await cdpMetrics(session);

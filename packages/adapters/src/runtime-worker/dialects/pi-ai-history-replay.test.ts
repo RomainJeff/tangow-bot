@@ -50,7 +50,7 @@ describe("toHistory", () => {
       content: [{ type: "text", text: "on it" }],
       api: "anthropic-messages",
       provider: "anthropic",
-      model: "rakazo-replayed-history",
+      model: "tangow-replayed-history",
       usage: {
         input: 0,
         output: 0,

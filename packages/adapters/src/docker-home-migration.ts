@@ -54,7 +54,7 @@ type Rename =
 
 const RENEW_AFTER_MS = HOME_MOVE_TTL_MS / 3;
 /** A dot entry, so it stays in the home and is never one of the entries the move renames. */
-export const HOME_MOVE_MARKER = ".rakazo-move-pending";
+export const HOME_MOVE_MARKER = ".tangow-move-pending";
 
 /**
  * Moves one idle Docker computer's home onto its volumes by renaming, on the storage that holds

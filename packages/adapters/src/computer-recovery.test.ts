@@ -22,7 +22,7 @@ afterEach(async () => {
 });
 
 async function fixture() {
-  const root = await mkdtemp(path.join(tmpdir(), "rakazo-recovery-"));
+  const root = await mkdtemp(path.join(tmpdir(), "tangow-recovery-"));
   roots.push(root);
   const sandbox: SandboxProvider = new FakeSandboxProvider();
   const home = new LocalAgentHomeStore(path.join(root, "homes"));

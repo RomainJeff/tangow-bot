@@ -70,7 +70,7 @@ describe("toTeamChatInbound", () => {
   });
 
   it("treats @mentions as mention when kind is omitted", () => {
-    expect(toTeamChatInbound(baseEvent({ content: "hey @rakazo look" }))?.kind).toBe("mention");
+    expect(toTeamChatInbound(baseEvent({ content: "hey @tangow look" }))?.kind).toBe("mention");
   });
 });
 

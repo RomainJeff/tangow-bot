@@ -12,7 +12,7 @@ const KEYS = { LANGFUSE_PUBLIC_KEY: "pk-placeholder", LANGFUSE_SECRET_KEY: "sk-p
 
 function recordedTrace(): RunTrace {
   const trace = new RunTrace({ now: () => 1_000 });
-  const root = trace.openSpan({ name: "rakazo.run", attributes: { "langfuse.user.id": "user-1" } });
+  const root = trace.openSpan({ name: "tangow.run", attributes: { "langfuse.user.id": "user-1" } });
   const child = trace.openSpan(
     { name: "generation 1", attributes: { "langfuse.observation.input": "token is hunter2" } },
     root,

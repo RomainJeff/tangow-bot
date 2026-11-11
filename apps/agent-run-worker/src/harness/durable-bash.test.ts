@@ -11,7 +11,7 @@ afterEach(async () => {
 });
 
 async function mount() {
-  const cwd = await mkdtemp(path.join(tmpdir(), "rakazo-bash-"));
+  const cwd = await mkdtemp(path.join(tmpdir(), "tangow-bash-"));
   dirs.push(cwd);
   return cwd;
 }
@@ -32,9 +32,9 @@ async function bash(cwd: string, command: string) {
   };
 }
 
-const spoolName = () => `.rakazo-bash-${randomUUID()}.log`;
+const spoolName = () => `.tangow-bash-${randomUUID()}.log`;
 const spoolFiles = async (cwd: string) =>
-  (await readdir(cwd)).filter((name) => name.startsWith(".rakazo-bash-"));
+  (await readdir(cwd)).filter((name) => name.startsWith(".tangow-bash-"));
 
 describe("native bash", () => {
   it("shows the model the first and last lines of a long output and keeps the whole of it on the mount", async () => {

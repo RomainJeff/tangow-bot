@@ -108,7 +108,7 @@ async function assertDecisionConformance(provider: DecisionProvider): Promise<vo
 
 describe("decision conformance", () => {
   afterEach(() => {
-    installLogger(createLogger({ service: "rakazo", level: "off", sinks: [] }));
+    installLogger(createLogger({ service: "tangow", level: "off", sinks: [] }));
   });
 
   it("the OpenRouter adapter honours the contract", async () => {

@@ -12,7 +12,7 @@ async function main() {
     throw new Error("E2B_API_KEY or OPENROUTER_API_KEY is required for live provider canaries");
   }
 
-  const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-canary-"));
+  const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-canary-"));
   let postgres: StartedPostgreSqlContainer | undefined;
   try {
     if (runOpenRouter) postgres = await new PostgreSqlContainer("postgres:16-alpine").start();

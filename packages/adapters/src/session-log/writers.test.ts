@@ -176,7 +176,7 @@ describe("session log writers", () => {
     database = await openPgliteDatabase();
     log = new PostgresSessionLog(database.prisma);
     const { prisma } = database;
-    await prisma.user.create({ data: { id: USER, name: "W", email: "w@rakazo.test" } });
+    await prisma.user.create({ data: { id: USER, name: "W", email: "w@tangow.test" } });
     await prisma.organization.create({
       data: { id: "org_writers", name: "W", slug: "org-writers", createdAt: new Date() },
     });

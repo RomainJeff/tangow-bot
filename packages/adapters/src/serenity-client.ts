@@ -301,7 +301,7 @@ async function withSerenityClient<T>(
       return response;
     },
   });
-  const client = new Client({ name: "rakazo", version: "0.1.0" }, { capabilities: {} });
+  const client = new Client({ name: "tangow", version: "0.1.0" }, { capabilities: {} });
   try {
     await client.connect(transport, { signal: requestSignal, timeout: SERENITY_TIMEOUT_MS });
     return await run(client, requestSignal);

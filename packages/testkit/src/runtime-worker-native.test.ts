@@ -20,7 +20,7 @@ import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.j
 import { startModelEmulator } from "./model-emulator.js";
 
 beforeEach(async () => {
-  const home = await mkdtemp(path.join(tmpdir(), "rakazo-native-home-"));
+  const home = await mkdtemp(path.join(tmpdir(), "tangow-native-home-"));
   vi.stubEnv("HOME", home);
   onTestFinished(() => rm(home, { recursive: true, force: true }));
 });
@@ -52,7 +52,7 @@ async function nativeRun(
 ) {
   const server = await startModelEmulator({ steps, apiKey: "controller-only-key" });
   onTestFinished(() => server.close());
-  const root = fixtureRoot ?? (await mkdtemp(path.join(tmpdir(), "rakazo-native-run-")));
+  const root = fixtureRoot ?? (await mkdtemp(path.join(tmpdir(), "tangow-native-run-")));
   onTestFinished(() => rm(root, { recursive: true, force: true }));
   await mkdir(path.join(root, "workspace/bots/bot"), { recursive: true });
   const exits: Array<Promise<string>> = [];
@@ -155,7 +155,7 @@ describe("the pi-native harness through the controller", () => {
             id: "long",
             name: "bash",
             arguments: {
-              command: `ln -s /tmp .rakazo; seq 1 900000${suffix}`,
+              command: `ln -s /tmp .tangow; seq 1 900000${suffix}`,
               ...(status === "timeout" ? { timeout: 0.2 } : {}),
             },
           },
@@ -206,7 +206,7 @@ describe("the pi-native harness through the controller", () => {
   );
 
   it("retains the complete stream when native bash is cancelled", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "rakazo-native-cancel-"));
+    const root = await mkdtemp(path.join(tmpdir(), "tangow-native-cancel-"));
     const volume = path.join(root, "workspace/bots/bot");
     const cancel = new AbortController();
     const pending = nativeRun(
@@ -231,13 +231,13 @@ describe("the pi-native harness through the controller", () => {
     await expect
       .poll(async () => {
         const files = await readdir(volume).catch(() => []);
-        const spool = files.find((file) => file.startsWith(".rakazo-bash-"));
+        const spool = files.find((file) => file.startsWith(".tangow-bash-"));
         return spool ? (await readFile(path.join(volume, spool))).byteLength : 0;
       })
       .toBe(Buffer.byteLength(expected));
     cancel.abort();
     await rejected;
-    const spool = (await readdir(volume)).find((file) => file.startsWith(".rakazo-bash-"));
+    const spool = (await readdir(volume)).find((file) => file.startsWith(".tangow-bash-"));
     expect(await readFile(path.join(volume, spool!), "utf8")).toBe(expected);
   });
 

@@ -448,7 +448,7 @@ export class McpOAuthBroker {
       authProvider: provider,
       fetch: networkFetch.fetch,
     });
-    const client = new Client({ name: "rakazo-oauth", version: "0.1.0" });
+    const client = new Client({ name: "tangow-oauth", version: "0.1.0" });
     const signal = AbortSignal.timeout(15_000);
     try {
       await client.connect(transport, { signal, timeout: 15_000 });

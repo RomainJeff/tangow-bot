@@ -37,7 +37,7 @@ export async function bundleGuest(outfile = GUEST_BUNDLE): Promise<string> {
     target: "node24",
     // Bundled CommonJS dependencies call require, which an ES module lacks.
     banner: {
-      js: 'import { createRequire as rakazoCreateRequire } from "node:module"; const require = rakazoCreateRequire(import.meta.url);',
+      js: 'import { createRequire as tangowCreateRequire } from "node:module"; const require = tangowCreateRequire(import.meta.url);',
     },
     logLevel: "warning",
   });

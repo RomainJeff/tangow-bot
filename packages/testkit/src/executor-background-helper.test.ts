@@ -111,7 +111,7 @@ async function fixture(
     const [bot] = await createRepos(run.prisma).listBots({
       userId: run.userId,
       spaceId: run.spaceId,
-      email: "worker@rakazo.test",
+      email: "worker@tangow.test",
       isDeploymentOwner: false,
     });
     return bot?.status;
@@ -1433,7 +1433,7 @@ it("neither lists, messages nor stops another person's helper of the same bot", 
   helperId = helper.id;
   // Another person in a group woke the same bot, and this helper is theirs.
   await run.prisma.user.create({
-    data: { id: "other", name: "Other", email: "other@rakazo.test" },
+    data: { id: "other", name: "Other", email: "other@tangow.test" },
   });
   await run.prisma.run.update({
     where: { id: helper.id },

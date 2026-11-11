@@ -31,7 +31,7 @@ async function seedPoison(base: string) {
     ".pi/agent/auth.json": JSON.stringify(
       Object.fromEntries(
         PROTOCOLS.map((protocol) => [
-          `rakazo-proof-${protocol}`,
+          `tangow-proof-${protocol}`,
           { type: "api_key", key: `${POISON}-key` },
         ]),
       ),

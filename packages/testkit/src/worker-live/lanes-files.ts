@@ -77,7 +77,7 @@ export const laneF: Lane = {
         JSON.stringify(logged?.type === "tool.result" ? logged.payload.output : ""),
       );
       const spool = (await files.list(worker.volumes.private!, context("f"))).filter(
-        (entry) => entry.kind === "file" && /^\.rakazo-bash-[0-9a-f-]+\.log$/.test(entry.path),
+        (entry) => entry.kind === "file" && /^\.tangow-bash-[0-9a-f-]+\.log$/.test(entry.path),
       );
       const content = spool[0]
         ? await files.read(worker.volumes.private!, spool[0].path, context("f"))

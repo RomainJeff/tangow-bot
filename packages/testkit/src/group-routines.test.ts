@@ -15,7 +15,7 @@ async function sharedBotGroup() {
   const owner = bot.userId;
   const space = await prisma.space.findUniqueOrThrow({ where: { id: bot.spaceId } });
   const joined = { organizationId: space.organizationId, userId: "ana", createdAt: new Date() };
-  await prisma.user.create({ data: { id: "ana", name: "Ana", email: "ana@rakazo.test" } });
+  await prisma.user.create({ data: { id: "ana", name: "Ana", email: "ana@tangow.test" } });
   await prisma.member.create({ data: { ...joined, id: "member-ana", role: "member" } });
   await prisma.spaceMember.create({
     data: { ...joined, id: "space-member-ana", spaceId: space.id, role: "member" },
@@ -54,7 +54,7 @@ async function sharedBotGroup() {
   const actor = (userId: string) => ({
     userId,
     spaceId: space.id,
-    email: `${userId}@rakazo.test`,
+    email: `${userId}@tangow.test`,
     isDeploymentOwner: false,
   });
   return { run, owner, group, thread, dueAt, routine, runsOf, actor };

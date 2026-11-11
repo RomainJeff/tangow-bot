@@ -45,7 +45,7 @@ function noUsage(): Usage {
  * foreign: it rewrites stored tool-call ids into the current provider's format (the thread may
  * have switched model since) and never pairs them with reasoning items we did not keep.
  */
-const REPLAYED_HISTORY_MODEL = "rakazo-replayed-history";
+const REPLAYED_HISTORY_MODEL = "tangow-replayed-history";
 const NO_TOOL_OUTPUT = "(no output recorded)";
 
 /**

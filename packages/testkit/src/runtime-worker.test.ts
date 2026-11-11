@@ -54,7 +54,7 @@ async function attempts(run: WorkerRun, runId: string) {
 let bundled: Promise<string> | undefined;
 /** The guest bundle, in a directory with no node_modules above it. */
 function guestBundle() {
-  bundled ??= mkdtemp(path.join(tmpdir(), "rakazo-guest-bundle-")).then((dir) =>
+  bundled ??= mkdtemp(path.join(tmpdir(), "tangow-guest-bundle-")).then((dir) =>
     bundleGuest(path.join(dir, "agent-run-worker.mjs")),
   );
   return bundled;

@@ -28,7 +28,7 @@ afterAll(() => database.close());
 /** Writes the rows an existing deployment holds, with SQL the previous schema accepts. */
 async function seedExistingDeployment() {
   const { prisma } = database;
-  await prisma.user.create({ data: { id: USER, name: "M", email: "migration@rakazo.test" } });
+  await prisma.user.create({ data: { id: USER, name: "M", email: "migration@tangow.test" } });
   await prisma.organization.create({
     data: { id: "org_migration", name: "M", slug: "org-migration", createdAt: new Date() },
   });

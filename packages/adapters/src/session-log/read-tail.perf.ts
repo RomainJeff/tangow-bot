@@ -103,7 +103,7 @@ async function chainLength(db: PrismaClient, sessionId: SessionId): Promise<numb
 
 await prisma.user.upsert({
   where: { id: "perf-user" },
-  create: { id: "perf-user", name: "Perf", email: "perf@rakazo.test" },
+  create: { id: "perf-user", name: "Perf", email: "perf@tangow.test" },
   update: {},
 });
 await prisma.organization.upsert({

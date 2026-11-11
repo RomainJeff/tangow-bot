@@ -12,7 +12,7 @@ const SPACE = "space_log";
 const USER = "user_log";
 
 async function seedSpace(prisma: PrismaClient): Promise<void> {
-  await prisma.user.create({ data: { id: USER, name: "Log", email: "log@rakazo.test" } });
+  await prisma.user.create({ data: { id: USER, name: "Log", email: "log@tangow.test" } });
   await prisma.organization.create({
     data: { id: "org_log", name: "Log", slug: "org-log", createdAt: new Date() },
   });
@@ -276,7 +276,7 @@ describe("sessions migration", () => {
         await applyMigration(pglite, name);
       }
       await pglite.exec(`
-        INSERT INTO "user" (id, name, email, "updatedAt") VALUES ('u1', 'U', 'u@rakazo.test', now());
+        INSERT INTO "user" (id, name, email, "updatedAt") VALUES ('u1', 'U', 'u@tangow.test', now());
         INSERT INTO organization (id, name, slug, "createdAt") VALUES ('o1', 'O', 'o1', now());
         INSERT INTO spaces (id, "organizationId", name) VALUES ('s1', 'o1', 'S');
         INSERT INTO bots (id, "spaceId", "userId", name, color, "updatedAt")

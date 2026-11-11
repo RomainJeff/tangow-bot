@@ -191,7 +191,7 @@ export async function startWorkerRun<
       (current.provider as unknown as LocalWorkerProvider).volumePath(volumeRef),
     );
 
-  await prisma.user.create({ data: { id: USER, name: "Worker", email: "worker@rakazo.test" } });
+  await prisma.user.create({ data: { id: USER, name: "Worker", email: "worker@tangow.test" } });
   await prisma.organization.create({
     data: { id: "org-worker", name: "Worker", slug: "org-worker", createdAt: new Date() },
   });

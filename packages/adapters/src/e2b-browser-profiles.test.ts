@@ -194,7 +194,7 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1").each([
 ])(
   "runs and quiesces the generated $mode E2B desktop as UID/GID 1000 with a protected workspace",
   async ({ target, home }) => {
-    const name = `rakazo-e2b-profiles-${randomUUID()}`;
+    const name = `tangow-e2b-profiles-${randomUUID()}`;
     const docker = (...args: string[]) =>
       execFileSync("docker", args, { encoding: "utf8", timeout: 120_000 });
     try {

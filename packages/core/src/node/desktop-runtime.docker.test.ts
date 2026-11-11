@@ -7,7 +7,7 @@ import { browserProfilePathForScreen, shellQuote, stopBrowserCommand } from "./d
 it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
   "stops the hinted browser through a directory alias and leaves another profile with the same basename alive",
   () => {
-    const name = `rakazo-profile-identity-${randomUUID()}`;
+    const name = `tangow-profile-identity-${randomUUID()}`;
     const docker = (...args: string[]) =>
       execFileSync("docker", args, { encoding: "utf8", timeout: 60_000 });
     const env = {

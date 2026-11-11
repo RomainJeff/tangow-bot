@@ -76,7 +76,7 @@ describe("agent skills service (filesystem)", () => {
   };
 
   beforeEach(async () => {
-    dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-api-skills-"));
+    dataDir = await mkdtemp(path.join(tmpdir(), "tangow-api-skills-"));
     prisma = {
       $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
       bot: {
@@ -297,7 +297,7 @@ describe("agent skills service (filesystem)", () => {
   it("imports a tar.gz bundle with its extra files, rejecting bad frontmatter and duplicates", async () => {
     const skills = service();
     async function bundle(skillMd: string): Promise<string> {
-      const src = await mkdtemp(path.join(tmpdir(), "rakazo-bundle-"));
+      const src = await mkdtemp(path.join(tmpdir(), "tangow-bundle-"));
       try {
         await mkdir(path.join(src, "scripts"));
         await writeFile(path.join(src, "SKILL.md"), skillMd, "utf8");

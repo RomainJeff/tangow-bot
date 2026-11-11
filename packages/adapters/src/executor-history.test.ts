@@ -1101,7 +1101,7 @@ describe("a channel run's history, read from the database", () => {
 
   it("holds that channel's posts and this run's words past a compaction, nothing private and nothing from another run", async () => {
     const { prisma } = database;
-    await prisma.user.create({ data: { id: "user-1", name: "U", email: "u@rakazo.test" } });
+    await prisma.user.create({ data: { id: "user-1", name: "U", email: "u@tangow.test" } });
     await prisma.organization.create({
       data: { id: "org-1", name: "O", slug: "org-1", createdAt: new Date() },
     });
@@ -1212,7 +1212,7 @@ describe("interactive executor sessions with durable history", () => {
   beforeAll(async () => {
     database = await openPgliteDatabase();
     const { prisma } = database;
-    await prisma.user.create({ data: { id: "user-1", name: "U", email: "u@rakazo.test" } });
+    await prisma.user.create({ data: { id: "user-1", name: "U", email: "u@tangow.test" } });
     await prisma.organization.create({
       data: { id: "org-1", name: "O", slug: "org-1", createdAt: new Date() },
     });

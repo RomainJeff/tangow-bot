@@ -48,7 +48,7 @@ beforeAll(async () => {
 });
 afterAll(() => database.close());
 beforeEach(async () => {
-  dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-docker-home-"));
+  dataDir = await mkdtemp(path.join(tmpdir(), "tangow-docker-home-"));
   deps = moveDeps(prisma);
 });
 
@@ -241,7 +241,7 @@ describe("moving a Docker home onto its volumes", () => {
 
   it("moves a link or a file a guest planted in place of a folder as it is, never followed", async () => {
     const { computer, bots } = await dockerComputer("team");
-    const elsewhere = await mkdtemp(path.join(tmpdir(), "rakazo-elsewhere-"));
+    const elsewhere = await mkdtemp(path.join(tmpdir(), "tangow-elsewhere-"));
     await writeFile(path.join(elsewhere, "secret"), "outside");
     const home = path.join(dataDir, "homes", computer.homeKey);
     await mkdir(path.join(home, "bots"), { recursive: true });
@@ -311,7 +311,7 @@ describe("moving a Docker home onto its volumes", () => {
   it("lets a computer other than Docker boot with a move marker in its home", async () => {
     const spaceId = await fixture.seedSpace();
     const computer = await fixture.seedComputer(spaceId, { kind: "e2b" });
-    await put(`homes/${computer.homeKey}/.rakazo-move-pending`, "");
+    await put(`homes/${computer.homeKey}/.tangow-move-pending`, "");
 
     const boot = provisionComputer(
       {
@@ -413,7 +413,7 @@ describe("moving every idle Docker home", () => {
     expect(
       (await listDeferredDockerHomes({ prisma: own.prisma, dataDir })).map((c) => c.id),
     ).toEqual([conflicting.computer.id]);
-    await put(`homes/${clean.computer.homeKey}/.rakazo-move-pending`, "");
+    await put(`homes/${clean.computer.homeKey}/.tangow-move-pending`, "");
     const pending = await listDeferredDockerHomes({ prisma: own.prisma, dataDir });
     expect(pending.find((c) => c.id === clean.computer.id)?.reason).toBe("move_pending");
     expect(pending).toHaveLength(2);

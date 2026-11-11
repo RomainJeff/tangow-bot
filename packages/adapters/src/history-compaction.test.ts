@@ -370,13 +370,13 @@ describe("formatRecalledMemory", () => {
         memory: "Ava prefers feature flags.",
         id: "fact-1",
         provenance: "evals/corpora/ava.yaml",
-        entity: "rakazo-space/workspace-1",
+        entity: "tangow-space/workspace-1",
       },
     ]);
     expect(block).toContain("Ava prefers feature flags.");
     expect(block).toContain("provenance: evals/corpora/ava.yaml");
     expect(block).toContain("id: fact-1");
-    expect(block).toContain("entity: rakazo-space/workspace-1");
+    expect(block).toContain("entity: tangow-space/workspace-1");
   });
 });
 
@@ -400,7 +400,7 @@ describe("compactHistory", () => {
     database = await openPgliteDatabase();
     log = new PostgresSessionLog(database.prisma);
     const { prisma } = database;
-    await prisma.user.create({ data: { id: USER, name: "C", email: "c@rakazo.test" } });
+    await prisma.user.create({ data: { id: USER, name: "C", email: "c@tangow.test" } });
     await prisma.organization.create({
       data: { id: "org_compaction", name: "C", slug: "org-compaction", createdAt: new Date() },
     });
@@ -1255,7 +1255,7 @@ describe("compactHistory", () => {
     await append(seeded, exchanges(seeded, 2));
     const h = harness(seeded, {
       memoryDocuments: [{ path: "MEMORY.md", content: "- Ships on Fridays", revision: 3 }],
-      learnedText: "- Call the user Rom\n- The repo is rakazo-bot",
+      learnedText: "- Call the user Rom\n- The repo is tangow-bot",
     });
 
     await h.compact();
@@ -1273,7 +1273,7 @@ describe("compactHistory", () => {
         botId: seeded.botId,
         path: "MEMORY.md",
         content: expect.stringMatching(
-          /^## Learned \d{4}-\d{2}-\d{2}\n- Call the user Rom\n- The repo is rakazo-bot$/,
+          /^## Learned \d{4}-\d{2}-\d{2}\n- Call the user Rom\n- The repo is tangow-bot$/,
         ),
         mode: "append",
         sourceThreadId: seeded.threadId,
@@ -1286,7 +1286,7 @@ describe("compactHistory", () => {
     }));
     expect(after.at(-1)).toEqual({
       type: "memory.revised",
-      payload: { facts: ["Call the user Rom", "The repo is rakazo-bot"] },
+      payload: { facts: ["Call the user Rom", "The repo is tangow-bot"] },
     });
   });
 

@@ -14,7 +14,7 @@ let database: PgliteDatabase;
 beforeAll(async () => {
   database = await openPgliteDatabase();
   const { prisma } = database;
-  await prisma.user.create({ data: { id: USER, name: "U", email: "files@rakazo.test" } });
+  await prisma.user.create({ data: { id: USER, name: "U", email: "files@tangow.test" } });
   await prisma.organization.create({
     data: { id: "org_files", name: "O", slug: "org-files", createdAt: new Date() },
   });

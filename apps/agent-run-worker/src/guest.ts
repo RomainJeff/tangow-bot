@@ -341,7 +341,7 @@ async function runAttempt(
       const name = entry.name;
       if (
         !entry.isDirectory() &&
-        /^\.rakazo-screen-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.png$/.test(name)
+        /^\.tangow-screen-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.png$/.test(name)
       ) {
         await unlink(path.join(cwd, name)).catch(reportCleanupError);
       }

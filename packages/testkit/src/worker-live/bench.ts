@@ -36,7 +36,7 @@ function series(values: number[]) {
 export async function benchLive(live: Live, trials: number, databaseUrl?: string) {
   const toolsPerRun = 5;
   const arms = ["local_memory", "dedicated_computer", "team_computer"] as const;
-  const localRoot = await mkdtemp(path.join(tmpdir(), "rakazo-live-bench-"));
+  const localRoot = await mkdtemp(path.join(tmpdir(), "tangow-live-bench-"));
   // The live bundle carries the managed skills beside it; from source the provider's default applies.
   const beside = new URL("../guest/managed-skills/agent", import.meta.url);
   const managedSkills = existsSync(beside) ? fileURLToPath(beside) : undefined;

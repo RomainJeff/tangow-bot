@@ -64,7 +64,7 @@ export function parseComputerActions(value: unknown): ComputerAction[] {
  * a link to another bot's files; the root and a name that does not exist yet cannot.
  */
 export function screenPath(): string {
-  return `.rakazo-screen-${randomUUID()}.png`;
+  return `.tangow-screen-${randomUUID()}.png`;
 }
 
 /** `savedAt`: the screen is a file there, so the result names it instead of carrying the image. */

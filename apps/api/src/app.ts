@@ -165,7 +165,7 @@ export async function createApp(
     ? { prisma: prismaOverride, pool: undefined }
     : createDb(env.databaseUrl, {
         poolMax: parsePositiveInteger(process.env.DB_POOL_MAX, 4),
-        applicationName: "rakazo-api",
+        applicationName: "tangow-api",
       });
   const { prisma } = created;
   const realtime =
@@ -214,7 +214,7 @@ export async function createApp(
   if (!inMemoryJobs && !created.pool) {
     ownedJobPool = createPool(env.databaseUrl, {
       poolMax: parsePositiveInteger(process.env.DB_POOL_MAX, 4),
-      applicationName: "rakazo-api-jobs",
+      applicationName: "tangow-api-jobs",
     });
   }
   const jobPool = created.pool ?? ownedJobPool;
@@ -387,7 +387,7 @@ export async function createApp(
   // Its own small pool: a held skill lock must never take a connection the change itself needs.
   const skillLockPool = createPool(env.databaseUrl, {
     poolMax: 2,
-    applicationName: "rakazo-api-skill-lock",
+    applicationName: "tangow-api-skill-lock",
   });
   const skillLock = createPostgresSkillLock(skillLockPool);
   const sessionLog = new PostgresSessionLog(prisma);

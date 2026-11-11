@@ -255,7 +255,7 @@ export const COMMUNICATION = [
         "Commits a public post that publishes without further review.",
       ),
       read("mentions", {}, "Reads mentions without changing them."),
-      read("search", { query: "rakazo" }, "Searches without changing anything."),
+      read("search", { query: "tangow" }, "Searches without changing anything."),
     ],
   }),
   scenario({

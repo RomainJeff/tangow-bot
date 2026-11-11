@@ -149,7 +149,7 @@ describe("skill tools", () => {
 
   beforeEach(async () => {
     prisma = makePrisma();
-    dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-skill-tools-"));
+    dataDir = await mkdtemp(path.join(tmpdir(), "tangow-skill-tools-"));
     deps = { prisma: prisma as never, dataDir, learning: "off", lock: createInMemorySkillLock() };
   });
 
@@ -826,7 +826,7 @@ describe("skill drafts", () => {
     let deps: SkillToolDeps;
     beforeEach(async () => {
       prisma = makePrisma();
-      dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-skill-drafts-"));
+      dataDir = await mkdtemp(path.join(tmpdir(), "tangow-skill-drafts-"));
       deps = { prisma: prisma as never, dataDir, learning: "off", lock: createInMemorySkillLock() };
     });
     afterEach(async () => {

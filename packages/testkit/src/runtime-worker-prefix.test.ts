@@ -81,7 +81,7 @@ describe("prompt bytes at the provider boundary", () => {
     };
     // A VM's absolute mount paths remain the same across attempts. The local volume fixture
     // otherwise embeds a different host directory in Pi's cwd and skill catalog each time.
-    const root = await mkdtemp(path.join(tmpdir(), "rakazo-prefix-guest-"));
+    const root = await mkdtemp(path.join(tmpdir(), "tangow-prefix-guest-"));
     onTestFinished(() => rm(root, { recursive: true, force: true }));
     await mkdir(path.join(root, "workspace/bots/bot"), { recursive: true });
     let launches = 0;

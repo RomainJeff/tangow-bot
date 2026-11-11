@@ -42,7 +42,7 @@ async function counted(label: string, appends: number, work: () => Promise<unkno
   for (const text of statements) print(`  ${text}`);
 }
 
-await prisma.user.create({ data: { id: tag, name: "RT", email: `${tag}@rakazo.test` } });
+await prisma.user.create({ data: { id: tag, name: "RT", email: `${tag}@tangow.test` } });
 await prisma.organization.create({
   data: { id: tag, name: "RT", slug: tag, createdAt: new Date() },
 });

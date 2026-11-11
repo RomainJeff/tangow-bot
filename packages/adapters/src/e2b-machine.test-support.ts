@@ -57,7 +57,7 @@ export function fakeE2BMachine(
 
 /** Real Linux shell/process execution behind the E2B SDK boundary, with no remote service. */
 export async function dockerE2BMachine(image: string) {
-  const name = `rakazo-e2b-browser-${randomUUID()}`;
+  const name = `tangow-e2b-browser-${randomUUID()}`;
   const docker = async (...args: string[]) => {
     try {
       const result = await execFileAsync("docker", args, {

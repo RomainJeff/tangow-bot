@@ -155,7 +155,7 @@ describe("the skills catalog in the pi-native prompt", () => {
   it.each([true, false])(
     "sends instructions once and offers the skills catalog only with read, read=%s",
     async (read) => {
-      const root = await mkdtemp(path.join(tmpdir(), "rakazo-prompt-"));
+      const root = await mkdtemp(path.join(tmpdir(), "tangow-prompt-"));
       cleanups.push(() => rm(root, { recursive: true, force: true }));
       const managed = path.join(root, "managed-skills/agent/interrogate");
       await mkdir(managed, { recursive: true });
@@ -197,7 +197,7 @@ describe("the skills catalog in the pi-native prompt", () => {
 describe("run channel conformance of the pi-native harness", () => {
   const piNative = HARNESSES["pi-native"]!;
   const guestRoot = async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "rakazo-pi-native-"));
+    const root = await mkdtemp(path.join(tmpdir(), "tangow-pi-native-"));
     cleanups.push(() => rm(root, { recursive: true, force: true }));
     await mkdir(path.join(root, "workspace/bots/bot_guest"), { recursive: true });
     return root;
@@ -210,13 +210,13 @@ describe("run channel conformance of the pi-native harness", () => {
       const cwd = path.join(root, "workspace/bots/bot_guest");
       const target = path.join(root, "keep.txt");
       await writeFile(target, "unrelated");
-      const screen = ".rakazo-screen-00000000-0000-4000-8000-000000000001.png";
-      const link = ".rakazo-screen-00000000-0000-4000-8000-000000000002.png";
-      const directory = ".rakazo-screen-00000000-0000-4000-8000-000000000003.png";
+      const screen = ".tangow-screen-00000000-0000-4000-8000-000000000001.png";
+      const link = ".tangow-screen-00000000-0000-4000-8000-000000000002.png";
+      const directory = ".tangow-screen-00000000-0000-4000-8000-000000000003.png";
       await mkdir(path.join(cwd, directory));
       await writeFile(path.join(cwd, directory, screen), "nested capture");
       await writeFile(path.join(cwd, "keep.txt"), "home note");
-      await writeFile(path.join(cwd, ".rakazo-screen-not-a-uuid.png"), "unrelated");
+      await writeFile(path.join(cwd, ".tangow-screen-not-a-uuid.png"), "unrelated");
       const harness: GuestHarness = {
         ...piNative,
         async run(_start, host) {
@@ -251,7 +251,7 @@ describe("run channel conformance of the pi-native harness", () => {
       });
       expect((await readdir(cwd)).sort()).toEqual([
         directory,
-        ".rakazo-screen-not-a-uuid.png",
+        ".tangow-screen-not-a-uuid.png",
         "keep.txt",
       ]);
       expect(await readFile(path.join(cwd, directory, screen), "utf8")).toBe("nested capture");
@@ -264,7 +264,7 @@ describe("run channel conformance of the pi-native harness", () => {
     async (failed) => {
       const root = await guestRoot();
       const cwd = path.join(root, "workspace/bots/bot_guest");
-      const screen = path.join(cwd, ".rakazo-screen-00000000-0000-4000-8000-000000000001.png");
+      const screen = path.join(cwd, ".tangow-screen-00000000-0000-4000-8000-000000000001.png");
       await writeFile(screen, "capture");
       const unlink = fs.promises.unlink;
       const remove = vi.spyOn(fs.promises, "unlink").mockImplementation(async (file) => {

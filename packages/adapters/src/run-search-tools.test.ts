@@ -39,7 +39,7 @@ describe("search_runs authorization and archive discovery", () => {
     database = await openPgliteDatabase();
     log = new PostgresSessionLog(database.prisma);
     await database.prisma.user.create({
-      data: { id: "search-user", name: "Search", email: "search@rakazo.test" },
+      data: { id: "search-user", name: "Search", email: "search@tangow.test" },
     });
     await database.prisma.organization.create({
       data: { id: "search-org", name: "Search", slug: "search-org", createdAt: new Date() },
@@ -187,7 +187,7 @@ describe("search_runs authorization and archive discovery", () => {
 
   it("the executor retrieves a retained receipt after compaction, posts it, and performs zero follow-up fetches", async () => {
     const c = await conversation();
-    const root = await mkdtemp(path.join(tmpdir(), "rakazo-search-executor-"));
+    const root = await mkdtemp(path.join(tmpdir(), "tangow-search-executor-"));
     try {
       const computer = await database.prisma.computer.create({
         data: {
@@ -629,7 +629,7 @@ describe("search_runs authorization and archive discovery", () => {
   it("searches a person's runs of a bot shared with them in a group", async () => {
     const c = await conversation();
     await database.prisma.user.create({
-      data: { id: "group-person", name: "Person", email: "person@rakazo.test" },
+      data: { id: "group-person", name: "Person", email: "person@tangow.test" },
     });
     await database.prisma.bot.update({ where: { id: c.bot.id }, data: { visibility: "space" } });
     const group = await database.prisma.chatGroup.create({

@@ -19,7 +19,7 @@ import {
   screenNavigationAllowed,
 } from "./screen-link.js";
 
-const ORIGIN = "https://rakazo.example";
+const ORIGIN = "https://tangow.example";
 const DIRECTORY = "/novnc/session/view/1790000000000.AbC_d-9";
 const EMBED = `${ORIGIN}${DIRECTORY}/embed.html?autoconnect=true&resize=scale&view_only=true&path=websockify`;
 const PLAIN = `${ORIGIN}${DIRECTORY}/vnc.html?autoconnect=true&view_only=true`;
@@ -46,7 +46,7 @@ describe("parseScreenLinkMessage", () => {
     ],
     ["another version", '{"type":"tangow-screen-state","version":2,"state":"failed"}'],
     ["a string version", '{"type":"tangow-screen-state","version":"1","state":"failed"}'],
-    ["another type", '{"type":"rakazo-screen","version":1,"state":"failed"}'],
+    ["another type", '{"type":"tangow-screen","version":1,"state":"failed"}'],
     ["an unknown state", '{"type":"tangow-screen-state","version":1,"state":"expired"}'],
     ["a state from the prototype", '{"type":"tangow-screen-state","version":1,"state":"toString"}'],
     ["an array", '["tangow-screen-state",1,"failed"]'],

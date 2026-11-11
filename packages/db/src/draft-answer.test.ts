@@ -34,7 +34,7 @@ let prisma: PrismaClient;
 beforeAll(async () => {
   database = await openPgliteDatabase();
   prisma = database.prisma;
-  await prisma.user.create({ data: { id: OWNER, name: "U", email: "drafts@rakazo.test" } });
+  await prisma.user.create({ data: { id: OWNER, name: "U", email: "drafts@tangow.test" } });
   await prisma.organization.create({
     data: { id: "org_drafts", name: "O", slug: "org-drafts", createdAt: new Date() },
   });

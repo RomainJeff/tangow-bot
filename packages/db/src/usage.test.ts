@@ -16,7 +16,7 @@ beforeAll(async () => {
   database = await openPgliteDatabase();
   prisma = database.prisma;
   for (const id of [USER, "user_other"]) {
-    await prisma.user.create({ data: { id, name: id, email: `${id}@rakazo.test` } });
+    await prisma.user.create({ data: { id, name: id, email: `${id}@tangow.test` } });
   }
   await prisma.organization.create({
     data: { id: "org_usage", name: "O", slug: "org-usage", createdAt: new Date() },

@@ -271,7 +271,7 @@ describe("browser_run executor wiring", () => {
         steps: 1,
       });
     } finally {
-      installLogger(createLogger({ service: "rakazo", level: "off", sinks: [] }));
+      installLogger(createLogger({ service: "tangow", level: "off", sinks: [] }));
     }
   });
 

@@ -30,20 +30,20 @@ describe.skipIf(!dockerWorkersEnabled)("Docker worker isolation, from inside a w
   beforeAll(async () => {
     const deadline = new Date(Date.now() + 60_000);
     const w = workers();
-    for (const name of ["rakazo-isoa", "rakazo-isob", "rakazo-isos1", "rakazo-isos2"]) {
+    for (const name of ["tangow-isoa", "tangow-isob", "tangow-isos1", "tangow-isos2"]) {
       await w.ensureVolume({ name, ensureDeadline: deadline });
       await writeFile(path.join(w.volumePath(name), "secret.txt"), marker(name));
     }
     const a = await w.ensure(
       spec(attempts[0], [
-        { volumeRef: "rakazo-isoa", path: "/workspace/bots/a", access: "rw" },
-        { volumeRef: "rakazo-isos1", path: "/workspace/shared", access: "rw" },
+        { volumeRef: "tangow-isoa", path: "/workspace/bots/a", access: "rw" },
+        { volumeRef: "tangow-isos1", path: "/workspace/shared", access: "rw" },
       ]),
     );
     const b = await w.ensure(
       spec(attempts[1], [
-        { volumeRef: "rakazo-isob", path: "/workspace/bots/b", access: "rw" },
-        { volumeRef: "rakazo-isos2", path: "/workspace/shared", access: "ro" },
+        { volumeRef: "tangow-isob", path: "/workspace/bots/b", access: "rw" },
+        { volumeRef: "tangow-isos2", path: "/workspace/shared", access: "ro" },
       ]),
     );
     mine = a.providerRef;
@@ -66,7 +66,7 @@ describe.skipIf(!dockerWorkersEnabled)("Docker worker isolation, from inside a w
     );
     // What a Compose deployment runs beside the workers: named services on their own network,
     // and a service published on the host's 127.0.0.1.
-    const network = `rakazo-test-compose-${supervisor.token.slice(0, 6)}`;
+    const network = `tangow-test-compose-${supervisor.token.slice(0, 6)}`;
     docker("network", "create", network);
     extra.push(`network:${network}`);
     for (const alias of ["postgres", "api", "supervisor"]) {
@@ -79,7 +79,7 @@ describe.skipIf(!dockerWorkersEnabled)("Docker worker isolation, from inside a w
         "--network-alias",
         alias,
         "--label",
-        "rakazo.test=true",
+        "tangow.test=true",
         image,
         "node",
         "-e",
@@ -94,7 +94,7 @@ describe.skipIf(!dockerWorkersEnabled)("Docker worker isolation, from inside a w
         "-d",
         "--rm",
         "--label",
-        "rakazo.test=true",
+        "tangow.test=true",
         "-p",
         `127.0.0.1:${publishedPort}:8080`,
         image,
@@ -140,33 +140,33 @@ describe.skipIf(!dockerWorkersEnabled)("Docker worker isolation, from inside a w
       results.ownShared = read("/workspace/shared/secret.txt");
       for (const p of [
         "/workspace/bots/b/secret.txt",
-        "/data/volumes/rakazo-isob/secret.txt",
-        "/data/volumes/rakazo-isos2/secret.txt",
-        "/workspace/bots/a/../../../data/volumes/rakazo-isob/secret.txt",
-        "/workspace/bots/a/../rakazo-isob/secret.txt",
-        "/workspace/bots/a/../../rakazo-isob/secret.txt",
+        "/data/volumes/tangow-isob/secret.txt",
+        "/data/volumes/tangow-isos2/secret.txt",
+        "/workspace/bots/a/../../../data/volumes/tangow-isob/secret.txt",
+        "/workspace/bots/a/../tangow-isob/secret.txt",
+        "/workspace/bots/a/../../tangow-isob/secret.txt",
         "/proc/1/root/workspace/bots/b/secret.txt",
-        ${JSON.stringify(path.join(supervisor.dataDir, "volumes/rakazo-isob/secret.txt"))},
+        ${JSON.stringify(path.join(supervisor.dataDir, "volumes/tangow-isob/secret.txt"))},
         "/var/run/docker.sock",
       ]) results[p] = read(p);
-      fs.symlinkSync("../rakazo-isob/secret.txt", "/workspace/bots/a/link-rel");
-      fs.symlinkSync(${JSON.stringify(path.join(supervisor.dataDir, "volumes/rakazo-isob/secret.txt"))}, "/workspace/bots/a/link-abs");
+      fs.symlinkSync("../tangow-isob/secret.txt", "/workspace/bots/a/link-rel");
+      fs.symlinkSync(${JSON.stringify(path.join(supervisor.dataDir, "volumes/tangow-isob/secret.txt"))}, "/workspace/bots/a/link-abs");
       results.linkRel = read("/workspace/bots/a/link-rel");
       results.linkAbs = read("/workspace/bots/a/link-abs");
       results.workspace = fs.readdirSync("/workspace").sort();
       results.bots = fs.readdirSync("/workspace/bots");
       results.mounts = fs.readFileSync("/proc/self/mountinfo", "utf8").split("\\n")
         .map((l) => l.split(" ")[4]).filter((m) => m && !/^\\/(proc|sys|dev)/.test(m));
-      results.found = cp.spawnSync("rg", ["-uuu", "--no-messages", "-l", "-F", "ISOLATION_MARKER_rakazo-isob", "/",
+      results.found = cp.spawnSync("rg", ["-uuu", "--no-messages", "-l", "-F", "ISOLATION_MARKER_tangow-isob", "/",
         "-g", "!proc", "-g", "!sys"], { encoding: "utf8", timeout: 90000 }).stdout.trim();
-      results.foundS2 = cp.spawnSync("rg", ["-uuu", "--no-messages", "-l", "-F", "ISOLATION_MARKER_rakazo-isos2", "/",
+      results.foundS2 = cp.spawnSync("rg", ["-uuu", "--no-messages", "-l", "-F", "ISOLATION_MARKER_tangow-isos2", "/",
         "-g", "!proc", "-g", "!sys"], { encoding: "utf8", timeout: 90000 }).stdout.trim();
       console.log(JSON.stringify(results));
     `);
     const results = JSON.parse(output) as Record<string, unknown>;
     console.log("volume probes", JSON.stringify(results, null, 1));
-    expect(results.own).toBe(marker("rakazo-isoa"));
-    expect(results.ownShared).toBe(marker("rakazo-isos1"));
+    expect(results.own).toBe(marker("tangow-isoa"));
+    expect(results.ownShared).toBe(marker("tangow-isos1"));
     for (const [key, value] of Object.entries(results)) {
       if (key.startsWith("/")) expect(value, key).toBe("ENOENT");
     }

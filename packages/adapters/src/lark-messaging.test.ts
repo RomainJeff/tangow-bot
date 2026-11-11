@@ -74,7 +74,7 @@ function message(chatType = "p2p", sender = "ou-test") {
 }
 
 function webhook(body: unknown, headers: Record<string, string> = {}) {
-  return new Request("https://rakazo.test/api/v1/messaging/webhook/lark", {
+  return new Request("https://tangow.test/api/v1/messaging/webhook/lark", {
     method: "POST",
     headers: { "content-type": "application/json", ...headers },
     body: JSON.stringify(body),

@@ -67,7 +67,7 @@ export function useDockerSupervisor() {
   let child: ChildProcess | undefined;
   beforeAll(async () => {
     if (!dockerWorkersEnabled) return;
-    state.dir = await mkdtemp(path.join(tmpdir(), "rakazo-docker-workers-"));
+    state.dir = await mkdtemp(path.join(tmpdir(), "tangow-docker-workers-"));
     state.dataDir = path.join(state.dir, "data");
     await mkdir(state.dataDir, { recursive: true });
     state.port = await freePort();

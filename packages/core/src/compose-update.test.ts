@@ -308,8 +308,8 @@ describe("compose argv construction", () => {
   });
 
   it("defaults -p to the name pinned in the compose file", () => {
-    expect(DEFAULT_COMPOSE_PROJECT_NAME).toBe("rakazo-prod");
-    expect(composePsArgv(target).args.slice(0, 3)).toEqual(["compose", "-p", "rakazo-prod"]);
+    expect(DEFAULT_COMPOSE_PROJECT_NAME).toBe("tangow-prod");
+    expect(composePsArgv(target).args.slice(0, 3)).toEqual(["compose", "-p", "tangow-prod"]);
   });
 
   it("refuses a project name that could be parsed as another flag or a second argument", () => {
@@ -480,7 +480,7 @@ describe("update plans", () => {
     const steps = composeUpdatePlan({
       strategy: "build",
       target,
-      repoUrl: "https://github.com/someone/rakazo",
+      repoUrl: "https://github.com/someone/tangow",
       branch: "trunk",
       repointRemote: true,
     });
@@ -508,7 +508,7 @@ describe("update plans", () => {
   });
 
   it("keeps the repository URL in argv rather than in any compose input", () => {
-    const repoUrl = "https://github.com/someone/rakazo";
+    const repoUrl = "https://github.com/someone/tangow";
     const steps = composeUpdatePlan({
       strategy: "build",
       target,
@@ -613,12 +613,12 @@ describe("sidecar boundary validation", () => {
 
   it("marks a fork as unofficial so the sidecar picks the build path", () => {
     const result = validateUpdateRequest({
-      repoUrl: "https://github.com/someone/rakazo",
+      repoUrl: "https://github.com/someone/tangow",
       branch: "main",
     });
     expect(result).toEqual({
       request: {
-        repoUrl: "https://github.com/someone/rakazo",
+        repoUrl: "https://github.com/someone/tangow",
         branch: "main",
         official: false,
       },

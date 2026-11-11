@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { loadEnv } from "./env.js";
 
 const base = {
-  DATABASE_URL: "postgres://tangow:tangow@127.0.0.1:5433/rakazo",
+  DATABASE_URL: "postgres://tangow:tangow@127.0.0.1:5433/tangow",
   NODE_ENV: "test",
 };
 

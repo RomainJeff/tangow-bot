@@ -61,7 +61,7 @@ describe("token and cache measurements", () => {
   });
 
   it("records every relayed request of each scenario through a catalog model's own protocol", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "rakazo-measure-"));
+    const root = await mkdtemp(path.join(tmpdir(), "tangow-measure-"));
     onTestFinished(() => rm(root, { recursive: true, force: true }));
     const models = resolveModels("opencode-go", ["glm-*-flash"]);
     const workers = stableLocalWorkers(path.join(root, "workers"));

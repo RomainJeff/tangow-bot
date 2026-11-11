@@ -43,7 +43,7 @@ describe("provider-neutral computer workspace", () => {
   });
 
   it("restores a checkpoint into a replacement provider machine", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "rakazo-workspace-store-"));
+    const root = await mkdtemp(path.join(tmpdir(), "tangow-workspace-store-"));
     roots.push(root);
     const home = new LocalAgentHomeStore(root);
     const firstProvider = new FakeSandboxProvider();
@@ -78,7 +78,7 @@ describe("provider-neutral computer workspace", () => {
   });
 
   it("checkpoints a Docker computer on the local store by revision, without copying", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "rakazo-workspace-store-"));
+    const root = await mkdtemp(path.join(tmpdir(), "tangow-workspace-store-"));
     roots.push(root);
     const provider = new FakeSandboxProvider();
     const computer = await provider.provision({ botId: "bot-1", homePath: root }, context);
@@ -96,7 +96,7 @@ describe("provider-neutral computer workspace", () => {
   });
 
   it("never imports or exports a home that lives on volumes", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "rakazo-workspace-store-"));
+    const root = await mkdtemp(path.join(tmpdir(), "tangow-workspace-store-"));
     roots.push(root);
     const provider = new FakeSandboxProvider();
     const computer = await provider.provision({ botId: "bot-1", homePath: root }, context);

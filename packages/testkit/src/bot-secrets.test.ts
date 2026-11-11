@@ -20,7 +20,7 @@ const key = "fake-reusable-api-key";
 
 describeIntegration("reusable credential lifecycle", () => {
   let handles: Awaited<ReturnType<typeof createApp>>;
-  const dataDir = mkdtempSync(path.join(tmpdir(), "rakazo-secret-lifecycle-"));
+  const dataDir = mkdtempSync(path.join(tmpdir(), "tangow-secret-lifecycle-"));
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
     const auth = new Headers(init?.headers).get("Authorization");
@@ -299,7 +299,7 @@ describeIntegration("reusable credential lifecycle", () => {
 
   describe("webhook key", () => {
     async function keyedBot(label: string) {
-      const cookie = await signup(`webhook-${label}-${stamp}@rakazo.test`, `Webhook ${label}`);
+      const cookie = await signup(`webhook-${label}-${stamp}@tangow.test`, `Webhook ${label}`);
       const me = await rpc<{ userId: string }>(cookie, "me");
       const bot = await rpc<{ id: string }>(cookie, "bots/create", {
         name: `Webhook ${label}`,
@@ -358,7 +358,7 @@ describeIntegration("reusable credential lifecycle", () => {
     it("refuses the key to anyone but the bot's owner", async () => {
       const bot = await keyedBot("owner");
       const { secret } = await bot.read();
-      const stranger = await signup(`webhook-stranger-${stamp}@rakazo.test`, "Webhook stranger");
+      const stranger = await signup(`webhook-stranger-${stamp}@tangow.test`, "Webhook stranger");
 
       await expect(bot.read(stranger)).rejects.toThrow("bots/webhookSecret failed (404)");
       expect(await bot.read()).toEqual({ secret });
@@ -399,7 +399,7 @@ describeIntegration("reusable credential lifecycle", () => {
       completedAt?: Date;
     } = {},
   ) {
-    const cookie = await signup(`executor-${label}-${stamp}@rakazo.test`, `Executor ${label}`);
+    const cookie = await signup(`executor-${label}-${stamp}@tangow.test`, `Executor ${label}`);
     const me = await rpc<{ userId: string; spaceId: string }>(cookie, "me");
     const bot = await rpc<{ id: string }>(cookie, "bots/create", {
       name: `Executor ${label}`,

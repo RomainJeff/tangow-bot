@@ -109,7 +109,7 @@ it("lists each owned active computer once and queues only idle computers in the 
   const actor = {
     spaceId,
     userId: fixture.userId,
-    email: "test@rakazo.test",
+    email: "test@tangow.test",
     isDeploymentOwner: true,
   } satisfies Actor;
   async function call(path: string, input: unknown = null) {

@@ -107,7 +107,7 @@ async function withRemoteMcpClient<T>(
     },
     fetch: safeFetch,
   });
-  const client = new Client({ name: "rakazo", version: "0.1.0" }, { capabilities: {} });
+  const client = new Client({ name: "tangow", version: "0.1.0" }, { capabilities: {} });
   try {
     await client.connect(transport, { signal, timeout: MCP_TIMEOUT_MS });
     return await run(client, signal);

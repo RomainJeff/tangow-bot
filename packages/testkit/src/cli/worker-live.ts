@@ -361,7 +361,7 @@ async function measure() {
   );
   if (!local) await requireIdleDeployment();
   const live = local ? undefined : session();
-  const localRoot = local ? await mkdtemp(path.join(os.tmpdir(), "rakazo-measure-")) : undefined;
+  const localRoot = local ? await mkdtemp(path.join(os.tmpdir(), "tangow-measure-")) : undefined;
   const startedAt = new Date().toISOString();
   const threads: ThreadRecord[] = [];
   let written = Promise.resolve();

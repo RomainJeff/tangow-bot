@@ -76,7 +76,7 @@ function modelText(
   return { text: `${head}\n\n${marker}${status ? `\n${status}` : ""}\n\n${tail}`, truncated: true };
 }
 
-const SPOOL_FILE = /^\.rakazo-bash-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.log$/;
+const SPOOL_FILE = /^\.tangow-bash-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.log$/;
 /** Spool files of commands still running in this process: never pruned. */
 const spooling = new Set<string>();
 let pruning = Promise.resolve();
@@ -102,7 +102,7 @@ function claimSpool(spoolDir: string): Promise<string> {
       aged.sort((a, b) => a.mtimeMs - b.mtimeMs || a.file.localeCompare(b.file));
       await Promise.all(aged.slice(0, excess).map(({ file }) => rm(file, { force: true })));
     }
-    const spoolPath = path.join(spoolDir, `.rakazo-bash-${randomUUID()}.log`);
+    const spoolPath = path.join(spoolDir, `.tangow-bash-${randomUUID()}.log`);
     spooling.add(spoolPath);
     return spoolPath;
   });

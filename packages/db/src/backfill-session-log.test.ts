@@ -26,7 +26,7 @@ async function openLegacyDatabase(): Promise<{ database: PgliteDatabase; pglite:
     for (const name of names.filter((name) => name !== DROP)) await applyMigration(created, name);
   });
   const { prisma } = opened;
-  await prisma.user.create({ data: { id: USER, name: "U", email: "u@rakazo.test" } });
+  await prisma.user.create({ data: { id: USER, name: "U", email: "u@tangow.test" } });
   await prisma.organization.create({
     data: { id: "org_backfill", name: "O", slug: "org-backfill", createdAt: new Date() },
   });

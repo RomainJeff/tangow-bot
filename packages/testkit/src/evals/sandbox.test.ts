@@ -24,7 +24,7 @@ describe("honest offline eval shell results", () => {
           "bash",
           "-c",
           "wrapper",
-          "rakazo-background-launch",
+          "tangow-background-launch",
           "computer",
           "run",
           "call",

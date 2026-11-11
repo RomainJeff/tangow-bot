@@ -32,7 +32,7 @@ export function workerFixture(prisma: PrismaClient) {
 
     async seedOwner() {
       await prisma.user.create({
-        data: { id: userId, name: "W", email: `${userId}@rakazo.test` },
+        data: { id: userId, name: "W", email: `${userId}@tangow.test` },
       });
       await prisma.organization.create({
         data: { id: organizationId, name: "W", slug: organizationId, createdAt: new Date() },

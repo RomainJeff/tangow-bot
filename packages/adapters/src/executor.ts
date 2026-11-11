@@ -1018,7 +1018,7 @@ export async function persistLivePluginConnections(
 }
 
 export const APPROVED_EFFECT_REPLAY_ORDER = [{ createdAt: "asc" as const }, { id: "asc" as const }];
-const CATALOG_APPROVAL_TOOL = "__rakazoCatalogTool";
+const CATALOG_APPROVAL_TOOL = "__tangowCatalogTool";
 
 export function approvalReplayEffectToolName(
   liveName: string,
@@ -4395,7 +4395,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 "bash",
                 "-c",
                 BACKGROUND_WORK_LAUNCH,
-                "rakazo-background-launch",
+                "tangow-background-launch",
                 // Marker id must match sleepComputerIfIdle's probe (DB id), not ComputerRef.id
                 // (providerRef via toComputerRef). Scope launches to this run for cancel teardown.
                 requireStoredComputer().id,

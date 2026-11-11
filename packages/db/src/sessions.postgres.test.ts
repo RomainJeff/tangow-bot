@@ -31,7 +31,7 @@ describePostgres("appendSessionEntryInTransaction under contention (PostgreSQL)"
       await db.prisma.$disconnect();
       await db.pool.end();
     };
-    await prisma.user.create({ data: { id, name: "Sessions", email: `${id}@rakazo.test` } });
+    await prisma.user.create({ data: { id, name: "Sessions", email: `${id}@tangow.test` } });
     await prisma.organization.create({
       data: { id, name: "Sessions", slug: id, createdAt: new Date() },
     });

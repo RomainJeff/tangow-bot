@@ -36,7 +36,7 @@ afterEach(async () => {
 });
 
 async function tmpRoot() {
-  const dir = await mkdtemp(path.join(tmpdir(), "rakazo-skills-"));
+  const dir = await mkdtemp(path.join(tmpdir(), "tangow-skills-"));
   dirs.push(dir);
   return dir;
 }

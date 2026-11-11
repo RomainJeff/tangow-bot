@@ -10,7 +10,7 @@ import { createLogger, installLogger } from "./logger.js";
 import { createTestSink } from "./test-sink.js";
 
 afterEach(() => {
-  installLogger(createLogger({ service: "rakazo", level: "off", sinks: [] }));
+  installLogger(createLogger({ service: "tangow", level: "off", sinks: [] }));
 });
 
 describe("job correlation envelope", () => {
@@ -39,14 +39,14 @@ describe("job correlation envelope", () => {
 
   it("uses a nested envelope for reserved keys and non-plain objects", () => {
     const correlation = { jobId: "job-2", traceId: "d".repeat(32) };
-    const reserved = wrapJobPayload({ runId: "run-2", __rakazoLog: "keep" }, correlation);
+    const reserved = wrapJobPayload({ runId: "run-2", __tangowLog: "keep" }, correlation);
     expect(reserved).toEqual({
       v: 1,
       correlation,
-      payload: { runId: "run-2", __rakazoLog: "keep" },
+      payload: { runId: "run-2", __tangowLog: "keep" },
     });
     expect(unwrapJobPayload(reserved)).toEqual({
-      payload: { runId: "run-2", __rakazoLog: "keep" },
+      payload: { runId: "run-2", __tangowLog: "keep" },
       correlation,
     });
 

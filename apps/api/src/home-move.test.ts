@@ -83,7 +83,7 @@ it.each(["screen", "lease", "stop"])(
               actor: {
                 spaceId,
                 userId: fixture.userId,
-                email: "test@rakazo.test",
+                email: "test@tangow.test",
                 isDeploymentOwner: true,
               },
             },

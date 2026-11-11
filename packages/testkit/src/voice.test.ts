@@ -20,7 +20,7 @@ describeVoice("voice credentials and speech HTTP", () => {
   let prisma: PrismaClient;
   let stop: () => Promise<void>;
   const stamp = Date.now();
-  const dataDir = mkdtempSync(path.join(tmpdir(), "rakazo-voice-"));
+  const dataDir = mkdtempSync(path.join(tmpdir(), "tangow-voice-"));
 
   beforeAll(async () => {
     const { createApp } = await import("../../../apps/api/src/app.ts");
@@ -40,8 +40,8 @@ describeVoice("voice credentials and speech HTTP", () => {
   });
 
   it("connects a scripted key, speaks, and transcribes without leaking the secret", async () => {
-    const cookie = await signup(app, `voice-${stamp}@rakazo.test`, "Voice User");
-    const other = await signup(app, `voice-other-${stamp}@rakazo.test`, "Other Voice");
+    const cookie = await signup(app, `voice-${stamp}@tangow.test`, "Voice User");
+    const other = await signup(app, `voice-other-${stamp}@tangow.test`, "Other Voice");
 
     const before = await rpc<{ ready: boolean; utterances: string[] }>(
       app,
@@ -134,10 +134,10 @@ describeVoice("voice credentials and speech HTTP", () => {
   });
 
   it("disconnects the actor credential and leaves another user's key in place", async () => {
-    const cookie = await signup(app, `voice-disconnect-${stamp}@rakazo.test`, "Voice Disconnect");
+    const cookie = await signup(app, `voice-disconnect-${stamp}@tangow.test`, "Voice Disconnect");
     const other = await signup(
       app,
-      `voice-disconnect-other-${stamp}@rakazo.test`,
+      `voice-disconnect-other-${stamp}@tangow.test`,
       "Other Voice Disconnect",
     );
     const me = await rpc<{ userId: string }>(app, cookie, "me");

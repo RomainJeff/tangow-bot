@@ -214,7 +214,7 @@ const onboarding = {
 
 describe("browser_run", () => {
   afterEach(() => {
-    installLogger(createLogger({ service: "rakazo", level: "off", sinks: [] }));
+    installLogger(createLogger({ service: "tangow", level: "off", sinks: [] }));
   });
 
   it("completes a multi-page flow: buttons, a field from values, a drop-down by label", async () => {

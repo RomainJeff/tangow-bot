@@ -15,7 +15,7 @@ const describeIntegration = hasDb ? describe : describe.skip;
 
 describeIntegration("run executor lifecycle", () => {
   let handles: Awaited<ReturnType<typeof createApp>>;
-  const dataDir = mkdtempSync(path.join(tmpdir(), "rakazo-executor-lifecycle-"));
+  const dataDir = mkdtempSync(path.join(tmpdir(), "tangow-executor-lifecycle-"));
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   beforeAll(async () => {
@@ -558,7 +558,7 @@ describeIntegration("run executor lifecycle", () => {
 
   it("applies the same no-parallel-run rule to the targeted group member", async () => {
     const cookie = await signup(
-      `executor-group-steering-${stamp}@rakazo.test`,
+      `executor-group-steering-${stamp}@tangow.test`,
       "Executor group steering",
     );
     const me = await rpc<{ userId: string; spaceId: string }>(cookie, "me");
@@ -835,7 +835,7 @@ describeIntegration("run executor lifecycle", () => {
       completedAt?: Date;
     } = {},
   ) {
-    const cookie = await signup(`executor-${label}-${stamp}@rakazo.test`, `Executor ${label}`);
+    const cookie = await signup(`executor-${label}-${stamp}@tangow.test`, `Executor ${label}`);
     const me = await rpc<{ userId: string; spaceId: string }>(cookie, "me");
     const bot = await rpc<{ id: string }>(cookie, "bots/create", {
       name: `Executor ${label}`,

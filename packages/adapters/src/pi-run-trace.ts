@@ -96,7 +96,7 @@ export class RunTraceRecorder {
   constructor(private readonly options: RunTraceRecorderOptions) {
     this.trace = new RunTrace({ now: options.now });
     this.root = this.trace.openSpan({
-      name: "rakazo.run",
+      name: "tangow.run",
       attributes: {
         "langfuse.observation.type": "span",
         "langfuse.trace.name": "agent run",

@@ -417,7 +417,7 @@ describe("moving a home from snapshots to volumes", () => {
     expect(report.outcome === "adopted" && report.manifest.files).toContainEqual({
       homePath: `bots/${ada.id}/notes.md`,
       destination: { scope: "private", botId: ada.id },
-      volumeId: ada_.replace("rakazo-", ""),
+      volumeId: ada_.replace("tangow-", ""),
       volumePath: "notes.md",
       size: 9,
       sha256: sha("ada notes"),

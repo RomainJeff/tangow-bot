@@ -22,7 +22,7 @@ describePostgres("openRunLog under contention (PostgreSQL)", () => {
       await db.prisma.$disconnect();
       await db.pool.end();
     };
-    await prisma.user.create({ data: { id, name: "Run log", email: `${id}@rakazo.test` } });
+    await prisma.user.create({ data: { id, name: "Run log", email: `${id}@tangow.test` } });
     await prisma.organization.create({
       data: { id, name: "Run log", slug: id, createdAt: new Date() },
     });

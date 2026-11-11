@@ -461,7 +461,7 @@ describe("a worker run's screens by path", () => {
     const results: Record<string, unknown> = {};
     const read = { type: "tool" as const, id: "see", name: "read", arguments: { path: "" } };
     // Stands for another bot's folder that the guest links from its own volume.
-    const elsewhere = await mkdtemp(path.join(tmpdir(), "rakazo-other-bot-"));
+    const elsewhere = await mkdtemp(path.join(tmpdir(), "tangow-other-bot-"));
     cleanups.push(() => rm(elsewhere, { recursive: true, force: true }));
     const run = await startWorkerRun({
       steps: [
@@ -472,7 +472,7 @@ describe("a worker run's screens by path", () => {
             id: "link",
             name: "bash",
             arguments: {
-              command: `mkdir -p .rakazo && ln -s ${elsewhere} .rakazo/screens && ln -s ${elsewhere} screens`,
+              command: `mkdir -p .tangow && ln -s ${elsewhere} .tangow/screens && ln -s ${elsewhere} screens`,
             },
           },
         },
@@ -512,7 +512,7 @@ describe("a worker run's screens by path", () => {
     run.model.assertComplete();
 
     expect(await readdir(elsewhere)).toEqual([]);
-    const screen = "\\.rakazo-screen-[\\w-]{36}\\.png";
+    const screen = "\\.tangow-screen-[\\w-]{36}\\.png";
     expect(String(results.look)).toMatch(
       new RegExp(
         `^computer observed\\n\\{"frameId":"[^"]+",.*"width":\\d+,"height":\\d+.*"path":"${screen}"\\}\\nScreen saved at ${screen}\\. Read it to see it\\.$`,
@@ -526,7 +526,7 @@ describe("a worker run's screens by path", () => {
     });
     expect(
       (await readdir(run.provider.volumePath(volume.providerRef!))).filter((name) =>
-        name.startsWith(".rakazo-screen-"),
+        name.startsWith(".tangow-screen-"),
       ),
     ).toEqual([]);
     const fromController = seen

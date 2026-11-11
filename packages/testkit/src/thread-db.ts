@@ -94,7 +94,7 @@ export async function openThreadDb(): Promise<ThreadDb> {
   async function owner(spaceId: string, userId: string) {
     await prisma.user.upsert({
       where: { id: userId },
-      create: { id: userId, name: userId, email: `${userId}@rakazo.test` },
+      create: { id: userId, name: userId, email: `${userId}@tangow.test` },
       update: {},
     });
     const organizationId = `org-${spaceId}`;

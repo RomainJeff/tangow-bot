@@ -35,7 +35,7 @@ export const PREVIOUS_IMAGE_TAG_ENV = "TANGOW_IMAGE_TAG_PREVIOUS";
  * Matches the `name:` pinned in `infra/compose/docker-compose.prod.yml`. Used when Compose has not
  * injected `COMPOSE_PROJECT_NAME` (it does, into running services) and no dedicated override is set.
  */
-export const DEFAULT_COMPOSE_PROJECT_NAME = "rakazo-prod";
+export const DEFAULT_COMPOSE_PROJECT_NAME = "tangow-prod";
 export const COMPOSE_PROJECT_NAME_ENV = "COMPOSE_PROJECT_NAME";
 export const COMPOSE_PROJECT_NAME_OVERRIDE_ENV = "TANGOW_COMPOSE_PROJECT_NAME";
 

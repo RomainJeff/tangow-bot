@@ -12,7 +12,7 @@ import { afterPrivateText, startWorkerRun } from "./worker-run-fixture.js";
 type WorkerRun = Awaited<ReturnType<typeof startWorkerRun>>;
 
 beforeEach(async () => {
-  const home = await mkdtemp(path.join(tmpdir(), "rakazo-native-transcript-home-"));
+  const home = await mkdtemp(path.join(tmpdir(), "tangow-native-transcript-home-"));
   vi.stubEnv("HOME", home);
   onTestFinished(() => rm(home, { recursive: true, force: true }));
 });
@@ -29,7 +29,7 @@ async function fixture(
 
 /** A file outside every guest, so it shows how often a command ran. */
 async function probe() {
-  const dir = await mkdtemp(path.join(tmpdir(), "rakazo-native-probe-"));
+  const dir = await mkdtemp(path.join(tmpdir(), "tangow-native-probe-"));
   onTestFinished(() => rm(dir, { recursive: true, force: true }));
   const file = path.join(dir, "probe.txt");
   return {

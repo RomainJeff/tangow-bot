@@ -357,7 +357,7 @@ describe("native Composio tools", () => {
     const context = contextWith();
     composioSdkState.rawTools.mockResolvedValue([{ ...rawTool(), version: "version-A" }]);
     const [before] = await connector.discoverTools(context);
-    const marker = "__rakazoCatalogTool";
+    const marker = "__tangowCatalogTool";
     const request = boundDirectApprovalRequest(
       approvalRoute(before!),
       { owner: "example" },
@@ -397,7 +397,7 @@ describe("native Composio tools", () => {
       { name: "Personal", ref: "ca-personal" },
     ];
     const [before] = await connector.discoverTools(contextWith(accounts));
-    const marker = "__rakazoCatalogTool";
+    const marker = "__tangowCatalogTool";
     const request = boundDirectApprovalRequest(
       approvalRoute(before!),
       { owner: "example", composio_account: "Work" },
@@ -610,7 +610,7 @@ describe("composio tool mapping", () => {
     } as never;
     const connector = new CompositeConnector(destination, [failing]);
     const sink = createTestSink();
-    installLogger(createLogger({ service: "rakazo-api", sinks: [sink] }));
+    installLogger(createLogger({ service: "tangow-api", sinks: [sink] }));
 
     try {
       await expect(connector.discoverTools({ userId: "u" } as AdapterContext)).resolves.toEqual([
@@ -624,7 +624,7 @@ describe("composio tool mapping", () => {
       expect(logged).toContain("[redacted]");
       expect(logged).not.toContain("ak_secretvaluehere");
     } finally {
-      installLogger(createLogger({ service: "rakazo-api", level: "off", sinks: [] }));
+      installLogger(createLogger({ service: "tangow-api", level: "off", sinks: [] }));
     }
   });
 
@@ -703,7 +703,7 @@ describe("composio tool mapping", () => {
     expect(
       composioSdkState.created
         .map(({ userId }) => userId)
-        .filter((userId) => userId !== "__rakazo_catalog__"),
+        .filter((userId) => userId !== "__tangow_catalog__"),
     ).toEqual(["workspace-a__user-1", "workspace-b__user-1"]);
   });
 

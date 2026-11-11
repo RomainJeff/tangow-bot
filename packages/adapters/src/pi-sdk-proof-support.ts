@@ -313,7 +313,7 @@ function anthropicEvents(blocks: WireBlock[], usage: WireUsage | undefined): str
 }
 
 export async function proofModelRuntime(fixture: WireFixture, apiKey: string) {
-  const provider = `rakazo-proof-${fixture.protocol}`;
+  const provider = `tangow-proof-${fixture.protocol}`;
   const modelRuntime = await ModelRuntime.create({
     credentials: new PiRuntimeCredentialStore(provider, { type: "api_key", key: apiKey }),
     modelsPath: null,

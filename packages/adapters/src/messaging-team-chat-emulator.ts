@@ -168,7 +168,7 @@ export class MessagingTeamChatEmulator implements MessagingSurface {
       // focused send recording without Chat SDK wiring.
       adapter: {
         version: "1.0.0",
-        botUsername: "rakazo-emulator",
+        botUsername: "tangow-emulator",
         postMessage: async (threadId: string, message: { text?: string }) => {
           const handle = this.recordSend(threadId, message.text ?? "", "outbound");
           return { id: handle, html_url: null };

@@ -552,7 +552,7 @@ describe("destroyBot", () => {
   });
 
   it("removes the bot's copy of its owner's skills", async () => {
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-destroy-bot-skills-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-destroy-bot-skills-"));
     const bot = { id: "bot-1", spaceId: "workspace-1", name: "Researcher", archivedAt: null };
     const copy = botSkillsRoot(dataDir, bot);
     await mkdir(path.join(copy, "release-steps", "scripts"), { recursive: true });

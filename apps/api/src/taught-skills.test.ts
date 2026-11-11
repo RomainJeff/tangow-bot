@@ -76,7 +76,7 @@ it("logs each revision of a taught skill's draft card against the card", async (
   const actor = {
     userId: "user-1",
     spaceId: "space-1",
-    email: "user@rakazo.test",
+    email: "user@tangow.test",
     isDeploymentOwner: true,
   };
 

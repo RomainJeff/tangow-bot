@@ -28,7 +28,7 @@ describe("a group's people, bots and lead", () => {
   const actor = (userId: string) => ({
     userId,
     spaceId: space,
-    email: `${userId}@rakazo.test`,
+    email: `${userId}@tangow.test`,
     isDeploymentOwner: false,
   });
   const newBot = async (userId: string, name: string) =>
@@ -115,7 +115,7 @@ describe("a group's people, bots and lead", () => {
     database = await openPgliteDatabase();
     prisma = database.prisma;
     for (const id of ["creator", "ana", "ben", "cleo", "dan", "stranger"]) {
-      await prisma.user.create({ data: { id, name: id, email: `${id}@rakazo.test` } });
+      await prisma.user.create({ data: { id, name: id, email: `${id}@tangow.test` } });
       await bootstrapUserSpace(prisma, { id }, env);
     }
     const home = (await prisma.spaceMember.findFirstOrThrow({ where: { userId: "creator" } }))
@@ -127,7 +127,7 @@ describe("a group's people, bots and lead", () => {
       const [invitation] = await createSpaceInvitations(prisma, {
         spaceId: space,
         userId: "creator",
-        emails: [`${userId}@rakazo.test`],
+        emails: [`${userId}@tangow.test`],
       });
       await acceptSpaceInvitation(prisma, { token: invitation!.id, userId });
     }

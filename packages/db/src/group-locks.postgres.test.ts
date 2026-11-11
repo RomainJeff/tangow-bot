@@ -25,7 +25,7 @@ describePostgres("group thread lock order (PostgreSQL)", () => {
       await db.prisma.$disconnect();
       await db.pool.end();
     };
-    await prisma.user.create({ data: { id, name: "Locks", email: `${id}@rakazo.test` } });
+    await prisma.user.create({ data: { id, name: "Locks", email: `${id}@tangow.test` } });
     await prisma.organization.create({
       data: { id, name: "Locks", slug: id, createdAt: new Date() },
     });

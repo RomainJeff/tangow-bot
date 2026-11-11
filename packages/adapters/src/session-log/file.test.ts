@@ -9,7 +9,7 @@ import { runSessionLogConformance } from "./conformance.js";
 import { FileSessionLog } from "./file.js";
 
 function temporaryRoot(): Promise<string> {
-  return mkdtemp(path.join(tmpdir(), "rakazo-session-log-"));
+  return mkdtemp(path.join(tmpdir(), "tangow-session-log-"));
 }
 
 runSessionLogConformance(async () => {

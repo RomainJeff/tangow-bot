@@ -41,7 +41,7 @@ describe.skipIf(!databaseAvailable)("eval history accounting", () => {
           { expect() {}, response: { type: "text" as const, text: `Saved ${turn} turn.` } },
         ]),
       });
-      const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-eval-history-"));
+      const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-eval-history-"));
       try {
         const { createApp } = await import("../../../apps/api/src/app.ts");
         const result = await runTrial(

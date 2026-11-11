@@ -155,12 +155,12 @@ export function sanitizeSerenityBrainLabel(label: string): string {
 
 export function serenityBotEntity(botId: string, brainLabel = ""): string {
   const label = sanitizeSerenityBrainLabel(brainLabel);
-  return label ? `rakazo-bot/${label}/${botId}` : `rakazo-bot/${botId}`;
+  return label ? `tangow-bot/${label}/${botId}` : `tangow-bot/${botId}`;
 }
 
 export function serenitySpaceEntity(spaceId: string, brainLabel = ""): string {
   const label = sanitizeSerenityBrainLabel(brainLabel);
-  return label ? `rakazo-space/${label}/${spaceId}` : `rakazo-space/${spaceId}`;
+  return label ? `tangow-space/${label}/${spaceId}` : `tangow-space/${spaceId}`;
 }
 
 function durableEntities(
@@ -263,7 +263,7 @@ export class SerenityMemoryProvider implements SemanticMemoryProvider {
       context.spaceId,
       this.connection.brainLabel,
     );
-    const provenance = `rakazo space:${context.spaceId} bot:${request.botId}`;
+    const provenance = `tangow space:${context.spaceId} bot:${request.botId}`;
     const results = await Promise.all(
       entities.map((entity) =>
         rememberSerenity(request.content, provenance, this.connection, {

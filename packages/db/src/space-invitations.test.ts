@@ -27,7 +27,7 @@ describe("Space invite links", () => {
 
   async function user(id: string, name: string): Promise<string> {
     await prisma.user.create({
-      data: { id, name, email: `${id}@rakazo.test` },
+      data: { id, name, email: `${id}@tangow.test` },
     });
     return (await bootstrapUserSpace(prisma, { id }, env)).spaceId;
   }
@@ -90,7 +90,7 @@ describe("Space invite links", () => {
     await expect(previewSpaceInvitation(prisma, { token, userId: "stranger" })).resolves.toEqual({
       spaceName: "Family",
       inviterName: "Ada",
-      email: "guest@rakazo.test",
+      email: "guest@tangow.test",
       forYou: false,
     });
     await expect(acceptSpaceInvitation(prisma, { token, userId: "stranger" })).rejects.toThrow(
@@ -112,7 +112,7 @@ describe("Space invite links", () => {
   });
 
   it("refuses expired and revoked links, and extends a re-invited email's link", async () => {
-    const token = await invite("stranger@rakazo.test");
+    const token = await invite("stranger@tangow.test");
     await prisma.spaceInvitation.update({
       where: { id: token },
       data: { expiresAt: new Date(Date.now() - 1000) },
@@ -121,13 +121,13 @@ describe("Space invite links", () => {
       SpaceInvitationUnavailableError,
     );
 
-    const live = await invite("stranger@rakazo.test");
+    const live = await invite("stranger@tangow.test");
     expect(live).not.toBe(token);
     await prisma.spaceInvitation.update({
       where: { id: live },
       data: { expiresAt: new Date(Date.now() + 1000) },
     });
-    expect(await invite("STRANGER@rakazo.test")).toBe(live);
+    expect(await invite("STRANGER@tangow.test")).toBe(live);
     const [extended] = (await listSpaceMembers(prisma, { spaceId: shared, userId: "owner" }))
       .invitations;
     expect(extended!.expiresAt.getTime()).toBeGreaterThan(Date.now() + 60_000);
@@ -143,16 +143,16 @@ describe("Space invite links", () => {
     const invitations = await createSpaceInvitations(prisma, {
       spaceId: shared,
       userId: "owner",
-      emails: ["guest@rakazo.test", "new-1@rakazo.test", "new-2@rakazo.test", "New-1@rakazo.test"],
+      emails: ["guest@tangow.test", "new-1@tangow.test", "new-2@tangow.test", "New-1@tangow.test"],
     });
     expect(invitations.map((invitation) => invitation.email)).toEqual([
-      "new-1@rakazo.test",
-      "new-2@rakazo.test",
+      "new-1@tangow.test",
+      "new-2@tangow.test",
     ]);
     const view = await listSpaceMembers(prisma, { spaceId: shared, userId: "owner" });
     expect(view.invitations.map((invitation) => invitation.email)).toEqual([
-      "new-1@rakazo.test",
-      "new-2@rakazo.test",
+      "new-1@tangow.test",
+      "new-2@tangow.test",
     ]);
     for (const { id } of invitations) {
       await revokeSpaceInvitation(prisma, { spaceId: shared, userId: "owner", invitationId: id });
@@ -164,7 +164,7 @@ describe("Space invite links", () => {
       createSpaceInvitations(prisma, {
         spaceId: shared,
         userId: "guest",
-        emails: ["stranger@rakazo.test"],
+        emails: ["stranger@tangow.test"],
       }),
     ).rejects.toThrow(NotSpaceOwnerError);
     await expect(
@@ -216,7 +216,7 @@ describe("Space invite links", () => {
     });
     expect(await spaceIdsOf("guest")).not.toContain(shared);
 
-    const token = await invite("guest@rakazo.test");
+    const token = await invite("guest@tangow.test");
     await expect(acceptSpaceInvitation(prisma, { token, userId: "guest" })).resolves.toEqual({
       spaceId: shared,
     });

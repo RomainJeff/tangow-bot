@@ -542,7 +542,7 @@ it.skipIf(process.env.VERIFY_DATABASE !== "1" || !process.env.DATABASE_URL)(
           actor: {
             spaceId: fixture.run.spaceId,
             userId: fixture.run.userId,
-            email: "worker@rakazo.test",
+            email: "worker@tangow.test",
             isDeploymentOwner: true,
           },
         },

@@ -147,7 +147,7 @@ async function main() {
   report.provider = connection.provider;
   save();
   // This CLI owns a disposable database. Never migrate or evaluate against an inherited database.
-  const dataDir = mkdtempSync(path.join(tmpdir(), "rakazo-evals-"));
+  const dataDir = mkdtempSync(path.join(tmpdir(), "tangow-evals-"));
   let postgres: StartedPostgreSqlContainer | undefined;
   try {
     postgres = await new PostgreSqlContainer("postgres:16-alpine").start();

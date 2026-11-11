@@ -175,7 +175,7 @@ describe("OpenAPI connector import", () => {
       signal: new AbortController().signal,
     } as never;
     const execute = (await provider.discoverTools(context))[2]!;
-    const marker = "__rakazoCatalogTool";
+    const marker = "__tangowCatalogTool";
     const approvedRequest = catalogApprovalRequest(
       execute.name,
       { id: "api-approved:operation_20", arguments: {} },

@@ -99,7 +99,7 @@ const routine = {
 let dataDir: string;
 
 beforeEach(async () => {
-  dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-routine-cards-"));
+  dataDir = await mkdtemp(path.join(tmpdir(), "tangow-routine-cards-"));
   vi.mocked(runAutoReviewJudge).mockReset();
 });
 

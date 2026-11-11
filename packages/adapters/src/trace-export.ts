@@ -17,7 +17,7 @@ import { request } from "undici";
 import type { RecordedSpan, RunTrace } from "./run-trace.js";
 
 const TRACE_PATH = "/api/public/otel/v1/traces";
-const SCOPE_NAME = "rakazo";
+const SCOPE_NAME = "tangow";
 
 /** Credentials and endpoint of the trace export destination. */
 export interface TraceExportConfig {
