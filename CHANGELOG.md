@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
+- Tangow now uses its own name everywhere on web, desktop, iPhone, Android and self-hosted servers: app copy, the `tangow://` mobile links, `TANGOW_*` server settings and the default `tangow` database and Compose project.
 - On web and desktop, a space's owner now invites people by email, several at once, and each invite link works only for the account with that email; pending invites are listed by email, each with its own link to copy or revoke, instead of anonymous links copied once.
 
 #### Fixed
