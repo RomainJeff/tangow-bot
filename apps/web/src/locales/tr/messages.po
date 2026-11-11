@@ -237,7 +237,7 @@ msgstr ""
 msgid "{what} · paused"
 msgstr "{what} · duraklatıldı"
 
-#: src/pages/shell/transcript.tsx:228
+#: src/pages/shell/transcript.tsx:229
 msgid "{workingBotName} is working"
 msgstr "{workingBotName} çalışıyor"
 
@@ -298,12 +298,12 @@ msgstr "İşlem onayları"
 #. placeholder {0}: sectionMenu.section.name
 #: src/pages/bot-page/BotPage.tsx:347
 #: src/pages/BotContextMenu.tsx:101
-#: src/pages/shell/shell-overlays.tsx:406
+#: src/pages/shell/shell-overlays.tsx:411
 #: src/pages/shell/sidebar-roster.tsx:149
 msgid "Actions for {0}"
 msgstr "{0} için işlemler"
 
-#: src/pages/shell/shell-overlays.tsx:280
+#: src/pages/shell/shell-overlays.tsx:285
 msgid "Actions for space"
 msgstr ""
 
@@ -810,7 +810,7 @@ msgstr ""
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "Botlar varsayılan olarak sormadan hareket eder. Yalnızca belirli bir işlem türünü önce incelemek istediğinde istisna ekle."
 
-#: src/pages/shell/transcript.tsx:229
+#: src/pages/shell/transcript.tsx:230
 msgid "Bots are working"
 msgstr "Botlar çalışıyor"
 
@@ -1262,9 +1262,9 @@ msgid "Conversation cleared"
 msgstr ""
 
 #: src/components/DraftCard.tsx:299
-#: src/pages/shell/message-actions-sheet.tsx:75
+#: src/pages/shell/message-actions-sheet.tsx:76
 #: src/pages/shell/message-hover-actions.tsx:98
-#: src/pages/shell/message-hover-actions.tsx:169
+#: src/pages/shell/message-hover-actions.tsx:170
 msgid "Copy"
 msgstr "Kopyala"
 
@@ -1751,7 +1751,7 @@ msgid "Create group"
 msgstr "Grup oluştur"
 
 #: src/pages/shell/bot-picker.tsx:74
-#: src/pages/shell/shell-main.tsx:175
+#: src/pages/shell/shell-main.tsx:177
 msgid "Create new Bot"
 msgstr "Yeni bot oluştur"
 
@@ -1908,7 +1908,7 @@ msgstr "Hafızayı da sil"
 msgid "Delete routine"
 msgstr "Rutini sil"
 
-#: src/pages/shell/shell-overlays.tsx:294
+#: src/pages/shell/shell-overlays.tsx:299
 msgid "Delete space"
 msgstr ""
 
@@ -2080,8 +2080,8 @@ msgstr ""
 msgid "Edit"
 msgstr "Düzenle"
 
-#: src/pages/shell/message-actions-sheet.tsx:107
-#: src/pages/shell/message-hover-actions.tsx:160
+#: src/pages/shell/message-actions-sheet.tsx:108
+#: src/pages/shell/message-hover-actions.tsx:161
 msgid "Edit and resend"
 msgstr "Düzenle ve yeniden gönder"
 
@@ -2638,7 +2638,7 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:268
+#: src/pages/shell/transcript.tsx:269
 msgid "Load earlier messages"
 msgstr "Önceki mesajları yükle"
 
@@ -2680,7 +2680,7 @@ msgstr "Ses sağlayıcıları yükleniyor…"
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
 #: src/pages/shell/session-view.tsx:129
-#: src/pages/shell/transcript.tsx:268
+#: src/pages/shell/transcript.tsx:269
 msgid "Loading…"
 msgstr "Yükleniyor…"
 
@@ -2809,7 +2809,7 @@ msgstr "Mesaj"
 msgid "Message {activeName}"
 msgstr "{activeName} sohbetine yaz"
 
-#: src/pages/shell/message-actions-sheet.tsx:120
+#: src/pages/shell/message-actions-sheet.tsx:121
 msgid "Message actions"
 msgstr ""
 
@@ -3246,7 +3246,7 @@ msgstr "her ayın 1'inde saat {0}"
 msgid "One-time"
 msgstr "Tek seferlik"
 
-#: src/pages/shell/shell-overlays.tsx:332
+#: src/pages/shell/shell-overlays.tsx:337
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
 msgstr ""
 
@@ -3478,7 +3478,7 @@ msgstr "Kuyrukta"
 msgid "React"
 msgstr "Tepki ver"
 
-#: src/pages/shell/message-actions-sheet.tsx:124
+#: src/pages/shell/message-actions-sheet.tsx:125
 #: src/pages/shell/message-hover-actions.tsx:77
 msgid "Reactions"
 msgstr "Tepkiler"
@@ -3638,11 +3638,11 @@ msgid "Remove message trigger?"
 msgstr "Mesaj tetikleyicisi kaldırılsın mı?"
 
 #: src/pages/shell/composer-attachments.tsx:160
-#: src/pages/shell/message-actions-sheet.tsx:83
+#: src/pages/shell/message-actions-sheet.tsx:84
 #: src/pages/shell/message-hover-actions.tsx:107
 #: src/pages/shell/message-hover-actions.tsx:108
-#: src/pages/shell/message-hover-actions.tsx:178
 #: src/pages/shell/message-hover-actions.tsx:179
+#: src/pages/shell/message-hover-actions.tsx:180
 msgid "Remove preview"
 msgstr "Önizlemeyi kaldır"
 
@@ -3671,7 +3671,7 @@ msgstr "Kaldırılıyor…"
 
 #: src/pages/BotContextMenu.tsx:138
 #: src/pages/shell/dialogs.tsx:246
-#: src/pages/shell/shell-overlays.tsx:421
+#: src/pages/shell/shell-overlays.tsx:426
 msgid "Rename section"
 msgstr ""
 
@@ -3693,7 +3693,7 @@ msgstr "Anahtarı değiştir"
 msgid "Replaced"
 msgstr ""
 
-#: src/pages/shell/message-actions-sheet.tsx:69
+#: src/pages/shell/message-actions-sheet.tsx:70
 #: src/pages/shell/message-hover-actions.tsx:63
 msgid "Reply"
 msgstr "Yanıtla"
@@ -4195,7 +4195,7 @@ msgstr "Seslendir + yazıya dök"
 msgid "Speak only"
 msgstr "Yalnızca seslendir"
 
-#: src/pages/shell/message-actions-sheet.tsx:93
+#: src/pages/shell/message-actions-sheet.tsx:94
 #: src/pages/shell/message-hover-actions.tsx:118
 msgid "Speak this reply"
 msgstr "Bu yanıtı seslendir"
@@ -4236,7 +4236,7 @@ msgstr "Adımlar"
 msgid "Stop"
 msgstr "Durdur"
 
-#: src/pages/shell/message-actions-sheet.tsx:93
+#: src/pages/shell/message-actions-sheet.tsx:94
 #: src/pages/shell/message-hover-actions.tsx:118
 msgid "Stop speaking"
 msgstr "Seslendirmeyi durdur"
@@ -4307,7 +4307,7 @@ msgstr ""
 msgid "Teach a task"
 msgstr "Görev öğret"
 
-#: src/pages/shell/shell-main.tsx:241
+#: src/pages/shell/shell-main.tsx:243
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "Öğretme sürüyor. Yeni mesaj göndermeden önce öğretmeyi durdur."
 

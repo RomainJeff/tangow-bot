@@ -237,7 +237,7 @@ msgstr ""
 msgid "{what} · paused"
 msgstr "{what} · en pausa"
 
-#: src/pages/shell/transcript.tsx:228
+#: src/pages/shell/transcript.tsx:229
 msgid "{workingBotName} is working"
 msgstr "{workingBotName} está trabajando"
 
@@ -298,12 +298,12 @@ msgstr "Confirmaciones de acción"
 #. placeholder {0}: sectionMenu.section.name
 #: src/pages/bot-page/BotPage.tsx:347
 #: src/pages/BotContextMenu.tsx:101
-#: src/pages/shell/shell-overlays.tsx:406
+#: src/pages/shell/shell-overlays.tsx:411
 #: src/pages/shell/sidebar-roster.tsx:149
 msgid "Actions for {0}"
 msgstr "Acciones para {0}"
 
-#: src/pages/shell/shell-overlays.tsx:280
+#: src/pages/shell/shell-overlays.tsx:285
 msgid "Actions for space"
 msgstr ""
 
@@ -810,7 +810,7 @@ msgstr ""
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "Los bots actúan sin preguntar de forma predeterminada. Agrega una excepción solo cuando quieras revisar primero un tipo de acción."
 
-#: src/pages/shell/transcript.tsx:229
+#: src/pages/shell/transcript.tsx:230
 msgid "Bots are working"
 msgstr "Los bots están trabajando"
 
@@ -1262,9 +1262,9 @@ msgid "Conversation cleared"
 msgstr ""
 
 #: src/components/DraftCard.tsx:299
-#: src/pages/shell/message-actions-sheet.tsx:75
+#: src/pages/shell/message-actions-sheet.tsx:76
 #: src/pages/shell/message-hover-actions.tsx:98
-#: src/pages/shell/message-hover-actions.tsx:169
+#: src/pages/shell/message-hover-actions.tsx:170
 msgid "Copy"
 msgstr "Copiar"
 
@@ -1751,7 +1751,7 @@ msgid "Create group"
 msgstr "Crear grupo"
 
 #: src/pages/shell/bot-picker.tsx:74
-#: src/pages/shell/shell-main.tsx:175
+#: src/pages/shell/shell-main.tsx:177
 msgid "Create new Bot"
 msgstr "Crear nuevo bot"
 
@@ -1908,7 +1908,7 @@ msgstr "Eliminar también las memorias"
 msgid "Delete routine"
 msgstr "Eliminar rutina"
 
-#: src/pages/shell/shell-overlays.tsx:294
+#: src/pages/shell/shell-overlays.tsx:299
 msgid "Delete space"
 msgstr ""
 
@@ -2080,8 +2080,8 @@ msgstr ""
 msgid "Edit"
 msgstr "Editar"
 
-#: src/pages/shell/message-actions-sheet.tsx:107
-#: src/pages/shell/message-hover-actions.tsx:160
+#: src/pages/shell/message-actions-sheet.tsx:108
+#: src/pages/shell/message-hover-actions.tsx:161
 msgid "Edit and resend"
 msgstr "Editar y reenviar"
 
@@ -2638,7 +2638,7 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:268
+#: src/pages/shell/transcript.tsx:269
 msgid "Load earlier messages"
 msgstr "Cargar mensajes anteriores"
 
@@ -2680,7 +2680,7 @@ msgstr "Cargando proveedores de voz…"
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
 #: src/pages/shell/session-view.tsx:129
-#: src/pages/shell/transcript.tsx:268
+#: src/pages/shell/transcript.tsx:269
 msgid "Loading…"
 msgstr "Cargando…"
 
@@ -2809,7 +2809,7 @@ msgstr "Mensaje"
 msgid "Message {activeName}"
 msgstr "Mensaje a {activeName}"
 
-#: src/pages/shell/message-actions-sheet.tsx:120
+#: src/pages/shell/message-actions-sheet.tsx:121
 msgid "Message actions"
 msgstr ""
 
@@ -3246,7 +3246,7 @@ msgstr "el día 1 a las {0}"
 msgid "One-time"
 msgstr "Una sola vez"
 
-#: src/pages/shell/shell-overlays.tsx:332
+#: src/pages/shell/shell-overlays.tsx:337
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
 msgstr ""
 
@@ -3478,7 +3478,7 @@ msgstr "En cola"
 msgid "React"
 msgstr "Reaccionar"
 
-#: src/pages/shell/message-actions-sheet.tsx:124
+#: src/pages/shell/message-actions-sheet.tsx:125
 #: src/pages/shell/message-hover-actions.tsx:77
 msgid "Reactions"
 msgstr "Reacciones"
@@ -3638,11 +3638,11 @@ msgid "Remove message trigger?"
 msgstr "¿Quitar disparador de mensajes?"
 
 #: src/pages/shell/composer-attachments.tsx:160
-#: src/pages/shell/message-actions-sheet.tsx:83
+#: src/pages/shell/message-actions-sheet.tsx:84
 #: src/pages/shell/message-hover-actions.tsx:107
 #: src/pages/shell/message-hover-actions.tsx:108
-#: src/pages/shell/message-hover-actions.tsx:178
 #: src/pages/shell/message-hover-actions.tsx:179
+#: src/pages/shell/message-hover-actions.tsx:180
 msgid "Remove preview"
 msgstr "Quitar vista previa"
 
@@ -3671,7 +3671,7 @@ msgstr "Quitando…"
 
 #: src/pages/BotContextMenu.tsx:138
 #: src/pages/shell/dialogs.tsx:246
-#: src/pages/shell/shell-overlays.tsx:421
+#: src/pages/shell/shell-overlays.tsx:426
 msgid "Rename section"
 msgstr ""
 
@@ -3693,7 +3693,7 @@ msgstr "Reemplazar clave"
 msgid "Replaced"
 msgstr ""
 
-#: src/pages/shell/message-actions-sheet.tsx:69
+#: src/pages/shell/message-actions-sheet.tsx:70
 #: src/pages/shell/message-hover-actions.tsx:63
 msgid "Reply"
 msgstr "Responder"
@@ -4195,7 +4195,7 @@ msgstr "Hablar + transcribir"
 msgid "Speak only"
 msgstr "Solo hablar"
 
-#: src/pages/shell/message-actions-sheet.tsx:93
+#: src/pages/shell/message-actions-sheet.tsx:94
 #: src/pages/shell/message-hover-actions.tsx:118
 msgid "Speak this reply"
 msgstr "Leer esta respuesta"
@@ -4236,7 +4236,7 @@ msgstr "Pasos"
 msgid "Stop"
 msgstr "Detener"
 
-#: src/pages/shell/message-actions-sheet.tsx:93
+#: src/pages/shell/message-actions-sheet.tsx:94
 #: src/pages/shell/message-hover-actions.tsx:118
 msgid "Stop speaking"
 msgstr "Dejar de hablar"
@@ -4307,7 +4307,7 @@ msgstr ""
 msgid "Teach a task"
 msgstr "Enseñar una tarea"
 
-#: src/pages/shell/shell-main.tsx:241
+#: src/pages/shell/shell-main.tsx:243
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "Enseñanza en curso: detén la enseñanza antes de enviar un nuevo mensaje."
 

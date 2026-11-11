@@ -237,7 +237,7 @@ msgstr ""
 msgid "{what} · paused"
 msgstr "{what} · 已暂停"
 
-#: src/pages/shell/transcript.tsx:228
+#: src/pages/shell/transcript.tsx:229
 msgid "{workingBotName} is working"
 msgstr "{workingBotName} 正在工作"
 
@@ -298,12 +298,12 @@ msgstr "操作确认"
 #. placeholder {0}: sectionMenu.section.name
 #: src/pages/bot-page/BotPage.tsx:347
 #: src/pages/BotContextMenu.tsx:101
-#: src/pages/shell/shell-overlays.tsx:406
+#: src/pages/shell/shell-overlays.tsx:411
 #: src/pages/shell/sidebar-roster.tsx:149
 msgid "Actions for {0}"
 msgstr "{0} 的操作"
 
-#: src/pages/shell/shell-overlays.tsx:280
+#: src/pages/shell/shell-overlays.tsx:285
 msgid "Actions for space"
 msgstr ""
 
@@ -810,7 +810,7 @@ msgstr ""
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "默认情况下 Bot 会直接执行。只有当你想先审核某类操作时，才添加例外。"
 
-#: src/pages/shell/transcript.tsx:229
+#: src/pages/shell/transcript.tsx:230
 msgid "Bots are working"
 msgstr "Bot 正在工作"
 
@@ -1262,9 +1262,9 @@ msgid "Conversation cleared"
 msgstr ""
 
 #: src/components/DraftCard.tsx:299
-#: src/pages/shell/message-actions-sheet.tsx:75
+#: src/pages/shell/message-actions-sheet.tsx:76
 #: src/pages/shell/message-hover-actions.tsx:98
-#: src/pages/shell/message-hover-actions.tsx:169
+#: src/pages/shell/message-hover-actions.tsx:170
 msgid "Copy"
 msgstr "复制"
 
@@ -1751,7 +1751,7 @@ msgid "Create group"
 msgstr "创建群组"
 
 #: src/pages/shell/bot-picker.tsx:74
-#: src/pages/shell/shell-main.tsx:175
+#: src/pages/shell/shell-main.tsx:177
 msgid "Create new Bot"
 msgstr "新建 Bot"
 
@@ -1908,7 +1908,7 @@ msgstr "同时删除记忆"
 msgid "Delete routine"
 msgstr "删除例行任务"
 
-#: src/pages/shell/shell-overlays.tsx:294
+#: src/pages/shell/shell-overlays.tsx:299
 msgid "Delete space"
 msgstr ""
 
@@ -2080,8 +2080,8 @@ msgstr ""
 msgid "Edit"
 msgstr "编辑"
 
-#: src/pages/shell/message-actions-sheet.tsx:107
-#: src/pages/shell/message-hover-actions.tsx:160
+#: src/pages/shell/message-actions-sheet.tsx:108
+#: src/pages/shell/message-hover-actions.tsx:161
 msgid "Edit and resend"
 msgstr "编辑并重新发送"
 
@@ -2638,7 +2638,7 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:268
+#: src/pages/shell/transcript.tsx:269
 msgid "Load earlier messages"
 msgstr "加载更早的消息"
 
@@ -2680,7 +2680,7 @@ msgstr "正在加载语音提供方…"
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
 #: src/pages/shell/session-view.tsx:129
-#: src/pages/shell/transcript.tsx:268
+#: src/pages/shell/transcript.tsx:269
 msgid "Loading…"
 msgstr "加载中…"
 
@@ -2809,7 +2809,7 @@ msgstr "消息"
 msgid "Message {activeName}"
 msgstr "给 {activeName} 发消息"
 
-#: src/pages/shell/message-actions-sheet.tsx:120
+#: src/pages/shell/message-actions-sheet.tsx:121
 msgid "Message actions"
 msgstr ""
 
@@ -3246,7 +3246,7 @@ msgstr "每月 1 日 {0}"
 msgid "One-time"
 msgstr "一次性"
 
-#: src/pages/shell/shell-overlays.tsx:332
+#: src/pages/shell/shell-overlays.tsx:337
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
 msgstr ""
 
@@ -3478,7 +3478,7 @@ msgstr "排队中"
 msgid "React"
 msgstr "回应"
 
-#: src/pages/shell/message-actions-sheet.tsx:124
+#: src/pages/shell/message-actions-sheet.tsx:125
 #: src/pages/shell/message-hover-actions.tsx:77
 msgid "Reactions"
 msgstr "表情回应"
@@ -3638,11 +3638,11 @@ msgid "Remove message trigger?"
 msgstr "移除消息触发器？"
 
 #: src/pages/shell/composer-attachments.tsx:160
-#: src/pages/shell/message-actions-sheet.tsx:83
+#: src/pages/shell/message-actions-sheet.tsx:84
 #: src/pages/shell/message-hover-actions.tsx:107
 #: src/pages/shell/message-hover-actions.tsx:108
-#: src/pages/shell/message-hover-actions.tsx:178
 #: src/pages/shell/message-hover-actions.tsx:179
+#: src/pages/shell/message-hover-actions.tsx:180
 msgid "Remove preview"
 msgstr "移除预览"
 
@@ -3671,7 +3671,7 @@ msgstr "正在移除…"
 
 #: src/pages/BotContextMenu.tsx:138
 #: src/pages/shell/dialogs.tsx:246
-#: src/pages/shell/shell-overlays.tsx:421
+#: src/pages/shell/shell-overlays.tsx:426
 msgid "Rename section"
 msgstr ""
 
@@ -3693,7 +3693,7 @@ msgstr "替换密钥"
 msgid "Replaced"
 msgstr ""
 
-#: src/pages/shell/message-actions-sheet.tsx:69
+#: src/pages/shell/message-actions-sheet.tsx:70
 #: src/pages/shell/message-hover-actions.tsx:63
 msgid "Reply"
 msgstr "回复"
@@ -4195,7 +4195,7 @@ msgstr "朗读 + 转写"
 msgid "Speak only"
 msgstr "仅朗读"
 
-#: src/pages/shell/message-actions-sheet.tsx:93
+#: src/pages/shell/message-actions-sheet.tsx:94
 #: src/pages/shell/message-hover-actions.tsx:118
 msgid "Speak this reply"
 msgstr "朗读这条回复"
@@ -4236,7 +4236,7 @@ msgstr "步骤"
 msgid "Stop"
 msgstr "停止"
 
-#: src/pages/shell/message-actions-sheet.tsx:93
+#: src/pages/shell/message-actions-sheet.tsx:94
 #: src/pages/shell/message-hover-actions.tsx:118
 msgid "Stop speaking"
 msgstr "停止朗读"
@@ -4307,7 +4307,7 @@ msgstr ""
 msgid "Teach a task"
 msgstr "示范任务"
 
-#: src/pages/shell/shell-main.tsx:241
+#: src/pages/shell/shell-main.tsx:243
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "正在示范，发送新消息前请先停止示范。"
 

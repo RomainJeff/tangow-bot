@@ -207,11 +207,16 @@ export function ShellOverlays({
                   }
                 : undefined
             }
-            onClear={() => {
-              setBotMenu(null);
-              if (contextBot) runBotAction(contextBot.id, "clear");
-              else setClearTarget({ kind: "group", chat: contextGroup! });
-            }}
+            onClear={
+              // A group of several people keeps its history: no one clears it alone.
+              (contextGroup?.people.length ?? 0) > 1
+                ? undefined
+                : () => {
+                    setBotMenu(null);
+                    if (contextBot) runBotAction(contextBot.id, "clear");
+                    else setClearTarget({ kind: "group", chat: contextGroup! });
+                  }
+            }
             onArchive={
               manages
                 ? () => {

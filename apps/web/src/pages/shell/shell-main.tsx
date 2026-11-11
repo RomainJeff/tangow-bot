@@ -72,6 +72,8 @@ export function ShellMain({
   onOpenComputer: () => void;
 }) {
   const { active, activeGroup, groupId, inGroup, initialBotsLoaded, refreshBots } = roster;
+  // A group of several people keeps its history: no one edits it alone.
+  const sharedHistory = inGroup && (activeGroup?.people.length ?? 0) > 1;
   const { panel, setPanel, pickedBotId, showBotPage, panelOpen, panelSize } = panels;
   const { panelCoversColumn } = panels;
   const { callOpen, setCallOpen, voiceStatus } = voice;
@@ -196,7 +198,7 @@ export function ShellMain({
               onOpenBot={openBot}
               onAnswer={send.answerCard}
               onReply={setReplyTarget}
-              onEdit={draft.startRewind}
+              onEdit={sharedHistory ? undefined : draft.startRewind}
               rewindFromItemId={draft.activeRewindTarget?.id ?? null}
               onReact={send.reactToMessage}
               onJumpToMessage={transcriptWindow.jumpToReplyMessage}

@@ -113,7 +113,8 @@ export const Transcript = memo(function Transcript({
   onOpenBot: (botId: string, messageId?: string) => void;
   onAnswer: (target: CardAnswerTarget, text: string, edits?: CardEdits) => Promise<void>;
   onReply: (message: MessageItem) => void;
-  onEdit: (message: MessageItem) => void;
+  /** Absent in a group of several people, whose history no one rewrites alone. */
+  onEdit?: (message: MessageItem) => void;
   rewindFromItemId: string | null;
   onReact: (message: MessageItem, reaction: MessageReaction) => Promise<void>;
   onJumpToMessage: (messageId: string) => void;

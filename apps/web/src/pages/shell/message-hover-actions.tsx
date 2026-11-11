@@ -144,7 +144,8 @@ export function UserMessageActions({
 }: {
   message: MessageItem;
   previewMessageId?: string;
-  onEdit: (message: MessageItem) => void;
+  /** Absent where the history is not only yours to rewrite: a group of several people. */
+  onEdit?: (message: MessageItem) => void;
 }) {
   const { t } = useLingui();
   if (isLiveItem(message)) return null;
@@ -153,7 +154,7 @@ export function UserMessageActions({
       data-testid="message-user-actions"
       className="pointer-events-none absolute end-0 top-full z-10 flex items-center gap-0.5 opacity-0 transition-opacity duration-(--duration-hover) ease-quiet group-hover/message:pointer-events-auto group-hover/message:opacity-100 group-has-[:focus-visible]/message:pointer-events-auto group-has-[:focus-visible]/message:opacity-100"
     >
-      {canEditAndResendMessage(message) ? (
+      {onEdit && canEditAndResendMessage(message) ? (
         <button
           type="button"
           data-testid="message-edit"
