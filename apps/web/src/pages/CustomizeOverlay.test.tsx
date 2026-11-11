@@ -29,8 +29,18 @@ vi.mock("./SkillsOverlay", () => ({
 
 import { CustomizeOverlay } from "./CustomizeOverlay";
 
-it("switches sections inside one dialog without remounting a visited section", async () => {
+function stubPhone(phone: boolean) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal("matchMedia", (media: string) => ({
+    matches: phone,
+    media,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
+}
+
+it("switches sections inside one dialog without remounting a visited section", async () => {
+  stubPhone(false);
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -51,6 +61,33 @@ it("switches sections inside one dialog without remounting a visited section", a
   expect(document.querySelector('[role="dialog"]')).toBe(dialog);
   expect(dialog?.querySelector("h2")?.textContent).toBe("Skills");
   expect(mounts).toEqual({ integrations: 1, skills: 1 });
+
+  await act(async () => root.unmount());
+  container.remove();
+  vi.unstubAllGlobals();
+});
+
+it("opens a phone on the list of sections and returns to it from a section", async () => {
+  stubPhone(true);
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  await act(async () => root.render(<CustomizeOverlay onClose={() => {}} />));
+  const click = (selector: string) =>
+    act(async () => {
+      document.querySelector<HTMLButtonElement>(selector)?.click();
+    });
+  const title = () => document.querySelector("h2")?.textContent;
+
+  expect(title()).toBe("Customize");
+  expect(document.querySelector('[data-testid="customize-nav-skills"]')).toBeNull();
+
+  await click('[data-testid="customize-list-skills"]');
+  expect(title()).toBe("Skills");
+
+  const back = [...document.querySelectorAll("button")].find((b) => b.textContent === "Customize");
+  await act(async () => back?.click());
+  expect(title()).toBe("Customize");
 
   await act(async () => root.unmount());
   container.remove();

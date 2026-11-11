@@ -11,6 +11,7 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
+  SettingRow,
   UserAvatar,
 } from "@tangow/ui-web";
 import {
@@ -27,9 +28,12 @@ import {
   Volume2,
   XIcon,
 } from "lucide-react";
-import { type ComponentType, useEffect, useId, useRef, useState } from "react";
+import { type ComponentType, type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { rpc } from "../lib/rpc";
+import { useMediaQuery } from "../lib/use-media-query";
 import { ProfileSettingsPanels, UpdatesSettingsPanel } from "./AccountSettingsOverlay";
+import { BackCapsule } from "./BackCapsule";
+import { SettingsGroup } from "./bot-page/page-kit";
 import { ComputerSettingsPanel } from "./ComputerSettingsPanel";
 import { DecisionModelSettingsPanel } from "./DecisionModelSettingsPanel";
 import { MemorySettingsOverlay } from "./MemorySettingsOverlay";
@@ -41,6 +45,7 @@ import {
   type SettingsSection,
   SPACE_SETTINGS_SECTIONS,
 } from "./settings-sections";
+import { PHONE_MEDIA } from "./shell/layout";
 import { UsageSettingsPanel } from "./usage-settings";
 import { VoiceSettingsOverlay } from "./VoiceSettingsOverlay";
 
@@ -57,7 +62,7 @@ export function SettingsOverlay({
   name,
   initials,
   image,
-  initialSection = "profile",
+  initialSection = null,
   avatarStyle,
   onAvatarStyleChange,
   isDeploymentOwner = false,
@@ -76,7 +81,7 @@ export function SettingsOverlay({
   name: string;
   initials: string;
   image: string | null;
-  initialSection?: SettingsSection;
+  initialSection?: SettingsSection | null;
   avatarStyle: AvatarStyle;
   onAvatarStyleChange: (style: AvatarStyle) => Promise<void>;
   isDeploymentOwner?: boolean;
@@ -94,7 +99,12 @@ export function SettingsOverlay({
   const { t } = useLingui();
   const panelRef = useRef<HTMLDivElement>(null);
   const usageRef = useRef<HTMLDivElement>(null);
-  const [section, setSection] = useState<SettingsSection>(initialSection);
+  const phone = useMediaQuery(PHONE_MEDIA);
+  const [chosen, setSection] = useState<SettingsSection | null>(
+    initialSection ?? (phone ? null : "profile"),
+  );
+  // A phone shows the list of sections until one is chosen; a window always shows one.
+  const section = phone ? chosen : (chosen ?? "profile");
   const [memoryBusy, setMemoryBusy] = useState(false);
   const [decisionModelBusy, setDecisionModelBusy] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState(false);
@@ -115,10 +125,6 @@ export function SettingsOverlay({
   const panelBusy = memoryBusy || decisionModelBusy || voiceBusy || providersBusy;
 
   useEffect(() => {
-    setSection(initialSection);
-  }, [initialSection]);
-
-  useEffect(() => {
     if (section === "usage") {
       usageRef.current?.focus();
     }
@@ -137,7 +143,7 @@ export function SettingsOverlay({
     usage: { label: t`Usage`, icon: Gauge },
   };
 
-  const sectionTitle = navItems[section].label;
+  const sectionTitle = section ? navItems[section].label : t`Settings`;
 
   const closeLabel =
     section === "models"
@@ -163,6 +169,27 @@ export function SettingsOverlay({
 
   const spaceLabelId = useId();
   const currentSpace = spaces.find((space) => space.id === currentSpaceId);
+  const spaceSwitcher = (
+    <SpaceSwitcher
+      labelId={spaceLabelId}
+      spaces={spaces}
+      currentSpaceId={currentSpaceId}
+      disabled={panelBusy}
+      onSwitch={(spaceId) => {
+        if (panelBusy) return;
+        onSwitchSpace(spaceId);
+      }}
+    />
+  );
+  const closeButton = (
+    <DialogClose
+      aria-label={closeLabel}
+      disabled={panelBusy}
+      render={<Button variant="ghost" size="icon-sm" />}
+    >
+      <XIcon />
+    </DialogClose>
+  );
 
   return (
     <Dialog
@@ -188,45 +215,18 @@ export function SettingsOverlay({
         className="h-[min(760px,calc(100%-2rem))] max-h-[calc(100%-2rem)] w-[min(1080px,calc(100%-2rem))] sm:max-h-[calc(100%-5rem)] sm:max-w-[1080px]"
       >
         <div className="flex min-h-0 flex-1 flex-col md:flex-row">
-          <nav
-            data-testid="settings-nav"
-            aria-label={t`Settings`}
-            // Beside the content, an inset panel like the app's sidebar; at phone width a row of tabs.
-            className="flex shrink-0 flex-row gap-1 overflow-x-auto px-3 py-3 md:m-2 md:w-[200px] md:flex-col md:gap-0.5 md:overflow-y-auto md:rounded-xl md:bg-group md:p-2 md:shadow-group"
-          >
-            <div className="flex items-center gap-2.5 px-2.5 pt-1.5 pb-2.5 max-md:hidden">
-              <UserAvatar initials={initials} image={image} className="size-6 text-label" />
-              <span className="truncate text-row-name font-semibold text-foreground">{name}</span>
-            </div>
-            {ACCOUNT_SETTINGS_SECTIONS.map((id) => (
-              <SettingsNavButton
-                key={id}
-                id={id}
-                item={navItems[id]}
-                active={id === section}
-                disabled={panelBusy}
-                onSelect={setSection}
-              />
-            ))}
-            <div
-              aria-hidden="true"
-              className="shrink-0 bg-border max-md:mx-1 max-md:w-px md:mx-1 md:my-2 md:h-px"
-            />
-            <SpaceSwitcher
-              labelId={spaceLabelId}
-              spaces={spaces}
-              currentSpaceId={currentSpaceId}
-              disabled={panelBusy}
-              onSwitch={(spaceId) => {
-                if (panelBusy) return;
-                onSwitchSpace(spaceId);
-              }}
-            />
-            <fieldset
-              aria-labelledby={currentSpace ? spaceLabelId : undefined}
-              className="contents"
+          {phone ? null : (
+            <nav
+              data-testid="settings-nav"
+              aria-label={t`Settings`}
+              // Beside the content, an inset panel like the app's sidebar.
+              className="m-2 flex w-[200px] shrink-0 flex-col gap-0.5 overflow-y-auto rounded-xl bg-group p-2 shadow-group"
             >
-              {SPACE_SETTINGS_SECTIONS.map((id) => (
+              <div className="flex items-center gap-2.5 px-2.5 pt-1.5 pb-2.5">
+                <UserAvatar initials={initials} image={image} className="size-6 text-label" />
+                <span className="truncate text-row-name font-semibold text-foreground">{name}</span>
+              </div>
+              {ACCOUNT_SETTINGS_SECTIONS.map((id) => (
                 <SettingsNavButton
                   key={id}
                   id={id}
@@ -236,21 +236,42 @@ export function SettingsOverlay({
                   onSelect={setSection}
                 />
               ))}
-            </fieldset>
-          </nav>
+              <div aria-hidden="true" className="mx-1 my-2 h-px shrink-0 bg-border" />
+              {spaceSwitcher}
+              <fieldset
+                aria-labelledby={currentSpace ? spaceLabelId : undefined}
+                className="contents"
+              >
+                {SPACE_SETTINGS_SECTIONS.map((id) => (
+                  <SettingsNavButton
+                    key={id}
+                    id={id}
+                    item={navItems[id]}
+                    active={id === section}
+                    disabled={panelBusy}
+                    onSelect={setSection}
+                  />
+                ))}
+              </fieldset>
+            </nav>
+          )}
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            {phone && section ? (
+              <div className="flex shrink-0 items-center justify-between gap-1 px-2.5 pt-2.5">
+                <BackCapsule
+                  label={t`Settings`}
+                  disabled={panelBusy}
+                  onClick={() => setSection(null)}
+                />
+                {closeButton}
+              </div>
+            ) : null}
             <div className="flex items-start justify-between gap-4 px-6 pt-6 sm:px-8 sm:pt-7">
               <DialogTitle className="text-2xl font-medium text-foreground">
                 {sectionTitle}
               </DialogTitle>
-              <DialogClose
-                aria-label={closeLabel}
-                disabled={panelBusy}
-                render={<Button variant="ghost" size="icon-sm" />}
-              >
-                <XIcon />
-              </DialogClose>
+              {phone && section ? null : closeButton}
             </div>
 
             <div
@@ -266,6 +287,15 @@ export function SettingsOverlay({
                   : "rk-scroll overflow-y-auto overscroll-contain px-6 pb-6 pt-5 sm:px-8 sm:pb-8"
               }`}
             >
+              {section === null ? (
+                <SettingsList
+                  navItems={navItems}
+                  disabled={panelBusy}
+                  spaceSwitcher={spaceSwitcher}
+                  spaceLabelId={currentSpace ? spaceLabelId : undefined}
+                  onSelect={setSection}
+                />
+              ) : null}
               {section === "profile" ? (
                 <ProfileSettingsPanels
                   email={email}
@@ -340,7 +370,6 @@ function SettingsNavButton({
   disabled: boolean;
   onSelect: (section: SettingsSection) => void;
 }) {
-  const { t } = useLingui();
   const Icon = item.icon;
   return (
     <button
@@ -351,18 +380,67 @@ function SettingsNavButton({
       onClick={() => onSelect(id)}
       className={`flex shrink-0 items-center gap-2.5 rounded-lg px-2.5 py-2 text-start text-[13.5px] transition-colors disabled:pointer-events-none disabled:opacity-50 ${
         active
-          ? "bg-sidebar-accent text-foreground max-md:bg-group max-md:shadow-group"
+          ? "bg-sidebar-accent text-foreground"
           : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
       }`}
     >
       <Icon className="size-4 shrink-0" strokeWidth={1.75} />
       <span className="whitespace-nowrap">{item.label}</span>
-      {item.updateAvailable ? (
-        <span role="img" aria-label={t`Update available`} title={t`Update available`}>
-          <CloudDownload className="size-4 shrink-0" aria-hidden />
-        </span>
-      ) : null}
+      {item.updateAvailable ? <UpdateAvailableIcon /> : null}
     </button>
+  );
+}
+
+function UpdateAvailableIcon() {
+  const { t } = useLingui();
+  return (
+    <span role="img" aria-label={t`Update available`} title={t`Update available`}>
+      <CloudDownload className="size-4 shrink-0" aria-hidden />
+    </span>
+  );
+}
+
+/** At phone width the sections are a list the person picks from, grouped as the window's nav. */
+function SettingsList({
+  navItems,
+  disabled,
+  spaceSwitcher,
+  spaceLabelId,
+  onSelect,
+}: {
+  navItems: Record<SettingsSection, NavItem>;
+  disabled: boolean;
+  spaceSwitcher: ReactNode;
+  spaceLabelId: string | undefined;
+  onSelect: (section: SettingsSection) => void;
+}) {
+  const rows = (ids: readonly SettingsSection[]) =>
+    ids.map((id) => {
+      const { label, icon: Icon, updateAvailable } = navItems[id];
+      return (
+        <SettingRow
+          key={id}
+          data-testid={`settings-list-${id}`}
+          leading={<Icon className="size-4 text-muted-foreground" strokeWidth={1.75} />}
+          label={label}
+          value={updateAvailable ? <UpdateAvailableIcon /> : undefined}
+          chevron
+          disabled={disabled}
+          className="disabled:pointer-events-none disabled:opacity-50"
+          onClick={() => onSelect(id)}
+        />
+      );
+    });
+  return (
+    <div className="flex flex-col gap-6">
+      <SettingsGroup>{rows(ACCOUNT_SETTINGS_SECTIONS)}</SettingsGroup>
+      <div className="flex flex-col gap-1.5">
+        {spaceSwitcher}
+        <fieldset aria-labelledby={spaceLabelId} className="contents">
+          <SettingsGroup>{rows(SPACE_SETTINGS_SECTIONS)}</SettingsGroup>
+        </fieldset>
+      </div>
+    </div>
   );
 }
 

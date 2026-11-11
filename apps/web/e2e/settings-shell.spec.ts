@@ -137,25 +137,23 @@ test("settings space switcher moves to another space and keeps the section", asy
   await expect(switcher).toContainText("Home");
   await captureScreenshot(page, testInfo, "settings-space-name");
 
-  // At phone width the nav is a row of tabs; the switcher stays in it.
+  // At phone width the section stays open with a way back; the switcher heads the space group of the list.
   await page.setViewportSize({ width: 390, height: 844 });
-  await settings.getByTestId("settings-nav-profile").click();
-  await expect(settings.getByRole("heading", { name: "Profile", exact: true })).toBeVisible();
-  await captureScreenshot(page, testInfo, "settings-phone-profile");
-  await settings.getByTestId("settings-nav-space").click();
   await expect(settings.getByRole("heading", { name: "General", exact: true })).toBeVisible();
   await captureScreenshot(page, testInfo, "settings-phone-space-general");
-  await switcher.click();
+  await settings.getByRole("button", { name: "Settings", exact: true }).click();
+  const phoneSwitcher = settings.getByTestId("settings-space-switcher");
+  await phoneSwitcher.click();
   await expect(menu).toBeVisible();
   await captureScreenshot(page, testInfo, "settings-phone-switcher-open");
 
-  // The switch happens in place: settings stay open on the section and the page never reloads.
+  // The switch happens in place: settings stay open and the page never reloads.
   await page.evaluate(() => {
     (window as { beforeSwitch?: boolean }).beforeSwitch = true;
   });
   await menu.getByRole("menuitemradio", { name: "Family" }).click();
-  await expect(switcher).toContainText("Family");
-  await expect(settings).toHaveAttribute("data-settings-section", "space");
+  await expect(phoneSwitcher).toContainText("Family");
+  await settings.getByTestId("settings-list-space").click();
   await expect(settings.getByRole("textbox", { name: "Name" })).toHaveValue("Family");
   expect(await page.evaluate(() => (window as { beforeSwitch?: boolean }).beforeSwitch)).toBe(true);
 });
