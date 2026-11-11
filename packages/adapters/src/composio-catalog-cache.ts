@@ -1,4 +1,4 @@
-import type { ConnectorTool } from "@rakazo/adapter-kit";
+import type { ConnectorTool } from "@tangow/adapter-kit";
 
 export type ToolkitDirectoryEntry = {
   slug: string;

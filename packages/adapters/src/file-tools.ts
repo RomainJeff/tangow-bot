@@ -1,5 +1,5 @@
-import type { ComputerFileEntry } from "@rakazo/adapter-kit";
-import { ATTACHMENT_MAX_BYTES } from "@rakazo/contracts";
+import type { ComputerFileEntry } from "@tangow/adapter-kit";
+import { ATTACHMENT_MAX_BYTES } from "@tangow/contracts";
 import { applyTextEdit, readLineWindow, type TextEditResult } from "./file-text.js";
 import { textContentArg } from "./tool-text.js";
 

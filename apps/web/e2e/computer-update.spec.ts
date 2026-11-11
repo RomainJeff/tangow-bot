@@ -1,4 +1,4 @@
-import type { ComputerStatus, ComputerUpdate, ComputerUpdateAllResult } from "@rakazo/contracts";
+import type { ComputerStatus, ComputerUpdate, ComputerUpdateAllResult } from "@tangow/contracts";
 import {
   activeBotId,
   captureScreenshot,

@@ -1,4 +1,4 @@
-import { inferAttachmentMimeType } from "@rakazo/core";
+import { inferAttachmentMimeType } from "@tangow/core";
 
 export const MAX_WIDGET_IMAGE_BYTES = 1024 * 1024;
 

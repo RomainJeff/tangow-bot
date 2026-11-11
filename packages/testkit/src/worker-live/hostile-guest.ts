@@ -8,15 +8,15 @@
  * It reports every controller message it received on stderr and exits once the controller closes
  * the channel.
  */
-import type { GuestBody } from "@rakazo/adapter-kit";
-import { WORKER_PROTOCOL_VERSION, workerHarness } from "@rakazo/adapter-kit";
+import type { GuestBody } from "@tangow/adapter-kit";
+import { WORKER_PROTOCOL_VERSION, workerHarness } from "@tangow/adapter-kit";
 import {
   capabilityWorker,
   encodeMessage,
   readControllerFrame,
   streamChannel,
   WORKER_LIMITS,
-} from "@rakazo/adapters/runtime-worker/wire";
+} from "@tangow/adapters/runtime-worker/wire";
 
 const REQUESTS: Record<string, GuestBody> = {
   model_target: {

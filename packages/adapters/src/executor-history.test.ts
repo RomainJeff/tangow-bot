@@ -6,21 +6,21 @@ import type {
   HarnessTranscriptEntry,
   SemanticMemoryRecallRequest,
   SessionLog,
-} from "@rakazo/adapter-kit";
-import type { MessageBlock, SessionEntry, SessionId } from "@rakazo/contracts";
+} from "@tangow/adapter-kit";
+import type { MessageBlock, SessionEntry, SessionId } from "@tangow/contracts";
 import {
   EntryId,
   EntrySeq,
   SessionEntrySchema,
   SessionId as SessionIdSchema,
-} from "@rakazo/contracts";
-import { projectThreadItems } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
-import { appendSessionEntryInTransaction, createThreadEvents } from "@rakazo/db";
-import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
-import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
-import type { LogEvent } from "@rakazo/logging";
-import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
+} from "@tangow/contracts";
+import { projectThreadItems } from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
+import { appendSessionEntryInTransaction, createThreadEvents } from "@tangow/db";
+import type { PgliteDatabase } from "@tangow/db/pglite.test-support";
+import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
+import type { LogEvent } from "@tangow/logging";
+import { createLogger, createTestSink, installLogger } from "@tangow/logging";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { appendBotMessageInTransaction } from "./bot-messages.js";
 import type * as ChildBotsModule from "./child-bots.js";

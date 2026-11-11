@@ -6,9 +6,9 @@ import {
   createScheduleFromTool,
   handoffToGroupBot,
   toComputerRef,
-} from "@rakazo/adapters";
-import type { SessionId, ThreadEntry } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, ONCE_ROUTINE_CRON } from "@rakazo/core";
+} from "@tangow/adapters";
+import type { SessionId, ThreadEntry } from "@tangow/contracts";
+import { ACTIVE_RUN_STATUSES, ONCE_ROUTINE_CRON } from "@tangow/core";
 import {
   appendEvent,
   appendRunBlocksInTransaction,
@@ -19,7 +19,7 @@ import {
   createThreadMessage,
   RunHistoryWriteError,
   sharedBotThread,
-} from "@rakazo/db";
+} from "@tangow/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
 import { sessionCookieHeader, threadMessages } from "./index.js";

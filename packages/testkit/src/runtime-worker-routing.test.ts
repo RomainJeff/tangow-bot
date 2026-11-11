@@ -1,5 +1,5 @@
-import { runContinueJob } from "@rakazo/adapter-kit";
-import { createJobReconciler } from "@rakazo/adapters";
+import { runContinueJob } from "@tangow/adapter-kit";
+import { createJobReconciler } from "@tangow/adapters";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import { startWorkerRun } from "./worker-run-fixture.js";

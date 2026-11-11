@@ -2,12 +2,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
-import type { AgentRunRequest, WorkerProvider } from "@rakazo/adapter-kit";
-import { AgentRuntimeUnavailableError } from "@rakazo/adapter-kit";
-import type { E2BWorkerSdk } from "@rakazo/adapters";
-import { createWorkerLifecycle, E2BWorkerProvider } from "@rakazo/adapters";
-import { describeToolActivity } from "@rakazo/adapters/agent-text-policy";
-import type { GuestConnector, WorkerClock } from "@rakazo/adapters/runtime-worker";
+import type { AgentRunRequest, WorkerProvider } from "@tangow/adapter-kit";
+import { AgentRuntimeUnavailableError } from "@tangow/adapter-kit";
+import type { E2BWorkerSdk } from "@tangow/adapters";
+import { createWorkerLifecycle, E2BWorkerProvider } from "@tangow/adapters";
+import { describeToolActivity } from "@tangow/adapters/agent-text-policy";
+import type { GuestConnector, WorkerClock } from "@tangow/adapters/runtime-worker";
 import {
   createLifecycleLauncher,
   createStopJournal,
@@ -16,10 +16,10 @@ import {
   readFrameLines,
   WORKER_LIMITS,
   WORKER_NATIVE_TOOLS,
-} from "@rakazo/adapters/runtime-worker";
-import { HARNESSES, runGuest } from "@rakazo/agent-run-worker";
-import type { StopPhase } from "@rakazo/core";
-import { stopState } from "@rakazo/core";
+} from "@tangow/adapters/runtime-worker";
+import { HARNESSES, runGuest } from "@tangow/agent-run-worker";
+import type { StopPhase } from "@tangow/core";
+import { stopState } from "@tangow/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LocalWorkerFaults } from "./local-worker-provider.js";
 import { LocalWorkerProvider } from "./local-worker-provider.js";

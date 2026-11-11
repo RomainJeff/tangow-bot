@@ -1,4 +1,4 @@
-import type { ModelCategoryAssignment, ModelOAuthBegin, ThinkingLevel } from "@rakazo/contracts";
+import type { ModelCategoryAssignment, ModelOAuthBegin, ThinkingLevel } from "@tangow/contracts";
 import {
   DEFAULT_MODEL_CONTEXT_WINDOW,
   DEFAULT_MODEL_MAX_TOKENS,
@@ -9,8 +9,8 @@ import {
   parseModelContextWindow,
   parseModelMaxImagesPerPrompt,
   parseModelMaxTokens,
-} from "@rakazo/contracts";
-import { createModelProbe, featuredModelProviders, initialModelProbeState } from "@rakazo/core";
+} from "@tangow/contracts";
+import { createModelProbe, featuredModelProviders, initialModelProbeState } from "@tangow/core";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Linking } from "react-native";

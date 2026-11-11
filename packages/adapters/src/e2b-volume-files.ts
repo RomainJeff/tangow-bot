@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { AdapterContext, PortableFile, VolumeEntry, VolumeFiles } from "@rakazo/adapter-kit";
-import { fileMode, isPortablePath } from "@rakazo/adapter-kit";
+import type { AdapterContext, PortableFile, VolumeEntry, VolumeFiles } from "@tangow/adapter-kit";
+import { fileMode, isPortablePath } from "@tangow/adapter-kit";
 import type { ConnectionOpts } from "e2b";
 import { Sandbox, SandboxNotFoundError, TimeoutError } from "e2b";
 import type { VolumeManifest } from "./docker-volume-import.js";

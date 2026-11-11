@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 export const PROFILE_PHOTO_SIZE = 128;
-// Mirrors the server guard in @rakazo/auth: the photo rides in every session payload.
+// Mirrors the server guard in @tangow/auth: the photo rides in every session payload.
 export const PROFILE_PHOTO_MAX_LENGTH = 32 * 1024;
 
 export type ProfilePhotoEncoding =

@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import type { MemoryDocument } from "@rakazo/contracts";
+import type { MemoryDocument } from "@tangow/contracts";
 import {
   activeBotId,
   captureScreenshot,

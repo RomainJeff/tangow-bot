@@ -118,9 +118,9 @@
                   "@earendil-works/pi-ai": "Only a harness adapter (apps/agent-run-worker/src/harness/) or a model dialect (runtime-worker/dialects/) may import an agent SDK.",
                   "@earendil-works/pi-agent-core": "Only a harness adapter (apps/agent-run-worker/src/harness/) or a model dialect (runtime-worker/dialects/) may import an agent SDK.",
                   "@earendil-works/pi-coding-agent": "Only a harness adapter (apps/agent-run-worker/src/harness/) or a model dialect (runtime-worker/dialects/) may import an agent SDK.",
-                  "@rakazo/adapters": "Only a harness adapter (apps/agent-run-worker/src/harness/) or a model dialect (runtime-worker/dialects/) may import an agent SDK.",
-                  "@rakazo/adapters/runtime-worker/pi-ai": "Only a harness adapter (apps/agent-run-worker/src/harness/) or a model dialect (runtime-worker/dialects/) may import an agent SDK.",
-                  "@rakazo/adapters/pi-run-model": "Only a harness adapter (apps/agent-run-worker/src/harness/) or a model dialect (runtime-worker/dialects/) may import an agent SDK."
+                  "@tangow/adapters": "Only a harness adapter (apps/agent-run-worker/src/harness/) or a model dialect (runtime-worker/dialects/) may import an agent SDK.",
+                  "@tangow/adapters/runtime-worker/pi-ai": "Only a harness adapter (apps/agent-run-worker/src/harness/) or a model dialect (runtime-worker/dialects/) may import an agent SDK.",
+                  "@tangow/adapters/pi-run-model": "Only a harness adapter (apps/agent-run-worker/src/harness/) or a model dialect (runtime-worker/dialects/) may import an agent SDK."
                 }
               }
             }

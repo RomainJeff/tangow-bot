@@ -1,4 +1,4 @@
-import { createComposerLinkPreview, inferComposerChange } from "@rakazo/core";
+import { createComposerLinkPreview, inferComposerChange } from "@tangow/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // What `useComposerLinkPreview` does on iOS, without the hook: every change of the field is fed

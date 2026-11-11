@@ -1,4 +1,4 @@
-import type { AskDraftFields, AskDraftRecipient } from "@rakazo/contracts";
+import type { AskDraftFields, AskDraftRecipient } from "@tangow/contracts";
 import type { RecipientRole } from "./draft-fields.js";
 import { isMailAddress, RECIPIENT_ROLES } from "./draft-fields.js";
 

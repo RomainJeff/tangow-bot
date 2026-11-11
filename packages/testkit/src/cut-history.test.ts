@@ -1,8 +1,8 @@
-import { PostgresSessionLog } from "@rakazo/adapters";
-import type { MessageBlock } from "@rakazo/contracts";
-import { SessionId, toThreadEntry } from "@rakazo/contracts";
-import { projectThreadView } from "@rakazo/core";
-import { clearThread, rewindThread, sessionEntryFromRow } from "@rakazo/db";
+import { PostgresSessionLog } from "@tangow/adapters";
+import type { MessageBlock } from "@tangow/contracts";
+import { SessionId, toThreadEntry } from "@tangow/contracts";
+import { projectThreadView } from "@tangow/core";
+import { clearThread, rewindThread, sessionEntryFromRow } from "@tangow/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { querySpaceSearch } from "../../../apps/api/src/search.ts";
 import { loadChain } from "../../../apps/api/src/thread-message-pages.ts";

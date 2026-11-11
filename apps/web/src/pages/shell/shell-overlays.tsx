@@ -4,7 +4,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import { Pencil, Trash2 } from "lucide-react";
 import { lazy, Suspense } from "react";
 import type { NavigateFunction } from "react-router-dom";

@@ -1,15 +1,15 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { MessageBlock } from "@rakazo/contracts";
+import type { MessageBlock } from "@tangow/contracts";
 import {
   avatarIdentitySeed,
   BOT_DELEGATION_GUIDANCE,
   BOT_OFFER_DEDICATED_BOT,
   ONCE_ROUTINE_CRON,
   SHAPES,
-} from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+} from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
 import { describe, expect, it, vi } from "vitest";
 import {
   appendToolCompletionAudit,

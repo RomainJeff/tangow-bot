@@ -1,7 +1,7 @@
-import type { Actor, MessageBlock, SearchHit } from "@rakazo/contracts";
-import { LINK_BLOCK_KINDS, toThreadEntry } from "@rakazo/contracts";
-import { extractLinksFromText, matchesSearchQuery, snippetAroundMatch } from "@rakazo/core";
-import type { SessionEntryRow } from "@rakazo/db";
+import type { Actor, MessageBlock, SearchHit } from "@tangow/contracts";
+import { LINK_BLOCK_KINDS, toThreadEntry } from "@tangow/contracts";
+import { extractLinksFromText, matchesSearchQuery, snippetAroundMatch } from "@tangow/core";
+import type { SessionEntryRow } from "@tangow/db";
 import {
   ENTRY_ON_CHAIN,
   groupMembershipFilter,
@@ -10,7 +10,7 @@ import {
   type PrismaClient,
   sessionEntryFromRow,
   sharedWithFilter,
-} from "@rakazo/db";
+} from "@tangow/db";
 import { withoutHiddenPeerRuns } from "./thread-message-pages.js";
 import { userFileArtifact } from "./user-file-artifact.js";
 

@@ -1,4 +1,4 @@
-import type { ComputerRef } from "@rakazo/adapter-kit";
+import type { ComputerRef } from "@tangow/adapter-kit";
 import { afterEach, describe, expect, it } from "vitest";
 import { toolResult } from "./file-task.js";
 import type { ModelEmulatorStep } from "./model-emulator.js";

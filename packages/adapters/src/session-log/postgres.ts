@@ -3,23 +3,23 @@ import type {
   RunSearchInput,
   SessionEntryDraft,
   SessionLog,
-} from "@rakazo/adapter-kit";
-import { assertEntryCount, SessionReadError } from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
+import { assertEntryCount, SessionReadError } from "@tangow/adapter-kit";
 import type {
   RunSearchLimitation,
   RunSearchPage,
   SessionEntry,
   SessionId,
-} from "@rakazo/contracts";
-import { CARD_STATE_TYPES, EntryId } from "@rakazo/contracts";
-import { compactionFirst } from "@rakazo/core";
-import type { PrismaClient, SessionEntryRow } from "@rakazo/db";
+} from "@tangow/contracts";
+import { CARD_STATE_TYPES, EntryId } from "@tangow/contracts";
+import { compactionFirst } from "@tangow/core";
+import type { PrismaClient, SessionEntryRow } from "@tangow/db";
 import {
   appendSessionEntryInTransaction,
   createSessionInTransaction,
   Prisma,
   sessionEntryFromRow,
-} from "@rakazo/db";
+} from "@tangow/db";
 
 import {
   boundedSearchPage,

@@ -6,9 +6,9 @@
  *
  *   DATABASE_URL=postgres://... pnpm exec tsx packages/adapters/src/session-log/read-tail.perf.ts
  */
-import { SessionId } from "@rakazo/contracts";
-import type { PrismaClient } from "@rakazo/db";
-import { createDb } from "@rakazo/db";
+import { SessionId } from "@tangow/contracts";
+import type { PrismaClient } from "@tangow/db";
+import { createDb } from "@tangow/db";
 import { PostgresSessionLog } from "./postgres.js";
 
 const ENTRIES = 200_000;

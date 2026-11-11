@@ -4,13 +4,13 @@
  * `LAUNCH_CHOREOGRAPHY`'s first step starts the animated splash from, so the
  * native → JS handoff has no visible jump.
  *
- * Reproducible by design: run `pnpm --filter @rakazo/mobile generate-splash-assets`
+ * Reproducible by design: run `pnpm --filter @tangow/mobile generate-splash-assets`
  * any time the bloub engine's `somnolent` expression or the `cercle` shape
  * changes, instead of hand-exporting a PNG.
  */
 import { fileURLToPath } from "node:url";
-import { SPECIAL_BOT_COLORS } from "@rakazo/contracts";
-import { BotEngine, EXPRESSION_BY_ID, LAUNCH_CHOREOGRAPHY, RAYON, SHAPES } from "@rakazo/core";
+import { SPECIAL_BOT_COLORS } from "@tangow/contracts";
+import { BotEngine, EXPRESSION_BY_ID, LAUNCH_CHOREOGRAPHY, RAYON, SHAPES } from "@tangow/core";
 import sharp from "sharp";
 
 /** Mirrors `BLOUB_HALF_VIEWBOX` in `components/bot-avatar.tsx`. */
@@ -26,7 +26,7 @@ function eyeColors(fill: string): { paper: string; outline: string | null } {
 
 function renderSvg(fill: string): string {
   const cercle = SHAPES.find((shape) => shape.id === "cercle");
-  if (!cercle) throw new Error("Missing the 'cercle' shape in @rakazo/core's SHAPES.");
+  if (!cercle) throw new Error("Missing the 'cercle' shape in @tangow/core's SHAPES.");
   const asleep = LAUNCH_CHOREOGRAPHY[0]!;
   if (asleep.mood !== "somnolent" || !asleep.look) {
     throw new Error("The native splash expects the choreography to start asleep, looking down.");

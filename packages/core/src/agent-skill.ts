@@ -1,4 +1,4 @@
-import { SKILL_DESCRIPTION_MAX_CHARS } from "@rakazo/contracts";
+import { SKILL_DESCRIPTION_MAX_CHARS } from "@tangow/contracts";
 
 /**
  * Claude Agent Skills: reusable SKILL.md recipes shared across assistants.

@@ -1,10 +1,10 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { ConnectorProvider } from "@rakazo/adapter-kit";
-import type { GuestHarness } from "@rakazo/agent-run-worker";
-import { HARNESSES } from "@rakazo/agent-run-worker";
-import { cancelRunsInTransaction } from "@rakazo/db";
+import type { ConnectorProvider } from "@tangow/adapter-kit";
+import type { GuestHarness } from "@tangow/agent-run-worker";
+import { HARNESSES } from "@tangow/agent-run-worker";
+import { cancelRunsInTransaction } from "@tangow/db";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import type { ModelEmulatorStep } from "./model-emulator.js";
 import { afterPrivateText, startWorkerRun } from "./worker-run-fixture.js";

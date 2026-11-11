@@ -1,4 +1,4 @@
-import { IMAGE_STACK } from "@rakazo/core";
+import { IMAGE_STACK } from "@tangow/core";
 
 export type StackFrame = { width: number; height: number };
 

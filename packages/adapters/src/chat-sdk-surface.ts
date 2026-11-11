@@ -11,7 +11,7 @@ import type {
   MessagingSendRequest,
   MessagingSendResult,
   MessagingSurface,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import type { Adapter, Message, Thread } from "chat";
 import { Chat } from "chat";
 

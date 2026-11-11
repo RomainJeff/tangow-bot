@@ -1,4 +1,4 @@
-import { extractLinksFromText } from "@rakazo/core";
+import { extractLinksFromText } from "@tangow/core";
 import { describe, expect, it } from "vitest";
 import {
   closeUnterminatedFence,

@@ -1,4 +1,4 @@
-import type { AskDraft } from "@rakazo/contracts";
+import type { AskDraft } from "@tangow/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { closeDraftEdit, draftEditTarget, openDraftEdit, syncDraftEdit } from "./draft-edit";
 

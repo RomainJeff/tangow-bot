@@ -1,4 +1,4 @@
-import { BOT_DESCRIPTION_MAX_LENGTH, type BotMessageIntent } from "@rakazo/contracts";
+import { BOT_DESCRIPTION_MAX_LENGTH, type BotMessageIntent } from "@tangow/contracts";
 
 export const BOT_MESSAGE_MAX_LENGTH = 8_000;
 

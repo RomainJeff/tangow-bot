@@ -1,11 +1,11 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { ComputerMode } from "@rakazo/contracts";
+import type { ComputerMode } from "@tangow/contracts";
 import {
   BOT_DESCRIPTION_MAX_LENGTH,
   BOT_NAME_MAX_LENGTH,
   BOT_TITLE_MAX_LENGTH,
-} from "@rakazo/contracts";
-import { Button, Input, Textarea, Toggle } from "@rakazo/ui-web";
+} from "@tangow/contracts";
+import { Button, Input, Textarea, Toggle } from "@tangow/ui-web";
 import { X } from "lucide-react";
 import { useId, useState } from "react";
 

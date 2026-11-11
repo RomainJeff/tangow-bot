@@ -5,7 +5,7 @@ import type {
   DecisionProvider,
   DecisionRequest,
   DecisionResponse,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 
 export type FakeDecisionStep = DecisionResponse | Error | ((request: DecisionRequest) => unknown);
 

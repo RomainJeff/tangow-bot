@@ -1,14 +1,14 @@
-import type { SandboxProvider } from "@rakazo/adapter-kit";
-import type { Actor, SessionEntry } from "@rakazo/contracts";
-import { SessionEntrySchema, SessionId } from "@rakazo/contracts";
-import type { PrismaClient, ThreadEvents } from "@rakazo/db";
+import type { SandboxProvider } from "@tangow/adapter-kit";
+import type { Actor, SessionEntry } from "@tangow/contracts";
+import { SessionEntrySchema, SessionId } from "@tangow/contracts";
+import type { PrismaClient, ThreadEvents } from "@tangow/db";
 import {
   appendCardStateInTransaction,
   appendSessionEntryInTransaction,
   conversationRunFilter,
   IsolationError,
   threadOfSession,
-} from "@rakazo/db";
+} from "@tangow/db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   cancelSupersededQueuedRuns,
@@ -22,7 +22,7 @@ import {
 } from "./thread-target.js";
 
 vi.mock("../../../packages/db/src/sessions.js", async () =>
-  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+  (await import("@tangow/db/sessions.test-support")).stubbedDbSessions(),
 );
 
 beforeEach(() => {

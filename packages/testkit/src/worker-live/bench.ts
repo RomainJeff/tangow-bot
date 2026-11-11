@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
-import { nativeToolsForHarness } from "@rakazo/adapters/runtime-worker";
+import { nativeToolsForHarness } from "@tangow/adapters/runtime-worker";
 import { LocalWorkerProvider } from "../local-worker-provider.js";
 import { nativeCalls, quantiles, queryLog, settled } from "../worker-channel-tap.js";
 import { directProxyOverheads } from "./measurements.js";

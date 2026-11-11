@@ -1,4 +1,4 @@
-import type { MessageBlock } from "@rakazo/contracts";
+import type { MessageBlock } from "@tangow/contracts";
 import type { ProgressLayer } from "./session-log/project-thread-view.js";
 
 export function isToolActivityBlock(block: MessageBlock): boolean {

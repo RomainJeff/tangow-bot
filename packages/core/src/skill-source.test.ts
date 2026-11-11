@@ -1,4 +1,4 @@
-import { MessageBlocks } from "@rakazo/contracts";
+import { MessageBlocks } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import { skillSourcesOf } from "./skill-source.js";
 

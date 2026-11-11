@@ -1,12 +1,12 @@
-import type { TransactionalEmail, TransactionalEmailProvider } from "@rakazo/adapter-kit";
+import type { TransactionalEmail, TransactionalEmailProvider } from "@tangow/adapter-kit";
 import {
   decodeAttachmentBase64,
   emailAllowed,
   isMessagingEmail,
   parseAllowlist,
   signupPolicyFromEnv,
-} from "@rakazo/core";
-import { bootstrapUserSpace, type PrismaClient } from "@rakazo/db";
+} from "@tangow/core";
+import { bootstrapUserSpace, type PrismaClient } from "@tangow/db";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { APIError, createAuthMiddleware } from "better-auth/api";

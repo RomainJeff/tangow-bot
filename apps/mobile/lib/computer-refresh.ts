@@ -1,6 +1,6 @@
-import type { ComputerStatus } from "@rakazo/contracts";
-import type { HeldScreenUrl } from "@rakazo/core";
-import { computerScreenKey, isScreenUrlReusable } from "@rakazo/core";
+import type { ComputerStatus } from "@tangow/contracts";
+import type { HeldScreenUrl } from "@tangow/core";
+import { computerScreenKey, isScreenUrlReusable } from "@tangow/core";
 
 interface RefreshInput {
   screenAttempts?: number;

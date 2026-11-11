@@ -1,4 +1,4 @@
-import { readBoundedJsonResponse } from "@rakazo/core";
+import { readBoundedJsonResponse } from "@tangow/core";
 import { type AccessCredentials, accessHeaders, isAccessLoginUrl } from "./access";
 import { t } from "./i18n";
 

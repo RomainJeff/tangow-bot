@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { Pool, PrismaClient } from "@rakazo/db";
+import type { Pool, PrismaClient } from "@tangow/db";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createInMemorySkillLock, createPostgresSkillLock } from "./skill-lock.js";
 import { skillCreateFromTool } from "./skill-tools.js";

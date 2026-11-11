@@ -1,10 +1,10 @@
-import type * as db from "@rakazo/db";
+import type * as db from "@tangow/db";
 import { expect, it, vi } from "vitest";
 import type { TaughtSkillsDeps } from "./taught-skills.js";
 import { createTaughtSkillsService } from "./taught-skills.js";
 
 const logged = vi.hoisted(() => [] as unknown[]);
-vi.mock("@rakazo/db", async (original) => ({
+vi.mock("@tangow/db", async (original) => ({
   ...(await original<typeof db>()),
   appendCardStateInTransaction: vi.fn(async (_tx, draft) => {
     logged.push(draft);

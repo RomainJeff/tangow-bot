@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { runContinueJob } from "@rakazo/adapter-kit";
-import type { BotMessageIntent, EntryId, Peer, SessionId } from "@rakazo/contracts";
+import { runContinueJob } from "@tangow/adapter-kit";
+import type { BotMessageIntent, EntryId, Peer, SessionId } from "@tangow/contracts";
 import {
   BOT_MESSAGE_MAX_HOPS,
   BOT_MESSAGE_MAX_LENGTH,
@@ -9,8 +9,8 @@ import {
   clampBotMessage,
   nextBotMessageHop,
   resolveBotAddress,
-} from "@rakazo/core";
-import type { Prisma, PrismaClient } from "@rakazo/db";
+} from "@tangow/core";
+import type { Prisma, PrismaClient } from "@tangow/db";
 import {
   appendSessionEntryInTransaction,
   loadBotMessageContext,
@@ -18,8 +18,8 @@ import {
   threadEntryByNonce,
   threadEventSeq,
   withTransactionRetry,
-} from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 import type { ExecutorDeps } from "./executor.js";
 
 type RunHopSource = {

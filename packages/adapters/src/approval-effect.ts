@@ -1,11 +1,11 @@
-import type { AgentToolExecutionResult } from "@rakazo/adapter-kit";
-import { APPROVAL_WAITING_TEXT } from "@rakazo/contracts";
+import type { AgentToolExecutionResult } from "@tangow/adapter-kit";
+import { APPROVAL_WAITING_TEXT } from "@tangow/contracts";
 import {
   DRAFT_DISCARDED_NOTE,
   readDraft,
   refusedProposalResult,
   replacedDraftResult,
-} from "@rakazo/core";
+} from "@tangow/core";
 
 export type ApprovalPausedToolResult = AgentToolExecutionResult & { terminate: true };
 

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { SessionEntryDraft } from "@rakazo/adapter-kit";
-import type { MessageBlock, SessionEntry, SessionEntryOf } from "@rakazo/contracts";
-import { EntryId, SessionId } from "@rakazo/contracts";
+import type { SessionEntryDraft } from "@tangow/adapter-kit";
+import type { MessageBlock, SessionEntry, SessionEntryOf } from "@tangow/contracts";
+import { EntryId, SessionId } from "@tangow/contracts";
 import type { Prisma, PrismaClient } from "./client.js";
 import { markThreadUnread } from "./groups.js";
 import { appendRunBlocksInTransaction, appendSessionEntryInTransaction } from "./sessions.js";

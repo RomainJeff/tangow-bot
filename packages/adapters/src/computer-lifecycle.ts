@@ -7,17 +7,17 @@ import type {
   JobPublisher,
   PortableFile,
   SandboxProvider,
-} from "@rakazo/adapter-kit";
-import type { ComputerUpdate } from "@rakazo/contracts";
-import { VolumeKind } from "@rakazo/contracts";
+} from "@tangow/adapter-kit";
+import type { ComputerUpdate } from "@tangow/contracts";
+import { VolumeKind } from "@tangow/contracts";
 import {
   ACTIVE_RUN_STATUSES,
   computerVolumeHome,
   parseScreenLeaseId,
   screenLeaseId,
-} from "@rakazo/core";
-import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
-import { expireComputerExecutionLeases, parseComputerMode } from "@rakazo/db";
+} from "@tangow/core";
+import type { Prisma, PrismaClient, ThreadEvents } from "@tangow/db";
+import { expireComputerExecutionLeases, parseComputerMode } from "@tangow/db";
 import {
   clearInactiveUserComputerControl,
   expireComputerControl,

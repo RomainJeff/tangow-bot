@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
-import type { ProductEvent, ThreadEntry } from "@rakazo/contracts";
-import { SessionEntrySchema, toThreadEntry } from "@rakazo/contracts";
+import type { ProductEvent, ThreadEntry } from "@tangow/contracts";
+import { SessionEntrySchema, toThreadEntry } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import { isToolActivityBlock } from "../tool-activity.js";
 import { linkEntries } from "./fixtures/read-fixture.js";

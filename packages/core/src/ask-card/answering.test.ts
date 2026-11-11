@@ -1,4 +1,4 @@
-import type { MessageBlock, Run } from "@rakazo/contracts";
+import type { MessageBlock, Run } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import { linkEntries } from "../session-log/fixtures/read-fixture.js";
 import { projectThreadView } from "../session-log/project-thread-view.js";

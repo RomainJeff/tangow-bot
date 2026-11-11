@@ -1,8 +1,8 @@
-import type { HarnessDeclaration } from "@rakazo/adapter-kit";
-import { createWorkerAgentRuntime, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
-import { HARNESSES } from "@rakazo/agent-run-worker";
-import type { HelperProfile } from "@rakazo/core";
-import { cancelRunsInTransaction } from "@rakazo/db";
+import type { HarnessDeclaration } from "@tangow/adapter-kit";
+import { createWorkerAgentRuntime, WORKER_LIMITS } from "@tangow/adapters/runtime-worker";
+import { HARNESSES } from "@tangow/agent-run-worker";
+import type { HelperProfile } from "@tangow/core";
+import { cancelRunsInTransaction } from "@tangow/db";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { stopThreadRuns } from "../../../apps/api/src/thread-target.js";
 import {

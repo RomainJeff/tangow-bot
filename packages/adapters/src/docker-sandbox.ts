@@ -15,9 +15,9 @@ import type {
   SandboxProvider,
   ScreenRequest,
   ScreenSession,
-} from "@rakazo/adapter-kit";
-import { boundedSandboxCommandTimeoutMs, resolveSupervisorToken } from "@rakazo/core";
-import { outgoingCorrelationHeaders } from "@rakazo/logging";
+} from "@tangow/adapter-kit";
+import { boundedSandboxCommandTimeoutMs, resolveSupervisorToken } from "@tangow/core";
+import { outgoingCorrelationHeaders } from "@tangow/logging";
 import { z } from "zod";
 import { screenSessionKey } from "./computer-screens.js";
 import {

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import type { ComputerRef, WorkerSpec } from "@rakazo/adapter-kit";
-import { DockerSandboxProvider, DockerWorkerProvider } from "@rakazo/adapters";
+import type { ComputerRef, WorkerSpec } from "@tangow/adapter-kit";
+import { DockerSandboxProvider, DockerWorkerProvider } from "@tangow/adapters";
 import { describe, expect, it } from "vitest";
 import {
   docker,

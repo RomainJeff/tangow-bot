@@ -1,4 +1,4 @@
-import { WorkingLine } from "@rakazo/ui-web";
+import { WorkingLine } from "@tangow/ui-web";
 import "./beautiful-ui.css";
 
 /* Beautiful UI primitives — hand-ported from beautifului.dev

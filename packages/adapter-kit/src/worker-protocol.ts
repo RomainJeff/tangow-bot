@@ -1,4 +1,4 @@
-import { AskQuestion, ModelCategorySchema, VolumeAccess, WorkerState } from "@rakazo/contracts";
+import { AskQuestion, ModelCategorySchema, VolumeAccess, WorkerState } from "@tangow/contracts";
 import { z } from "zod";
 import {
   RunReceiptSchema,

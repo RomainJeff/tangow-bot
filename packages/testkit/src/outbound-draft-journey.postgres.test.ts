@@ -1,6 +1,6 @@
-import type { AskDraftEdits, ThreadEntry } from "@rakazo/contracts";
-import { askDraftState } from "@rakazo/contracts";
-import { projectThreadItems, projectThreadView } from "@rakazo/core";
+import type { AskDraftEdits, ThreadEntry } from "@tangow/contracts";
+import { askDraftState } from "@tangow/contracts";
+import { projectThreadItems, projectThreadView } from "@tangow/core";
 import { describe, expect, it } from "vitest";
 import { acmeApp } from "./draft-app.test-support.js";
 import { latestCard } from "./index.js";

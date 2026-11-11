@@ -1,5 +1,5 @@
 import type { McpTransportFactory } from "@earendil-works/pi-coding-agent";
-import type { GuestTool } from "@rakazo/adapter-kit";
+import type { GuestTool } from "@tangow/adapter-kit";
 import type { HarnessHost } from "../harness.js";
 import { rakazoMcpServer } from "../rakazo-mcp.js";
 

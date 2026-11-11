@@ -1,6 +1,6 @@
-import type { ConnectorProvider } from "@rakazo/adapter-kit";
-import { EncryptedSecretStore, InstalledConnectorProvider } from "@rakazo/adapters";
-import type { PrismaClient } from "@rakazo/db";
+import type { ConnectorProvider } from "@tangow/adapter-kit";
+import { EncryptedSecretStore, InstalledConnectorProvider } from "@tangow/adapters";
+import type { PrismaClient } from "@tangow/db";
 
 const TOOLS = [
   {

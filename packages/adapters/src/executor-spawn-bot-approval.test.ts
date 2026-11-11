@@ -1,8 +1,8 @@
-import type { AgentRunRequest } from "@rakazo/adapter-kit";
-import type { ActionApprovalRule } from "@rakazo/core";
-import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
-import type { PrismaClient } from "@rakazo/db";
-import { answerRunInput } from "@rakazo/db";
+import type { AgentRunRequest } from "@tangow/adapter-kit";
+import type { ActionApprovalRule } from "@tangow/core";
+import { approvalEffectKey } from "@tangow/core/node/approval-effect-key";
+import type { PrismaClient } from "@tangow/db";
+import { answerRunInput } from "@tangow/db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isApprovalPausedResult, SPAWN_BOT_CANCELLED_RESULT } from "./approval-effect.js";
 import type * as AutoReviewModule from "./auto-review.js";
@@ -14,7 +14,7 @@ import { createRunExecutor } from "./executor.js";
 import { recordingSessionLog } from "./session-log/recording.test-support.js";
 
 vi.mock("../../db/src/sessions.js", async () =>
-  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+  (await import("@tangow/db/sessions.test-support")).stubbedDbSessions(),
 );
 
 vi.mock("./computer-lifecycle.js", async (importOriginal) => ({
@@ -833,7 +833,7 @@ describe("spawn_bot approval in the executor", () => {
   });
 
   describe("an edited card is replayed from the stored request", () => {
-    /** The answer transaction of @rakazo/db, run against the rows this test's executor uses. */
+    /** The answer transaction of @tangow/db, run against the rows this test's executor uses. */
     function answerCard(
       f: ReturnType<typeof fixture>,
       edits: { name?: string; instructions?: string } | undefined,

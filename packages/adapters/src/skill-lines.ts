@@ -4,13 +4,13 @@
  * its lines once, recorded on the run, whatever the number of calls or attempts, so a resume, a
  * replay or the sweep changes nothing, and neither does a conversation the user emptied since.
  */
-import type { SessionLog } from "@rakazo/adapter-kit";
-import type { SessionId } from "@rakazo/contracts";
-import type { SkillSourceBlock } from "@rakazo/core";
-import { asSkillAvailability, runStartedByUser, userSkillKey } from "@rakazo/core";
-import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
-import { threadEventSeq } from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+import type { SessionLog } from "@tangow/adapter-kit";
+import type { SessionId } from "@tangow/contracts";
+import type { SkillSourceBlock } from "@tangow/core";
+import { asSkillAvailability, runStartedByUser, userSkillKey } from "@tangow/core";
+import type { Prisma, PrismaClient, ThreadEvents } from "@tangow/db";
+import { threadEventSeq } from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 
 const FINISHED = ["completed", "failed", "cancelled"];
 type SkillChange = SkillSourceBlock["change"];

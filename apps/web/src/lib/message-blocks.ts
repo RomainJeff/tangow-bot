@@ -1,6 +1,6 @@
-import type { MessageBlock } from "@rakazo/contracts";
-import { isLinkPreviewCard } from "@rakazo/contracts";
-import { isToolActivityBlock } from "@rakazo/core";
+import type { MessageBlock } from "@tangow/contracts";
+import { isLinkPreviewCard } from "@tangow/contracts";
+import { isToolActivityBlock } from "@tangow/core";
 
 /** Like isToolActivityBlock, but keeps `steps` visible when the pref is on. */
 export function isHiddenActivityBlock(block: MessageBlock, showSteps: boolean): boolean {

@@ -13,7 +13,7 @@ import { cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { bundleGuest } from "@rakazo/agent-run-worker/bundle";
+import { bundleGuest } from "@tangow/agent-run-worker/bundle";
 import { build } from "esbuild";
 import { HOSTILE_GUEST_BUILD } from "../worker-live/hostile-guest-build.js";
 
@@ -22,7 +22,7 @@ const OUT = fileURLToPath(new URL("../../dist/worker-live/", import.meta.url));
 const ENTRY = fileURLToPath(new URL("./worker-live.ts", import.meta.url));
 const MIGRATIONS = fileURLToPath(new URL("../../../db/prisma/migrations/", import.meta.url));
 const PGLITE = path.dirname(
-  createRequire(require.resolve("@rakazo/db/pglite.test-support")).resolve("@electric-sql/pglite"),
+  createRequire(require.resolve("@tangow/db/pglite.test-support")).resolve("@electric-sql/pglite"),
 );
 const E2B_DEPENDENCIES = path.join(
   require.resolve("e2b").split("/node_modules/e2b/")[0]!,

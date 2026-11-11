@@ -25,7 +25,7 @@ vi.mock("@lingui/react/macro", () => {
     parts.reduce((text, part, index) => text + part + (values[index] ?? ""), "");
   return { useLingui: () => ({ t }), Trans: ({ children }: { children: ReactNode }) => children };
 });
-vi.mock("@rakazo/ui-web", () => {
+vi.mock("@tangow/ui-web", () => {
   const Container = ({ children }: { children?: ReactNode }) => <div>{children}</div>;
   return {
     Checkbox: ({ "aria-label": label }: { "aria-label": string }) => (

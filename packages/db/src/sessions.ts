@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { NewSession, SessionEntryDraft, SessionLog } from "@rakazo/adapter-kit";
-import { nextSessionEntry, SessionAppendError, sessionEntryNonce } from "@rakazo/adapter-kit";
+import type { NewSession, SessionEntryDraft, SessionLog } from "@tangow/adapter-kit";
+import { nextSessionEntry, SessionAppendError, sessionEntryNonce } from "@tangow/adapter-kit";
 import type {
   CARD_STATE_TYPES,
   EntryId,
@@ -11,7 +11,7 @@ import type {
   SessionEntryOf,
   SessionEntryType,
   ThreadEntry,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import {
   FactualRunRecapSchema,
   isRunTrace,
@@ -20,8 +20,8 @@ import {
   SessionEntrySchema,
   SessionId,
   toThreadEntry,
-} from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, SessionEntryDecodeError, sanitizeJsonValue } from "@rakazo/core";
+} from "@tangow/contracts";
+import { ACTIVE_RUN_STATUSES, SessionEntryDecodeError, sanitizeJsonValue } from "@tangow/core";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";
 

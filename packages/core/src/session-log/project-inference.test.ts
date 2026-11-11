@@ -1,5 +1,5 @@
-import type { SessionEntry } from "@rakazo/contracts";
-import { SessionEntrySchema } from "@rakazo/contracts";
+import type { SessionEntry } from "@tangow/contracts";
+import { SessionEntrySchema } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import { fixtureChain, fixtureText, linkEntries } from "./fixtures/read-fixture.js";
 import { decodeEntries } from "./jsonl.js";

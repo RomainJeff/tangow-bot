@@ -1,4 +1,4 @@
-import { APPROVAL_WAITING_TEXT, HELPER_STOPPED_FOR_PAUSE } from "@rakazo/contracts";
+import { APPROVAL_WAITING_TEXT, HELPER_STOPPED_FOR_PAUSE } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import { linkEntries } from "./fixtures/read-fixture.js";
 import { projectInferenceTurns } from "./project-inference.js";

@@ -1,5 +1,5 @@
-import type { EntryId, SessionEntry } from "@rakazo/contracts";
-import { pendingPauseOfEffect, readDraft } from "@rakazo/core";
+import type { EntryId, SessionEntry } from "@tangow/contracts";
+import { pendingPauseOfEffect, readDraft } from "@tangow/core";
 import { resolveDuplicateEffectGate } from "./approval-effect.js";
 
 export type EndedDraftEffect = {

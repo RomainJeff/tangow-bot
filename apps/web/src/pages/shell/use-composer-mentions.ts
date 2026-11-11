@@ -1,5 +1,5 @@
-import type { Connection, ConnectionCatalogItem, Routine } from "@rakazo/contracts";
-import { buildComposerMentionOptions } from "@rakazo/core";
+import type { Connection, ConnectionCatalogItem, Routine } from "@tangow/contracts";
+import { buildComposerMentionOptions } from "@tangow/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { rpc } from "../../lib/rpc";
 import type { Roster } from "./use-roster";

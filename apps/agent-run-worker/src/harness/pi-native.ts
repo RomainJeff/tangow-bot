@@ -11,20 +11,20 @@ import {
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import type { GuestBody, GuestImage, GuestRunInput, ReplyFinal } from "@rakazo/adapter-kit";
-import { PI_NATIVE_HARNESS, RAKAZO_TOOL_PREFIX } from "@rakazo/adapter-kit";
+import type { GuestBody, GuestImage, GuestRunInput, ReplyFinal } from "@tangow/adapter-kit";
+import { PI_NATIVE_HARNESS, RAKAZO_TOOL_PREFIX } from "@tangow/adapter-kit";
 import {
   createAgentTextPolicy,
   describeToolActivity,
   stripModelControlTokens,
-} from "@rakazo/adapters/agent-text-policy";
-import { guestRuntimeModel } from "@rakazo/adapters/pi-run-model";
+} from "@tangow/adapters/agent-text-policy";
+import { guestRuntimeModel } from "@tangow/adapters/pi-run-model";
 import {
   piAiProviderStream,
   projectPiAi,
   relayedModel,
-} from "@rakazo/adapters/runtime-worker/pi-ai";
-import { skillReadName } from "@rakazo/adapters/volume-skills";
+} from "@tangow/adapters/runtime-worker/pi-ai";
+import { skillReadName } from "@tangow/adapters/volume-skills";
 import type { DoneBody, GuestHarness, HarnessHost } from "../harness.js";
 import { mcpResult, rakazoMcpTools } from "../rakazo-mcp.js";
 import { durableBashTool } from "./durable-bash.js";

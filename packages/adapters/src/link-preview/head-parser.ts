@@ -1,5 +1,5 @@
-import { isPreviewableUrl } from "@rakazo/contracts";
-import { sanitizePreviewTitle } from "@rakazo/core";
+import { isPreviewableUrl } from "@tangow/contracts";
+import { sanitizePreviewTitle } from "@tangow/core";
 import { JSDOM } from "jsdom";
 
 const CHARSET_SNIFF_BYTES = 4096;

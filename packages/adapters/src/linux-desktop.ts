@@ -9,8 +9,8 @@ import type {
   PageBrowserResult,
   ScreenRequest,
   ScreenSession,
-} from "@rakazo/adapter-kit";
-import type { DesktopEnvironment, DesktopProfileCommands } from "@rakazo/core/node/desktop-runtime";
+} from "@tangow/adapter-kit";
+import type { DesktopEnvironment, DesktopProfileCommands } from "@tangow/core/node/desktop-runtime";
 import {
   BROWSER_APPLICATIONS,
   browserLauncherPath,
@@ -24,7 +24,7 @@ import {
   screenPorts,
   shellQuote,
   stopAllDesktopBrowsersCommand,
-} from "@rakazo/core/node/desktop-runtime";
+} from "@tangow/core/node/desktop-runtime";
 import { z } from "zod";
 import { ComputerScreenUnavailableError, screenSessionKey } from "./computer-screens.js";
 import {

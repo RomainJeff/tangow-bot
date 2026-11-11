@@ -7,9 +7,9 @@ import type {
   ConnectionCatalogItem,
   McpServer,
   SpaceMembers,
-} from "@rakazo/contracts";
-import type { ShareableApp } from "@rakazo/core";
-import { givableSkills, shareableApps } from "@rakazo/core";
+} from "@tangow/contracts";
+import type { ShareableApp } from "@tangow/core";
+import { givableSkills, shareableApps } from "@tangow/core";
 import { rpc } from "./api";
 import { readViewer } from "./bot-page";
 import { t } from "./i18n";

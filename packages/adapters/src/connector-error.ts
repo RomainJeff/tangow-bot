@@ -1,4 +1,4 @@
-import type { ConnectorFailureKind } from "@rakazo/adapter-kit";
+import type { ConnectorFailureKind } from "@tangow/adapter-kit";
 
 export class ConnectorError extends Error {
   constructor(

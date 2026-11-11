@@ -1,4 +1,4 @@
-import { isToolPauseResult, readControllerFrame } from "@rakazo/adapters/runtime-worker/wire";
+import { isToolPauseResult, readControllerFrame } from "@tangow/adapters/runtime-worker/wire";
 import { afterEach, expect, it } from "vitest";
 import { latestCard } from "./index.js";
 import { startWorkerRun } from "./worker-run-fixture.js";

@@ -1,4 +1,4 @@
-import { OPENAI_COMPATIBLE_BASE_URL_HINT, type ThinkingLevel } from "@rakazo/contracts";
+import { OPENAI_COMPATIBLE_BASE_URL_HINT, type ThinkingLevel } from "@tangow/contracts";
 import { useState } from "react";
 import {
   ActivityIndicator,

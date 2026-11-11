@@ -1,6 +1,6 @@
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
-import type { VoiceCatalogEntry, VoiceCredential } from "@rakazo/contracts";
-import { Button, Field, FieldLabel, Input } from "@rakazo/ui-web";
+import type { VoiceCatalogEntry, VoiceCredential } from "@tangow/contracts";
+import { Button, Field, FieldLabel, Input } from "@tangow/ui-web";
 import { useEffect, useId, useState } from "react";
 import { localizedProviderHint } from "../lib/localized-provider-hint";
 import { rpc } from "../lib/rpc";

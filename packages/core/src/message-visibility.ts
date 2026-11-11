@@ -1,4 +1,4 @@
-import type { MessageBlock } from "@rakazo/contracts";
+import type { MessageBlock } from "@tangow/contracts";
 
 /** A note about the conversation rather than something a bot said to the user. */
 const ASIDE_BLOCK_KINDS = new Set<MessageBlock["kind"]>(["handoff", "channel_message", "meta"]);

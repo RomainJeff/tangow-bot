@@ -1,11 +1,11 @@
 import { RPCHandler } from "@orpc/server/fetch";
-import { createInMemorySkillLock } from "@rakazo/adapters";
-import type { Actor } from "@rakazo/contracts";
-import type { PrismaClient } from "@rakazo/db";
+import { createInMemorySkillLock } from "@tangow/adapters";
+import type { Actor } from "@tangow/contracts";
+import type { PrismaClient } from "@tangow/db";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@rakazo/db", async (importOriginal) => {
-  const db = await importOriginal<typeof import("@rakazo/db")>();
+vi.mock("@tangow/db", async (importOriginal) => {
+  const db = await importOriginal<typeof import("@tangow/db")>();
   return {
     ...db,
     createRepos: (prisma: PrismaClient) => ({

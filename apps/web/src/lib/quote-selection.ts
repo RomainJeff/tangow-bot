@@ -1,5 +1,5 @@
-import type { ThreadMessage } from "@rakazo/contracts";
-import { REPLY_QUOTE_MAX_LENGTH } from "@rakazo/contracts";
+import type { ThreadMessage } from "@tangow/contracts";
+import { REPLY_QUOTE_MAX_LENGTH } from "@tangow/contracts";
 
 /**
  * Resolves a text selection to the message it quotes. A quote stays scoped to

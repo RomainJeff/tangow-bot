@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { VolumeFiles, WorkerProvider } from "@rakazo/adapter-kit";
+import type { VolumeFiles, WorkerProvider } from "@tangow/adapter-kit";
 import {
   createWorkerLifecycle,
   InMemoryJobQueue,
@@ -9,9 +9,9 @@ import {
   moveHomeToVolumes,
   provisionComputer,
   replaceComputer,
-} from "@rakazo/adapters";
-import type { GuestConnector } from "@rakazo/adapters/runtime-worker";
-import { volumeMountPath } from "@rakazo/core";
+} from "@tangow/adapters";
+import type { GuestConnector } from "@tangow/adapters/runtime-worker";
+import { volumeMountPath } from "@tangow/core";
 import { Sandbox } from "e2b";
 import { toolResult } from "../file-task.js";
 import { startWorkerRun } from "../worker-run-fixture.js";

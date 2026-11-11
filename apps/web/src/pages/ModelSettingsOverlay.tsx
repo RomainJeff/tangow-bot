@@ -7,7 +7,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import { X } from "lucide-react";
 import { RoutingSettings } from "./model-settings/routing-settings";
 import { useModelSettings } from "./model-settings/use-model-settings";

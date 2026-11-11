@@ -3,18 +3,18 @@ import {
   COMPUTER_SCREEN_UNAVAILABLE,
   ComputerScreenUnavailableError,
   createSkillLineSweep,
-} from "@rakazo/adapters";
-import type { Actor } from "@rakazo/contracts";
-import { REPLY_QUOTE_MAX_LENGTH } from "@rakazo/contracts";
-import { openScreenCapability } from "@rakazo/core/node/screen-capability";
-import type { PrismaClient } from "@rakazo/db";
-import { appendCardStateInTransaction, InvalidAnswerError } from "@rakazo/db";
-import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
+} from "@tangow/adapters";
+import type { Actor } from "@tangow/contracts";
+import { REPLY_QUOTE_MAX_LENGTH } from "@tangow/contracts";
+import { openScreenCapability } from "@tangow/core/node/screen-capability";
+import type { PrismaClient } from "@tangow/db";
+import { appendCardStateInTransaction, InvalidAnswerError } from "@tangow/db";
+import { createLogger, createTestSink, installLogger } from "@tangow/logging";
 import { describe, expect, it, vi } from "vitest";
 import { createRouter, type RouterDeps } from "./router.js";
 
 vi.mock("../../../packages/db/src/sessions.js", async () =>
-  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+  (await import("@tangow/db/sessions.test-support")).stubbedDbSessions(),
 );
 
 describe("account preferences", () => {

@@ -1,4 +1,4 @@
-import type { RunActivityRow, RunFailureKind } from "@rakazo/contracts";
+import type { RunActivityRow, RunFailureKind } from "@tangow/contracts";
 import { t } from "./i18n";
 
 export type StateWord = "done" | "failed" | "cancelled" | "running" | "waiting";

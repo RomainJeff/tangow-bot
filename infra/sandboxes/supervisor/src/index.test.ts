@@ -2,9 +2,9 @@ import { spawnSync } from "node:child_process";
 import http from "node:http";
 import net from "node:net";
 import { duplexPair } from "node:stream";
-import { resolveSupervisorToken } from "@rakazo/core";
-import { stopBrowserCommand } from "@rakazo/core/node/desktop-runtime";
-import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
+import { resolveSupervisorToken } from "@tangow/core";
+import { stopBrowserCommand } from "@tangow/core/node/desktop-runtime";
+import { createLogger, createTestSink, installLogger } from "@tangow/logging";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   MAX_SUPERVISOR_FILE_REQUEST_BYTES,

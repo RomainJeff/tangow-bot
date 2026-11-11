@@ -1,11 +1,11 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { Bot, Group, GroupPerson } from "@rakazo/contracts";
+import type { Bot, Group, GroupPerson } from "@tangow/contracts";
 import {
   GROUP_DESCRIPTION_MAX_LENGTH,
   GROUP_MEMBER_MAX,
   GROUP_MEMBER_MIN,
-} from "@rakazo/contracts";
-import { applyPicks, groupLeadBotId } from "@rakazo/core";
+} from "@tangow/contracts";
+import { applyPicks, groupLeadBotId } from "@tangow/core";
 import {
   BotAvatar,
   Button,
@@ -14,7 +14,7 @@ import {
   NativeSelectOption,
   Textarea,
   UserAvatar,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import { Check, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useId, useMemo, useState } from "react";

@@ -1,4 +1,4 @@
-import type { Bot, BotSection, Group, Space, SpaceMemoryConfig } from "@rakazo/contracts";
+import type { Bot, BotSection, Group, Space, SpaceMemoryConfig } from "@tangow/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { rpc } from "../../lib/rpc";
 import type { ContextMenuPosition } from "../BotContextMenu";

@@ -48,7 +48,7 @@ export function buildComputers({ provider, values, override, run, dock }) {
       "pnpm",
       [
         "--filter",
-        "@rakazo/agent-run-worker",
+        "@tangow/agent-run-worker",
         "template:build",
         "--name",
         connection.WORKER_TEMPLATE || "rakazo-worker-pi-native",
@@ -59,7 +59,7 @@ export function buildComputers({ provider, values, override, run, dock }) {
     run(
       "Desktop template build",
       "pnpm",
-      ["--filter", "@rakazo/computer-e2b-template", "template:build", "--image", digest],
+      ["--filter", "@tangow/computer-e2b-template", "template:build", "--image", digest],
       { env: connection },
     );
   }

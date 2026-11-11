@@ -11,8 +11,8 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { SKILL_BUNDLE_MAX_BYTES, SKILL_BUNDLE_MAX_ENTRIES } from "@rakazo/contracts";
-import { buildSkillMd } from "@rakazo/core";
+import { SKILL_BUNDLE_MAX_BYTES, SKILL_BUNDLE_MAX_ENTRIES } from "@tangow/contracts";
+import { buildSkillMd } from "@tangow/core";
 import { create as tarCreate } from "tar";
 import { afterEach, describe, expect, it } from "vitest";
 import { ZipFile } from "yazl";

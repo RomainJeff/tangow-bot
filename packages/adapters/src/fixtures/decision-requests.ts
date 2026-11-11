@@ -1,4 +1,4 @@
-import type { DecisionRequest } from "@rakazo/adapter-kit";
+import type { DecisionRequest } from "@tangow/adapter-kit";
 
 /** Fixture-page requests for the fake adapters in the conformance suite. */
 export const decisionConformanceRequests = {

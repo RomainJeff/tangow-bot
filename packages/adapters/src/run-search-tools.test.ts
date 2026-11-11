@@ -6,12 +6,12 @@ import type {
   AgentRuntimeEvent,
   MemoryStore,
   SessionEntryDraft,
-} from "@rakazo/adapter-kit";
-import { EntrySeq, RunSearchPage, SessionId } from "@rakazo/contracts";
-import { redactSecrets, unattendedTriggerToolRequiresApproval } from "@rakazo/core";
-import { createThreadEvents } from "@rakazo/db";
-import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
-import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
+} from "@tangow/adapter-kit";
+import { EntrySeq, RunSearchPage, SessionId } from "@tangow/contracts";
+import { redactSecrets, unattendedTriggerToolRequiresApproval } from "@tangow/core";
+import { createThreadEvents } from "@tangow/db";
+import type { PgliteDatabase } from "@tangow/db/pglite.test-support";
+import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type * as ComputerLifecycle from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";

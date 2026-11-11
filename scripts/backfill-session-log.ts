@@ -27,7 +27,7 @@ async function main() {
   if (!url) throw new Error("DATABASE_URL is not set");
   const deploy = spawnSync(
     "pnpm",
-    ["--filter", "@rakazo/db", "exec", "prisma", "migrate", "deploy"],
+    ["--filter", "@tangow/db", "exec", "prisma", "migrate", "deploy"],
     {
       stdio: "inherit",
     },

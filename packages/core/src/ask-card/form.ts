@@ -1,4 +1,4 @@
-import type { AskAnswers, AskQuestion, MessageBlock } from "@rakazo/contracts";
+import type { AskAnswers, AskQuestion, MessageBlock } from "@tangow/contracts";
 import { isApprovalAskBlock, isSecretAskBlock } from "../action-approval.js";
 
 export type AskCardBlock = Extract<MessageBlock, { kind: "ask" }>;

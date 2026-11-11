@@ -1,4 +1,4 @@
-import type { LinkPreviewDraft } from "@rakazo/contracts";
+import type { LinkPreviewDraft } from "@tangow/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComposerPageHead } from "./composer-link-preview.js";
 import {

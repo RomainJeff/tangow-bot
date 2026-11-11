@@ -8,9 +8,9 @@ import type {
   WorkerCapabilities,
   WorkerProvider,
   WorkerSpec,
-} from "@rakazo/adapter-kit";
-import { workerHarness } from "@rakazo/adapter-kit";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/adapter-kit";
+import { workerHarness } from "@tangow/adapter-kit";
+import { getLogger } from "@tangow/logging";
 import type { FrameChannel } from "./runtime-worker/framing.js";
 import { streamChannel } from "./runtime-worker/framing.js";
 import type { GuestConnector } from "./runtime-worker/launcher.js";

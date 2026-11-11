@@ -3,8 +3,8 @@ import { mkdir, mkdtemp, readdir, readFile, rm, stat, symlink, writeFile } from 
 import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { GuestBody, GuestTool, ReplyFinal, WorkerStartV1 } from "@rakazo/adapter-kit";
-import type { FrameChannel } from "@rakazo/adapters/runtime-worker";
+import type { GuestBody, GuestTool, ReplyFinal, WorkerStartV1 } from "@tangow/adapter-kit";
+import type { FrameChannel } from "@tangow/adapters/runtime-worker";
 import {
   createCapabilityKey,
   createSessionInbox,
@@ -14,10 +14,10 @@ import {
   mintCapability,
   readGuestFrame,
   verifyCapability,
-} from "@rakazo/adapters/runtime-worker";
-import { relayPiAiCall } from "@rakazo/adapters/runtime-worker/pi-ai";
-import type { GuestHarness } from "@rakazo/agent-run-worker";
-import { HARNESSES, runGuest } from "@rakazo/agent-run-worker";
+} from "@tangow/adapters/runtime-worker";
+import { relayPiAiCall } from "@tangow/adapters/runtime-worker/pi-ai";
+import type { GuestHarness } from "@tangow/agent-run-worker";
+import { HARNESSES, runGuest } from "@tangow/agent-run-worker";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ModelEmulatorStep } from "./model-emulator.js";
 import { startModelEmulator } from "./model-emulator.js";

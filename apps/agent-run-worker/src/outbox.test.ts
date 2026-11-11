@@ -1,4 +1,4 @@
-import type { GuestBody, ReplyPart } from "@rakazo/adapter-kit";
+import type { GuestBody, ReplyPart } from "@tangow/adapter-kit";
 import {
   createSessionInbox,
   encodeMessage,
@@ -6,7 +6,7 @@ import {
   memoryChannelPair,
   readControllerFrame,
   readGuestFrame,
-} from "@rakazo/adapters/runtime-worker";
+} from "@tangow/adapters/runtime-worker";
 import { describe, expect, it } from "vitest";
 import { createOutbox, type Outbox } from "./outbox.js";
 

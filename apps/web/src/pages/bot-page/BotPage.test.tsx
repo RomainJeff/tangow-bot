@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import type { Bot, Routine } from "@rakazo/contracts";
-import { createSaveStore } from "@rakazo/core";
-import { SaveStoreProvider } from "@rakazo/ui-web";
+import type { Bot, Routine } from "@tangow/contracts";
+import { createSaveStore } from "@tangow/core";
+import { SaveStoreProvider } from "@tangow/ui-web";
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";

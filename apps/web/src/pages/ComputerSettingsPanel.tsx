@@ -1,6 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { ComputerListItem, ComputerUpdateAllResult } from "@rakazo/contracts";
-import { Button, SettingRow } from "@rakazo/ui-web";
+import type { ComputerListItem, ComputerUpdateAllResult } from "@tangow/contracts";
+import { Button, SettingRow } from "@tangow/ui-web";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { LoadingState } from "../components/ai/primitives";
 import { ComputerMaintenanceActions } from "../components/ComputerMaintenanceActions";

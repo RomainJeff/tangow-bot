@@ -34,7 +34,7 @@ produce native release artifacts, even when an OTA update would be possible.
   `gh auth status`, dependencies, and signing credentials through the existing
   private configuration. For mobile, verify EAS authentication with
   `npx eas-cli@latest whoami` from `apps/mobile` and run
-  `pnpm --filter @rakazo/mobile exec expo install --check` from the root.
+  `pnpm --filter @tangow/mobile exec expo install --check` from the root.
   Do not print credentials, disable signing or notarization, or commit build outputs.
 - Record which output files already exist. Use only artifacts produced by this run,
   never an old IPA or a DMG selected merely because it is the newest in a directory.

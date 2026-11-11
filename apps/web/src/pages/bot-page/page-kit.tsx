@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
-import type { Bot } from "@rakazo/contracts";
-import { saveKey } from "@rakazo/core";
+import type { Bot } from "@tangow/contracts";
+import { saveKey } from "@tangow/core";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,7 +14,7 @@ import {
   type SaveMetaLabels,
   Skeleton,
   useFieldSave,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import { Children, Fragment, type ReactNode, useCallback, useState } from "react";
 import type { BotCommands, UpdateBotPatch } from "../shell/bot-commands";
 

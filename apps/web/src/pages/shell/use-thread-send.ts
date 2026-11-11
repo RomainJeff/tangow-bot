@@ -1,12 +1,12 @@
 import { useLingui } from "@lingui/react/macro";
-import type { MessageReaction } from "@rakazo/contracts";
-import type { ComposerMention, ComposerPageHead } from "@rakazo/core";
+import type { MessageReaction } from "@tangow/contracts";
+import type { ComposerMention, ComposerPageHead } from "@tangow/core";
 import {
   attachmentsForThread,
   editedWaitingDraft,
   inferAttachmentMimeType,
   resolveComposerSendPlan,
-} from "@rakazo/core";
+} from "@tangow/core";
 import { useCallback, useState } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import type { CardEdits } from "../../components/AskCard";

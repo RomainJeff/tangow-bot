@@ -1,4 +1,4 @@
-import { darkShadows, lightShadows } from "@rakazo/ui-tokens";
+import { darkShadows, lightShadows } from "@tangow/ui-tokens";
 import { describe, expect, it } from "vitest";
 import { botColors, shadowsForAppearance } from "./theme.js";
 

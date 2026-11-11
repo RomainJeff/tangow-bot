@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
-import type { JobPublisher } from "@rakazo/adapter-kit";
-import { runContinueJob } from "@rakazo/adapter-kit";
-import type { EncryptedSecretStore } from "@rakazo/adapters";
-import { escapePromptData } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+import type { JobPublisher } from "@tangow/adapter-kit";
+import { runContinueJob } from "@tangow/adapter-kit";
+import type { EncryptedSecretStore } from "@tangow/adapters";
+import { escapePromptData } from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 
 export const WEBHOOK_MAX_BODY_BYTES = 64 * 1024;
 export const WEBHOOK_SECRET_KIND = "webhook";

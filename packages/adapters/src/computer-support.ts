@@ -8,11 +8,11 @@ import type {
   ComputerRef,
   JobPublisher,
   SandboxProvider,
-} from "@rakazo/adapter-kit";
-import { computerScreenSleepJob } from "@rakazo/adapter-kit";
-import type { ComputerMode } from "@rakazo/contracts";
-import { WORKSPACE_ROOT } from "@rakazo/core";
-import { shellQuote } from "@rakazo/core/node/desktop-runtime";
+} from "@tangow/adapter-kit";
+import { computerScreenSleepJob } from "@tangow/adapter-kit";
+import type { ComputerMode } from "@tangow/contracts";
+import { WORKSPACE_ROOT } from "@tangow/core";
+import { shellQuote } from "@tangow/core/node/desktop-runtime";
 
 export const DEFAULT_SANDBOX_IDLE_MS = 10 * 60 * 1000;
 

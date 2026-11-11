@@ -1,13 +1,13 @@
 import { useLingui } from "@lingui/react/macro";
-import type { ThinkingLevel } from "@rakazo/contracts";
-import { BOT_DESCRIPTION_MAX_LENGTH, BOT_INSTRUCTIONS_MAX_LENGTH } from "@rakazo/contracts";
+import type { ThinkingLevel } from "@tangow/contracts";
+import { BOT_DESCRIPTION_MAX_LENGTH, BOT_INSTRUCTIONS_MAX_LENGTH } from "@tangow/contracts";
 import {
   botModelKey,
   connectedModelOptions,
   defaultModelLabel,
   parseModelOptionKey,
   thinkingChoices,
-} from "@rakazo/core";
+} from "@tangow/core";
 import {
   NativeSelect,
   NativeSelectOption,
@@ -15,7 +15,7 @@ import {
   SettingRow,
   Switch,
   TextSettingField,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import type { FocusEvent } from "react";
 import { useId, useRef } from "react";
 import { thinkingLevelLabel, useModelCatalog, useVoices } from "./model-options";

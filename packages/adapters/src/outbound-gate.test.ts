@@ -1,5 +1,5 @@
-import type { DraftBinding } from "@rakazo/core";
-import { draftMessage } from "@rakazo/core";
+import type { DraftBinding } from "@tangow/core";
+import { draftMessage } from "@tangow/core";
 import { describe, expect, it } from "vitest";
 import {
   boundDirectApprovalRequest,

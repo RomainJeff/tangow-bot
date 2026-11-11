@@ -1,5 +1,5 @@
-import type { MessageBlock } from "@rakazo/contracts";
-import { sizes } from "@rakazo/ui-tokens";
+import type { MessageBlock } from "@tangow/contracts";
+import { sizes } from "@tangow/ui-tokens";
 import { describe, expect, it } from "vitest";
 import {
   blocksWithoutPreviewedLinkLine,

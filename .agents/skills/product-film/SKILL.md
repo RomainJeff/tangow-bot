@@ -47,7 +47,7 @@ npx --yes esbuild@0.25.0 .agents/skills/product-film/template/avatar/avatar-entr
 ## 3. Screens
 
 Build the product's screens with [template/assets/screen-kit.js](template/assets/screen-kit.js) on the app's tokens
-(`screen-kit.css`, the "gris atténué" skin; refresh it from `@rakazo/ui-tokens` when the skin changes). Use the app's
+(`screen-kit.css`, the "gris atténué" skin; refresh it from `@tangow/ui-tokens` when the skin changes). Use the app's
 real strings. Everything the timeline animates carries a `data-part`; items that appear later start collapsed
 (`height: 0; overflow: hidden; opacity: 0`) and open to `measure(el)`.
 

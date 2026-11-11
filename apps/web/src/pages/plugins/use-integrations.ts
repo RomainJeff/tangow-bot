@@ -5,8 +5,8 @@ import type {
   ConnectionCatalogItem,
   IntegrationCatalogResult,
   IntegrationCatalogSurface,
-} from "@rakazo/contracts";
-import { abortableDelay } from "@rakazo/core";
+} from "@tangow/contracts";
+import { abortableDelay } from "@tangow/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { optionalCatalogFeedProbe } from "../../lib/optional-catalog-feed";
 import { rpc } from "../../lib/rpc";

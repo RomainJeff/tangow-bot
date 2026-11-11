@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import type { BotActivityItem, BotActivityOutput, RunActivityRow } from "@rakazo/contracts";
+import type { BotActivityItem, BotActivityOutput, RunActivityRow } from "@tangow/contracts";
 import type { ReactNode } from "react";
 import { act } from "react";
 import type { Root } from "react-dom/client";

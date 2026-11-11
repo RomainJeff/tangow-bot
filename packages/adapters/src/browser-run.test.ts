@@ -7,8 +7,8 @@ import type {
   ComputerRef,
   DecisionRequest,
   DecisionResponse,
-} from "@rakazo/adapter-kit";
-import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
+} from "@tangow/adapter-kit";
+import { createLogger, createTestSink, installLogger } from "@tangow/logging";
 import { afterEach, describe, expect, it } from "vitest";
 import type { BrowserRunOptions } from "./browser-run.js";
 import { browserRunFromTool } from "./browser-run.js";

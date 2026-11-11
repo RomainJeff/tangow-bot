@@ -1,4 +1,4 @@
-import type { ThreadItem } from "@rakazo/contracts";
+import type { ThreadItem } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import { latestTakeoverItemId } from "./takeover-card.js";
 

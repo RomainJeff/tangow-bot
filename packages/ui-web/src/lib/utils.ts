@@ -1,9 +1,9 @@
-import type { RadiusKey, SizeKey } from "@rakazo/ui-tokens";
-import { lightShadows, space, typography } from "@rakazo/ui-tokens";
+import type { RadiusKey, SizeKey } from "@tangow/ui-tokens";
+import { lightShadows, space, typography } from "@tangow/ui-tokens";
 import { type ClassValue, clsx } from "clsx";
 import { extendTailwindMerge } from "tailwind-merge";
 
-/** `rowName` -> `row-name` (mirrors the generator's `kebabCase` in `@rakazo/ui-tokens`). */
+/** `rowName` -> `row-name` (mirrors the generator's `kebabCase` in `@tangow/ui-tokens`). */
 function kebabCase(key: string): string {
   return key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
 }

@@ -13,15 +13,15 @@ import {
   expect,
   type Page,
 } from "@playwright/test";
-import { type MessageBlock, SessionId } from "@rakazo/contracts";
-import { abortableDelay } from "@rakazo/core";
-import { loadRootEnv } from "@rakazo/core/node/load-root-env";
+import { type MessageBlock, SessionId } from "@tangow/contracts";
+import { abortableDelay } from "@tangow/core";
+import { loadRootEnv } from "@tangow/core/node/load-root-env";
 import {
   appendSessionEntryInTransaction,
   createBotMessageInTransaction,
   createThreadMessage,
   type PrismaClient,
-} from "@rakazo/db";
+} from "@tangow/db";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import type { createApp } from "../../../../apps/api/src/app.ts";
 import {
@@ -192,12 +192,12 @@ function performanceEnvironment(databaseUrl: string): NodeJS.ProcessEnv {
 }
 
 function buildProductionArtifacts(env: NodeJS.ProcessEnv) {
-  run("pnpm", ["--filter", "@rakazo/desktop", "pack:dir"], env);
+  run("pnpm", ["--filter", "@tangow/desktop", "pack:dir"], env);
 }
 
 function migrateDatabase(env: NodeJS.ProcessEnv) {
-  run("pnpm", ["--filter", "@rakazo/db", "generate"], env);
-  run("pnpm", ["--filter", "@rakazo/db", "exec", "prisma", "migrate", "deploy"], env);
+  run("pnpm", ["--filter", "@tangow/db", "generate"], env);
+  run("pnpm", ["--filter", "@tangow/db", "exec", "prisma", "migrate", "deploy"], env);
 }
 
 function run(command: string, args: string[], env: NodeJS.ProcessEnv) {
@@ -209,7 +209,7 @@ function startPreview(env: NodeJS.ProcessEnv) {
     "pnpm",
     [
       "--filter",
-      "@rakazo/web",
+      "@tangow/web",
       "exec",
       "vite",
       "preview",

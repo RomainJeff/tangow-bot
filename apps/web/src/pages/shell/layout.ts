@@ -1,4 +1,4 @@
-import type { Bot, Group, SpaceBot, SpaceGroup } from "@rakazo/contracts";
+import type { Bot, Group, SpaceBot, SpaceGroup } from "@tangow/contracts";
 
 export type Panel = "computer" | "bot" | "create" | "create-group" | "group-settings" | null;
 

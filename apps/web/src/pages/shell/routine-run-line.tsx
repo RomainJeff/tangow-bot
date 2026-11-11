@@ -1,7 +1,7 @@
 import { plural } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
-import type { RoutineItem } from "@rakazo/core";
-import { failureSinceLabel } from "@rakazo/core";
+import type { RoutineItem } from "@tangow/core";
+import { failureSinceLabel } from "@tangow/core";
 import { CircleX } from "lucide-react";
 import { useRoutineCopy } from "../bot-page/routine-copy";
 

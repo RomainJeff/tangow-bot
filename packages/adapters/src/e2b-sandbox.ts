@@ -16,14 +16,14 @@ import type {
   SandboxProvider,
   ScreenRequest,
   ScreenSession,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import {
   boundedSandboxCommandTimeoutMs,
   underVolumeMounts,
   type VolumeHome,
   WORKSPACE_ROOT,
-} from "@rakazo/core";
-import { stopAllDesktopBrowsersCommand } from "@rakazo/core/node/desktop-runtime";
+} from "@tangow/core";
+import { stopAllDesktopBrowsersCommand } from "@tangow/core/node/desktop-runtime";
 import type { CommandHandle, CommandResult, ConnectionOpts } from "e2b";
 import { CommandExitError, ConnectionConfig, Sandbox, Template, TimeoutError } from "e2b";
 import { ComputerScreenUnavailableError } from "./computer-screens.js";

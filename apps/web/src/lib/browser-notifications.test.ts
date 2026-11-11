@@ -1,5 +1,5 @@
-import type { ProductEvent } from "@rakazo/contracts";
-import { SessionEntrySchema } from "@rakazo/contracts";
+import type { ProductEvent } from "@tangow/contracts";
+import { SessionEntrySchema } from "@tangow/contracts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type BrowserNotificationApi,

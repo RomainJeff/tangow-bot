@@ -12,11 +12,11 @@ import {
   readBoundedJsonResponse,
   resolveSupervisorToken,
   SANDBOX_SKILL_MOUNTS,
-} from "@rakazo/core";
-import { loadRootEnv } from "@rakazo/core/node/load-root-env";
-import { getLogger, SERVICE_NAMES } from "@rakazo/logging";
-import { createRootLogger } from "@rakazo/logging/axiom";
-import { requestLogging } from "@rakazo/logging/hono";
+} from "@tangow/core";
+import { loadRootEnv } from "@tangow/core/node/load-root-env";
+import { getLogger, SERVICE_NAMES } from "@tangow/logging";
+import { createRootLogger } from "@tangow/logging/axiom";
+import { requestLogging } from "@tangow/logging/hono";
 import Docker from "dockerode";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";

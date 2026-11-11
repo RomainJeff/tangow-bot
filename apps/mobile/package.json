@@ -1,5 +1,5 @@
 {
-  "name": "@rakazo/mobile",
+  "name": "@tangow/mobile",
   "version": "2026.11.5",
   "license": "Apache-2.0",
   "main": "expo-router/entry",
@@ -30,10 +30,10 @@
   "dependencies": {
     "@expo/metro-runtime": "57.0.18",
     "@expo/ui": "57.0.26",
-    "@rakazo/chat-ui": "workspace:*",
-    "@rakazo/contracts": "workspace:*",
-    "@rakazo/core": "workspace:*",
-    "@rakazo/ui-tokens": "workspace:*",
+    "@tangow/chat-ui": "workspace:*",
+    "@tangow/contracts": "workspace:*",
+    "@tangow/core": "workspace:*",
+    "@tangow/ui-tokens": "workspace:*",
     "@react-native-vector-icons/ionicons": "13.1.4",
     "@react-native-vector-icons/material-design-icons": "13.1.4",
     "expo": "57.0.32",

@@ -1,5 +1,5 @@
-import type { ScreenLinkClock, ScreenLinkView } from "@rakazo/core";
-import { createScreenLink } from "@rakazo/core";
+import type { ScreenLinkClock, ScreenLinkView } from "@tangow/core";
+import { createScreenLink } from "@tangow/core";
 import type { AppStateStatus } from "react-native";
 import type { WebViewMessageEvent } from "react-native-webview";
 import { describe, expect, it, vi } from "vitest";

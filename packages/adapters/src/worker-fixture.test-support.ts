@@ -1,7 +1,7 @@
-import type { AdapterContext } from "@rakazo/adapter-kit";
-import type { RunNeeds, WorkerLaunch } from "@rakazo/core";
-import { WORKER_ENSURE_TIMEOUT_SECONDS } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+import type { AdapterContext } from "@tangow/adapter-kit";
+import type { RunNeeds, WorkerLaunch } from "@tangow/core";
+import { WORKER_ENSURE_TIMEOUT_SECONDS } from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
 import type { createWorkerLifecycle } from "./worker-lifecycle.js";
 
 export const mcpOnly: RunNeeds = { files: { private: null, shared: null }, computer: "none" };

@@ -5,8 +5,8 @@ import type {
   Bot,
   MemoryDocument,
   SkillAvailability,
-} from "@rakazo/contracts";
-import { filterSkillList, parseSkillMd } from "@rakazo/core";
+} from "@tangow/contracts";
+import { filterSkillList, parseSkillMd } from "@tangow/core";
 import {
   Button,
   Input,
@@ -14,7 +14,7 @@ import {
   NativeSelectOptGroup,
   NativeSelectOption,
   Switch,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import { Check } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";

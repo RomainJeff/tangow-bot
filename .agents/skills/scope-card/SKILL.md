@@ -138,7 +138,7 @@ Duplicate, already shipped or in progress → write a minimal `## Scoping` secti
 - No Mobbin, Muse, Dots or mockup.
 
 **feature**
-- Target behaviour, reused primitives (`@rakazo/ui-web`, `apps/web/src/components/ai/`), any visible copy quoted and justified as `AGENTS.md` requires.
+- Target behaviour, reused primitives (`@tangow/ui-web`, `apps/web/src/components/ai/`), any visible copy quoted and justified as `AGENTS.md` requires.
 - UI touched → **one** Claude Design board: the recommendation, light theme, main surface (see Mockups). When the recommendation does not change the UI (behaviour, prompt, server), no mockup: any UI becomes an open question.
 
 **feature UX**: the feature branch, plus:

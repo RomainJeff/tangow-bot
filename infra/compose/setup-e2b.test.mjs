@@ -72,15 +72,15 @@ if (name === 'git') {
  if (args.includes('rev-parse')) console.log('${sha}');
 } else if (name === 'docker') {
  if (args.includes('config') && args.includes('--format')) { console.log(JSON.stringify({services:{api:{environment:{AGENT_RUNTIME:process.env.SCRIPTED?'scripted':'worker'}},worker:{environment:{AGENT_RUNTIME:process.env.SCRIPTED?'scripted':'worker'}}}})); process.exit(0); }
- if (args.includes('@rakazo/adapters') && process.env.STOPPED_SERVICES && !args.includes('run')) process.exit(1);
+ if (args.includes('@tangow/adapters') && process.env.STOPPED_SERVICES && !args.includes('run')) process.exit(1);
  if (args[0] === 'compose' && args.includes('ps')) console.log('container-id');
  if (args[0] === 'inspect' && args.some(a=>a.includes('.State.ExitCode'))) { console.log('exited '+(process.env.MIGRATION_FAILED?'1':'0')+' sha256:app'); process.exit(0); }
  if (args[0] === 'inspect') console.log(args.includes('{{.State.Running}}') ? (process.env.WORKER_STOPPED ? 'false' : 'true') : (process.env.MISMATCH || process.env.OLD_RUNTIME) ? 'b'.repeat(40) : '${sha}');
  if (args[0] === 'image') console.log(args.includes('{{.Id}}') ? 'sha256:app' : args.some(a=>a.includes('Config.Env')) ? (process.env.MISMATCH ? 'b'.repeat(40) : '${sha}') : 'registry.example.com/computer@sha256:'+'c'.repeat(64));
  if (args.includes('up') && process.env.FAIL_START && fs.existsSync('.env.e2b.compose.json')) process.exit(1);
  if (args.includes('logs')) console.log('worker ready');
- if (args.includes('@rakazo/adapters') && (process.env.FAIL_CONTAINER_CONNECT || !process.env.E2B_API_KEY)) process.exit(1);
- if (args.includes('exec') && !args.includes('ps') && !args.includes('@rakazo/adapters')) {
+ if (args.includes('@tangow/adapters') && (process.env.FAIL_CONTAINER_CONNECT || !process.env.E2B_API_KEY)) process.exit(1);
+ if (args.includes('exec') && !args.includes('ps') && !args.includes('@tangow/adapters')) {
    global.fetch = async () => ({ ok: true, json: async () => ({ok:true,sandbox:process.env.FAIL_HEALTH?'docker':'e2b',revision:'${sha}'}) });
    eval('(async () => {' + args.at(-1) + '})()').catch(() => process.exit(1));
  }
@@ -175,14 +175,14 @@ test("builds independent templates and writes a private ignored idempotent overr
   assert.doesNotMatch(result.stdout + result.stderr, /fake-test-secret/);
   assert.equal(JSON.stringify(f.calls()).includes("fake-test-secret"), false);
   assert.ok(
-    f.calls().some((c) => c.includes("@rakazo/agent-run-worker") && c.includes("template:build")),
+    f.calls().some((c) => c.includes("@tangow/agent-run-worker") && c.includes("template:build")),
   );
   assert.ok(
     f
       .calls()
       .some(
         (c) =>
-          c.includes("@rakazo/computer-e2b-template") &&
+          c.includes("@tangow/computer-e2b-template") &&
           c.includes("--image") &&
           c.some((v) => v.includes("@sha256:")),
       ),

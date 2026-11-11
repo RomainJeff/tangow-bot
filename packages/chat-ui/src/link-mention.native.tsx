@@ -1,7 +1,7 @@
-import type { LinkMentionLookup } from "@rakazo/core";
-import { linkMentionLabel } from "@rakazo/core";
-import type { ColorTokens } from "@rakazo/ui-tokens";
-import { radii, sizes } from "@rakazo/ui-tokens";
+import type { LinkMentionLookup } from "@tangow/core";
+import { linkMentionLabel } from "@tangow/core";
+import type { ColorTokens } from "@tangow/ui-tokens";
+import { radii, sizes } from "@tangow/ui-tokens";
 import type { ReactNode } from "react";
 import type { TextProps } from "react-native";
 import { StyleSheet, Text, View } from "react-native";

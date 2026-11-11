@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
-import type { SessionEntry } from "@rakazo/contracts";
-import { SessionEntrySchema } from "@rakazo/contracts";
+import type { SessionEntry } from "@tangow/contracts";
+import { SessionEntrySchema } from "@tangow/contracts";
 import type { TailSource } from "../jsonl.js";
 import { readTailFromEnd } from "../jsonl.js";
 

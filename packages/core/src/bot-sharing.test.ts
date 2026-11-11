@@ -4,7 +4,7 @@ import type {
   Connection,
   ConnectionCatalogItem,
   McpServer,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import {
   declareApp,

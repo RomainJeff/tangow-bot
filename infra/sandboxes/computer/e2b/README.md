@@ -31,7 +31,7 @@ Each bot's Chrome profile stays on the machine's own disk, under `/home/user/.br
 
    ```bash
    pnpm install
-   pnpm --filter @rakazo/computer-e2b-template template:build --image <registry>/rakazo-computer@sha256:<digest>
+   pnpm --filter @tangow/computer-e2b-template template:build --image <registry>/rakazo-computer@sha256:<digest>
    ```
 
    The SDK reads `E2B_API_KEY`, and `E2B_API_URL` or `E2B_DOMAIN`. Pass `--name <name>` to build a test template instead of `desktop`.

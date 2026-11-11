@@ -1,5 +1,5 @@
-import type { AskDraftRecipient } from "@rakazo/contracts";
-import { ASK_DRAFT_ADDRESS_MAX_LENGTH, ASK_DRAFT_SUBJECT_MAX_LENGTH } from "@rakazo/contracts";
+import type { AskDraftRecipient } from "@tangow/contracts";
+import { ASK_DRAFT_ADDRESS_MAX_LENGTH, ASK_DRAFT_SUBJECT_MAX_LENGTH } from "@tangow/contracts";
 import type { DraftPath, RecipientSlot } from "./draft-fields.js";
 import {
   addressesIn,

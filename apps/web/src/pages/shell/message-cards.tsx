@@ -1,8 +1,8 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { LinkMentionGlyph } from "@rakazo/chat-ui/web";
-import type { MessageBlock } from "@rakazo/contracts";
-import { abortableDelay } from "@rakazo/core";
-import { Button, FramedBlock, LinkPreviewPicture, Surface } from "@rakazo/ui-web";
+import { LinkMentionGlyph } from "@tangow/chat-ui/web";
+import type { MessageBlock } from "@tangow/contracts";
+import { abortableDelay } from "@tangow/core";
+import { Button, FramedBlock, LinkPreviewPicture, Surface } from "@tangow/ui-web";
 import { ImageIcon } from "lucide-react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { SuccessPop } from "../../components/ai/primitives";

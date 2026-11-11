@@ -1,4 +1,4 @@
-import type { BotMessageIntent, EntryId, Peer } from "@rakazo/contracts";
+import type { BotMessageIntent, EntryId, Peer } from "@tangow/contracts";
 import type { Prisma, PrismaClient } from "./client.js";
 import type { SessionEntryRow } from "./sessions.js";
 import { sessionEntryFromRow } from "./sessions.js";

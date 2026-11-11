@@ -3,13 +3,13 @@ import type {
   ComputerRef,
   PageBrowserCommand,
   SandboxProvider,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import {
   E2BSandboxEmulator,
   InMemoryJobQueue,
   recoverBrowserApprovalScreens,
-} from "@rakazo/adapters";
-import { browserApprovalCheckpointOf } from "@rakazo/db";
+} from "@tangow/adapters";
+import { browserApprovalCheckpointOf } from "@tangow/db";
 import { afterEach, expect, it, vi } from "vitest";
 import type { RouterDeps } from "../../../apps/api/src/router.js";
 import { createRouter } from "../../../apps/api/src/router.js";

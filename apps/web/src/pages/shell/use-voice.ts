@@ -1,6 +1,6 @@
-import type { VoiceStatus } from "@rakazo/contracts";
-import type { ThreadView } from "@rakazo/core";
-import { speechFromBlocks } from "@rakazo/core";
+import type { VoiceStatus } from "@tangow/contracts";
+import type { ThreadView } from "@tangow/core";
+import { speechFromBlocks } from "@tangow/core";
 import type { Dispatch, SetStateAction } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { rpc } from "../../lib/rpc";

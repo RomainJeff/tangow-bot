@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { RPCHandler } from "@orpc/server/fetch";
-import type { Actor } from "@rakazo/contracts";
-import type { PrismaClient } from "@rakazo/db";
-import { createDb, findModelCategories, setModelCategory } from "@rakazo/db";
+import type { Actor } from "@tangow/contracts";
+import type { PrismaClient } from "@tangow/db";
+import { createDb, findModelCategories, setModelCategory } from "@tangow/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { RouterDeps } from "./router.js";
 import { createRouter } from "./router.js";

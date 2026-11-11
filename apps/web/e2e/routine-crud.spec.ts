@@ -1,4 +1,4 @@
-import type { Bot, Routine } from "@rakazo/contracts";
+import type { Bot, Routine } from "@tangow/contracts";
 import {
   activeBotId,
   addRoutineTrigger,

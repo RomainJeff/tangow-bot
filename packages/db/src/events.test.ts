@@ -1,7 +1,7 @@
-import type { RealtimeFanout } from "@rakazo/adapter-kit";
-import { ProductEventSchema } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
-import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
+import type { RealtimeFanout } from "@tangow/adapter-kit";
+import { ProductEventSchema } from "@tangow/contracts";
+import { ACTIVE_RUN_STATUSES } from "@tangow/core";
+import { approvalEffectKey } from "@tangow/core/node/approval-effect-key";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PrismaClient } from "./client.js";
 import {

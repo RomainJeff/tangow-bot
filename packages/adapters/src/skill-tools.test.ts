@@ -12,13 +12,13 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { SKILL_BUNDLE_MAX_ENTRIES } from "@rakazo/contracts";
+import { SKILL_BUNDLE_MAX_ENTRIES } from "@tangow/contracts";
 import {
   buildSkillMd,
   formatSkillsCatalogInstruction,
   parseSkillMd,
   SANDBOX_SKILL_MOUNTS,
-} from "@rakazo/core";
+} from "@tangow/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { agentConnectionTools, builtinAgentTools } from "./builtin-tools.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";

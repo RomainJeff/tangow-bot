@@ -1,5 +1,5 @@
-import type { AskCardBlock, AskCardIntents, AskCardView, AskForm, Presenter } from "@rakazo/core";
-import { createAskCard, resolveAskCardView } from "@rakazo/core";
+import type { AskCardBlock, AskCardIntents, AskCardView, AskForm, Presenter } from "@tangow/core";
+import { createAskCard, resolveAskCardView } from "@tangow/core";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 export type UseAskCardOptions = {

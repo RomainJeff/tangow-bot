@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { createDb } from "@rakazo/db";
-import { migrationNames, migrationSql } from "@rakazo/db/pglite.test-support";
+import { createDb } from "@tangow/db";
+import { migrationNames, migrationSql } from "@tangow/db/pglite.test-support";
 
 /** A disposable database per arm; DATABASE_URL needs permission to create and drop databases. */
 export async function openBenchPostgres(url: string) {

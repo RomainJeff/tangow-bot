@@ -1,5 +1,5 @@
-import { TraceExporter } from "@rakazo/adapters";
-import type { WorkerTrace } from "@rakazo/adapters/runtime-worker";
+import { TraceExporter } from "@tangow/adapters";
+import type { WorkerTrace } from "@tangow/adapters/runtime-worker";
 import { describe, expect, it, onTestFinished } from "vitest";
 import { startWorkerRun } from "./worker-run-fixture.js";
 

@@ -1,4 +1,4 @@
-import type { Routine } from "@rakazo/contracts";
+import type { Routine } from "@tangow/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { resetI18nForTests } from "./i18n";
 import { cadenceLine, describeSchedule, routinesSummary } from "./routine-copy";

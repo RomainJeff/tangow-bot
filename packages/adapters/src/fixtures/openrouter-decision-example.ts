@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import type { DecisionRequest } from "@rakazo/adapter-kit";
+import type { DecisionRequest } from "@tangow/adapter-kit";
 
 /**
  * The documented OpenRouter Decisions example (openrouter-decision.json, copied

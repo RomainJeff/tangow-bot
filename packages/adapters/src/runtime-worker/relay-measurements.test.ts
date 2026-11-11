@@ -1,4 +1,4 @@
-import type { PiAiModelCall } from "@rakazo/adapter-kit";
+import type { PiAiModelCall } from "@tangow/adapter-kit";
 import { describe, expect, it } from "vitest";
 import { clearRelayPrefixes, measureRelayPrefix } from "./relay-measurements.js";
 

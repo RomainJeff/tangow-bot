@@ -86,8 +86,8 @@ describe("mobile i18n", () => {
   it("translates every mobile chrome t() id in both non-English catalogs", async () => {
     const { ZH_MESSAGES } = await import("./locales/zh");
     const { RU_MESSAGES } = await import("./locales/ru");
-    const { EMPTY_PLUGIN_CATALOG_MESSAGE, SLASH_ACTIONS } = await import("@rakazo/core");
-    const { OPENAI_COMPATIBLE_BASE_URL_HINT } = await import("@rakazo/contracts");
+    const { EMPTY_PLUGIN_CATALOG_MESSAGE, SLASH_ACTIONS } = await import("@tangow/core");
+    const { OPENAI_COMPATIBLE_BASE_URL_HINT } = await import("@tangow/contracts");
     const mobileRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
     const ids = new Set<string>([
       EMPTY_PLUGIN_CATALOG_MESSAGE,

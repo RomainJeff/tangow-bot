@@ -1,7 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { MemoryDocument } from "@rakazo/contracts";
-import { showsTeamMemory } from "@rakazo/core";
-import { NativeSelect, NativeSelectOption, SaveMeta, SettingRow } from "@rakazo/ui-web";
+import type { MemoryDocument } from "@tangow/contracts";
+import { showsTeamMemory } from "@tangow/core";
+import { NativeSelect, NativeSelectOption, SaveMeta, SettingRow } from "@tangow/ui-web";
 import { type ReactNode, useEffect, useState } from "react";
 import { rpc } from "../../lib/rpc";
 import {

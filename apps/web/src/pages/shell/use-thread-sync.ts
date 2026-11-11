@@ -1,11 +1,11 @@
-import type { ComputerStatus, ProductEvent } from "@rakazo/contracts";
+import type { ComputerStatus, ProductEvent } from "@tangow/contracts";
 import {
   appendedEntries,
   blocksOfBotWords,
   botWordsOf,
   isRunTerminalEvent,
   runThreadSubscription,
-} from "@rakazo/core";
+} from "@tangow/core";
 import type { RefObject } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { markOnce } from "../../lib/performance";

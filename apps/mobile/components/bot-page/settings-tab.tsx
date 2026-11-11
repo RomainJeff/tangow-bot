@@ -3,7 +3,7 @@ import {
   connectedModelOptions,
   defaultModelLabel,
   parseModelOptionKey,
-} from "@rakazo/core";
+} from "@tangow/core";
 import { useRouter } from "expo-router";
 import { View } from "react-native";
 import { useComputerChoice } from "../../lib/bot-choices";

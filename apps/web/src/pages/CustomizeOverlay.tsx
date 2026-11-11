@@ -6,7 +6,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import { Puzzle, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 import { PluginsOverlay } from "./PluginsOverlay";

@@ -1,5 +1,5 @@
-import type { AskDraftFields, AskDraftRecipient } from "@rakazo/contracts";
-import { ASK_DRAFT_ADDRESS_MAX_LENGTH, ASK_DRAFT_SUBJECT_MAX_LENGTH } from "@rakazo/contracts";
+import type { AskDraftFields, AskDraftRecipient } from "@tangow/contracts";
+import { ASK_DRAFT_ADDRESS_MAX_LENGTH, ASK_DRAFT_SUBJECT_MAX_LENGTH } from "@tangow/contracts";
 
 /** Where a value sits inside a call's arguments or an effect's stored request. */
 export type DraftPath = Array<string | number>;

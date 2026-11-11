@@ -1,4 +1,4 @@
-import type { BotActivityItem, MessageBlock, RunActivityRow } from "@rakazo/contracts";
+import type { BotActivityItem, MessageBlock, RunActivityRow } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import type { ActivityRead } from "./activity-rows.js";
 import {

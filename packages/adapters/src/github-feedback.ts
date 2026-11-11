@@ -1,4 +1,4 @@
-import type { AdapterContext, FeedbackIssue, FeedbackProvider } from "@rakazo/adapter-kit";
+import type { AdapterContext, FeedbackIssue, FeedbackProvider } from "@tangow/adapter-kit";
 import { z } from "zod";
 import { combineSignals } from "./connector-safety.js";
 

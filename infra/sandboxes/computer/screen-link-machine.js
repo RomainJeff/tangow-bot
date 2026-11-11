@@ -1,7 +1,7 @@
 /**
  * Reconnect machine for the chrome-less noVNC embed. Pure: the session feeds events stamped
  * with `now`, runs the returned effects, and calls `step` again with `tick` at `nextWake`.
- * The wire constants mirror `@rakazo/core`'s screen-link contract; a drift test in core
+ * The wire constants mirror `@tangow/core`'s screen-link contract; a drift test in core
  * equates them, because this file ships alone in the computer image.
  */
 

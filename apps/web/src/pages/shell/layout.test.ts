@@ -1,4 +1,4 @@
-import type { Bot } from "@rakazo/contracts";
+import type { Bot } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import { botPageFor, pageBotOf, panelSizeFor, threadJumpLocation } from "./layout";
 

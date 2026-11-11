@@ -1,6 +1,6 @@
-import { replyContextOf } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
-import { sessionEntryFromRow } from "@rakazo/db";
+import { replyContextOf } from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
+import { sessionEntryFromRow } from "@tangow/db";
 
 /** Fetch the explicit target even when it has fallen outside the history window. */
 export async function loadReplyContext(

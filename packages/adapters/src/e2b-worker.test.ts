@@ -1,5 +1,5 @@
-import type { WorkerSpec } from "@rakazo/adapter-kit";
-import { createLogger, createTestSink, getLogger, installLogger } from "@rakazo/logging";
+import type { WorkerSpec } from "@tangow/adapter-kit";
+import { createLogger, createTestSink, getLogger, installLogger } from "@tangow/logging";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { E2BWorkerSandbox, E2BWorkerSdk } from "./e2b-worker.js";
 import { E2B_CREATE_MARGIN_MS, E2BWorkerProvider } from "./e2b-worker.js";

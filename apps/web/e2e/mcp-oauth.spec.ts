@@ -1,4 +1,4 @@
-import type { McpServer } from "@rakazo/contracts";
+import type { McpServer } from "@tangow/contracts";
 import { MCP_OAUTH_CHANNEL } from "../src/lib/mcp-connect";
 import { captureScreenshot, completeOnboarding, signup } from "./helpers";
 import { expect, type Route, test } from "./test";

@@ -1,7 +1,7 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { SearchHit, ThreadSnapshot } from "@rakazo/contracts";
+import type { SearchHit, ThreadSnapshot } from "@tangow/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sessionCookieHeader } from "./index.js";
 

@@ -1,4 +1,4 @@
-import type { ConnectorProvider } from "@rakazo/adapter-kit";
+import type { ConnectorProvider } from "@tangow/adapter-kit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { latestCard } from "./index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";

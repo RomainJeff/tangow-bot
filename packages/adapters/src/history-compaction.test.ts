@@ -7,14 +7,14 @@ import type {
   SemanticMemoryResponse,
   SemanticMemorySaveRequest,
   SessionEntryDraft,
-} from "@rakazo/adapter-kit";
-import type { AgentHistoryTurn, EntryId, SessionEntry, SessionId } from "@rakazo/contracts";
-import { EntrySeq } from "@rakazo/contracts";
-import { projectInferenceTurns } from "@rakazo/core";
-import { createThreadEvents, rewindThread } from "@rakazo/db";
-import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
-import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
-import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
+} from "@tangow/adapter-kit";
+import type { AgentHistoryTurn, EntryId, SessionEntry, SessionId } from "@tangow/contracts";
+import { EntrySeq } from "@tangow/contracts";
+import { projectInferenceTurns } from "@tangow/core";
+import { createThreadEvents, rewindThread } from "@tangow/db";
+import type { PgliteDatabase } from "@tangow/db/pglite.test-support";
+import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
+import { createLogger, createTestSink, installLogger } from "@tangow/logging";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { CompactHistoryDeps } from "./history-compaction.js";
 import {

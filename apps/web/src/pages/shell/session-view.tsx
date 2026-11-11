@@ -1,12 +1,12 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { ChatMarkdown, truncateMarkdownForRender } from "@rakazo/chat-ui/web";
-import type { SessionEntry, SessionEntryOf } from "@rakazo/contracts";
+import { ChatMarkdown, truncateMarkdownForRender } from "@tangow/chat-ui/web";
+import type { SessionEntry, SessionEntryOf } from "@tangow/contracts";
 import {
   classifyRunFailure,
   drawsNothing,
   projectThreadView,
   unshownRunReport,
-} from "@rakazo/core";
+} from "@tangow/core";
 import {
   Button,
   Dialog,
@@ -15,7 +15,7 @@ import {
   DialogTitle,
   formatShortDuration,
   ReasoningDisclosure,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import { Check, Copy, X } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useDebugMode } from "../../lib/debug-mode";

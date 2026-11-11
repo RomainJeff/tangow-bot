@@ -6,9 +6,9 @@ import type {
   AgentRunRequest,
   AgentRuntime,
   AgentRuntimeEvent,
-} from "@rakazo/adapter-kit";
-import { redactSecrets } from "@rakazo/core";
-import { redactSensitiveText } from "@rakazo/logging";
+} from "@tangow/adapter-kit";
+import { redactSecrets } from "@tangow/core";
+import { redactSensitiveText } from "@tangow/logging";
 import { stripModelControlTokens } from "./agent-text-policy.js";
 import { streamRunModel, thinkingLevelFor } from "./pi-run-model.js";
 import { RunTraceRecorder } from "./pi-run-trace.js";

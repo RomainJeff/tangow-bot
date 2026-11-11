@@ -1,7 +1,7 @@
-import { builtinAgentTools, computerExecTool } from "@rakazo/adapters";
-import { nativeToolsForHarness } from "@rakazo/adapters/runtime-worker";
-import type { HelperProfile } from "@rakazo/core";
-import { delegatedTools, HELPER_PROFILES, MAIN_BOT_BLOCKED_TOOLS, selectTools } from "@rakazo/core";
+import { builtinAgentTools, computerExecTool } from "@tangow/adapters";
+import { nativeToolsForHarness } from "@tangow/adapters/runtime-worker";
+import type { HelperProfile } from "@tangow/core";
+import { delegatedTools, HELPER_PROFILES, MAIN_BOT_BLOCKED_TOOLS, selectTools } from "@tangow/core";
 import { expect, it } from "vitest";
 import { researcher, screenOperator } from "./helper-profiles.fixture.js";
 

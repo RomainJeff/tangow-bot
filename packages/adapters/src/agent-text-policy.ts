@@ -1,5 +1,5 @@
-import type { AgentRunRequest, HarnessTranscriptEntry } from "@rakazo/adapter-kit";
-import { RAKAZO_TOOL_PREFIX } from "@rakazo/adapter-kit";
+import type { AgentRunRequest, HarnessTranscriptEntry } from "@tangow/adapter-kit";
+import { RAKAZO_TOOL_PREFIX } from "@tangow/adapter-kit";
 import { TOOL_FINAL_RESPONSE_FALLBACK } from "./user-progress.js";
 
 // Some OpenAI-compatible models return EOS immediately after a tool result

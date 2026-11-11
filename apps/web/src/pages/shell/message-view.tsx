@@ -1,12 +1,12 @@
 import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { ChatMarkdown } from "@rakazo/chat-ui/web";
-import type { GroupPerson, MessageBlock } from "@rakazo/contracts";
+import { ChatMarkdown } from "@tangow/chat-ui/web";
+import type { GroupPerson, MessageBlock } from "@tangow/contracts";
 import type {
   ImageStack as ImageStackModel,
   LinkMentionResolver,
   SkillSourceBlock,
-} from "@rakazo/core";
+} from "@tangow/core";
 import {
   imagesOf,
   isLinkOnlyMessage,
@@ -16,8 +16,8 @@ import {
   narrationSegments,
   skillSourcesOf,
   textWithoutPreviewedLinkLine,
-} from "@rakazo/core";
-import type { MessageRowMeta, StackedAvatarItem } from "@rakazo/ui-web";
+} from "@tangow/core";
+import type { MessageRowMeta, StackedAvatarItem } from "@tangow/ui-web";
 import {
   BotAvatar,
   cn,
@@ -28,7 +28,7 @@ import {
   StackedAvatars,
   UserAvatar,
   UserBubble,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import { BookOpen, Clock } from "lucide-react";
 import type { ReactNode } from "react";
 import { memo, useMemo, useRef } from "react";

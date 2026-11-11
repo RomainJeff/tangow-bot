@@ -11,14 +11,14 @@ import type {
   WorkerIdentity,
   WorkerSkill,
   WorkerStartV1,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import {
   AgentRuntimeUnavailableError,
   FRAME_CAPABILITY,
   WORKER_PROTOCOL_VERSION,
-} from "@rakazo/adapter-kit";
-import { redactSecrets, secretRedactor } from "@rakazo/core";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/adapter-kit";
+import { redactSecrets, secretRedactor } from "@tangow/core";
+import { getLogger } from "@tangow/logging";
 import { isFailedToolResult, isToolPauseResult } from "../approval-effect.js";
 import {
   HELPER_STOPPED_FOR_PAUSE,

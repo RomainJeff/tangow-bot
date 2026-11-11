@@ -4,8 +4,8 @@ import type {
   ConnectorEvent,
   ConnectorProvider,
   ConnectorTool,
-} from "@rakazo/adapter-kit";
-import type { PrismaClient } from "@rakazo/db";
+} from "@tangow/adapter-kit";
+import type { PrismaClient } from "@tangow/db";
 import { z } from "zod";
 import { ConnectorError } from "./connector-error.js";
 import { connectorError, connectorResult } from "./connector-errors.js";

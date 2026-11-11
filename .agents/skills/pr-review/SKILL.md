@@ -26,7 +26,7 @@ Run `TZ=Europe/Paris date '+%u %H'` (day-of-week 1=Mon..7=Sun, hour 00-23). Cont
 
 ## 1. Hard rules
 
-- NEVER run end-to-end tests: no `pnpm test:e2e`, no `pnpm --filter @rakazo/desktop test:e2e`, no Playwright, nothing under `apps/web/e2e` or desktop e2e. This overrides AGENTS.md. Unit tests, typecheck and lint are fine.
+- NEVER run end-to-end tests: no `pnpm test:e2e`, no `pnpm --filter @tangow/desktop test:e2e`, no Playwright, nothing under `apps/web/e2e` or desktop e2e. This overrides AGENTS.md. Unit tests, typecheck and lint are fine.
 - Read `AGENTS.md` at the repo root and follow it for any code you write (public repo, no secrets, CHANGELOG rule, UI system, import rules, simplicity).
 - People: Romain and Jeff share one GitHub account, `@romainjeff`. The UI/design decider is `@wooznext`. "Ping the maintainers" means mention `@romainjeff`.
 - All GitHub text you post is public. Write it in English, no local paths, no tool output dumps.

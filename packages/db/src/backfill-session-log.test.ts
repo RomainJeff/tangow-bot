@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import type { PGlite } from "@electric-sql/pglite";
-import { projectThreadItems } from "@rakazo/core";
+import { projectThreadItems } from "@tangow/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { BackfillRefused, backfillThread, moveMessagesToLog } from "./backfill-session-log.js";
 import type { PrismaClient } from "./client.js";

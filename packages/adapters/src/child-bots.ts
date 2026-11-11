@@ -5,11 +5,11 @@ import type {
   ArtifactStore,
   JobPublisher,
   SandboxProvider,
-} from "@rakazo/adapter-kit";
-import { routineJobKey, runContinueJob, runJobKey } from "@rakazo/adapter-kit";
-import type { Actor, Bot, ComputerMode } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
-import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
+} from "@tangow/adapter-kit";
+import { routineJobKey, runContinueJob, runJobKey } from "@tangow/adapter-kit";
+import type { Actor, Bot, ComputerMode } from "@tangow/contracts";
+import { ACTIVE_RUN_STATUSES } from "@tangow/core";
+import type { Prisma, PrismaClient, ThreadEvents } from "@tangow/db";
 import {
   archiveGroupsLeftWithoutBots,
   cancelRunsInTransaction,
@@ -20,8 +20,8 @@ import {
   expireComputerExecutionLeases,
   logCancelledRunsInTransaction,
   withTransactionRetry,
-} from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 import { releaseBotScreen } from "./computer-lifecycle.js";
 import { toComputerRef } from "./computer-support.js";
 import { checkpointAndRecordComputerWorkspace } from "./computer-workspace.js";

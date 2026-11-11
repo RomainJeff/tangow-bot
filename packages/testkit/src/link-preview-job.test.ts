@@ -4,10 +4,10 @@ import {
   type LinkPreviewJobDeps,
   type LinkPreviewReadResult,
   runLinkPreviewJob,
-} from "@rakazo/adapters";
-import type { MessageBlock } from "@rakazo/contracts";
-import { appendLinkBlocks, removeLinkPreviewBlock } from "@rakazo/db";
-import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
+} from "@tangow/adapters";
+import type { MessageBlock } from "@tangow/contracts";
+import { appendLinkBlocks, removeLinkPreviewBlock } from "@tangow/db";
+import { createLogger, createTestSink, installLogger } from "@tangow/logging";
 import { PNG } from "pngjs";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { openThreadDb, type ThreadDb } from "./thread-db.js";

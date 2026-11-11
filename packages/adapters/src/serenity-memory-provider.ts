@@ -8,7 +8,7 @@ import type {
   SemanticMemoryResponse,
   SemanticMemoryResult,
   SemanticMemorySaveRequest,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import {
   classifySerenityEndpointTrust,
   forgetSerenity,

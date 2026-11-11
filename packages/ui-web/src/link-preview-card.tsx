@@ -1,5 +1,5 @@
-import { previewSiteInitial } from "@rakazo/core";
-import { linkLargeImageRatio } from "@rakazo/ui-tokens";
+import { previewSiteInitial } from "@tangow/core";
+import { linkLargeImageRatio } from "@tangow/ui-tokens";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { cn } from "./lib/utils.js";
 import { Surface } from "./surface.js";

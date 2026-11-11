@@ -1,13 +1,13 @@
-import type { AskDraft, MessageBlock } from "@rakazo/contracts";
-import type { DraftLocal } from "@rakazo/core";
+import type { AskDraft, MessageBlock } from "@tangow/contracts";
+import type { DraftLocal } from "@tangow/core";
 import {
   DRAFT_UNDO_MS,
   draftAddresses,
   draftCardView,
   draftChanges,
   draftPrimaryAction,
-} from "@rakazo/core";
-import { radii, sizes } from "@rakazo/ui-tokens";
+} from "@tangow/core";
+import { radii, sizes } from "@tangow/ui-tokens";
 import { useRouter } from "expo-router";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";

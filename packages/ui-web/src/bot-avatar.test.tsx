@@ -1,4 +1,4 @@
-import { avatarIdentitySeed, SHAPES } from "@rakazo/core";
+import { avatarIdentitySeed, SHAPES } from "@tangow/core";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { AvatarStyleProvider } from "./avatar-style.js";

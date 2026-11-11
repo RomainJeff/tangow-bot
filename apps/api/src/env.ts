@@ -1,19 +1,19 @@
-import type { WorkerProviderConfig } from "@rakazo/adapters";
+import type { WorkerProviderConfig } from "@tangow/adapters";
 import {
   resolveDeploymentModel,
   resolveSandboxProvider,
   resolveWorkerProvider,
-} from "@rakazo/adapters";
-import type { SkillLearningMode } from "@rakazo/core";
+} from "@tangow/adapters";
+import type { SkillLearningMode } from "@tangow/core";
 import {
   parseSkillLearningMode,
   resolveAuthSecret,
   resolveEncryptionKey,
   resolveScreenProxySecret,
   resolveSupervisorToken,
-} from "@rakazo/core";
+} from "@tangow/core";
 
-export { resolveSandboxProvider } from "@rakazo/adapters";
+export { resolveSandboxProvider } from "@tangow/adapters";
 
 export interface AppEnv {
   nodeEnv: string;

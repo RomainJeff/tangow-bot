@@ -7,11 +7,11 @@ import type {
   ComputerRef,
   PortableFile,
   SandboxProvider,
-} from "@rakazo/adapter-kit";
-import type { ComputerMode, HomeStorage } from "@rakazo/contracts";
-import type { HomePersistence } from "@rakazo/core";
-import { homePersistence, parseScreenLeaseId } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+} from "@tangow/adapter-kit";
+import type { ComputerMode, HomeStorage } from "@tangow/contracts";
+import type { HomePersistence } from "@tangow/core";
+import { homePersistence, parseScreenLeaseId } from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
 import { normalizeWorkspacePath, teamBotWorkspaceDirectory } from "./computer-support.js";
 import type { LocalAgentHomeStore } from "./home.js";
 

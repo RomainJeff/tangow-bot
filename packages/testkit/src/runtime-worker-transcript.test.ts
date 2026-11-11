@@ -1,5 +1,5 @@
-import type { AgentRunRequest, AgentRuntimeEvent, GuestBody } from "@rakazo/adapter-kit";
-import { createWorkerAgentRuntime } from "@rakazo/adapters/runtime-worker";
+import type { AgentRunRequest, AgentRuntimeEvent, GuestBody } from "@tangow/adapter-kit";
+import { createWorkerAgentRuntime } from "@tangow/adapters/runtime-worker";
 import { describe, expect, it, onTestFinished } from "vitest";
 import {
   consume,

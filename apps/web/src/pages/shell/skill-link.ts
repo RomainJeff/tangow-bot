@@ -1,5 +1,5 @@
-import type { AgentSkillCatalogEntry } from "@rakazo/contracts";
-import type { SkillSourceBlock } from "@rakazo/core";
+import type { AgentSkillCatalogEntry } from "@tangow/contracts";
+import type { SkillSourceBlock } from "@tangow/core";
 import type { BotPageView } from "./layout";
 
 /**

@@ -5,7 +5,7 @@ import type {
   Connection,
   ConnectionCatalogItem,
   McpServer,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 
 /** The owner's own skills a shared bot can be given; a disabled one is given to no bot. */
 export function givableSkills(skills: readonly AgentSkillCatalogEntry[]): AgentSkillCatalogEntry[] {

@@ -1,5 +1,5 @@
-import type { GridNode } from "@rakazo/chat-ui/native";
-import { TableRecords } from "@rakazo/chat-ui/native";
+import type { GridNode } from "@tangow/chat-ui/native";
+import { TableRecords } from "@tangow/chat-ui/native";
 import { mobileTokens } from "../lib/appearance";
 import { useI18n } from "../lib/i18n";
 import { PreviewSheet } from "./preview-sheet";

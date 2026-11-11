@@ -1,5 +1,5 @@
-import type { Routine } from "@rakazo/contracts";
-import { createAnswerOrder } from "@rakazo/core";
+import type { Routine } from "@tangow/contracts";
+import { createAnswerOrder } from "@tangow/core";
 
 /**
  * Each bot's routines, outside React so the Routines tab and a routine's screen read one copy.

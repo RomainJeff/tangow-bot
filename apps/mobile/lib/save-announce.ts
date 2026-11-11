@@ -1,4 +1,4 @@
-import type { FieldSaveState } from "@rakazo/core";
+import type { FieldSaveState } from "@tangow/core";
 
 const announced = new WeakSet<object>();
 

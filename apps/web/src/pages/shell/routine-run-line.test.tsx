@@ -1,5 +1,5 @@
-import type { EntryId, SessionId } from "@rakazo/contracts";
-import type { RoutineItem } from "@rakazo/core";
+import type { EntryId, SessionId } from "@tangow/contracts";
+import type { RoutineItem } from "@tangow/core";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 

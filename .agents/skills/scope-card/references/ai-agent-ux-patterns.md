@@ -16,7 +16,7 @@ statut: référence vivante
 Contraintes DS non négociables rappelées ici parce qu'elles conditionnent chaque pattern :
 - **Monochrome** : primary = encre (ink). Statuts = `destructive` / `success` / `warning` uniquement. La **seule couleur d'identité** appartient aux bots.
 - shadcn/ui sur Base UI (web/desktop) ; mobile natif-first (Expo UI, sheets/menus/pickers natifs).
-- Tokens sémantiques `@rakazo/ui-tokens`. Jamais de hex produit en dur.
+- Tokens sémantiques `@tangow/ui-tokens`. Jamais de hex produit en dur.
 - **Minimalisme + progressive disclosure** : la capacité avancée n'apparaît que quand elle devient pertinente. Chaque mot visible est de l'UI ; on commence par ce qu'on peut **retirer**. Le frontend exprime l'intention et rend l'état ; le backend possède l'orchestration.
 
 ---
@@ -250,7 +250,7 @@ Rakazo est autant une messagerie qu'un client d'agent (Rakazo est né comme un b
 - **Diverger sur la mécanique native, pas sur le sens** : mobile Expo utilise sheets, menus contextuels, pickers **natifs** ; approbations et options avancées passent en bottom sheet ; le long-press remplace le survol.
 - **Densité adaptée** : desktop peut montrer plan + fil côte à côte ; mobile replie le plan en sheet et privilégie une colonne.
 - **Pas de scroll horizontal de page** sur mobile : diffs/tableaux/code scrollent dans leur propre conteneur.
-- Tokens `@rakazo/ui-tokens` partagés = cohérence visuelle garantie ; ne jamais recoder une couleur en dur pour "adapter" une surface.
+- Tokens `@tangow/ui-tokens` partagés = cohérence visuelle garantie ; ne jamais recoder une couleur en dur pour "adapter" une surface.
 
 ### 4.4 Accessibilité
 
@@ -289,7 +289,7 @@ Rakazo est autant une messagerie qu'un client d'agent (Rakazo est né comme un b
 | **Couleur décorative** (accents, dégradés produit) | Casse le monochrome, dilue l'identité des bots | Couleur réservée aux bots ; reste en encre + tokens |
 | **Handoff silencieux** entre agents | "Qui agit ?" perdu | Marqueur de handoff explicite dans la timeline |
 | **Onboarding bloquant** / tour imposé | Contredit le minimalisme, agace | Empty states apprenants + découverte progressive dismissable |
-| **Hex en dur** pour "ajuster" une surface | Casse la cohérence et le theming | Toujours `@rakazo/ui-tokens` |
+| **Hex en dur** pour "ajuster" une surface | Casse la cohérence et le theming | Toujours `@tangow/ui-tokens` |
 | **Fin de run muette** (dernier log = fin) | L'utilisateur ne sait pas le résultat ni la suite | Bloc de clôture : résumé + artefacts + prochaine action |
 
 ---
@@ -299,7 +299,7 @@ Rakazo est autant une messagerie qu'un client d'agent (Rakazo est né comme un b
 À passer sur toute maquette de feature Rakazo **avant de coder**. Cocher = conforme.
 
 **Fondations DS**
-- [ ] Zéro hex en dur : toutes les couleurs viennent de `@rakazo/ui-tokens`.
+- [ ] Zéro hex en dur : toutes les couleurs viennent de `@tangow/ui-tokens`.
 - [ ] Seule la couleur d'identité d'un **bot** est colorée ; le reste est encre + statuts (`destructive`/`success`/`warning`).
 - [ ] Statuts et identité bot ne reposent **jamais** sur la couleur seule (icône/texte/nom en doublon).
 - [ ] Mobile : composants natifs (sheets/menus/pickers) là où c'est attendu ; pas de portage brut du web.

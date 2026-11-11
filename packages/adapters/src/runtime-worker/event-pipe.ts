@@ -1,4 +1,4 @@
-import type { AgentRuntimeEvent } from "@rakazo/adapter-kit";
+import type { AgentRuntimeEvent } from "@tangow/adapter-kit";
 
 type Pulled = { event: AgentRuntimeEvent; pulled: () => void };
 

@@ -1,4 +1,4 @@
-import type { ComputerStatus } from "@rakazo/contracts";
+import type { ComputerStatus } from "@tangow/contracts";
 import { useState, useSyncExternalStore } from "react";
 import { Alert } from "react-native";
 import { rpc } from "../lib/api";

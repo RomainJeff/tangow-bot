@@ -1,5 +1,5 @@
-import { ASK_ANSWER_MAX_LENGTH } from "@rakazo/contracts";
-import { radii, sizes } from "@rakazo/ui-tokens";
+import { ASK_ANSWER_MAX_LENGTH } from "@tangow/contracts";
+import { radii, sizes } from "@tangow/ui-tokens";
 import type { Ref } from "react";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";

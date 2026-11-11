@@ -1,4 +1,4 @@
-import { botColors } from "@rakazo/ui-tokens";
+import { botColors } from "@tangow/ui-tokens";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { StackedAvatars } from "./stacked-avatars.js";

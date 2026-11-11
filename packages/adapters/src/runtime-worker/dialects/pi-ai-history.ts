@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Api, AssistantMessage, Message, Model, ToolCall, Usage } from "@earendil-works/pi-ai";
-import type { AgentRunRequest, HarnessTranscriptEntry } from "@rakazo/adapter-kit";
+import type { AgentRunRequest, HarnessTranscriptEntry } from "@tangow/adapter-kit";
 import * as z from "zod";
 import { stripFakeToolCalls } from "../../agent-text-policy.js";
 

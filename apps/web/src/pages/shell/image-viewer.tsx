@@ -1,8 +1,8 @@
 import { i18n } from "@lingui/core";
 import { useLingui } from "@lingui/react/macro";
-import type { StackImage } from "@rakazo/core";
-import { IMAGE_STACK, threadTimeMarkerLabel } from "@rakazo/core";
-import { Button, cn, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
+import type { StackImage } from "@tangow/core";
+import { IMAGE_STACK, threadTimeMarkerLabel } from "@tangow/core";
+import { Button, cn, Dialog, DialogClose, DialogContent, DialogTitle } from "@tangow/ui-web";
 import { ChevronLeft, ChevronRight, RotateCw, X } from "lucide-react";
 import type { KeyboardEvent } from "react";
 import { useEffect, useRef } from "react";

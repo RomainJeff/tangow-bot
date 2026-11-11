@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import type { LinkMentionBlock, LinkPreviewCard } from "@rakazo/contracts";
-import { EntryId } from "@rakazo/contracts";
-import { linkKey } from "@rakazo/core";
+import type { LinkMentionBlock, LinkPreviewCard } from "@tangow/contracts";
+import { EntryId } from "@tangow/contracts";
+import { linkKey } from "@tangow/core";
 import type { Prisma, PrismaClient } from "./client.js";
 import {
   appendCardStateInTransaction,

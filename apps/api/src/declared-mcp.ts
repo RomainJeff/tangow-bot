@@ -1,18 +1,18 @@
-import type { EncryptedSecretStore } from "@rakazo/adapters";
+import type { EncryptedSecretStore } from "@tangow/adapters";
 import type {
   Actor,
   BotConnector,
   DeclaredMcp,
   McpServerConfigInput,
   MessageBlock,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import {
   botConnectors,
   IsolationError,
   type Prisma,
   type PrismaClient,
   sharedWithFilter,
-} from "@rakazo/db";
+} from "@tangow/db";
 import { createMcpServer, mcpServerDto } from "./mcp-servers.js";
 
 /** This deployment's stdio rule, as the MCP connector applies it when it runs a server. */

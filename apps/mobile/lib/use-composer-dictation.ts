@@ -1,4 +1,4 @@
-import { writtenLanguage } from "@rakazo/core";
+import { writtenLanguage } from "@tangow/core";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, AppState, Linking, Platform } from "react-native";

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import type { MessageBlock } from "@rakazo/contracts";
-import { SessionEntrySchema } from "@rakazo/contracts";
-import { projectThreadView } from "@rakazo/core";
+import type { MessageBlock } from "@tangow/contracts";
+import { SessionEntrySchema } from "@tangow/contracts";
+import { projectThreadView } from "@tangow/core";
 import type { ReactNode } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";

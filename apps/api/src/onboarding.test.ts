@@ -1,10 +1,10 @@
-import type * as db from "@rakazo/db";
+import type * as db from "@tangow/db";
 import { describe, expect, it, vi } from "vitest";
 import { chooseFocus, dismissFocus, markAppConnected } from "./onboarding.js";
 
 const posted = vi.hoisted(() => [] as Array<{ blocks: unknown[] }>);
 const logged = vi.hoisted(() => [] as unknown[]);
-vi.mock("@rakazo/db", async (original) => ({
+vi.mock("@tangow/db", async (original) => ({
   ...(await original<typeof db>()),
   appendCardStateInTransaction: vi.fn(async (_tx, draft) => {
     logged.push(draft);

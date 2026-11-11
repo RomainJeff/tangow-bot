@@ -1,4 +1,4 @@
-import type { AgentRunRequest, SemanticMemoryRecallRequest } from "@rakazo/adapter-kit";
+import type { AgentRunRequest, SemanticMemoryRecallRequest } from "@tangow/adapter-kit";
 import { describe, expect, it, vi } from "vitest";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";

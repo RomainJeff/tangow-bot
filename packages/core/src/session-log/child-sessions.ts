@@ -1,4 +1,4 @@
-import type { SessionId, ThreadEntry, ThreadItem } from "@rakazo/contracts";
+import type { SessionId, ThreadEntry, ThreadItem } from "@tangow/contracts";
 
 export type ChildSession = { kind: "routine" | "subagent"; name: string };
 

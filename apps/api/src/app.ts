@@ -11,13 +11,13 @@ import type {
   SandboxProvider,
   TransactionalEmailProvider,
   WorkerProvider,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import type {
   ComposioProvider,
   ConnectorRegistry,
   DestinationEmulator,
   RemoteConnectorDependencies,
-} from "@rakazo/adapters";
+} from "@tangow/adapters";
 import {
   applyMessagingOutboundStatus,
   ChatSdkMessagingSurface,
@@ -68,11 +68,11 @@ import {
   SpaceDecisionProviderResolver,
   SpaceMemoryProviderResolver,
   toTeamChatInbound,
-} from "@rakazo/adapters";
-import type { GuestConnector } from "@rakazo/adapters/runtime-worker";
-import { createAuth, isBlockedAuthPath } from "@rakazo/auth";
-import { signupPolicyFromEnv } from "@rakazo/core";
-import type { Pool, PrismaClient } from "@rakazo/db";
+} from "@tangow/adapters";
+import type { GuestConnector } from "@tangow/adapters/runtime-worker";
+import { createAuth, isBlockedAuthPath } from "@tangow/auth";
+import { signupPolicyFromEnv } from "@tangow/core";
+import type { Pool, PrismaClient } from "@tangow/db";
 import {
   createDb,
   createPool,
@@ -81,17 +81,17 @@ import {
   parsePositiveInteger,
   provisionMessagingIdentity,
   requireMembership,
-} from "@rakazo/db";
-import type { Logger } from "@rakazo/logging";
+} from "@tangow/db";
+import type { Logger } from "@tangow/logging";
 import {
   createServiceLogger,
   enrichLogContext,
   getLogger,
   installLogger,
   SERVICE_NAMES,
-} from "@rakazo/logging";
-import { requestLogging } from "@rakazo/logging/hono";
-import { MarkdownMemoryStore } from "@rakazo/memory";
+} from "@tangow/logging";
+import { requestLogging } from "@tangow/logging/hono";
+import { MarkdownMemoryStore } from "@tangow/memory";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { AppEnv } from "./env.js";

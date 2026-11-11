@@ -1,6 +1,6 @@
-import type { AdapterContext, MessagingSurface } from "@rakazo/adapter-kit";
-import type { PrismaClient } from "@rakazo/db";
-import { appendSessionEntryInTransaction } from "@rakazo/db";
+import type { AdapterContext, MessagingSurface } from "@tangow/adapter-kit";
+import type { PrismaClient } from "@tangow/db";
+import { appendSessionEntryInTransaction } from "@tangow/db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   applyMessagingOutboundStatus,
@@ -11,7 +11,7 @@ import {
 } from "./messaging-delivery.js";
 
 vi.mock("../../db/src/sessions.js", async () =>
-  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+  (await import("@tangow/db/sessions.test-support")).stubbedDbSessions(),
 );
 
 beforeEach(() => {

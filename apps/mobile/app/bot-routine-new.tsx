@@ -1,4 +1,4 @@
-import { emptyRoutineDraft, type RoutineDraft, validateRoutineDraft } from "@rakazo/core";
+import { emptyRoutineDraft, type RoutineDraft, validateRoutineDraft } from "@tangow/core";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { ScrollView, StyleSheet, TextInput, View } from "react-native";

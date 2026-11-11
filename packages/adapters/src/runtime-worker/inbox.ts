@@ -9,7 +9,7 @@ import {
   type WorkerEventV1,
   type WorkerIdentity,
   type WorkerReplyV1,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import { WORKER_LIMITS } from "./limits.js";
 
 /**

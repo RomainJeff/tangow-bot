@@ -2,7 +2,7 @@ import {
   GROUP_DESCRIPTION_MAX_LENGTH,
   GROUP_MEMBER_MAX,
   GROUP_MEMBER_MIN,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import { Stack, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput } from "react-native";

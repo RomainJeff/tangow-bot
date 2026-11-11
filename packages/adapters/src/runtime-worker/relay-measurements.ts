@@ -1,4 +1,4 @@
-import type { PiAiModelCall } from "@rakazo/adapter-kit";
+import type { PiAiModelCall } from "@tangow/adapter-kit";
 import type { RelayConversation } from "./model-relay.js";
 
 type Section = "system" | "tools" | "recall" | "history" | "image";

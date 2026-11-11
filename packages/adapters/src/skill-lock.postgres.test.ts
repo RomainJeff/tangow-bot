@@ -1,8 +1,8 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { buildSkillMd } from "@rakazo/core";
-import { createPool } from "@rakazo/db";
+import { buildSkillMd } from "@tangow/core";
+import { createPool } from "@tangow/db";
 import { describe, expect, it, vi } from "vitest";
 import { listUserSkills, userSkillsRoot, writeUserSkill } from "./skill-store.js";
 

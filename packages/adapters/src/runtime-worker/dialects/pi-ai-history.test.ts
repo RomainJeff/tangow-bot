@@ -1,4 +1,4 @@
-import type { AgentHistoryTurn } from "@rakazo/contracts";
+import type { AgentHistoryTurn } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import { ingestPiAi, projectPiAi } from "./pi-ai-history.js";
 

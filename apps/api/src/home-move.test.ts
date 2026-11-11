@@ -3,9 +3,9 @@ import {
   acquireComputerExecutionLease,
   releaseComputerExecutionLease,
   renewComputerExecutionLease,
-} from "@rakazo/adapters";
-import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
-import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
+} from "@tangow/adapters";
+import type { PgliteDatabase } from "@tangow/db/pglite.test-support";
+import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { FakeSandboxProvider } from "../../../packages/adapters/src/fake-sandbox.js";
 import { InMemoryJobQueue } from "../../../packages/adapters/src/wakeup.js";

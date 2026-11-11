@@ -1,8 +1,8 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { ComposioEmulator } from "@rakazo/adapters";
-import type { ThreadSnapshot } from "@rakazo/contracts";
+import { ComposioEmulator } from "@tangow/adapters";
+import type { ThreadSnapshot } from "@tangow/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
 import { sessionCookieHeader, threadMessages } from "./index.js";

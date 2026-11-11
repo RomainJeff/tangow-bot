@@ -1,6 +1,6 @@
 import { Readable } from "node:stream";
-import { resolveSupervisorToken } from "@rakazo/core";
-import { screenPorts } from "@rakazo/core/node/desktop-runtime";
+import { resolveSupervisorToken } from "@tangow/core";
+import { screenPorts } from "@tangow/core/node/desktop-runtime";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mock = vi.hoisted(() => ({ exec: vi.fn(), inspect: vi.fn() }));

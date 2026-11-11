@@ -1,5 +1,5 @@
-import type { SessionId } from "@rakazo/contracts";
-import { replacedDraftResult } from "@rakazo/core";
+import type { SessionId } from "@tangow/contracts";
+import { replacedDraftResult } from "@tangow/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PrismaClient } from "./client.js";
 import type { AnswerRunInput, DismissProposalWithTextInput } from "./events.js";

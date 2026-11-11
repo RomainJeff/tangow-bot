@@ -1,7 +1,7 @@
-import type { EncryptedSecretStore } from "@rakazo/adapters";
-import { buildMcpCredentialBlob } from "@rakazo/adapters";
-import type { Actor, McpServer, McpServerConfigInput } from "@rakazo/contracts";
-import type { Prisma, PrismaClient } from "@rakazo/db";
+import type { EncryptedSecretStore } from "@tangow/adapters";
+import { buildMcpCredentialBlob } from "@tangow/adapters";
+import type { Actor, McpServer, McpServerConfigInput } from "@tangow/contracts";
+import type { Prisma, PrismaClient } from "@tangow/db";
 
 export function mcpServerDto(
   row: {

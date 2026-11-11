@@ -1,6 +1,6 @@
-import type { SessionId } from "@rakazo/contracts";
-import type { PrismaClient } from "@rakazo/db";
-import { createDb } from "@rakazo/db";
+import type { SessionId } from "@tangow/contracts";
+import type { PrismaClient } from "@tangow/db";
+import { createDb } from "@tangow/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { openRunLog } from "./executor.js";
 import { PostgresSessionLog } from "./session-log/postgres.js";

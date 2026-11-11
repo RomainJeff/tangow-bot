@@ -1,6 +1,6 @@
-import { ChatMarkdown, truncateMarkdownForRender } from "@rakazo/chat-ui/native";
-import type { BotActivityOutput, RunActivityRow, RunRecap, RunStatus } from "@rakazo/contracts";
-import type { ActivityItem, RecapBody, RecapRead } from "@rakazo/core";
+import { ChatMarkdown, truncateMarkdownForRender } from "@tangow/chat-ui/native";
+import type { BotActivityOutput, RunActivityRow, RunRecap, RunStatus } from "@tangow/contracts";
+import type { ActivityItem, RecapBody, RecapRead } from "@tangow/core";
 import {
   dayMarkers,
   foldActivity,
@@ -8,8 +8,8 @@ import {
   reduceActivity,
   runTitle,
   threadTimeMarkerLabel,
-} from "@rakazo/core";
-import { radii } from "@rakazo/ui-tokens";
+} from "@tangow/core";
+import { radii } from "@tangow/ui-tokens";
 import { useFocusEffect, useNavigation, useRouter } from "expo-router";
 import type { ComponentProps } from "react";
 import {

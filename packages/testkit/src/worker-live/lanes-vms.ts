@@ -1,6 +1,6 @@
 import path from "node:path";
-import { nativeToolsForHarness } from "@rakazo/adapters/runtime-worker";
-import { WORKSPACE_ROOT } from "@rakazo/core";
+import { nativeToolsForHarness } from "@tangow/adapters/runtime-worker";
+import { WORKSPACE_ROOT } from "@tangow/core";
 import { Sandbox } from "e2b";
 import { toolResult } from "../file-task.js";
 import { nativeCalls } from "../worker-channel-tap.js";

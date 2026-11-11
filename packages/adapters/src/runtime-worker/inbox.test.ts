@@ -1,4 +1,4 @@
-import type { ReplyFinal, WorkerEventV1, WorkerReplyV1 } from "@rakazo/adapter-kit";
+import type { ReplyFinal, WorkerEventV1, WorkerReplyV1 } from "@tangow/adapter-kit";
 import { describe, expect, it } from "vitest";
 import { createSessionInbox, type InboxHandler } from "./inbox.js";
 

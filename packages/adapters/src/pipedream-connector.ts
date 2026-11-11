@@ -6,7 +6,7 @@ import type {
   ConnectorEvent,
   ConnectorTool,
   ManagedConnectorProvider,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import { collectPages, filterCatalog } from "./composio-connector.js";
 import { ConnectorError } from "./connector-error.js";
 import { connectorError, connectorResult, httpConnectorFailureKind } from "./connector-errors.js";

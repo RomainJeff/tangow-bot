@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { SessionEntrySchema } from "@rakazo/contracts";
+import { SessionEntrySchema } from "@tangow/contracts";
 import type { ReactNode } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";

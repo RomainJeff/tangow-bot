@@ -1,4 +1,4 @@
-import type { ThreadItem } from "@rakazo/contracts";
+import type { ThreadItem } from "@tangow/contracts";
 
 export type RoutineItem = Extract<ThreadItem, { kind: "routine" }>;
 

@@ -8,8 +8,8 @@ import type {
   SessionRunTrigger,
   ThreadEntry,
   ThreadEntryOf,
-} from "@rakazo/contracts";
-import { isInferenceEntry, needsThePerson, REPLY_QUOTE_MAX_LENGTH } from "@rakazo/contracts";
+} from "@tangow/contracts";
+import { isInferenceEntry, needsThePerson, REPLY_QUOTE_MAX_LENGTH } from "@tangow/contracts";
 import { blocksToAgentHistoryText } from "../attachments.js";
 import { escapeDirectoryField, escapePromptData, renderBotMessageBlock } from "../bot-messages.js";
 import { messageReaction } from "../message-reactions.js";

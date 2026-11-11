@@ -1,6 +1,6 @@
-import { ASK_DRAFT_SUBJECT_MAX_LENGTH } from "@rakazo/contracts";
-import { heldBack, LINE_BREAKS, takeAddresses } from "@rakazo/core";
-import { radii, sizes } from "@rakazo/ui-tokens";
+import { ASK_DRAFT_SUBJECT_MAX_LENGTH } from "@tangow/contracts";
+import { heldBack, LINE_BREAKS, takeAddresses } from "@tangow/core";
+import { radii, sizes } from "@tangow/ui-tokens";
 import type { ReactNode } from "react";
 import { Children, Fragment, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";

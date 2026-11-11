@@ -1,4 +1,4 @@
-import { saveKey } from "@rakazo/core";
+import { saveKey } from "@tangow/core";
 import * as SecureStore from "expo-secure-store";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { botSaves } from "./bot-page-state.js";

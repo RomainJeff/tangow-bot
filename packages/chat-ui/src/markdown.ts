@@ -1,4 +1,4 @@
-import { wwwLinkHref } from "@rakazo/core";
+import { wwwLinkHref } from "@tangow/core";
 
 export type ChatMarkdownProps = {
   children: string;

@@ -1,4 +1,4 @@
-import type { UsageCell } from "@rakazo/contracts";
+import type { UsageCell } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import { pivotUsage, usageAverage, usageDimensions } from "./usage-breakdown.js";
 

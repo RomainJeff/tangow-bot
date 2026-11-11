@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
-import type { MessageBlock } from "@rakazo/contracts";
-import { buildWidgetDocument, parseWidgetHeightMessage } from "@rakazo/core/widget";
+import type { MessageBlock } from "@tangow/contracts";
+import { buildWidgetDocument, parseWidgetHeightMessage } from "@tangow/core/widget";
 import {
   Button,
   Dialog,
@@ -9,7 +9,7 @@ import {
   DialogTitle,
   Skeleton,
   Surface,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import { Maximize2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ArtifactTarget } from "../../lib/artifact-open";

@@ -1,5 +1,5 @@
-import type { AgentSkill, AgentSkillCatalogEntry, SkillAvailability } from "@rakazo/contracts";
-import { filterSkillList, parseSkillMd } from "@rakazo/core";
+import type { AgentSkill, AgentSkillCatalogEntry, SkillAvailability } from "@tangow/contracts";
+import { filterSkillList, parseSkillMd } from "@tangow/core";
 import * as DocumentPicker from "expo-document-picker";
 import { File } from "expo-file-system";
 import { useEffect, useRef, useState } from "react";

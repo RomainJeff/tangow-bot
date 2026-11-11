@@ -1,5 +1,5 @@
-import type { AdapterContext, ComputerRef, PageBrowserCommand } from "@rakazo/adapter-kit";
-import { E2BSandboxEmulator } from "@rakazo/adapters";
+import type { AdapterContext, ComputerRef, PageBrowserCommand } from "@tangow/adapter-kit";
+import { E2BSandboxEmulator } from "@tangow/adapters";
 import { afterEach, expect, it, vi } from "vitest";
 import { stopThreadRuns } from "../../../apps/api/src/thread-target.js";
 import { startWorkerRun } from "./worker-run-fixture.js";

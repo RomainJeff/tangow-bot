@@ -1,5 +1,5 @@
-import type { AgentRunRequest, AgentRuntime } from "@rakazo/adapter-kit";
-import { DRAFT_CARDS } from "@rakazo/core";
+import type { AgentRunRequest, AgentRuntime } from "@tangow/adapter-kit";
+import { DRAFT_CARDS } from "@tangow/core";
 import { describe, expect, it } from "vitest";
 import { prepareDraft } from "./draft-preparation.js";
 

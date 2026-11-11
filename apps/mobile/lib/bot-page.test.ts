@@ -1,5 +1,5 @@
-import type { Me } from "@rakazo/contracts";
-import type { FieldSaveState } from "@rakazo/core";
+import type { Me } from "@tangow/contracts";
+import type { FieldSaveState } from "@tangow/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const server = vi.hoisted(() => ({

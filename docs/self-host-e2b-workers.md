@@ -139,7 +139,7 @@ and `E2B_SANDBOX_URL`, from the environment.
 
    ```bash
    pnpm install
-   pnpm --filter @rakazo/agent-run-worker template:build
+   pnpm --filter @tangow/agent-run-worker template:build
    ```
 
    To build it under another name, pass `--name <name>` and set `WORKER_TEMPLATE` to that name.
@@ -159,7 +159,7 @@ and `E2B_SANDBOX_URL`, from the environment.
    amd64, then build the template from the image digest:
 
    ```bash
-   pnpm --filter @rakazo/computer-e2b-template template:build \
+   pnpm --filter @tangow/computer-e2b-template template:build \
      --image <registry>/rakazo-computer@sha256:<digest>
    ```
 

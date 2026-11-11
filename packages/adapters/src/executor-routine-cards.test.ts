@@ -6,10 +6,10 @@ import type {
   AgentRunRequest,
   AgentRuntimeEvent,
   ConnectorCall,
-} from "@rakazo/adapter-kit";
-import { BOT_MESSAGE_MAX_HOPS, BOT_OFFER_PROPOSALS, withProposalKey } from "@rakazo/core";
-import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
-import { Prisma } from "@rakazo/db";
+} from "@tangow/adapter-kit";
+import { BOT_MESSAGE_MAX_HOPS, BOT_OFFER_PROPOSALS, withProposalKey } from "@tangow/core";
+import { approvalEffectKey } from "@tangow/core/node/approval-effect-key";
+import { Prisma } from "@tangow/db";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isApprovalPausedResult } from "./approval-effect.js";
 import type * as AutoReviewModule from "./auto-review.js";

@@ -9,9 +9,9 @@ import type {
   HarnessDeclaration,
   ReplyBody,
   WorkerIdentity,
-} from "@rakazo/adapter-kit";
-import { PI_NATIVE_HARNESS } from "@rakazo/adapter-kit";
-import type { FrameChannel, LaunchedGuest, WorkerClock } from "@rakazo/adapters/runtime-worker";
+} from "@tangow/adapter-kit";
+import { PI_NATIVE_HARNESS } from "@tangow/adapter-kit";
+import type { FrameChannel, LaunchedGuest, WorkerClock } from "@tangow/adapters/runtime-worker";
 import {
   capabilityWorker,
   createWorkerAgentRuntime,
@@ -20,8 +20,8 @@ import {
   readControllerFrame,
   WORKER_LIMITS,
   WORKER_NATIVE_TOOLS,
-} from "@rakazo/adapters/runtime-worker";
-import { createLogger, createTestSink, getLogger, installLogger } from "@rakazo/logging";
+} from "@tangow/adapters/runtime-worker";
+import { createLogger, createTestSink, getLogger, installLogger } from "@tangow/logging";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 import * as piRunModel from "../../adapters/src/pi-run-model.js";
 import type { ModelEmulatorRequest } from "./model-emulator.js";

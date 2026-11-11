@@ -1,6 +1,6 @@
-import type { Routine } from "@rakazo/contracts";
-import { draftFromRoutine, type RoutineDraft, triggerSave } from "@rakazo/core";
-import { radii } from "@rakazo/ui-tokens";
+import type { Routine } from "@tangow/contracts";
+import { draftFromRoutine, type RoutineDraft, triggerSave } from "@tangow/core";
+import { radii } from "@tangow/ui-tokens";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {

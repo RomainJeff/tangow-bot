@@ -1,4 +1,4 @@
-import type { AskDraftFields, AskDraftRecipient } from "@rakazo/contracts";
+import type { AskDraftFields, AskDraftRecipient } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import { changeLine, foldedRoles, heldBack, takeAddresses } from "./draft-lines.js";
 

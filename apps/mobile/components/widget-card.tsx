@@ -1,6 +1,6 @@
-import type { MessageBlock } from "@rakazo/contracts";
-import { buildWidgetDocument, parseWidgetHeightMessage } from "@rakazo/core/widget";
-import { radii, sizes } from "@rakazo/ui-tokens";
+import type { MessageBlock } from "@tangow/contracts";
+import { buildWidgetDocument, parseWidgetHeightMessage } from "@tangow/core/widget";
+import { radii, sizes } from "@tangow/ui-tokens";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Linking, Modal, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
 import Animated, {

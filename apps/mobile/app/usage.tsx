@@ -1,4 +1,4 @@
-import type { UsageCell, UsagePeriod } from "@rakazo/contracts";
+import type { UsageCell, UsagePeriod } from "@tangow/contracts";
 import {
   formatTokenCount,
   pivotUsage,
@@ -9,7 +9,7 @@ import {
   type UsageRow,
   usageAverage,
   usageDimensions,
-} from "@rakazo/core";
+} from "@tangow/core";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";

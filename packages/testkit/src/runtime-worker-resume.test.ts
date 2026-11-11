@@ -1,4 +1,4 @@
-import type { ConnectorProvider } from "@rakazo/adapter-kit";
+import type { ConnectorProvider } from "@tangow/adapter-kit";
 import { afterEach, expect, it } from "vitest";
 import { catalogEntries, lazyCatalogTools } from "../../adapters/src/lazy-tool-catalog.js";
 import { latestCard } from "./index.js";

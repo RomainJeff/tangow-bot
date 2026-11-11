@@ -11,7 +11,7 @@
  * and any OTLP backend can be pointed at instead.
  */
 import type { AttributeValue } from "@earendil-works/pi-telemetry";
-import { guardedWrite, reportSinkError } from "@rakazo/logging";
+import { guardedWrite, reportSinkError } from "@tangow/logging";
 import { request } from "undici";
 
 import type { RecordedSpan, RunTrace } from "./run-trace.js";

@@ -30,7 +30,7 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { parseArgs } from "node:util";
 import type { Api } from "@earendil-works/pi-ai";
-import { WORKER_PROFILE, workerTemplate } from "@rakazo/agent-run-worker/template";
+import { WORKER_PROFILE, workerTemplate } from "@tangow/agent-run-worker/template";
 import type { ConnectionOpts } from "e2b";
 import { Sandbox, Template } from "e2b";
 import type { TaskId } from "../worker-live/accept.js";

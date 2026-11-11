@@ -1,4 +1,4 @@
-import { motion, springAt } from "@rakazo/ui-tokens";
+import { motion, springAt } from "@tangow/ui-tokens";
 import {
   Easing,
   useAnimatedStyle,

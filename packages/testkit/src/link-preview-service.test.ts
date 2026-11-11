@@ -1,5 +1,5 @@
-import { createLinkPreviewFetcherForTests, resolveLinkPreviewDetailed } from "@rakazo/adapters";
-import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
+import { createLinkPreviewFetcherForTests, resolveLinkPreviewDetailed } from "@tangow/adapters";
+import { createLogger, createTestSink, installLogger } from "@tangow/logging";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createFakeThreadDb } from "./fake-thread-db.js";
 

@@ -3,7 +3,7 @@ import http from "node:http";
 import type { Socket } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { WorkerSpec } from "@rakazo/adapter-kit";
+import type { WorkerSpec } from "@tangow/adapter-kit";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DOCKER_CREATE_MARGIN_MS, DockerWorkerProvider } from "./docker-worker.js";
 import { encodeFrameLine } from "./runtime-worker/framing.js";

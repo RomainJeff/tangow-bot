@@ -1,5 +1,5 @@
-import type { ComputerStatus } from "@rakazo/contracts";
-import { SCREEN_URL_RENEW_MS } from "@rakazo/core";
+import type { ComputerStatus } from "@tangow/contracts";
+import { SCREEN_URL_RENEW_MS } from "@tangow/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createComputerRefresh } from "./computer-refresh";
 

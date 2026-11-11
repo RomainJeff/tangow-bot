@@ -1,5 +1,5 @@
-import type { MessageBlock, ThreadItem, ThreadMessage } from "@rakazo/contracts";
-import { LINK_BLOCK_KINDS } from "@rakazo/contracts";
+import type { MessageBlock, ThreadItem, ThreadMessage } from "@tangow/contracts";
+import { LINK_BLOCK_KINDS } from "@tangow/contracts";
 import { showsTimeMarker } from "./thread-time-markers.js";
 
 /** Consecutive messages from the same bot within this window collapse under one header

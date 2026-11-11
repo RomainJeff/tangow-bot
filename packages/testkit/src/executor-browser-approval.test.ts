@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import type { AdapterContext, ComputerRef, SandboxProvider } from "@rakazo/adapter-kit";
-import { E2BSandboxEmulator } from "@rakazo/adapters";
-import { HARNESSES } from "@rakazo/agent-run-worker";
+import type { AdapterContext, ComputerRef, SandboxProvider } from "@tangow/adapter-kit";
+import { E2BSandboxEmulator } from "@tangow/adapters";
+import { HARNESSES } from "@tangow/agent-run-worker";
 import { afterEach, expect, it, vi } from "vitest";
 import { dockerE2BMachine } from "../../adapters/src/e2b-machine.test-support.js";
 import { E2BSandboxProvider } from "../../adapters/src/e2b-sandbox.js";

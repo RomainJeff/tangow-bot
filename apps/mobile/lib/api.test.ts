@@ -5,8 +5,8 @@ import type {
   SessionEntryOf,
   SessionEntryType,
   ThreadItem,
-} from "@rakazo/contracts";
-import type { ThreadRow } from "@rakazo/core";
+} from "@tangow/contracts";
+import type { ThreadRow } from "@tangow/core";
 import * as SecureStore from "expo-secure-store";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MobileSnapshot } from "./api.js";

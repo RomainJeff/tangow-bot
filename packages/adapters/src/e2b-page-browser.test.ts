@@ -1,6 +1,6 @@
 import type { CommandHandle, CommandStartOpts } from "@e2b/desktop";
 import { CommandExitError } from "@e2b/desktop";
-import type { PageBrowserCommand } from "@rakazo/adapter-kit";
+import type { PageBrowserCommand } from "@tangow/adapter-kit";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { fakeE2BMachine } from "./e2b-machine.test-support.js";
 import type { E2BSandboxSdk } from "./e2b-sandbox.js";

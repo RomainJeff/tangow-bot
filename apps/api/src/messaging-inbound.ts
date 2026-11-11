@@ -1,7 +1,7 @@
-import type { JobPublisher, MessagingInboundMessage } from "@rakazo/adapter-kit";
-import { messagingDeliverJob, runContinueJob } from "@rakazo/adapter-kit";
-import type { MessageBlock } from "@rakazo/contracts";
-import { parseMessagingCommand, sanitizeMessagingLabel } from "@rakazo/core";
+import type { JobPublisher, MessagingInboundMessage } from "@tangow/adapter-kit";
+import { messagingDeliverJob, runContinueJob } from "@tangow/adapter-kit";
+import type { MessageBlock } from "@tangow/contracts";
+import { parseMessagingCommand, sanitizeMessagingLabel } from "@tangow/core";
 import type {
   MessagingIdentityRequest,
   Prisma,
@@ -9,13 +9,13 @@ import type {
   ProvisionedMessagingIdentity,
   SignupPolicyEnv,
   ThreadEvents,
-} from "@rakazo/db";
+} from "@tangow/db";
 import {
   createThreadMessage,
   normalizeMessagingLinkCode,
   redeemMessagingLinkCode,
-} from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 import {
   MESSAGE_ROUTING_REARMED_REASON,
   MESSAGE_ROUTING_REASON,

@@ -1,5 +1,5 @@
-import type { EntryId, SessionEntry, SessionId } from "@rakazo/contracts";
-import { SessionEntrySchema } from "@rakazo/contracts";
+import type { EntryId, SessionEntry, SessionId } from "@tangow/contracts";
+import { SessionEntrySchema } from "@tangow/contracts";
 
 type Draft<E> = E extends { type: "rewind" | "compaction" }
   ? Omit<E, "id" | "seq" | "ts"> & { id?: EntryId; ts?: string }

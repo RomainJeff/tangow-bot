@@ -1,4 +1,4 @@
-import { LIVE_WORKER_STATES, WORKER_TTL_SECONDS } from "@rakazo/core";
+import { LIVE_WORKER_STATES, WORKER_TTL_SECONDS } from "@tangow/core";
 import { Prisma } from "./client.js";
 
 /** A bot owns its private volume; a space owns its shared one, and is deleted only once empty. */

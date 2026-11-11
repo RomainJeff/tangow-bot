@@ -12,9 +12,9 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
-import type { AdapterContext } from "@rakazo/adapter-kit";
-import type { PrismaClient } from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+import type { AdapterContext } from "@tangow/adapter-kit";
+import type { PrismaClient } from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 import { DockerVolumeFiles } from "./docker-volume-files.js";
 import { migrateUserSkillsToShared } from "./skill-volume-migration.js";
 import type { HomeAdoption, HomeMoveBlocker, WorkerLifecycle } from "./worker-lifecycle.js";

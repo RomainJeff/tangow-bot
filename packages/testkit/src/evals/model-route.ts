@@ -1,4 +1,4 @@
-import type { ModelCategory } from "@rakazo/contracts";
+import type { ModelCategory } from "@tangow/contracts";
 
 export const MODEL_ROUTE_CASES: readonly {
   id: string;

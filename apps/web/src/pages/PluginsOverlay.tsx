@@ -1,12 +1,12 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { ConnectionCatalogItem } from "@rakazo/contracts";
+import type { ConnectionCatalogItem } from "@tangow/contracts";
 import {
   buildFeaturedConnectorTiles,
   CONNECTION_CATALOG_PAGE_SIZE,
   EMPTY_PLUGIN_CATALOG_MESSAGE,
   filterConnectionCatalogItems,
-} from "@rakazo/core";
-import { Button, Input } from "@rakazo/ui-web";
+} from "@tangow/core";
+import { Button, Input } from "@tangow/ui-web";
 import { useMemo, useState } from "react";
 import { IntegrationSetup } from "../components/integrations/IntegrationSetup";
 import { AdvancedIntegrations } from "./plugins/advanced-integrations";

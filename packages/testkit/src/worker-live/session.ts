@@ -2,8 +2,8 @@ import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
-import type { AdapterContext, SandboxProvider, WorkerProvider } from "@rakazo/adapter-kit";
-import type { E2BSandboxSdk, E2BWorkerSdk } from "@rakazo/adapters";
+import type { AdapterContext, SandboxProvider, WorkerProvider } from "@tangow/adapter-kit";
+import type { E2BSandboxSdk, E2BWorkerSdk } from "@tangow/adapters";
 import {
   E2BSandboxProvider,
   E2BVolumeFiles,
@@ -11,8 +11,8 @@ import {
   e2bComputerSdk,
   e2bVolumeSandbox,
   e2bWorkerSdk,
-} from "@rakazo/adapters";
-import type { GuestConnector } from "@rakazo/adapters/runtime-worker";
+} from "@tangow/adapters";
+import type { GuestConnector } from "@tangow/adapters/runtime-worker";
 import type { ConnectionOpts } from "e2b";
 import { Sandbox, Volume } from "e2b";
 

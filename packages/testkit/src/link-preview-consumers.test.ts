@@ -1,14 +1,14 @@
-import type { AgentRuntime, MemoryStore, SessionLog } from "@rakazo/adapter-kit";
+import type { AgentRuntime, MemoryStore, SessionLog } from "@tangow/adapter-kit";
 import {
   botRunOutcomeText,
   completionNotificationBody,
   loadCurrentTurnImages,
   mirrorMessagingOutbound,
-} from "@rakazo/adapters";
-import type { MessageBlock, SessionEntry } from "@rakazo/contracts";
-import { SessionEntrySchema } from "@rakazo/contracts";
-import { blocksToAgentHistoryText, projectInferenceTurns, speechFromBlocks } from "@rakazo/core";
-import type { Prisma, PrismaClient } from "@rakazo/db";
+} from "@tangow/adapters";
+import type { MessageBlock, SessionEntry } from "@tangow/contracts";
+import { SessionEntrySchema } from "@tangow/contracts";
+import { blocksToAgentHistoryText, projectInferenceTurns, speechFromBlocks } from "@tangow/core";
+import type { Prisma, PrismaClient } from "@tangow/db";
 import { describe, expect, it, vi } from "vitest";
 import { querySpaceSearch } from "../../../apps/api/src/search.ts";
 import { compactHistory } from "../../adapters/src/history-compaction.ts";
@@ -16,7 +16,7 @@ import { materializeCurrentTurnFiles } from "../../adapters/src/thread-artifacts
 import { previewFromBlocks } from "../../db/src/thread-listing.ts";
 
 vi.mock("../../db/src/sessions.js", async () =>
-  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+  (await import("@tangow/db/sessions.test-support")).stubbedDbSessions(),
 );
 
 /** A title no consumer may ever repeat: it is page content, not something anyone said. */

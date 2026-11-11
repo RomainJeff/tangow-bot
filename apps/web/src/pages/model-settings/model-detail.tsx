@@ -1,12 +1,12 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { ThinkingLevel } from "@rakazo/contracts";
+import type { ThinkingLevel } from "@tangow/contracts";
 import {
   Button,
   Input,
   ModelThinkingOptions,
   NativeSelect,
   NativeSelectOption,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import { ModelPicker } from "./model-picker";
 import { SubscriptionSignIn } from "./subscription-sign-in";
 import type { ModelSettings } from "./use-model-settings";

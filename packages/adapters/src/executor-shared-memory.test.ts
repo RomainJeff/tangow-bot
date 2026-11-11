@@ -3,7 +3,7 @@ import type {
   AgentRunRequest,
   ConnectorTool,
   MemoryCommitRequest,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import { describe, expect, it, vi } from "vitest";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";

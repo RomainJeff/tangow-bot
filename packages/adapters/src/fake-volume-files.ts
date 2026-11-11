@@ -1,5 +1,5 @@
-import type { AdapterContext, PortableFile, VolumeEntry, VolumeFiles } from "@rakazo/adapter-kit";
-import { fileMode } from "@rakazo/adapter-kit";
+import type { AdapterContext, PortableFile, VolumeEntry, VolumeFiles } from "@tangow/adapter-kit";
+import { fileMode } from "@tangow/adapter-kit";
 
 type StoredFile = { content: Uint8Array; mode: number };
 

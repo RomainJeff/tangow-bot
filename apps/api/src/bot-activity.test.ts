@@ -5,10 +5,10 @@ import type {
   BotActivityOutput,
   RunRecap,
   SessionEntry,
-} from "@rakazo/contracts";
-import { SessionEntrySchema } from "@rakazo/contracts";
-import type { PrismaClient } from "@rakazo/db";
-import { IsolationError } from "@rakazo/db";
+} from "@tangow/contracts";
+import { SessionEntrySchema } from "@tangow/contracts";
+import type { PrismaClient } from "@tangow/db";
+import { IsolationError } from "@tangow/db";
 import { describe, expect, it, vi } from "vitest";
 import type { RouterDeps } from "./router.js";
 import { createRouter } from "./router.js";

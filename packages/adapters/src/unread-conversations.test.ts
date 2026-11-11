@@ -5,9 +5,9 @@ import {
   createSpaceInvitations,
   setBotSharing,
   sharedBotThread,
-} from "@rakazo/db";
-import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
-import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
+} from "@tangow/db";
+import type { PgliteDatabase } from "@tangow/db/pglite.test-support";
+import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { unreadConversationCount } from "./executor.js";
 

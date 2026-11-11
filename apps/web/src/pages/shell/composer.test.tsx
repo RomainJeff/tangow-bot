@@ -75,7 +75,7 @@ vi.mock("../../lib/desktop.js", () => ({
   desktopBridge: () => undefined,
 }));
 
-vi.mock("@rakazo/ui-web", () => {
+vi.mock("@tangow/ui-web", () => {
   const Button = ({
     variant: _variant,
     size: _size,

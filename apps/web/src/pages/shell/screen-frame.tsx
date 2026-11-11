@@ -1,7 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
-import type { ScreenLink, ScreenLinkView } from "@rakazo/core";
-import { createScreenLink, screenLinkChannel } from "@rakazo/core";
-import { cn, Shimmer } from "@rakazo/ui-web";
+import type { ScreenLink, ScreenLinkView } from "@tangow/core";
+import { createScreenLink, screenLinkChannel } from "@tangow/core";
+import { cn, Shimmer } from "@tangow/ui-web";
 import { LoaderCircle } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 

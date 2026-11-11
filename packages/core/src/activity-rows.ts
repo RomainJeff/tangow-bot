@@ -5,8 +5,8 @@ import type {
   RunActivityRow,
   RunRecap,
   RunsCursor,
-} from "@rakazo/contracts";
-import { parseKnownMessageBlocks } from "@rakazo/contracts";
+} from "@tangow/contracts";
+import { parseKnownMessageBlocks } from "@tangow/contracts";
 import { ACTIVE_RUN_STATUSES } from "./run-state.js";
 
 type CreationItem = Exclude<BotActivityItem, { kind: "routine_run" }>;

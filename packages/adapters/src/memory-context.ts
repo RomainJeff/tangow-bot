@@ -3,8 +3,8 @@ import type {
   MarkdownMemoryScope,
   MemorySnapshot,
   MemoryStore,
-} from "@rakazo/adapter-kit";
-import { escapePromptData } from "@rakazo/core";
+} from "@tangow/adapter-kit";
+import { escapePromptData } from "@tangow/core";
 
 const MAX_AGENT_MEMORY_BYTES = 32 * 1024;
 

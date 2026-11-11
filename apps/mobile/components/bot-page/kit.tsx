@@ -1,5 +1,5 @@
-import type { FieldSaveState } from "@rakazo/core";
-import { radii, tokensForAppearance } from "@rakazo/ui-tokens";
+import type { FieldSaveState } from "@tangow/core";
+import { radii, tokensForAppearance } from "@tangow/ui-tokens";
 import { useFocusEffect } from "expo-router";
 import {
   Children,

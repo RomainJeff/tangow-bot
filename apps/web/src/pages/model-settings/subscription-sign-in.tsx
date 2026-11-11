@@ -1,5 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Button, Input } from "@rakazo/ui-web";
+import { Button, Input } from "@tangow/ui-web";
 import type { ModelSettings } from "./use-model-settings";
 
 export function SubscriptionSignIn({

@@ -1,4 +1,4 @@
-import { radii } from "@rakazo/ui-tokens";
+import { radii } from "@tangow/ui-tokens";
 import { StyleSheet, Text, View } from "react-native";
 import { mobileTokens } from "../lib/appearance";
 import { useI18n } from "../lib/i18n";

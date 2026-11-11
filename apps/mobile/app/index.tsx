@@ -1,4 +1,4 @@
-import { normalizeCreateBotProfile } from "@rakazo/contracts";
+import { normalizeCreateBotProfile } from "@tangow/contracts";
 import { Redirect, useRouter } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import {

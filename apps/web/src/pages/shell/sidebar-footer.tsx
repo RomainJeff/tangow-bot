@@ -1,5 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { Bot, Group } from "@rakazo/contracts";
+import type { Bot, Group } from "@tangow/contracts";
 import {
   BotAvatar,
   Button,
@@ -8,7 +8,7 @@ import {
   PopoverContent,
   PopoverTrigger,
   UserAvatar,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import { Gauge, LogOut, Settings, SlidersHorizontal } from "lucide-react";
 import type { Dispatch, SetStateAction } from "react";
 import { authClient } from "../../lib/auth";

@@ -1,5 +1,5 @@
 import path from "node:path";
-import { E2B_WORKER_GUEST_ENTRY } from "@rakazo/adapters/e2b-worker";
+import { E2B_WORKER_GUEST_ENTRY } from "@tangow/adapters/e2b-worker";
 import type { TemplateBuilder } from "e2b";
 import { Template } from "e2b";
 

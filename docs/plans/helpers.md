@@ -79,8 +79,8 @@ These come from issue #386 and its two decision comments. They are settled and e
 Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at the PR head. Web and desktop lanes drive through the **run** skill plus the browser tools. Worker lanes drive through Bash. Mobile lanes drive through `pnpm test:mobile-screenshots` and its Maestro flows.
 
 - [ ] `git fetch origin <head-branch> && git checkout <head SHA>`.
-- [ ] Run `pnpm install --frozen-lockfile` and `pnpm --filter @rakazo/db exec prisma generate`. Start `pnpm dev` with the local worker provider and the testkit model emulator. Wait for the web app to answer on its dev port.
-- [ ] Deliver input only by typing in the composer through the browser tools, or through `pnpm test:worker-live` for worker lanes. Read-only diagnostics are the debug-mode run details, the API logs and `pnpm --filter @rakazo/db exec prisma studio`.
+- [ ] Run `pnpm install --frozen-lockfile` and `pnpm --filter @tangow/db exec prisma generate`. Start `pnpm dev` with the local worker provider and the testkit model emulator. Wait for the web app to answer on its dev port.
+- [ ] Deliver input only by typing in the composer through the browser tools, or through `pnpm test:worker-live` for worker lanes. Read-only diagnostics are the debug-mode run details, the API logs and `pnpm --filter @tangow/db exec prisma studio`.
 - [ ] Save every screenshot to `/tmp/swarm-<pr-id>/worker-<n>/<slug>.png` and return the paths with the report.
 
 ## Remove helper cards from the conversation (H1)
@@ -118,8 +118,8 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 - [ ] `packages/core/src/session-log/project-ui.test.ts` and `project-thread-view.test.ts` drop the card cases and gain one case asserting that a thread with a `run_subagent` call and its `subagent` answer projects to the exact list of message items, with no item of kind `subagent`. Run `pnpm exec vitest run packages/core/src/session-log`.
 - [ ] The same projection case asserts that the `run_subagent` call in the `steps` block carries the helper's literal `sessionId`.
 - [ ] `project-inference.test.ts` keeps its helper replay cases unchanged and still passes. Run `pnpm exec vitest run packages/core/src/session-log/project-inference.test.ts`.
-- [ ] `apps/web/src/lib/thread-events.test.ts` is rewritten without the `scout` row. Run `pnpm --filter @rakazo/web test`.
-- [ ] Run `pnpm --filter @rakazo/mobile test` and `pnpm --filter @rakazo/contracts test`.
+- [ ] `apps/web/src/lib/thread-events.test.ts` is rewritten without the `scout` row. Run `pnpm --filter @tangow/web test`.
+- [ ] Run `pnpm --filter @tangow/mobile test` and `pnpm --filter @tangow/contracts test`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `sonnet` at the PR head, per the boot recipe.
 
@@ -503,7 +503,7 @@ Rerun from a worktree at the spike commit with node 24 on `PATH`.
 
 ```
 pnpm install --frozen-lockfile --prefer-offline
-pnpm --filter @rakazo/db exec prisma generate
+pnpm --filter @tangow/db exec prisma generate
 npx vitest run packages/testkit/src/spike-helpers-wakeup.test.ts | grep OBS
 ```
 

@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import type { Routine } from "@rakazo/contracts";
+import type { Routine } from "@tangow/contracts";
 import {
   activeBotId,
   addRoutineTrigger,

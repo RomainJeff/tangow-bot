@@ -1,14 +1,14 @@
-import type { ArtifactStore, SessionEntryDraft } from "@rakazo/adapter-kit";
-import type { LinkMentionBlock, LinkPreviewCard, MessageBlock } from "@rakazo/contracts";
-import { EntryId, SessionId } from "@rakazo/contracts";
+import type { ArtifactStore, SessionEntryDraft } from "@tangow/adapter-kit";
+import type { LinkMentionBlock, LinkPreviewCard, MessageBlock } from "@tangow/contracts";
+import { EntryId, SessionId } from "@tangow/contracts";
 import {
   appendRunBlocksInTransaction,
   appendRunFinishedInTransaction,
   appendSessionEntryInTransaction,
   openRoutineSessionInTransaction,
   type PrismaClient,
-} from "@rakazo/db";
-import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
+} from "@tangow/db";
+import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
 
 /**
  * A Postgres for the tests of what reads and writes a thread's messages: PGlite with the

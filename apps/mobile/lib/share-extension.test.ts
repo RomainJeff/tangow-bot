@@ -8,7 +8,7 @@ describe("iOS share extension", () => {
   it("draws with the current design tokens", () => {
     expect(
       read(SHARE_TOKENS_SWIFT_PATH),
-      "Run `pnpm --filter @rakazo/mobile generate:share-tokens` after changing a token.",
+      "Run `pnpm --filter @tangow/mobile generate:share-tokens` after changing a token.",
     ).toBe(shareTokensSwift());
   });
 

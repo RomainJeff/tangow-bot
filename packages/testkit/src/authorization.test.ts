@@ -1,17 +1,17 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { ComposioEmulator, ScriptedVoiceProvider } from "@rakazo/adapters";
-import type { appContract, Space, SpaceNavigation } from "@rakazo/contracts";
-import { resolveScreenProxySecret } from "@rakazo/core";
-import { SCREEN_TARGET_ENDPOINT } from "@rakazo/core/node/screen-capability";
+import { ComposioEmulator, ScriptedVoiceProvider } from "@tangow/adapters";
+import type { appContract, Space, SpaceNavigation } from "@tangow/contracts";
+import { resolveScreenProxySecret } from "@tangow/core";
+import { SCREEN_TARGET_ENDPOINT } from "@tangow/core/node/screen-capability";
 import {
   claimEmptySpaceDeletionForMember,
   deleteEmptySpaceForMember,
   pauseRunForTakeover,
   releaseSpaceDeletionClaim,
   renewSpaceDeletionClaim,
-} from "@rakazo/db";
+} from "@tangow/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
 import { addScreenProxyCapability } from "../../../apps/api/src/screen-proxy.ts";

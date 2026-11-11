@@ -6,9 +6,9 @@ import type {
   ConnectorTool,
   MemoryStore,
   SemanticMemoryProvider,
-} from "@rakazo/adapter-kit";
-import { createWorkerAgentRuntime, memoryChannelPair } from "@rakazo/adapters/runtime-worker";
-import { HARNESSES, runGuest } from "@rakazo/agent-run-worker";
+} from "@tangow/adapter-kit";
+import { createWorkerAgentRuntime, memoryChannelPair } from "@tangow/adapters/runtime-worker";
+import { HARNESSES, runGuest } from "@tangow/agent-run-worker";
 import { describe, expect, it, onTestFinished } from "vitest";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import { startWorkerRun } from "./worker-run-fixture.js";

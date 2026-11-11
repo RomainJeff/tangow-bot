@@ -9,9 +9,9 @@ COPY . .
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store,sharing=locked \
     ELECTRON_SKIP_BINARY_DOWNLOAD=1 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
     pnpm install --frozen-lockfile --store-dir=/pnpm-store \
-      --filter "@rakazo/agent-run-worker..." --filter rakazo
+      --filter "@tangow/agent-run-worker..." --filter rakazo
 # The bundle script loads the adapters, which import the Prisma client; the bundle itself excludes it.
-RUN pnpm --filter @rakazo/db generate && pnpm --filter @rakazo/agent-run-worker bundle
+RUN pnpm --filter @tangow/db generate && pnpm --filter @tangow/agent-run-worker bundle
 
 FROM node:24-bookworm
 

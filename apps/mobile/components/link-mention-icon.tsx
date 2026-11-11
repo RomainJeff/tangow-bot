@@ -1,4 +1,4 @@
-import { sizes } from "@rakazo/ui-tokens";
+import { sizes } from "@tangow/ui-tokens";
 import { Image, StyleSheet } from "react-native";
 import type { MobileArtifactTarget } from "../lib/artifact-open";
 import { useArtifactImage } from "./link-preview-card";

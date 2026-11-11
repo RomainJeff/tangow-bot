@@ -1,11 +1,11 @@
 import { isIP } from "node:net";
-import type { PageHeadFetchInit, PageHeadRead } from "@rakazo/contracts/page-head-reader";
+import type { PageHeadFetchInit, PageHeadRead } from "@tangow/contracts/page-head-reader";
 import {
   devicePageUrl,
   isPublicAddress,
   PAGE_HEAD_MAX_BYTES,
   readPageHead,
-} from "@rakazo/contracts/page-head-reader";
+} from "@tangow/contracts/page-head-reader";
 
 /** Page reads running at once for the renderer: a link pasted twice must not pile up sockets. */
 const MAX_PAGE_HEAD_READS = 2;

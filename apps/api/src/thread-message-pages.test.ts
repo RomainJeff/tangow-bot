@@ -1,6 +1,6 @@
-import type { ProductEvent, SessionEntry } from "@rakazo/contracts";
-import { EntryId, SessionEntrySchema, SessionId } from "@rakazo/contracts";
-import type { PrismaClient } from "@rakazo/db";
+import type { ProductEvent, SessionEntry } from "@tangow/contracts";
+import { EntryId, SessionEntrySchema, SessionId } from "@tangow/contracts";
+import type { PrismaClient } from "@tangow/db";
 import { describe, expect, it, vi } from "vitest";
 import { forwardedThreadEvent, isPeerRun, loadEntryPage } from "./thread-message-pages.js";
 

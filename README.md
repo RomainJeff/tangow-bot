@@ -114,7 +114,7 @@ The Electron and Expo apps are clients of the same Rakazo API used by the web ap
 With the development stack running, launch Electron with:
 
 ```bash
-pnpm --filter @rakazo/desktop dev
+pnpm --filter @tangow/desktop dev
 ```
 
 On first run the desktop app asks for the address of a Rakazo server. Developers running

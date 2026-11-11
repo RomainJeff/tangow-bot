@@ -1,12 +1,12 @@
 import { cp, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, rmdir } from "node:fs/promises";
 import path from "node:path";
-import type { AdapterContext, ComputerRef, SandboxProvider } from "@rakazo/adapter-kit";
+import type { AdapterContext, ComputerRef, SandboxProvider } from "@tangow/adapter-kit";
 import {
   SKILL_BUNDLE_MAX_BYTES,
   SKILL_BUNDLE_MAX_ENTRIES,
   SKILL_DESCRIPTION_MAX_CHARS,
-} from "@rakazo/contracts";
-import type { ParsedSkillMd, SkillLearningMode, SkillRecord } from "@rakazo/core";
+} from "@tangow/contracts";
+import type { ParsedSkillMd, SkillLearningMode, SkillRecord } from "@tangow/core";
 import {
   asSkillAvailability,
   buildSkillMd,
@@ -20,9 +20,9 @@ import {
   userSkillKey,
   validateBotSkill,
   validateBotSkillFile,
-} from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 import { loadManagedSkills } from "./managed-skills.js";
 import type { SkillOwnerLock } from "./skill-lock.js";
 import type { SkillTreeFile } from "./skill-store.js";

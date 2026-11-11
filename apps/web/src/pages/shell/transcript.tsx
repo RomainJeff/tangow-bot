@@ -1,10 +1,10 @@
 import { i18n } from "@lingui/core";
 import { useLingui } from "@lingui/react/macro";
-import type { MessageReaction, ThreadItem } from "@rakazo/contracts";
-import type { SkillSourceBlock, ThreadView } from "@rakazo/core";
-import { isToolActivityBlock } from "@rakazo/core";
-import type { GroupAvatarMember } from "@rakazo/ui-web";
-import { cn } from "@rakazo/ui-web";
+import type { MessageReaction, ThreadItem } from "@tangow/contracts";
+import type { SkillSourceBlock, ThreadView } from "@tangow/core";
+import { isToolActivityBlock } from "@tangow/core";
+import type { GroupAvatarMember } from "@tangow/ui-web";
+import { cn } from "@tangow/ui-web";
 import type { RefObject } from "react";
 import { Fragment, memo, useEffect, useMemo, useRef, useState } from "react";
 import type { CardEdits } from "../../components/AskCard";

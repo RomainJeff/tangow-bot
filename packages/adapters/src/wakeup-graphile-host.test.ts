@@ -1,4 +1,4 @@
-import type { BackgroundJobHandlers } from "@rakazo/adapter-kit";
+import type { BackgroundJobHandlers } from "@tangow/adapter-kit";
 import type { Runner } from "graphile-worker";
 import type { Pool } from "pg";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -14,7 +14,7 @@ import {
   ISOLATED_JOB_NAMES,
   LINK_PREVIEW_JOB_CONCURRENCY,
   linkPreviewJob,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import { makeWorkerUtils } from "graphile-worker";
 import {
   databaseCapacityBackoffMs,

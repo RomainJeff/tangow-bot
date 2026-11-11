@@ -8,10 +8,10 @@ import type {
   MessagingSurface,
   SandboxProvider,
   SessionLog,
-} from "@rakazo/adapter-kit";
-import { messagingDeliverJob } from "@rakazo/adapter-kit";
-import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/adapter-kit";
+import { messagingDeliverJob } from "@tangow/adapter-kit";
+import type { Prisma, PrismaClient, ThreadEvents } from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 import { expireComputerControl } from "./computer-control.js";
 import {
   scheduleComputerSleep,

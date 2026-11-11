@@ -1,6 +1,6 @@
-import type { BackgroundJob, JobPublisher, SandboxProvider } from "@rakazo/adapter-kit";
-import type { PrismaClient, ThreadEvents } from "@rakazo/db";
-import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
+import type { BackgroundJob, JobPublisher, SandboxProvider } from "@tangow/adapter-kit";
+import type { PrismaClient, ThreadEvents } from "@tangow/db";
+import { createLogger, createTestSink, installLogger } from "@tangow/logging";
 import { describe, expect, it, vi } from "vitest";
 import {
   clearInactiveUserComputerControl,

@@ -1,10 +1,10 @@
-import type { AskDraft } from "@rakazo/contracts";
+import type { AskDraft } from "@tangow/contracts";
 import {
   BOT_NAME_MAX_LENGTH,
   BOT_TITLE_MAX_LENGTH,
   SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH,
   SPAWN_BOT_PROMPT_MAX_LENGTH,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import { approvalPushBody, buildApprovalAskBlock } from "./approval-ask.js";
 

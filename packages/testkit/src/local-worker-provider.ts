@@ -9,12 +9,12 @@ import type {
   WorkerCapabilities,
   WorkerProvider,
   WorkerSpec,
-} from "@rakazo/adapter-kit";
-import type { ChannelFaults, FrameChannel, GuestConnector } from "@rakazo/adapters/runtime-worker";
-import { memoryChannelPair, streamChannel, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
-import type { GuestHarness } from "@rakazo/agent-run-worker";
-import { HARNESSES, runGuest } from "@rakazo/agent-run-worker";
-import type { PrismaClient } from "@rakazo/db";
+} from "@tangow/adapter-kit";
+import type { ChannelFaults, FrameChannel, GuestConnector } from "@tangow/adapters/runtime-worker";
+import { memoryChannelPair, streamChannel, WORKER_LIMITS } from "@tangow/adapters/runtime-worker";
+import type { GuestHarness } from "@tangow/agent-run-worker";
+import { HARNESSES, runGuest } from "@tangow/agent-run-worker";
+import type { PrismaClient } from "@tangow/db";
 import { VolumeComputer } from "./volume-computer.js";
 
 export interface LocalWorkerFaults extends ChannelFaults {
@@ -32,7 +32,7 @@ type Vm = { spec: WorkerSpec; root: string; guest?: Guest };
 const KILL_GRACE_MS = 2_000;
 /** The guest's source entry, resolved on use: a bundled harness has no package to resolve. */
 const guestEntry = () =>
-  fileURLToPath(new URL("./main.ts", import.meta.resolve("@rakazo/agent-run-worker")));
+  fileURLToPath(new URL("./main.ts", import.meta.resolve("@tangow/agent-run-worker")));
 
 function channelQueue() {
   const queued: FrameChannel[] = [];

@@ -5,8 +5,8 @@ import type {
   ModelCategory,
   RunModelDecision,
   SandboxKind,
-} from "@rakazo/contracts";
-import type { HelperProfile } from "@rakazo/core";
+} from "@tangow/contracts";
+import type { HelperProfile } from "@tangow/core";
 import type { RunPersistence, RunResumeEvent } from "./run-snapshot.js";
 import type { SkillCollision, WorkerSkill } from "./worker-protocol.js";
 

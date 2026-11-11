@@ -1,6 +1,6 @@
-import type { ComposerLinkPreviewView } from "@rakazo/core";
-import { previewSiteInitial } from "@rakazo/core";
-import { radii, sizes } from "@rakazo/ui-tokens";
+import type { ComposerLinkPreviewView } from "@tangow/core";
+import { previewSiteInitial } from "@tangow/core";
+import { radii, sizes } from "@tangow/ui-tokens";
 import { memo } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { t } from "../lib/i18n";

@@ -1,4 +1,4 @@
-import type { AskDraftEdits } from "@rakazo/contracts";
+import type { AskDraftEdits } from "@tangow/contracts";
 
 /**
  * What the person changed on each mail draft card, by card: it stays on this device until the card

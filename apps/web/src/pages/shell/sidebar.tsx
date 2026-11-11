@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
-import type { SearchHit } from "@rakazo/contracts";
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@rakazo/ui-web";
+import type { SearchHit } from "@tangow/contracts";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@tangow/ui-web";
 import { Search } from "lucide-react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { useRef } from "react";

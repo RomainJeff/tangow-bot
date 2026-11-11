@@ -1,5 +1,5 @@
-import type { MessageBlock, SessionId } from "@rakazo/contracts";
-import { stepCallTitle } from "@rakazo/core";
+import type { MessageBlock, SessionId } from "@tangow/contracts";
+import { stepCallTitle } from "@tangow/core";
 import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";

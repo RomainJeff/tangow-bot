@@ -1,12 +1,12 @@
-import type { LinkPreviewJobDeps, LinkPreviewServiceDeps } from "@rakazo/adapters";
+import type { LinkPreviewJobDeps, LinkPreviewServiceDeps } from "@tangow/adapters";
 import {
   createLinkPreviewFetcherForTests,
   resolveLinkPreviewDetailed,
   resolveLinkPreviewWithDeviceHead,
   runLinkPreviewJob,
-} from "@rakazo/adapters";
-import type { MessageBlock } from "@rakazo/contracts";
-import { createLogger, installLogger } from "@rakazo/logging";
+} from "@tangow/adapters";
+import type { MessageBlock } from "@tangow/contracts";
+import { createLogger, installLogger } from "@tangow/logging";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeThreadDb } from "./fake-thread-db.js";
 import { openThreadDb, type ThreadDb } from "./thread-db.js";

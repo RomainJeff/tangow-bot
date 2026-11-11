@@ -12,7 +12,7 @@ vi.mock("expo-secure-store", () => ({
   }),
 }));
 
-import { avatarIdentitySeed } from "@rakazo/core";
+import { avatarIdentitySeed } from "@tangow/core";
 import {
   clearMainBotCache,
   loadMainBotCache,

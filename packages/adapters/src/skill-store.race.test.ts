@@ -2,7 +2,7 @@ import type * as FsPromises from "node:fs/promises";
 import { mkdtemp, readdir, readFile, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { buildSkillMd } from "@rakazo/core";
+import { buildSkillMd } from "@tangow/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   isExists,

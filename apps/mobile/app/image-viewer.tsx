@@ -1,6 +1,6 @@
-import type { StackImage } from "@rakazo/core";
-import { threadTimeMarkerLabel } from "@rakazo/core";
-import { motion, radii, sizes, space } from "@rakazo/ui-tokens";
+import type { StackImage } from "@tangow/core";
+import { threadTimeMarkerLabel } from "@tangow/core";
+import { motion, radii, sizes, space } from "@tangow/ui-tokens";
 import { Link, Redirect, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { type ReactNode, useEffect, useRef, useState } from "react";

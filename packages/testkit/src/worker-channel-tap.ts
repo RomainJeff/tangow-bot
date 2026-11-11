@@ -1,6 +1,6 @@
 import { performance } from "node:perf_hooks";
-import type { FrameChannel, GuestConnector } from "@rakazo/adapters/runtime-worker";
-import type { PrismaClient } from "@rakazo/db";
+import type { FrameChannel, GuestConnector } from "@tangow/adapters/runtime-worker";
+import type { PrismaClient } from "@tangow/db";
 
 /** A frame as the controller's side of the channel read or sent it. */
 export type Seen = { at: number; from: "guest" | "controller"; frame: Uint8Array };

@@ -1,4 +1,4 @@
-import type { AgentRunRequest, ConnectorTool } from "@rakazo/adapter-kit";
+import type { AgentRunRequest, ConnectorTool } from "@tangow/adapter-kit";
 import {
   BotSecretDestination,
   BotSecretName,
@@ -7,9 +7,9 @@ import {
   SecretHttpRequest,
   SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH,
   SPAWN_BOT_PROMPT_MAX_LENGTH,
-} from "@rakazo/contracts";
-import type { HelperProfile } from "@rakazo/core";
-import { BOT_SKILL_DESCRIPTION_MAX_LENGTH } from "@rakazo/core";
+} from "@tangow/contracts";
+import type { HelperProfile } from "@tangow/core";
+import { BOT_SKILL_DESCRIPTION_MAX_LENGTH } from "@tangow/core";
 import { z } from "zod";
 
 export const DELEGATION_TOOL_NAMES = new Set([
@@ -75,7 +75,7 @@ export async function helperModel(
   };
 }
 
-export { HELPER_STOPPED_FOR_PAUSE } from "@rakazo/contracts";
+export { HELPER_STOPPED_FOR_PAUSE } from "@tangow/contracts";
 
 export function helperInstructions(name: string, ...extra: Array<string | undefined>) {
   return [

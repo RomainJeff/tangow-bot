@@ -1,21 +1,21 @@
 import { readdir, unlink } from "node:fs/promises";
 import path from "node:path";
-import type { GuestBody, ReplyFinal, ReplyPart, WorkerStartV1 } from "@rakazo/adapter-kit";
-import { FRAME_CAPABILITY, sameWorker, WORKER_PROTOCOL_VERSION } from "@rakazo/adapter-kit";
-import type { FrameChannel } from "@rakazo/adapters/runtime-worker/wire";
+import type { GuestBody, ReplyFinal, ReplyPart, WorkerStartV1 } from "@tangow/adapter-kit";
+import { FRAME_CAPABILITY, sameWorker, WORKER_PROTOCOL_VERSION } from "@tangow/adapter-kit";
+import type { FrameChannel } from "@tangow/adapters/runtime-worker/wire";
 import {
   capabilityWorker,
   encodeMessage,
   isToolPauseResult,
   readControllerFrame,
   WORKER_LIMITS,
-} from "@rakazo/adapters/runtime-worker/wire";
-import type { SkillRoot } from "@rakazo/adapters/volume-skills";
+} from "@tangow/adapters/runtime-worker/wire";
+import type { SkillRoot } from "@tangow/adapters/volume-skills";
 import {
   convergeSkills,
   discoverVolumeSkills,
   reportVolumeSkill,
-} from "@rakazo/adapters/volume-skills";
+} from "@tangow/adapters/volume-skills";
 import type { GuestHarness, HarnessHost, InformativeBody } from "./harness.js";
 import type { Outbox } from "./outbox.js";
 import { createOutbox } from "./outbox.js";

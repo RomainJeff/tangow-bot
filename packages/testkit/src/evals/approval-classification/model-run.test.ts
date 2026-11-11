@@ -1,5 +1,5 @@
-import type { DecisionResponse } from "@rakazo/adapter-kit";
-import { FakeDecisionProvider } from "@rakazo/adapters";
+import type { DecisionResponse } from "@tangow/adapter-kit";
+import { FakeDecisionProvider } from "@tangow/adapters";
 import { describe, expect, it } from "vitest";
 import { ambiguous, critical, read, scenario, tool } from "./corpus.js";
 import {

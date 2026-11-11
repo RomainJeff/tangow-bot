@@ -5,22 +5,22 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { crc32, deflateSync } from "node:zlib";
 import { serve } from "@hono/node-server";
-import type { SessionEntryDraft } from "@rakazo/adapter-kit";
+import type { SessionEntryDraft } from "@tangow/adapter-kit";
 import {
   ComposioEmulator,
   EmailEmulator,
   LocalArtifactStore,
   PipedreamConnector,
   ThirdPartyConnectorEmulator,
-} from "@rakazo/adapters";
-import type { EntryId, MessageBlock, SessionEntry, SessionId } from "@rakazo/contracts";
-import { messageBlockForArtifact } from "@rakazo/core";
+} from "@tangow/adapters";
+import type { EntryId, MessageBlock, SessionEntry, SessionId } from "@tangow/contracts";
+import { messageBlockForArtifact } from "@tangow/core";
 import {
   appendSessionEntryInTransaction,
   createBotMessageInTransaction,
   createThreadMessage,
   type PrismaClient,
-} from "@rakazo/db";
+} from "@tangow/db";
 import { sessionCookieHeader } from "../index.js";
 import { runProcess } from "./process.js";
 
@@ -48,7 +48,7 @@ async function main() {
   await mkdir(REPORT_DIR, { recursive: true });
   await mkdir(DATA_DIR, { recursive: true });
 
-  execFileSync("pnpm", ["--filter", "@rakazo/db", "exec", "prisma", "migrate", "deploy"], {
+  execFileSync("pnpm", ["--filter", "@tangow/db", "exec", "prisma", "migrate", "deploy"], {
     cwd: path.join(ROOT, "packages", "db"),
     env: process.env,
     stdio: "inherit",

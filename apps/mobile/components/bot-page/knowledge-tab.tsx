@@ -3,8 +3,8 @@ import type {
   BotSharing,
   MemoryDocument,
   SpaceMemoryConfig,
-} from "@rakazo/contracts";
-import { filterSkillList, showsTeamMemory } from "@rakazo/core";
+} from "@tangow/contracts";
+import { filterSkillList, showsTeamMemory } from "@tangow/core";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { rpc } from "../../lib/api";

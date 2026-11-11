@@ -1,7 +1,7 @@
-import type { SessionEntryDraft } from "@rakazo/adapter-kit";
-import { SessionId } from "@rakazo/contracts";
-import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
-import { applyMigration, migrationNames, openPgliteDatabase } from "@rakazo/db/pglite.test-support";
+import type { SessionEntryDraft } from "@tangow/adapter-kit";
+import { SessionId } from "@tangow/contracts";
+import type { PgliteDatabase } from "@tangow/db/pglite.test-support";
+import { applyMigration, migrationNames, openPgliteDatabase } from "@tangow/db/pglite.test-support";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PostgresSessionLog } from "./session-log/postgres.js";
 

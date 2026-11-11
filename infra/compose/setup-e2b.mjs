@@ -268,7 +268,7 @@ async function main() {
     "pnpm",
     [
       "--filter",
-      "@rakazo/computer-e2b-template",
+      "@tangow/computer-e2b-template",
       "exec",
       "node",
       "--input-type=module",
@@ -292,7 +292,7 @@ async function main() {
           service,
           "pnpm",
           "--filter",
-          "@rakazo/adapters",
+          "@tangow/adapters",
           "exec",
           "node",
           "--input-type=module",
@@ -306,7 +306,7 @@ async function main() {
     console.log("Building lightweight Pi worker template...");
     run(
       "pnpm",
-      ["--filter", "@rakazo/agent-run-worker", "template:build", "--name", workerTemplate],
+      ["--filter", "@tangow/agent-run-worker", "template:build", "--name", workerTemplate],
       buildEnv,
     );
     console.log("Building and pushing desktop computer image...");
@@ -324,7 +324,7 @@ async function main() {
     console.log("Building desktop E2B template...");
     run(
       "pnpm",
-      ["--filter", "@rakazo/computer-e2b-template", "template:build", "--image", digest],
+      ["--filter", "@tangow/computer-e2b-template", "template:build", "--image", digest],
       buildEnv,
     );
   }

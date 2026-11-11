@@ -4,11 +4,11 @@ import type {
   ConnectorEvent,
   ConnectorProvider,
   ConnectorTool,
-} from "@rakazo/adapter-kit";
-import { isLocalMcpHost } from "@rakazo/contracts";
-import type { McpServer, PrismaClient } from "@rakazo/db";
-import { botConnectors } from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/adapter-kit";
+import { isLocalMcpHost } from "@tangow/contracts";
+import type { McpServer, PrismaClient } from "@tangow/db";
+import { botConnectors } from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 import { connectorError, connectorResult } from "./connector-errors.js";
 import { sanitizeConnectorError } from "./connector-safety.js";
 import {

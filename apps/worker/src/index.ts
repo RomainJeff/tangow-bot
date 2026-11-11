@@ -3,9 +3,9 @@ import {
   type JobPublisher,
   type JobWorkerHost,
   LINK_PREVIEW_JOB_CONCURRENCY,
-} from "@rakazo/adapter-kit";
-import { ComposioConnector, IntegrationProviderSettings } from "@rakazo/adapters";
-import { loadRootEnv } from "@rakazo/core/node/load-root-env";
+} from "@tangow/adapter-kit";
+import { ComposioConnector, IntegrationProviderSettings } from "@tangow/adapters";
+import { loadRootEnv } from "@tangow/core/node/load-root-env";
 
 loadRootEnv();
 
@@ -54,18 +54,18 @@ import {
   resolveWorkerProvider,
   SpaceDecisionProviderResolver,
   SpaceMemoryProviderResolver,
-} from "@rakazo/adapters";
-import { parseSkillLearningMode, resolveEncryptionKey, resolveSupervisorToken } from "@rakazo/core";
+} from "@tangow/adapters";
+import { parseSkillLearningMode, resolveEncryptionKey, resolveSupervisorToken } from "@tangow/core";
 import {
   createDb,
   createPool,
   createThreadEvents,
   isTooManyDatabaseConnections,
   parsePositiveInteger,
-} from "@rakazo/db";
-import { SERVICE_NAMES } from "@rakazo/logging";
-import { createRootLogger } from "@rakazo/logging/axiom";
-import { MarkdownMemoryStore } from "@rakazo/memory";
+} from "@tangow/db";
+import { SERVICE_NAMES } from "@tangow/logging";
+import { createRootLogger } from "@tangow/logging/axiom";
+import { MarkdownMemoryStore } from "@tangow/memory";
 
 const logger = createRootLogger(SERVICE_NAMES.worker);
 

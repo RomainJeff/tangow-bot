@@ -1,5 +1,5 @@
-import type { Bot } from "@rakazo/contracts";
-import { createAnswerOrder } from "@rakazo/core";
+import type { Bot } from "@tangow/contracts";
+import { createAnswerOrder } from "@tangow/core";
 
 /**
  * The bots the bot page shows, outside React so the page and the screens it

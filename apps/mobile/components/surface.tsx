@@ -1,4 +1,4 @@
-import { radii } from "@rakazo/ui-tokens";
+import { radii } from "@tangow/ui-tokens";
 import type { ReactNode } from "react";
 import type { ViewProps, ViewStyle } from "react-native";
 import { StyleSheet, View } from "react-native";

@@ -1,6 +1,6 @@
 import { cp, mkdir, readdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
-import type { Logger } from "@rakazo/logging";
+import type { Logger } from "@tangow/logging";
 
 const MANAGED_SKILL_FAMILIES = ["agent", "computer"] as const;
 

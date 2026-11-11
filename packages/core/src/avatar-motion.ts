@@ -2,7 +2,7 @@
  * Shared working-avatar choreography: while a run is active the bot glances
  * around and changes mood at random intervals.
  *
- * Web (`@rakazo/ui-web`) and mobile (`apps/mobile`) both drive the same bloub
+ * Web (`@tangow/ui-web`) and mobile (`apps/mobile`) both drive the same bloub
  * engine, so the ranges live here and neither surface drifts from the other.
  */
 

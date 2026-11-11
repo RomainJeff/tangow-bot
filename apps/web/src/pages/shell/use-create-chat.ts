@@ -1,5 +1,5 @@
-import type { ComputerMode } from "@rakazo/contracts";
-import { normalizeCreateBotProfile } from "@rakazo/contracts";
+import type { ComputerMode } from "@tangow/contracts";
+import { normalizeCreateBotProfile } from "@tangow/contracts";
 import type { Dispatch, SetStateAction } from "react";
 import { useEffect, useRef } from "react";
 import type { NavigateFunction } from "react-router-dom";

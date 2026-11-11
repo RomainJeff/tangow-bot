@@ -6,9 +6,9 @@
  *
  *   DATABASE_URL=postgres://... pnpm exec tsx packages/adapters/src/session-log/append-roundtrips.perf.ts
  */
-import type { SessionEntryDraft } from "@rakazo/adapter-kit";
-import { EntryId, SessionId } from "@rakazo/contracts";
-import { createDb } from "@rakazo/db";
+import type { SessionEntryDraft } from "@tangow/adapter-kit";
+import { EntryId, SessionId } from "@tangow/contracts";
+import { createDb } from "@tangow/db";
 import { PostgresSessionLog } from "./postgres.js";
 
 const url = process.env.DATABASE_URL;

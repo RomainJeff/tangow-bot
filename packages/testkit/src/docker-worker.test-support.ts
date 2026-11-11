@@ -6,8 +6,8 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { WorkerSpec } from "@rakazo/adapter-kit";
-import { DockerWorkerProvider } from "@rakazo/adapters";
+import type { WorkerSpec } from "@tangow/adapter-kit";
+import { DockerWorkerProvider } from "@tangow/adapters";
 import { afterAll, beforeAll } from "vitest";
 
 /** Opt-in: needs Docker and the worker image (apps/agent-run-worker/Dockerfile), no network or keys. */

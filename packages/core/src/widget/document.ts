@@ -1,4 +1,4 @@
-import { renderTokensCss } from "@rakazo/ui-tokens/render-css";
+import { renderTokensCss } from "@tangow/ui-tokens/render-css";
 import { WIDGET_KIT_CSS } from "./kit.js";
 
 const WIDGET_CSP =

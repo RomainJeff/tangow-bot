@@ -1,6 +1,6 @@
 import { RPCHandler } from "@orpc/server/fetch";
-import type { Actor, Routine } from "@rakazo/contracts";
-import type { PrismaClient } from "@rakazo/db";
+import type { Actor, Routine } from "@tangow/contracts";
+import type { PrismaClient } from "@tangow/db";
 import { describe, expect, it, vi } from "vitest";
 import { createRouter, type RouterDeps } from "./router.js";
 import { lastRunsByRoutine } from "./runs.js";

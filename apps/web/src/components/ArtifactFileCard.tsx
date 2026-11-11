@@ -1,8 +1,8 @@
 import { i18n } from "@lingui/core";
 import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { ChatMarkdown } from "@rakazo/chat-ui/web";
-import { Button, Dialog, DialogClose, DialogContent, DialogTitle, Surface } from "@rakazo/ui-web";
+import { ChatMarkdown } from "@tangow/chat-ui/web";
+import { Button, Dialog, DialogClose, DialogContent, DialogTitle, Surface } from "@tangow/ui-web";
 import { Download, FileText, X } from "lucide-react";
 import { type RefObject, useEffect, useRef, useState } from "react";
 import {

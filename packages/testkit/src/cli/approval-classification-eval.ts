@@ -7,7 +7,7 @@ import {
   prepareDecisionProviderConnection,
   TOOL_EFFECT_PROMPT_VERSION,
   TOOL_EFFECT_TIMEOUT_MS,
-} from "@rakazo/adapters";
+} from "@tangow/adapters";
 import { DEVELOPMENT_CASES } from "../evals/approval-classification/cases.js";
 import type { ApprovalCase } from "../evals/approval-classification/corpus.js";
 import { corpusSha256, validateCorpus } from "../evals/approval-classification/corpus.js";

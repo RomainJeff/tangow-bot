@@ -1,6 +1,6 @@
-import type { DecisionProvider } from "@rakazo/adapter-kit";
-import { classifyToolEffect } from "@rakazo/adapters";
-import { connectorToolRequiresApproval } from "@rakazo/core";
+import type { DecisionProvider } from "@tangow/adapter-kit";
+import { classifyToolEffect } from "@tangow/adapters";
+import { connectorToolRequiresApproval } from "@tangow/core";
 import type { ApprovalCase, Label } from "./corpus.js";
 import { cohortOf } from "./corpus.js";
 import type { Prediction } from "./report.js";

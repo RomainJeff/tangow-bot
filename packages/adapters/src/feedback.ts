@@ -1,6 +1,6 @@
-import type { AdapterContext, FeedbackIssue, FeedbackProvider } from "@rakazo/adapter-kit";
-import { redactSecrets } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+import type { AdapterContext, FeedbackIssue, FeedbackProvider } from "@tangow/adapter-kit";
+import { redactSecrets } from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
 import { z } from "zod";
 import { sanitizeConnectorError } from "./connector-safety.js";
 import { GITHUB_REPOSITORY_PATTERN, GithubFeedbackProvider } from "./github-feedback.js";

@@ -1,5 +1,5 @@
 import { useLingui } from "@lingui/react/macro";
-import type { Routine } from "@rakazo/contracts";
+import type { Routine } from "@tangow/contracts";
 import {
   applyTriggerEdit,
   CRON_FREQS,
@@ -14,7 +14,7 @@ import {
   triggerEditFor,
   triggerEditRef,
   withoutTrigger,
-} from "@rakazo/core";
+} from "@tangow/core";
 import {
   Button,
   Dialog,
@@ -30,7 +30,7 @@ import {
   Input,
   Label,
   SettingRow,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import { Check, Clock, Copy, Eye, EyeOff, GitBranch, Globe, MessageSquare } from "lucide-react";
 import { type ReactNode, useEffect, useId, useState } from "react";
 import { RoutineSchedule } from "../RoutineSchedule";

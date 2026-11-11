@@ -12,8 +12,8 @@ import {
   parseModelMaxImagesPerPrompt,
   parseModelMaxTokens,
   type ThinkingLevel,
-} from "@rakazo/contracts";
-import { createModelProbe, initialModelProbeState } from "@rakazo/core";
+} from "@tangow/contracts";
+import { createModelProbe, initialModelProbeState } from "@tangow/core";
 import {
   Button,
   Input,
@@ -23,7 +23,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { IntegrationSetup } from "../components/integrations/IntegrationSetup";

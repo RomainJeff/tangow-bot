@@ -1,9 +1,9 @@
 import { setupI18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
-import type { MessageBlock } from "@rakazo/contracts";
-import { SessionEntrySchema } from "@rakazo/contracts";
-import { projectThreadView } from "@rakazo/core";
-import { ComposerLinkPreview, ComposerShell } from "@rakazo/ui-web";
+import type { MessageBlock } from "@tangow/contracts";
+import { SessionEntrySchema } from "@tangow/contracts";
+import { projectThreadView } from "@tangow/core";
+import { ComposerLinkPreview, ComposerShell } from "@tangow/ui-web";
 import { createRoot } from "react-dom/client";
 import type { MessageItem } from "../../src/lib/thread-items";
 import { placeHoverPill } from "../../src/pages/shell/hover-pill-placement";

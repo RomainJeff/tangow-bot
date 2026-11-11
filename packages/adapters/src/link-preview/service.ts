@@ -1,5 +1,5 @@
-import type { AdapterContext, ArtifactStore } from "@rakazo/adapter-kit";
-import { isEligibleLink, normalizePreviewUrl } from "@rakazo/core";
+import type { AdapterContext, ArtifactStore } from "@tangow/adapter-kit";
+import { isEligibleLink, normalizePreviewUrl } from "@tangow/core";
 import {
   type CachedLinkRead,
   findCachedLinkPreview,
@@ -9,8 +9,8 @@ import {
   type PrismaClient,
   reserveLinkPreviewRead,
   storeLinkPreviewCache,
-} from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 import type { LinkPreviewFailureReason } from "./errors.js";
 import type { EncodedPreviewImage } from "./image.js";
 import {

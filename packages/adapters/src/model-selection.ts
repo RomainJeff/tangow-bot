@@ -1,8 +1,8 @@
-import type { Actor, ModelCategory, RunModelDecision } from "@rakazo/contracts";
-import { ThinkingLevelSchema } from "@rakazo/contracts";
-import { MODEL_PROVIDER_NOT_CONNECTED_MESSAGE, UNKNOWN_MODEL_MESSAGE } from "@rakazo/core";
-import type { findDefaultModelCredential, PrismaClient } from "@rakazo/db";
-import { findModelCredential } from "@rakazo/db";
+import type { Actor, ModelCategory, RunModelDecision } from "@tangow/contracts";
+import { ThinkingLevelSchema } from "@tangow/contracts";
+import { MODEL_PROVIDER_NOT_CONNECTED_MESSAGE, UNKNOWN_MODEL_MESSAGE } from "@tangow/core";
+import type { findDefaultModelCredential, PrismaClient } from "@tangow/db";
+import { findModelCredential } from "@tangow/db";
 import { modelAcceptsImageInput } from "./model-vision.js";
 import { listPiCatalog, scriptedCatalogEntry } from "./pi-models.js";
 import { OPENAI_COMPATIBLE_PROVIDER_ID } from "./pi-openai-compatible-provider.js";

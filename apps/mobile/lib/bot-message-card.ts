@@ -1,4 +1,4 @@
-import type { BotMessageIntent, ThreadItem } from "@rakazo/contracts";
+import type { BotMessageIntent, ThreadItem } from "@tangow/contracts";
 import { t } from "./i18n";
 
 type BotMessageItem = Extract<ThreadItem, { kind: "botMessage" }>;

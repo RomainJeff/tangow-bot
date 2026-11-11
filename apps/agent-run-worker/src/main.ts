@@ -1,6 +1,6 @@
 import { Console } from "node:console";
 import path from "node:path";
-import { streamChannel, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker/wire";
+import { streamChannel, WORKER_LIMITS } from "@tangow/adapters/runtime-worker/wire";
 import { runGuest } from "./guest.js";
 import { HARNESSES } from "./harness/index.js";
 

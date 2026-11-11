@@ -1,5 +1,5 @@
-import { createLinkPreviewPurge, sweepOrphanPreviewArtifacts } from "@rakazo/adapters";
-import { ThreadEntrySchema } from "@rakazo/contracts";
+import { createLinkPreviewPurge, sweepOrphanPreviewArtifacts } from "@tangow/adapters";
+import { ThreadEntrySchema } from "@tangow/contracts";
 import {
   appendLinkBlocks,
   findCachedLinkPreview,
@@ -14,7 +14,7 @@ import {
   reserveLinkPreviewRead,
   rewindThread,
   storeLinkPreviewCache,
-} from "@rakazo/db";
+} from "@tangow/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeThreadDb } from "./fake-thread-db.js";
 import { openThreadDb, type ThreadDb } from "./thread-db.js";

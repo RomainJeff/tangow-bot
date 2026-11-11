@@ -100,7 +100,7 @@ asks, each rendered as a normal bot row.
 ### Outbound draft card
 
 A message the bot wrote in the person's name, in a `FramedBlock`. The header
-holds the app's mark, from the bundled marks in `@rakazo/core` (Gmail, Outlook,
+holds the app's mark, from the bundled marks in `@tangow/core` (Gmail, Outlook,
 Slack), else a neutral glyph in `mutedForeground`, never a letter; a catalog
 `logo` wins over both. Open, it reads as a grid: a 64 px label column (72 pt on iPhone), then From
 (avatar, name, account), To in 500, Cc, Bcc, Subject, all at `text-row-name`
@@ -182,7 +182,7 @@ outlined for a delegated task's result (subagent).
 What the article or photo behind a link looks like, kept with the message's attachments: under
 the bubble (or alone, in the bubble's place, when the message is only its link),
 `gap-1` below it and aligned to its edge. Three formats the server picks from what
-it downloaded: `large` (picture at `linkLargeImageRatio`, 1.91:1, from `@rakazo/ui-tokens` on both surfaces, then title and site), `compact`
+it downloaded: `large` (picture at `linkLargeImageRatio`, 1.91:1, from `@tangow/ui-tokens` on both surfaces, then title and site), `compact`
 (56 px thumbnail when there is a picture, title, site) and `photo` (the picture
 alone in a `rounded-bubble` frame capped at `linkPhotoMax`, the site under it).
 Only an article (a page whose head declares one) or a direct image link gets a card; a
@@ -294,4 +294,4 @@ The picture is only the inline thumbnail `links.preview` returns, accepted by
 `acceptPreviewThumbnail` (a `data:image/webp;base64,` URL of at most 70 000
 characters) and never copied into a message. When to read, the 800 ms debounce, the
 cancellation and the per-draft removal live once, in `createComposerLinkPreview`
-(`@rakazo/core`); a removed preview sends `linkPreview: false`.
+(`@tangow/core`); a removed preview sends `linkPreview: false`.

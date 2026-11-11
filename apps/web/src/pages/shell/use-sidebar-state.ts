@@ -1,5 +1,5 @@
-import type { SearchHit } from "@rakazo/contracts";
-import { groupBotsForSidebar } from "@rakazo/core";
+import type { SearchHit } from "@tangow/contracts";
+import { groupBotsForSidebar } from "@tangow/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import { readActivityMode, writeActivityMode } from "../../lib/activity-mode";

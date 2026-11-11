@@ -6,9 +6,9 @@ import {
   computerSleepJob,
   type JobPublisher,
   type SandboxProvider,
-} from "@rakazo/adapter-kit";
-import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
-import type { PrismaClient, ThreadEvents } from "@rakazo/db";
+} from "@tangow/adapter-kit";
+import { ACTIVE_RUN_STATUSES } from "@tangow/core";
+import type { PrismaClient, ThreadEvents } from "@tangow/db";
 import { recoverBrowserApprovalScreens } from "./browser-approval.js";
 import { expireComputerControl, hasActiveComputerControl } from "./computer-control.js";
 import { releaseBotScreen, toComputerRef } from "./computer-lifecycle.js";

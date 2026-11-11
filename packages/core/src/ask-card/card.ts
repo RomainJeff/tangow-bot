@@ -1,4 +1,4 @@
-import { ASK_ANSWER_MAX_LENGTH } from "@rakazo/contracts";
+import { ASK_ANSWER_MAX_LENGTH } from "@tangow/contracts";
 import type {
   AskCardBlock,
   AskForm,

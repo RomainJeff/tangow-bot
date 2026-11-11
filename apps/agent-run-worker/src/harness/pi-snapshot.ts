@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { FileEntry } from "@earendil-works/pi-coding-agent";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import type { RunSnapshot } from "@rakazo/adapter-kit";
+import type { RunSnapshot } from "@tangow/adapter-kit";
 import { z } from "zod";
 
 export function callOccurrenceId(messageId: string, providerId: string) {

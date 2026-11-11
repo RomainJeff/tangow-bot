@@ -11,8 +11,8 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { AdapterContext, PortableFile, VolumeFiles } from "@rakazo/adapter-kit";
-import { buildSkillMd } from "@rakazo/core";
+import type { AdapterContext, PortableFile, VolumeFiles } from "@tangow/adapter-kit";
+import { buildSkillMd } from "@tangow/core";
 import { afterEach, expect, it } from "vitest";
 import { migrateUserSkillsToShared } from "./skill-volume-migration.js";
 import type { SkillRoot } from "./volume-skills.js";

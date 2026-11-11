@@ -1,4 +1,4 @@
-import type { DecisionUnavailableReason } from "@rakazo/adapter-kit";
+import type { DecisionUnavailableReason } from "@tangow/adapter-kit";
 import type { ApprovalCase, Cohort, Connector, Label, Route, Split, Stratum } from "./corpus.js";
 import { cohortOf } from "./corpus.js";
 

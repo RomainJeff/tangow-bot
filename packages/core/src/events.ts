@@ -1,4 +1,4 @@
-import type { MessageBlock, SessionId } from "@rakazo/contracts";
+import type { MessageBlock, SessionId } from "@tangow/contracts";
 
 export function progressMessageId(runId: string): string {
   return `progress:${runId}`;

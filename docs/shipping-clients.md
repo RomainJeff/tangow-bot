@@ -61,9 +61,9 @@ convenience, not a release process.
 
 ## When it is the wrong tool
 
-- **Iterating on the desktop app.** `pnpm --filter @rakazo/desktop dev` builds
+- **Iterating on the desktop app.** `pnpm --filter @tangow/desktop dev` builds
   and launches Electron directly. No pack needed.
-- **Iterating on the mobile app.** `pnpm --filter @rakazo/mobile start` with
+- **Iterating on the mobile app.** `pnpm --filter @tangow/mobile start` with
   Expo Go or a dev build reloads on save. No EAS round trip needed.
 - **First build after a fresh clone.** `.ship/` is empty, so both targets build
   from scratch. That is correct, just slow.

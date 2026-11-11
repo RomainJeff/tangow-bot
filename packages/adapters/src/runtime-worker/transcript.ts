@@ -4,7 +4,7 @@ import type {
   ModelDialect,
   RefusalReason,
   ReplyFinal,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import { ingestPiAi } from "./dialects/pi-ai-history.js";
 import { nativeToolsForHarness } from "./guest-input.js";
 

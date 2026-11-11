@@ -1,5 +1,5 @@
-import type { ConnectorTool } from "@rakazo/adapter-kit";
-import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
+import type { ConnectorTool } from "@tangow/adapter-kit";
+import { approvalEffectKey } from "@tangow/core/node/approval-effect-key";
 import { describe, expect, it } from "vitest";
 import {
   approvedCatalogReplay,

@@ -1,9 +1,9 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { type ScheduleToolDeps, updateRoutine } from "@rakazo/adapters";
-import type { Routine } from "@rakazo/contracts";
-import type { PrismaClient } from "@rakazo/db";
+import { type ScheduleToolDeps, updateRoutine } from "@tangow/adapters";
+import type { Routine } from "@tangow/contracts";
+import type { PrismaClient } from "@tangow/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sessionCookieHeader } from "./index.js";
 

@@ -1,6 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { AskDraft } from "@rakazo/contracts";
-import { draftSentLine, draftSentTo } from "@rakazo/core";
+import type { AskDraft } from "@tangow/contracts";
+import { draftSentLine, draftSentTo } from "@tangow/core";
 import { Check } from "lucide-react";
 import { AppLogo } from "./AppLogo";
 

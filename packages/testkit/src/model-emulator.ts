@@ -3,8 +3,8 @@ import type { ServerResponse } from "node:http";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { performance } from "node:perf_hooks";
-import type { AgentRunRequest } from "@rakazo/adapter-kit";
-import { DRAFT_CARDS } from "@rakazo/core";
+import type { AgentRunRequest } from "@tangow/adapter-kit";
+import { DRAFT_CARDS } from "@tangow/core";
 
 export interface ModelEmulatorRequest {
   model: string;

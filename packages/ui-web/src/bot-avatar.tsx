@@ -13,7 +13,7 @@ import {
   pointerLook,
   RAYON,
   SHAPES,
-} from "@rakazo/core";
+} from "@tangow/core";
 import type { CSSProperties } from "react";
 import { memo, useEffect, useId, useRef, useState } from "react";
 import { type AvatarStyle, useAvatarStyle } from "./avatar-style.js";
@@ -188,7 +188,7 @@ export const BotAvatar = memo(function BotAvatar({
 const BLOUB_HALF_VIEWBOX = RAYON * 1.12;
 
 /**
- * The organic avatar, drawn by the vendored bloub engine (`@rakazo/core/bloub`): a
+ * The organic avatar, drawn by the vendored bloub engine (`@tangow/core/bloub`): a
  * morphing ink body with the eyes punched out as holes and idle blinks. While a run
  * is active the bot glances around and changes mood at random intervals.
  */

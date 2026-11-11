@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
-import type { ComputerStatus } from "@rakazo/contracts";
-import { computerScreenKey } from "@rakazo/core";
+import type { ComputerStatus } from "@tangow/contracts";
+import { computerScreenKey } from "@tangow/core";
 import {
   activeBotId,
   captureScreenshot,

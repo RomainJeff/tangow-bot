@@ -6,8 +6,8 @@ import type {
   DecisionRequest,
   DecisionResponse,
   ToolCallTrace,
-} from "@rakazo/adapter-kit";
-import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
+} from "@tangow/adapter-kit";
+import { createLogger, createTestSink, installLogger } from "@tangow/logging";
 import { describe, expect, it, vi } from "vitest";
 import { BROWSER_ACT_LOCKED_MESSAGE } from "./browser-run.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";

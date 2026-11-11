@@ -1,4 +1,4 @@
-import type { ThinkingLevel } from "@rakazo/contracts";
+import type { ThinkingLevel } from "@tangow/contracts";
 import { t } from "./i18n";
 
 export function thinkingLevelLabel(level: ThinkingLevel): string {

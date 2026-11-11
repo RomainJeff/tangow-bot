@@ -8,7 +8,7 @@ import {
   Input,
   NativeSelect,
   NativeSelectOption,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import type { Integrations } from "./use-integrations";
 
 export function AdvancedIntegrations({

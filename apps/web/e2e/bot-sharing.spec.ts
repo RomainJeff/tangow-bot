@@ -1,4 +1,4 @@
-import type { BotSharing } from "@rakazo/contracts";
+import type { BotSharing } from "@tangow/contracts";
 import {
   captureScreenshot,
   completeOnboarding,

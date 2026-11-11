@@ -1,5 +1,5 @@
-import { EntryId } from "@rakazo/contracts";
-import { searchHitThreadTarget, threadEntriesOf } from "@rakazo/core";
+import { EntryId } from "@tangow/contracts";
+import { searchHitThreadTarget, threadEntriesOf } from "@tangow/core";
 import type { RefObject } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { SetURLSearchParams } from "react-router-dom";

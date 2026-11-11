@@ -1,6 +1,6 @@
-import type { LinkPreviewCard } from "@rakazo/contracts";
-import { isLinkPreviewCard } from "@rakazo/contracts";
-import { messageHostsLinkPreview } from "@rakazo/core";
+import type { LinkPreviewCard } from "@tangow/contracts";
+import { isLinkPreviewCard } from "@tangow/contracts";
+import { messageHostsLinkPreview } from "@tangow/core";
 import { copyableMessageText } from "../../lib/message-text";
 import { rpc } from "../../lib/rpc";
 import type { MessageItem } from "../../lib/thread-items";

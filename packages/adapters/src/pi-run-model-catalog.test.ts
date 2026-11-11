@@ -1,5 +1,5 @@
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai";
-import type { AgentRunRequest } from "@rakazo/adapter-kit";
+import type { AgentRunRequest } from "@tangow/adapter-kit";
 import { describe, expect, it } from "vitest";
 import { catalogModel } from "./model-catalog.js";
 import { buildModelConnectPlaintext, modelCredentialDto } from "./model-connect.js";

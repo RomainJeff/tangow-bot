@@ -1,6 +1,6 @@
-import type { AdapterContext } from "@rakazo/adapter-kit";
-import type { PrismaClient } from "@rakazo/db";
-import { openPgliteDatabase, type PgliteDatabase } from "@rakazo/db/pglite.test-support";
+import type { AdapterContext } from "@tangow/adapter-kit";
+import type { PrismaClient } from "@tangow/db";
+import { openPgliteDatabase, type PgliteDatabase } from "@tangow/db/pglite.test-support";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MarkdownMemoryStore } from "./index.js";
 

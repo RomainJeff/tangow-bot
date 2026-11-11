@@ -1,4 +1,4 @@
-import type { AdapterContext } from "@rakazo/adapter-kit";
+import type { AdapterContext } from "@tangow/adapter-kit";
 import { describe, expect, it, vi } from "vitest";
 import type { FeedbackInput } from "./feedback.js";
 import { createFeedbackProvider, feedbackIssue } from "./feedback.js";

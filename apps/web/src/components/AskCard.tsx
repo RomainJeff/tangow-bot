@@ -1,8 +1,8 @@
 import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { ChatMarkdown } from "@rakazo/chat-ui/web";
-import type { AskDraftEdits, ThreadMessage } from "@rakazo/contracts";
-import { BOT_NAME_MAX_LENGTH, SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH } from "@rakazo/contracts";
+import { ChatMarkdown } from "@tangow/chat-ui/web";
+import type { AskDraftEdits, ThreadMessage } from "@tangow/contracts";
+import { BOT_NAME_MAX_LENGTH, SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH } from "@tangow/contracts";
 import {
   askFormOf,
   canEditSpawnBotCard,
@@ -11,8 +11,8 @@ import {
   routineCardSettlement,
   spawnBotEdits,
   spawnBotReadOnlyDetail,
-} from "@rakazo/core";
-import { Button, FramedBlock, Input, Textarea } from "@rakazo/ui-web";
+} from "@tangow/core";
+import { Button, FramedBlock, Input, Textarea } from "@tangow/ui-web";
 import { ChevronRight, Repeat } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { Fragment, useId, useState } from "react";

@@ -1,7 +1,7 @@
-import type { ConnectorRegistry } from "@rakazo/adapters";
-import type { Actor, MessageBlock, SessionEntryOf } from "@rakazo/contracts";
-import { appConnectAnswerId, EntryId } from "@rakazo/contracts";
-import { featuredConnectorProvidersMatch } from "@rakazo/core";
+import type { ConnectorRegistry } from "@tangow/adapters";
+import type { Actor, MessageBlock, SessionEntryOf } from "@tangow/contracts";
+import { appConnectAnswerId, EntryId } from "@tangow/contracts";
+import { featuredConnectorProvidersMatch } from "@tangow/core";
 import {
   appendCardStateInTransaction,
   blocksOf,
@@ -12,7 +12,7 @@ import {
   type PrismaClient,
   type ThreadEvents,
   threadEventSeq,
-} from "@rakazo/db";
+} from "@tangow/db";
 import { type McpStdioRule, missingDeclaredMcpCards } from "./declared-mcp.js";
 import { resolveThreadTarget, type ThreadTarget } from "./thread-target.js";
 

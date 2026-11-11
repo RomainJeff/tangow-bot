@@ -3,8 +3,8 @@ import type {
   AgentRuntimeEvent,
   ArtifactPut,
   FeedbackProvider,
-} from "@rakazo/adapter-kit";
-import type { MessageBlock } from "@rakazo/contracts";
+} from "@tangow/adapter-kit";
+import type { MessageBlock } from "@tangow/contracts";
 import { describe, expect, it, vi } from "vitest";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import { createRunExecutor } from "./executor.js";

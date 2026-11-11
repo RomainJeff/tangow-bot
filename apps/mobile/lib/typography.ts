@@ -1,5 +1,5 @@
-import type { TypographyKey } from "@rakazo/ui-tokens";
-import { typography } from "@rakazo/ui-tokens";
+import type { TypographyKey } from "@tangow/ui-tokens";
+import { typography } from "@tangow/ui-tokens";
 
 /** A `Text` style built from a `typography` token, RN-shaped (no CSS units). */
 export type NativeTextStyle = {

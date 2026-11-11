@@ -14,8 +14,8 @@ import type {
   ThreadEntry,
   ThreadItem,
   ThreadMessagePage,
-} from "@rakazo/contracts";
-import type { ProgressLayer, ThreadRow } from "@rakazo/core";
+} from "@tangow/contracts";
+import type { ProgressLayer, ThreadRow } from "@tangow/core";
 import {
   applyEntryEvent,
   isRunTerminalEvent,
@@ -25,7 +25,7 @@ import {
   signupRequiresEmailVerification,
   withOlderEntries,
   withRefreshedEntries,
-} from "@rakazo/core";
+} from "@tangow/core";
 import * as SecureStore from "expo-secure-store";
 import type { AccessCredentials } from "./access";
 import { currentAccessHeaders, loadAccess, saveAccess } from "./access-store";

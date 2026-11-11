@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { ORPCError } from "@orpc/client";
-import type { Bot, BotActivityOutput, Routine } from "@rakazo/contracts";
-import { SaveStoreProvider } from "@rakazo/ui-web";
+import type { Bot, BotActivityOutput, Routine } from "@tangow/contracts";
+import { SaveStoreProvider } from "@tangow/ui-web";
 import { act, type ReactNode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";

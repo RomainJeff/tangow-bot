@@ -27,6 +27,6 @@ Expect: the card title and bullets; the scout worktree path; the SHA it is check
 
 1. **Current behaviour** per surface, one line each ("absent" when the surface does nothing).
 2. **Key files**: 3 to 8 permalinks `[path:line](https://github.com/<owner>/<repo>/blob/<SHA>/<path>#L<line>)`.
-3. **Reusable primitives** already present (components in `@rakazo/ui-web`, `apps/web/src/components/ai/`, shared contracts).
+3. **Reusable primitives** already present (components in `@tangow/ui-web`, `apps/web/src/components/ai/`, shared contracts).
 4. **Bug only**: probable cause and the line that proves it, or "not found".
 5. **Watch points**: security (untrusted input → LLM → tools, secrets, auth), parity across surfaces, i18n.

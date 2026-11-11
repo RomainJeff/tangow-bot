@@ -1,4 +1,4 @@
-import type { UsageCategory, UsageCell } from "@rakazo/contracts";
+import type { UsageCategory, UsageCell } from "@tangow/contracts";
 
 export type UsageDimension = "bots" | "models" | "categories";
 export const USAGE_DIMENSIONS: readonly UsageDimension[] = ["bots", "models", "categories"];

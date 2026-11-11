@@ -1,4 +1,4 @@
-import type { Routine, RunFailureKind } from "@rakazo/contracts";
+import type { Routine, RunFailureKind } from "@tangow/contracts";
 import {
   type CronFreq,
   type CronPreset,
@@ -10,7 +10,7 @@ import {
   type RoutineDraftError,
   routineCadence,
   type TriggerRef,
-} from "@rakazo/core";
+} from "@tangow/core";
 import { dateLocaleForUi, getActiveUiLocale, t } from "./i18n";
 
 const MINUTE = 60_000;

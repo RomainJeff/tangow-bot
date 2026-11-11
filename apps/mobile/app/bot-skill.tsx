@@ -1,5 +1,5 @@
-import type { AgentSkill } from "@rakazo/contracts";
-import { parseSkillMd } from "@rakazo/core";
+import type { AgentSkill } from "@tangow/contracts";
+import { parseSkillMd } from "@tangow/core";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Alert, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput } from "react-native";

@@ -1,5 +1,5 @@
-import type { ThinkingLevel } from "@rakazo/contracts";
-import type { FieldSaveState } from "@rakazo/core";
+import type { ThinkingLevel } from "@tangow/contracts";
+import type { FieldSaveState } from "@tangow/core";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("./api", () => ({ rpc: vi.fn() }));

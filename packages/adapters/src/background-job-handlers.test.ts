@@ -7,9 +7,9 @@ import type {
   MessagingSurface,
   SandboxProvider,
   SessionLog,
-} from "@rakazo/adapter-kit";
-import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
-import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
+} from "@tangow/adapter-kit";
+import type { Prisma, PrismaClient, ThreadEvents } from "@tangow/db";
+import { createLogger, createTestSink, installLogger } from "@tangow/logging";
 import { describe, expect, it, vi } from "vitest";
 import { createBackgroundJobHandlers } from "./background-job-handlers.js";
 import { createRunExecutor } from "./executor.js";

@@ -1,4 +1,4 @@
-import type { AskDraft, AskDraftEdits } from "@rakazo/contracts";
+import type { AskDraft, AskDraftEdits } from "@tangow/contracts";
 import type { SpawnBotEdits } from "./spawn-bot-edit";
 
 /** What a card's owner changed before Send: a Create bot card's fields, or a mail draft's. */

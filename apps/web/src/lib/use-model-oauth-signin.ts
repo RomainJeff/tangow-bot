@@ -1,5 +1,5 @@
-import type { ModelOAuthBegin } from "@rakazo/contracts";
-import { cancelModelOAuthAttempt, finishModelOAuthAttempt } from "@rakazo/core";
+import type { ModelOAuthBegin } from "@tangow/contracts";
+import { cancelModelOAuthAttempt, finishModelOAuthAttempt } from "@tangow/core";
 import { useEffect, useRef, useState } from "react";
 import { desktopBridge, oauthStateOf, onDesktopOAuthCallback } from "./desktop";
 import { waitForModelOAuth } from "./model-auth";

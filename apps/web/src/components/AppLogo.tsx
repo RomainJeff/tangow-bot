@@ -1,5 +1,5 @@
-import type { AskDraft } from "@rakazo/contracts";
-import { appIcon } from "@rakazo/core";
+import type { AskDraft } from "@tangow/contracts";
+import { appIcon } from "@tangow/core";
 import { Mail, MessageSquare } from "lucide-react";
 import { useState } from "react";
 

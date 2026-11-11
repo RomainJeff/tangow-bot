@@ -4,7 +4,7 @@ import {
   managedDesktopOperationCommand,
   shellQuote,
   stopAllDesktopBrowsersCommand,
-} from "@rakazo/core/node/desktop-runtime";
+} from "@tangow/core/node/desktop-runtime";
 import { describe, expect, it } from "vitest";
 import { dockerE2BMachine } from "./e2b-machine.test-support.js";
 import { E2BSandboxProvider } from "./e2b-sandbox.js";

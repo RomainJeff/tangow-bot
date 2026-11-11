@@ -7,9 +7,9 @@ import type {
   ModelCredential,
   Routine,
   VoiceInfo,
-} from "@rakazo/contracts";
-import type { Draft, FieldSaveState, ModelCatalog, RoutinePayload } from "@rakazo/core";
-import { draftConflicts, fieldValue, saveKey } from "@rakazo/core";
+} from "@tangow/contracts";
+import type { Draft, FieldSaveState, ModelCatalog, RoutinePayload } from "@tangow/core";
+import { draftConflicts, fieldValue, saveKey } from "@tangow/core";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { rpc, selectedSpaceId } from "./api";
 import {

@@ -1,4 +1,4 @@
-import { radii, sizes } from "@rakazo/ui-tokens";
+import { radii, sizes } from "@tangow/ui-tokens";
 import type { ReactNode } from "react";
 import { Fragment, useState } from "react";
 import { Alert, Pressable, type PressableProps, Text, View, type ViewProps } from "react-native";

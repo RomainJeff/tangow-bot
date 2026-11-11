@@ -1,8 +1,8 @@
-import type { AgentRunRequest, ConnectorProvider } from "@rakazo/adapter-kit";
-import { AgentRuntimeUnavailableError } from "@rakazo/adapter-kit";
-import { PostgresSessionLog, ScriptedAgentRuntime } from "@rakazo/adapters";
-import { HARNESSES } from "@rakazo/agent-run-worker";
-import { createRepos } from "@rakazo/db";
+import type { AgentRunRequest, ConnectorProvider } from "@tangow/adapter-kit";
+import { AgentRuntimeUnavailableError } from "@tangow/adapter-kit";
+import { PostgresSessionLog, ScriptedAgentRuntime } from "@tangow/adapters";
+import { HARNESSES } from "@tangow/agent-run-worker";
+import { createRepos } from "@tangow/db";
 import { afterEach, expect, it, vi } from "vitest";
 import { stopThreadRuns, threadSnapshot } from "../../../apps/api/src/thread-target.js";
 import { toolResult } from "./file-task.js";

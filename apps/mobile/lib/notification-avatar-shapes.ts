@@ -1,5 +1,5 @@
-import { AVATAR_INK, BotEngine, RAYON, SHAPES } from "@rakazo/core";
-import { darkTokens } from "@rakazo/ui-tokens";
+import { AVATAR_INK, BotEngine, RAYON, SHAPES } from "@tangow/core";
+import { darkTokens } from "@tangow/ui-tokens";
 
 type Point = [number, number];
 type Curve = [number, number, number, number, number, number];

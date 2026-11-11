@@ -3,7 +3,7 @@ import type {
   CommandRequest,
   ComputerRef,
   ProcessEvent,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import { VolumeComputer } from "../volume-computer.js";
 
 /**

@@ -1,5 +1,5 @@
-import type { Me, VoiceInfo } from "@rakazo/contracts";
-import { createSaveStore, type ModelCatalog } from "@rakazo/core";
+import type { Me, VoiceInfo } from "@tangow/contracts";
+import { createSaveStore, type ModelCatalog } from "@tangow/core";
 import { createBotRecords } from "./bot-records";
 import { createRoutineRecords } from "./routine-records";
 import { serverMessage } from "./server-error";

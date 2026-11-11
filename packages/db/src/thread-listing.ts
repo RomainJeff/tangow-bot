@@ -1,5 +1,5 @@
-import type { SessionEntry, SessionEntryType } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, plainText, visibleEntries } from "@rakazo/core";
+import type { SessionEntry, SessionEntryType } from "@tangow/contracts";
+import { ACTIVE_RUN_STATUSES, plainText, visibleEntries } from "@tangow/core";
 import type { Prisma, PrismaClient } from "./client.js";
 import { hiddenPeerRunIds } from "./peer-runs.js";
 import type { SessionEntryRow } from "./sessions.js";

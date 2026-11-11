@@ -1,6 +1,6 @@
-import { useAskCard } from "@rakazo/chat-ui/ask-card";
-import type { AskCardBlock, AskForm, AskSettledView, Presenter, ViewChange } from "@rakazo/core";
-import { motion, radii, sizes } from "@rakazo/ui-tokens";
+import { useAskCard } from "@tangow/chat-ui/ask-card";
+import type { AskCardBlock, AskForm, AskSettledView, Presenter, ViewChange } from "@tangow/core";
+import { motion, radii, sizes } from "@tangow/ui-tokens";
 import { useEffect, useRef, useState } from "react";
 import type { LayoutChangeEvent, TextProps } from "react-native";
 import { AccessibilityInfo, AppState, Pressable, StyleSheet, Text, View } from "react-native";

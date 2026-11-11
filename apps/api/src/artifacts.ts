@@ -1,15 +1,15 @@
 import { createHash } from "node:crypto";
-import type { ArtifactStore } from "@rakazo/adapter-kit";
-import type { Actor, MessageBlock } from "@rakazo/contracts";
-import { ATTACHMENT_MAX_COUNT } from "@rakazo/contracts";
+import type { ArtifactStore } from "@tangow/adapter-kit";
+import type { Actor, MessageBlock } from "@tangow/contracts";
+import { ATTACHMENT_MAX_COUNT } from "@tangow/contracts";
 import {
   AttachmentValidationError,
   decodeAttachmentBase64,
   messageBlockForArtifact,
   promptTextForAttachments,
   validateAttachmentMimeType,
-} from "@rakazo/core";
-import { IsolationError, type PrismaClient } from "@rakazo/db";
+} from "@tangow/core";
+import { IsolationError, type PrismaClient } from "@tangow/db";
 import { userFileArtifact } from "./user-file-artifact.js";
 
 function adapterContext(actor: Actor, botId: string, operationId: string) {

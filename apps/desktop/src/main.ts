@@ -5,7 +5,7 @@ import type {
   DesktopAccessCredentials,
   DesktopReachability,
   DesktopSetup,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import { app, BrowserWindow, ipcMain, Menu, net, type Session, session, shell } from "electron";
 import {
   accessStorageAvailable,

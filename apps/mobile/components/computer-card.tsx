@@ -1,5 +1,5 @@
-import type { MessageBlock } from "@rakazo/contracts";
-import { radii, sizes } from "@rakazo/ui-tokens";
+import type { MessageBlock } from "@tangow/contracts";
+import { radii, sizes } from "@tangow/ui-tokens";
 import { StyleSheet, Text, View, type ViewProps } from "react-native";
 import { mobileTokens, resolveMobileAppearance } from "../lib/appearance";
 import { useI18n } from "../lib/i18n";

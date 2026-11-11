@@ -1,8 +1,8 @@
 import { constants } from "node:fs";
 import { chmod, lstat, mkdir, open, readdir } from "node:fs/promises";
 import path from "node:path";
-import type { PortableFile, VolumeEntry, VolumeFiles } from "@rakazo/adapter-kit";
-import { fileMode, isPortablePath } from "@rakazo/adapter-kit";
+import type { PortableFile, VolumeEntry, VolumeFiles } from "@tangow/adapter-kit";
+import { fileMode, isPortablePath } from "@tangow/adapter-kit";
 
 /**
  * Whole Docker volumes, as directories under `DATA_DIR/volumes`. A guest shapes them, so a link

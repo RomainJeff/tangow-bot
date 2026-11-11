@@ -4,7 +4,7 @@ import type {
   AgentRuntimeEvent,
   ToolCallGenerationResult,
   ToolCallTrace,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 
 import { RunTrace, type RunTraceSpan } from "./run-trace.js";
 

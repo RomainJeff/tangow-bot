@@ -81,7 +81,7 @@ desktop_changed() {
 
 mobile_native() {
   echo "==> mobile: native build (profile '$CHANNEL')"
-  pnpm --filter @rakazo/mobile check
+  pnpm --filter @tangow/mobile check
   (cd apps/mobile && npx eas-cli@latest build --platform ios --profile "$CHANNEL" --non-interactive)
   record mobile-native
 }
@@ -103,7 +103,7 @@ mobile() {
     return
   fi
   echo "==> mobile: JS-only change, publishing an update to '$CHANNEL'"
-  pnpm --filter @rakazo/mobile check
+  pnpm --filter @tangow/mobile check
   (cd apps/mobile && npx eas-cli@latest update --platform all --channel "$CHANNEL" \
     --environment "$CHANNEL" --message "$(git log -1 --pretty=%s)" --non-interactive)
 }
@@ -113,9 +113,9 @@ desktop() {
   if ! files="$(changed_since desktop)" || desktop_changed <<< "$files"; then
     echo "==> desktop: packing"
     if [[ "$desktop_dir" == true ]]; then
-      pnpm --filter @rakazo/desktop pack:dir
+      pnpm --filter @tangow/desktop pack:dir
     else
-      pnpm --filter @rakazo/desktop pack
+      pnpm --filter @tangow/desktop pack
     fi
     record desktop
   else

@@ -1,5 +1,5 @@
-import type { ConnectorProvider } from "@rakazo/adapter-kit";
-import { EncryptedSecretStore, McpConnector, McpOAuthBroker } from "@rakazo/adapters";
+import type { ConnectorProvider } from "@tangow/adapter-kit";
+import { EncryptedSecretStore, McpConnector, McpOAuthBroker } from "@tangow/adapters";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import type { Seen } from "./worker-channel-tap.js";

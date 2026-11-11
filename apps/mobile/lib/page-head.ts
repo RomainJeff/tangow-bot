@@ -1,5 +1,5 @@
-import type { PageHeadRead } from "@rakazo/contracts";
-import { readPageHead } from "@rakazo/contracts";
+import type { PageHeadRead } from "@tangow/contracts";
+import { readPageHead } from "@tangow/contracts";
 import { fetch } from "expo/fetch";
 
 /**

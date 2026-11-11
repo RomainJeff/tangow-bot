@@ -1,4 +1,4 @@
-import type { AgentSkill } from "@rakazo/contracts";
+import type { AgentSkill } from "@tangow/contracts";
 import { activeBotId, captureScreenshot, completeOnboarding, openBotTab, signup } from "./helpers";
 import { expect, test } from "./test";
 

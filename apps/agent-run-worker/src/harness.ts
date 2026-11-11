@@ -5,7 +5,7 @@ import type {
   ReplyFinal,
   ReplyPart,
   WorkerIdentity,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 
 export type InformativeBody = Extract<
   GuestBody,

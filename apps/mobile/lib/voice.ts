@@ -1,4 +1,4 @@
-import { readBoundedResponseBytes } from "@rakazo/core";
+import { readBoundedResponseBytes } from "@tangow/core";
 import { File, Paths } from "expo-file-system";
 import type { ApiRequestContext } from "./api";
 import { captureApiRequestContext, rpc } from "./api";

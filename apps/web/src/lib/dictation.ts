@@ -1,4 +1,4 @@
-import { readBoundedResponseBytes, writtenLanguage } from "@rakazo/core";
+import { readBoundedResponseBytes, writtenLanguage } from "@tangow/core";
 import { selectedSpaceId, withSpaceHeaders } from "./rpc.js";
 
 // "dictate" is the composer's continuous mode: no endpoint
@@ -53,7 +53,7 @@ const USUAL_SPEECH_LOCALE: Record<string, string> = {
 
 /**
  * `SpeechRecognition.lang` for the person's own recent writing, same
- * heuristic as the mobile app (`writtenLanguage`, `@rakazo/core`): the
+ * heuristic as the mobile app (`writtenLanguage`, `@tangow/core`): the
  * browser's own language is not necessarily the one they write in (a
  * browser set to English still reports English to someone writing in
  * French). A clear language wins, as a locale the recognizer knows: one of

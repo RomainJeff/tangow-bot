@@ -6,8 +6,8 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { Duplex } from "node:stream";
-import { resolveSupervisorToken } from "@rakazo/core";
-import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
+import { resolveSupervisorToken } from "@tangow/core";
+import { createLogger, createTestSink, installLogger } from "@tangow/logging";
 import { expect, it } from "vitest";
 
 // Build the worker image first (rakazo/worker:local, or RAKAZO_WORKER_IMAGE). Needs Docker only.

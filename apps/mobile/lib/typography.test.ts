@@ -1,4 +1,4 @@
-import { typography } from "@rakazo/ui-tokens";
+import { typography } from "@tangow/ui-tokens";
 import { describe, expect, it } from "vitest";
 import { nativeTextStyle } from "./typography";
 

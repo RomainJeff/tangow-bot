@@ -1,7 +1,7 @@
-import type { ReplyBody } from "@rakazo/adapter-kit";
-import { parseControllerMessage, parseGuestMessage } from "@rakazo/adapter-kit";
-import type { GuestConnector } from "@rakazo/adapters/runtime-worker";
-import { messageHelper } from "@rakazo/db";
+import type { ReplyBody } from "@tangow/adapter-kit";
+import { parseControllerMessage, parseGuestMessage } from "@tangow/adapter-kit";
+import type { GuestConnector } from "@tangow/adapters/runtime-worker";
+import { messageHelper } from "@tangow/db";
 import { afterEach, expect, it } from "vitest";
 import type { LocalWorkerProvider } from "./local-worker-provider.js";
 import type { ModelEmulatorRequest } from "./model-emulator.js";

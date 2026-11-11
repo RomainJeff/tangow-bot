@@ -8,10 +8,10 @@ import type {
   PortableFile,
   ProcessEvent,
   SandboxProvider,
-} from "@rakazo/adapter-kit";
-import { E2BSandboxEmulator } from "@rakazo/adapters";
-import type { VolumeHome } from "@rakazo/core";
-import { underVolumeMounts } from "@rakazo/core";
+} from "@tangow/adapter-kit";
+import { E2BSandboxEmulator } from "@tangow/adapters";
+import type { VolumeHome } from "@tangow/core";
+import { underVolumeMounts } from "@tangow/core";
 
 /**
  * The fake E2B computer, whose files live on the volumes it was provisioned with when its home is

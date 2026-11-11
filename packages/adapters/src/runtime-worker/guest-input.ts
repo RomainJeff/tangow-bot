@@ -7,9 +7,9 @@ import type {
   HarnessCapability,
   HarnessDeclaration,
   WorkerStartV1,
-} from "@rakazo/adapter-kit";
-import type { HelperProfile } from "@rakazo/core";
-import { delegatedTools, selectTools, startableHelpers } from "@rakazo/core";
+} from "@tangow/adapter-kit";
+import type { HelperProfile } from "@tangow/core";
+import { delegatedTools, selectTools, startableHelpers } from "@tangow/core";
 import { isBackgroundHelperTool, isHelperTool } from "../builtin-tools.js";
 import {
   catalogIndexText,

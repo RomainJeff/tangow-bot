@@ -1,4 +1,4 @@
-import type { MemoryDocument } from "@rakazo/contracts";
+import type { MemoryDocument } from "@tangow/contracts";
 import {
   captureScreenshot,
   completeOnboarding,

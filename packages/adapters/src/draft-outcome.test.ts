@@ -1,5 +1,5 @@
-import type { SessionEntry } from "@rakazo/contracts";
-import { HELPER_STOPPED_FOR_PAUSE, SessionEntrySchema } from "@rakazo/contracts";
+import type { SessionEntry } from "@tangow/contracts";
+import { HELPER_STOPPED_FOR_PAUSE, SessionEntrySchema } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import { DRAFT_DISCARDED_RESULT } from "./approval-effect.js";
 import type { EndedDraftEffect } from "./draft-outcome.js";

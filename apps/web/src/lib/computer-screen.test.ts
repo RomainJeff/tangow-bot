@@ -1,6 +1,6 @@
-import type { ComputerStatus } from "@rakazo/contracts";
-import type { HeldScreenUrl } from "@rakazo/core";
-import { computerScreenKey } from "@rakazo/core";
+import type { ComputerStatus } from "@tangow/contracts";
+import type { HeldScreenUrl } from "@tangow/core";
+import { computerScreenKey } from "@tangow/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComputerScreenResult } from "./computer-screen";
 import { cachedScreenUrl, loadComputerScreen } from "./computer-screen";

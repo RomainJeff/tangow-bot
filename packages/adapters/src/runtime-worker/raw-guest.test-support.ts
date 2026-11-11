@@ -5,8 +5,8 @@ import type {
   HarnessDeclaration,
   ReplyBody,
   WorkerIdentity,
-} from "@rakazo/adapter-kit";
-import { ReplyPartSchema, WORKER_PROTOCOL_VERSION } from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
+import { ReplyPartSchema, WORKER_PROTOCOL_VERSION } from "@tangow/adapter-kit";
 import type { FrameChannel, LaunchedGuest } from "./index.js";
 import {
   capabilityWorker,

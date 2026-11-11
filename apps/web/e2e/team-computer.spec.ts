@@ -1,4 +1,4 @@
-import type { ThreadEntry } from "@rakazo/contracts";
+import type { ThreadEntry } from "@tangow/contracts";
 import {
   activeBotId,
   captureScreenshot,

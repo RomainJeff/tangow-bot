@@ -1,4 +1,4 @@
-import { radii } from "@rakazo/ui-tokens";
+import { radii } from "@tangow/ui-tokens";
 import { memo } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { mobileTokens, resolveMobileAppearance } from "../lib/appearance";

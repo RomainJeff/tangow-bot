@@ -6,4 +6,4 @@
  * ring, the negative spread that tucks a blur under its surface — which RN's
  * single `shadow*` shadow could not, and it is not clipped by `overflow`.
  */
-export { botColors, shadowsForAppearance, tokens } from "@rakazo/ui-tokens";
+export { botColors, shadowsForAppearance, tokens } from "@tangow/ui-tokens";

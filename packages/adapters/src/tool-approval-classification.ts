@@ -5,7 +5,7 @@ import type {
   DecisionRequest,
   DecisionUnavailableReason,
   ToolCallTrace,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import { redactToolArgsForReview } from "./auto-review.js";
 import { decideWithin } from "./decision.js";
 

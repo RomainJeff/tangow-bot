@@ -8,9 +8,9 @@ import type {
   PortableFile,
   VolumeEntry,
   VolumeFiles,
-} from "@rakazo/adapter-kit";
-import { fileMode, isPortablePath } from "@rakazo/adapter-kit";
-import type { PrismaClient } from "@rakazo/db";
+} from "@tangow/adapter-kit";
+import { fileMode, isPortablePath } from "@tangow/adapter-kit";
+import type { PrismaClient } from "@tangow/db";
 import { shouldSkipPortableWorkspaceFile } from "./computer-workspace.js";
 import type { HomeAdoption, VolumeOwner, WorkerLifecycle } from "./worker-lifecycle.js";
 import { HOME_MOVE_TTL_MS } from "./worker-lifecycle.js";

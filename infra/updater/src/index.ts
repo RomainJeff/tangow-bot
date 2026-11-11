@@ -4,7 +4,7 @@ import { access, lstat, open, readFile, rename, unlink } from "node:fs/promises"
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
-import { MIGRATION_WAIT_TIMEOUT_S, type ServerUpdateRun } from "@rakazo/contracts";
+import { MIGRATION_WAIT_TIMEOUT_S, type ServerUpdateRun } from "@tangow/contracts";
 import {
   type ComposeUpdateStep,
   chooseUpdateStrategy,
@@ -35,10 +35,10 @@ import {
   selectLatestRelease,
   upsertEnvAssignments,
   validateUpdateRequest,
-} from "@rakazo/core";
-import { type Logger, SERVICE_NAMES } from "@rakazo/logging";
-import { createRootLogger } from "@rakazo/logging/axiom";
-import { requestLogging } from "@rakazo/logging/hono";
+} from "@tangow/core";
+import { type Logger, SERVICE_NAMES } from "@tangow/logging";
+import { createRootLogger } from "@tangow/logging/axiom";
+import { requestLogging } from "@tangow/logging/hono";
 import { type Context, Hono } from "hono";
 import {
   readTagState,

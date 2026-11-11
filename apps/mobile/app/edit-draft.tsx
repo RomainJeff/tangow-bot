@@ -1,14 +1,14 @@
-import type { AskDraftEdits } from "@rakazo/contracts";
-import { ASK_DRAFT_TEXT_MAX_LENGTH } from "@rakazo/contracts";
-import type { RecipientRole } from "@rakazo/core";
+import type { AskDraftEdits } from "@tangow/contracts";
+import { ASK_DRAFT_TEXT_MAX_LENGTH } from "@tangow/contracts";
+import type { RecipientRole } from "@tangow/core";
 import {
   addressesOf,
   changeLine,
   draftAddresses,
   foldedRoles,
   RECIPIENT_ROLES,
-} from "@rakazo/core";
-import { radii } from "@rakazo/ui-tokens";
+} from "@tangow/core";
+import { radii } from "@tangow/ui-tokens";
 import { Stack, useRouter } from "expo-router";
 import { usePreventRemove } from "expo-router/react-navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";

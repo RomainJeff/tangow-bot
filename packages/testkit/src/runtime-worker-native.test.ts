@@ -7,14 +7,14 @@ import type {
   AgentSteeringMessage,
   SubagentLog,
   WorkerIdentity,
-} from "@rakazo/adapter-kit";
-import type { LaunchedGuest, WorkerClock } from "@rakazo/adapters/runtime-worker";
+} from "@tangow/adapter-kit";
+import type { LaunchedGuest, WorkerClock } from "@tangow/adapters/runtime-worker";
 import {
   createWorkerAgentRuntime,
   memoryChannelPair,
   WORKER_NATIVE_TOOLS,
-} from "@rakazo/adapters/runtime-worker";
-import { HARNESSES, runGuest } from "@rakazo/agent-run-worker";
+} from "@tangow/adapters/runtime-worker";
+import { HARNESSES, runGuest } from "@tangow/agent-run-worker";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import { startModelEmulator } from "./model-emulator.js";

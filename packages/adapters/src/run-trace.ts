@@ -10,7 +10,7 @@ import type {
   TelemetrySpan,
 } from "@earendil-works/pi-telemetry";
 import { NOOP_TELEMETRY_CONTEXT } from "@earendil-works/pi-telemetry";
-import { generateTraceId } from "@rakazo/logging";
+import { generateTraceId } from "@tangow/logging";
 
 const INERT_TELEMETRY_SPAN: TelemetrySpan = {
   ...NOOP_TELEMETRY_CONTEXT,

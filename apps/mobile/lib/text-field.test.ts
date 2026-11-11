@@ -1,4 +1,4 @@
-import { createSaveStore, fieldValue, saveKey } from "@rakazo/core";
+import { createSaveStore, fieldValue, saveKey } from "@tangow/core";
 import { describe, expect, it } from "vitest";
 import { leaveTextField, restingText } from "./text-field";
 

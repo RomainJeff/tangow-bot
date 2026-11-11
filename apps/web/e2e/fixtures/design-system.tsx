@@ -1,4 +1,4 @@
-import { botColors } from "@rakazo/ui-tokens";
+import { botColors } from "@tangow/ui-tokens";
 import {
   AvatarStyleProvider,
   BotAvatar,
@@ -20,7 +20,7 @@ import {
   UserAvatar,
   UserBubble,
   WorkingLine,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import {
   BookOpen,
   Copy,
@@ -235,7 +235,7 @@ function Kitchen() {
           An unframed card: the bot's paper, never lifted.
         </Surface>
         <Surface variant="outlined" className="p-4 font-mono text-mono text-foreground">
-          pnpm --filter @rakazo/ui-tokens generate
+          pnpm --filter @tangow/ui-tokens generate
         </Surface>
       </Section>
 

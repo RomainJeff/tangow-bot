@@ -1,4 +1,3 @@
-import { type ColorTokens, darkTokens, type ResolvedAppearance } from "@rakazo/ui-tokens";
 import Markdown, {
   type ASTNode,
   createMarkdownIt,
@@ -6,6 +5,7 @@ import Markdown, {
   type MarkdownStyleMap,
   type RenderRules,
 } from "@ronradtke/react-native-markdown-display";
+import { type ColorTokens, darkTokens, type ResolvedAppearance } from "@tangow/ui-tokens";
 import { memo, useMemo } from "react";
 import type { TextProps, TextStyle } from "react-native";
 import { Linking, StyleSheet, Text, View } from "react-native";

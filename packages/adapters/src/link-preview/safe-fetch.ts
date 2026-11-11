@@ -1,7 +1,7 @@
 import dns from "node:dns";
 import { isIP } from "node:net";
-import { LINK_PREVIEW_URL_MAX_LENGTH } from "@rakazo/contracts";
-import { isAuthenticationDestination } from "@rakazo/core";
+import { LINK_PREVIEW_URL_MAX_LENGTH } from "@tangow/contracts";
+import { isAuthenticationDestination } from "@tangow/core";
 import { Agent } from "undici";
 import {
   createAddressCheckedLookup,

@@ -1,4 +1,4 @@
-import type { Routine } from "@rakazo/contracts";
+import type { Routine } from "@tangow/contracts";
 import {
   type CronFreq,
   type CronPreset,

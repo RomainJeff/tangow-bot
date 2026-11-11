@@ -1,17 +1,17 @@
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { Actor, ComputerMode } from "@rakazo/contracts";
-import type { PrismaClient } from "@rakazo/db";
+import type { Actor, ComputerMode } from "@tangow/contracts";
+import type { PrismaClient } from "@tangow/db";
 import {
   claimEmptySpaceDeletionForMember,
   createRepos,
   createThreadEvents,
   deleteEmptySpaceForMember,
   deleteOwnerVolumes,
-} from "@rakazo/db";
-import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
-import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
+} from "@tangow/db";
+import type { PgliteDatabase } from "@tangow/db/pglite.test-support";
+import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { destroyBot } from "./child-bots.js";
 import { provisionComputer } from "./computer-lifecycle.js";

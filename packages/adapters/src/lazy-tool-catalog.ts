@@ -3,8 +3,8 @@ import type {
   ConnectorEvent,
   ConnectorRoute,
   ConnectorTool,
-} from "@rakazo/adapter-kit";
-import { RAKAZO_TOOL_PREFIX } from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
+import { RAKAZO_TOOL_PREFIX } from "@tangow/adapter-kit";
 import { z } from "zod";
 import { ConnectorError } from "./connector-error.js";
 

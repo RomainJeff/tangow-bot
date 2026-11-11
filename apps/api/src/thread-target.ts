@@ -1,14 +1,14 @@
 import { ORPCError } from "@orpc/server";
-import type { JobPublisher, SandboxProvider, SessionLog } from "@rakazo/adapter-kit";
-import { linkPreviewJob, runContinueJob } from "@rakazo/adapter-kit";
+import type { JobPublisher, SandboxProvider, SessionLog } from "@tangow/adapter-kit";
+import { linkPreviewJob, runContinueJob } from "@tangow/adapter-kit";
 import {
   cancelComputerRunWork,
   recoverBrowserApprovalScreens,
   releaseBotScreen,
   screenLeaseIdForRun,
   toComputerRef,
-} from "@rakazo/adapters";
-import type { SessionEntries } from "@rakazo/contracts";
+} from "@tangow/adapters";
+import type { SessionEntries } from "@tangow/contracts";
 import {
   type Actor,
   GROUP_MEMBER_MIN,
@@ -19,7 +19,7 @@ import {
   type RunStatus,
   type SessionId,
   type ThreadSnapshot,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import {
   ACTIVE_RUN_STATUSES,
   blocksToAgentHistoryText,
@@ -27,8 +27,8 @@ import {
   isActive,
   resolveGroupTargetBotIds,
   runFailureError,
-} from "@rakazo/core";
-import type { DraftLeft } from "@rakazo/db";
+} from "@tangow/core";
+import type { DraftLeft } from "@tangow/db";
 import {
   blocksOf,
   browserApprovalCheckpointOf,
@@ -54,8 +54,8 @@ import {
   threadOfSession,
   touchGroupUpdatedAt,
   usableBotIds,
-} from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 import {
   buildSendPrompt,
   buildUserMessageBlocks,

@@ -1,4 +1,4 @@
-import { SandboxKind } from "@rakazo/contracts";
+import { SandboxKind } from "@tangow/contracts";
 import { z } from "zod";
 
 export const BROWSER_APPROVAL_CHECKPOINT_PREFIX = '{"kind":"browser_approval_v1",';

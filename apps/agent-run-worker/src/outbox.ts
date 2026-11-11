@@ -5,9 +5,9 @@ import type {
   ReplyPart,
   WorkerIdentity,
   WorkerReplyV1,
-} from "@rakazo/adapter-kit";
-import { ReplyPartSchema, WORKER_PROTOCOL_VERSION } from "@rakazo/adapter-kit";
-import { encodeMessage, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker/wire";
+} from "@tangow/adapter-kit";
+import { ReplyPartSchema, WORKER_PROTOCOL_VERSION } from "@tangow/adapter-kit";
+import { encodeMessage, WORKER_LIMITS } from "@tangow/adapters/runtime-worker/wire";
 
 const partTypes = new Set<string>(ReplyPartSchema.options.map((option) => option.shape.type.value));
 

@@ -3,8 +3,8 @@ import type {
   ConnectorTool,
   HarnessDeclaration,
   WorkerStartV1,
-} from "@rakazo/adapter-kit";
-import { PI_NATIVE_HARNESS } from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
+import { PI_NATIVE_HARNESS } from "@tangow/adapter-kit";
 import { describe, expect, it } from "vitest";
 import { catalogEntries, EXACT_TOOL_SEARCH_TEXT, lazyCatalogTools } from "../lazy-tool-catalog.js";
 import { encodeMessage } from "./framing.js";

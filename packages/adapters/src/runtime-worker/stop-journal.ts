@@ -1,5 +1,5 @@
-import { STOP_PHASES, type StopPhase } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+import { STOP_PHASES, type StopPhase } from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
 
 /** The only writer of `attempts.stopPhase`. A phase never moves back. */
 export interface StopJournal {

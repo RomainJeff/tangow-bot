@@ -1,4 +1,4 @@
-import { radii } from "@rakazo/ui-tokens";
+import { radii } from "@tangow/ui-tokens";
 import { useEffect } from "react";
 import { StyleSheet } from "react-native";
 import Animated, {

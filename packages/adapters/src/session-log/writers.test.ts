@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
-import type { SessionEntryDraft } from "@rakazo/adapter-kit";
-import type { FactualRunRecap, MessageBlock, SessionEntry } from "@rakazo/contracts";
-import { EntryId, EntrySeq, SessionId } from "@rakazo/contracts";
+import type { SessionEntryDraft } from "@tangow/adapter-kit";
+import type { FactualRunRecap, MessageBlock, SessionEntry } from "@tangow/contracts";
+import { EntryId, EntrySeq, SessionId } from "@tangow/contracts";
 import {
   projectThreadItems,
   projectThreadView,
   spawnBotApprovalBlock,
   visibleEntries,
-} from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+} from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
 import {
   answerRunInputInTransaction,
   appendEventInTransaction,
@@ -32,9 +32,9 @@ import {
   rewindThread,
   runsOfMessage,
   threadOfSession,
-} from "@rakazo/db";
-import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
-import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
+} from "@tangow/db";
+import type { PgliteDatabase } from "@tangow/db/pglite.test-support";
+import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { messageConnectedAgent } from "../agent-connections.js";
 import { messageBot, returnBotMessageOutcome } from "../bot-messages.js";

@@ -1,10 +1,10 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { E2BSandboxProvider, ModelCallRuntime } from "@rakazo/adapters";
-import type { RunStatus } from "@rakazo/contracts";
-import { isTerminal } from "@rakazo/core";
-import { loadRootEnv } from "@rakazo/core/node/load-root-env";
+import { E2BSandboxProvider, ModelCallRuntime } from "@tangow/adapters";
+import type { RunStatus } from "@tangow/contracts";
+import { isTerminal } from "@tangow/core";
+import { loadRootEnv } from "@tangow/core/node/load-root-env";
 import { afterAll, describe, expect, it } from "vitest";
 import { sessionCookieHeader } from "./index.js";
 import { computerOnVolumes, localWorkerApp } from "./local-worker-provider.js";

@@ -1,4 +1,4 @@
-import type { ThreadItem } from "@rakazo/contracts";
+import type { ThreadItem } from "@tangow/contracts";
 
 /**
  * The live "Needs you" computer card: the newest one of a run waiting for the user's screen.

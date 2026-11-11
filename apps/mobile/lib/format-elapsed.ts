@@ -3,7 +3,7 @@
  * native `WorkingLine`'s ticking duration. Ported from
  * `packages/ui-web/src/format-elapsed.ts` rather than imported: mobile keeps
  * its own copy of small native-safe helpers instead of depending on the
- * web-only `@rakazo/ui-web` package (its barrel renders `div`s).
+ * web-only `@tangow/ui-web` package (its barrel renders `div`s).
  */
 export function formatElapsed(startedAtMs: number, nowMs: number): string {
   const totalTenths = Math.round(Math.max(0, nowMs - startedAtMs) / 100);

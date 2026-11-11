@@ -8,8 +8,8 @@ import type {
   DecisionQuestion,
   DecisionRequest,
   DecisionResponse,
-} from "@rakazo/adapter-kit";
-import { isLocalMcpHost } from "@rakazo/contracts";
+} from "@tangow/adapter-kit";
+import { isLocalMcpHost } from "@tangow/contracts";
 import { isCloudMetadataAddress, isPrivateAddress } from "./network-address.js";
 import { isBlockedHostname } from "./web-ssrf.js";
 

@@ -1,5 +1,5 @@
-import { createSkillLineSweep, writeSkillLines } from "@rakazo/adapters";
-import { appendSessionEntryInTransaction } from "@rakazo/db";
+import { createSkillLineSweep, writeSkillLines } from "@tangow/adapters";
+import { appendSessionEntryInTransaction } from "@tangow/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { openThreadDb, type ThreadDb } from "./thread-db.js";
 

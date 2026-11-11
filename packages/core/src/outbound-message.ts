@@ -1,5 +1,5 @@
-import type { AskDraftRecipient } from "@rakazo/contracts";
-import { ASK_DRAFT_SUBJECT_MAX_LENGTH } from "@rakazo/contracts";
+import type { AskDraftRecipient } from "@tangow/contracts";
+import { ASK_DRAFT_SUBJECT_MAX_LENGTH } from "@tangow/contracts";
 import { connectorKindFromToolName, isEmailConnectorKind } from "./action-approval.js";
 import type { RecipientRole } from "./draft-fields.js";
 import {

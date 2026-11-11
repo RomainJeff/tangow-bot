@@ -3,13 +3,13 @@ import type {
   TeamChatInboundMessage,
   TeamChatSendRequest,
   TeamChatSendResult,
-} from "@rakazo/adapter-kit";
-import { runContinueJob } from "@rakazo/adapter-kit";
-import { AutomatedSenderPoliciesSchema, type MessageBlock } from "@rakazo/contracts";
-import { BOT_MESSAGE_MAX_HOPS } from "@rakazo/core";
-import type { PrismaClient, ThreadEvents } from "@rakazo/db";
-import { loadBotMessageContext, runMessages } from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/adapter-kit";
+import { runContinueJob } from "@tangow/adapter-kit";
+import { AutomatedSenderPoliciesSchema, type MessageBlock } from "@tangow/contracts";
+import { BOT_MESSAGE_MAX_HOPS } from "@tangow/core";
+import type { PrismaClient, ThreadEvents } from "@tangow/db";
+import { loadBotMessageContext, runMessages } from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 import type { TeamChatEngagementJudge } from "./team-chat-judge.js";
 import {
   MESSAGE_ROUTING_REARMED_REASON,

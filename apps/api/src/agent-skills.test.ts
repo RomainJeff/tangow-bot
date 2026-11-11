@@ -1,16 +1,16 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { SkillOwnerLock } from "@rakazo/adapters";
+import type { SkillOwnerLock } from "@tangow/adapters";
 import {
   createInMemorySkillLock,
   listUserSkills,
   skillCreateFromTool,
   userSkillsRoot,
-} from "@rakazo/adapters";
-import { buildSkillMd } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
-import { IsolationError } from "@rakazo/db";
+} from "@tangow/adapters";
+import { buildSkillMd } from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
+import { IsolationError } from "@tangow/db";
 import { create as tarCreate } from "tar";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ZipFile } from "yazl";

@@ -1,6 +1,6 @@
 import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
-import { settleRoutineAsk } from "@rakazo/core";
+import { settleRoutineAsk } from "@tangow/core";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import type { AskBlock } from "../../src/components/AskCard";

@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { AdapterContext, WorkerProvider } from "@rakazo/adapter-kit";
-import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
-import { Prisma } from "@rakazo/db";
+import type { AdapterContext, WorkerProvider } from "@tangow/adapter-kit";
+import { ACTIVE_RUN_STATUSES } from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
+import { Prisma } from "@tangow/db";
 import { z } from "zod";
 import type { VolumeImportSource } from "./docker-volume-import.js";
 import {

@@ -1,5 +1,5 @@
-import type { AdapterContext, ComputerRef } from "@rakazo/adapter-kit";
-import type { BrowserApprovalCheckpoint } from "@rakazo/db";
+import type { AdapterContext, ComputerRef } from "@tangow/adapter-kit";
+import type { BrowserApprovalCheckpoint } from "@tangow/db";
 import { scheduleComputerSleep } from "./computer-idle.js";
 import type { ComputerExecutionLease } from "./computer-lifecycle.js";
 import {

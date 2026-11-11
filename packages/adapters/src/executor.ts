@@ -28,7 +28,7 @@ import type {
   SubagentLog,
   ToolCallTrace,
   WebProvider,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import {
   AgentRuntimeBusyError,
   AgentRuntimeUnavailableError,
@@ -40,7 +40,7 @@ import {
   routineWakeupJob,
   runContinueJob,
   runJobKey,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import type {
   ComputerMode,
   FactualRunRecap,
@@ -50,7 +50,7 @@ import type {
   SessionEntry,
   SessionEntryOf,
   SessionRunTrigger,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import {
   AskBlock,
   ATTACHMENT_MAX_BYTES,
@@ -70,7 +70,7 @@ import {
   RunTrigger,
   SessionId,
   ThinkingLevelSchema,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import type {
   ActionApprovalRule,
   CreatedRoutine,
@@ -84,7 +84,7 @@ import type {
   SkillLearningMode,
   ToolCallDetail,
   ToolCallStreak,
-} from "@rakazo/core";
+} from "@tangow/core";
 import {
   ACTIVE_RUN_STATUSES,
   appendTextSegment,
@@ -172,15 +172,15 @@ import {
   validateSpawnBotArgs,
   valueAt,
   withProposalKey,
-} from "@rakazo/core";
+} from "@tangow/core";
 import {
   approvalEffectKey,
   isToolEffectIdempotencyKey,
   legacyScopedToolEffectIdempotencyKey,
   stableJsonValue,
   toolEffectIdempotencyKey,
-} from "@rakazo/core/node/approval-effect-key";
-import type { CreateBotMessageInput, McpServer, PrismaClient, ThreadEvents } from "@rakazo/db";
+} from "@tangow/core/node/approval-effect-key";
+import type { CreateBotMessageInput, McpServer, PrismaClient, ThreadEvents } from "@tangow/db";
 import {
   activeBotNames,
   appendCardStateInTransaction,
@@ -211,8 +211,8 @@ import {
   sessionEntryFromRow,
   sharedWithFilter,
   threadEventSeq,
-} from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 import { parse as parseShellCommand } from "shell-quote";
 import {
   connectAgent,

@@ -1,8 +1,8 @@
-import type { ThreadEntry, ThreadItem } from "@rakazo/contracts";
-import { projectThreadItems } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+import type { ThreadEntry, ThreadItem } from "@tangow/contracts";
+import { projectThreadItems } from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
 
-export { DestinationEmulator, McpEmulator } from "@rakazo/adapters";
+export { DestinationEmulator, McpEmulator } from "@tangow/adapters";
 
 export function sessionCookieHeader(response: Response) {
   const cookies = response.headers.getSetCookie?.() ?? [];

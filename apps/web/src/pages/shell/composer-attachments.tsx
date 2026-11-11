@@ -1,14 +1,14 @@
 import { useLingui } from "@lingui/react/macro";
-import type { LinkPreviewDraft } from "@rakazo/contracts";
-import { ATTACHMENT_ALLOWED_MIME_TYPES } from "@rakazo/contracts";
-import type { ComposerChange, ComposerLinkPreviewView, ComposerPageHead } from "@rakazo/core";
-import { createComposerLinkPreview } from "@rakazo/core";
+import type { LinkPreviewDraft } from "@tangow/contracts";
+import { ATTACHMENT_ALLOWED_MIME_TYPES } from "@tangow/contracts";
+import type { ComposerChange, ComposerLinkPreviewView, ComposerPageHead } from "@tangow/core";
+import { createComposerLinkPreview } from "@tangow/core";
 import {
   Button,
   ComposerAttachment,
   ComposerLinkPreview,
   LinkPreviewPicture,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import { Plus } from "lucide-react";
 import type { DragEvent, RefObject } from "react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";

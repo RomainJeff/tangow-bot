@@ -4,7 +4,7 @@ import path from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
-import type { GuestTool } from "@rakazo/adapter-kit";
+import type { GuestTool } from "@tangow/adapter-kit";
 import { afterEach, describe, expect, it } from "vitest";
 import type { HarnessHost, InformativeBody } from "./harness.js";
 import { rakazoMcpServer, rakazoMcpTools } from "./rakazo-mcp.js";

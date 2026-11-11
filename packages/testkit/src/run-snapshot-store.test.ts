@@ -1,4 +1,4 @@
-import { runPersistence } from "@rakazo/db";
+import { runPersistence } from "@tangow/db";
 import { afterEach, expect, it } from "vitest";
 import { startWorkerRun } from "./worker-run-fixture.js";
 

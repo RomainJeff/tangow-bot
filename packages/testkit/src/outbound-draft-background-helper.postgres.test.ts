@@ -1,4 +1,4 @@
-import { HARNESSES } from "@rakazo/agent-run-worker";
+import { HARNESSES } from "@tangow/agent-run-worker";
 import { describe, expect, it } from "vitest";
 import { acmeApp } from "./draft-app.test-support.js";
 import { latestCard } from "./index.js";

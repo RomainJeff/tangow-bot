@@ -1,8 +1,8 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { FrameSummary } from "@rakazo/adapters/runtime-worker";
-import { bundleGuest } from "@rakazo/agent-run-worker/bundle";
+import type { FrameSummary } from "@tangow/adapters/runtime-worker";
+import { bundleGuest } from "@tangow/agent-run-worker/bundle";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { latestCard } from "./index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";

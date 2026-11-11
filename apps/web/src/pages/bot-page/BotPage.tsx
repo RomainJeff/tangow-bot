@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
-import type { Bot, Routine } from "@rakazo/contracts";
-import { routineFailing } from "@rakazo/core";
+import type { Bot, Routine } from "@tangow/contracts";
+import { routineFailing } from "@tangow/core";
 import {
   Button,
   DropdownMenu,
@@ -12,7 +12,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import {
   Archive,
   ArchiveRestore,

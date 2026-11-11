@@ -1,7 +1,7 @@
-import type { HarnessDeclaration } from "@rakazo/adapter-kit";
-import { createWorkerAgentRuntime } from "@rakazo/adapters/runtime-worker";
-import { HELPER_STOPPED_FOR_PAUSE } from "@rakazo/contracts";
-import { DRAFT_CARDS } from "@rakazo/core";
+import type { HarnessDeclaration } from "@tangow/adapter-kit";
+import { createWorkerAgentRuntime } from "@tangow/adapters/runtime-worker";
+import { HELPER_STOPPED_FOR_PAUSE } from "@tangow/contracts";
+import { DRAFT_CARDS } from "@tangow/core";
 import { describe, expect, it, vi } from "vitest";
 import {
   manualLauncher,

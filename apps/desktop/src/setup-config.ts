@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { isIP } from "node:net";
-import type { DesktopAccessCredentials, DesktopSetup } from "@rakazo/contracts";
+import type { DesktopAccessCredentials, DesktopSetup } from "@tangow/contracts";
 
 export const PROBE_RESPONSE_LIMIT_BYTES = 64 * 1024;
 

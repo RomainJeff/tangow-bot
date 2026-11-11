@@ -1,4 +1,4 @@
-import type { ConnectorTool } from "@rakazo/adapter-kit";
+import type { ConnectorTool } from "@tangow/adapter-kit";
 import { describe, expect, it, vi } from "vitest";
 import corpus from "./fixtures/composio-search-corpus.json" with { type: "json" };
 import {

@@ -3,15 +3,15 @@ import {
   messagingDeliverJob,
   routineWakeupJob,
   runContinueJob,
-} from "@rakazo/adapter-kit";
-import type { MessageBlock } from "@rakazo/contracts";
-import type { Pool, PrismaClient, ThreadEvents } from "@rakazo/db";
+} from "@tangow/adapter-kit";
+import type { MessageBlock } from "@tangow/contracts";
+import type { Pool, PrismaClient, ThreadEvents } from "@tangow/db";
 import {
   BROWSER_APPROVAL_CHECKPOINT_PREFIX,
   browserApprovalCheckpointOf,
   runMessages,
-} from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 import type { PoolClient } from "pg";
 import { returnBotMessageOutcome } from "./bot-messages.js";
 import { scheduleBrowserApprovalCleanup } from "./browser-approval.js";

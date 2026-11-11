@@ -1,4 +1,4 @@
-import type { UsageCell } from "@rakazo/contracts";
+import type { UsageCell } from "@tangow/contracts";
 import { captureScreenshot, completeOnboarding, openUserSettings, signup } from "./helpers";
 import { expect, test } from "./test";
 

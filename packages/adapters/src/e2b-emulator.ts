@@ -1,4 +1,4 @@
-import type { AdapterContext, ComputerRef } from "@rakazo/adapter-kit";
+import type { AdapterContext, ComputerRef } from "@tangow/adapter-kit";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
 
 /** E2B protocol emulator backed by deterministic local state. */

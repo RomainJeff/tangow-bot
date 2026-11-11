@@ -1,7 +1,7 @@
 import { cp, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { WORKER_NATIVE_TOOLS } from "@rakazo/adapters/runtime-worker";
+import { WORKER_NATIVE_TOOLS } from "@tangow/adapters/runtime-worker";
 import { build } from "esbuild";
 import { piToolManifest } from "../src/harness/pi-tools.js";
 

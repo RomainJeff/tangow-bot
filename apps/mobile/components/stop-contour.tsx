@@ -1,4 +1,4 @@
-import { motion } from "@rakazo/ui-tokens";
+import { motion } from "@tangow/ui-tokens";
 import { useEffect, useRef } from "react";
 import { Animated, Easing } from "react-native";
 import { useReducedMotion } from "react-native-reanimated";

@@ -3,7 +3,7 @@ import {
   BOT_TITLE_MAX_LENGTH,
   SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH,
   SPAWN_BOT_PROMPT_MAX_LENGTH,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import {
   botNameKey,

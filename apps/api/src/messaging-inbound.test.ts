@@ -1,4 +1,4 @@
-import { appendSessionEntryInTransaction } from "@rakazo/db";
+import { appendSessionEntryInTransaction } from "@tangow/db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createMessagingInboundHandler,
@@ -9,7 +9,7 @@ import {
 import { inboundDeliveryClientNonce, messagingWakeIdempotencyKey } from "./webhook-inbound.js";
 
 vi.mock("../../../packages/db/src/sessions.js", async () =>
-  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+  (await import("@tangow/db/sessions.test-support")).stubbedDbSessions(),
 );
 
 beforeEach(() => {

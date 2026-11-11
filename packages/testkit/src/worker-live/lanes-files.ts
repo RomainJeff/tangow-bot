@@ -1,4 +1,4 @@
-import { WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
+import { WORKER_LIMITS } from "@tangow/adapters/runtime-worker";
 import { nativeFileTask, toolResult } from "../file-task.js";
 import { call, finish, liveRun } from "./run.js";
 import type { Lane } from "./session.js";

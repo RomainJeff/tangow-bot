@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { SessionEntryDraft } from "@rakazo/adapter-kit";
-import type { SessionEntry } from "@rakazo/contracts";
-import { SessionId } from "@rakazo/contracts";
+import type { SessionEntryDraft } from "@tangow/adapter-kit";
+import type { SessionEntry } from "@tangow/contracts";
+import { SessionId } from "@tangow/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { cancelRunsInTransaction, logCancelledRunsInTransaction } from "./cancel-runs.js";
 import { createDb, type PrismaClient } from "./client.js";

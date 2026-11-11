@@ -1,4 +1,4 @@
-import { MIGRATION_WAIT_TIMEOUT_S } from "@rakazo/contracts";
+import { MIGRATION_WAIT_TIMEOUT_S } from "@tangow/contracts";
 import {
   DEFAULT_UPDATE_REMOTE,
   isOfficialRepoUrl,

@@ -9,8 +9,8 @@ import {
   cronSchedule,
   cronSchedulePreset,
   cronScheduleTime,
-} from "@rakazo/core";
-import { Input, NativeSelect, NativeSelectOption } from "@rakazo/ui-web";
+} from "@tangow/core";
+import { Input, NativeSelect, NativeSelectOption } from "@tangow/ui-web";
 import { Clock } from "lucide-react";
 
 const UNITS: CronUnit[] = ["minutes", "hours", "days"];

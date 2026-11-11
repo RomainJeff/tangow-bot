@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { GuestTool } from "@rakazo/adapter-kit";
+import type { GuestTool } from "@tangow/adapter-kit";
 import {
   assertConnectorToolArgs,
   clipToolResultContent,
   TOOL_RESULT_TEXT_LIMIT,
-} from "@rakazo/adapters/runtime-worker/wire";
+} from "@tangow/adapters/runtime-worker/wire";
 import type { HarnessHost } from "./harness.js";
 
 type JsonRpcId = string | number;

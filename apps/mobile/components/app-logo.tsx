@@ -1,6 +1,6 @@
-import type { AskDraft } from "@rakazo/contracts";
-import { appIcon } from "@rakazo/core";
-import { radii } from "@rakazo/ui-tokens";
+import type { AskDraft } from "@tangow/contracts";
+import { appIcon } from "@tangow/core";
+import { radii } from "@tangow/ui-tokens";
 import { useState } from "react";
 import { Image, StyleSheet } from "react-native";
 import Svg, { Path, SvgUri } from "react-native-svg";

@@ -17,7 +17,7 @@ import type {
   AgentHomeStore,
   HomeTreeEntry,
   PortableFile,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import { fileHandlePath } from "./file-handle-path.js";
 
 export class LocalAgentHomeStore implements AgentHomeStore {

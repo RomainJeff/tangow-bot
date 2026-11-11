@@ -9,7 +9,7 @@ import type {
   MemoryStore,
   SandboxProvider,
   WorkerProvider,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import {
   createBackgroundJobHandlers,
   createInMemorySkillLock,
@@ -23,19 +23,19 @@ import {
   ModelCallRuntime,
   PostgresSessionLog,
   provisionComputer,
-} from "@rakazo/adapters";
+} from "@tangow/adapters";
 import type {
   GuestConnector,
   RunWorkers,
   WorkerClock,
   WorkerTrace,
-} from "@rakazo/adapters/runtime-worker";
-import { createRunWorkers } from "@rakazo/adapters/runtime-worker";
-import type { GuestHarness } from "@rakazo/agent-run-worker";
-import type { SessionEntry } from "@rakazo/contracts";
-import type { PrismaClient } from "@rakazo/db";
-import { createThreadEvents } from "@rakazo/db";
-import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
+} from "@tangow/adapters/runtime-worker";
+import { createRunWorkers } from "@tangow/adapters/runtime-worker";
+import type { GuestHarness } from "@tangow/agent-run-worker";
+import type { SessionEntry } from "@tangow/contracts";
+import type { PrismaClient } from "@tangow/db";
+import { createThreadEvents } from "@tangow/db";
+import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
 import type { LocalWorkerFaults } from "./local-worker-provider.js";
 import { LocalWorkerProvider } from "./local-worker-provider.js";
 import type { ModelEmulatorStep } from "./model-emulator.js";

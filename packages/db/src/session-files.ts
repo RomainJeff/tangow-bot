@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { SessionEntry, SessionRunTrigger } from "@rakazo/contracts";
-import { decodeEntries, encodeEntries } from "@rakazo/core";
+import type { SessionEntry, SessionRunTrigger } from "@tangow/contracts";
+import { decodeEntries, encodeEntries } from "@tangow/core";
 import type { Prisma, PrismaClient } from "./client.js";
 import { sessionEntryFromRow } from "./sessions.js";
 

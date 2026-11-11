@@ -9,7 +9,7 @@ import {
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import type { AgentSteeringMessage } from "@rakazo/adapter-kit";
+import type { AgentSteeringMessage } from "@tangow/adapter-kit";
 import { PiRuntimeCredentialStore } from "./pi-credentials.js";
 
 export type WireProtocol = "openai-completions" | "anthropic-messages";

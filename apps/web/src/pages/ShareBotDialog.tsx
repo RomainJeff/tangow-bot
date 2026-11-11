@@ -5,8 +5,8 @@ import type {
   BotSharing,
   ConnectionCatalogItem,
   SpaceMembers,
-} from "@rakazo/contracts";
-import type { ShareableApp } from "@rakazo/core";
+} from "@tangow/contracts";
+import type { ShareableApp } from "@tangow/core";
 import {
   connectorKey,
   declareApp,
@@ -14,7 +14,7 @@ import {
   shareableApps,
   shareWithPerson,
   shareWithSpace,
-} from "@rakazo/core";
+} from "@tangow/core";
 import {
   Checkbox,
   Dialog,
@@ -24,7 +24,7 @@ import {
   SettingRow,
   Switch,
   UserAvatar,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import { useEffect, useState } from "react";
 import { rpc } from "../lib/rpc";
 import { saveFailureReason } from "../lib/save-store";

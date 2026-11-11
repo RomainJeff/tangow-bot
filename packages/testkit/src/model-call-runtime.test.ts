@@ -1,6 +1,6 @@
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
-import type { AgentRunRequest, AgentRuntimeEvent } from "@rakazo/adapter-kit";
-import { ModelCallRuntime, TraceExporter } from "@rakazo/adapters";
+import type { AgentRunRequest, AgentRuntimeEvent } from "@tangow/adapter-kit";
+import { ModelCallRuntime, TraceExporter } from "@tangow/adapters";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ModelEmulatorStep } from "./model-emulator.js";
 import { startModelEmulator } from "./model-emulator.js";

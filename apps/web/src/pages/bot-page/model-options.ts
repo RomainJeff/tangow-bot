@@ -1,7 +1,7 @@
 import { t } from "@lingui/core/macro";
-import type { ThinkingLevel, VoiceInfo } from "@rakazo/contracts";
-import type { ModelCatalog as CoreModelCatalog } from "@rakazo/core";
-import { connectedModelOptions, defaultModelLabel, parseModelOptionKey } from "@rakazo/core";
+import type { ThinkingLevel, VoiceInfo } from "@tangow/contracts";
+import type { ModelCatalog as CoreModelCatalog } from "@tangow/core";
+import { connectedModelOptions, defaultModelLabel, parseModelOptionKey } from "@tangow/core";
 import { useEffect, useState } from "react";
 import { rpc } from "../../lib/rpc";
 

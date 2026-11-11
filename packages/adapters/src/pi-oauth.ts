@@ -13,7 +13,7 @@ import {
   type ModelOAuthSignInMode,
   type ThinkingLevel,
   ThinkingLevelSchema,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import { createManualAnthropicOAuthLogin } from "./pi-anthropic-oauth.js";
 
 export const CHATGPT_OAUTH_PROVIDER = "openai-codex";

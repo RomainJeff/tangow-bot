@@ -1,6 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { HeldScreenUrl } from "@rakazo/core";
-import { Button } from "@rakazo/ui-web";
+import type { HeldScreenUrl } from "@tangow/core";
+import { Button } from "@tangow/ui-web";
 import { useEffect, useRef, useState } from "react";
 import { cachedScreenUrl, loadComputerScreen } from "../../lib/computer-screen";
 import { rpc } from "../../lib/rpc";

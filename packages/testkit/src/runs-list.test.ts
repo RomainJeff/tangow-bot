@@ -1,9 +1,9 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { BotActivityOutput, Routine, RunActivityRow, RunRecap } from "@rakazo/contracts";
-import type { PrismaClient } from "@rakazo/db";
-import { createBotMessageInTransaction } from "@rakazo/db";
+import type { BotActivityOutput, Routine, RunActivityRow, RunRecap } from "@tangow/contracts";
+import type { PrismaClient } from "@tangow/db";
+import { createBotMessageInTransaction } from "@tangow/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sessionCookieHeader } from "./index.js";
 

@@ -1,4 +1,4 @@
-import type { AgentRunModel, AgentRuntimeEvent, GuestModel } from "@rakazo/adapter-kit";
+import type { AgentRunModel, AgentRuntimeEvent, GuestModel } from "@tangow/adapter-kit";
 
 import type { RunTraceRecorder } from "../pi-run-trace.js";
 

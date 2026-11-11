@@ -1,8 +1,8 @@
-import type { RunSearchInput, SessionLog } from "@rakazo/adapter-kit";
-import { FactualRunRecapSchema, SessionId } from "@rakazo/contracts";
-import { matchesSearchQuery, snippetAroundMatch } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
-import { ENTRY_ON_CHAIN, groupMembershipFilter, Prisma, sharedWithFilter } from "@rakazo/db";
+import type { RunSearchInput, SessionLog } from "@tangow/adapter-kit";
+import { FactualRunRecapSchema, SessionId } from "@tangow/contracts";
+import { matchesSearchQuery, snippetAroundMatch } from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
+import { ENTRY_ON_CHAIN, groupMembershipFilter, Prisma, sharedWithFilter } from "@tangow/db";
 import { z } from "zod";
 import {
   decodeSearchCursor,

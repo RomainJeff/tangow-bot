@@ -7,11 +7,11 @@ import type {
   ComputerRef,
   JobPublisher,
   SandboxProvider,
-} from "@rakazo/adapter-kit";
-import { buildSkillMd } from "@rakazo/core";
-import type { PrismaClient, ThreadEvents } from "@rakazo/db";
-import { clearThread } from "@rakazo/db";
-import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
+} from "@tangow/adapter-kit";
+import { buildSkillMd } from "@tangow/core";
+import type { PrismaClient, ThreadEvents } from "@tangow/db";
+import { clearThread } from "@tangow/db";
+import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
 import { describe, expect, it, vi } from "vitest";
 import {
   acquireComputerExecutionLease,
@@ -31,7 +31,7 @@ import { botSkillsRoot, skillDirName, userSkillsRoot, writeUserSkill } from "./s
 import { workerFixture } from "./worker-fixture.test-support.js";
 
 vi.mock("../../db/src/sessions.js", async () =>
-  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+  (await import("@tangow/db/sessions.test-support")).stubbedDbSessions(),
 );
 
 const context = {

@@ -1,4 +1,4 @@
-import type { Peer, ThreadEntry } from "@rakazo/contracts";
+import type { Peer, ThreadEntry } from "@tangow/contracts";
 
 export interface PeerMessage {
   messageId: string;

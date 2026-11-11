@@ -1,4 +1,4 @@
-import type { VolumeAccess } from "@rakazo/contracts";
+import type { VolumeAccess } from "@tangow/contracts";
 import type { AdapterContext, AdapterDescriptor } from "./types.js";
 
 export interface WorkerCapabilities {

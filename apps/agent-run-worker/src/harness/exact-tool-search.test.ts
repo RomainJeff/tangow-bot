@@ -5,7 +5,7 @@ import type {
   ToolInfo,
 } from "@earendil-works/pi-coding-agent";
 import { createToolSearchExtension } from "@earendil-works/pi-coding-agent";
-import { RAKAZO_TOOL_PREFIX } from "@rakazo/adapter-kit";
+import { RAKAZO_TOOL_PREFIX } from "@tangow/adapter-kit";
 import { expect, it } from "vitest";
 import { exactToolSearchExtension } from "./exact-tool-search.js";
 

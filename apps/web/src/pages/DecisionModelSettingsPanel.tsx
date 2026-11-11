@@ -1,6 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { SpaceDecisionConfig } from "@rakazo/contracts";
-import { Button, Field, FieldLabel, Input } from "@rakazo/ui-web";
+import type { SpaceDecisionConfig } from "@tangow/contracts";
+import { Button, Field, FieldLabel, Input } from "@tangow/ui-web";
 import { useEffect, useId, useState } from "react";
 import { rpc } from "../lib/rpc";
 

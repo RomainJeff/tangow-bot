@@ -1,4 +1,4 @@
-import type { HelperProfile } from "@rakazo/core";
+import type { HelperProfile } from "@tangow/core";
 
 /**
  * Example profiles for tests and the demo in docs/examples/helpers. They never ship: a dev checkout

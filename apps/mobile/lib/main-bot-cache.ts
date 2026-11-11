@@ -1,4 +1,4 @@
-import { avatarIdentitySeed } from "@rakazo/core";
+import { avatarIdentitySeed } from "@tangow/core";
 import * as SecureStore from "expo-secure-store";
 
 const MAIN_BOT_CACHE_KEY = "rakazo.main_bot";

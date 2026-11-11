@@ -4,7 +4,7 @@ import type {
   BrowserActStep,
   BrowserProvider,
   ComputerRef,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 
 const MAX_BROWSER_ACTIONS = 24;
 

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readOutboundCall } from "@rakazo/core";
+import { readOutboundCall } from "@tangow/core";
 
 export type Label = "consequential" | "read_only";
 export type Split = "development" | "holdout";
