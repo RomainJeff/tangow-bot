@@ -729,6 +729,58 @@ export async function lockGroupForCreator(
   if (locked.length !== 1) throw new IsolationError();
 }
 
+/**
+ * Locks the groups of bots their owner is archiving or deleting, and returns those the bots leave
+ * with no active bot. Of these, a group someone else made, with bots shared with them, is
+ * archived for everyone with its history: its creator restores it once a bot is back. The owner's
+ * own are left to the caller.
+ */
+export async function archiveGroupsLeftWithoutBots(
+  tx: Prisma.TransactionClient,
+  bots: { botIds: string[]; ownerId: string | undefined },
+) {
+  if (bots.botIds.length === 0) return [];
+  await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT groups.id
+    FROM chat_groups AS groups
+    INNER JOIN chat_group_members AS members ON members."groupId" = groups.id
+    WHERE members."botId" IN (${Prisma.join(bots.botIds)})
+    ORDER BY groups.id
+    FOR UPDATE OF groups
+  `;
+  const groups = await tx.chatGroup.findMany({
+    where: { members: { some: { botId: { in: bots.botIds } } } },
+    select: {
+      id: true,
+      userId: true,
+      members: { select: { botId: true, bot: { select: { archivedAt: true } } } },
+      thread: { select: { id: true } },
+    },
+  });
+  const closed = groups.filter(
+    (group) =>
+      !hasMinimumActiveMembers(
+        group.members.filter(
+          (member) => !bots.botIds.includes(member.botId) && member.bot.archivedAt === null,
+        ),
+      ),
+  );
+  const archivedIds = closed
+    .filter((group) => group.userId !== bots.ownerId)
+    .map((group) => group.id);
+  if (archivedIds.length) {
+    await tx.chatGroup.updateMany({
+      where: { id: { in: archivedIds }, archivedAt: null },
+      data: { archivedAt: new Date() },
+    });
+    await tx.chatGroupPerson.updateMany({
+      where: { groupId: { in: archivedIds } },
+      data: { pinned: false },
+    });
+  }
+  return closed;
+}
+
 export async function touchGroupUpdatedAt(
   prisma: Pick<Prisma.TransactionClient, "chatGroup">,
   groupId: string,

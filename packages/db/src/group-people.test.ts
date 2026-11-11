@@ -114,7 +114,7 @@ describe("a group's people, bots and lead", () => {
   beforeAll(async () => {
     database = await openPgliteDatabase();
     prisma = database.prisma;
-    for (const id of ["creator", "ana", "ben", "stranger"]) {
+    for (const id of ["creator", "ana", "ben", "cleo", "stranger"]) {
       await prisma.user.create({ data: { id, name: id, email: `${id}@rakazo.test` } });
       await bootstrapUserSpace(prisma, { id }, env);
     }
@@ -123,7 +123,7 @@ describe("a group's people, bots and lead", () => {
     space = (
       await createSpaceForMember(prisma, { currentSpaceId: home, userId: "creator", name: "Team" })
     ).id;
-    for (const userId of ["ana", "ben"]) {
+    for (const userId of ["ana", "ben", "cleo"]) {
       const { token } = await createSpaceInvitation(prisma, { spaceId: space, userId: "creator" });
       await acceptSpaceInvitation(prisma, { token, userId });
     }
@@ -251,6 +251,25 @@ describe("a group's people, bots and lead", () => {
     expect(await prisma.chatGroupPerson.count({ where: { userId: "ben" } })).toBe(0);
     expect(await status(benRun!.id)).toBe("cancelled");
     expect(await status(anaRun!.id)).toBe("running");
+  });
+
+  it("archives for everyone a group whose only bots leave with their owner's Space removal", async () => {
+    const groups = createGroupRepos(prisma);
+    const cleoBot = await newBot("cleo", "Tutor");
+    await setBotSharing(prisma, actor("cleo"), {
+      botId: cleoBot,
+      visibility: "space",
+      userIds: [],
+    });
+    const group = await groups.createGroup(actor("creator"), {
+      name: "Lessons",
+      botIds: [cleoBot],
+      userIds: ["ana"],
+    });
+    await removeSpaceMember(prisma, { spaceId: space, userId: "creator", memberUserId: "cleo" });
+
+    const archived = await groups.listGroups(actor("ana"), { archived: true });
+    expect(archived.map((listed) => listed.id)).toContain(group.id);
   });
 
   it("keeps each person's messages to their own runs of a bot", async () => {
