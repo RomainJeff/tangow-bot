@@ -824,6 +824,7 @@ export async function claimSteering(
       },
       select: {
         id: true,
+        userId: true,
         trigger: true,
         sessionId: true,
         historyThroughSeq: true,
@@ -847,6 +848,8 @@ export async function claimSteering(
             }
           : {
               OR: [{ runId: null }, { runId: input.runId }],
+              // In a group, two people can each have a run of the bot: one steers only their own.
+              userId: run.userId,
               message: {
                 sessionId: run.thread.sessionId,
                 // Private follow-ups remain unclaimed for the existing private continuation.
@@ -2380,16 +2383,26 @@ async function finalizeRunOnce(
   });
 }
 
-type WakeScope = Pick<FinalizeRunBase, "spaceId" | "threadId" | "botId">;
+type WakeScope = Pick<FinalizeRunBase, "spaceId" | "threadId" | "botId" | "runId">;
 
+/**
+ * Continues the person whose run is ending: in a group, two people can each have runs of the bot,
+ * and one person's messages never steer, or wake the bot as, another. Their pending messages are
+ * continued when one of their own runs ends.
+ */
 async function createSteeringContinuation(
   tx: Prisma.TransactionClient,
   input: WakeScope,
 ): Promise<string | null> {
+  const { userId } = await tx.run.findUniqueOrThrow({
+    where: { id: input.runId },
+    select: { userId: true },
+  });
   const active = await tx.run.findFirst({
     where: {
       threadId: input.threadId,
       botId: input.botId,
+      userId,
       ...conversationRunFilter,
       status: { in: [...ACTIVE_RUN_STATUSES] },
     },
@@ -2399,6 +2412,7 @@ async function createSteeringContinuation(
   const pending = await tx.steeringMessage.findMany({
     where: {
       botId: input.botId,
+      userId,
       runId: null,
       message: { session: { threadId: input.threadId, kind: "thread" } },
     },
@@ -2440,11 +2454,7 @@ async function createSteeringContinuation(
     return woken.id;
   }
   const last = pending.at(-1)!;
-  const run = await followUp(
-    pending[0]!.userId,
-    "Respond to the user's steering context.",
-    last.message.id,
-  );
+  const run = await followUp(userId, "Respond to the user's steering context.", last.message.id);
   await tx.steeringMessage.updateMany({
     where: { id: { in: pending.map((item) => item.id) }, runId: null },
     data: { runId: run.id, claimedAt: null },
