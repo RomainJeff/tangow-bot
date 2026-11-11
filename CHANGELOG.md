@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-11-12
+
+#### Changed
+
+- In a phone browser, Settings and Customize now open on a list of sections, each opening on its own page with a back button, instead of a sliding row of tabs above the title, and the bot page returns to the chat with Chat in place of its close button.
+
 ### 2026-11-11
 
 #### Added
