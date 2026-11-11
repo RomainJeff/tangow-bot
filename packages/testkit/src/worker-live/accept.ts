@@ -298,7 +298,7 @@ export async function acceptTasks(options: {
           const reply = await replyOf(run, runId);
           const workers = Sandbox.list({
             ...live.connection,
-            query: { metadata: { p3live: live.tag, rakazo: "worker" } },
+            query: { metadata: { p3live: live.tag, tangow: "worker" } },
           });
           let workersLeft = 0;
           while (workers.hasNext) workersLeft += (await workers.nextItems()).length;

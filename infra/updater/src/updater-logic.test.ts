@@ -10,7 +10,7 @@ import {
 } from "./updater-logic.js";
 
 const base = {
-  TANGOW_DEPLOY_DIR: "/srv/rakazo",
+  TANGOW_DEPLOY_DIR: "/srv/tangow",
   TANGOW_UPDATER_TOKEN: "fake-review-updater-token-000000000000",
 } as const;
 
@@ -18,10 +18,10 @@ describe("resolveUpdaterConfig", () => {
   it("derives the compose file, env file, and defaults from the deployment directory", () => {
     const config = resolveUpdaterConfig({ ...base });
     expect(config).toMatchObject({
-      deployDir: "/srv/rakazo",
-      composeFiles: [`/srv/rakazo/${DEFAULT_COMPOSE_FILE}`],
+      deployDir: "/srv/tangow",
+      composeFiles: [`/srv/tangow/${DEFAULT_COMPOSE_FILE}`],
       updateServices: ["api", "worker", "web"],
-      envFile: "/srv/rakazo/.env",
+      envFile: "/srv/tangow/.env",
       projectName: DEFAULT_COMPOSE_PROJECT_NAME,
       token: base.TANGOW_UPDATER_TOKEN,
       port: DEFAULT_UPDATER_PORT,
@@ -50,7 +50,7 @@ describe("resolveUpdaterConfig", () => {
 
   it("refuses a deployment directory that is missing or relative", () => {
     expect(() => resolveUpdaterConfig({ TANGOW_UPDATER_TOKEN: "t" })).toThrow(/TANGOW_DEPLOY_DIR/);
-    expect(() => resolveUpdaterConfig({ ...base, TANGOW_DEPLOY_DIR: "srv/rakazo" })).toThrow(
+    expect(() => resolveUpdaterConfig({ ...base, TANGOW_DEPLOY_DIR: "srv/tangow" })).toThrow(
       /TANGOW_DEPLOY_DIR/,
     );
   });
@@ -69,7 +69,7 @@ describe("resolveUpdaterConfig", () => {
         ...base,
         TANGOW_COMPOSE_FILE: "infra/compose/docker-compose.prod.yml:ops/overlay.yml",
       }).composeFiles,
-    ).toEqual(["/srv/rakazo/infra/compose/docker-compose.prod.yml", "/srv/rakazo/ops/overlay.yml"]);
+    ).toEqual(["/srv/tangow/infra/compose/docker-compose.prod.yml", "/srv/tangow/ops/overlay.yml"]);
   });
 
   it("honours COMPOSE_PATH_SEPARATOR the way Compose does", () => {
@@ -79,7 +79,7 @@ describe("resolveUpdaterConfig", () => {
         COMPOSE_PATH_SEPARATOR: ",",
         TANGOW_COMPOSE_FILE: "a.yml,b.yml",
       }).composeFiles,
-    ).toEqual(["/srv/rakazo/a.yml", "/srv/rakazo/b.yml"]);
+    ).toEqual(["/srv/tangow/a.yml", "/srv/tangow/b.yml"]);
   });
 
   it("checks every entry in a list, not just the first", () => {

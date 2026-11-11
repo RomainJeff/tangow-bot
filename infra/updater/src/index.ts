@@ -323,7 +323,7 @@ export function createUpdaterApp(
       throw new UpdateRefused("The deployment environment must be a regular, non-symlink file.");
     }
     const contents = upsertEnvAssignments(current, assignments);
-    const temporary = `${config.envFile}.rakazo-update-${randomUUID()}`;
+    const temporary = `${config.envFile}.tangow-update-${randomUUID()}`;
     let temporaryFile: Awaited<ReturnType<typeof open>> | null = null;
     try {
       temporaryFile = await open(temporary, "wx", 0o600);

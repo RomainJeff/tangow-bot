@@ -79,7 +79,7 @@ async function main() {
   // larger max just competes for Postgres max_connections (53300).
   const { prisma, pool } = createDb(databaseUrl, {
     poolMax: parsePositiveInteger(process.env.DB_POOL_MAX, 8),
-    applicationName: "rakazo-worker",
+    applicationName: "tangow-worker",
   });
   const realtime = new PostgresRealtimeFanout({
     connectionString: process.env.REALTIME_DATABASE_URL ?? databaseUrl,
@@ -189,7 +189,7 @@ async function main() {
   // Its own small pool: a held skill lock must never take a connection the change itself needs.
   const skillLockPool = createPool(databaseUrl, {
     poolMax: 2,
-    applicationName: "rakazo-worker-skill-lock",
+    applicationName: "tangow-worker-skill-lock",
   });
   const skillLock = createPostgresSkillLock(skillLockPool);
   const skillLearning = parseSkillLearningMode(process.env.SKILL_LEARNING);

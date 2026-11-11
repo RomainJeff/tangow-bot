@@ -314,7 +314,7 @@ export function createWorkerLifecycle(deps: {
     });
     if (volume.mode === "ready") return volume.providerRef;
     const { providerRef } = await provider.ensureVolume(
-      { name: `rakazo-${volumeId}`, ensureDeadline: volume.ensureUntil },
+      { name: `tangow-${volumeId}`, ensureDeadline: volume.ensureUntil },
       context,
     );
     // Locked like `deleteOwnerVolumes`, so the ref lands either on the row or in a deletion record.

@@ -45,8 +45,8 @@ function fixture() {
           "flock() { :; }",
           `bash() { return ${failLifecycle ? 1 : 0}; }`,
           script
-            .replaceAll("/tmp/rakazo/desktop-assignments", root)
-            .replaceAll("/tmp/rakazo", root),
+            .replaceAll("/tmp/tangow/desktop-assignments", root)
+            .replaceAll("/tmp/tangow", root),
         ].join("\n"),
       ],
       { encoding: "utf8", timeout: 5000 },
@@ -125,7 +125,7 @@ describe("shared Linux desktop lifecycle", () => {
         ensure: "exit 99",
         release: `test -e /dev/fd/8; printf '%s\\n' ${shellQuote(profile)} >>${shellQuote(events)}; exit 1`,
       }),
-    ).replaceAll("/tmp/rakazo", f.root);
+    ).replaceAll("/tmp/tangow", f.root);
     const result = spawnSync(
       "bash",
       ["-eu", "-c", `flock() { :; }; export -f flock;\n${command}`],
@@ -196,7 +196,7 @@ describe("shared Linux desktop lifecycle", () => {
         [
           "pkill() { :; }; sleep() { :; }",
           `bash() { printf '%s\\n' "$5" >>${shellQuote(record)}; }`,
-          resetDesktopRuntimeCommand(env).replaceAll("/tmp/rakazo", f.root),
+          resetDesktopRuntimeCommand(env).replaceAll("/tmp/tangow", f.root),
         ].join("\n"),
       ],
       { encoding: "utf8", timeout: 5000 },
@@ -219,7 +219,7 @@ describe("shared Linux desktop lifecycle", () => {
     expect(
       patterns.some((pattern) =>
         pattern.test(
-          "/usr/bin/x11vnc -display :21 -rfbport 0 -unixsock /tmp/rakazo/sockets/view-21-token -forever",
+          "/usr/bin/x11vnc -display :21 -rfbport 0 -unixsock /tmp/tangow/sockets/view-21-token -forever",
         ),
       ),
     ).toBe(true);

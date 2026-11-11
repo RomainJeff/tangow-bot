@@ -84,14 +84,14 @@ export async function migrateProviderToDocker({
     "inspect",
     "--format",
     "{{.Id}}",
-    "rakazo/app:local",
+    "tangow/app:local",
   ]).stdout.trim();
   const supervisorImage = dock("Supervisor image", [
     "image",
     "inspect",
     "--format",
     "{{.Id}}",
-    "rakazo/supervisor:local",
+    "tangow/supervisor:local",
   ]).stdout.trim();
   if (!state) {
     writePrivate(path.join(root, sourceOverride), `${JSON.stringify(override)}\n`);

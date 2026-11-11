@@ -92,7 +92,7 @@ try {
         throw new Error("Active work prevents worker verification");
       await verifyE2BInstallation(
         process.env.E2B_API_KEY ?? "",
-        process.env.WORKER_TEMPLATE || "rakazo-worker-pi-native",
+        process.env.WORKER_TEMPLATE || "tangow-worker-pi-native",
       );
     }
     const previews = [];

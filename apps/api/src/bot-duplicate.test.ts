@@ -44,7 +44,7 @@ describe("bots.duplicate", () => {
     } as unknown as PrismaClient;
     const skillLock = createInMemorySkillLock();
     const handler = new RPCHandler(
-      createRouter({ prisma, skillLock, dataDir: "/tmp/rakazo-duplicate" } as RouterDeps),
+      createRouter({ prisma, skillLock, dataDir: "/tmp/tangow-duplicate" } as RouterDeps),
     );
 
     let release = () => {};

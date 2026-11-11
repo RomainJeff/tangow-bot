@@ -58,7 +58,7 @@ async function fakeSupervisor() {
       return;
     }
     socket.write(
-      "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: rakazo-guest\r\n\r\n",
+      "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: tangow-guest\r\n\r\n",
     );
     let received = "";
     socket.on("data", (chunk) => (received += chunk));
@@ -111,7 +111,7 @@ describe("DockerWorkerProvider", () => {
   let worker: DockerWorkerProvider;
   beforeEach(async () => {
     supervisor = await fakeSupervisor();
-    dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-docker-worker-"));
+    dataDir = await mkdtemp(path.join(tmpdir(), "tangow-docker-worker-"));
     worker = new DockerWorkerProvider({
       supervisorUrl: supervisor.url,
       supervisorToken: TOKEN,
@@ -134,8 +134,8 @@ describe("DockerWorkerProvider", () => {
 
   it("asks the supervisor for the attempt's worker with its volumes, read-only where granted", async () => {
     const attempt = spec([
-      { volumeRef: "rakazo-vol_bot", path: "/workspace/bots/bot_1", access: "rw" },
-      { volumeRef: "rakazo-vol_shared", path: "/workspace/shared", access: "ro" },
+      { volumeRef: "tangow-vol_bot", path: "/workspace/bots/bot_1", access: "rw" },
+      { volumeRef: "tangow-vol_shared", path: "/workspace/shared", access: "ro" },
     ]);
 
     expect(await worker.ensure(attempt)).toEqual({ providerRef: "ctr1" });
@@ -148,8 +148,8 @@ describe("DockerWorkerProvider", () => {
           attemptId: "attempt_1",
           ttlSeconds: 3_600,
           mounts: [
-            { volume: "rakazo-vol_bot", path: "/workspace/bots/bot_1", readOnly: false },
-            { volume: "rakazo-vol_shared", path: "/workspace/shared", readOnly: true },
+            { volume: "tangow-vol_bot", path: "/workspace/bots/bot_1", readOnly: false },
+            { volume: "tangow-vol_shared", path: "/workspace/shared", readOnly: true },
           ],
         },
       },
@@ -209,12 +209,12 @@ describe("DockerWorkerProvider", () => {
   });
 
   it("creates a volume as a directory of DATA_DIR and returns its name every time", async () => {
-    const input = { name: "rakazo-vol_1", ensureDeadline: spec([]).ensureDeadline };
+    const input = { name: "tangow-vol_1", ensureDeadline: spec([]).ensureDeadline };
 
     const refs = [await worker.ensureVolume(input), await worker.ensureVolume(input)];
 
-    expect(refs).toEqual([{ providerRef: "rakazo-vol_1" }, { providerRef: "rakazo-vol_1" }]);
-    expect(await readdir(path.join(dataDir, "volumes"))).toEqual(["rakazo-vol_1"]);
+    expect(refs).toEqual([{ providerRef: "tangow-vol_1" }, { providerRef: "tangow-vol_1" }]);
+    expect(await readdir(path.join(dataDir, "volumes"))).toEqual(["tangow-vol_1"]);
   });
 
   it("never follows a link left where a volume goes, to create or to delete", async () => {
@@ -222,13 +222,13 @@ describe("DockerWorkerProvider", () => {
     await mkdir(outside);
     await writeFile(path.join(outside, "keep.txt"), "keep");
     await mkdir(path.join(dataDir, "volumes"));
-    await symlink(outside, path.join(dataDir, "volumes", "rakazo-linked"));
+    await symlink(outside, path.join(dataDir, "volumes", "tangow-linked"));
 
     await expect(
-      worker.ensureVolume({ name: "rakazo-linked", ensureDeadline: spec([]).ensureDeadline }),
-    ).rejects.toThrow("rakazo-linked is not a directory");
-    await worker.deleteVolume({ providerRef: "rakazo-linked" });
-    await worker.deleteVolume({ providerRef: "rakazo-never-created" });
+      worker.ensureVolume({ name: "tangow-linked", ensureDeadline: spec([]).ensureDeadline }),
+    ).rejects.toThrow("tangow-linked is not a directory");
+    await worker.deleteVolume({ providerRef: "tangow-linked" });
+    await worker.deleteVolume({ providerRef: "tangow-never-created" });
 
     expect(await readdir(path.join(dataDir, "volumes"))).toEqual([]);
     expect(await readdir(outside)).toEqual(["keep.txt"]);

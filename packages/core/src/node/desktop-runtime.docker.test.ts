@@ -18,7 +18,7 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
     };
     const profile = browserProfilePathForScreen("bot", env);
     const other = `/tmp/other/${path.posix.basename(profile)}`;
-    const pidFile = `/tmp/rakazo/browser-pid-${path.posix.basename(profile).slice("chromium-bot-".length)}`;
+    const pidFile = `/tmp/tangow/browser-pid-${path.posix.basename(profile).slice("chromium-bot-".length)}`;
     try {
       docker(
         "run",
@@ -29,7 +29,7 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
         "none",
         "--entrypoint",
         "sleep",
-        process.env.TANGOW_COMPUTER_IMAGE ?? "rakazo/computer:local",
+        process.env.TANGOW_COMPUTER_IMAGE ?? "tangow/computer:local",
         "infinity",
       );
       docker(
@@ -38,7 +38,7 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
         "bash",
         "-eu",
         "-c",
-        `mkdir -p ${shellQuote(profile)} ${shellQuote(other)} /tmp/rakazo; ln -s ${shellQuote(profile)} /tmp/profile-alias`,
+        `mkdir -p ${shellQuote(profile)} ${shellQuote(other)} /tmp/tangow; ln -s ${shellQuote(profile)} /tmp/profile-alias`,
       );
       for (const [label, directory] of [
         ["matching", "/tmp/profile-alias"],

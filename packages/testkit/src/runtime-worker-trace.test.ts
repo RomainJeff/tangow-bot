@@ -59,7 +59,7 @@ describe("a traced worker run", () => {
   it("exports the run, each relayed model request and each tool call, with secrets masked", async () => {
     const payloads: unknown[] = [];
     const exporter = new TraceExporter({ send: async (payload) => void payloads.push(payload) });
-    expect(await runShowingKey({ exporter, serviceName: "rakazo-worker" })).toBe("completed");
+    expect(await runShowingKey({ exporter, serviceName: "tangow-worker" })).toBe("completed");
     await exporter.flush();
 
     expect(payloads).toHaveLength(1);

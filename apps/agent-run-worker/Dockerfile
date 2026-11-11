@@ -1,6 +1,6 @@
-# The Docker worker image, rakazo/worker: what the E2B template (template/template.ts) installs, for
+# The Docker worker image, tangow/worker: what the E2B template (template/template.ts) installs, for
 # the pi-native harness. Build context is the repository root:
-#   docker build -f apps/agent-run-worker/Dockerfile -t rakazo/worker:local .
+#   docker build -f apps/agent-run-worker/Dockerfile -t tangow/worker:local .
 FROM node:24-bookworm AS bundle
 ENV COREPACK_HOME=/usr/local/share/corepack
 RUN corepack enable
@@ -9,7 +9,7 @@ COPY . .
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store,sharing=locked \
     ELECTRON_SKIP_BINARY_DOWNLOAD=1 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
     pnpm install --frozen-lockfile --store-dir=/pnpm-store \
-      --filter "@tangow/agent-run-worker..." --filter rakazo
+      --filter "@tangow/agent-run-worker..." --filter tangow
 # The bundle script loads the adapters, which import the Prisma client; the bundle itself excludes it.
 RUN pnpm --filter @tangow/db generate && pnpm --filter @tangow/agent-run-worker bundle
 
@@ -31,7 +31,7 @@ ENV TANGOW_WORKER_HOME=/home/user TANGOW_WORKER_HARNESS=pi-native
 
 COPY --from=bundle /app/apps/agent-run-worker/dist/managed-skills /managed-skills
 RUN chown -R root:root /managed-skills && chmod -R a+rX,a-w /managed-skills
-COPY --from=bundle /app/apps/agent-run-worker/dist/agent-run-worker.mjs /opt/rakazo/agent-run-worker.mjs
+COPY --from=bundle /app/apps/agent-run-worker/dist/agent-run-worker.mjs /opt/tangow/agent-run-worker.mjs
 
 USER 1000:1000
 WORKDIR /workspace

@@ -44,7 +44,7 @@ describe("normalizeRepoUrl", () => {
       "http://github.com/me/rakazo",
       "git://github.com/me/rakazo",
       "file:///etc/passwd",
-      "/srv/rakazo",
+      "/srv/tangow",
       "https://github.com",
       "https://github.com/onlyone",
       "https://github.com/me/../../etc",

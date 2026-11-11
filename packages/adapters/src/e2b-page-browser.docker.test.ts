@@ -19,16 +19,16 @@ const context = {
   signal: new AbortController().signal,
 };
 const computer = { id: "machine", providerRef: "machine", kind: "e2b" as const, botId: "home" };
-const image = process.env.TANGOW_COMPUTER_IMAGE ?? "rakazo/computer:local";
+const image = process.env.TANGOW_COMPUTER_IMAGE ?? "tangow/computer:local";
 const environment = {
   homeDir: "/home/user",
-  workspaceDir: "/home/user/rakazo-home",
-  browserProfilesDir: "/home/user/rakazo-home/.browser-profiles",
+  workspaceDir: "/home/user/tangow-home",
+  browserProfilesDir: "/home/user/tangow-home/.browser-profiles",
   displayStart: 20,
   portStart: 6100,
 };
 const key = createHash("sha256").update("bot").digest("hex").slice(0, 32);
-const registry = `/tmp/rakazo/desktop-assignments/${key}`;
+const registry = `/tmp/tangow/desktop-assignments/${key}`;
 
 async function ready(f: Awaited<ReturnType<typeof dockerE2BMachine>>, command: string) {
   const result = await f.exec(

@@ -122,7 +122,7 @@ function e2bIgnoringCancel(root: string): Worker<E2BWorkerProvider> {
   };
   return {
     provider: new E2BWorkerProvider(
-      { apiKey: "e2b-test-key", template: "rakazo-worker-pi-native" },
+      { apiKey: "e2b-test-key", template: "tangow-worker-pi-native" },
       sdk,
     ),
     async dispose() {
@@ -147,7 +147,7 @@ async function sleepingRun<P extends WorkerProvider & GuestConnector>(
     ],
   });
   cleanups.push(() => fixture.close());
-  const root = await mkdtemp(path.join(tmpdir(), "rakazo-worker-stop-"));
+  const root = await mkdtemp(path.join(tmpdir(), "tangow-worker-stop-"));
   const { provider, dispose } = worker(root);
   cleanups.push(async () => {
     await dispose();

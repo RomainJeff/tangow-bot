@@ -16,7 +16,7 @@ async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is required");
   const { prisma, pool } = createDb(url);
-  const template = process.env.WORKER_TEMPLATE || "rakazo-worker-pi-native";
+  const template = process.env.WORKER_TEMPLATE || "tangow-worker-pi-native";
   try {
     if (values.inspect) {
       const inventory = await inspectE2BDockerMigration(prisma);

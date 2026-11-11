@@ -22,7 +22,7 @@ import { WORKER_LIMITS } from "./runtime-worker/limits.js";
  */
 export const DOCKER_CREATE_MARGIN_MS = 60_000;
 
-const VOLUME_NAME = /^rakazo-[A-Za-z0-9_-]{1,64}$/;
+const VOLUME_NAME = /^tangow-[A-Za-z0-9_-]{1,64}$/;
 /** What undici reports when the supervisor closed a pooled keep-alive connection under a request. */
 const RESET_CODES = new Set(["ECONNRESET", "EPIPE", "UND_ERR_SOCKET"]);
 

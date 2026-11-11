@@ -23,7 +23,7 @@ import { createDb } from "../packages/db/src/client.js";
 const { values } = parseArgs({
   options: {
     computer: { type: "string" },
-    template: { type: "string", default: "rakazo-worker-pi-native" },
+    template: { type: "string", default: "tangow-worker-pi-native" },
   },
 });
 

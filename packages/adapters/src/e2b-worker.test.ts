@@ -86,7 +86,7 @@ function fakeE2B() {
   return { sdk, sandboxes, volumes, guests };
 }
 
-const config = { apiKey: "e2b-test-key", template: "rakazo-worker-pi-native" };
+const config = { apiKey: "e2b-test-key", template: "tangow-worker-pi-native" };
 
 function spec(mounts: WorkerSpec["mounts"], overrides: Partial<WorkerSpec> = {}): WorkerSpec {
   return {
@@ -123,11 +123,11 @@ describe("E2BWorkerProvider", () => {
     const e2b = fakeE2B();
     const worker = new E2BWorkerProvider(config, e2b.sdk);
     const bot = await worker.ensureVolume({
-      name: "rakazo-vol_bot",
+      name: "tangow-vol_bot",
       ensureDeadline: spec([]).ensureDeadline,
     });
     const shared = await worker.ensureVolume({
-      name: "rakazo-vol_shared",
+      name: "tangow-vol_shared",
       ensureDeadline: spec([]).ensureDeadline,
     });
     const attempt = spec([
@@ -141,16 +141,16 @@ describe("E2BWorkerProvider", () => {
     expect([first, again]).toEqual([{ providerRef: "sbx_1" }, { providerRef: "sbx_1" }]);
     const { requestTimeoutMs, signal, ...created } = e2b.sandboxes.get("sbx_1")!;
     expect(created).toEqual({
-      template: "rakazo-worker-pi-native",
+      template: "tangow-worker-pi-native",
       secure: true,
-      metadata: { rakazo: "worker", attemptId: "attempt_1" },
+      metadata: { tangow: "worker", attemptId: "attempt_1" },
       envs: {
         TANGOW_WORKER_HARNESS: "pi-native",
         TANGOW_WORKER_HOME: "/home/user",
       },
       volumeMounts: {
-        "/workspace/bots/bot_1": "rakazo-vol_bot",
-        "/workspace/shared": "rakazo-vol_shared",
+        "/workspace/bots/bot_1": "tangow-vol_bot",
+        "/workspace/shared": "tangow-vol_shared",
       },
       timeoutMs: 3_600_000,
       lifecycle: { onTimeout: "kill" },
@@ -159,7 +159,7 @@ describe("E2BWorkerProvider", () => {
 
   it("asks for the worker's TTL, and logs when the deployment's limit cuts it shorter", async () => {
     const sink = createTestSink();
-    installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+    installLogger(createLogger({ service: "tangow-worker", sinks: [sink] }));
     const e2b = fakeE2B();
     const roomy = new E2BWorkerProvider({ ...config, maxTimeoutMs: 86_400_000 }, e2b.sdk);
     const capped = new E2BWorkerProvider({ ...config, maxTimeoutMs: 1_800_000 }, e2b.sdk);
@@ -241,7 +241,7 @@ describe("E2BWorkerProvider", () => {
     await worker.ensure(spec([]));
     await e2b.sdk.createSandbox({
       ...e2b.sandboxes.get("sbx_1")!,
-      metadata: { rakazo: "worker", attemptId: "attempt_1" },
+      metadata: { tangow: "worker", attemptId: "attempt_1" },
     });
     await worker.ensure(spec([], { attemptId: "attempt_2" }));
 
@@ -257,17 +257,17 @@ describe("E2BWorkerProvider", () => {
     const worker = new E2BWorkerProvider(config, e2b.sdk);
 
     const refs = [
-      await worker.ensureVolume({ name: "rakazo-vol_1", ensureDeadline: spec([]).ensureDeadline }),
-      await worker.ensureVolume({ name: "rakazo-vol_1", ensureDeadline: spec([]).ensureDeadline }),
+      await worker.ensureVolume({ name: "tangow-vol_1", ensureDeadline: spec([]).ensureDeadline }),
+      await worker.ensureVolume({ name: "tangow-vol_1", ensureDeadline: spec([]).ensureDeadline }),
     ];
 
-    expect(refs).toEqual([{ providerRef: "rakazo-vol_1" }, { providerRef: "rakazo-vol_1" }]);
-    expect([...e2b.volumes]).toEqual(["rakazo-vol_1"]);
+    expect(refs).toEqual([{ providerRef: "tangow-vol_1" }, { providerRef: "tangow-vol_1" }]);
+    expect([...e2b.volumes]).toEqual(["tangow-vol_1"]);
   });
 
   it("does not create a volume after a slow lookup exhausts its create deadline", async () => {
     const e2b = fakeE2B();
-    const input = { name: "rakazo-delayed", ...creatingFor(1_000) };
+    const input = { name: "tangow-delayed", ...creatingFor(1_000) };
     const now = Date.now();
     const clock = vi.spyOn(Date, "now").mockReturnValue(now);
     const worker = new E2BWorkerProvider(config, {
@@ -309,7 +309,7 @@ describe("E2BWorkerProvider", () => {
 
     expect(guest).toMatchObject({
       sandboxId: "sbx_1",
-      command: "node /opt/rakazo/agent-run-worker.mjs",
+      command: "node /opt/tangow/agent-run-worker.mjs",
       envs: { TANGOW_WORKER_CAPABILITY: "rkw1.claims.mac" },
     });
     expect(Buffer.from(hello.value!).toString()).toBe('{"kind":"worker.hello"}');
@@ -383,7 +383,7 @@ describe("E2BWorkerProvider", () => {
 
   it("logs a failing guest's stderr tail as an inert field", async () => {
     const sink = createTestSink();
-    installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+    installLogger(createLogger({ service: "tangow-worker", sinks: [sink] }));
     const e2b = fakeE2B();
     const worker = new E2BWorkerProvider(config, e2b.sdk);
     const { exited, fake } = await connected(e2b, worker);

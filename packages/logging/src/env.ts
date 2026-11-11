@@ -40,7 +40,7 @@ export function createServiceLogger(options: {
 
 export const SERVICE_NAMES = {
   api: "rakazo-api",
-  worker: "rakazo-worker",
+  worker: "tangow-worker",
   supervisor: "rakazo-sandbox-supervisor",
   updater: "rakazo-updater",
 } as const;

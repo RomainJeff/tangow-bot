@@ -518,14 +518,14 @@ export function createRunWorkspaceCheckpoint(checkpoint: () => Promise<unknown>)
 
 const SHELL_INTERPRETER_NAMES = /^(?:bash|sh|dash|zsh|ksh|fish)$/;
 const STATIC_SHELL_EXPANSIONS: Readonly<Record<string, string>> = {
-  HOME: "/home/rakazo",
-  LOGNAME: "rakazo",
-  PATH: "/home/rakazo/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-  PWD: "/home/rakazo",
+  HOME: "/home/tangow",
+  LOGNAME: "tangow",
+  PATH: "/home/tangow/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+  PWD: "/home/tangow",
   TMPDIR: "/tmp",
-  USER: "rakazo",
-  WORKSPACE: "/home/rakazo/workspace",
-  XDG_CONFIG_HOME: "/home/rakazo/.config",
+  USER: "tangow",
+  WORKSPACE: "/home/tangow/workspace",
+  XDG_CONFIG_HOME: "/home/tangow/.config",
 };
 const SAFE_SHELL_CONTROL_OPS = new Set([
   "&&",

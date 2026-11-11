@@ -59,8 +59,8 @@ export function hasComputerIdentity(
   botId: string,
   spaceId: string,
 ) {
-  const labeledSpaceId = labels?.["rakazo.spaceId"] ?? labels?.["rakazo.workspaceId"];
-  return labels?.["rakazo.botId"] === botId && labeledSpaceId === spaceId;
+  const labeledSpaceId = labels?.["tangow.spaceId"] ?? labels?.["tangow.workspaceId"];
+  return labels?.["tangow.botId"] === botId && labeledSpaceId === spaceId;
 }
 
 export function hasValidBearerToken(authorization: string | undefined, expectedToken: string) {
@@ -402,7 +402,7 @@ export function normalizeWorkspaceRelative(value: string) {
 }
 
 /** The computer user's home, and its workspace until the home moves onto volumes. */
-export const COMPUTER_HOME = "/home/rakazo";
+export const COMPUTER_HOME = "/home/tangow";
 
 export function workspaceTarget(relative: string, workspace = COMPUTER_HOME) {
   return relative ? path.posix.join(workspace, relative) : workspace;

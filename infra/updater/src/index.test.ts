@@ -14,7 +14,7 @@ import { resolveUpdaterConfig } from "./updater-logic.js";
 const token = "fake-review-updater-token-000000000000";
 const app = createUpdaterApp(
   resolveUpdaterConfig({
-    TANGOW_DEPLOY_DIR: "/rakazo-updater-tests-no-such-directory",
+    TANGOW_DEPLOY_DIR: "/tangow-updater-tests-no-such-directory",
     TANGOW_UPDATER_TOKEN: token,
   }),
 );
@@ -30,7 +30,7 @@ afterEach(async () => {
 });
 
 async function deployment(env = "TANGOW_IMAGE_TAG=v1.0.0\nTANGOW_IMAGE_TAG_PREVIOUS=v0.9.0\n") {
-  const deployDir = await mkdtemp(path.join(os.tmpdir(), "rakazo-updater-test-"));
+  const deployDir = await mkdtemp(path.join(os.tmpdir(), "tangow-updater-test-"));
   temporaryDirectories.push(deployDir);
   await writeFile(path.join(deployDir, ".env"), env);
   return {
@@ -121,7 +121,7 @@ describe("updater HTTP surface", () => {
     const response = await createUpdaterApp(fixture.config).request("/apply", {
       method: "POST",
       headers: authorized,
-      body: JSON.stringify({ repoUrl: "https://github.com/someone/rakazo", branch: "main" }),
+      body: JSON.stringify({ repoUrl: "https://github.com/someone/tangow", branch: "main" }),
     });
     expect(response.status).toBe(400);
     const payload = (await response.json()) as { error: string };
@@ -467,18 +467,18 @@ describe("child process environment", () => {
     // The child environment is rebuilt from an allowlist, so GIT_CONFIG_* set on the Compose
     // service never reaches git. Without these three, every git call exits 128 with "detected
     // dubious ownership" on the layout docs/self-host.md recommends.
-    const env = commandEnvironment({ TANGOW_DEPLOY_DIR: "/srv/rakazo" });
+    const env = commandEnvironment({ TANGOW_DEPLOY_DIR: "/srv/tangow" });
     expect(env.GIT_CONFIG_COUNT).toBe("1");
     expect(env.GIT_CONFIG_KEY_0).toBe("safe.directory");
-    expect(env.GIT_CONFIG_VALUE_0).toBe("/srv/rakazo");
+    expect(env.GIT_CONFIG_VALUE_0).toBe("/srv/tangow");
   });
 
   it("keeps the exemption scoped to the deployment directory, whoever calls it", () => {
     const env = commandEnvironment(
-      { TANGOW_DEPLOY_DIR: "/opt/rakazo" },
+      { TANGOW_DEPLOY_DIR: "/opt/tangow" },
       { GIT_CONFIG_VALUE_0: "*", GIT_CONFIG_COUNT: "9" },
     );
-    expect(env.GIT_CONFIG_VALUE_0).toBe("/opt/rakazo");
+    expect(env.GIT_CONFIG_VALUE_0).toBe("/opt/tangow");
     expect(env.GIT_CONFIG_COUNT).toBe("1");
   });
 

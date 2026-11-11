@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 const source = fileURLToPath(new URL("./setup-e2b.mjs", import.meta.url));
 const sha = "a".repeat(40);
 function fixture(t) {
-  const root = mkdtempSync(path.join(tmpdir(), "rakazo-setup-"));
+  const root = mkdtempSync(path.join(tmpdir(), "tangow-setup-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(path.join(root, "infra/compose"), { recursive: true });
   mkdirSync(path.join(root, "bin"));
@@ -56,7 +56,7 @@ if (name === 'sudo') {
 if (name === 'tar') { fs.writeFileSync(args[args.indexOf('-czf')+1], 'fake-data-backup'); process.exit(0); }
 if (name === 'docker' && args.includes('scripts/setup-e2b-homes.ts')) {
  if (args.includes('--verify') && process.env.FAIL_VERIFY) process.exit(1);
- if (args.includes('--verify') && process.env.EXPECT_TEMPLATE && (args.includes('WORKER_TEMPLATE') ? process.env.WORKER_TEMPLATE : 'rakazo-worker-pi-native') !== process.env.EXPECT_TEMPLATE) process.exit(1);
+ if (args.includes('--verify') && process.env.EXPECT_TEMPLATE && (args.includes('WORKER_TEMPLATE') ? process.env.WORKER_TEMPLATE : 'tangow-worker-pi-native') !== process.env.EXPECT_TEMPLATE) process.exit(1);
  const computers=process.env.UPGRADE_EXISTING && !fs.existsSync('.upgraded') ? [{id:'computer-old',spaceId:'space-old',scope:'team',homeStorage:process.env.DOCKER_VOLUMES?'volumes':'snapshot'}] : [];
  console.log(JSON.stringify(args.includes('--prepare') ? {prepared:'computer-old'} : {computers,previews:process.env.UNMAPPED && args.includes('--plans') ? [{computerId:'computer-old',notCopied:[{homePath:'legacy.txt',kind:'unmapped'}]}] : [],blockers:{runs:process.env.BUSY_RUNS?1:0,controls:0,leases:0,maintenance:0,unsupported:0}})); process.exit(0);
 }

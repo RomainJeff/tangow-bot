@@ -1,4 +1,4 @@
-name: rakazo-prod
+name: tangow-prod
 
 services:
   postgres:
@@ -9,15 +9,15 @@ services:
     pids_limit: 200
     mem_limit: 2g
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-rakazo}
+      POSTGRES_USER: ${POSTGRES_USER:-tangow}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      POSTGRES_DB: ${POSTGRES_DB:-rakazo}
+      POSTGRES_DB: ${POSTGRES_DB:-tangow}
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
       - data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rakazo} -d ${POSTGRES_DB:-rakazo}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tangow} -d ${POSTGRES_DB:-tangow}"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -46,7 +46,7 @@ services:
     mem_limit: 1536m
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgres://${POSTGRES_USER:-rakazo}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-rakazo}
+      DATABASE_URL: postgres://${POSTGRES_USER:-tangow}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-tangow}
       SANDBOX_PROVIDER: ${SANDBOX_PROVIDER:-e2b}
     networks:
       - data
@@ -81,7 +81,7 @@ services:
     environment:
       NODE_ENV: production
       API_HOST: "0.0.0.0"
-      DATABASE_URL: postgres://${POSTGRES_USER:-rakazo}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-rakazo}
+      DATABASE_URL: postgres://${POSTGRES_USER:-tangow}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-tangow}
       DATA_DIR: /data
       SANDBOX_PROVIDER: ${SANDBOX_PROVIDER:-e2b}
       WAKEUP_DRIVER: graphile
@@ -137,7 +137,7 @@ services:
     environment:
       BETTER_AUTH_SECRET: ""
       NODE_ENV: production
-      DATABASE_URL: postgres://${POSTGRES_USER:-rakazo}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-rakazo}
+      DATABASE_URL: postgres://${POSTGRES_USER:-tangow}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-tangow}
       DATA_DIR: /data
       SANDBOX_PROVIDER: ${SANDBOX_PROVIDER:-e2b}
       SCREEN_PROXY_SECRET: ""
@@ -225,10 +225,10 @@ services:
       TANGOW_IMAGE: ${TANGOW_IMAGE:-ghcr.io/elie222/rakazo/app}
       # `-p` is available to Compose interpolation but is not injected into containers unless it is
       # declared here. The sidecar must target the project the operator actually started.
-      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-rakazo-prod}
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-tangow-prod}
       # Must equal the host path it is mounted from, or every relative bind mount in this file would
-      # resolve somewhere else. /srv/rakazo is the supported Linux production layout.
-      TANGOW_DEPLOY_DIR: ${TANGOW_DEPLOY_DIR:-/srv/rakazo}
+      # resolve somewhere else. /srv/tangow is the supported Linux production layout.
+      TANGOW_DEPLOY_DIR: ${TANGOW_DEPLOY_DIR:-/srv/tangow}
       # A deployment that layers an overlay has to be reconciled with the same file list and the
       # same services the operator runs by hand, so these are read from the environment rather
       # than pinned to the base stack. Defaults reproduce the previous behaviour exactly.
@@ -243,7 +243,7 @@ services:
       AXIOM_EDGE_URL: ${AXIOM_EDGE_URL:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ${TANGOW_DEPLOY_DIR:-/srv/rakazo}:${TANGOW_DEPLOY_DIR:-/srv/rakazo}
+      - ${TANGOW_DEPLOY_DIR:-/srv/tangow}:${TANGOW_DEPLOY_DIR:-/srv/tangow}
     networks:
       - control
     healthcheck:

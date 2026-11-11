@@ -7,7 +7,7 @@ import type { E2BSandboxSdk } from "./e2b-sandbox.js";
 
 const execFileAsync = promisify(execFile);
 
-const WORKSPACE = "/home/user/rakazo-home";
+const WORKSPACE = "/home/user/tangow-home";
 
 /** An E2B computer as the SDK serves it: its workspace files by path, its metadata, its end. */
 export function fakeE2BMachine(
@@ -91,7 +91,7 @@ export async function dockerE2BMachine(image: string) {
     image,
     "-eu",
     "-c",
-    "mkdir -p /home/user/rakazo-home; chown -R 1000:1000 /home/user; exec sleep infinity",
+    "mkdir -p /home/user/tangow-home; chown -R 1000:1000 /home/user; exec sleep infinity",
   );
   if (started.exitCode) throw new Error(started.stderr);
   const exec = (command: string) =>

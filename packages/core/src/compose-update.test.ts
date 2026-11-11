@@ -40,8 +40,8 @@ import {
 } from "./compose-update.js";
 
 const target = {
-  composeFiles: ["/srv/rakazo/infra/compose/docker-compose.prod.yml"],
-  envFiles: ["/srv/rakazo/.env"],
+  composeFiles: ["/srv/tangow/infra/compose/docker-compose.prod.yml"],
+  envFiles: ["/srv/tangow/.env"],
 };
 
 describe("image references", () => {
@@ -66,7 +66,7 @@ describe("image references", () => {
   it("accepts registry paths with a host and rejects anything else", () => {
     expect(isValidImageName(OFFICIAL_SERVER_IMAGE)).toBe(true);
     expect(isValidImageName("ghcr.io:5000/owner/app")).toBe(true);
-    expect(isValidImageName("rakazo/app")).toBe(true);
+    expect(isValidImageName("tangow/app")).toBe(true);
     expect(isValidImageName("Ghcr.io/owner/app")).toBe(false);
     expect(isValidImageName("owner/app:tag")).toBe(false);
     expect(isValidImageName("owner/../app")).toBe(false);
@@ -216,7 +216,7 @@ describe("compose argv construction", () => {
         "-p",
         DEFAULT_COMPOSE_PROJECT_NAME,
         "--env-file",
-        "/srv/rakazo/.env",
+        "/srv/tangow/.env",
         "--file",
         ...target.composeFiles,
         "pull",
@@ -231,8 +231,8 @@ describe("compose argv construction", () => {
     const overlaid = {
       ...target,
       composeFiles: [
-        "/srv/rakazo/infra/compose/docker-compose.prod.yml",
-        "/srv/rakazo/ops/compose/docker-compose.sandbox.yml",
+        "/srv/tangow/infra/compose/docker-compose.prod.yml",
+        "/srv/tangow/ops/compose/docker-compose.sandbox.yml",
       ],
     };
     for (const invocation of [
@@ -279,8 +279,8 @@ describe("compose argv construction", () => {
     const overlaid = {
       ...target,
       composeFiles: [
-        "/srv/rakazo/infra/compose/docker-compose.prod.yml",
-        "/srv/rakazo/ops/compose/docker-compose.sandbox.yml",
+        "/srv/tangow/infra/compose/docker-compose.prod.yml",
+        "/srv/tangow/ops/compose/docker-compose.sandbox.yml",
       ],
       services: ["api", "worker", "web", "supervisor"],
     };

@@ -162,7 +162,7 @@ export async function startWorkerRun<
     ? await openBenchPostgres(options.databaseUrl)
     : await openPgliteDatabase();
   const prisma = options.prisma?.(database.prisma) ?? database.prisma;
-  const dir = await mkdtemp(path.join(tmpdir(), "rakazo-worker-run-"));
+  const dir = await mkdtemp(path.join(tmpdir(), "tangow-worker-run-"));
   const dataDir = options.dataDir ?? path.join(dir, "data");
   const homesRoot = options.dataDir ?? path.join(dir, "homes");
   const catalog =

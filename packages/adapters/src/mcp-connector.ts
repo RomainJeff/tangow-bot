@@ -327,7 +327,7 @@ export class McpConnector implements ConnectorProvider {
     server: McpServer,
     context: AdapterContext,
   ): Promise<{ session: McpSession; material: OAuthMaterial }> {
-    const session = new McpSession({ name: `rakazo-${server.slug}` });
+    const session = new McpSession({ name: `tangow-${server.slug}` });
     try {
       const secret = server.secretId
         ? await this.prisma.secret.findFirst({

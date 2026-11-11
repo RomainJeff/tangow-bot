@@ -236,7 +236,7 @@ describe("browser_run executor wiring", () => {
     }
 
     const sink = createTestSink();
-    installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+    installLogger(createLogger({ service: "tangow-worker", sinks: [sink] }));
     try {
       const provider = new FakeDecisionProvider({ script: [clickSearch] });
       const generations: string[] = [];

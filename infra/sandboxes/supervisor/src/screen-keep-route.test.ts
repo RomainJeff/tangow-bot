@@ -35,7 +35,7 @@ beforeEach(() => {
   mock.inspect.mockReset();
   mock.inspect.mockResolvedValue({
     Config: {
-      Labels: { "rakazo.managed": "true", "rakazo.botId": "home", "rakazo.spaceId": "space" },
+      Labels: { "tangow.managed": "true", "tangow.botId": "home", "tangow.spaceId": "space" },
     },
   });
   runCommands(() => 0);

@@ -37,7 +37,7 @@ function options() {
       "dry-run": { type: "boolean", default: false },
       "leave-unmapped": { type: "boolean", default: false },
       "workspace-only": { type: "boolean", default: false },
-      template: { type: "string", default: "rakazo-worker-pi-native" },
+      template: { type: "string", default: "tangow-worker-pi-native" },
     },
   });
   const dryRun = values["dry-run"];

@@ -15,7 +15,7 @@ import { releaseBotScreen, toComputerRef } from "./computer-lifecycle.js";
 import { sandboxIdleMs, scheduleBotScreenSleep } from "./computer-support.js";
 import { checkpointComputerWorkspace } from "./computer-workspace.js";
 
-const BACKGROUND_WORK_MARKER_PREFIX = "/tmp/rakazo-background-";
+const BACKGROUND_WORK_MARKER_PREFIX = "/tmp/tangow-background-";
 const BACKGROUND_WORK_IDLE_SENTINEL = "rakazo-background-idle";
 
 export const BACKGROUND_WORK_LAUNCH = [

@@ -40,7 +40,7 @@ beforeEach(async () => {
   vi.resetModules();
   vi.resetAllMocks();
   vi.stubEnv("HOSTNAME", "");
-  vi.stubEnv("DATA_DIR", "/tmp/rakazo-loopback-test");
+  vi.stubEnv("DATA_DIR", "/tmp/tangow-loopback-test");
   vi.stubEnv("SANDBOX_SCREEN_NETWORK", "published");
   vi.stubEnv("SANDBOX_SCREEN_HOST", "127.0.0.1");
   screen = http.createServer((_req, res) => res.end("ok"));
@@ -96,7 +96,7 @@ describe("computer loopback provision lifecycle", () => {
     const container = {
       inspect: vi.fn().mockResolvedValue({
         Config: {
-          Labels: { "rakazo.managed": "true", "rakazo.botId": "other", "rakazo.spaceId": "other" },
+          Labels: { "tangow.managed": "true", "tangow.botId": "other", "tangow.spaceId": "other" },
         },
       }),
       stop: vi.fn(),
@@ -130,7 +130,7 @@ describe("computer loopback provision lifecycle", () => {
     const container = {
       inspect: vi.fn(async () => ({
         Config: {
-          Labels: { "rakazo.managed": "true", "rakazo.botId": "bot", "rakazo.spaceId": "space" },
+          Labels: { "tangow.managed": "true", "tangow.botId": "bot", "tangow.spaceId": "space" },
         },
         State: { Running: running },
       })),
@@ -170,7 +170,7 @@ describe("computer loopback provision lifecycle", () => {
     const container = {
       inspect: vi.fn(async () => ({
         Config: {
-          Labels: { "rakazo.managed": "true", "rakazo.botId": "bot", "rakazo.spaceId": "space" },
+          Labels: { "tangow.managed": "true", "tangow.botId": "bot", "tangow.spaceId": "space" },
         },
         State: { Running: true },
       })),
@@ -214,12 +214,12 @@ describe("computer loopback provision lifecycle", () => {
       Image: "test-image-id",
       Config: {
         User: hostComputerUser(),
-        Labels: { "rakazo.managed": "true", "rakazo.botId": "bot", "rakazo.spaceId": "space" },
+        Labels: { "tangow.managed": "true", "tangow.botId": "bot", "tangow.spaceId": "space" },
       },
       HostConfig: {
         NetworkMode: computerNetworkNameFor("bot"),
         PortBindings: { "7070/tcp": hosts.map((HostIp) => ({ HostIp, HostPort: "0" })) },
-        Binds: [`${homePath}:/home/rakazo`, ...skillsBinds],
+        Binds: [`${homePath}:/home/tangow`, ...skillsBinds],
       },
       State: { Running: false },
       NetworkSettings: { Ports: { "6080/tcp": [{ HostIp: "127.0.0.1", HostPort: screenPort }] } },
@@ -270,7 +270,7 @@ describe("computer loopback provision lifecycle", () => {
       expect(options.HostConfig.PortBindings["7070/tcp"]).toEqual(
         enabled ? [{ HostIp: "127.0.0.1", HostPort: "0" }] : undefined,
       );
-      expect(options.HostConfig.Binds).toEqual([`${homePath}:/home/rakazo`, ...skillsBinds]);
+      expect(options.HostConfig.Binds).toEqual([`${homePath}:/home/tangow`, ...skillsBinds]);
       expect(options.Env).toContainEqual(
         expect.stringMatching(/^TANGOW_COMPUTER_CONTROL_TOKEN=.+/),
       );
@@ -343,7 +343,7 @@ describe("provisioning network rollback", () => {
                 expect.objectContaining({
                   Type: "volume",
                   Source: "example_appdata",
-                  Target: "/home/rakazo",
+                  Target: "/home/tangow",
                   VolumeOptions: { NoCopy: true, Subpath: "homes/bot" },
                 }),
               ],
@@ -403,7 +403,7 @@ describe("provisioning network rollback", () => {
       inspect: vi.fn().mockResolvedValue({
         Image: "old-image",
         Config: {
-          Labels: { "rakazo.managed": "true", "rakazo.botId": "bot", "rakazo.spaceId": "space" },
+          Labels: { "tangow.managed": "true", "tangow.botId": "bot", "tangow.spaceId": "space" },
         },
         HostConfig: { PortBindings: {} },
       }),
@@ -502,13 +502,13 @@ describe("space computer limit enforcement", () => {
       async (opts?: { filters?: { label?: string[] } }) => {
         const labels = opts?.filters?.label ?? [];
         // For findBotContainer check
-        if (labels.some((l: string) => l.startsWith("rakazo.botId="))) {
+        if (labels.some((l: string) => l.startsWith("tangow.botId="))) {
           return [];
         }
         // For countSpaceContainers
         return [
-          { Id: "c1", Labels: { "rakazo.managed": "true", "rakazo.spaceId": "space-1" } },
-          { Id: "c2", Labels: { "rakazo.managed": "true", "rakazo.spaceId": "space-1" } },
+          { Id: "c1", Labels: { "tangow.managed": "true", "tangow.spaceId": "space-1" } },
+          { Id: "c2", Labels: { "tangow.managed": "true", "tangow.spaceId": "space-1" } },
         ];
       },
     );
@@ -528,10 +528,10 @@ describe("space computer limit enforcement", () => {
     mocks.docker.listContainers.mockImplementation(
       async (opts?: { filters?: { label?: string[] } }) => {
         const labels = opts?.filters?.label ?? [];
-        if (labels.some((l: string) => l.startsWith("rakazo.botId="))) {
+        if (labels.some((l: string) => l.startsWith("tangow.botId="))) {
           return [];
         }
-        return [{ Id: "c1", Labels: { "rakazo.managed": "true", "rakazo.spaceId": "space-1" } }];
+        return [{ Id: "c1", Labels: { "tangow.managed": "true", "tangow.spaceId": "space-1" } }];
       },
     );
 
@@ -561,9 +561,9 @@ describe("space computer limit enforcement", () => {
         Config: {
           User: hostComputerUser(process.getuid?.(), process.getgid?.()),
           Labels: {
-            "rakazo.managed": "true",
-            "rakazo.botId": "bot-existing",
-            "rakazo.spaceId": "space-1",
+            "tangow.managed": "true",
+            "tangow.botId": "bot-existing",
+            "tangow.spaceId": "space-1",
           },
         },
         State: { Running: true },
@@ -581,20 +581,20 @@ describe("space computer limit enforcement", () => {
     mocks.docker.listContainers.mockImplementation(
       async (opts?: { filters?: { label?: string[] } }) => {
         const labels = opts?.filters?.label ?? [];
-        if (labels.some((l: string) => l === "rakazo.botId=bot-existing")) {
+        if (labels.some((l: string) => l === "tangow.botId=bot-existing")) {
           return [
             {
               Id: existing.id,
               Labels: {
-                "rakazo.managed": "true",
-                "rakazo.botId": "bot-existing",
-                "rakazo.spaceId": "space-1",
+                "tangow.managed": "true",
+                "tangow.botId": "bot-existing",
+                "tangow.spaceId": "space-1",
               },
             },
           ];
         }
         return [
-          { Id: existing.id, Labels: { "rakazo.managed": "true", "rakazo.spaceId": "space-1" } },
+          { Id: existing.id, Labels: { "tangow.managed": "true", "tangow.spaceId": "space-1" } },
         ];
       },
     );
@@ -629,9 +629,9 @@ describe("space computer limit enforcement", () => {
         }),
       });
     const labels = {
-      "rakazo.managed": "true",
-      "rakazo.botId": "bot-shared",
-      "rakazo.spaceId": "space-1",
+      "tangow.managed": "true",
+      "tangow.botId": "bot-shared",
+      "tangow.spaceId": "space-1",
     };
     let created = false;
     mocks.docker.listContainers.mockImplementation(async () =>
@@ -675,9 +675,9 @@ describe("space computer limit enforcement", () => {
         Config: {
           User: hostComputerUser(process.getuid?.(), process.getgid?.()),
           Labels: {
-            "rakazo.managed": "true",
-            "rakazo.botId": "bot-existing",
-            "rakazo.spaceId": "space-1",
+            "tangow.managed": "true",
+            "tangow.botId": "bot-existing",
+            "tangow.spaceId": "space-1",
           },
         },
         State: { Running: true },
@@ -702,14 +702,14 @@ describe("space computer limit enforcement", () => {
     mocks.docker.listContainers.mockImplementation(
       async (opts?: { filters?: { label?: string[] } }) => {
         const labels = opts?.filters?.label ?? [];
-        return labels.some((l: string) => l === "rakazo.botId=bot-existing")
+        return labels.some((l: string) => l === "tangow.botId=bot-existing")
           ? [
               {
                 Id: existing.id,
                 Labels: {
-                  "rakazo.managed": "true",
-                  "rakazo.botId": "bot-existing",
-                  "rakazo.spaceId": "space-1",
+                  "tangow.managed": "true",
+                  "tangow.botId": "bot-existing",
+                  "tangow.spaceId": "space-1",
                 },
               },
             ]
@@ -730,15 +730,15 @@ describe("space computer limit enforcement", () => {
     mocks.docker.listContainers.mockImplementation(
       async (opts?: { filters?: { label?: string[] } }) => {
         const labels = opts?.filters?.label ?? [];
-        if (labels.some((l: string) => l.startsWith("rakazo.botId="))) {
+        if (labels.some((l: string) => l.startsWith("tangow.botId="))) {
           return [];
         }
-        // Legacy managed computer: COMPUTER_IMAGE + workspaceId, no rakazo.managed.
+        // Legacy managed computer: COMPUTER_IMAGE + workspaceId, no tangow.managed.
         return [
           {
             Id: "legacy",
             Image: COMPUTER_IMAGE,
-            Labels: { "rakazo.workspaceId": "space-1", "rakazo.botId": "legacy-bot" },
+            Labels: { "tangow.workspaceId": "space-1", "tangow.botId": "legacy-bot" },
           },
         ];
       },
@@ -760,12 +760,12 @@ describe("space computer limit enforcement", () => {
     mocks.docker.listContainers.mockImplementation(
       async (opts?: { filters?: { label?: string[] } }) => {
         const labels = opts?.filters?.label ?? [];
-        if (labels.some((l: string) => l.startsWith("rakazo.botId="))) {
+        if (labels.some((l: string) => l.startsWith("tangow.botId="))) {
           return [];
         }
         return Array.from({ length: created }, (_, index) => ({
           Id: `c${index}`,
-          Labels: { "rakazo.managed": "true", "rakazo.spaceId": "space-1" },
+          Labels: { "tangow.managed": "true", "tangow.spaceId": "space-1" },
         }));
       },
     );
@@ -803,9 +803,9 @@ describe("space computer limit enforcement", () => {
         Config: {
           User: hostComputerUser(process.getuid?.(), process.getgid?.()),
           Labels: {
-            "rakazo.managed": "true",
-            "rakazo.botId": "bot-existing",
-            "rakazo.spaceId": "space-1",
+            "tangow.managed": "true",
+            "tangow.botId": "bot-existing",
+            "tangow.spaceId": "space-1",
           },
         },
         State: { Running: true },
@@ -828,26 +828,26 @@ describe("space computer limit enforcement", () => {
     mocks.docker.listContainers.mockImplementation(
       async (opts?: { filters?: { label?: string[] } }) => {
         const labels = opts?.filters?.label ?? [];
-        if (labels.some((l: string) => l === "rakazo.botId=bot-existing")) {
+        if (labels.some((l: string) => l === "tangow.botId=bot-existing")) {
           return present.has(existing.id)
             ? [
                 {
                   Id: existing.id,
                   Labels: {
-                    "rakazo.managed": "true",
-                    "rakazo.botId": "bot-existing",
-                    "rakazo.spaceId": "space-1",
+                    "tangow.managed": "true",
+                    "tangow.botId": "bot-existing",
+                    "tangow.spaceId": "space-1",
                   },
                 },
               ]
             : [];
         }
-        if (labels.some((l: string) => l.startsWith("rakazo.botId="))) {
+        if (labels.some((l: string) => l.startsWith("tangow.botId="))) {
           return [];
         }
         return [...present].map((Id) => ({
           Id,
-          Labels: { "rakazo.managed": "true", "rakazo.spaceId": "space-1" },
+          Labels: { "tangow.managed": "true", "tangow.spaceId": "space-1" },
         }));
       },
     );

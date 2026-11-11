@@ -296,7 +296,7 @@ export async function carryDockerVolumesToE2B(
       if (report.providerKind !== docker) continue;
       await keepReserved();
       const { providerRef } = await target.ensureVolume(
-        { name: `rakazo-${report.volumeId}`, ensureDeadline: workerEnsureDeadline(new Date()) },
+        { name: `tangow-${report.volumeId}`, ensureDeadline: workerEnsureDeadline(new Date()) },
         context,
       );
       const volume: TargetVolume = {

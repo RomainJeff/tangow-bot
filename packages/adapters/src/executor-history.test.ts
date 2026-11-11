@@ -762,7 +762,7 @@ describe("the history a run reads from its session log", () => {
       replied("First answer"),
     ]);
     const sink = createTestSink();
-    installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+    installLogger(createLogger({ service: "tangow-worker", sinks: [sink] }));
     const f = fixture({ tail, clearSeq: 2 });
 
     const request = await f.request();
@@ -787,7 +787,7 @@ describe("the history a run reads from its session log", () => {
       historyMessagesAvailable: 2,
       historyMessagesKept: 2,
     });
-    installLogger(createLogger({ service: "rakazo-worker", level: "off", sinks: [] }));
+    installLogger(createLogger({ service: "tangow-worker", level: "off", sinks: [] }));
   });
 
   it("replays a subagent as the tool result of the call that launched it", async () => {

@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 
 const volumes = vi.hoisted(() => ({
   listed: [
-    { volumeId: "vol_9f2", name: "rakazo-volume_a" },
-    { volumeId: "vol_4c1", name: "rakazo-volume_b" },
+    { volumeId: "vol_9f2", name: "tangow-volume_a" },
+    { volumeId: "vol_4c1", name: "tangow-volume_b" },
   ],
   destroyed: [] as string[],
 }));
@@ -26,8 +26,8 @@ describe("the E2B worker binding", () => {
   it("deletes a volume known by its name through the id E2B gave it", async () => {
     const sdk = e2bWorkerSdk({ apiKey: "e2b-test-key" });
 
-    expect(await sdk.destroyVolume("rakazo-volume_b")).toBe(true);
-    expect(await sdk.destroyVolume("rakazo-volume_gone")).toBe(false);
+    expect(await sdk.destroyVolume("tangow-volume_b")).toBe(true);
+    expect(await sdk.destroyVolume("tangow-volume_gone")).toBe(false);
     expect(volumes.destroyed).toEqual(["vol_4c1"]);
   });
 });

@@ -615,7 +615,7 @@ describe("browser_run", () => {
     });
     provider.latencyMs = 1_000;
     const sink = createTestSink();
-    installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+    installLogger(createLogger({ service: "tangow-worker", sinks: [sink] }));
     const pending = browserRunFromTool(
       browser,
       computer,
@@ -671,7 +671,7 @@ describe("browser_run", () => {
 
   it("sends only the documented state, redacted, and logs no content", async () => {
     const sink = createTestSink();
-    installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+    installLogger(createLogger({ service: "tangow-worker", sinks: [sink] }));
     const long = "lorem ipsum ".repeat(600);
     const browser = new FlowBrowser();
     browser.sessions.get(pageBrowserSessionKey(computer, context)).load(

@@ -379,7 +379,7 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
   "Stop kills pre-approval background work during an active continuation",
   async () => {
     const machine = await dockerE2BMachine(
-      process.env.COMPUTER_TEST_IMAGE ?? "rakazo/computer:local",
+      process.env.COMPUTER_TEST_IMAGE ?? "tangow/computer:local",
     );
     cleanups.push(() => machine.close());
     const entered = Promise.withResolvers<void>();

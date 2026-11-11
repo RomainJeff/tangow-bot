@@ -35,7 +35,7 @@ COPY infra/updater/package.json infra/updater/
 # and @tangow/sandbox-supervisor, plus scripts/backfill-session-log.ts and @tangow/db's
 # prisma CLI it runs to migrate, and scripts/migrate-docker-homes.ts;
 # the desktop, mobile, www and testkit projects only add electron, expo, react-native
-# and the astro toolchain to an image that never builds them. `rakazo` is the
+# and the astro toolchain to an image that never builds them. `tangow` is the
 # workspace root: `start` is `tsx src/index.ts`, and tsx, turbo and cross-env are root
 # devDependencies resolved through /app/node_modules/.bin.
 # The skip-download vars cover any postinstall that survives a future filter change.
@@ -52,7 +52,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store,sharing=locked \
       --filter "@tangow/web..." \
       --filter "@tangow/sandbox-supervisor..." \
       --filter "@tangow/db..." \
-      --filter "rakazo"
+      --filter "tangow"
 # Normalize modes: a restrictive host umask (e.g. 077 on hardened hosts) would otherwise
 # leave the copied tree unreadable to USER node at runtime.
 COPY --chmod=755 . .

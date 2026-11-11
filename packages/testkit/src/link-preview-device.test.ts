@@ -27,7 +27,7 @@ const html = (body: string) =>
   new Response(body, { headers: { "content-type": "text/html; charset=utf-8" } });
 const refusal = () => new Response("no", { status: 403 });
 
-afterEach(() => installLogger(createLogger({ service: "rakazo-worker", level: "off", sinks: [] })));
+afterEach(() => installLogger(createLogger({ service: "tangow-worker", level: "off", sinks: [] })));
 
 /** news.test refuses the server; its images (img.test) are open. Its cache is a fake's, or the store's. */
 function site(

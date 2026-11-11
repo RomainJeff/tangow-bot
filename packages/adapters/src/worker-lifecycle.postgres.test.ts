@@ -50,7 +50,7 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
         homeStorage: "volumes",
       });
       const bot = await fixture.seedBot(spaceId, computer.id);
-      const ref = `rakazo-${randomUUID()}`;
+      const ref = `tangow-${randomUUID()}`;
       const volume = await fixture.seedVolume("bot_private", spaceId, bot.id, ref);
       await prisma.volume.update({
         where: { id: volume.id },

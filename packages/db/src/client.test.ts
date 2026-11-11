@@ -15,7 +15,7 @@ afterEach(async () => {
 
 describe("createDb", () => {
   it("caps the pg pool and swallows idle-client errors so they cannot crash the process", () => {
-    const { pool } = createDb("postgres://rakazo:rakazo@127.0.0.1:9/rakazo", {
+    const { pool } = createDb("postgres://tangow:tangow@127.0.0.1:9/rakazo", {
       poolMax: 3,
       applicationName: "rakazo-test",
     });
@@ -32,7 +32,7 @@ describe("createDb", () => {
   });
 
   it("defaults to a four-connection pool", () => {
-    const { pool } = createDb("postgres://rakazo:rakazo@127.0.0.1:9/rakazo");
+    const { pool } = createDb("postgres://tangow:tangow@127.0.0.1:9/rakazo");
     pools.push(pool);
     expect(pool.options.max).toBe(4);
   });
@@ -99,7 +99,7 @@ describe("retryOnTooManyConnections", () => {
 
 describe("createPool", () => {
   it("builds a bounded pool with connect-retry and idle-error listeners", () => {
-    const pool = createPool("postgres://rakazo:rakazo@127.0.0.1:9/rakazo", {
+    const pool = createPool("postgres://tangow:tangow@127.0.0.1:9/rakazo", {
       poolMax: 2,
       applicationName: "rakazo-pool-test",
     });

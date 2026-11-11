@@ -6,9 +6,9 @@ import { Sandbox, SandboxNotFoundError, TimeoutError } from "e2b";
 import type { VolumeManifest } from "./docker-volume-import.js";
 import { MAX_IMPORT_FILE_BYTES, volumeManifest } from "./docker-volume-import.js";
 
-const STAGED_PREFIX = ".rakazo-";
+const STAGED_PREFIX = ".tangow-";
 const STAGED_NAME =
-  /(?:^|\/)\.rakazo-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  /(?:^|\/)\.tangow-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /**
  * Whether `path` has the name `write` stages a file under. A killed process, or a sandbox that
@@ -19,7 +19,7 @@ export function isStagedWrite(path: string): boolean {
 }
 
 /** Where a volume-files sandbox mounts the volume it serves. */
-export const VOLUME_FILES_MOUNT = "/mnt/rakazo-volume";
+export const VOLUME_FILES_MOUNT = "/mnt/tangow-volume";
 
 /**
  * How long a volume-files sandbox lives at most. A sandbox `close` never reached, for example after
@@ -73,14 +73,14 @@ export type OpenVolumeSandbox = (volumeRef: string) => Promise<VolumeSandbox>;
 export function e2bVolumeSandbox(options: {
   template: string;
   connection?: ConnectionOpts;
-  /** Tags each sandbox, beside `rakazo: "volume-files"`. */
+  /** Tags each sandbox, beside `tangow: "volume-files"`. */
   metadata?: Record<string, string>;
 }): OpenVolumeSandbox {
   return async (volumeRef) => {
     const sandbox = await Sandbox.create(options.template, {
       ...options.connection,
       secure: true,
-      metadata: { ...options.metadata, rakazo: "volume-files" },
+      metadata: { ...options.metadata, tangow: "volume-files" },
       volumeMounts: { [VOLUME_FILES_MOUNT]: volumeRef },
       timeoutMs: SANDBOX_TIMEOUT_MS,
       lifecycle: { onTimeout: "kill" },

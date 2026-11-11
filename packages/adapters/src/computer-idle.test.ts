@@ -260,7 +260,7 @@ describe("background work launch and probe", () => {
       const databaseId = "computer-db-id";
       const providerRef = "provider-ref";
       const launchId = "active";
-      markers.add(`/tmp/rakazo-background-${databaseId}-run-1-${launchId}`);
+      markers.add(`/tmp/tangow-background-${databaseId}-run-1-${launchId}`);
 
       const launched = spawn(
         "bash",
@@ -287,8 +287,8 @@ describe("background work launch and probe", () => {
     "cleans a completed marker without blocking a later launch",
     async () => {
       const markerId = "computer-relaunch-id";
-      const completedMarker = `/tmp/rakazo-background-${markerId}-run-1-completed`;
-      const activeMarker = `/tmp/rakazo-background-${markerId}-run-1-active`;
+      const completedMarker = `/tmp/tangow-background-${markerId}-run-1-completed`;
+      const activeMarker = `/tmp/tangow-background-${markerId}-run-1-active`;
       markers.add(completedMarker);
       markers.add(activeMarker);
       const completed = spawn(
@@ -332,8 +332,8 @@ describe("background work launch and probe", () => {
     "does not run the command when its marker cannot be opened",
     async () => {
       const markerId = "computer-marker-error";
-      const marker = `/tmp/rakazo-background-${markerId}-run-1-collision`;
-      const commandRan = `/tmp/rakazo-background-command-ran-${markerId}`;
+      const marker = `/tmp/tangow-background-${markerId}-run-1-collision`;
+      const commandRan = `/tmp/tangow-background-command-ran-${markerId}`;
       markers.add(marker);
       markers.add(commandRan);
       mkdirSync(marker);
@@ -361,8 +361,8 @@ describe("background work launch and probe", () => {
     "does not follow a pre-existing marker symlink",
     async () => {
       const markerId = "computer-marker-symlink";
-      const marker = `/tmp/rakazo-background-${markerId}-run-1-collision`;
-      const commandRan = `/tmp/rakazo-background-command-ran-${markerId}`;
+      const marker = `/tmp/tangow-background-${markerId}-run-1-collision`;
+      const commandRan = `/tmp/tangow-background-command-ran-${markerId}`;
       markers.add(marker);
       markers.add(commandRan);
       symlinkSync(commandRan, marker);
@@ -392,7 +392,7 @@ describe("background work launch and probe", () => {
       const computerId = "computer-cancel-id";
       const runId = "run-cancel-1";
       const launchId = "active";
-      const marker = `/tmp/rakazo-background-${computerId}-${runId}-${launchId}`;
+      const marker = `/tmp/tangow-background-${computerId}-${runId}-${launchId}`;
       markers.add(marker);
 
       const launched = spawn(

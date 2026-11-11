@@ -60,7 +60,7 @@ export const HOME_MOVE_MARKER = ".rakazo-move-pending";
  * Moves one idle Docker computer's home onto its volumes by renaming, on the storage that holds
  * both `DATA_DIR/homes` and `DATA_DIR/volumes`. A team home gives `bots/<botId>` to each bot's
  * private volume and `shared` to the space volume; a dedicated home gives every root entry but its
- * dot entries to its bot's private volume. Dotfiles and browser profiles stay in `/home/rakazo`.
+ * dot entries to its bot's private volume. Dotfiles and browser profiles stay in `/home/tangow`.
  *
  * Every conflict is checked first. Then a marker file in the home directory records the move, the
  * computer adopts its volumes, the renames run, and the marker goes. While the marker exists the

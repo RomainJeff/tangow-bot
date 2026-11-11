@@ -342,7 +342,7 @@ def ensure_world(client: CdpClient, session_id: str) -> None:
 
 EVAL_HELPERS = r"""
 (() => {
-  if (window.__rakazoPageBrowser) return true;
+  if (window.__tangowPageBrowser) return true;
   const refMap = new Map();
   // New snapshots/documents never recycle references. Retain exact nodes, not selectors.
   function newRef() {
@@ -439,7 +439,7 @@ EVAL_HELPERS = r"""
       })
       .join("\n");
   }
-  window.__rakazoPageBrowser = {
+  window.__tangowPageBrowser = {
     snapshot() {
       refMap.clear();
       const elements = [];
@@ -585,7 +585,7 @@ def navigate(client: CdpClient, session_id: str, url: str) -> dict[str, Any]:
 
 def snapshot(client: CdpClient, session_id: str) -> dict[str, Any]:
     ensure_helpers(client, session_id)
-    data = eval_json(client, session_id, "window.__rakazoPageBrowser.snapshot()")
+    data = eval_json(client, session_id, "window.__tangowPageBrowser.snapshot()")
     if not isinstance(data, dict):
         raise RuntimeError("snapshot returned non-object")
     return {"ok": True, **data}
@@ -608,13 +608,13 @@ def act(client: CdpClient, session_id: str, actions: list[dict[str, Any]]) -> di
         for step in actions:
             kind, ref = step["kind"], step["ref"]
             # Preflight catches stale refs before a mutation is dispatched.
-            if not eval_json(client, session_id, f"Boolean(window.__rakazoPageBrowser.resolve({json.dumps(ref)}))"):
+            if not eval_json(client, session_id, f"Boolean(window.__tangowPageBrowser.resolve({json.dumps(ref)}))"):
                 raise RuntimeError("Stale element ref. Take a fresh snapshot.")
             arguments = json.dumps(ref)
             if kind != "click":
                 arguments += ", " + json.dumps(step["text"])
             uncertain = True
-            data = eval_json(client, session_id, f"window.__rakazoPageBrowser.{kind}({arguments})")
+            data = eval_json(client, session_id, f"window.__tangowPageBrowser.{kind}({arguments})")
             if not isinstance(data, dict):
                 raise RuntimeError("Action response unavailable")
             completed += 1

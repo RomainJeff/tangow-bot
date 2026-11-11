@@ -6,7 +6,7 @@
  */
 
 export const SCREEN_STATES = ["connecting", "connected", "reconnecting", "stalled", "failed"];
-export const MESSAGE_TYPE = "rakazo-screen-state";
+export const MESSAGE_TYPE = "tangow-screen-state";
 export const MESSAGE_VERSION = 1;
 
 const BACKOFF_MS = [1_000, 2_000, 4_000, 8_000, 15_000];

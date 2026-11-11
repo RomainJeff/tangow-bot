@@ -22,11 +22,11 @@ const volumeSchema = z
     spaceId: z.string(),
     botId: z.string().nullable(),
     providerRef: z.string().nullable(),
-    targetRef: z.string().regex(/^rakazo-[a-zA-Z0-9_-]+$/),
+    targetRef: z.string().regex(/^tangow-[a-zA-Z0-9_-]+$/),
     manifest: volumeManifestSchema.nullable(),
   })
   .refine(
-    (volume) => volume.targetRef === `rakazo-${volume.id}`,
+    (volume) => volume.targetRef === `tangow-${volume.id}`,
     "Invalid target volume reference",
   );
 const stateSchema = z.object({
@@ -165,7 +165,7 @@ export async function migrateE2BToDocker(
         spaceId: volume.spaceId,
         botId: volume.botId,
         providerRef: volume.providerRef,
-        targetRef: `rakazo-${volume.id}`,
+        targetRef: `tangow-${volume.id}`,
         manifest: null,
       })),
       computers: inventory.computers.map(({ id, spaceId, providerRef }) => ({

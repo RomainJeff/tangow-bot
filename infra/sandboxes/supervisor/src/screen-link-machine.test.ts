@@ -394,7 +394,7 @@ describe("embed screen link machine", () => {
 
   it("encodes the three wire keys and nothing else", () => {
     expect(encodeStateMessage("stalled")).toBe(
-      '{"type":"rakazo-screen-state","version":1,"state":"stalled"}',
+      '{"type":"tangow-screen-state","version":1,"state":"stalled"}',
     );
   });
 });

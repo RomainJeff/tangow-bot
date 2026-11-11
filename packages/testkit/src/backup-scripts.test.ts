@@ -41,8 +41,8 @@ function fixture() {
     let source = readFileSync(path.join(repoRoot, script), "utf8");
     if (script.endsWith("backup-prod.sh")) {
       // Relocate only the fixed output directory: never write to real host backups.
-      expect(source).toContain('BACKUP_ROOT="/var/backups/rakazo"');
-      source = source.replace('BACKUP_ROOT="/var/backups/rakazo"', `BACKUP_ROOT="${snapshots}"`);
+      expect(source).toContain('BACKUP_ROOT="/var/backups/tangow"');
+      source = source.replace('BACKUP_ROOT="/var/backups/tangow"', `BACKUP_ROOT="${snapshots}"`);
     }
     write(path.join(checkout, script), source);
   }
@@ -251,7 +251,7 @@ describe("development restore failures", () => {
 describe("production backup deployment and archive behavior", () => {
   it.each([false, true])("uses the configured deployment directory: %s", (custom) => {
     const f = fixture();
-    const deployment = custom ? f.checkout : "/srv/rakazo";
+    const deployment = custom ? f.checkout : "/srv/tangow";
     const result = f.run(
       "infra/compose/backup-prod.sh",
       [],
@@ -275,7 +275,7 @@ describe("production backup deployment and archive behavior", () => {
       path.join(repoRoot, "infra/systemd/tangow-backup.service"),
       "utf8",
     );
-    expect(service).toContain("EnvironmentFile=-/etc/rakazo/backup.env");
+    expect(service).toContain("EnvironmentFile=-/etc/tangow/backup.env");
   });
 
   it("rejects relative deployment paths before any backup commands", () => {

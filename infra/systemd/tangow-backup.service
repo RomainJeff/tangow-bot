@@ -5,7 +5,7 @@ After=docker.service
 
 [Service]
 Type=oneshot
-EnvironmentFile=-/etc/rakazo/backup.env
+EnvironmentFile=-/etc/tangow/backup.env
 ExecStart=/usr/local/sbin/tangow-backup
 Nice=10
 IOSchedulingClass=best-effort

@@ -76,7 +76,7 @@ describe("job correlation envelope", () => {
 
   it("restores context, logs completion, and rethrows failures", async () => {
     const sink = createTestSink();
-    installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+    installLogger(createLogger({ service: "tangow-worker", sinks: [sink] }));
     await runCorrelatedJob({
       name: "run.continue",
       payload: { runId: "run-9" },

@@ -8,7 +8,7 @@ export const SCREEN_STATES: readonly [
   "failed",
 ];
 export type ScreenState = (typeof SCREEN_STATES)[number];
-export const MESSAGE_TYPE: "rakazo-screen-state";
+export const MESSAGE_TYPE: "tangow-screen-state";
 export const MESSAGE_VERSION: 1;
 
 export function encodeStateMessage(state: ScreenState): string;

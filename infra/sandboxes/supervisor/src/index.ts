@@ -392,9 +392,9 @@ app.post("/computers/:id/exec", async (c) => {
         workingDir: commandWorkingDir(body.cwd, computerWorkspace(info.Config.Labels)),
         env: [
           `DISPLAY=${layout.display}`,
-          "HOME=/home/rakazo",
-          "PATH=/home/rakazo/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-          "NPM_CONFIG_PREFIX=/home/rakazo/.local",
+          "HOME=/home/tangow",
+          "PATH=/home/tangow/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "NPM_CONFIG_PREFIX=/home/tangow/.local",
           "PIP_USER=1",
           ...Object.entries(body.env ?? {}).map(([k, v]) => `${k}=${v}`),
         ],
@@ -460,7 +460,7 @@ app.post("/computers/:id/browser", async (c) => {
         env: [
           `DISPLAY=${layout.display}`,
           `TANGOW_CDP_PORT=${layout.debugPort}`,
-          "HOME=/home/rakazo",
+          "HOME=/home/tangow",
           "TANGOW_BROWSER_WATCH_STDIN=1",
         ],
         timeoutMs: 25_000,
@@ -901,7 +901,7 @@ app.use("/workers", limitSupervisorRequestBody);
 const attemptWorkers = (attemptId: string) =>
   docker.listContainers({
     all: true,
-    filters: { label: ["rakazo.worker=true", `rakazo.attempt=${attemptId}`] },
+    filters: { label: ["tangow.worker=true", `tangow.attempt=${attemptId}`] },
   });
 
 let workersNetwork: Promise<unknown> | undefined;
@@ -912,7 +912,7 @@ function ensureWorkersNetwork() {
       Name: WORKER_NETWORK,
       Driver: "bridge",
       CheckDuplicate: true,
-      Labels: { "rakazo.managed": "true" },
+      Labels: { "tangow.managed": "true" },
       Options: { "com.docker.network.bridge.enable_icc": "false" },
     })
     .catch((error) => {
@@ -1006,7 +1006,7 @@ export async function upgradeWorkerGuest(
   try {
     const container = docker.getContainer(match[1]!);
     const info = await container.inspect();
-    if (info.Config.Labels?.["rakazo.worker"] !== "true") return refuse("404 Not Found");
+    if (info.Config.Labels?.["tangow.worker"] !== "true") return refuse("404 Not Found");
     const exec = await container.exec({
       Cmd: ["node", WORKER_GUEST_ENTRY],
       AttachStdin: true,
@@ -1021,13 +1021,13 @@ export async function upgradeWorkerGuest(
     // The client left while the exec was starting: closing stdin ends the guest.
     if (socket.destroyed) return stream.end();
     socket.write(
-      "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: rakazo-guest\r\n\r\n",
+      "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: tangow-guest\r\n\r\n",
     );
     if (head.length > 0) stream.write(head);
     relayWorkerGuest({
       socket,
       stream,
-      attemptId: info.Config.Labels?.["rakazo.attempt"],
+      attemptId: info.Config.Labels?.["tangow.attempt"],
       exitCode: () => guestExitCode(exec),
     });
   } catch {
@@ -1189,7 +1189,7 @@ async function findBotContainer(botId: string, spaceId: string) {
     filters: {
       // Space IDs were preserved when workspaces became Spaces. Search by the
       // stable bot label, then validate either generation of the Space label.
-      label: [`rakazo.botId=${botId}`],
+      label: [`tangow.botId=${botId}`],
     },
   });
   for (const item of listed) {
@@ -1202,8 +1202,8 @@ async function findBotContainer(botId: string, spaceId: string) {
 
 /** Count managed computers for a space, including legacy workspaceId / unlabeled-managed. */
 export async function countSpaceContainers(spaceId: string): Promise<number> {
-  // Do not filter by rakazo.managed=true: legacy computers are still managed via
-  // COMPUTER_IMAGE + rakazo.workspaceId (same rule as isTangowContainer).
+  // Do not filter by tangow.managed=true: legacy computers are still managed via
+  // COMPUTER_IMAGE + tangow.workspaceId (same rule as isTangowContainer).
   const listed = await docker.listContainers({ all: true });
   let count = 0;
   for (const item of listed) {
@@ -1218,10 +1218,10 @@ async function isManagedSpaceContainer(
 ): Promise<boolean> {
   const labels = item.Labels;
   if (labels) {
-    const listedSpaceId = labels["rakazo.spaceId"] ?? labels["rakazo.workspaceId"];
+    const listedSpaceId = labels["tangow.spaceId"] ?? labels["tangow.workspaceId"];
     // Labeled for another space (or no space identity) cannot count toward this cap.
     if (listedSpaceId !== spaceId) return false;
-    if (labels["rakazo.managed"] === "true" || item.Image === COMPUTER_IMAGE) return true;
+    if (labels["tangow.managed"] === "true" || item.Image === COMPUTER_IMAGE) return true;
     // Space matches but Image may be an ID after the tag moved — confirm via inspect.
   }
   // Missing list Labels: inspect with the same managed rule as isTangowContainer.
@@ -1229,8 +1229,8 @@ async function isManagedSpaceContainer(
     const info = await docker.getContainer(item.Id).inspect();
     const infoLabels = info.Config?.Labels ?? {};
     const managed =
-      infoLabels["rakazo.managed"] === "true" || info.Config?.Image === COMPUTER_IMAGE;
-    const infoSpaceId = infoLabels["rakazo.spaceId"] ?? infoLabels["rakazo.workspaceId"];
+      infoLabels["tangow.managed"] === "true" || info.Config?.Image === COMPUTER_IMAGE;
+    const infoSpaceId = infoLabels["tangow.spaceId"] ?? infoLabels["tangow.workspaceId"];
     return managed && infoSpaceId === spaceId;
   } catch {
     // Container might have been removed concurrently
@@ -1313,7 +1313,7 @@ async function ensureManagedScreen(
 
 function isTangowContainer(info: Docker.ContainerInspectInfo, botId: string, spaceId: string) {
   const labels = info.Config.Labels ?? {};
-  const managed = labels["rakazo.managed"] === "true" || info.Config.Image === COMPUTER_IMAGE;
+  const managed = labels["tangow.managed"] === "true" || info.Config.Image === COMPUTER_IMAGE;
   return managed && hasComputerIdentity(labels, botId, spaceId);
 }
 
@@ -1557,7 +1557,7 @@ async function removeBotNetwork(botId: string) {
               .inspect()
               .catch(() => undefined)
           )?.Config.Labels ?? {};
-        const owner = labels["rakazo.botId"];
+        const owner = labels["tangow.botId"];
         owners.push(owner);
         if (owner === botId) {
           await network.disconnect({ Container: containerId, Force: true }).catch(() => undefined);
@@ -1614,7 +1614,7 @@ async function runContainerCommand(
   options.signal?.throwIfAborted();
   const timeoutMs = options.timeoutMs;
   const completionMarker = timeoutMs
-    ? `/tmp/rakazo-command-${randomUUID()}.completed-124`
+    ? `/tmp/tangow-command-${randomUUID()}.completed-124`
     : undefined;
   const command =
     completionMarker && timeoutMs !== undefined
@@ -1625,8 +1625,8 @@ async function runContainerCommand(
     AttachStdout: true,
     AttachStderr: true,
     ...(options.signal ? { AttachStdin: true } : {}),
-    WorkingDir: options.workingDir ?? "/home/rakazo",
-    Env: options.env ?? ["DISPLAY=:1", "HOME=/home/rakazo"],
+    WorkingDir: options.workingDir ?? "/home/tangow",
+    Env: options.env ?? ["DISPLAY=:1", "HOME=/home/tangow"],
   });
   options.signal?.throwIfAborted();
   const stream = await exec.start({ hijack: true, stdin: Boolean(options.signal) });
@@ -1735,8 +1735,8 @@ async function writeContainerFile(
     AttachStdin: true,
     AttachStdout: true,
     AttachStderr: true,
-    WorkingDir: "/home/rakazo",
-    Env: ["HOME=/home/rakazo"],
+    WorkingDir: "/home/tangow",
+    Env: ["HOME=/home/tangow"],
   });
   const stream = await exec.start({ hijack: true, stdin: true });
   const chunks: Buffer[] = [];

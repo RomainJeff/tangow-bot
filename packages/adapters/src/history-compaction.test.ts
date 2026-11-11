@@ -1216,7 +1216,7 @@ describe("compactHistory", () => {
       ],
     });
     const sink = createTestSink();
-    installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+    installLogger(createLogger({ service: "tangow-worker", sinks: [sink] }));
 
     await h.compact();
 
@@ -1247,7 +1247,7 @@ describe("compactHistory", () => {
         inputTokens: 4_200,
       })),
     );
-    installLogger(createLogger({ service: "rakazo-worker", level: "off", sinks: [] }));
+    installLogger(createLogger({ service: "tangow-worker", level: "off", sinks: [] }));
   });
 
   it("learns the durable facts of what it summarized, commits them to memory and logs them", async () => {
@@ -1295,7 +1295,7 @@ describe("compactHistory", () => {
     await append(seeded, exchanges(seeded, 2));
     const h = harness(seeded, { learnedText: "NONE" });
     const sink = createTestSink();
-    installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+    installLogger(createLogger({ service: "tangow-worker", sinks: [sink] }));
 
     await h.compact();
 
@@ -1310,7 +1310,7 @@ describe("compactHistory", () => {
       "user.message",
       "assistant.text",
     ]);
-    installLogger(createLogger({ service: "rakazo-worker", level: "off", sinks: [] }));
+    installLogger(createLogger({ service: "tangow-worker", level: "off", sinks: [] }));
   });
 
   it("keeps ten facts at most and redacts secrets before they reach memory", async () => {

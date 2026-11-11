@@ -321,7 +321,7 @@ describe("where a product run executes", () => {
         where: { kind: "bot_private" },
         select: { botId: true, providerRef: true },
       }),
-    ).toEqual([{ botId: run.bot.id, providerRef: expect.stringMatching(/^rakazo-/) }]);
+    ).toEqual([{ botId: run.bot.id, providerRef: expect.stringMatching(/^tangow-/) }]);
     expect(await attemptsOf(run, runId)).toEqual([{ workerState: "released" }]);
   });
 

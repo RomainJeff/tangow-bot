@@ -22,7 +22,7 @@ const context = {
 
 describe("E2B computer backend", () => {
   it.each([
-    { exitCode: 1, stdout: "rakazo-background-idle\n", stderr: "" },
+    { exitCode: 1, stdout: "tangow-background-idle\n", stderr: "" },
     { exitCode: 7, stdout: "partial output\n", stderr: "command failed\n" },
   ])("returns process events for a command exiting with $exitCode", async (result) => {
     const machine = fakeE2BMachine("computer");
@@ -45,7 +45,7 @@ describe("E2B computer backend", () => {
     expect(events).toEqual(
       result.exitCode === 1
         ? [
-            { type: "stdout", data: "rakazo-background-idle\n" },
+            { type: "stdout", data: "tangow-background-idle\n" },
             { type: "exit", code: 1 },
           ]
         : [
@@ -109,7 +109,7 @@ describe("E2B computer backend", () => {
     expect(create).toHaveBeenCalledWith(
       `desktop:${releaseRef}`,
       expect.objectContaining({
-        metadata: expect.objectContaining({ rakazo: "computer", releaseRef }),
+        metadata: expect.objectContaining({ tangow: "computer", releaseRef }),
       }),
     );
   });
@@ -503,9 +503,9 @@ describe("E2B computer backend", () => {
       root: "/workspace",
       mounts: mounts.map(([path, volumeRef]) => ({ path, volumeRef })),
     });
-    const ada: [string, string] = ["/workspace/bots/bot_a", "rakazo-vol_a"];
-    const bob: [string, string] = ["/workspace/bots/bot_b", "rakazo-vol_b"];
-    const shared: [string, string] = ["/workspace/shared", "rakazo-vol_shared"];
+    const ada: [string, string] = ["/workspace/bots/bot_a", "tangow-vol_a"];
+    const bob: [string, string] = ["/workspace/bots/bot_b", "tangow-vol_b"];
+    const shared: [string, string] = ["/workspace/shared", "tangow-vol_shared"];
 
     async function provisionOver(
       existing: ReturnType<typeof fakeE2BMachine> | null,
@@ -544,8 +544,8 @@ describe("E2B computer backend", () => {
       const created = vi.mocked(first.sdk.create).mock.calls[0]![0];
 
       expect(created.volumeMounts).toEqual({
-        "/workspace/bots/bot_a": "rakazo-vol_a",
-        "/workspace/shared": "rakazo-vol_shared",
+        "/workspace/bots/bot_a": "tangow-vol_a",
+        "/workspace/shared": "tangow-vol_shared",
       });
       expect(created.metadata).toMatchObject({ botId: "team-home", home: "volumes" });
       const sameSet = fakeE2BMachine("same", {}, created.metadata);
@@ -605,8 +605,8 @@ describe("E2B computer backend", () => {
       }
 
       expect(run.mock.calls.map(([, options]) => options?.cwd)).toEqual([
-        "/home/user/rakazo-home",
-        "/home/user/rakazo-home/bots/bot_a",
+        "/home/user/tangow-home",
+        "/home/user/tangow-home/bots/bot_a",
         "/workspace/shared",
         "/workspace/bots/bot_a",
         "/workspace/shared",
@@ -644,17 +644,17 @@ describe("E2B computer backend", () => {
       await expect(write("notes.md")).rejects.toThrow("notes.md is on no mounted volume");
       await expect(write("bots/bot_b/notes.md")).rejects.toThrow("on no mounted volume");
       expect([...replacement.files.keys()].sort()).toEqual([
-        "/home/user/rakazo-home/bots/bot_a/notes.md",
-        "/home/user/rakazo-home/shared/team.md",
+        "/home/user/tangow-home/bots/bot_a/notes.md",
+        "/home/user/tangow-home/shared/team.md",
       ]);
     });
   });
 
   describe("linking the workspace to its volumes", () => {
     async function link(prepare: (at: string) => Promise<void>) {
-      const dir = await mkdtemp(path.join(tmpdir(), "rakazo-link-"));
+      const dir = await mkdtemp(path.join(tmpdir(), "tangow-link-"));
       onTestFinished(() => rm(dir, { recursive: true, force: true }));
-      const [target, at] = [path.join(dir, "workspace"), path.join(dir, "rakazo-home")];
+      const [target, at] = [path.join(dir, "workspace"), path.join(dir, "tangow-home")];
       await mkdir(target);
       await prepare(at);
       const result = spawnSync("bash", ["-c", linkWorkspaceCommand(target, at)], {
@@ -737,7 +737,7 @@ describe("E2B computer backend", () => {
       context,
     );
     expect(command).toHaveBeenLastCalledWith(
-      expect.stringContaining("/home/user/rakazo-home/notes/readme.md"),
+      expect.stringContaining("/home/user/tangow-home/notes/readme.md"),
       expect.anything(),
     );
   });
@@ -1063,7 +1063,7 @@ describe("sandbox-gone detection", () => {
   ];
   const alive = [
     new Error("bash: x11vnc: command not found"),
-    new Error("Path /home/user/rakazo-home/notes.md not found"),
+    new Error("Path /home/user/tangow-home/notes.md not found"),
     new Error("tar: /home/user/x: No such file or directory"),
     new TimeoutError(
       "canceled: This error is likely due to exceeding 'requestTimeoutMs'. You can pass the request timeout value as an option when making the request.",

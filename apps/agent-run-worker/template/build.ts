@@ -11,7 +11,7 @@ const bundle = await bundleGuest();
 // The SDK reads E2B_API_KEY, and E2B_DOMAIN or E2B_API_URL for a self-hosted E2B.
 const built = await Template.build(
   workerTemplate(harness, bundle),
-  values.name ?? `rakazo-worker-${harness}`,
+  values.name ?? `tangow-worker-${harness}`,
   { ...WORKER_PROFILE, onBuildLogs: defaultBuildLogger() },
 );
 console.log(`Built the worker template ${built.name}`);

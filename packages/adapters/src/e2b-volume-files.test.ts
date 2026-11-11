@@ -63,7 +63,7 @@ async function localVolumes() {
     const id = `${volumeRef}#${opened.filter((ref) => ref === volumeRef).length}`;
     let dir = dirs.get(volumeRef);
     if (!dir) {
-      dir = await mkdtemp(path.join(tmpdir(), "rakazo-volume-"));
+      dir = await mkdtemp(path.join(tmpdir(), "tangow-volume-"));
       roots.push(dir);
       dirs.set(volumeRef, dir);
     }

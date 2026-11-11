@@ -308,7 +308,7 @@ async function main() {
     if ((setup || (needsComputers && provider === "e2b")) && !values["computer-image"]) {
       const image = dock(
         "Existing computer image lookup",
-        ["image", "inspect", "--format", "{{json .RepoDigests}}", "rakazo/computer:local"],
+        ["image", "inspect", "--format", "{{json .RepoDigests}}", "tangow/computer:local"],
         { allowFailure: true },
       );
       let digests = [];
@@ -443,7 +443,7 @@ async function main() {
         "inspect",
         "--format",
         "{{.Id}}",
-        "rakazo/app:local",
+        "tangow/app:local",
       ]).stdout.trim();
       const expectedImages = Object.fromEntries(services.map((service) => [service, appImage]));
       if (provider === "docker")
@@ -452,7 +452,7 @@ async function main() {
           "inspect",
           "--format",
           "{{.Id}}",
-          "rakazo/supervisor:local",
+          "tangow/supervisor:local",
         ]).stdout.trim();
       const filename = path.join(root, ".env");
       const original = readFileSync(filename, "utf8");

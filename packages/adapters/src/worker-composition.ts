@@ -17,7 +17,7 @@ export type WorkerProviderConfig =
   | { kind: "docker"; supervisorUrl: string; supervisorToken: string; dataDir: string };
 
 /** The template `apps/agent-run-worker/template` builds for the default harness. */
-const DEFAULT_WORKER_TEMPLATE = "rakazo-worker-pi-native";
+const DEFAULT_WORKER_TEMPLATE = "tangow-worker-pi-native";
 const RECONCILE_BATCH = 10;
 
 /**

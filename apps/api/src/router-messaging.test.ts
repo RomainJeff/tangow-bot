@@ -265,7 +265,7 @@ function messagingDeps(
       providers: ["sendblue"],
       openSignup: false,
     },
-    dataDir: "/tmp/rakazo-router-test",
+    dataDir: "/tmp/tangow-router-test",
   } as unknown as RouterDeps;
   const actor = {
     spaceId: "ws-1",

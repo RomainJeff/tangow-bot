@@ -41,7 +41,7 @@ describe("account preferences", () => {
         screenProxySecret: "fake-test-secret",
         sandboxProvider: "fake",
       },
-      dataDir: "/tmp/rakazo-router-test",
+      dataDir: "/tmp/tangow-router-test",
     } as unknown as RouterDeps;
     const actor = {
       spaceId: "workspace-1",
@@ -170,7 +170,7 @@ describe("model setup gate", () => {
         screenProxySecret: "fake-test-secret",
         sandboxProvider: "fake",
       },
-      dataDir: "/tmp/rakazo-router-test",
+      dataDir: "/tmp/tangow-router-test",
     } as unknown as RouterDeps;
     const actor = {
       spaceId: "workspace-1",
@@ -315,7 +315,7 @@ describe("thread answer delivery", () => {
         screenProxySecret: "fake-test-secret",
         sandboxProvider: "fake",
       },
-      dataDir: "/tmp/rakazo-router-test",
+      dataDir: "/tmp/tangow-router-test",
     } as unknown as RouterDeps;
     const actor = {
       spaceId: "workspace-1",
@@ -385,7 +385,7 @@ describe("thread answer delivery", () => {
           screenProxySecret: "fake-test-secret",
           sandboxProvider: "fake",
         },
-        dataDir: "/tmp/rakazo-router-test",
+        dataDir: "/tmp/tangow-router-test",
       } as unknown as RouterDeps;
       const handler = new RPCHandler(createRouter(deps));
       return (json: Record<string, unknown>) =>
@@ -473,7 +473,7 @@ describe("MCP server deletion", () => {
         screenProxySecret: "fake-test-secret",
         sandboxProvider: "fake",
       },
-      dataDir: "/tmp/rakazo-router-test",
+      dataDir: "/tmp/tangow-router-test",
     } as unknown as RouterDeps;
     const actor = {
       spaceId: "workspace-1",
@@ -570,7 +570,7 @@ describe("connections.complete", () => {
         screenProxySecret: "fake-test-secret",
         sandboxProvider: "fake",
       },
-      dataDir: "/tmp/rakazo-router-test",
+      dataDir: "/tmp/tangow-router-test",
     } as unknown as RouterDeps;
     const actor = {
       spaceId: "workspace-1",
@@ -629,7 +629,7 @@ describe("updater owner gate", () => {
         updaterUrl: undefined,
         updaterToken: undefined,
       },
-      dataDir: "/tmp/rakazo-router-test",
+      dataDir: "/tmp/tangow-router-test",
     } as unknown as RouterDeps;
     return { deps, handler: new RPCHandler(createRouter(deps)) };
   }
@@ -752,7 +752,7 @@ describe("computer screen url", () => {
         screenProxySecret: "fake-test-secret",
         sandboxProvider: "e2b",
       },
-      dataDir: "/tmp/rakazo-router-test",
+      dataDir: "/tmp/tangow-router-test",
     } as unknown as RouterDeps;
     const handler = new RPCHandler(createRouter(deps));
     const { response } = await handler.handle(
@@ -869,7 +869,7 @@ describe("thread rewind", () => {
         screenProxySecret: "fake-test-secret",
         sandboxProvider: "fake",
       },
-      dataDir: "/tmp/rakazo-router-test",
+      dataDir: "/tmp/tangow-router-test",
     } as unknown as RouterDeps;
     const actor = {
       spaceId: "workspace-1",
@@ -1046,7 +1046,7 @@ describe("thread stop", () => {
         screenProxySecret: "fake-test-secret",
         sandboxProvider: "fake",
       },
-      dataDir: "/tmp/rakazo-router-test",
+      dataDir: "/tmp/tangow-router-test",
     } as unknown as RouterDeps;
     const actor = {
       spaceId: "workspace-1",
@@ -1321,7 +1321,7 @@ describe("routine update triggers", () => {
         screenProxySecret: "fake-test-secret",
         sandboxProvider: "fake",
       },
-      dataDir: "/tmp/rakazo-router-test",
+      dataDir: "/tmp/tangow-router-test",
     } as unknown as RouterDeps;
     const actor = {
       spaceId: "workspace-1",
@@ -1628,7 +1628,7 @@ describe("an archived bot's page", () => {
         screenProxySecret: "fake-test-secret",
         sandboxProvider: "fake",
       },
-      dataDir: "/tmp/rakazo-router-test",
+      dataDir: "/tmp/tangow-router-test",
     } as unknown as RouterDeps;
     return new RPCHandler(createRouter(deps));
   }

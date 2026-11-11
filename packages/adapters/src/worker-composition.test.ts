@@ -13,7 +13,7 @@ describe("the worker provider a deployment runs", () => {
     [
       "E2B workers with the default template on an E2B deployment",
       { SANDBOX_PROVIDER: "e2b", E2B_API_KEY: "e2b-key" },
-      { kind: "e2b", apiKey: "e2b-key", template: "rakazo-worker-pi-native" },
+      { kind: "e2b", apiKey: "e2b-key", template: "tangow-worker-pi-native" },
     ],
     [
       "E2B workers with a template of its own",

@@ -199,7 +199,7 @@ export const laneEAnthropic: Lane = {
 };
 
 /** Where the refusal lane writes the hand-written guest in each worker VM. */
-const HOSTILE_GUEST = "/tmp/rakazo-hostile-guest.mjs";
+const HOSTILE_GUEST = "/tmp/tangow-hostile-guest.mjs";
 
 /**
  * The hand-written guest: the copy the live bundle carries beside it, or, from source, a bundle

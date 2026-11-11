@@ -18,7 +18,7 @@ beforeEach(() => {
   mock.inspect.mockReset();
   mock.inspect.mockResolvedValue({
     Config: {
-      Labels: { "rakazo.managed": "true", "rakazo.botId": "home", "rakazo.spaceId": "space" },
+      Labels: { "tangow.managed": "true", "tangow.botId": "home", "tangow.spaceId": "space" },
     },
   });
   mock.exec.mockImplementation(async (options: { Cmd: string[] }) => ({
@@ -66,7 +66,7 @@ it("resolves the owned display and refuses an older fence before running the hel
     Env: [
       "DISPLAY=:2",
       "TANGOW_CDP_PORT=9223",
-      "HOME=/home/rakazo",
+      "HOME=/home/tangow",
       "TANGOW_BROWSER_WATCH_STDIN=1",
     ],
   });

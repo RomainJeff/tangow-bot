@@ -43,7 +43,7 @@ beforeAll(async () => {
 });
 afterAll(() => database.close());
 beforeEach(async () => {
-  root = await mkdtemp(path.join(tmpdir(), "rakazo-home-move-"));
+  root = await mkdtemp(path.join(tmpdir(), "tangow-home-move-"));
   home = new LocalAgentHomeStore(root);
   volumeFiles = new MemoryVolumeFiles();
   provider = new FakeWorkerProvider();
@@ -79,7 +79,7 @@ async function seedHome(
   files: Record<string, string>,
   modes: Record<string, number> = {},
 ) {
-  const staging = await mkdtemp(path.join(tmpdir(), "rakazo-home-seed-"));
+  const staging = await mkdtemp(path.join(tmpdir(), "tangow-home-seed-"));
   try {
     for (const [file, content] of Object.entries(files)) {
       const target = path.join(staging, file);
@@ -116,7 +116,7 @@ async function volumeContents() {
 
 async function volumeRef(where: { botId: string } | { spaceId: string; kind: "space_shared" }) {
   const volume = await prisma.volume.findFirstOrThrow({ where });
-  return `rakazo-${volume.id}`;
+  return `tangow-${volume.id}`;
 }
 
 async function homeStorageOf(computerId: string) {

@@ -10,12 +10,12 @@ import { resolveSupervisorToken } from "@tangow/core";
 import { createLogger, createTestSink, installLogger } from "@tangow/logging";
 import { expect, it } from "vitest";
 
-// Build the worker image first (rakazo/worker:local, or TANGOW_WORKER_IMAGE). Needs Docker only.
+// Build the worker image first (tangow/worker:local, or TANGOW_WORKER_IMAGE). Needs Docker only.
 it.skipIf(process.env.VERIFY_DOCKER_WORKERS !== "1")(
   "creates a hardened worker on its volume, relays the guest, and removes it",
   async () => {
-    const dataDir = mkdtempSync(path.join(tmpdir(), "rakazo-workers-"));
-    const volume = path.join(dataDir, "volumes", "rakazo-private");
+    const dataDir = mkdtempSync(path.join(tmpdir(), "tangow-workers-"));
+    const volume = path.join(dataDir, "volumes", "tangow-private");
     mkdirSync(volume, { recursive: true });
     process.env.DATA_DIR = dataDir;
     // DATA_DIR is read when the supervisor module loads.
@@ -37,7 +37,7 @@ it.skipIf(process.env.VERIFY_DOCKER_WORKERS !== "1")(
           body: JSON.stringify({
             attemptId,
             ttlSeconds: 120,
-            mounts: [{ volume: "rakazo-private", path: "/workspace/bot", readOnly: false }],
+            mounts: [{ volume: "tangow-private", path: "/workspace/bot", readOnly: false }],
           }),
         });
       const created = await create();
@@ -47,12 +47,12 @@ it.skipIf(process.env.VERIFY_DOCKER_WORKERS !== "1")(
       expect(await (await create()).json()).toEqual({ id });
 
       const info = JSON.parse(docker("inspect", id))[0];
-      expect(Object.keys(info.NetworkSettings.Networks)).toEqual(["rakazo-workers"]);
+      expect(Object.keys(info.NetworkSettings.Networks)).toEqual(["tangow-workers"]);
       expect(
         docker(
           "network",
           "inspect",
-          "rakazo-workers",
+          "tangow-workers",
           "--format",
           '{{index .Options "com.docker.network.bridge.enable_icc"}}',
         ),
@@ -73,7 +73,7 @@ it.skipIf(process.env.VERIFY_DOCKER_WORKERS !== "1")(
             headers: {
               ...headers,
               connection: "Upgrade",
-              upgrade: "rakazo-guest",
+              upgrade: "tangow-guest",
               "x-tangow-worker-capability": "not-the-attempt-capability",
             },
           })
@@ -98,13 +98,13 @@ it.skipIf(process.env.VERIFY_DOCKER_WORKERS !== "1")(
         headers,
       });
       expect(await removed.json()).toEqual({ destroyed: true });
-      expect(docker("ps", "-aq", "--filter", `label=rakazo.attempt=${attemptId}`)).toBe("");
+      expect(docker("ps", "-aq", "--filter", `label=tangow.attempt=${attemptId}`)).toBe("");
       expect(existsSync(path.join(volume, "file"))).toBe(true);
     } finally {
       server.close();
       execFileSync("sh", [
         "-c",
-        `docker rm -f $(docker ps -aq --filter label=rakazo.attempt=${attemptId}) 2>/dev/null || true`,
+        `docker rm -f $(docker ps -aq --filter label=tangow.attempt=${attemptId}) 2>/dev/null || true`,
       ]);
       rmSync(dataDir, { recursive: true, force: true });
     }

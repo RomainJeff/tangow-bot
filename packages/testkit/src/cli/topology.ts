@@ -17,8 +17,8 @@ async function main() {
   const env = {
     ...process.env,
     TOPOLOGY_API_PORT: String(port),
-    TOPOLOGY_APP_IMAGE: process.env.TOPOLOGY_APP_IMAGE ?? "rakazo/app:topology",
-    TOPOLOGY_COMPUTER_IMAGE: process.env.TOPOLOGY_COMPUTER_IMAGE ?? "rakazo/computer:topology",
+    TOPOLOGY_APP_IMAGE: process.env.TOPOLOGY_APP_IMAGE ?? "tangow/app:topology",
+    TOPOLOGY_COMPUTER_IMAGE: process.env.TOPOLOGY_COMPUTER_IMAGE ?? "tangow/computer:topology",
   };
   const compose = (args: string[], capture = false) =>
     command(
@@ -225,7 +225,7 @@ async function waitForWorker(
   while (Date.now() - started < timeoutMs) {
     const logs = compose(["logs", "--no-color", "--tail", "100", "worker"], true);
     // apps/worker logs readiness via the structured logger (packages/logging) as
-    // {"timestamp":...,"level":"info","message":"worker ready","service.name":"rakazo-worker"},
+    // {"timestamp":...,"level":"info","message":"worker ready","service.name":"tangow-worker"},
     // not the old plain "rakazo worker ready" console.log line -- match the JSON field directly
     // rather than a substring that depends on the sink's exact key order.
     if (logs.includes('"message":"worker ready"')) return;
@@ -285,7 +285,7 @@ function assertComputerNetworkIsolation(
     "inspect",
     computerId,
     "--format",
-    '{{index .Config.Labels "rakazo.managed"}}',
+    '{{index .Config.Labels "tangow.managed"}}',
   ]).trim();
   if (managed !== "true") throw new Error("isolated peer is not a managed computer");
   const [spec] = JSON.parse(docker(["inspect", computerId])) as Array<{
@@ -356,7 +356,7 @@ function removeManagedComputers(
         "--filter",
         `network=${networkName}`,
         "--filter",
-        "label=rakazo.managed=true",
+        "label=tangow.managed=true",
       ])
         .split("\n")
         .map((id) => id.trim())

@@ -631,7 +631,7 @@ describe("destroyBot", () => {
           home: {} as AgentHomeStore,
           jobs: { cancel: vi.fn() } as unknown as JobPublisher,
           events: {} as ThreadEvents,
-          dataDir: "/tmp/rakazo-destroy-bot-test",
+          dataDir: "/tmp/tangow-destroy-bot-test",
         },
         {
           id: "bot-1",

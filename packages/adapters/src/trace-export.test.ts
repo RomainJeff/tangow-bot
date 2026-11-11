@@ -79,7 +79,7 @@ describe("resolveTraceExportConfig", () => {
 describe("encodeTrace", () => {
   it("emits an OTLP request with redacted content and parent links", () => {
     const payload = encodeTrace(recordedTrace(), {
-      serviceName: "rakazo-worker",
+      serviceName: "tangow-worker",
       environment: "staging",
       redact: (text) => text.replaceAll("hunter2", "[redacted]"),
     }) as {

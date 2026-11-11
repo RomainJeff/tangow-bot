@@ -149,7 +149,7 @@ export class DockerSandboxProvider implements SandboxProvider {
   }
 
   /**
-   * A home on volumes keeps `/home/rakazo` on its home directory for dotfiles and browser profiles,
+   * A home on volumes keeps `/home/tangow` on its home directory for dotfiles and browser profiles,
    * and mounts its volumes at the paths workers use. The supervisor replaces a computer created
    * with another set of mounts; nothing it held is lost, since the home directory and the volumes
    * both outlive it.
@@ -210,7 +210,7 @@ export class DockerSandboxProvider implements SandboxProvider {
       let code: number | undefined;
       for await (const event of this.execute(
         computer,
-        { argv: ["bash", "-c", linkWorkspaceCommand(volumeHome.root, "/home/rakazo/workspace")] },
+        { argv: ["bash", "-c", linkWorkspaceCommand(volumeHome.root, "/home/tangow/workspace")] },
         context,
       )) {
         if (event.type === "stderr") stderr += event.data;
@@ -576,9 +576,9 @@ function dockerCwd(cwd: string | undefined) {
   if (cwd === "/workspace" || cwd?.startsWith("/workspace/")) {
     return path.posix.join("/workspace", normalizeWorkspacePath(cwd.slice("/workspace".length)));
   }
-  if (!cwd || cwd === "." || cwd === "/" || cwd === "/home/rakazo") return "/home/rakazo";
-  const relative = cwd.startsWith("/home/rakazo/")
-    ? cwd.slice("/home/rakazo/".length)
+  if (!cwd || cwd === "." || cwd === "/" || cwd === "/home/tangow") return "/home/tangow";
+  const relative = cwd.startsWith("/home/tangow/")
+    ? cwd.slice("/home/tangow/".length)
     : normalizeWorkspacePath(cwd);
-  return path.posix.join("/home/rakazo", relative);
+  return path.posix.join("/home/tangow", relative);
 }

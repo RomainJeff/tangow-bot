@@ -12,7 +12,7 @@ const page = (body: string) =>
 const resolveLinkPreview = async (...args: Parameters<typeof resolveLinkPreviewDetailed>) =>
   (await resolveLinkPreviewDetailed(...args)).preview;
 
-afterEach(() => installLogger(createLogger({ service: "rakazo-worker", level: "off", sinks: [] })));
+afterEach(() => installLogger(createLogger({ service: "tangow-worker", level: "off", sinks: [] })));
 
 function service(route: (url: string) => Response | Promise<Response>, resolve = publicResolver) {
   const db = createFakeThreadDb();
@@ -37,7 +37,7 @@ function service(route: (url: string) => Response | Promise<Response>, resolve =
 
 function capture() {
   const sink = createTestSink();
-  installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+  installLogger(createLogger({ service: "tangow-worker", sinks: [sink] }));
   return sink;
 }
 

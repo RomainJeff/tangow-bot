@@ -25,7 +25,7 @@ const supervisor = useDockerSupervisor();
 /** The run's own containers: other suites may share this Docker daemon. */
 const containersOf = (attempts: Array<{ id: string }>) =>
   attempts
-    .map((attempt) => docker("ps", "-aq", "--filter", `label=rakazo.attempt=${attempt.id}`))
+    .map((attempt) => docker("ps", "-aq", "--filter", `label=tangow.attempt=${attempt.id}`))
     .join("");
 const provider = () => supervisor.provider();
 
@@ -84,7 +84,7 @@ describe.skipIf(!dockerWorkersEnabled)("Docker workers", () => {
       expect(seen[1]).toContain("Successfully wrote");
       const volumes = await run.prisma.volume.findMany();
       const ref = (kind: string) => volumes.find((volume) => volume.kind === kind)!.providerRef!;
-      expect(ref("bot_private")).toMatch(/^rakazo-/);
+      expect(ref("bot_private")).toMatch(/^tangow-/);
       // Visible on the host, in DATA_DIR/volumes, after the worker is gone.
       const host = (kind: string, file: string) =>
         readFileSync(path.join(supervisor.dataDir, "volumes", ref(kind), file), "utf8");
@@ -131,7 +131,7 @@ describe.skipIf(!dockerWorkersEnabled)("Docker workers", () => {
           argv: [
             "bash",
             "-c",
-            `cat /workspace/bots/${run.bot.id}/from-worker.txt && readlink /home/rakazo/workspace && pwd`,
+            `cat /workspace/bots/${run.bot.id}/from-worker.txt && readlink /home/tangow/workspace && pwd`,
           ],
         },
         context,

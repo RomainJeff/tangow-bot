@@ -51,7 +51,7 @@ afterEach(() => rm(root, { recursive: true, force: true }));
 const prisma = () => database.prisma;
 const dataDir = () => path.join(root, "data");
 const journal = () => path.join(dataDir(), "docker-provider-migration", operationId, "state.json");
-const target = (id: string) => path.join(dataDir(), "volumes", `rakazo-${id}`);
+const target = (id: string) => path.join(dataDir(), "volumes", `tangow-${id}`);
 const migrate = (
   destroyComputer = async (ref: string) => {
     destroyed.push(ref);
@@ -110,7 +110,7 @@ it("preserves private, archived and shared volume identities, contents, empty di
       spaceId: volume.spaceId,
       botId: volume.botId,
       providerKind: "docker-worker",
-      providerRef: `rakazo-${volume.id}`,
+      providerRef: `tangow-${volume.id}`,
     });
     expect(await readFile(path.join(target(volume.id), "note.txt"), "utf8")).toBe(
       volume.providerRef,

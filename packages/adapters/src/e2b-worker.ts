@@ -15,7 +15,7 @@ import type { GuestConnector } from "./runtime-worker/launcher.js";
 import { WORKER_LIMITS } from "./runtime-worker/limits.js";
 
 /** Where the worker template puts the guest bundle. */
-export const E2B_WORKER_GUEST_ENTRY = "/opt/rakazo/agent-run-worker.mjs";
+export const E2B_WORKER_GUEST_ENTRY = "/opt/tangow/agent-run-worker.mjs";
 
 /**
  * `ensure` stops creating this long before the shared ensure deadline, so a create the server
@@ -195,7 +195,7 @@ function handoff() {
   };
 }
 
-const attemptTag = (attemptId: string) => ({ rakazo: "worker", attemptId });
+const attemptTag = (attemptId: string) => ({ tangow: "worker", attemptId });
 
 /**
  * Run workers as E2B sandboxes, one per attempt, tagged with its id. The guest is the bundle the

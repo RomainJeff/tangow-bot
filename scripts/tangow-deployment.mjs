@@ -102,7 +102,7 @@ export function inspectHomes(comp, provider) {
     throw new Error("Invalid Docker deferred-home inventory.");
   for (const computer of inventory.deferred)
     console.log(
-      `Docker home deferred: ${JSON.stringify(computer)}. Retried when the computer suspends; retain .rakazo-move-pending.`,
+      `Docker home deferred: ${JSON.stringify(computer)}. Retried when the computer suspends; retain .tangow-move-pending.`,
     );
 }
 
@@ -112,7 +112,7 @@ export function workerImage(dock, revision) {
     "inspect",
     "--format",
     '{{index .Config.Labels "org.opencontainers.image.revision"}}',
-    "rakazo/worker:local",
+    "tangow/worker:local",
   ]).stdout.trim();
   if (label !== revision)
     throw new Error(
@@ -123,6 +123,6 @@ export function workerImage(dock, revision) {
     "inspect",
     "--format",
     "{{.Id}}",
-    "rakazo/worker:local",
+    "tangow/worker:local",
   ]).stdout.trim();
 }
