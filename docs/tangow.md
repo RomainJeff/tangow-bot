@@ -1,6 +1,6 @@
 # Tangow
 
-Tangow runs **directly on the server**, from a Tangow source checkout. It updates the application
+The `./tangow` operator CLI runs **directly on the server**, from a Tangow source checkout. It updates the application
 and the computer builds for the configured provider. Run `./tangow` or `pnpm tangow`; it operates the source Compose stack. Coding agents can use the project [Tangow skill](../.agents/skills/tangow/SKILL.md)
 for lifecycle operations and recovery.
 

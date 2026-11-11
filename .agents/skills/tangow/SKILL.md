@@ -1,6 +1,6 @@
 ---
 name: tangow
-description: Use when operating a Tangow source server with Tangow, including updates, Docker or E2B computer builds, provider migration, restarts, cleanup, or recovery after an interrupted deployment.
+description: Use when operating a Tangow source server with the `./tangow` CLI, including updates, Docker or E2B computer builds, provider migration, restarts, cleanup, or recovery after an interrupted deployment.
 ---
 
 # Tangow

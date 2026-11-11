@@ -19,7 +19,7 @@ provider, or run the complete stack locally.
 - Docker and E2B
 - Composio, Pipedream Connect, MCP, and OpenAPI integrations
 
-For an existing source deployment, use [Tangow](./docs/tangow.md) on the server to update Tangow,
+For an existing source deployment, use the [`./tangow` operator CLI](./docs/tangow.md) on the server to update it,
 inspect services, rebuild workers and computers, or migrate Docker homes to E2B.
 
 ## Getting started

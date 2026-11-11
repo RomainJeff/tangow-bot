@@ -1,6 +1,6 @@
 ---
 name: product-film
-description: Make an Apple-style product film of a Tangow/tangow feature, skin or release - one 3D studio, an anonymised phone, the app's iOS screens playing live on its glass, hard cuts on the music's beats, benefit lines and an end card - rendered to MP4 with the HyperFrames CLI. Use when someone asks for a product video, a launch or reveal trailer, a feature film, "une vidéo façon pub Apple" or "un trailer". Not for explaining code, plans or architecture (technical-video-explainer, pr-motion-explainer).
+description: Make an Apple-style product film of a Tangow feature, skin or release - one 3D studio, an anonymised phone, the app's iOS screens playing live on its glass, hard cuts on the music's beats, benefit lines and an end card - rendered to MP4 with the HyperFrames CLI. Use when someone asks for a product video, a launch or reveal trailer, a feature film, "une vidéo façon pub Apple" or "un trailer". Not for explaining code, plans or architecture (technical-video-explainer, pr-motion-explainer).
 ---
 
 # Product film
