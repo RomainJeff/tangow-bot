@@ -5,7 +5,7 @@ import { expect, type Route, test } from "./test";
 
 test("connects an MCP server through the OAuth popup callback", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `mcp-oauth-${stamp}@rakazo.test`, "password12", "MCP OAuth");
+  await signup(page, `mcp-oauth-${stamp}@tangow.test`, "password12", "MCP OAuth");
   await completeOnboarding(page);
 
   let oauthStatus: McpServer["oauthStatus"] = "none";

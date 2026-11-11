@@ -54,7 +54,7 @@ test.afterAll(async () => {
 });
 
 test.beforeEach(async () => {
-  userData = await mkdtemp(path.join(tmpdir(), "rakazo-desktop-e2e-"));
+  userData = await mkdtemp(path.join(tmpdir(), "tangow-desktop-e2e-"));
 });
 
 test.afterEach(async () => {
@@ -235,7 +235,7 @@ test("an HTTP error document is not accepted after a healthy probe", async () =>
 
 test("a session-pending shell skeleton is not accepted as a ready app", async () => {
   const skeletonHtml = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Tangow</title></head>
-<body><div id="root"><div data-rakazo-app-state="session-pending"><aside></aside><main><div>Opening your Space…</div></main></div></div></body></html>`;
+<body><div id="root"><div data-tangow-app-state="session-pending"><aside></aside><main><div>Opening your Space…</div></main></div></div></body></html>`;
   const skeleton = createServer((request, response) => {
     if (request.url === "/rpc/health" && request.method === "POST") {
       response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
@@ -276,17 +276,17 @@ for (const { name, surface } of [
   },
   {
     name: "logged-out welcome",
-    surface: '<div data-rakazo-surface="welcome"><button>Sign up</button></div>',
+    surface: '<div data-tangow-surface="welcome"><button>Sign up</button></div>',
   },
   {
     name: "translated logged-out welcome",
-    surface: '<div data-rakazo-surface="welcome"><button>Créer un compte</button></div>',
+    surface: '<div data-tangow-surface="welcome"><button>Créer un compte</button></div>',
   },
 ]) {
   test(`a post-session ${name} mount is accepted`, async () => {
     const readyHtml = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Tangow</title>
 </head>
-<body><div id="root"><div data-rakazo-app-state="ready">${surface}</div></div></body></html>`;
+<body><div id="root"><div data-tangow-app-state="ready">${surface}</div></div></body></html>`;
     const ready = createServer((request, response) => {
       if (request.url === "/rpc/health" && request.method === "POST") {
         response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
@@ -310,7 +310,7 @@ for (const { name, surface } of [
         setup.getByRole("button", { name: "Continue" }).click(),
       ]).then(([window]) => window);
 
-      await expect(appWindow.locator('[data-rakazo-app-state="ready"]')).toBeVisible();
+      await expect(appWindow.locator('[data-tangow-app-state="ready"]')).toBeVisible();
       await expect
         .poll(async () => {
           try {
@@ -332,7 +332,7 @@ for (const { name, surface } of [
 
 test("a shell mount before workspace bootstrap is not accepted", async () => {
   const preBootstrapHtml = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Tangow</title></head>
-<body><div id="root"><div data-rakazo-app-state="ready"><div data-testid="shell-root" data-ready="false">Workspace</div></div></div></body></html>`;
+<body><div id="root"><div data-tangow-app-state="ready"><div data-testid="shell-root" data-ready="false">Workspace</div></div></div></body></html>`;
   const preBootstrap = createServer((request, response) => {
     if (request.url === "/rpc/health" && request.method === "POST") {
       response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
@@ -368,7 +368,7 @@ test("a shell mount before workspace bootstrap is not accepted", async () => {
 
 test("a session-ready marker without a route surface is not accepted", async () => {
   const emptyReadyHtml = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Tangow</title></head>
-<body><div id="root"><div data-rakazo-app-state="ready" class="h-full"></div></div></body></html>`;
+<body><div id="root"><div data-tangow-app-state="ready" class="h-full"></div></div></body></html>`;
   const emptyReady = createServer((request, response) => {
     if (request.url === "/rpc/health" && request.method === "POST") {
       response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
@@ -516,7 +516,7 @@ test("servers on the same host but different ports do not share login cookies", 
   const first = createServer((_request, response) => {
     response.writeHead(200, {
       "content-type": "text/html; charset=utf-8",
-      "set-cookie": "rakazo_session=fake-one; Path=/; SameSite=Lax",
+      "set-cookie": "tangow_session=fake-one; Path=/; SameSite=Lax",
     });
     response.end("<!doctype html><main>Cookie stored</main>");
   });

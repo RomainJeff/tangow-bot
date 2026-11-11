@@ -207,7 +207,7 @@ export default defineConfig(({ mode }) => {
       lingui(),
       tailwindcss(),
       {
-        name: "rakazo-performance-asset-delay",
+        name: "tangow-performance-asset-delay",
         configurePreviewServer(server) {
           if (!Number.isFinite(performanceAssetDelayMs) || performanceAssetDelayMs <= 0) return;
           server.middlewares.use((req, _res, next) => {
@@ -221,7 +221,7 @@ export default defineConfig(({ mode }) => {
         },
       },
       {
-        name: "rakazo-novnc-proxy",
+        name: "tangow-novnc-proxy",
         configureServer: (server) => attachNovncProxy(server, screenProxySecret(), api),
         configurePreviewServer: (server) => attachNovncProxy(server, screenProxySecret(), api),
       },

@@ -31,10 +31,10 @@ import type { ModelCatalogEntry } from "../lib/model-auth";
 import { rpc } from "../lib/rpc";
 import { useModelOAuthSignIn } from "../lib/use-model-oauth-signin";
 
-const CUSTOM_MODEL_OPTION = "__rakazo_custom_model__";
+const CUSTOM_MODEL_OPTION = "__tangow_custom_model__";
 const FIRST_BOT_NAME = "Chief";
 const FIRST_BOT_SPAWN_KEY = "onboarding:first";
-const FIRST_BOT_LOCK = "rakazo:onboarding-first-bot";
+const FIRST_BOT_LOCK = "tangow:onboarding-first-bot";
 
 /** Survives StrictMode remounts; concurrent first-bot creates share one in-flight attempt. */
 let firstBotEnsure: Promise<{ id: string }> | null = null;

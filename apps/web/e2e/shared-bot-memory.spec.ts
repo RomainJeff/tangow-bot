@@ -16,10 +16,10 @@ test("a member's run saves for a shared bot's team, and its owner reads and edit
   baseURL,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `team-memory-owner-${stamp}@rakazo.test`, "password12", "Ada Owner");
+  await signup(page, `team-memory-owner-${stamp}@tangow.test`, "password12", "Ada Owner");
   await completeOnboarding(page);
   const { spaceId } = await rpc<{ spaceId: string }>(page, "me", undefined);
-  const guestEmail = `team-memory-guest-${stamp}@rakazo.test`;
+  const guestEmail = `team-memory-guest-${stamp}@tangow.test`;
   const inviteUrl = await inviteToSpace(page, spaceId, guestEmail);
   const botId = await createNamedBot(page, "Release notes");
   await rpc(page, "bots/share", { botId, visibility: "space", userIds: [] });

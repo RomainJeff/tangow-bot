@@ -25,7 +25,7 @@ test("Slack message trigger uses the mounted messaging provider and persists", a
     }),
   );
   const stamp = Date.now();
-  await signup(page, `routine-slack-${stamp}@rakazo.test`, "password12", "Slack Routine");
+  await signup(page, `routine-slack-${stamp}@tangow.test`, "password12", "Slack Routine");
   await completeOnboarding(page);
   const botId = activeBotId(page);
 
@@ -60,7 +60,7 @@ test("GitHub event trigger exposes signed delivery settings and persists", async
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `routine-github-${stamp}@rakazo.test`, "password12", "GitHub Routine");
+  await signup(page, `routine-github-${stamp}@tangow.test`, "password12", "GitHub Routine");
   await completeOnboarding(page);
   const botId = activeBotId(page);
 
@@ -100,7 +100,7 @@ test("picking Webhook shows the key the bot already has, and that key signs a de
   page,
 }) => {
   const stamp = Date.now();
-  await signup(page, `routine-live-key-${stamp}@rakazo.test`, "password12", "Live Key");
+  await signup(page, `routine-live-key-${stamp}@tangow.test`, "password12", "Live Key");
   await completeOnboarding(page);
   const botId = activeBotId(page);
   await openRoutineCreate(page);
@@ -131,7 +131,7 @@ test("Korean webhook routine keeps technical field labels in English", async ({
 }, testInfo) => {
   const stamp = Date.now();
   const userName = `Korean Routine ${stamp}`;
-  await signup(page, `routine-ko-${stamp}@rakazo.test`, "password12", userName);
+  await signup(page, `routine-ko-${stamp}@tangow.test`, "password12", userName);
   await completeOnboarding(page);
 
   await page.getByRole("button", { name: new RegExp(userName) }).click();
@@ -159,7 +159,7 @@ test("Korean webhook routine keeps technical field labels in English", async ({
 
 test("routine test-run completes and survives reload", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `routine-${stamp}@rakazo.test`, "password12", "Routine");
+  await signup(page, `routine-${stamp}@tangow.test`, "password12", "Routine");
   await completeOnboarding(page);
 
   await openRoutineCreate(page);

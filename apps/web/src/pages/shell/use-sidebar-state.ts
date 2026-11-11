@@ -10,7 +10,7 @@ import type { Roster } from "./use-roster";
 
 function collapsedSidebarSectionsStorageKey(userId: string | null | undefined): string | null {
   if (!userId) return null;
-  return `rakazo:collapsed-sidebar-sections:${userId}`;
+  return `tangow:collapsed-sidebar-sections:${userId}`;
 }
 
 function readCollapsedSidebarSections(userId: string | null | undefined): Set<string> {

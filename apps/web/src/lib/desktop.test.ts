@@ -131,7 +131,7 @@ describe("attempt correlation", () => {
     let emit: (callback: TangowDesktopOAuthCallback) => void = () => undefined;
     const unsubscribe = vi.fn();
     vi.stubGlobal("window", {
-      rakazoDesktop: {
+      tangowDesktop: {
         ...desktop("linux"),
         oauth: {
           onCallback: (listener: (callback: TangowDesktopOAuthCallback) => void) => {
@@ -187,7 +187,7 @@ describe("page head reader for link previews", () => {
   it("goes through the desktop bridge when there is one", async () => {
     const page = { head: "<head><title>T</title></head", contentType: "text/html" };
     const read = vi.fn(async () => page);
-    vi.stubGlobal("window", { rakazoDesktop: { ...desktop("darwin"), pageHead: { read } } });
+    vi.stubGlobal("window", { tangowDesktop: { ...desktop("darwin"), pageHead: { read } } });
     await expect(
       readPageHeadOnDesktop("https://news.example.com/a", new AbortController().signal),
     ).resolves.toEqual(page);
@@ -202,7 +202,7 @@ describe("page head reader for link previews", () => {
     );
     const cancel = vi.fn(async (id: string) => reads.get(id)?.());
     vi.stubGlobal("window", {
-      rakazoDesktop: { ...desktop("darwin"), pageHead: { read, cancel } },
+      tangowDesktop: { ...desktop("darwin"), pageHead: { read, cancel } },
     });
     const first = new AbortController();
     const second = new AbortController();
@@ -225,7 +225,7 @@ describe("page head reader for link previews", () => {
     const signal = new AbortController().signal;
     vi.stubGlobal("window", {});
     await expect(readPageHeadOnDesktop("https://news.example.com/a", signal)).resolves.toBeNull();
-    vi.stubGlobal("window", { rakazoDesktop: desktop("darwin") });
+    vi.stubGlobal("window", { tangowDesktop: desktop("darwin") });
     await expect(readPageHeadOnDesktop("https://news.example.com/a", signal)).resolves.toBeNull();
   });
 });

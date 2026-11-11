@@ -475,7 +475,7 @@ async function waitForMountedAppDocument(contents: Electron.WebContents) {
     if (contents.isCrashed()) throw new Error("Renderer stopped after load.");
     const ready = (await contents.executeJavaScript(`(() => {
       const appState =
-        document.querySelector("[data-rakazo-app-state]")?.getAttribute("data-rakazo-app-state") ??
+        document.querySelector("[data-tangow-app-state]")?.getAttribute("data-tangow-app-state") ??
         null;
       if (appState === "session-pending") return false;
 
@@ -485,7 +485,7 @@ async function waitForMountedAppDocument(contents: Electron.WebContents) {
           performance.getEntriesByName("rk:renderer:shell-ready").length > 0,
       );
       const authOrWelcomeSurface = Boolean(
-        document.querySelector('[data-rakazo-surface="welcome"]') ||
+        document.querySelector('[data-tangow-surface="welcome"]') ||
           document.querySelector(
             'form input[type="email"], form input[name="email"], form input#email',
           ) ||
@@ -980,7 +980,7 @@ app.whenReady().then(async () => {
   });
   // Link previews for sites that refuse the server: this computer reads the start of the page,
   // in a partition of its own (in memory, no cookies in or out), and the renderer sends it on.
-  const pageHeadSession = session.fromPartition("rakazo-link-preview");
+  const pageHeadSession = session.fromPartition("tangow-link-preview");
   const pageHead = createPageHeadReader(
     createPageFetch(
       (url) =>

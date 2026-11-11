@@ -10,7 +10,7 @@ import { expect, type Locator, type Page, test } from "./test";
 
 async function setupGroupComposer(page: Page) {
   const stamp = Date.now();
-  await signup(page, `quiet-composer-${stamp}@rakazo.test`, "password12", "Quiet Composer");
+  await signup(page, `quiet-composer-${stamp}@tangow.test`, "password12", "Quiet Composer");
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);
@@ -148,7 +148,7 @@ test("composer capsule: empty, typing, and mention chip in light and dark", asyn
 test("composer while a bot works: Send replaces Stop when drafting, light and dark", async ({
   page,
 }, testInfo) => {
-  await signup(page, `quiet-composer-run-${Date.now()}@rakazo.test`, "password12", "Run");
+  await signup(page, `quiet-composer-run-${Date.now()}@tangow.test`, "password12", "Run");
   await completeOnboarding(page);
   await page
     .locator("[data-sidebar-group]")

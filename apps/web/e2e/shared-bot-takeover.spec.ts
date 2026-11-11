@@ -15,10 +15,10 @@ test("a member takes over their own screen when their run on a shared bot asks",
   baseURL,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `takeover-owner-${stamp}@rakazo.test`, "password12", "Ada Owner");
+  await signup(page, `takeover-owner-${stamp}@tangow.test`, "password12", "Ada Owner");
   await completeOnboarding(page);
   const { spaceId } = await rpc<{ spaceId: string }>(page, "me", undefined);
-  const guestEmail = `takeover-guest-${stamp}@rakazo.test`;
+  const guestEmail = `takeover-guest-${stamp}@tangow.test`;
   const inviteUrl = await inviteToSpace(page, spaceId, guestEmail);
   const botId = await createNamedBot(page, "Release notes");
   await rpc(page, "bots/share", { botId, visibility: "space", userIds: [] });
@@ -65,10 +65,10 @@ test("in a group, the person whose run asks takes over its bot's screen", async 
   baseURL,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `group-takeover-owner-${stamp}@rakazo.test`, "password12", "Ada Owner");
+  await signup(page, `group-takeover-owner-${stamp}@tangow.test`, "password12", "Ada Owner");
   await completeOnboarding(page);
   const { spaceId } = await rpc<{ spaceId: string }>(page, "me", undefined);
-  const guestEmail = `group-takeover-guest-${stamp}@rakazo.test`;
+  const guestEmail = `group-takeover-guest-${stamp}@tangow.test`;
   const inviteUrl = await inviteToSpace(page, spaceId, guestEmail);
   const botId = await createNamedBot(page, "Releaser");
   await rpc(page, "bots/share", { botId, visibility: "space", userIds: [] });

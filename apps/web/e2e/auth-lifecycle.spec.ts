@@ -31,7 +31,7 @@ test("logout protects bot deep links and sign-in restores the session", async ({
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  const email = `auth-lifecycle-${stamp}@rakazo.test`;
+  const email = `auth-lifecycle-${stamp}@tangow.test`;
   const password = "password12";
   const userName = "Auth Lifecycle";
 
@@ -74,7 +74,7 @@ test("logout protects bot deep links and sign-in restores the session", async ({
   await page.getByRole("button", { name: "Log out" }).click();
   await expect(page.getByRole("heading", { name: "Sign in to Tangow" })).toBeVisible();
   await page.goto("/");
-  await expect(page.locator('[data-rakazo-surface="welcome"]')).toBeVisible();
+  await expect(page.locator('[data-tangow-surface="welcome"]')).toBeVisible();
   await expect(page.getByText(/Your team of always-on agents/)).toBeVisible();
   await page.getByRole("button", { name: /Sign up/ }).click();
   await expect(page).toHaveURL(/\/sign-up$/);
@@ -143,7 +143,7 @@ test("logout protects bot deep links and sign-in restores the session", async ({
 
 test("changes and recovers an email password", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  const email = `password-recovery-${stamp}@rakazo.test`;
+  const email = `password-recovery-${stamp}@tangow.test`;
   const originalPassword = "password12";
   const changedPassword = "changed-password12";
   const resetPassword = "reset-password12";

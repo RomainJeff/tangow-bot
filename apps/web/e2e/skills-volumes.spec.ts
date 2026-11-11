@@ -5,7 +5,7 @@ import { expect, test } from "./test";
 test("volume skills have a read-only viewer and no per-bot access switch", async ({
   page,
 }, testInfo) => {
-  await signup(page, `volume-skills-${Date.now()}@rakazo.test`, "password12", "Skills reviewer");
+  await signup(page, `volume-skills-${Date.now()}@tangow.test`, "password12", "Skills reviewer");
   await completeOnboarding(page);
   const botId = activeBotId(page);
   const skill: AgentSkill = {

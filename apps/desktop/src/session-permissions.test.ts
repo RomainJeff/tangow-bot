@@ -94,10 +94,10 @@ describe("desktop session permissions", () => {
   });
 
   it.each([
-    "rakazo-model-oauth",
+    "tangow-model-oauth",
     "tangow-mcp-oauth",
-    "rakazo-app-connect",
-    "rakazo-plugin-connect",
+    "tangow-app-connect",
+    "tangow-plugin-connect",
   ])("allows %s navigation without granting permissions to its popup", (name) => {
     const policy = policyFixture();
     expect(shouldOpenInAppPopup(new URL(appUrl).origin, providerUrl, name)).toBe(true);

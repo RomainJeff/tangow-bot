@@ -3,7 +3,7 @@ import { RPCLink } from "@orpc/client/fetch";
 import type { ContractRouterClient } from "@orpc/contract";
 import type { AppContract } from "@tangow/contracts";
 
-const SPACE_STORAGE_KEY = "rakazo:space-id";
+const SPACE_STORAGE_KEY = "tangow:space-id";
 
 type RpcClientContext = { spaceId?: string | null };
 

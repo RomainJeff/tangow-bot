@@ -29,7 +29,7 @@ describe("desktop preload bridge", () => {
 
     expect(exposeInMainWorld).toHaveBeenCalledTimes(1);
     const [globalName, bridge] = exposeInMainWorld.mock.calls[0] as [string, TangowDesktop];
-    expect(globalName).toBe("rakazoDesktop");
+    expect(globalName).toBe("tangowDesktop");
     expect(bridge.platform).toBe("linux");
     expect(Object.keys(bridge).sort()).toEqual([
       "oauth",

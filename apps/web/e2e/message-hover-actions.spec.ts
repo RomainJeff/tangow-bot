@@ -11,7 +11,7 @@ import {
 } from "./thread-log";
 
 test("widgets omit bubble hover actions", async ({ page }, testInfo) => {
-  await signup(page, `widget-hover-${Date.now()}@rakazo.test`, "password12", "Widget Hover");
+  await signup(page, `widget-hover-${Date.now()}@tangow.test`, "password12", "Widget Hover");
   await completeOnboarding(page);
   const botId = activeBotId(page);
   // Supply a widget artifact and transcript to exercise hover without an external model;
@@ -134,7 +134,7 @@ test("message hover shows a floating action pill; reply links to parent", async 
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `hover-actions-${stamp}@rakazo.test`, "password12", "Hover Actions");
+  await signup(page, `hover-actions-${stamp}@tangow.test`, "password12", "Hover Actions");
   await completeOnboarding(page);
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
 
@@ -380,7 +380,7 @@ test("message hover shows a floating action pill; reply links to parent", async 
 
 test("reply preview jumps to parent outside the loaded page", async ({ page }) => {
   const stamp = Date.now();
-  await signup(page, `hover-page-${stamp}@rakazo.test`, "password12", "Hover Page");
+  await signup(page, `hover-page-${stamp}@tangow.test`, "password12", "Hover Page");
   await completeOnboarding(page);
 
   const replyText = `page-reply-${stamp}`;
@@ -434,7 +434,7 @@ test("reply preview jumps to parent outside the loaded page", async ({ page }) =
 
 test("a send after a search jump lands on the latest messages", async ({ page }) => {
   const stamp = Date.now();
-  await signup(page, `jump-send-${stamp}@rakazo.test`, "password12", "Jump Send");
+  await signup(page, `jump-send-${stamp}@tangow.test`, "password12", "Jump Send");
   await completeOnboarding(page);
   await page.setViewportSize({ width: 1280, height: 600 });
   const botId = activeBotId(page);
@@ -526,7 +526,7 @@ test.describe("touch message actions", () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
 
   test("a tap does nothing; a 450ms hold opens the action sheet", async ({ page }, testInfo) => {
-    await signup(page, `touch-actions-${Date.now()}@rakazo.test`, "password12", "Touch Actions");
+    await signup(page, `touch-actions-${Date.now()}@tangow.test`, "password12", "Touch Actions");
     await completeOnboarding(page);
     expect(
       await page.evaluate(() => matchMedia("(hover: hover) and (pointer: fine)").matches),

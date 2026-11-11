@@ -136,7 +136,7 @@ export function AppConnectCard({
         displayName: block.name,
       });
       if (started.authorizationUrl) {
-        window.open(started.authorizationUrl, "rakazo-app-connect", "popup,width=560,height=720");
+        window.open(started.authorizationUrl, "tangow-app-connect", "popup,width=560,height=720");
       }
       for (let i = 0; i < 60; i += 1) {
         if (controller.signal.aborted) return;

@@ -46,7 +46,7 @@ function WidgetFrame({
   const [height, setHeight] = useState(192);
   const [document] = useState(() => buildWidgetDocument({ html, theme }));
   useEffect(() => {
-    frame.current?.contentWindow?.postMessage({ rakazoWidgetTheme: theme }, "*");
+    frame.current?.contentWindow?.postMessage({ tangowWidgetTheme: theme }, "*");
   }, [theme]);
   useEffect(() => {
     if (fullscreen) return;
@@ -73,7 +73,7 @@ function WidgetFrame({
       onLoad={() => {
         loads.current += 1;
         if (loads.current > 1) setNavigated(true);
-        else frame.current?.contentWindow?.postMessage({ rakazoWidgetTheme: theme }, "*");
+        else frame.current?.contentWindow?.postMessage({ tangowWidgetTheme: theme }, "*");
       }}
       className={
         navigated

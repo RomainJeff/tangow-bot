@@ -3,7 +3,7 @@ import { expect, type Page, test } from "./test";
 
 async function openComposer(page: Page) {
   const stamp = Date.now();
-  await signup(page, `composer-paste-${stamp}@rakazo.test`, "password12", "Paste Test");
+  await signup(page, `composer-paste-${stamp}@tangow.test`, "password12", "Paste Test");
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);

@@ -57,7 +57,7 @@ test("a working run's line and a hovered row's pill, light and dark", async ({
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `quiet-motion-${stamp}@rakazo.test`, "password12", "Quiet Motion");
+  await signup(page, `quiet-motion-${stamp}@tangow.test`, "password12", "Quiet Motion");
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);
@@ -99,7 +99,7 @@ test("a working run's line and a hovered row's pill, light and dark", async ({
 
 test("reduced motion freezes the working clock", async ({ page }) => {
   const stamp = Date.now();
-  await signup(page, `quiet-motion-rm-${stamp}@rakazo.test`, "password12", "Quiet Motion RM");
+  await signup(page, `quiet-motion-rm-${stamp}@tangow.test`, "password12", "Quiet Motion RM");
   await completeOnboarding(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/app");

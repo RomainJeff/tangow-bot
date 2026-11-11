@@ -7,10 +7,10 @@ test("an invite for an email survives sign up and joins only that account to the
   baseURL,
 }, testInfo) => {
   const stamp = Date.now();
-  const guestEmail = `invite-guest-${stamp}@rakazo.test`;
-  const laterEmail = `invite-later-${stamp}@rakazo.test`;
+  const guestEmail = `invite-guest-${stamp}@tangow.test`;
+  const laterEmail = `invite-later-${stamp}@tangow.test`;
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-  await signup(page, `invite-owner-${stamp}@rakazo.test`, "password12", "Ada Owner");
+  await signup(page, `invite-owner-${stamp}@tangow.test`, "password12", "Ada Owner");
   await completeOnboarding(page);
 
   const settings = await openUserSettings(page, "space");
@@ -50,7 +50,7 @@ test("an invite for an email survives sign up and joins only that account to the
   };
 
   await guest.goto(inviteUrl);
-  await signUpOnSignIn(`invite-other-${stamp}@rakazo.test`, "Sam Other");
+  await signUpOnSignIn(`invite-other-${stamp}@tangow.test`, "Sam Other");
   await expect(guest.getByText(`This invite is for ${guestEmail}.`)).toBeVisible();
   await expect(guest.getByRole("button", { name: "Join", exact: true })).toHaveCount(0);
   await captureScreenshot(guest, testInfo, "invite-another-account");
@@ -68,7 +68,7 @@ test("an invite for an email survives sign up and joins only that account to the
   await guest.waitForURL(/\/(app|onboarding)/);
   const { spaceId: ownerSpaceId } = await rpc<{ spaceId: string }>(page, "me", undefined);
   await expect
-    .poll(() => guest.evaluate(() => window.localStorage.getItem("rakazo:space-id")))
+    .poll(() => guest.evaluate(() => window.localStorage.getItem("tangow:space-id")))
     .toBe(ownerSpaceId);
   await expect(guest.getByText("Family", { exact: true }).first()).toBeVisible();
 

@@ -159,7 +159,7 @@ export function useModelOAuthSignIn(options: {
         await browserAuth.open(started.verificationUri);
         if (controller.signal.aborted) return;
       } else {
-        window.open(started.verificationUri, "rakazo-model-oauth", "noopener,noreferrer");
+        window.open(started.verificationUri, "tangow-model-oauth", "noopener,noreferrer");
       }
       waitingForCode = started.mode === "auth-url";
       if (!waitingForCode) await finishSubscriptionSignIn(started.loginId, controller);

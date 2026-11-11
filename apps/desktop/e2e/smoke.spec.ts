@@ -24,7 +24,7 @@ test("launches with a narrow preload bridge and an isolated renderer", async () 
     await expect(page).toHaveTitle("Tangow desktop smoke");
 
     const renderer = await page.evaluate(async () => {
-      const desktop = (window as typeof window & { rakazoDesktop?: TangowDesktop }).rakazoDesktop;
+      const desktop = (window as typeof window & { tangowDesktop?: TangowDesktop }).tangowDesktop;
 
       return {
         bridgeKeys: desktop ? Object.keys(desktop).sort() : [],

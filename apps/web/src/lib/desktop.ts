@@ -4,12 +4,12 @@ export type { TangowDesktop, TangowDesktopOAuthCallback } from "@tangow/contract
 
 declare global {
   interface Window {
-    rakazoDesktop?: TangowDesktop;
+    tangowDesktop?: TangowDesktop;
   }
 }
 
 export function desktopBridge(): TangowDesktop | undefined {
-  return typeof window === "undefined" ? undefined : window.rakazoDesktop;
+  return typeof window === "undefined" ? undefined : window.tangowDesktop;
 }
 
 let pageHeadReads = 0;

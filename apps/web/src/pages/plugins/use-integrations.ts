@@ -201,7 +201,7 @@ export function useIntegrations({ activeBotId }: { activeBotId?: string }) {
         displayName: nextAccountLabel(item.name, existing.length),
       });
       if (started.authorizationUrl)
-        window.open(started.authorizationUrl, "rakazo-plugin-connect", "noopener,noreferrer");
+        window.open(started.authorizationUrl, "tangow-plugin-connect", "noopener,noreferrer");
       if (item.noAuth && !started.authorizationUrl) {
         if (controller.signal.aborted) return;
         setItemConnected(item, true);

@@ -12,7 +12,7 @@ async function editAndResend(row: Locator) {
 
 test("edit and resend rewinds the thread to the edited message", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `rewind-${stamp}@rakazo.test`, "password12", "Rewind User");
+  await signup(page, `rewind-${stamp}@tangow.test`, "password12", "Rewind User");
   await completeOnboarding(page);
 
   const firstText = `rewind-first-${stamp}`;

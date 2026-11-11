@@ -12,7 +12,7 @@ import { expect, test } from "./test";
 
 test("bot creation, editing, and deletion persist", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `bot-crud-${stamp}@rakazo.test`, "password12", "Bot CRUD");
+  await signup(page, `bot-crud-${stamp}@tangow.test`, "password12", "Bot CRUD");
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);
@@ -116,7 +116,7 @@ test("bot creation, editing, and deletion persist", async ({ page }, testInfo) =
   // The avatar at the top of the page looks toward the mouse wherever it is.
   const heroAvatar = botPage
     .getByTestId("bot-appearance-trigger")
-    .locator(".rakazo-organic-avatar");
+    .locator(".tangow-organic-avatar");
   const heroBox = await heroAvatar.boundingBox();
   if (!heroBox) throw new Error("the bot page avatar has no box");
   const gaze = () =>
@@ -263,7 +263,7 @@ test("an archived bot's page opens read-only from the archived list, and Restore
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `bot-archive-${stamp}@rakazo.test`, "password12", "Archive Owner");
+  await signup(page, `bot-archive-${stamp}@tangow.test`, "password12", "Archive Owner");
   await completeOnboarding(page);
   const scoutId = await createNamedBot(page, "Scout");
   const panel = page.getByTestId("side-panel");

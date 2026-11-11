@@ -9,7 +9,7 @@ function stateMessage(state: string) {
 }
 
 test("the bot screen says when it is connecting or reconnecting", async ({ page }, testInfo) => {
-  await signup(page, `screen-reconnect-${Date.now()}@rakazo.test`, "password12", "Screen Link");
+  await signup(page, `screen-reconnect-${Date.now()}@tangow.test`, "password12", "Screen Link");
   await completeOnboarding(page);
   const botId = activeBotId(page);
   await rpc(page, "computer/boot", { botId });
@@ -74,7 +74,7 @@ test("the bot screen says when it is connecting or reconnecting", async ({ page 
 
 test("a screen that gives up stays failed until Retry", async ({ page }, testInfo) => {
   await page.clock.install();
-  await signup(page, `screen-failed-${Date.now()}@rakazo.test`, "password12", "Screen Failed");
+  await signup(page, `screen-failed-${Date.now()}@tangow.test`, "password12", "Screen Failed");
   await completeOnboarding(page);
   const botId = activeBotId(page);
   await rpc(page, "computer/boot", { botId });

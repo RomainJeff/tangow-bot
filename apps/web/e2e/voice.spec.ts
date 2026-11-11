@@ -6,7 +6,7 @@ test("Providers connect a voice key, space Voice speaks a reply, and opens a cal
 }, testInfo) => {
   const stamp = Date.now();
   const userName = `Voice ${stamp}`;
-  await signup(page, `voice-${stamp}@rakazo.test`, "password12", userName);
+  await signup(page, `voice-${stamp}@tangow.test`, "password12", userName);
   await completeOnboarding(page);
 
   await expect(page.getByRole("button", { name: "Call", exact: true })).toHaveCount(0);

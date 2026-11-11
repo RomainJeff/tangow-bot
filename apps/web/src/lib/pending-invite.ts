@@ -1,4 +1,4 @@
-const PENDING_INVITE_KEY = "rakazo:pending-invite";
+const PENDING_INVITE_KEY = "tangow:pending-invite";
 
 /** localStorage, not sessionStorage: sign up's email verification opens a new tab. */
 export function pendingInvite(): string | null {

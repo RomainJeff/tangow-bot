@@ -100,7 +100,7 @@ describe("ui-web theme CSS matches the ui-tokens source", () => {
           expect(selector, block).not.toMatch(/-eyes\s*$/);
         }
       }
-      expect(block).toContain(".rakazo-bot-avatar-eyes-working");
+      expect(block).toContain(".tangow-bot-avatar-eyes-working");
     });
   });
 });

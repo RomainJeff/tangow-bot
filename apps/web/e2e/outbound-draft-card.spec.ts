@@ -185,7 +185,7 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await signup(
       page,
-      `outbound-draft-${width}-${Date.now()}@rakazo.test`,
+      `outbound-draft-${width}-${Date.now()}@tangow.test`,
       "password12",
       "Ana Lima",
     );
@@ -425,7 +425,7 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
     await signup(
       page,
-      `outbound-chat-${width}-${Date.now()}@rakazo.test`,
+      `outbound-chat-${width}-${Date.now()}@tangow.test`,
       "password12",
       "Ana Lima",
     );
@@ -481,7 +481,7 @@ test("an app without a catalog logo shows its bundled mark, or a neutral glyph, 
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await signup(page, `outbound-marks-${Date.now()}@rakazo.test`, "password12", "Ana Lima");
+  await signup(page, `outbound-marks-${Date.now()}@tangow.test`, "password12", "Ana Lima");
   await completeOnboarding(page);
   const botId = activeBotId(page);
   const drafts = waitingDraft(botId, card({}, { app: { name: "Gmail", logo: null } }));
@@ -517,7 +517,7 @@ test("a discard still reaches its own thread when the person moves to another on
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await signup(page, `outbound-draft-move-${Date.now()}@rakazo.test`, "password12", "Ana Lima");
+  await signup(page, `outbound-draft-move-${Date.now()}@tangow.test`, "password12", "Ana Lima");
   await completeOnboarding(page);
   const botId = activeBotId(page);
   const other = await rpc<{ id: string }>(page, "bots/create", {
@@ -565,7 +565,7 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await signup(
       page,
-      `outbound-fields-${width}-${Date.now()}@rakazo.test`,
+      `outbound-fields-${width}-${Date.now()}@tangow.test`,
       "password12",
       "Ana Lima",
     );
@@ -777,7 +777,7 @@ for (const width of [1440, 390]) {
 
 test("the card keeps its shape while a send is on its way", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await signup(page, `outbound-sending-${Date.now()}@rakazo.test`, "password12", "Ana Lima");
+  await signup(page, `outbound-sending-${Date.now()}@tangow.test`, "password12", "Ana Lima");
   await completeOnboarding(page);
   const botId = activeBotId(page);
   let release: () => void = () => undefined;
@@ -823,7 +823,7 @@ test("a sent card fits a 320 px screen without scrolling the thread sideways", a
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 320, height: 700 });
-  await signup(page, `outbound-narrow-${Date.now()}@rakazo.test`, "password12", "Ana Lima");
+  await signup(page, `outbound-narrow-${Date.now()}@tangow.test`, "password12", "Ana Lima");
   await completeOnboarding(page);
   const botId = activeBotId(page);
   await showThread(page, [...waitingDraft(botId), ...sentAfter(botId, "draft-card", BODY)], {
@@ -842,7 +842,7 @@ test("a sent card fits a 320 px screen without scrolling the thread sideways", a
 
 test("a full recipient line is a keyboard stop that starts editing", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await signup(page, `outbound-keys-${Date.now()}@rakazo.test`, "password12", "Ana Lima");
+  await signup(page, `outbound-keys-${Date.now()}@tangow.test`, "password12", "Ana Lima");
   await completeOnboarding(page);
   const botId = activeBotId(page);
   const oneTo = card(
@@ -874,7 +874,7 @@ test("a full recipient line is a keyboard stop that starts editing", async ({ pa
 
 test("a one-address line keeps what does not fit in its field, marked", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await signup(page, `outbound-one-${Date.now()}@rakazo.test`, "password12", "Ana Lima");
+  await signup(page, `outbound-one-${Date.now()}@tangow.test`, "password12", "Ana Lima");
   await completeOnboarding(page);
   const botId = activeBotId(page);
   const oneTo = card(
@@ -919,7 +919,7 @@ test.describe("the open card's shadow", () => {
 
   test("has room inside every ancestor that clips it", async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await signup(page, `outbound-shadow-${Date.now()}@rakazo.test`, "password12", "Ana Lima");
+    await signup(page, `outbound-shadow-${Date.now()}@tangow.test`, "password12", "Ana Lima");
     await completeOnboarding(page);
     await showThread(page, waitingDraft(activeBotId(page)), { run: null });
     const draftCard = page.getByTestId("draft-card");

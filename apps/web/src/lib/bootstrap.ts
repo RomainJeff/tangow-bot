@@ -7,7 +7,7 @@ let primedBootstrap: { botId?: string; promise: Promise<AppBootstrap> } | null =
 
 const initialTarget = initialBootstrapTarget(
   window.location.pathname,
-  Boolean(window.rakazoDesktop),
+  Boolean(window.tangowDesktop),
 );
 if (initialTarget) {
   const { botId } = initialTarget;

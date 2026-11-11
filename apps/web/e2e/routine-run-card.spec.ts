@@ -27,7 +27,7 @@ test("renders a routine run's words as a message in a sub-bot's own thread", asy
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `routine-run-card-${stamp}@rakazo.test`, "password12", "Routine Run Card");
+  await signup(page, `routine-run-card-${stamp}@tangow.test`, "password12", "Routine Run Card");
   await completeOnboarding(page);
   const orchestratorId = activeBotId(page);
 
@@ -103,7 +103,7 @@ test("renders a webhook-woken routine as a routine message, not a user message",
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `webhook-run-card-${stamp}@rakazo.test`, "password12", "Webhook Run Card");
+  await signup(page, `webhook-run-card-${stamp}@tangow.test`, "password12", "Webhook Run Card");
   await completeOnboarding(page);
   const botId = activeBotId(page);
 

@@ -14,7 +14,7 @@ async function createBot(page: Page, name: string) {
 
 test("create group from + and see two bots in one transcript", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `group-${stamp}@rakazo.test`, "password12", "Group E2E");
+  await signup(page, `group-${stamp}@tangow.test`, "password12", "Group E2E");
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);
@@ -92,10 +92,10 @@ test("create group from + and see two bots in one transcript", async ({ page }, 
     .locator("aside")
     .first()
     .getByRole("button", { name: /^Draft team/ })
-    .locator(".rakazo-group-avatar");
+    .locator(".tangow-group-avatar");
   await expect(groupAvatar).toBeVisible();
-  await expect(groupAvatar.locator(".rakazo-organic-avatar")).toHaveCount(2);
-  const workingAvatar = groupAvatar.locator('.rakazo-organic-avatar[data-working="true"]');
+  await expect(groupAvatar.locator(".tangow-organic-avatar")).toHaveCount(2);
+  const workingAvatar = groupAvatar.locator('.tangow-organic-avatar[data-working="true"]');
   await expect(workingAvatar).toHaveCount(1);
   await expect(workingAvatar).toHaveAttribute("data-working", "true");
   await captureScreenshot(page, testInfo, "group-avatar-active");

@@ -15,10 +15,10 @@ test("a group's creator adds a person, who writes in it and leaves", async ({
   baseURL,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `group-people-owner-${stamp}@rakazo.test`, "password12", "Ada Owner");
+  await signup(page, `group-people-owner-${stamp}@tangow.test`, "password12", "Ada Owner");
   await completeOnboarding(page);
   const { spaceId } = await rpc<{ spaceId: string }>(page, "me", undefined);
-  const guestEmail = `group-people-guest-${stamp}@rakazo.test`;
+  const guestEmail = `group-people-guest-${stamp}@tangow.test`;
   const inviteUrl = await inviteToSpace(page, spaceId, guestEmail);
   // Scout stays Ada's alone; Helper is shared with the Space.
   await createNamedBot(page, "Scout");

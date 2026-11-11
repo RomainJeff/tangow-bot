@@ -7,7 +7,7 @@ test("a background helper lets the bot answer at once, then report back unprompt
   page,
 }, testInfo) => {
   const desktop = page.viewportSize()!;
-  await signup(page, `background-helper-${Date.now()}@rakazo.test`, "password12", "Background");
+  await signup(page, `background-helper-${Date.now()}@tangow.test`, "password12", "Background");
   await completeOnboarding(page);
 
   const ask = "research Lisbon hotels in the background";

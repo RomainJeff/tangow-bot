@@ -4,7 +4,7 @@ import { threadEntries } from "./thread-log";
 
 test("shows peer chips in transcript and opens view-only peer chat", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `peer-msg-${stamp}@rakazo.test`, "password12", "Peer Msg");
+  await signup(page, `peer-msg-${stamp}@tangow.test`, "password12", "Peer Msg");
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);
@@ -53,8 +53,8 @@ test("shows peer chips in transcript and opens view-only peer chat", async ({ pa
   await expect(chip.getByText(/Messaged|Message from/)).toBeVisible();
   await expect(chip).toHaveAccessibleName(/Messaged Researcher|Message from Researcher/);
   // Both sides of the exchange: the bot whose thread this is, then its peer.
-  await expect(chip.locator(".rakazo-organic-avatar")).toHaveCount(2);
-  await expect(chip.locator(".rakazo-organic-avatar").first()).toBeVisible();
+  await expect(chip.locator(".tangow-organic-avatar")).toHaveCount(2);
+  await expect(chip.locator(".tangow-organic-avatar").first()).toBeVisible();
   await expect(chip).not.toContainText("{peer}");
   // User bubble still contains the phrase; peer body must not appear outside the chip.
   await expect(chip).not.toContainText("peer-exchange-alpha");

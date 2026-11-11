@@ -75,7 +75,7 @@ test("artifact widgets isolate scripts and network, retain links, and open in fu
   await inline.getByRole("button", { name: "Review checklist" }).click();
   await expect(inline.getByRole("button", { name: "Reviewed", exact: true })).toBeVisible();
   await page.evaluate(() => {
-    window.postMessage(JSON.stringify({ rakazoWidgetHeight: 1 }), "*");
+    window.postMessage(JSON.stringify({ tangowWidgetHeight: 1 }), "*");
     document.documentElement.dataset.theme = "dark";
   });
   await expect(inline.locator("html")).toHaveAttribute("data-theme", "dark");

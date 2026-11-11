@@ -20,7 +20,7 @@ type Frame = {
 
 /** Opens the scripted cities card after a few exchanges, so the thread scrolls. */
 async function openCard(page: Page, name: string) {
-  await signup(page, `${name}-${Date.now()}@rakazo.test`, "password12", "Ask Follow");
+  await signup(page, `${name}-${Date.now()}@tangow.test`, "password12", "Ask Follow");
   await completeOnboarding(page);
   const botId = activeBotId(page);
   for (let turn = 1; turn <= 3; turn++) {

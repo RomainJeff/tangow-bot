@@ -66,7 +66,7 @@ export function App() {
     ) : (
       <div
         className="grid h-full place-items-center text-muted-foreground/80"
-        data-rakazo-app-state="session-pending"
+        data-tangow-app-state="session-pending"
       >
         <Trans>Loading…</Trans>
       </div>
@@ -77,7 +77,7 @@ export function App() {
   const invite = user ? pendingInvite() : null;
   const afterAuth = (destination: string) => (invite ? invitePath(invite) : destination);
   return (
-    <div className="h-full" data-rakazo-app-state="ready">
+    <div className="h-full" data-tangow-app-state="ready">
       <Suspense fallback={<div className="h-full bg-background" />}>
         <Routes>
           <Route path="/" element={user ? <Navigate to="/app" replace /> : <WelcomePage />} />
@@ -205,7 +205,7 @@ function ShellSkeleton() {
   return (
     <div
       className="flex h-full overflow-hidden bg-background"
-      data-rakazo-app-state="session-pending"
+      data-tangow-app-state="session-pending"
     >
       <aside className="hidden w-sidebar shrink-0 bg-sidebar px-2.5 pt-header md:block">
         <div className="space-y-0.5">

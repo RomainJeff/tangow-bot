@@ -77,7 +77,7 @@ test("a bot's stacked consecutive messages in a group thread share one header", 
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `message-grouping-${stamp}@rakazo.test`, "password12", "Message Grouping");
+  await signup(page, `message-grouping-${stamp}@tangow.test`, "password12", "Message Grouping");
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);
@@ -106,7 +106,7 @@ test("a bot's stacked consecutive messages in a group thread share one header", 
   // The first message of the group keeps the shared header: a name, and an
   // avatar reserved at the group's foot (not its own row).
   await expect(g1.locator('[data-slot="message-row-author"]')).toHaveText("Chief");
-  await expect(g1.locator('[data-slot="message-row-avatar"] .rakazo-organic-avatar')).toHaveCount(
+  await expect(g1.locator('[data-slot="message-row-avatar"] .tangow-organic-avatar')).toHaveCount(
     0,
   );
 
@@ -121,7 +121,7 @@ test("a bot's stacked consecutive messages in a group thread share one header", 
       .locator('[data-message-id="g1"], [data-message-id="g2"], [data-message-id="g3"]')
       .locator('[data-slot="message-row-author"]'),
   ).toHaveCount(1);
-  await expect(g3.locator('[data-slot="message-row-avatar"] .rakazo-organic-avatar')).toHaveCount(
+  await expect(g3.locator('[data-slot="message-row-avatar"] .tangow-organic-avatar')).toHaveCount(
     1,
   );
 
@@ -145,7 +145,7 @@ test("two replies from two runs of the same bot group like two messages, nothing
   page,
 }) => {
   const stamp = Date.now();
-  await signup(page, `run-grouping-${stamp}@rakazo.test`, "password12", "Run Grouping");
+  await signup(page, `run-grouping-${stamp}@tangow.test`, "password12", "Run Grouping");
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);
@@ -176,9 +176,9 @@ test("two replies from two runs of the same bot group like two messages, nothing
   await expect(first.locator('[data-slot="message-row-author"]')).toHaveText("Chief");
   await expect(second.locator('[data-slot="message-row-author"]')).toHaveCount(0);
   await expect(
-    first.locator('[data-slot="message-row-avatar"] .rakazo-organic-avatar'),
+    first.locator('[data-slot="message-row-avatar"] .tangow-organic-avatar'),
   ).toHaveCount(0);
   await expect(
-    second.locator('[data-slot="message-row-avatar"] .rakazo-organic-avatar'),
+    second.locator('[data-slot="message-row-avatar"] .tangow-organic-avatar'),
   ).toHaveCount(1);
 });

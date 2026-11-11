@@ -25,7 +25,7 @@ describe("collaboration transcript markers", () => {
     expect(html).toContain('data-size="17"');
     // The button already carries the name; the stack stays decoration.
     expect(html).toContain('data-slot="stacked-avatars" data-size="17" aria-hidden="true"');
-    expect(html.match(/rakazo-organic-avatar/g)?.length).toBeGreaterThan(1);
+    expect(html.match(/tangow-organic-avatar/g)?.length).toBeGreaterThan(1);
     expect(html).toContain("Message from Research");
     expect(html).not.toContain("{peer}");
   });

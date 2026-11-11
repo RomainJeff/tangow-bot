@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
-contextBridge.exposeInMainWorld("rakazoDesktop", {
+contextBridge.exposeInMainWorld("tangowDesktop", {
   platform: process.platform,
   window: {
     close: () => ipcRenderer.invoke("desktop.window.close"),

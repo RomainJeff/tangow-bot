@@ -59,7 +59,7 @@ for (const mode of ["development", "preview"] as const) {
     let authorized = true;
     let assetAttempts = 0;
     test.beforeAll(async () => {
-      const root = await mkdtemp(path.join(tmpdir(), "rakazo-screen-test-"));
+      const root = await mkdtemp(path.join(tmpdir(), "tangow-screen-test-"));
       await mkdir(path.join(root, "dist"));
       const upstream = createHttpServer((req, res) => {
         // Even a listener explicitly requesting same-origin access cannot loosen the proxy policy.
