@@ -26,10 +26,10 @@ struct ShareSession {
 
   /// The keys the app writes with expo-secure-store (lib/api.ts, lib/session.ts, lib/access-store.ts).
   private enum Key {
-    static let session = "rakazo.session_token"
-    static let apiBase = "rakazo.api_base"
-    static let space = "rakazo.space_id"
-    static let access = "rakazo.cf_access"
+    static let session = "tangow.session_token"
+    static let apiBase = "tangow.api_base"
+    static let space = "tangow.space_id"
+    static let access = "tangow.cf_access"
   }
 
   /// The local server the app falls back to when the build sets none (lib/endpoint.ts).
@@ -43,7 +43,7 @@ struct ShareSession {
     let base = stored.isEmpty ? defaultBase : stored
     var headers = [
       "content-type": "application/json",
-      "origin": "rakazo://",
+      "origin": "tangow://",
       "authorization": "Bearer \(token)",
     ]
     if let space = Keychain.read(Key.space), !space.isEmpty { headers["x-tangow-space-id"] = space }

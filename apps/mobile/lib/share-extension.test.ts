@@ -16,10 +16,10 @@ describe("iOS share extension", () => {
   it("reads the session from the keychain keys the app writes", () => {
     const client = read("targets/share/ShareClient.swift");
     for (const [file, key] of [
-      ["lib/session.ts", "rakazo.session_token"],
-      ["lib/api.ts", "rakazo.api_base"],
-      ["lib/api.ts", "rakazo.space_id"],
-      ["lib/access-store.ts", "rakazo.cf_access"],
+      ["lib/session.ts", "tangow.session_token"],
+      ["lib/api.ts", "tangow.api_base"],
+      ["lib/api.ts", "tangow.space_id"],
+      ["lib/access-store.ts", "tangow.cf_access"],
     ] as const) {
       expect(read(file)).toContain(`"${key}"`);
       expect(client).toContain(`"${key}"`);

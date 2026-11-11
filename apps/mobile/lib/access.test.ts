@@ -58,13 +58,13 @@ describe("storage", () => {
   it("round-trips a token for its origin and clears it", async () => {
     expect(await saveAccess("https://app.example.com", TOKEN)).toBe(true);
     expect(setItemAsync).toHaveBeenCalledWith(
-      "rakazo.cf_access",
+      "tangow.cf_access",
       JSON.stringify({ ...TOKEN, origin: "https://app.example.com" }),
     );
     expect(cachedAccess()).toEqual({ ...TOKEN, origin: "https://app.example.com" });
 
     expect(await saveAccess("https://app.example.com", null)).toBe(true);
-    expect(deleteItemAsync).toHaveBeenCalledWith("rakazo.cf_access");
+    expect(deleteItemAsync).toHaveBeenCalledWith("tangow.cf_access");
     expect(cachedAccess()).toBeNull();
   });
 

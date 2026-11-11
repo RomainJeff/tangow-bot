@@ -232,9 +232,9 @@ class TangowNotificationService : Service() {
       .setStyle(Notification.BigTextStyle().bigText(copy.body))
       .setContentIntent(openApp(run))
       .addExtras(Bundle().apply {
-        putString("rakazo.spaceId", run.spaceId)
-        putString("rakazo.botId", run.botId)
-        putString("rakazo.threadId", run.threadId)
+        putString("tangow.spaceId", run.spaceId)
+        putString("tangow.botId", run.botId)
+        putString("tangow.threadId", run.threadId)
       })
       .setAutoCancel(true)
       .setCategory(Notification.CATEGORY_MESSAGE)
@@ -321,12 +321,12 @@ class TangowNotificationService : Service() {
 
   private fun openApp(run: RunRecord? = null): PendingIntent {
     val intent = if (run == null) {
-      packageManager.getLaunchIntentForPackage(packageName) ?: Intent(Intent.ACTION_VIEW, Uri.parse("rakazo://"))
+      packageManager.getLaunchIntentForPackage(packageName) ?: Intent(Intent.ACTION_VIEW, Uri.parse("tangow://"))
     } else {
       val destination = if (run.groupId != null) {
-        "rakazo://group-thread?groupId=${Uri.encode(run.groupId)}&name=${Uri.encode(run.groupName.orEmpty())}&spaceId=${Uri.encode(run.spaceId)}"
+        "tangow://group-thread?groupId=${Uri.encode(run.groupId)}&name=${Uri.encode(run.groupName.orEmpty())}&spaceId=${Uri.encode(run.spaceId)}"
       } else {
-        "rakazo://thread?botId=${Uri.encode(run.botId)}&name=${Uri.encode(run.botName)}&spaceId=${Uri.encode(run.spaceId)}"
+        "tangow://thread?botId=${Uri.encode(run.botId)}&name=${Uri.encode(run.botName)}&spaceId=${Uri.encode(run.spaceId)}"
       }
       Intent(
         Intent.ACTION_VIEW,
@@ -365,7 +365,7 @@ class TangowNotificationService : Service() {
     private const val ACTION_THREAD_CHANGED = "com.tangow.notifications.THREAD_CHANGED"
     private const val PROMOTED_ONGOING_EXTRA = "android.requestPromotedOngoing"
     private const val POLL_INTERVAL_MS = 8_000L
-    private const val STATE_PREFERENCES = "com.rakazo.notification_state"
+    private const val STATE_PREFERENCES = "com.tangow.notification_state"
     private const val SEEN_RUNS = "seen_runs"
     private const val SEEN_RUNS_SEEDED = "seen_runs_seeded"
     private const val SEEN_RUNS_SPACE_ID = "seen_runs_space_id"
@@ -423,10 +423,10 @@ private fun attentionCopy(run: RunRecord): NotificationCopy = when (run.status) 
 }
 
 private object Channels {
-  const val LIVE = "rakazo_live"
-  const val MESSAGES = "rakazo_messages"
-  const val SCHEDULED = "rakazo_scheduled"
-  const val ATTENTION = "rakazo_attention"
+  const val LIVE = "tangow_live"
+  const val MESSAGES = "tangow_messages"
+  const val SCHEDULED = "tangow_scheduled"
+  const val ATTENTION = "tangow_attention"
 }
 
 private fun runs(session: ApiSession, filter: String): List<RunRecord> {
@@ -490,7 +490,7 @@ private fun rpc(session: ApiSession, procedure: String, input: JSONObject): JSON
     connection.readTimeout = 15_000
     connection.doOutput = true
     connection.setRequestProperty("Content-Type", "application/json")
-    connection.setRequestProperty("Origin", "rakazo://")
+    connection.setRequestProperty("Origin", "tangow://")
     connection.setRequestProperty("Authorization", "Bearer ${session.token}")
     if (session.spaceId.isNotBlank()) {
       connection.setRequestProperty("x-tangow-space-id", session.spaceId)

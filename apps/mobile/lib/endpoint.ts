@@ -75,7 +75,7 @@ export async function probeApiBase(
         method: "POST",
         headers: {
           "content-type": "application/json",
-          origin: "rakazo://",
+          origin: "tangow://",
           ...accessHeaders(access),
         },
         body: JSON.stringify({ json: {} }),

@@ -139,7 +139,7 @@ internal class NotificationStorage(context: Context) {
     const val TOKEN = "token"
     const val ACCESS_ID = "access_client_id"
     const val ACCESS_SECRET = "access_client_secret"
-    const val KEY_ALIAS = "rakazo.notifications.session"
+    const val KEY_ALIAS = "tangow.notifications.session"
     const val TRANSFORMATION = "AES/GCM/NoPadding"
     const val IV_SIZE = 12
   }

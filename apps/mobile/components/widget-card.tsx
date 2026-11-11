@@ -72,7 +72,7 @@ function WidgetWebView({
   const [height, setHeight] = useState(192);
   const frame = useRef<WebView>(null);
   const [source] = useState(() => ({ html: buildWidgetDocument({ html, theme }) }));
-  const themeScript = `window.postMessage(${JSON.stringify({ rakazoWidgetTheme: theme })}, "*"); true;`;
+  const themeScript = `window.postMessage(${JSON.stringify({ tangowWidgetTheme: theme })}, "*"); true;`;
   useEffect(() => {
     frame.current?.injectJavaScript(themeScript);
   }, [themeScript]);

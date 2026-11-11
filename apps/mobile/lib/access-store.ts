@@ -1,7 +1,7 @@
 import * as SecureStore from "expo-secure-store";
 import { type AccessCredentials, accessHeaders, defaultAccess, type StoredAccess } from "./access";
 
-const ACCESS_KEY = "rakazo.cf_access";
+const ACCESS_KEY = "tangow.cf_access";
 
 let cached: StoredAccess | null = null;
 

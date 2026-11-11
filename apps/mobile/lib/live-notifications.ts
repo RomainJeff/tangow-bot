@@ -58,10 +58,10 @@ export function notificationTargetsThread(
   target: NotificationThreadTarget | null,
 ): boolean {
   if (!data || !target) return false;
-  const dataThreadId = data.threadId ?? data["rakazo.threadId"];
+  const dataThreadId = data.threadId ?? data["tangow.threadId"];
   if (target.threadId && dataThreadId) return dataThreadId === target.threadId;
   return Boolean(
-    target.botId && (data.botId === target.botId || data["rakazo.botId"] === target.botId),
+    target.botId && (data.botId === target.botId || data["tangow.botId"] === target.botId),
   );
 }
 

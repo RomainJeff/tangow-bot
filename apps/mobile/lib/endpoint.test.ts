@@ -24,9 +24,9 @@ describe("normalizeApiBase", () => {
       ok: true,
       url: "https://app.example.com",
     });
-    expect(normalizeApiBase("https://rakazo.example.com:8443/api/")).toEqual({
+    expect(normalizeApiBase("https://tangow.example.com:8443/api/")).toEqual({
       ok: true,
-      url: "https://rakazo.example.com:8443",
+      url: "https://tangow.example.com:8443",
     });
     expect(normalizeApiBase("http://192.168.1.20:3100/")).toEqual({
       ok: true,
@@ -74,7 +74,7 @@ describe("display and warnings", () => {
   });
 
   it("shows host and non-default port", () => {
-    expect(displayApiHost("https://rakazo.example.com")).toBe("rakazo.example.com");
+    expect(displayApiHost("https://tangow.example.com")).toBe("tangow.example.com");
     expect(displayApiHost("http://10.0.0.8:3100")).toBe("10.0.0.8:3100");
   });
 
@@ -90,7 +90,7 @@ describe("display and warnings", () => {
 
   it("treats the compile-time default as not custom", () => {
     expect(usesCustomApiBase(defaultApiBase())).toBe(false);
-    expect(usesCustomApiBase("https://rakazo.example.com")).toBe(true);
+    expect(usesCustomApiBase("https://tangow.example.com")).toBe(true);
   });
 });
 

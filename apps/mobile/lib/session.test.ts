@@ -32,8 +32,8 @@ describe("mobile session storage", () => {
     await saveSessionToken("secret-token");
     await clearSessionToken();
 
-    expect(SecureStore.setItemAsync).toHaveBeenCalledWith("rakazo.session_token", "secret-token");
-    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith("rakazo.session_token");
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith("tangow.session_token", "secret-token");
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith("tangow.session_token");
   });
 
   it("forgets unsaved bot drafts when the session is cleared", async () => {
@@ -46,7 +46,7 @@ describe("mobile session storage", () => {
   it("overwrites the token when SecureStore delete fails", async () => {
     vi.mocked(SecureStore.deleteItemAsync).mockRejectedValueOnce(new Error("device locked"));
     await expect(clearSessionToken()).resolves.toBe(true);
-    expect(SecureStore.setItemAsync).toHaveBeenCalledWith("rakazo.session_token", "");
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith("tangow.session_token", "");
   });
 
   it("invalidates the in-memory session when SecureStore cannot clear the token", async () => {
@@ -66,8 +66,8 @@ describe("mobile session storage", () => {
     await expect(loadSessionToken()).resolves.toBe("");
 
     expect(SecureStore.getItemAsync).toHaveBeenCalledTimes(2);
-    expect(SecureStore.getItemAsync).toHaveBeenNthCalledWith(1, "rakazo.session_token");
-    expect(SecureStore.getItemAsync).toHaveBeenNthCalledWith(2, "rakazo.session_token");
+    expect(SecureStore.getItemAsync).toHaveBeenNthCalledWith(1, "tangow.session_token");
+    expect(SecureStore.getItemAsync).toHaveBeenNthCalledWith(2, "tangow.session_token");
   });
 
   it("restores the active session in memory when persistence is unavailable", async () => {

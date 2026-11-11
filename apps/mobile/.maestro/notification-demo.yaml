@@ -30,12 +30,12 @@ name: Android live working status demonstration
 
 # Only the public demo is recorded; sign-in uses disposable fixture credentials.
 - startRecording: ${TANGOW_NOTIFICATION_VIDEO}
-- openLink: "rakazo:///account"
+- openLink: "tangow:///account"
 - scrollUntilVisible:
     element: "Live working status"
     direction: DOWN
 - tapOn: "Live working status"
-- openLink: "rakazo:///thread?botId=${TANGOW_SCREENSHOT_BOT_ID}&name=Researcher"
+- openLink: "tangow:///thread?botId=${TANGOW_SCREENSHOT_BOT_ID}&name=Researcher"
 - extendedWaitUntil:
     visible: "Message Researcher"
     timeout: 10000
@@ -69,7 +69,7 @@ name: Android live working status demonstration
 - extendedWaitUntil:
     notVisible: "Stop"
     timeout: 30000
-- openLink: "rakazo:///account"
+- openLink: "tangow:///account"
 - scrollUntilVisible:
     element: "Live working status"
     direction: DOWN
