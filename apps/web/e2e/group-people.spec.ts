@@ -92,18 +92,23 @@ test("a group's creator adds a person, who writes in it and leaves", async ({
   await captureScreenshot(page, testInfo, "group-people-thread-phone");
   await page.setViewportSize({ width: 1280, height: 720 });
 
-  // Grace sees who is in it, changes nothing, and leaves.
+  // Grace sees who is in it and changes nothing, then leaves from the sidebar once she confirms.
   await guest.getByTestId("bot-settings-trigger").click();
   const guestPanel = guest.getByTestId("side-panel");
   await expect(guestPanel.getByText("Ada Owner", { exact: true })).toBeVisible();
   await expect(guestPanel.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
-  await guestPanel.getByRole("button", { name: "Leave group", exact: true }).click();
+  await guest.keyboard.press("Escape");
+  const guestRow = guest
+    .locator("aside")
+    .first()
+    .getByRole("button", { name: /^Launch crew/ });
+  await guestRow.click({ button: "right" });
+  await guest.getByRole("menuitem", { name: "Leave group" }).click();
+  const confirm = guest.getByRole("alertdialog", { name: "Leave Launch crew?" });
+  await expect(confirm).toBeVisible();
+  await captureScreenshot(guest, testInfo, "group-leave-confirm");
+  await confirm.getByRole("button", { name: "Leave", exact: true }).click();
   await guest.waitForURL(/\/app\/(?!g\/)[^/]+$/);
-  await expect(
-    guest
-      .locator("aside")
-      .first()
-      .getByRole("button", { name: /^Launch crew/ }),
-  ).toHaveCount(0);
+  await expect(guestRow).toHaveCount(0);
   await guestContext.close();
 });

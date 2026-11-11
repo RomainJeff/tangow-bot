@@ -474,3 +474,52 @@ export function DeleteItemDialog({
     </AlertDialog>
   );
 }
+
+export function LeaveGroupDialog({
+  group,
+  onCancel,
+  onConfirm,
+}: {
+  group: { name: string };
+  onCancel: () => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const { t } = useLingui();
+  const [leaving, setLeaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <AlertDialog open onOpenChange={closeUnlessBusy(leaving, onCancel)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="break-words">
+            <Trans>Leave {group.name}?</Trans>
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            <Trans>Only its creator can add you back.</Trans>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {error ? <p className="text-[13.5px] text-destructive">{error}</p> : null}
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={leaving}>
+            <Trans>Cancel</Trans>
+          </AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            disabled={leaving}
+            onClick={() => {
+              setLeaving(true);
+              setError(null);
+              void onConfirm().catch((err: unknown) => {
+                setError(err instanceof Error ? err.message : t`Could not leave group`);
+                setLeaving(false);
+              });
+            }}
+          >
+            {leaving ? <Trans>Leaving…</Trans> : <Trans>Leave</Trans>}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}

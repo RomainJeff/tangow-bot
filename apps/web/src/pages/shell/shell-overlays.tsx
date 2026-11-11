@@ -15,6 +15,7 @@ import {
   ClearConversationDialog,
   DeleteBotDialog,
   DeleteItemDialog,
+  LeaveGroupDialog,
   NewBotSectionDialog,
   NewSpaceDialog,
   PickerInfoDialog,
@@ -92,6 +93,7 @@ export function ShellOverlays({
   const { sectionMenu, setSectionMenu, closeSectionMenu } = overlays;
   const { deleteTarget, setDeleteTarget, deleteGroupTarget, setDeleteGroupTarget } = overlays;
   const { deleteSpaceTarget, setDeleteSpaceTarget, clearTarget, setClearTarget } = overlays;
+  const { leaveGroupTarget, setLeaveGroupTarget } = overlays;
   const { shareTarget, setShareTarget } = overlays;
   const { newSectionTarget, setNewSectionTarget } = overlays;
   const { renameSectionTarget, setRenameSectionTarget } = overlays;
@@ -245,9 +247,7 @@ export function ShellOverlays({
                 ? undefined
                 : () => {
                     setBotMenu(null);
-                    void rpc.groups
-                      .leave({ groupId: contextGroup!.id })
-                      .then(() => refreshBots(true));
+                    setLeaveGroupTarget(contextGroup!);
                   }
             }
           />
@@ -323,6 +323,19 @@ export function ShellOverlays({
             onConfirm={async () => {
               await rpc.groups.remove({ groupId: deleteGroupTarget.id });
               setDeleteGroupTarget(null);
+              setPanel(null);
+              await refreshBots(true);
+            }}
+          />
+        ) : null}
+
+        {leaveGroupTarget ? (
+          <LeaveGroupDialog
+            group={leaveGroupTarget}
+            onCancel={() => setLeaveGroupTarget(null)}
+            onConfirm={async () => {
+              await rpc.groups.leave({ groupId: leaveGroupTarget.id });
+              setLeaveGroupTarget(null);
               setPanel(null);
               await refreshBots(true);
             }}
