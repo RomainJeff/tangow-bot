@@ -4,6 +4,7 @@ import type {
   ComputerMode,
   EntryId,
   Group,
+  GroupPerson,
   Me,
   ModelCatalogEntry,
   ModelCredential,
@@ -827,6 +828,8 @@ export type MobileSnapshot = {
   run: MobileRun | null;
   activeRuns?: MobileRun[];
   members?: MobileGroup["members"];
+  /** A group's people, and those who wrote in it before leaving, for each message's author. */
+  people?: GroupPerson[];
   computer?: {
     state: string;
     controlHolder: string;
