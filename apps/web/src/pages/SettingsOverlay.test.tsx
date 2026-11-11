@@ -84,9 +84,11 @@ it("opens a phone on the section list and pushes then pops a section", async () 
   await act(async () => byTestId("settings-list-updates")?.click());
   expect(title()).toBe("Updates");
   expect(document.body.textContent).toContain("updates body");
+  expect(document.activeElement).toBe(backButton());
 
   await act(async () => backButton()?.click());
   expect(title()).toBe("Settings");
+  expect(document.activeElement).toBe(byTestId("settings-list-updates"));
   await close();
 });
 

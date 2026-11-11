@@ -86,8 +86,12 @@ it("opens a phone on the list of sections and returns to it from a section", asy
   expect(title()).toBe("Skills");
 
   const back = [...document.querySelectorAll("button")].find((b) => b.textContent === "Customize");
+  expect(document.activeElement).toBe(back);
   await act(async () => back?.click());
   expect(title()).toBe("Customize");
+  expect(document.activeElement).toBe(
+    document.querySelector('[data-testid="customize-list-skills"]'),
+  );
 
   await act(async () => root.unmount());
   container.remove();

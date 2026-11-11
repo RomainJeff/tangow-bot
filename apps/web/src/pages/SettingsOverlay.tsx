@@ -2,6 +2,7 @@ import { useLingui } from "@lingui/react/macro";
 import type { AvatarStyle, ComputerListItem, SpaceMemoryConfig } from "@tangow/contracts";
 import {
   Button,
+  cn,
   Dialog,
   DialogClose,
   DialogContent,
@@ -47,6 +48,7 @@ import {
 } from "./settings-sections";
 import { PHONE_MEDIA } from "./shell/layout";
 import { UsageSettingsPanel } from "./usage-settings";
+import { usePushedFocus } from "./use-pushed-focus";
 import { VoiceSettingsOverlay } from "./VoiceSettingsOverlay";
 
 type NavItem = {
@@ -129,6 +131,8 @@ export function SettingsOverlay({
       usageRef.current?.focus();
     }
   }, [section]);
+
+  const back = usePushedFocus(section, panelRef);
 
   const navItems: Record<SettingsSection, NavItem> = {
     profile: { label: t`Profile`, icon: UserRound },
@@ -257,13 +261,21 @@ export function SettingsOverlay({
           )}
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            {phone && section ? (
-              <div className="flex shrink-0 items-center justify-between gap-1 px-2.5 pt-2.5">
-                <BackCapsule
-                  label={t`Settings`}
-                  disabled={panelBusy}
-                  onClick={() => setSection(null)}
-                />
+            {phone ? (
+              <div
+                className={cn(
+                  "box-content flex h-capsule shrink-0 items-center justify-between gap-1 px-2.5 pt-2.5",
+                  !section && "justify-end",
+                )}
+              >
+                {section ? (
+                  <BackCapsule
+                    ref={back}
+                    label={t`Settings`}
+                    disabled={panelBusy}
+                    onClick={() => setSection(null)}
+                  />
+                ) : null}
                 {closeButton}
               </div>
             ) : null}
@@ -271,7 +283,7 @@ export function SettingsOverlay({
               <DialogTitle className="text-2xl font-medium text-foreground">
                 {sectionTitle}
               </DialogTitle>
-              {phone && section ? null : closeButton}
+              {phone ? null : closeButton}
             </div>
 
             <div
@@ -421,6 +433,7 @@ function SettingsList({
         <SettingRow
           key={id}
           data-testid={`settings-list-${id}`}
+          data-opens={id}
           leading={<Icon className="size-4 text-muted-foreground" strokeWidth={1.75} />}
           label={label}
           value={updateAvailable ? <UpdateAvailableIcon /> : undefined}

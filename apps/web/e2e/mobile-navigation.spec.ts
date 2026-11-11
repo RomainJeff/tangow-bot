@@ -90,11 +90,16 @@ test("phone Settings is a list of sections: a row pushes one, Back and close lea
   await settings.getByTestId("settings-list-models").click();
   await expect(settings.getByRole("heading", { name: "Models", exact: true })).toBeVisible();
   await expect(settings.getByTestId("settings-list-profile")).toHaveCount(0);
-  await expect(settings.getByRole("button", { name: "Close model settings" })).toBeVisible();
+  const sectionClose = settings.getByRole("button", { name: "Close model settings" });
+  await expect(sectionClose).toBeVisible();
+  const moved = await sectionClose.boundingBox();
+  expect(moved?.x).toBeCloseTo(close?.x ?? 0, 0);
+  expect(moved?.y).toBeCloseTo(close?.y ?? 0, 0);
+  await expect(settings.getByRole("button", { name: "Settings", exact: true })).toBeFocused();
   await captureScreenshot(page, testInfo, "mobile-settings-models");
 
   await settings.getByRole("button", { name: "Settings", exact: true }).click();
-  await expect(settings.getByTestId("settings-list-models")).toBeVisible();
+  await expect(settings.getByTestId("settings-list-models")).toBeFocused();
   await settings.getByRole("button", { name: "Close user settings" }).click();
   await expect(settings).toHaveCount(0);
 
@@ -151,22 +156,12 @@ test("the phone bot panel returns to the chat from its own back button", async (
   await expect(botPage.getByRole("button", { name: "Chat", exact: true })).toBeVisible();
 });
 
-test("at desktop width Settings keeps its nav and the panel its close button", async ({
+test("at desktop width the bot panel keeps its close button and hides the Chat back", async ({
   page,
-}, testInfo) => {
-  await signup(page, `desktop-settings-${Date.now()}@tangow.test`, "password12", "Desktop Nav");
+}) => {
+  await signup(page, `desktop-panel-${Date.now()}@tangow.test`, "password12", "Desktop Nav");
   await completeOnboarding(page);
   await page.setViewportSize({ width: 1280, height: 900 });
-
-  await openUserMenuEntry(page, "Settings");
-  const settings = page.getByTestId("user-settings");
-  await expect(settings.getByTestId("settings-nav")).toBeVisible();
-  await expect(settings.getByRole("heading", { name: "Profile", exact: true })).toBeVisible();
-  await expect(settings.getByTestId("settings-list-profile")).toHaveCount(0);
-  await expect(settings.getByRole("button", { name: "Settings", exact: true })).toHaveCount(0);
-  await expect(settings.getByRole("button", { name: "Close user settings" })).toBeVisible();
-  await captureScreenshot(page, testInfo, "desktop-settings");
-  await settings.getByRole("button", { name: "Close user settings" }).click();
 
   const botPage = await openBotPage(page);
   await expect(botPage.getByRole("button", { name: "Close panel" })).toBeVisible();

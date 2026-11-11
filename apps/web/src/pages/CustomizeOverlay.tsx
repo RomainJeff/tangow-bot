@@ -1,6 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
   Button,
+  cn,
   Dialog,
   DialogClose,
   DialogContent,
@@ -9,13 +10,14 @@ import {
   SettingRow,
 } from "@tangow/ui-web";
 import { Puzzle, Sparkles, X } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMediaQuery } from "../lib/use-media-query";
 import { BackCapsule } from "./BackCapsule";
 import { SettingsGroup } from "./bot-page/page-kit";
 import { PluginsOverlay } from "./PluginsOverlay";
 import { SkillsOverlay } from "./SkillsOverlay";
 import { PHONE_MEDIA } from "./shell/layout";
+import { usePushedFocus } from "./use-pushed-focus";
 
 export type CustomizeSection = "integrations" | "skills";
 
@@ -71,6 +73,7 @@ function CustomizeList({ onSelect }: { onSelect: (section: CustomizeSection) => 
           <SettingRow
             key={id}
             data-testid={`customize-list-${id}`}
+            data-opens={id}
             leading={<Icon className="size-4 text-muted-foreground" strokeWidth={1.75} />}
             label={label}
             chevron
@@ -103,6 +106,8 @@ export function CustomizeOverlay({
   const [chosen, setChosen] = useState<CustomizeSection | null>(phone ? null : "integrations");
   // A phone shows the list of sections until one is chosen; a window always shows one.
   const section = phone ? chosen : (chosen ?? "integrations");
+  const panelRef = useRef<HTMLDivElement>(null);
+  const back = usePushedFocus(section, panelRef);
   const [skillsVisited, setSkillsVisited] = useState(false);
   const selectSection = (next: CustomizeSection) => {
     setChosen(next);
@@ -140,14 +145,22 @@ export function CustomizeOverlay({
     >
       <DialogContent
         variant="window"
+        ref={panelRef}
         showCloseButton={false}
         className="flex h-[760px] max-h-[calc(100%-2rem)] w-[min(1080px,calc(100%-2rem))] max-w-[calc(100%-2rem)] flex-row gap-0 overflow-hidden p-0 max-md:flex-col sm:max-w-[1080px]"
       >
         {section && !phone ? <CustomizeNav section={section} onSelect={selectSection} /> : null}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          {phone && section ? (
-            <div className="flex shrink-0 items-center justify-between gap-1 px-2.5 pt-2.5">
-              <BackCapsule label={t`Customize`} onClick={() => setChosen(null)} />
+          {phone ? (
+            <div
+              className={cn(
+                "box-content flex h-capsule shrink-0 items-center justify-between gap-1 px-2.5 pt-2.5",
+                !section && "justify-end",
+              )}
+            >
+              {section ? (
+                <BackCapsule ref={back} label={t`Customize`} onClick={() => setChosen(null)} />
+              ) : null}
               {closeButton}
             </div>
           ) : null}
@@ -161,7 +174,7 @@ export function CustomizeOverlay({
                 <Trans>Skills</Trans>
               )}
             </DialogTitle>
-            {phone && section ? null : closeButton}
+            {phone ? null : closeButton}
           </DialogHeader>
           {section === null ? <CustomizeList onSelect={selectSection} /> : null}
           <div className={sectionClass("integrations")}>
