@@ -62,6 +62,16 @@ test("a group's creator adds a person, who writes in it and leaves", async ({
   await composer.press("Enter");
   const transcript = page.getByTestId("transcript");
   await expect(transcript.getByText("Kickoff is at noon.", { exact: true })).toBeVisible();
+  // The sidebar's group avatar shows Grace beside the bots.
+  await captureScreenshot(page, testInfo, "group-sidebar-people");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("link", { name: "Back" }).click();
+  const phoneList = page.getByTestId("bots-sidebar");
+  await expect(phoneList).toBeVisible();
+  await captureScreenshot(page, testInfo, "group-sidebar-people-phone");
+  await phoneList.getByRole("button", { name: /^Launch crew/ }).click();
+  await page.waitForURL(/\/app\/g\/[^/]+$/);
+  await page.setViewportSize({ width: 1280, height: 720 });
 
   // The group is in Grace's own sidebar, and Ada's message carries her name.
   await guest.reload();
