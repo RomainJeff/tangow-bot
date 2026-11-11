@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-11-12
+
+#### Changed
+
+- In a phone browser, buttons, menus and fields are now sized for a finger: icon buttons take a 44-point tap without stealing their neighbour's, menu rows are taller, settings windows fill the screen up to tablet width, and tapping a field no longer zooms the page.
+
 ### 2026-11-11
 
 #### Added
