@@ -2625,6 +2625,7 @@ describe("clearThread", () => {
       sessionEntry: { findMany: vi.fn().mockResolvedValue([]) },
       event: { deleteMany: vi.fn() },
       chatGroup: { update: vi.fn() },
+      chatGroupPerson: { count: vi.fn().mockResolvedValue(1) },
     };
     const prisma = {
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),

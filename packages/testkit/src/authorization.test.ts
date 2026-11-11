@@ -2124,6 +2124,35 @@ describeWithDatabase("API authorization and resource isolation", () => {
     await expect(call(dana.cookie, "computer/takeover")).resolves.toMatchObject({ status: 200 });
   });
 
+  it("keeps a group's history once it has several people: nobody clears or rewinds it", async () => {
+    const { owner, space, dana, bot } = await sharedBotSpace("group-history");
+    const group = await rpc<{ id: string }>(
+      app,
+      owner,
+      "groups/create",
+      { name: "Crew", botIds: [bot.id], userIds: [dana.userId] },
+      space,
+    );
+    await rpc(app, owner, "threads/send", { groupId: group.id, text: "Plan the week" }, space);
+    const message = await handles.prisma.sessionEntry.findFirstOrThrow({
+      where: { session: { thread: { groupId: group.id } }, type: "user.message" },
+      select: { id: true },
+    });
+
+    for (const cookie of [owner, dana.cookie]) {
+      await expect(
+        raw(app, cookie, "threads/clear", { groupId: group.id }, space),
+      ).resolves.toMatchObject({ status: 403 });
+      await expect(
+        raw(app, cookie, "threads/rewind", { groupId: group.id, messageId: message.id }, space),
+      ).resolves.toMatchObject({ status: 403 });
+    }
+    await rpc(app, owner, "groups/update", { groupId: group.id, userIds: [] }, space);
+    await expect(rpc(app, owner, "threads/clear", { groupId: group.id }, space)).resolves.toEqual({
+      ok: true,
+    });
+  });
+
   it("lets only a run's person answer its cards in a group", async () => {
     const { owner, space, dana, bot } = await sharedBotSpace("group-answer");
     const group = await rpc<{ id: string }>(

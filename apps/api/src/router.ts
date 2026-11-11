@@ -169,6 +169,7 @@ import {
   removeSpaceMember,
   renewSpaceDeletionClaim,
   revokeSpaceInvitation,
+  SharedGroupHistoryError,
   SPACE_DELETION_CLAIM_TIMEOUT_MS,
   SpaceDeletionInProgressError,
   SpaceInvitationUnavailableError,
@@ -1812,13 +1813,15 @@ export function createRouter(deps: RouterDeps) {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
         const contextBotId = target.kind === "bot" ? target.botId : target.memberBotIds[0];
         if (!contextBotId) throw new IsolationError();
-        const { cancelledRunIds, historyGeneration } = await deps.events.clearThread({
-          spaceId: context.actor.spaceId,
-          threadId: target.threadId,
-          botId: contextBotId,
-          userId: context.actor.userId,
-          ...(target.kind === "group" ? { groupId: target.groupId } : {}),
-        });
+        const { cancelledRunIds, historyGeneration } = await deps.events
+          .clearThread({
+            spaceId: context.actor.spaceId,
+            threadId: target.threadId,
+            botId: contextBotId,
+            userId: context.actor.userId,
+            ...(target.kind === "group" ? { groupId: target.groupId } : {}),
+          })
+          .catch(refuseSharedGroupHistory);
         await Promise.all(
           cancelledRunIds.map((runId) => deps.jobs.cancel(runJobKey(runId)).catch(() => undefined)),
         );
@@ -1844,14 +1847,16 @@ export function createRouter(deps: RouterDeps) {
         if (message.type !== "user.message") {
           throw new ORPCError("BAD_REQUEST", { message: "Only your own messages can be edited" });
         }
-        const rewound = await deps.events.rewindThread({
-          spaceId: context.actor.spaceId,
-          threadId: target.threadId,
-          botId: contextBotId,
-          userId: context.actor.userId,
-          messageId: input.messageId,
-          ...(target.kind === "group" ? { groupId: target.groupId } : {}),
-        });
+        const rewound = await deps.events
+          .rewindThread({
+            spaceId: context.actor.spaceId,
+            threadId: target.threadId,
+            botId: contextBotId,
+            userId: context.actor.userId,
+            messageId: input.messageId,
+            ...(target.kind === "group" ? { groupId: target.groupId } : {}),
+          })
+          .catch(refuseSharedGroupHistory);
         if (!rewound) throw new ORPCError("NOT_FOUND", { message: "Message not found" });
         await Promise.all(
           rewound.cancelledRunIds.map((runId) =>
@@ -5451,6 +5456,12 @@ async function computerStatus(
  * The bot whose computer the actor reaches: their own, or a bot shared with them (`memberId`),
  * whose computer they reach only for their own run's screen. Everything else stays the owner's.
  */
+/** Clearing or rewinding a group of several people is refused: its history is theirs too. */
+function refuseSharedGroupHistory(error: unknown): never {
+  if (error instanceof SharedGroupHistoryError) throw new ORPCError("FORBIDDEN");
+  throw error;
+}
+
 async function computerBot(deps: RouterDeps, actor: Actor, botId: string) {
   const owned = await createRepos(deps.prisma)
     .getBot(actor, botId)

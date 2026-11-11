@@ -393,6 +393,14 @@ interface TruncateThreadResult {
   cancelledRunIds: string[];
 }
 
+/** A group with more than one person keeps its history: nobody clears it or rewinds it. */
+export class SharedGroupHistoryError extends Error {
+  constructor() {
+    super("A group's history is shared by its people");
+    this.name = "SharedGroupHistoryError";
+  }
+}
+
 /**
  * Shared by clearThread (cut at zero) and rewindThread (cut at a message): stop the thread's
  * work, release its computer, and drop the feed at or after the cut. The entry that cuts the
@@ -417,6 +425,12 @@ async function truncateThreadInTransaction(
     data: input.groupId ? {} : { unread: false },
     select: { sessionId: true },
   });
+  if (
+    input.groupId &&
+    (await tx.chatGroupPerson.count({ where: { groupId: input.groupId } })) > 1
+  ) {
+    throw new SharedGroupHistoryError();
+  }
   if (input.groupId && input.userId) {
     await tx.chatGroupPerson.updateMany({
       where: { groupId: input.groupId, userId: input.userId },
