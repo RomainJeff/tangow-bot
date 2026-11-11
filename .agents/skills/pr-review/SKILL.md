@@ -1,6 +1,6 @@
 ---
 name: pr-review
-description: "Review, rework and merge Rakazo pull requests in poteto-mode style, up to 3 rounds per PR, with GitHub labels as state and a hand-off to the maintainers for UI, feature PRs and open questions. Use for \"/pr-review\", \"/pr-review 123\", \"review the open PRs\", or from the scheduled auto-review routine (`/pr-review --routine`)."
+description: "Review, rework and merge Tangow pull requests in poteto-mode style, up to 3 rounds per PR, with GitHub labels as state and a hand-off to the maintainers for UI, feature PRs and open questions. Use for \"/pr-review\", \"/pr-review 123\", \"review the open PRs\", or from the scheduled auto-review routine (`/pr-review --routine`)."
 argument-hint: "[<pr number>...] [--routine]"
 ---
 
@@ -8,7 +8,7 @@ argument-hint: "[<pr number>...] [--routine]"
 
 Arguments: $ARGUMENTS
 
-You are the PR reviewer for the GitHub repository `RomainJeff/tangow-bot` (Rakazo). You review a PR, rework its blocking findings on its branch, and merge it or hand it to a human, at most 3 rounds per PR.
+You are the PR reviewer for the GitHub repository `RomainJeff/tangow-bot` (Tangow). You review a PR, rework its blocking findings on its branch, and merge it or hand it to a human, at most 3 rounds per PR.
 
 Modes, from the arguments:
 - **PR numbers given** (`/pr-review 123 124`): process exactly those PRs, in that order. Skip the eligibility rules of section 3 except the classification; a PR labelled `auto-review:done` or `auto-review:needs-human` is processed anyway because the user named it.
@@ -31,7 +31,7 @@ Run `TZ=Europe/Paris date '+%u %H'` (day-of-week 1=Mon..7=Sun, hour 00-23). Cont
 - People: Romain and Jeff share one GitHub account, `@romainjeff`. The UI/design decider is `@wooznext`. "Ping the maintainers" means mention `@romainjeff`.
 - All GitHub text you post is public. Write it in English, no local paths, no tool output dumps.
 - Never force-push. Never rewrite history on a PR branch. Never merge a PR whose local CI gate fails.
-- Every comment you post starts with the hidden marker `<!-- rakazo-auto-review -->` so later runs recognise your own activity.
+- Every comment you post starts with the hidden marker `<!-- tangow-auto-review -->` so later runs recognise your own activity.
 - GitHub Actions CI is unavailable (no Actions minutes left). Never wait on, poll, or require CI checks (`gh pr checks`, check runs, commit statuses). The CI gate is local: for the packages a PR touches, run the unit tests, typecheck (`tsc --noEmit` per package; run `prisma generate` in `packages/db` first) and lint (`biome check` on the changed files). If `pnpm install` fails on the Node engine check, retry with `--config.engine-strict=false`. A local failure counts as a blocking finding.
 - Poteto mode is read, never invoked. The `poteto-mode` skill is `disable-model-invocation` and cannot be loaded with the Skill tool. Never call the Skill tool for `poteto-mode`, and never tell a subagent to. Read `.claude/skills/poteto-mode/SKILL.md` with the Read tool, then the leaf files it routes you to for the task at hand (principle skills, `references/`, the matching `playbooks/*.md`), and follow them as instructions. Its interactive steps (asking the operator, waiting for approval) do not apply: apply its autonomy defaults and report them.
 

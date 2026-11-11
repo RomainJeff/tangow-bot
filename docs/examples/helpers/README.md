@@ -29,7 +29,7 @@ interface HelperProfile {
 - `name` is what `run_subagent` passes as `helper`. The bot reads `name` and `description` in its
   `<available_helpers>` list, which names a profile only when it allows one of the bot's tools
   other than `search_runs` and `ask_parent`.
-- A helper gets every tool its harness runs itself, plus the Rakazo tools `allow` names, minus
+- A helper gets every tool its harness runs itself, plus the Tangow tools `allow` names, minus
   what `block` names. A name ending in `*` is a prefix.
 - `exclusive` holds a resource for the helper's whole run. A second helper of the same bot that
   needs it is refused until the first one ends.
@@ -79,7 +79,7 @@ The two examples:
 
    Paste the two objects from `packages/testkit/src/helper-profiles.fixture.ts` above the
    registry.
-2. Start Rakazo with `pnpm dev` and open a bot that runs on a worker.
+2. Start Tangow with `pnpm dev` and open a bot that runs on a worker.
 3. Send the bot the contents of `parallel-research/SKILL.md` and ask it to save it as a skill.
 4. Ask for something long, such as "Compare three hotels in Alfama for June, with prices and
    reviews". The bot says it started, and its answer arrives on its own once the researcher is

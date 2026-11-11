@@ -8,9 +8,9 @@
   "scenes": [
     {
       "type": "title",
-      "kicker": "rakazo-bot · Architecture",
+      "kicker": "tangow-bot · Architecture",
       "title": "Agent and computer, *apart*",
-      "vo": "Rakazo keeps the agent and its computer apart. The agent thinks in one place, and acts on a machine somewhere else."
+      "vo": "Tangow keeps the agent and its computer apart. The agent thinks in one place, and acts on a machine somewhere else."
     },
     {
       "type": "diagram",
@@ -21,7 +21,7 @@
           "y": 290,
           "w": 880,
           "h": 620,
-          "label": "Rakazo API"
+          "label": "Tangow API"
         },
         {
           "x": 1070,
@@ -115,7 +115,7 @@
           ]
         }
       ],
-      "vo": "Pi runs inside the Rakazo process and calls ordinary tools. Every tool goes through one boundary, the sandbox provider, which drives a Linux desktop."
+      "vo": "Pi runs inside the Tangow process and calls ordinary tools. Every tool goes through one boundary, the sandbox provider, which drives a Linux desktop."
     },
     {
       "type": "diagram",
@@ -210,7 +210,7 @@
           "y": 330,
           "w": 700,
           "h": 620,
-          "label": "Rakazo-owned"
+          "label": "Tangow-owned"
         }
       ],
       "nodes": {
@@ -271,7 +271,7 @@
           }
         }
       ],
-      "vo": "At the end of a run, on stop, or when idle, the workspace is checkpointed into Rakazo's own store. A new machine, even on another provider, restores it first."
+      "vo": "At the end of a run, on stop, or when idle, the workspace is checkpointed into Tangow's own store. A new machine, even on another provider, restores it first."
     },
     {
       "type": "kinetic",

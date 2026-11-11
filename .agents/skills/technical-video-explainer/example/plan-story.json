@@ -8,7 +8,7 @@
   "scenes": [
     {
       "type": "title",
-      "kicker": "rakazo-bot · Plan",
+      "kicker": "tangow-bot · Plan",
       "title": "A nudge after *thirty* tools",
       "vo": "This plan fixes silent runs. When a bot chains tools without a word, the person only sees an activity line."
     },

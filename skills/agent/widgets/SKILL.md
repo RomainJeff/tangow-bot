@@ -36,13 +36,13 @@ The model cannot see the render; copy a template and change its content.
    when that cannot do the job. Read and paste it from a file actually on the
    computer; never retype it from memory. It costs hundreds of KB and many tokens; transcription breaks it.
 4. Produce one file, at most 2 MB in UTF-8 bytes. Write only body content,
-   with inline styles/scripts if needed. Rakazo adds document, viewport, CSP,
+   with inline styles/scripts if needed. Tangow adds document, viewport, CSP,
    theme tokens, and kit. Omit doctype, html, head, and body tags.
    Use HTTPS media URLs. For an image you made on the computer, compress it
    to under 1 MB and write its absolute path (or `~/` path) in `<img src>`;
-   Rakazo embeds it at publish. Do not inline audio or video.
+   Tangow embeds it at publish. Do not inline audio or video.
 5. Link to HTTPS pages outside the widget. Use real `<a href="https://…">` links;
-   Rakazo opens them externally. Do not navigate the frame or submit forms.
+   Tangow opens them externally. Do not navigate the frame or submit forms.
 6. Give every image descriptive `alt`, every control a name, and every SVG an
    accessible title. Use real buttons for actions, ordered heading levels, and
    visible labels for values. Keep interactions local; there is no channel to the bot.

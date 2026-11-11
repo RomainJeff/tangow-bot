@@ -25,5 +25,5 @@ Grep first with several synonyms (English identifiers), then read only the match
 For each repo:
 - **What they do** (1 to 3 lines, concrete: the mechanism, not the marketing).
 - **Evidence**: 1 to 3 permalinks `[path:line](<prefix><path>#L<line>)`, or skill references.
-- **Keep or avoid for Rakazo** (1 line).
+- **Keep or avoid for Tangow** (1 line).
 Or simply: `<repo>: nothing comparable.`

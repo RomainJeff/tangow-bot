@@ -25,7 +25,7 @@ interpolates it into `DATABASE_URL`. Hex from `openssl rand` is safe; characters
 `@ : / ? # %` are not.
 
 Existing `pgdata` volumes keep the user, password, and database from first init (often the
-former hardcoded `rakazo` / `rakazo`). Keep those values in `.env`, or change them in place
+former hardcoded `tangow` / `tangow`). Keep those values in `.env`, or change them in place
 with `ALTER ROLE` / rename. Recreate the volume only after a backup (or when the data is
 disposable); `docker compose down -v` deletes all Postgres state.
 

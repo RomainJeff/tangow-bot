@@ -1,7 +1,7 @@
 # Self-host E2B workers
 
 On an E2B deployment, each bot run works in its own temporary E2B VM, called a worker. The worker
-runs the bot's Pi harness with native file and `bash` tools on the bot's volumes. Rakazo tools
+runs the bot's Pi harness with native file and `bash` tools on the bot's volumes. Tangow tools
 (computer, browser, memory, integrations) stay on the API and worker processes, and the model key
 never enters the worker. The worker is destroyed when the run attempt ends.
 
@@ -15,7 +15,7 @@ Worker providers implement the
 
 - An E2B account, or a self-hosted E2B deployment, with volumes enabled. Workers and computers
   mount the bot and space volumes.
-- A clean checkout matching the locally built `rakazo/app:local` image. For ordinary setup this
+- A clean checkout matching the locally built `tangow/app:local` image. For ordinary setup this
   is also the running revision. After a Tangow E2B home preflight refusal, keep its prepared target
   image, `.env` revision and completed startup migrations while setup upgrades the older services.
 - Node.js 22.22.2 or a later 22, 24, or 26 and later, with pnpm, on a host that reaches the E2B
@@ -35,8 +35,8 @@ pnpm from leaving a noninteractive reinstall waiting at its confirmation prompt:
 
 ```bash
 CI=true pnpm install --frozen-lockfile
-node infra/compose/setup-e2b.mjs --computer-image registry.example.com/rakazo-computer:local --dry-run
-node infra/compose/setup-e2b.mjs --computer-image registry.example.com/rakazo-computer:local
+node infra/compose/setup-e2b.mjs --computer-image registry.example.com/tangow-computer:local --dry-run
+node infra/compose/setup-e2b.mjs --computer-image registry.example.com/tangow-computer:local
 ```
 
 Docker must be accessible to the current user, with push access to a registry the E2B builder can
@@ -76,7 +76,7 @@ copies legacy user skills to the shared volumes. Original homes and old machines
 Detailed migration manifests are stored under `DATA_DIR/e2b-upgrade/`. The full data backup also
 retains folders outside the migration scope; backup traversal is independent of migration planning.
 
-A Docker computer whose home is already on Docker volumes (`DATA_DIR/volumes/rakazo-<volume-id>`)
+A Docker computer whose home is already on Docker volumes (`DATA_DIR/volumes/tangow-<volume-id>`)
 is carried the same way: setup stops it, copies the regular files of each of its volumes into an
 E2B volume of the same name, verifies their SHA-256 and mode, then switches the volume and the
 computer to E2B. A space's shared volume is copied once. Symbolic links, special files, empty
@@ -92,7 +92,7 @@ existing private configuration. Explicitly consent to the home move with `--migr
 The same workspace scope and retention warning apply in noninteractive mode:
 
 ```bash
-node infra/compose/setup-e2b.mjs --computer-image registry.example.com/rakazo-computer:local \
+node infra/compose/setup-e2b.mjs --computer-image registry.example.com/tangow-computer:local \
   --migrate-existing
 ```
 
@@ -127,7 +127,7 @@ never paste their contents into commits, issues or public logs.
 ## Build the templates
 
 Build both templates once per deployment, from the same commit as the API and worker images, and
-rebuild them on every upgrade. Rakazo publishes no shared template. The controller refuses a
+rebuild them on every upgrade. Tangow publishes no shared template. The controller refuses a
 worker whose protocol version or harness differs from its own.
 
 Run the builds where the E2B API and its file upload port are reachable. On a self-hosted E2B, that
@@ -135,7 +135,7 @@ is usually the E2B host itself. The E2B SDK reads `E2B_API_KEY` and `E2B_DOMAIN`
 and `E2B_SANDBOX_URL`, from the environment.
 
 1. Build the worker template from `apps/agent-run-worker/template`. It bundles the guest and builds
-   the template `rakazo-worker-pi-native`:
+   the template `tangow-worker-pi-native`:
 
    ```bash
    pnpm install
@@ -150,7 +150,7 @@ and `E2B_SANDBOX_URL`, from the environment.
    ```bash
    pnpm test:worker-live:bundle
    # copy packages/testkit/dist/worker-live to <dir> on the E2B host, then on the host:
-   node <dir>/bin/worker-live.mjs template --name rakazo-worker-pi-native \
+   node <dir>/bin/worker-live.mjs template --name tangow-worker-pi-native \
      --guest <dir>/guest/agent-run-worker.mjs
    ```
 
@@ -160,7 +160,7 @@ and `E2B_SANDBOX_URL`, from the environment.
 
    ```bash
    pnpm --filter @tangow/computer-e2b-template template:build \
-     --image <registry>/rakazo-computer@sha256:<digest>
+     --image <registry>/tangow-computer@sha256:<digest>
    ```
 
 A build under an existing name adds a new build to that template. New workers and computers use it.
@@ -175,7 +175,7 @@ E2B_API_KEY=replace-with-your-e2b-key
 # Self-hosted E2B only:
 # E2B_DOMAIN=e2b.example.com
 # Only when you built the worker template under another name:
-# WORKER_TEMPLATE=rakazo-worker-pi-native
+# WORKER_TEMPLATE=tangow-worker-pi-native
 ```
 
 For a self-hosted E2B, set `E2B_DOMAIN`. The SDK derives the API and sandbox endpoints from it.
@@ -192,7 +192,7 @@ later takes the storage of its space's team computer. Its runs go to workers wit
 
 Until upgraded, a computer created before this release keeps its home in snapshots under `DATA_DIR`,
 and the API refuses to start. The setup command above moves these homes as part of the upgrade. The following manual commands are for controlled recovery or standalone moves with `scripts/migrate-home-to-volumes.ts`. The move is
-one way: Rakazo has no command to move a home back to snapshots. The snapshot stays in `DATA_DIR`
+one way: Tangow has no command to move a home back to snapshots. The snapshot stays in `DATA_DIR`
 as the pre-move original, and nothing writes to it after the move.
 
 The commands below run in a one-off `api` container of the production Compose stack, which already
@@ -246,14 +246,14 @@ compose="docker compose --env-file .env -f infra/compose/docker-compose.prod.yml
      --space <space-id>
    ```
 
-Both scripts take `--template <name>` when your worker template is not `rakazo-worker-pi-native`.
+Both scripts take `--template <name>` when your worker template is not `tangow-worker-pi-native`.
 
 If the move refuses with `not_copied`, the home holds entries that a volume cannot hold, such as
 links or files outside every bot folder. The report lists them. Fix them, or rerun with
 `--leave-unmapped` to leave them in the snapshot only.
 
 Do not deploy while a move runs. If a move stops before it finishes, its reservation expires after
-one minute and Rakazo releases it. To release it at once, run the script with
+one minute and Tangow releases it. To release it at once, run the script with
 `--computer <computer-id> --clear-stale-move`. Then rerun the move with a new manifest path. It
 resumes the copy.
 
@@ -298,17 +298,17 @@ the bots work on E2B.
    ```
 
    During the run, the E2B dashboard lists a sandbox of the worker template with the metadata
-   `rakazo: worker` and the `attemptId`.
+   `tangow: worker` and the `attemptId`.
 
 3. After the reply, check that the E2B dashboard lists no sandbox with the metadata
-   `rakazo: worker`. The bot's computer, with the metadata `rakazo: computer`, can stay until it
+   `tangow: worker`. The bot's computer, with the metadata `tangow: computer`, can stay until it
    suspends.
 
 ## Limits
 
 - The worker VM has no egress filter. Code in the worker, including a modified Pi, can send any
   file of the bot's volume and of the space's shared volume anywhere. The worker holds no model key
-  or Rakazo secret.
+  or Tangow secret.
 - A worker lives at most one hour, the E2B sandbox timeout. A run that outlasts it loses its VM and
   continues in a new attempt. A deployment that allows a shorter sandbox timeout caps the worker at
   that limit and logs a warning.

@@ -1,4 +1,4 @@
-// Browser bundle of the real Rakazo avatar engine (packages/core) for product films: global RakazoAvatar.
+// Browser bundle of the real Tangow avatar engine (packages/core) for product films: global TangowAvatar.
 // Seek-safe: `frameAt(t)` rebuilds the engine and replays every scripted event up to t,
 // so any frame can be rendered in any order with the same result.
 import { avatarIdentitySeed } from "../../../../../packages/core/src/avatar-identity";

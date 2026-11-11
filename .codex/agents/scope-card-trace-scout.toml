@@ -1,5 +1,5 @@
 name = "scope-card-trace-scout"
-description = "Read-only Langfuse trace analyst for the scope-card skill. Reads a local JSONL extract of Rakazo agent observations (runs, model calls, tool calls) prepared by the caller, answers one measurable question about current bot behaviour, and returns a few aggregate figures plus 2 or 3 example trace links. Never sees the network or the keys."
+description = "Read-only Langfuse trace analyst for the scope-card skill. Reads a local JSONL extract of Tangow agent observations (runs, model calls, tool calls) prepared by the caller, answers one measurable question about current bot behaviour, and returns a few aggregate figures plus 2 or 3 example trace links. Never sees the network or the keys."
 model_reasoning_effort = "low"
 developer_instructions = """
 # Scope card trace scout

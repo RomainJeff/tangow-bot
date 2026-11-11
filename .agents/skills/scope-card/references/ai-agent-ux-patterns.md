@@ -1,14 +1,14 @@
 ---
-titre: "Patterns UX/UI pour clients d'agents IA - Loi de design du gate Design Rakazo"
+titre: "Patterns UX/UI pour clients d'agents IA - Loi de design du gate Design Tangow"
 date: 2026-09-06
-contexte: "Document de référence servant de loi de design au gate Design du pipeline de dev de features Rakazo. Distille les patterns best-in-class des meilleurs clients d'agents IA du marché, traduits pour le design system monochrome + progressive disclosure de Rakazo."
+contexte: "Document de référence servant de loi de design au gate Design du pipeline de dev de features Tangow. Distille les patterns best-in-class des meilleurs clients d'agents IA du marché, traduits pour le design system monochrome + progressive disclosure de Tangow."
 statut: référence vivante
 ---
 
 # Patterns UX/UI pour clients d'agents IA
 
-> Loi de design du gate **Design** de Rakazo. Toute maquette de feature passe la checklist du §6 avant de partir en code.
-> Rakazo est un **client d'agent IA conversationnel multi-surface** (web / desktop Electron / mobile Expo). On se compare aux meilleurs clients d'agents du marché, pas à un site voyage ni à une marque grand public.
+> Loi de design du gate **Design** de Tangow. Toute maquette de feature passe la checklist du §6 avant de partir en code.
+> Tangow est un **client d'agent IA conversationnel multi-surface** (web / desktop Electron / mobile Expo). On se compare aux meilleurs clients d'agents du marché, pas à un site voyage ni à une marque grand public.
 > **Règle d'écriture stricte : jamais de tiret cadratin. Tiret simple, virgule, point, ou reformulation.**
 >
 > **Lecture sélective (ne jamais charger tout le fichier).** Toujours : §1 (principes) et §6 (checklist). Puis seulement les sous-sections des moments que la feature touche : §2.x pour un moment de run, §3.x pour un moment de messagerie, §4.x si la feature est transverse. §5 (anti-patterns) en cas de doute. §7 (sources) jamais au gate. Repérer les sections avec `grep -n '^##' <ce fichier>` puis lire par plage de lignes.
@@ -40,7 +40,7 @@ Contraintes DS non négociables rappelées ici parce qu'elles conditionnent chaq
 
 ## 2. Les moments clés d'un run d'agent
 
-Format de chaque pattern : **Quoi** (best-in-class) / **Pourquoi** / **Pour Rakazo** (application concrète, DS-compatible).
+Format de chaque pattern : **Quoi** (best-in-class) / **Pourquoi** / **Pour Tangow** (application concrète, DS-compatible).
 
 ### 2.1 Lancement / composer / expression d'intention
 
@@ -48,7 +48,7 @@ Format de chaque pattern : **Quoi** (best-in-class) / **Pourquoi** / **Pour Raka
 
 **Pourquoi.** L'utilisateur formule une intention, pas une commande. Le mode (planifier vs exécuter directement) est la décision la plus lourde de conséquences ; la mettre à côté du bouton d'envoi la rend consciente sans l'imposer. Le reste (attachements, options avancées) suit la progressive disclosure.
 
-**Pour Rakazo.**
+**Pour Tangow.**
 - Composer = une seule zone de texte + bouton d'envoi. Le sélecteur de mode/bot vit **à côté** du bouton, pas dans une barre d'outils pleine.
 - Le choix de **bot** porte sa couleur d'identité (pastille) ; c'est le seul endroit coloré du composer.
 - Attachements de contexte : chips discrètes en `muted`, dépliables. Pas de panneau permanent tant qu'il n'y a rien d'attaché (empty by default).
@@ -61,7 +61,7 @@ Format de chaque pattern : **Quoi** (best-in-class) / **Pourquoi** / **Pour Raka
 
 **Pourquoi.** Un agent fait des dizaines d'étapes séquentielles, se met en pause, streame du partiel, forke en sous-tâches. Un fil de chat linéaire ne peut pas rendre ça lisiblement. Le "ce qu'il fait maintenant" maintient la confiance pendant la latence (cf. §4.1).
 
-**Pour Rakazo.**
+**Pour Tangow.**
 - **Une ligne d'état vivante** en tête du run : le libellé de l'étape courante ("Lecture des fichiers", "Exécution du test"), en `foreground`/`muted`, mise à jour par le stream. C'est un composant d'état, pas une phrase générée qui répète l'UI.
 - **Plan pliable** : si le backend produit un plan, l'afficher en liste verticale d'étapes à une ligne, chaque étape avec un état (à venir / en cours / faite / bloquée) rendu par la typo et une icône monochrome + le token de statut, pas par de la couleur décorative.
 - Streaming du texte token par token dans le fil ; les étapes se cochent dans la timeline.
@@ -74,7 +74,7 @@ Format de chaque pattern : **Quoi** (best-in-class) / **Pourquoi** / **Pour Raka
 
 **Pourquoi.** La vérifiabilité est le socle de la confiance dans un agent. Mais tout montrer en entier = mur illisible. Le compromis best-in-class est le **bloc pliable par défaut fermé** avec l'essentiel visible.
 
-**Pour Rakazo.**
+**Pour Tangow.**
 - **Carte d'appel d'outil** = composant `card` sobre : `[icône outil] nom_outil · résumé une ligne du résultat` + chevron de dépliement. Fermée par défaut.
 - **Succès** : icône neutre (encre) ou `success` discret (une coche, pas un aplat vert). Le succès est l'état attendu ; il ne crie pas.
 - **Erreur** : bordure/pastille `destructive`, résumé de l'erreur en clair, détail dépliable. Voir §2.7 pour la structure en trois temps.
@@ -88,7 +88,7 @@ Format de chaque pattern : **Quoi** (best-in-class) / **Pourquoi** / **Pour Raka
 
 **Pourquoi.** Sur-confirmer tue le bénéfice de l'agent ; sous-confirmer détruit la confiance sur l'irréversible. Le bon design route par réversibilité, pas par un gate uniforme.
 
-**Pour Rakazo.**
+**Pour Tangow.**
 - **Prompt d'approbation contextuel** : la carte de permission montre l'action exacte (commande, fichier écrit, requête réseau), pourquoi elle est demandée, et le diff/l'effet attendu si applicable. Boutons : `Approuver` (primary/ink), `Refuser` (`destructive` en variante outline/ghost, pas un bloc rouge plein).
 - **Tiérage** : réversible passe sans prompt (mode auto) ; sensible (suppression, écriture hors sandbox, réseau, dépense) = carte bloquante. Le niveau est une décision **backend** ; le frontend rend seulement l'état "en attente d'approbation".
 - **Délégation progressive** : proposer "toujours autoriser cet outil dans cette session" après quelques approbations, jamais imposé au premier run. La confiance se gagne, l'autonomie s'élargit au rythme de l'utilisateur.
@@ -98,13 +98,13 @@ Format de chaque pattern : **Quoi** (best-in-class) / **Pourquoi** / **Pour Raka
 
 ### 2.5 Message de l'utilisateur PENDANT un run (steering en cours d'exécution)
 
-**Sujet chaud pour Rakazo.** C'est le point où les clients actuels échouent le plus, donc la plus grosse opportunité de différenciation.
+**Sujet chaud pour Tangow.** C'est le point où les clients actuels échouent le plus, donc la plus grosse opportunité de différenciation.
 
 **Quoi (et ce qui ne marche pas).** Claude Code illustre le piège : taper Entrée pendant un run **met en file** sans que ce soit clair, l'utilisateur croit interrompre ; pour vraiment rediriger il faut Ctrl+C, ce qui **jette le travail en cours**. Sur les longs tours, les messages en attente ne sont traités qu'à la fin et peuvent être perdus à la déconnexion. Les demandes utilisateurs convergent vers : un **canal de steering prioritaire**, une **file visible/éditable**, et le choix explicite interrompre vs ajouter. Le bon modèle conceptuel : **mixed-initiative** (le contrôle passe fluidement entre humain et agent) et **interruption reprenable** (AG-UI : annulation + reprise, on ne repart pas de zéro).
 
 **Pourquoi.** Séparer les deux horloges (§2.2) impose de décider ce que fait un message envoyé pendant un run. L'ambiguïté "ça a interrompu ou pas ?" est la pire expérience : l'utilisateur ne sait pas si le bot l'a entendu.
 
-**Pour Rakazo.**
+**Pour Tangow.**
 - **Rendre l'intention explicite au moment de l'envoi.** Pendant un run, le composer affiche l'effet de l'envoi : par défaut **"Ajouter à la file"** (steering doux, l'agent l'intègre au prochain point d'arrêt) avec une action secondaire **"Interrompre et rediriger"** (steering dur). Deux affordances distinctes, jamais un seul Entrée ambigu.
 - **File de steering visible et éditable** : les messages en attente s'affichent en tête de run (chips `muted`), supprimables un par un avant d'être consommés. L'utilisateur voit que son message a été reçu.
 - **Interruption reprenable** : "Interrompre" met en pause proprement (checkpoint), n'efface pas le contexte, et laisse reprendre. Distinguer clairement **Pause/redirect** (reprenable) de **Stop** (`destructive`, termine le run).
@@ -118,7 +118,7 @@ Format de chaque pattern : **Quoi** (best-in-class) / **Pourquoi** / **Pour Raka
 
 **Pourquoi.** Le diff est le contrat de confiance sur une action irréversible (écrire du code, un fichier). Le voir avant qu'il "atterrisse" est une feature, pas un frein : on attrape les cas limites que l'agent rate.
 
-**Pour Rakazo.**
+**Pour Tangow.**
 - **Artefact = objet distinct du fil**, pas un pavé de texte inline. Carte d'artefact (nom, type, taille, statut) qui ouvre un panneau/viewer dédié.
 - **Diff** : ajouts/suppressions rendus par la **structure** (fond `muted` pour supprimé, encre pleine pour ajouté) + les tokens `success`/`destructive` en **liseré/marge**, pas en aplats colorés saturés qui casseraient le monochrome. Le vert/rouge classique du diff se traduit en : liseré fin de statut + fond très désaturé. La lisibilité vient du contraste de densité, pas de la couleur.
 - **Approbation d'application** : "Appliquer" (primary) vs "Rejeter" ; jamais d'écriture silencieuse d'un fichier sans que le diff ait été montrable.
@@ -132,7 +132,7 @@ Format de chaque pattern : **Quoi** (best-in-class) / **Pourquoi** / **Pour Raka
 
 **Pourquoi.** Un agent échoue régulièrement (outil indisponible, timeout, mauvaise interprétation). La qualité de l'UX se juge surtout dans l'échec. Un échec silencieux ou cryptique bloque et fait fuir.
 
-**Pour Rakazo.**
+**Pour Tangow.**
 - **Carte d'erreur** en `destructive` (liseré/icône, pas aplat) structurée : titre = ce qui a échoué ; corps = cause en clair ; action = 1 à 2 boutons de récupération **spécifiques** au type d'échec, pas un "Réessayer" nu.
 - **Succès partiel** : état dédié (`warning`), résumé de ce qui a marché vs ce qui reste, action pour finir seulement le reste.
 - **États dégradés** : si un outil/modèle est indisponible, le dire explicitement et proposer l'alternative, sans faire semblant.
@@ -146,7 +146,7 @@ Format de chaque pattern : **Quoi** (best-in-class) / **Pourquoi** / **Pour Raka
 
 **Pourquoi.** L'utilisateur a délégué ; à la fin il veut savoir le résultat et quoi faire ensuite, pas relire 40 étapes. Le résumé referme la boucle de confiance.
 
-**Pour Rakazo.**
+**Pour Tangow.**
 - **Bloc de clôture** : 1 à 3 lignes de résumé (ce qui a été fait/changé) + liste des artefacts produits + **prochaine action** proposée sous forme d'actions cliquables (chips), pas de paragraphe.
 - L'état de la ligne vivante (§2.2) bascule en "Terminé" (statut neutre/`success` discret) ; la timeline se fige, consultable.
 - **Historique** : le run devient une entrée d'historique repliée (titre + horodatage + bot), ré-ouvrable en entier. On ne garde pas tout déplié dans le fil.
@@ -158,7 +158,7 @@ Format de chaque pattern : **Quoi** (best-in-class) / **Pourquoi** / **Pour Raka
 
 **Pourquoi.** Un client d'agent est un objet nouveau ; sans repères l'utilisateur ne sait ni quoi demander ni ce que le bot peut faire. Mais un onboarding lourd contredit le minimalisme.
 
-**Pour Rakazo.**
+**Pour Tangow.**
 - **Empty state du composer** : quelques amorces d'intention concrètes (2 à 4 exemples cliquables typés du bot courant), sobres, en `muted`. Pas d'illustration décorative bavarde.
 - **Découverte progressive** : les capacités avancées (modes, outils, multi-bots) se révèlent quand elles deviennent pertinentes, pas dans un tour d'intro. Ex : la file de steering ne s'explique qu'au premier run long.
 - **Modèle mental honnête** : dire ce que le bot peut/ne peut pas faire au bon moment (ex : première action sensible -> expliquer le système de permissions une fois).
@@ -171,7 +171,7 @@ Format de chaque pattern : **Quoi** (best-in-class) / **Pourquoi** / **Pour Raka
 
 **Pourquoi.** Dès qu'il y a plusieurs bots/sous-agents, l'utilisateur doit savoir en permanence **qui parle** et **qui agit**. C'est exactement ce que la couleur d'identité par bot résout dans le DS monochrome.
 
-**Pour Rakazo.**
+**Pour Tangow.**
 - **Une couleur = un bot**, appliquée avec parcimonie : pastille/avatar, liseré du message, marqueur de la ligne d'état active. Le corps du message reste encre. La couleur **identifie**, elle ne décore pas.
 - **Handoff explicite** : quand un bot passe la main à un autre (ou spawn un sous-agent), un marqueur clair dans la timeline (couleur A -> couleur B), jamais silencieux.
 - **Sous-agents parallèles** : chaque sous-tâche est une ligne/carte pliable sous le bot parent, avec son état propre. Éviter la state explosion : vue repliée par défaut, compteur ("3 sous-tâches en cours").
@@ -182,47 +182,47 @@ Format de chaque pattern : **Quoi** (best-in-class) / **Pourquoi** / **Pour Raka
 
 ## 3. Le meilleur des messageries (Slack, WhatsApp, Telegram, iMessage)
 
-Rakazo est autant une messagerie qu'un client d'agent (Rakazo est né comme un bot Telegram). Deux familles de moments cohabitent : le **run** (§2) et la **conversation**. On prend le meilleur de chaque app, jamais leur surcharge. Tout se traduit dans le DS monochrome : l'accent coloré reste réservé à l'identité d'un bot.
+Tangow est autant une messagerie qu'un client d'agent (Tangow est né comme un bot Telegram). Deux familles de moments cohabitent : le **run** (§2) et la **conversation**. On prend le meilleur de chaque app, jamais leur surcharge. Tout se traduit dans le DS monochrome : l'accent coloré reste réservé à l'identité d'un bot.
 
 ### 3.1 Composer et saisie
 **Best-of.** iMessage (la saisie ne vole jamais l'écran), Slack (formatage riche en progressive disclosure, pas de barre d'outils permanente), Telegram (envoi optimiste, rapidité perçue).
-**Pour Rakazo.** Composer minimal ; formatage et pièces jointes révélés au besoin ; envoi optimiste (le message apparaît aussitôt en état "en cours d'envoi"). Rien qui encombre au repos.
+**Pour Tangow.** Composer minimal ; formatage et pièces jointes révélés au besoin ; envoi optimiste (le message apparaît aussitôt en état "en cours d'envoi"). Rien qui encombre au repos.
 
 ### 3.2 États de remise = états de run (une seule horloge côté message)
 **Best-of.** WhatsApp (ticks envoyé / remis / lu), iMessage (Distribué / Lu, discret).
-**Pour Rakazo.** Réutiliser cette grammaire pour un agent : envoyé → reçu → **en traitement** → répondu. Les états de remise d'une messagerie et l'état d'un run (§2.2) sont le **même** système, monochrome (encre + pastille de statut). Jamais deux vocabulaires concurrents pour dire "où en est mon message".
+**Pour Tangow.** Réutiliser cette grammaire pour un agent : envoyé → reçu → **en traitement** → répondu. Les états de remise d'une messagerie et l'état d'un run (§2.2) sont le **même** système, monochrome (encre + pastille de statut). Jamais deux vocabulaires concurrents pour dire "où en est mon message".
 
 ### 3.3 Groupement, temps, densité
 **Best-of.** iMessage/WhatsApp (messages groupés par émetteur, horodatage par paquets), Telegram (séparateurs de date discrets, marqueur "nouveaux messages").
-**Pour Rakazo.** Grouper les messages consécutifs d'un même bot ; horodatage au survol ou par bloc, pas par ligne ; un séparateur "nouveaux messages" au retour. Calme visuel avant tout.
+**Pour Tangow.** Grouper les messages consécutifs d'un même bot ; horodatage au survol ou par bloc, pas par ligne ; un séparateur "nouveaux messages" au retour. Calme visuel avant tout.
 
 ### 3.4 Fils / threads
 **Best-of.** Slack (un thread isole une sous-conversation sans polluer le canal).
-**Pour Rakazo.** Un run long ou une sous-tâche part en thread ou panneau dédié plutôt que d'inonder le fil. C'est la matérialisation des deux horloges (§2.2) : la conversation reste lisible, le workflow détaillé vit à côté.
+**Pour Tangow.** Un run long ou une sous-tâche part en thread ou panneau dédié plutôt que d'inonder le fil. C'est la matérialisation des deux horloges (§2.2) : la conversation reste lisible, le workflow détaillé vit à côté.
 
 ### 3.5 Réactions et feedback léger
 **Best-of.** iMessage (tapbacks en un geste), Slack (émoji comme signal ou action).
-**Pour Rakazo.** Réactions légères sur les messages du bot (valider, pouce, "à refaire") : un signal en un geste, sans écrire, qui alimente aussi la boucle de feedback produit. Tapbacks en encre, l'accent reste à l'identité du bot.
+**Pour Tangow.** Réactions légères sur les messages du bot (valider, pouce, "à refaire") : un signal en un geste, sans écrire, qui alimente aussi la boucle de feedback produit. Tapbacks en encre, l'accent reste à l'identité du bot.
 
 ### 3.6 Actions rapides et claviers inline (très pertinent pour Telegram)
 **Best-of.** Telegram bots (inline keyboards : boutons suggérés sous un message).
-**Pour Rakazo.** Proposer des actions tappables sous un message du bot (réponses suggérées, choix, confirmations). C'est le canal naturel du steering (§2.5) et des approbations (§2.4) : un tap plutôt qu'une phrase. Chips monochromes, jamais un mur de boutons.
+**Pour Tangow.** Proposer des actions tappables sous un message du bot (réponses suggérées, choix, confirmations). C'est le canal naturel du steering (§2.5) et des approbations (§2.4) : un tap plutôt qu'une phrase. Chips monochromes, jamais un mur de boutons.
 
 ### 3.7 Présence et activité
 **Best-of.** iMessage/WhatsApp (bulle de frappe "en train d'écrire").
-**Pour Rakazo.** L'équivalent enrichi : "le bot travaille" **avec le quoi** (§2.2), pas un simple "…". La présence entretient la confiance pendant la latence.
+**Pour Tangow.** L'équivalent enrichi : "le bot travaille" **avec le quoi** (§2.2), pas un simple "…". La présence entretient la confiance pendant la latence.
 
 ### 3.8 Épingles, sauvegarde, recherche
 **Best-of.** Telegram/Slack (épingler un message clé, messages sauvegardés, recherche rapide).
-**Pour Rakazo.** Épingler un artefact ou un résultat important en tête de conversation ; retrouver un run passé. Le résultat d'un agent a une valeur durable : ne pas le laisser défiler dans l'oubli.
+**Pour Tangow.** Épingler un artefact ou un résultat important en tête de conversation ; retrouver un run passé. Le résultat d'un agent a une valeur durable : ne pas le laisser défiler dans l'oubli.
 
 ### 3.9 Notifications : alerter juste
 **Best-of.** Telegram (messages silencieux, granularité fine), Slack (mention vs canal), iMessage (retenue).
-**Pour Rakazo.** N'alerter que quand le bot a besoin de l'humain : approbation, fin d'un run long, échec. Le reste est silencieux. Une notification = une raison.
+**Pour Tangow.** N'alerter que quand le bot a besoin de l'humain : approbation, fin d'un run long, échec. Le reste est silencieux. Une notification = une raison.
 
 ### 3.10 Retenue sur les effets
 **Best-of.** iMessage sait faire des effets mais les dose ; les bons clients n'animent pas gratuitement.
-**Pour Rakazo.** Aucune animation décorative. Le mouvement sert l'information (progression, apparition d'un résultat), jamais le spectacle. Cohérent avec le calme monochrome.
+**Pour Tangow.** Aucune animation décorative. Le mouvement sert l'information (progression, apparition d'un résultat), jamais le spectacle. Cohérent avec le calme monochrome.
 
 ---
 
@@ -274,7 +274,7 @@ Rakazo est autant une messagerie qu'un client d'agent (Rakazo est né comme un b
 
 ## 5. Anti-patterns (avec la correction)
 
-| Anti-pattern | Pourquoi c'est mauvais | Correction Rakazo |
+| Anti-pattern | Pourquoi c'est mauvais | Correction Tangow |
 |---|---|---|
 | **Chrome de statut inutile** (badges, bandeaux, "en cours..." partout) | Bruit visuel, dilue le vrai signal | Une seule ligne d'état vivante par run + tokens de statut ciblés |
 | **Texte qui répète l'UI** ("J'ai lancé la recherche", "Voici le résultat ci-dessous") | Redondance, coût de lecture | Le composant rend l'état ; le texte ne dit que le fond nouveau |
@@ -296,7 +296,7 @@ Rakazo est autant une messagerie qu'un client d'agent (Rakazo est né comme un b
 
 ## 6. Checklist de gate Design
 
-À passer sur toute maquette de feature Rakazo **avant de coder**. Cocher = conforme.
+À passer sur toute maquette de feature Tangow **avant de coder**. Cocher = conforme.
 
 **Fondations DS**
 - [ ] Zéro hex en dur : toutes les couleurs viennent de `@tangow/ui-tokens`.
@@ -375,4 +375,4 @@ Recherche web menée le 6 septembre 2026. Distinction analyse de design vs factu
 - [Towards AI - 7 design patterns for AI agents 2026](https://pub.towardsai.net/the-7-design-patterns-every-ai-agent-developer-should-know-in-2026-c77f28b51565) et [AI UX Playground - HITL for AI agents](https://aiuxplayground.substack.com/p/how-to-design-human-in-the-loophitl) - interrupt-based vs async-review HITL, reprise après interruption.
 - [Google Developers - AG-UI / A2UI generative UI](https://developers.googleblog.com/a2ui-v0-9-generative-ui/) - protocole d'événements (run lifecycle, message streaming, tool calls, annulation/reprise) qui structure le rendu live et le feedback dans la boucle.
 
-> Note d'honnêteté : les sources "analyse de design" sont des synthèses d'agences/chercheurs, pas des specs officielles ; elles convergent fortement, ce qui renforce la confiance, mais restent des recommandations à confronter à nos propres tests utilisateurs Rakazo. Les sources "factuel" décrivent des comportements produits observés à septembre 2026 et peuvent évoluer.
+> Note d'honnêteté : les sources "analyse de design" sont des synthèses d'agences/chercheurs, pas des specs officielles ; elles convergent fortement, ce qui renforce la confiance, mais restent des recommandations à confronter à nos propres tests utilisateurs Tangow. Les sources "factuel" décrivent des comportements produits observés à septembre 2026 et peuvent évoluer.

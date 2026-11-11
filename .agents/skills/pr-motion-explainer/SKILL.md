@@ -1,6 +1,6 @@
 ---
 name: pr-motion-explainer
-description: Build a short motion-graphic explainer (dark diagram, nodes, travelling pulses, before/after toggle) of the one mechanism a pull request changes. Use alongside every code review of a non-trivial Rakazo PR ("review PR #52", "code review this branch", "/code-review"), and whenever someone asks for a "motion explainer" or an animated explainer of a PR. Skips trivial PRs.
+description: Build a short motion-graphic explainer (dark diagram, nodes, travelling pulses, before/after toggle) of the one mechanism a pull request changes. Use alongside every code review of a non-trivial Tangow PR ("review PR #52", "code review this branch", "/code-review"), and whenever someone asks for a "motion explainer" or an animated explainer of a PR. Skips trivial PRs.
 ---
 
 # PR motion explainer

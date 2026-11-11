@@ -1,12 +1,12 @@
 # Mobile builds and store releases
 
-Rakazo's public repository contains no signing credentials, API keys, Apple
+Tangow's public repository contains no signing credentials, API keys, Apple
 team, or Google Play identifiers. The only store identifier tracked here is the
 iOS App Store Connect app ID in `apps/mobile/eas.json`, which submissions need
 and which Apple already exposes publicly. Every other value belongs in the
 release operator's private configuration.
 
-Self-hosters normally do not need to publish their own mobile app: the Rakazo
+Self-hosters normally do not need to publish their own mobile app: the Tangow
 client can select a compatible server from the sign-in screen. If you distribute
 your own branded build, use your own Expo and store accounts.
 
@@ -50,8 +50,8 @@ ignores. Run them from the repository root or from `apps/mobile`.
 
 | Command | Profile | Result |
 | --- | --- | --- |
-| `pnpm build:ios:preview` | `preview` (internal, Ad Hoc) | `builds/rakazo-preview.ipa`, install it with Expo Orbit or `xcrun devicectl` |
-| `pnpm release:ios` | `production` (App Store) | builds `builds/rakazo-production.ipa`, then submits that exact file to TestFlight |
+| `pnpm build:ios:preview` | `preview` (internal, Ad Hoc) | `builds/tangow-preview.ipa`, install it with Expo Orbit or `xcrun devicectl` |
+| `pnpm release:ios` | `production` (App Store) | builds `builds/tangow-production.ipa`, then submits that exact file to TestFlight |
 
 A production IPA is signed with an App Store profile and cannot be installed
 directly on a device; iOS reports "Failed to verify code signature" or

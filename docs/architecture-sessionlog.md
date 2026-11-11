@@ -1,6 +1,6 @@
 # Session log architecture
 
-Rakazo is one product on the web, the Electron desktop app and the Expo mobile app. The frontends express intent and render state, and the backend owns orchestration, as [AGENTS.md](../AGENTS.md) requires. The [architecture map](../ARCHITECTURE.md) links the other features' pages.
+Tangow is one product on the web, the Electron desktop app and the Expo mobile app. The frontends express intent and render state, and the backend owns orchestration, as [AGENTS.md](../AGENTS.md) requires. The [architecture map](../ARCHITECTURE.md) links the other features' pages.
 
 A conversation is an append-only log of typed entries. A person's message, each finished block of a bot's reply, each tool call and each tool result is one entry, one row in Postgres. An entry is never edited, and a rewind or a clear appends instead of deleting.
 

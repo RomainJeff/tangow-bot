@@ -27,5 +27,5 @@ Expect: the card title and bullets; the subjects to cover (any of Meta Muse, Cha
 For each subject:
 - **What they do** on this topic (1 to 3 lines), or "no public information".
 - **Sources**: `[title](url)` and date.
-- **Keep for Rakazo** (1 line).
+- **Keep for Tangow** (1 line).
 End with one line listing any useful source you could not access (paywall, login).

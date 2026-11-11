@@ -8,13 +8,13 @@
   },
   "base": "main",
   "permalinkRepo": "RomainJeff/tangow-bot",
-  "scoutWorktree": "~/dev/rakazo-scout-wt",
+  "scoutWorktree": "~/dev/tangow-scout-wt",
   "refsDir": "~/dev/refs",
   "referenceRepos": [],
   "localSources": [],
   "decisionDirs": [],
   "decisionLinks": [],
   "langfuse": {
-    "envFile": "~/.config/langfuse/rakazo.env"
+    "envFile": "~/.config/langfuse/tangow.env"
   }
 }

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Pull Rakazo Langfuse observations into a local JSONL file for the scope-card-trace-scout.
+"""Pull Tangow Langfuse observations into a local JSONL file for the scope-card-trace-scout.
 
-Keys come from the env file named by langfuse.envFile in ~/.config/rakazo/scope-card.json
-(default ~/.config/langfuse/rakazo.env) and never leave this process. LANGFUSE_BASE_URL in that
+Keys come from the env file named by langfuse.envFile in ~/.config/tangow/scope-card.json
+(default ~/.config/langfuse/tangow.env) and never leave this process. LANGFUSE_BASE_URL in that
 file overrides the default cloud host. Input and output text is truncated so the file stays
 small; it may still contain conversation excerpts, so it lives only in the session scratchpad
 and is never pasted into Notion.
@@ -21,8 +21,8 @@ import os
 import urllib.parse
 import urllib.request
 
-CONFIG = os.path.expanduser("~/.config/rakazo/scope-card.json")
-DEFAULT_ENV_FILE = "~/.config/langfuse/rakazo.env"
+CONFIG = os.path.expanduser("~/.config/tangow/scope-card.json")
+DEFAULT_ENV_FILE = "~/.config/langfuse/tangow.env"
 DEFAULT_BASE = "https://cloud.langfuse.com"
 
 

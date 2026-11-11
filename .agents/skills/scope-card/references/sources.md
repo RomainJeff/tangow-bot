@@ -1,6 +1,6 @@
 # Sources
 
-## Personal config (`~/.config/rakazo/scope-card.json`)
+## Personal config (`~/.config/tangow/scope-card.json`)
 
 | Key | Meaning |
 |---|---|

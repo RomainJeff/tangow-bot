@@ -15,7 +15,7 @@ Goal: the verdict reads in ten seconds, details are folded, and the section read
 | Verdict | `<callout icon="🎯" color="blue_bg">` | first block, 2-3 bullets in plain language (see Writing rules) |
 | To decide | `<callout icon="❓" color="yellow_bg">` + to-dos | absent when there is nothing to decide |
 | Solutions (every type) | `### 💡 Solutions`, **not folded**, right after À trancher: a table Option · Ce que ça change pour toi · Ampleur · Risque (bug, feature) or tabs A/B/C (feature UX), then a ⭐ Reco callout | required; 2-3 distinct options (one only for a bug with a single path, saying so) |
-| Details | toggle heading `### … {toggle="true"}` | closed by default; fixed emoji: 📐 Cadrage · 🧱 Existant Rakazo · 🌍 Ailleurs · 🐞 Diagnostic · 🎨 Design · ⚠️ Risques et découpage |
+| Details | toggle heading `### … {toggle="true"}` | closed by default; fixed emoji: 📐 Cadrage · 🧱 Existant Tangow · 🌍 Ailleurs · 🐞 Diagnostic · 🎨 Design · ⚠️ Risques et découpage |
 | Comparisons | `<table header-row="true" fit-page-width="true">` | rich text only in cells; `retenu` in `green_bg`, `écarté` in `gray_bg`; "rien de comparable" in `gray` |
 | Acceptance criteria | to-do `- [ ]` | reused as the QA checklist |
 | Root cause | `<callout icon="🔎" color="red_bg">` | |
@@ -130,7 +130,7 @@ Remove the blocks that do not apply to the type (see Variants). Replace every `<
 		</tr>
 	</table>
 	**i18n** — <impact ou « aucun »>
-### 🧱 Existant Rakazo {toggle="true"}
+### 🧱 Existant Tangow {toggle="true"}
 	<table header-row="true" fit-page-width="true">
 		<tr>
 			<td>Surface</td>
