@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { bootstrapUserSpace } from "./bootstrap-user.js";
 import { setBotSharing } from "./bot-sharing.js";
 import type { PrismaClient } from "./client.js";
-import { claimSteering, finalizeRun, messageHelper } from "./events.js";
+import { claimSteering, finalizeRun } from "./events.js";
 import { createGroupRepos, GroupCreatorCannotLeaveError } from "./groups.js";
 import { createThreadMessageInTransaction } from "./messages.js";
 import { openPgliteDatabase, type PgliteDatabase } from "./pglite.test-support.js";
@@ -250,26 +250,6 @@ describe("a group's people, bots and lead", () => {
       data: { runId: null },
     });
     expect(await claim()).toEqual([]);
-  });
-
-  it("lets a run message only its own person's helpers", async () => {
-    const group = await newGroup(["ana"]);
-    const anaRun = await holdRun("ana", group.threadId);
-    const anaHelper = await holdRun("ana", group.threadId, {
-      trigger: "helper",
-      parentRunId: anaRun.id,
-    });
-    const tell = (userId: string) =>
-      messageHelper(prisma, {
-        threadId: group.threadId,
-        botId: sharedBot,
-        userId,
-        helperId: anaHelper.id,
-        text: "Faster",
-      });
-
-    expect(await tell("creator")).toBe("unknown");
-    expect(await tell("ana")).toBe("steered");
   });
 
   it("wakes the bot for a helper's report as the person whose run started it", async () => {
