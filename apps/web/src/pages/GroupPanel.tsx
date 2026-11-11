@@ -19,6 +19,7 @@ import type { ReactNode } from "react";
 import { useEffect, useId, useMemo, useState } from "react";
 import { rpc } from "../lib/rpc";
 import { userInitials } from "../lib/user-initials";
+import { applyPicks } from "./group-picks";
 
 function validSelection(name: string, selected: readonly string[]) {
   return (
@@ -326,14 +327,18 @@ export function GroupSettings({
   const currentDescription = group.description ?? "";
   const [description, setDescription] = useState(currentDescription);
   const currentBotIds = group.members.map((member) => member.botId);
+  const [openedBotIds] = useState(currentBotIds);
   const [selected, setSelected] = useState(currentBotIds);
+  const nextBotIds = applyPicks(currentBotIds, openedBotIds, selected);
   // The creator is always in the group: only the others are picked.
   const currentPeople = group.people.map((person) => person.userId).filter((id) => id !== userId);
+  const [openedPeople] = useState(currentPeople);
   const [selectedPeople, setSelectedPeople] = useState(currentPeople);
+  const nextPeople = applyPicks(currentPeople, openedPeople, selectedPeople);
   const leadId = useId();
   const [lead, setLead] = useState(group.leadBotId);
   // The lead leaves with its bot; the first bot answers then.
-  const currentLead = lead && selected.includes(lead) ? lead : null;
+  const currentLead = lead && nextBotIds.includes(lead) ? lead : null;
   const [pending, setPending] = useState<"save" | "remove" | "leave" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const spacePeople = useSpacePeople(group.canManage ? group.spaceId : undefined, userId);
@@ -381,8 +386,8 @@ export function GroupSettings({
     return onSave({
       name: name.trim() !== group.name ? name.trim() : undefined,
       description: description.trim() !== currentDescription ? description.trim() : undefined,
-      botIds: sameMembers(selected, currentBotIds) ? undefined : selected,
-      userIds: sameMembers(selectedPeople, currentPeople) ? undefined : selectedPeople,
+      botIds: sameMembers(nextBotIds, currentBotIds) ? undefined : nextBotIds,
+      userIds: sameMembers(nextPeople, currentPeople) ? undefined : nextPeople,
       leadBotId: currentLead !== group.leadBotId ? currentLead : undefined,
     });
   }
@@ -488,7 +493,7 @@ export function GroupSettings({
       ) : null}
       <Button
         className="mt-5 w-full"
-        disabled={pending !== null || !validSelection(name, selected)}
+        disabled={pending !== null || !validSelection(name, nextBotIds)}
         onClick={() => void mutate("save", save)}
       >
         {pending === "save" ? <Trans>Saving…</Trans> : <Trans>Save</Trans>}
