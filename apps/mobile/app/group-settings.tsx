@@ -3,6 +3,7 @@ import {
   GROUP_MEMBER_MAX,
   GROUP_MEMBER_MIN,
 } from "@rakazo/contracts";
+import { applyPicks } from "@rakazo/core";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, TextInput } from "react-native";
@@ -14,6 +15,10 @@ import { type MobileBot, type MobileGroup, rpc } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
 import { serverMessage } from "../lib/server-error";
+
+function sameIds(left: readonly string[], right: readonly string[]) {
+  return left.length === right.length && left.every((id) => right.includes(id));
+}
 
 export default function GroupSettingsScreen() {
   const { t } = useI18n();
@@ -84,14 +89,20 @@ export default function GroupSettingsScreen() {
         userIds?: string[];
         leadBotId?: string;
       } = { groupId };
-      if (name.trim() !== group.name) input.name = name.trim();
-      if (description.trim() !== (group.description ?? "")) input.description = description.trim();
-      const memberIds = group.members.map((member) => member.botId).join(",");
-      if (selected.join(",") !== memberIds) input.botIds = selected;
-      const peopleIds = group.people.slice(1).map((person) => person.userId);
-      if ([...userIds].sort().join(",") !== [...peopleIds].sort().join(","))
-        input.userIds = userIds;
-      if (leadBotId && leadBotId !== group.leadBotId && selected.includes(leadBotId))
+      // What was switched in or out since the screen opened, applied to the group as it is now,
+      // so someone who left meanwhile is not added back.
+      const latest =
+        (await rpc<MobileGroup[]>("groups/list")).find((row) => row.id === groupId) ?? group;
+      const botIdsOf = (of: MobileGroup) => of.members.map((member) => member.botId);
+      // Its creator comes first and is always in it.
+      const peopleOf = (of: MobileGroup) => of.people.slice(1).map((person) => person.userId);
+      const botIds = applyPicks(botIdsOf(latest), botIdsOf(group), selected);
+      const nextPeople = applyPicks(peopleOf(latest), peopleOf(group), userIds);
+      if (name.trim() !== latest.name) input.name = name.trim();
+      if (description.trim() !== (latest.description ?? "")) input.description = description.trim();
+      if (!sameIds(botIds, botIdsOf(latest))) input.botIds = botIds;
+      if (!sameIds(nextPeople, peopleOf(latest))) input.userIds = nextPeople;
+      if (leadBotId && leadBotId !== latest.leadBotId && botIds.includes(leadBotId))
         input.leadBotId = leadBotId;
       if (Object.keys(input).length > 1) await rpc("groups/update", input);
       router.back();

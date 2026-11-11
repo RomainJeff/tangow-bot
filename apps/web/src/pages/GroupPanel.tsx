@@ -5,7 +5,7 @@ import {
   GROUP_MEMBER_MAX,
   GROUP_MEMBER_MIN,
 } from "@rakazo/contracts";
-import { groupLeadBotId } from "@rakazo/core";
+import { applyPicks, groupLeadBotId } from "@rakazo/core";
 import {
   BotAvatar,
   Button,
@@ -20,7 +20,6 @@ import type { ReactNode } from "react";
 import { useEffect, useId, useMemo, useState } from "react";
 import { rpc } from "../lib/rpc";
 import { userInitials } from "../lib/user-initials";
-import { applyPicks } from "./group-picks";
 
 function validSelection(name: string, selected: readonly string[]) {
   return (
