@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
-- When a bot in a group needs you on its computer, Open on its card now opens that computer on web and desktop so you can take control and hand it back from the group, and on iPhone and Android a shared bot's computer offers only the takeover, as in your own thread with it.
+- When a bot in a group needs you on its computer, Open on its card now opens that computer on web and desktop so you can take control and hand it back from the group, and on iPhone and Android a shared bot's computer offers only the takeover, as in your own thread with it; everyone else in the group sees the card as waiting for you by name instead of "Needs you".
 
 ### 2026-11-10
 
