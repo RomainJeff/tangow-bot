@@ -199,7 +199,6 @@ import { useDebugMode } from "../lib/debug-mode";
 import type { CardEdits } from "../lib/draft-edit";
 import { draftEdit, dropDraftEdit, syncDraftEdit } from "../lib/draft-edit";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
-import { messageAuthorId, splitRowsByPerson } from "../lib/group-people";
 import { commitHaptic, selectionHaptic, sendHaptic, successHaptic } from "../lib/haptics";
 import { dateLocaleForUi, t, useI18n } from "../lib/i18n";
 import {
@@ -585,13 +584,10 @@ function Thread() {
       progress: snap?.layer,
       imageStacks: true,
     });
-    const rows = keepUnchangedRows(
-      drawnRows.current,
-      groupId ? splitRowsByPerson(projected.rows, creatorId) : projected.rows,
-    );
+    const rows = keepUnchangedRows(drawnRows.current, projected.rows);
     drawnRows.current = new Map(rows.map((row) => [row.item.id, row]));
     return { ...projected, rows };
-  }, [snap?.entries, snap?.layer, showSteps, groupId, creatorId]);
+  }, [snap?.entries, snap?.layer, showSteps]);
   // The image viewer zooms out of a stack in the list. A run adding images, a helper's report or a
   // recap while it is open can fold that stack's row away, and the list would recycle the very view
   // the system hid as the zoom's source, leaving a hole. So the thread keeps the view it had until
@@ -2103,7 +2099,7 @@ function Thread() {
 
   /** Another person of the group behind a message; your own messages and bots' have none. */
   function messagePerson(message: MobileMessage): GroupPerson | undefined {
-    const authorId = messageAuthorId(message, creatorId);
+    const authorId = message.role === "user" ? (message.authorId ?? creatorId) : undefined;
     if (!authorId || !viewerUserId || authorId === viewerUserId) return undefined;
     return (
       snap?.people?.find((candidate) => candidate.userId === authorId) ?? {
