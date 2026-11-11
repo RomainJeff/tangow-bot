@@ -488,7 +488,7 @@ describe("mobile API authentication", () => {
 
     await expect(authHeaders()).resolves.toEqual({
       authorization: "Bearer session-token",
-      "x-rakazo-space-id": "space-support",
+      "x-tangow-space-id": "space-support",
     });
   });
 
@@ -625,7 +625,7 @@ describe("mobile API authentication", () => {
     });
     await expect(authHeaders()).resolves.toEqual({
       authorization: "Bearer session-token",
-      "x-rakazo-space-id": "space-support",
+      "x-tangow-space-id": "space-support",
     });
     expect(SecureStore.setItemAsync).not.toHaveBeenCalledWith(
       "rakazo.api_base",
@@ -656,7 +656,7 @@ describe("mobile API authentication", () => {
     expect(currentApiBase()).toBe(previous);
     await expect(authHeaders()).resolves.toEqual({
       authorization: "Bearer session-token",
-      "x-rakazo-space-id": "space-support",
+      "x-tangow-space-id": "space-support",
     });
   });
 
@@ -682,7 +682,7 @@ describe("mobile API authentication", () => {
     });
     expect(currentApiBase()).toBe(previous);
     await expect(authHeaders()).resolves.toEqual({
-      "x-rakazo-space-id": "space-support",
+      "x-tangow-space-id": "space-support",
     });
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith("rakazo.space_id", "space-support");
   });
@@ -727,7 +727,7 @@ describe("mobile API authentication", () => {
     );
     await expect(authHeaders()).resolves.toEqual({
       authorization: "Bearer session-token",
-      "x-rakazo-space-id": "space-support",
+      "x-tangow-space-id": "space-support",
     });
   });
 
@@ -781,7 +781,7 @@ describe("mobile API authentication", () => {
 
     await expect(authHeaders()).resolves.toEqual({
       authorization: "Bearer session-token",
-      "x-rakazo-space-id": "space-support",
+      "x-tangow-space-id": "space-support",
     });
     expect(SecureStore.setItemAsync).not.toHaveBeenCalledWith(
       "rakazo.api_base",
@@ -808,7 +808,7 @@ describe("mobile API authentication", () => {
     expect(currentApiBase()).toBe(previous);
     await expect(authHeaders()).resolves.toEqual({
       authorization: "Bearer session-token",
-      "x-rakazo-space-id": "space-support",
+      "x-tangow-space-id": "space-support",
     });
 
     vi.mocked(SecureStore.getItemAsync).mockReset();
@@ -935,8 +935,8 @@ describe("mobile API authentication", () => {
     await expect(restartedApi.rpc("spaces/list")).resolves.toEqual({ spaces: [] });
     expect(restartedApi.selectedSpaceId()).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[0]![1].headers["x-rakazo-space-id"]).toBe("space-deleted");
-    expect(fetchMock.mock.calls[1]![1].headers["x-rakazo-space-id"]).toBeUndefined();
+    expect(fetchMock.mock.calls[0]![1].headers["x-tangow-space-id"]).toBe("space-deleted");
+    expect(fetchMock.mock.calls[1]![1].headers["x-tangow-space-id"]).toBeUndefined();
   });
 
   it("does not let a stale rollback override a saved deleted-space fallback", async () => {
@@ -1042,8 +1042,8 @@ describe("mobile API authentication", () => {
     expect(selectedSpaceId()).toBe("space-support");
     expect(storage.get("rakazo.space_id")).toBe("space-support");
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[0]![1].headers["x-rakazo-space-id"]).toBe("space-support");
-    expect(fetchMock.mock.calls[1]![1].headers["x-rakazo-space-id"]).toBeUndefined();
+    expect(fetchMock.mock.calls[0]![1].headers["x-tangow-space-id"]).toBe("space-support");
+    expect(fetchMock.mock.calls[1]![1].headers["x-tangow-space-id"]).toBeUndefined();
   });
 
   it("keeps a Space selected during unauthorized recovery when the retry succeeds", async () => {
@@ -1135,7 +1135,7 @@ describe("mobile API authentication", () => {
 
     const stale = rpc("bots/list");
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(fetchMock.mock.calls[0]![1].headers["x-rakazo-space-id"]).toBe("space-a");
+    expect(fetchMock.mock.calls[0]![1].headers["x-tangow-space-id"]).toBe("space-a");
     await expect(selectSpace("space-b")).resolves.toBe(true);
     resolveStale(jsonResponse({ error: { message: "Unauthorized" } }, { status: 401 }));
 
@@ -1170,7 +1170,7 @@ describe("mobile API authentication", () => {
 
     const stale = rpc("bots/list");
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(fetchMock.mock.calls[0]![1].headers["x-rakazo-space-id"]).toBe("space-a");
+    expect(fetchMock.mock.calls[0]![1].headers["x-tangow-space-id"]).toBe("space-a");
     await expect(selectSpace("space-b")).resolves.toBe(true);
     await expect(selectSpace("space-a")).resolves.toBe(true);
     resolveStale(jsonResponse({ error: { message: "Unauthorized" } }, { status: 401 }));
@@ -1390,9 +1390,9 @@ describe("mobile API authentication", () => {
     expect(storage.has("rakazo.space_id")).toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(String(fetchMock.mock.calls[0]![0])).toContain("/rpc/bots/create");
-    expect(fetchMock.mock.calls[0]![1].headers["x-rakazo-space-id"]).toBe("space-deleted");
+    expect(fetchMock.mock.calls[0]![1].headers["x-tangow-space-id"]).toBe("space-deleted");
     expect(String(fetchMock.mock.calls[1]![0])).toContain("/rpc/spaces/list");
-    expect(fetchMock.mock.calls[1]![1].headers["x-rakazo-space-id"]).toBeUndefined();
+    expect(fetchMock.mock.calls[1]![1].headers["x-tangow-space-id"]).toBeUndefined();
   });
 
   it("keeps the Space selection when a mutating RPC unauthorized is a session failure", async () => {
@@ -1420,9 +1420,9 @@ describe("mobile API authentication", () => {
     expect(storage.get("rakazo.space_id")).toBe("space-support");
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(String(fetchMock.mock.calls[0]![0])).toContain("/rpc/bots/create");
-    expect(fetchMock.mock.calls[0]![1].headers["x-rakazo-space-id"]).toBe("space-support");
+    expect(fetchMock.mock.calls[0]![1].headers["x-tangow-space-id"]).toBe("space-support");
     expect(String(fetchMock.mock.calls[1]![0])).toContain("/rpc/spaces/list");
-    expect(fetchMock.mock.calls[1]![1].headers["x-rakazo-space-id"]).toBeUndefined();
+    expect(fetchMock.mock.calls[1]![1].headers["x-tangow-space-id"]).toBeUndefined();
   });
 
   it("recovers the active space after rollback persistence fails", async () => {
@@ -1447,7 +1447,7 @@ describe("mobile API authentication", () => {
       error: "Could not save the server URL",
     });
     await expect(authHeaders()).resolves.toEqual({
-      "x-rakazo-space-id": "space-support",
+      "x-tangow-space-id": "space-support",
     });
     expect(storage.get("rakazo.space_rollback")).toBe(
       JSON.stringify({ apiBase: "http://127.0.0.1:3100", spaceId: "space-support" }),

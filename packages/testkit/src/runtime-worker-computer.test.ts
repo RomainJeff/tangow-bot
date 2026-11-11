@@ -169,13 +169,13 @@ describe("a worker run's computer", () => {
         {
           expect(request) {
             const names = request.tools?.map((tool) => tool.function.name) ?? [];
-            expect(names).toContain("mcp__rakazo__browser_snapshot");
-            expect(names).not.toContain("mcp__rakazo__browser_run");
+            expect(names).toContain("mcp__tangow__browser_snapshot");
+            expect(names).not.toContain("mcp__tangow__browser_run");
           },
           response: {
             type: "tool",
             id: "page",
-            name: "mcp__rakazo__browser_snapshot",
+            name: "mcp__tangow__browser_snapshot",
             arguments: {},
           },
         },
@@ -186,7 +186,7 @@ describe("a worker run's computer", () => {
           response: {
             type: "tool",
             id: "say",
-            name: "mcp__rakazo__message_user",
+            name: "mcp__tangow__message_user",
             arguments: { message: "Done." },
           },
         },
@@ -540,7 +540,7 @@ describe("a worker run's screens by path", () => {
 describe("computer_exec", () => {
   const terminals = (request: ModelEmulatorRequest) =>
     (request.tools ?? [])
-      .map((tool) => tool.function.name.replace(/^mcp__rakazo__/, ""))
+      .map((tool) => tool.function.name.replace(/^mcp__tangow__/, ""))
       .filter((name) => ["bash", "shell", "computer_exec"].includes(name))
       .sort();
 
@@ -735,7 +735,7 @@ it("hands the computer to computer-use: the bot that can start it has none of it
       {
         expect(request) {
           names = (request.tools ?? []).map((tool) =>
-            tool.function.name.replace(/^mcp__rakazo__/, ""),
+            tool.function.name.replace(/^mcp__tangow__/, ""),
           );
         },
         response: finish[0]!.response,

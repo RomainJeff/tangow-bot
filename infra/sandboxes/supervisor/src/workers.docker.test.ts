@@ -74,7 +74,7 @@ it.skipIf(process.env.VERIFY_DOCKER_WORKERS !== "1")(
               ...headers,
               connection: "Upgrade",
               upgrade: "rakazo-guest",
-              "x-rakazo-worker-capability": "not-the-attempt-capability",
+              "x-tangow-worker-capability": "not-the-attempt-capability",
             },
           })
           .on("upgrade", (_response, upgraded) => resolve(upgraded))

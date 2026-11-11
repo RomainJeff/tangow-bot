@@ -493,7 +493,7 @@ private fun rpc(session: ApiSession, procedure: String, input: JSONObject): JSON
     connection.setRequestProperty("Origin", "rakazo://")
     connection.setRequestProperty("Authorization", "Bearer ${session.token}")
     if (session.spaceId.isNotBlank()) {
-      connection.setRequestProperty("x-rakazo-space-id", session.spaceId)
+      connection.setRequestProperty("x-tangow-space-id", session.spaceId)
     }
     if (session.accessClientId.isNotBlank() && session.accessClientSecret.isNotBlank()) {
       connection.setRequestProperty("CF-Access-Client-Id", session.accessClientId)

@@ -377,7 +377,7 @@ export async function authHeaders(
   return {
     ...currentAccessHeaders(currentApiBase(), defaultApiBase()),
     ...(token ? { authorization: `Bearer ${token}` } : {}),
-    ...(spaceId ? { "x-rakazo-space-id": spaceId } : {}),
+    ...(spaceId ? { "x-tangow-space-id": spaceId } : {}),
   };
 }
 
@@ -616,7 +616,7 @@ export async function rpc<T>(
   // a 401 arriving after the user switched Spaces — including A → B → A —
   // belongs to a stale request and must not touch the current selection.
   const requestHeaders = options.requestContext?.headers ?? (await authHeaders());
-  const requestSpaceId = requestHeaders["x-rakazo-space-id"];
+  const requestSpaceId = requestHeaders["x-tangow-space-id"];
   try {
     const res = await fetch(`${options.requestContext?.apiBase ?? currentApiBase()}/rpc/${proc}`, {
       method: "POST",

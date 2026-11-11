@@ -44,7 +44,7 @@ export interface TangowMcpTool {
  * native. A harness with native tool search gets each large catalog's tools deferred, and one
  * without gets the catalog's search, load and execute tools instead.
  */
-export function rakazoMcpTools(
+export function tangowMcpTools(
   tools: readonly GuestTool[],
   nativeToolSearch: boolean,
 ): TangowMcpTool[] {
@@ -122,7 +122,7 @@ export async function mcpResult(output: unknown, screensDir: string) {
   const files: string[] = [];
   for (const block of blocks) {
     if (block.type !== "image") continue;
-    const file = path.join(screensDir, `.rakazo-screen-${randomUUID()}.png`);
+    const file = path.join(screensDir, `.tangow-screen-${randomUUID()}.png`);
     await writeFile(file, Buffer.from(String(block.data), "base64"), { flag: "wx" });
     files.push(file);
   }
@@ -153,13 +153,13 @@ const PROTOCOL_VERSION = "2025-06-18";
  * transport. Every call is a `tool.call` to the controller, which keeps approval, journal,
  * redaction and budget. It depends on no harness: an adapter hands the transport to its MCP client.
  */
-export function rakazoMcpServer(
+export function tangowMcpServer(
   tools: readonly GuestTool[],
   host: HarnessHost,
   screensDir: string,
   options: { nativeToolSearch: boolean; nativeCallId?: () => string | undefined },
 ): McpClientTransport {
-  const listed = rakazoMcpTools(tools, options.nativeToolSearch);
+  const listed = tangowMcpTools(tools, options.nativeToolSearch);
   const byName = new Map(listed.map((tool) => [tool.name, tool]));
   const listeners = {
     message: new Set<(message: JsonRpcMessage) => void>(),
@@ -202,7 +202,7 @@ export function rakazoMcpServer(
           protocolVersion:
             typeof params.protocolVersion === "string" ? params.protocolVersion : PROTOCOL_VERSION,
           capabilities: { tools: {} },
-          serverInfo: { name: "rakazo", version: "1" },
+          serverInfo: { name: "tangow", version: "1" },
           instructions: "Tangow's own tools: your computer, browser, memory, connectors and app.",
         };
       case "ping":

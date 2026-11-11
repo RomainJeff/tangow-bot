@@ -63,7 +63,7 @@ async function fakeSupervisor() {
     let received = "";
     socket.on("data", (chunk) => (received += chunk));
     socket.on("error", () => undefined);
-    const capability = req.headers["x-rakazo-worker-capability"];
+    const capability = req.headers["x-tangow-worker-capability"];
     guests.push({
       socket,
       capability: typeof capability === "string" ? capability : undefined,

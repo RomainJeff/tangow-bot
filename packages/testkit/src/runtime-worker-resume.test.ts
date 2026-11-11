@@ -202,7 +202,7 @@ it("keeps an uncalled loaded tool and a full parallel result receipt across a ch
       {
         expect(request) {
           expect(request.tools?.map((tool) => tool.function.name)).toContain(
-            "mcp__rakazo__utility_29",
+            "mcp__tangow__utility_29",
           );
         },
         response: {
@@ -256,7 +256,7 @@ it("keeps an uncalled loaded tool and a full parallel result receipt across a ch
   await run.continueRun(runId);
   expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).error).toBe(null);
   run.model.assertComplete();
-  expect(resumed?.tools?.map((tool) => tool.function.name)).toContain("mcp__rakazo__utility_29");
+  expect(resumed?.tools?.map((tool) => tool.function.name)).toContain("mcp__tangow__utility_29");
   expect(resumed?.messages).toEqual(
     expect.arrayContaining([
       expect.objectContaining({

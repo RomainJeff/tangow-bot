@@ -281,12 +281,12 @@ describe("the pi-native harness through the controller", () => {
           response: {
             type: "tool",
             id: "one",
-            name: "mcp__rakazo__run_subagent",
+            name: "mcp__tangow__run_subagent",
             arguments: { category: "everyday", name: "slow", task: "slow-task" },
             siblings: [
               {
                 id: "two",
-                name: "mcp__rakazo__run_subagent",
+                name: "mcp__tangow__run_subagent",
                 arguments: { category: "everyday", name: "peer", task: "peer-task" },
               },
             ],
@@ -420,7 +420,7 @@ describe("the pi-native harness through the controller", () => {
           expect(request) {
             const names = request.tools?.map((tool) => tool.function.name) ?? [];
             expect(names).toContain("tool_search");
-            expect(names).not.toContain("mcp__rakazo__publish_note");
+            expect(names).not.toContain("mcp__tangow__publish_note");
           },
           response: {
             type: "tool",
@@ -432,13 +432,13 @@ describe("the pi-native harness through the controller", () => {
         {
           expect(request) {
             expect(request.tools?.map((tool) => tool.function.name)).toContain(
-              "mcp__rakazo__publish_note",
+              "mcp__tangow__publish_note",
             );
           },
           response: {
             type: "tool",
             id: "publish",
-            name: "mcp__rakazo__publish_note",
+            name: "mcp__tangow__publish_note",
             arguments: { title: "Plan" },
           },
         },
@@ -494,10 +494,10 @@ describe("the pi-native harness through the controller", () => {
       { label, name, other, deferred: false, reverseCatalog: false },
     ]),
     ...[false, true].flatMap((reverseCatalog) =>
-      ["mcp__rakazo__remember", "remember"].map((name) => ({
+      ["mcp__tangow__remember", "remember"].map((name) => ({
         label: `canonical alias overlap ${name}, reversed=${reverseCatalog}`,
         name,
-        other: name === "remember" ? "mcp__rakazo__remember" : "remember",
+        other: name === "remember" ? "mcp__tangow__remember" : "remember",
         deferred: false,
         reverseCatalog,
       })),
@@ -557,9 +557,9 @@ describe("the pi-native harness through the controller", () => {
               const loaded = request.tools?.map((tool) => tool.function.name) ?? [];
               assigned =
                 loaded.find((tool) =>
-                  ["remember", "mcp__rakazo__remember"].includes(name)
-                    ? tool === `mcp__rakazo__${name}`
-                    : tool.startsWith("mcp__rakazo__"),
+                  ["remember", "mcp__tangow__remember"].includes(name)
+                    ? tool === `mcp__tangow__${name}`
+                    : tool.startsWith("mcp__tangow__"),
                 ) ?? "";
               expect(assigned).toBeTruthy();
             },
@@ -685,13 +685,13 @@ describe("the pi-native harness through the controller", () => {
             expect(request) {
               expect(JSON.stringify(request.messages)).toContain("parent-private-context");
               expect(request.tools?.map((tool) => tool.function.name)).toContain(
-                "mcp__rakazo__run_subagent",
+                "mcp__tangow__run_subagent",
               );
             },
             response: {
               type: "tool",
               id: "delegate",
-              name: "mcp__rakazo__run_subagent",
+              name: "mcp__tangow__run_subagent",
               arguments: { category: "everyday", name: "scout", task: "Find the child note." },
             },
           },
@@ -703,10 +703,10 @@ describe("the pi-native harness through the controller", () => {
               expect(context).not.toContain("Draft a note.");
               expect(systemOf(request)).toContain('named "scout"');
               expect(request.tools?.map((tool) => tool.function.name)).toEqual([
-                "mcp__rakazo__remember",
+                "mcp__tangow__remember",
               ]);
             },
-            response: { type: "tool", id: "save", name: "mcp__rakazo__remember", arguments: {} },
+            response: { type: "tool", id: "save", name: "mcp__tangow__remember", arguments: {} },
           },
           ...(outcome === "paused"
             ? []
@@ -729,7 +729,7 @@ describe("the pi-native harness through the controller", () => {
                     : "Stopped: the run is waiting for the user.",
               );
               expect(context).not.toContain("child-only-result");
-              expect(context).not.toContain('"name":"mcp__rakazo__remember"');
+              expect(context).not.toContain('"name":"mcp__tangow__remember"');
             },
             response: { type: "text", text: "Parent finished." },
           },
@@ -851,7 +851,7 @@ describe("the pi-native harness through the controller", () => {
                   slowClosed = true;
                 },
               }
-            : { type: "tool", id: "pause", name: "mcp__rakazo__remember", arguments: {} };
+            : { type: "tool", id: "pause", name: "mcp__tangow__remember", arguments: {} };
         },
       };
       const pending = nativeRun(
@@ -861,12 +861,12 @@ describe("the pi-native harness through the controller", () => {
             response: {
               type: "tool",
               id: "slow",
-              name: "mcp__rakazo__run_subagent",
+              name: "mcp__tangow__run_subagent",
               arguments: { category: "everyday", name: "slow", task: "slow-task" },
               siblings: [
                 {
                   id: "peer",
-                  name: "mcp__rakazo__run_subagent",
+                  name: "mcp__tangow__run_subagent",
                   arguments: { category: "everyday", name: "peer", task: "peer-task" },
                 },
               ],

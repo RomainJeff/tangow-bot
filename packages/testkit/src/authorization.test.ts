@@ -1143,7 +1143,7 @@ describeWithDatabase("API authorization and resource isolation", () => {
           headers: {
             "content-type": "application/json",
             cookie,
-            "x-rakazo-space-id": space,
+            "x-tangow-space-id": space,
             origin: "http://127.0.0.1:5173",
           },
           body: JSON.stringify({ text: "Release notes go out on Thursdays.", botId: bot.id }),
@@ -2886,7 +2886,7 @@ async function raw(
     headers: {
       "content-type": "application/json",
       ...(cookie ? { cookie } : {}),
-      ...(spaceId ? { "x-rakazo-space-id": spaceId } : {}),
+      ...(spaceId ? { "x-tangow-space-id": spaceId } : {}),
       origin: "http://127.0.0.1:5173",
     },
     body: JSON.stringify({ json: body ?? {} }),

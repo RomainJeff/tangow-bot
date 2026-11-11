@@ -692,7 +692,7 @@ async function rpc<T>(
     headers: {
       "content-type": "application/json",
       cookie,
-      ...(spaceId ? { "x-rakazo-space-id": spaceId } : {}),
+      ...(spaceId ? { "x-tangow-space-id": spaceId } : {}),
       origin: "http://127.0.0.1:5173",
     },
     body: JSON.stringify({ json: body }),

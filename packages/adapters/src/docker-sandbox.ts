@@ -127,13 +127,13 @@ export class DockerSandboxProvider implements SandboxProvider {
   private headers(context: AdapterContext, botId?: string) {
     return {
       authorization: `Bearer ${this.supervisorToken}`,
-      "x-rakazo-space-id": context.spaceId,
+      "x-tangow-space-id": context.spaceId,
       ...outgoingCorrelationHeaders(),
-      ...(botId ? { "x-rakazo-bot-id": botId } : {}),
+      ...(botId ? { "x-tangow-bot-id": botId } : {}),
       // The supervisor picks the screen and its browser profile by this key.
-      ...(context.botId ? { "x-rakazo-screen-id": screenSessionKey(context) } : {}),
-      ...(context.screenLeaseId ? { "x-rakazo-screen-lease-id": context.screenLeaseId } : {}),
-      ...(context.cancelRunWork ? { "x-rakazo-cancel-run-work": "1" } : {}),
+      ...(context.botId ? { "x-tangow-screen-id": screenSessionKey(context) } : {}),
+      ...(context.screenLeaseId ? { "x-tangow-screen-lease-id": context.screenLeaseId } : {}),
+      ...(context.cancelRunWork ? { "x-tangow-cancel-run-work": "1" } : {}),
     };
   }
 
@@ -486,7 +486,7 @@ export class DockerSandboxProvider implements SandboxProvider {
           method: "DELETE",
           headers: {
             ...this.headers(context, computer.botId),
-            ...(keep ? { "x-rakazo-preserve-screen": "1" } : {}),
+            ...(keep ? { "x-tangow-preserve-screen": "1" } : {}),
           },
           signal: deadline.signal,
         }),

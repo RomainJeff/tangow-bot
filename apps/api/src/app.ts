@@ -564,7 +564,7 @@ export async function createApp(
   });
   app.use("/rpc/*", async (c, next) => {
     const session = await auth.api.getSession({ headers: sessionHeaders(c.req.raw) });
-    const requestedSpaceId = c.req.header("x-rakazo-space-id");
+    const requestedSpaceId = c.req.header("x-tangow-space-id");
     const actor = session?.user
       ? await requireMembership(prisma, session.user.id, requestedSpaceId).catch(() => null)
       : null;
@@ -584,7 +584,7 @@ export async function createApp(
     const actor = await requireMembership(
       prisma,
       session.user.id,
-      c.req.header("x-rakazo-space-id"),
+      c.req.header("x-tangow-space-id"),
     ).catch(() => null);
     if (actor) enrichLogContext({ "user.id": actor.userId, "space.id": actor.spaceId });
     return actor;

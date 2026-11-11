@@ -206,7 +206,7 @@ function lazySteps(seen: { executed?: string }, between: () => Promise<void> = a
     },
     {
       async expect(request) {
-        expect(toolNames(request)).toContain("mcp__rakazo__mcp__demo__tool_29");
+        expect(toolNames(request)).toContain("mcp__tangow__mcp__demo__tool_29");
         expect(JSON.stringify(request.tools)).toContain("schema-marker-29");
         await between();
       },

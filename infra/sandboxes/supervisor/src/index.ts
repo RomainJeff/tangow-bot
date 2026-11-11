@@ -214,7 +214,7 @@ app.post("/computers", async (c) => {
     })
     .parse(await c.req.json());
   try {
-    assertRequestIdentity(c.req.header("x-rakazo-bot-id"), c.req.header("x-rakazo-space-id"), {
+    assertRequestIdentity(c.req.header("x-tangow-bot-id"), c.req.header("x-tangow-space-id"), {
       botId: body.botId,
       spaceId: body.spaceId,
     });
@@ -352,8 +352,8 @@ app.get("/computers/:id", async (c) => {
   try {
     const { info } = await managedContainer(
       id,
-      c.req.header("x-rakazo-bot-id"),
-      c.req.header("x-rakazo-space-id"),
+      c.req.header("x-tangow-bot-id"),
+      c.req.header("x-tangow-space-id"),
     );
     return c.json({
       id,
@@ -379,10 +379,10 @@ app.post("/computers/:id/exec", async (c) => {
   try {
     const { container, info } = await managedContainer(
       id,
-      c.req.header("x-rakazo-bot-id"),
-      c.req.header("x-rakazo-space-id"),
+      c.req.header("x-tangow-bot-id"),
+      c.req.header("x-tangow-space-id"),
     );
-    const screenId = c.req.header("x-rakazo-screen-id") || c.req.header("x-rakazo-bot-id") || id;
+    const screenId = c.req.header("x-tangow-screen-id") || c.req.header("x-tangow-bot-id") || id;
     const screenIndex = computerScreens.get(id)?.get(screenId)?.index ?? 0;
     const layout = screenPorts(screenIndex);
     const result = await runContainerCommand(
@@ -448,10 +448,10 @@ app.post("/computers/:id/browser", async (c) => {
   try {
     const { container, layout } = await managedScreen(
       c.req.param("id"),
-      c.req.header("x-rakazo-bot-id"),
-      c.req.header("x-rakazo-space-id"),
-      c.req.header("x-rakazo-screen-id"),
-      c.req.header("x-rakazo-screen-lease-id"),
+      c.req.header("x-tangow-bot-id"),
+      c.req.header("x-tangow-space-id"),
+      c.req.header("x-tangow-screen-id"),
+      c.req.header("x-tangow-screen-lease-id"),
     );
     const result = await runContainerCommand(
       container,
@@ -486,10 +486,10 @@ app.post("/computers/:id/observe", async (c) => {
   try {
     const { container, info, layout, browserProfile } = await managedScreen(
       c.req.param("id"),
-      c.req.header("x-rakazo-bot-id"),
-      c.req.header("x-rakazo-space-id"),
-      c.req.header("x-rakazo-screen-id"),
-      c.req.header("x-rakazo-screen-lease-id"),
+      c.req.header("x-tangow-bot-id"),
+      c.req.header("x-tangow-space-id"),
+      c.req.header("x-tangow-screen-id"),
+      c.req.header("x-tangow-screen-lease-id"),
     );
     const control = computerControlEndpoint(info);
     const observation = await preferComputerControl(
@@ -527,10 +527,10 @@ app.post("/computers/:id/actions", async (c) => {
   try {
     const { container, info, layout, browserProfile } = await managedScreen(
       c.req.param("id"),
-      c.req.header("x-rakazo-bot-id"),
-      c.req.header("x-rakazo-space-id"),
-      c.req.header("x-rakazo-screen-id"),
-      c.req.header("x-rakazo-screen-lease-id"),
+      c.req.header("x-tangow-bot-id"),
+      c.req.header("x-tangow-space-id"),
+      c.req.header("x-tangow-screen-id"),
+      c.req.header("x-tangow-screen-lease-id"),
     );
     const control = computerControlEndpoint(info);
     const workspace = computerWorkspace(info.Config.Labels);
@@ -579,8 +579,8 @@ app.get("/computers/:id/files", async (c) => {
   try {
     const { container, info } = await managedContainer(
       c.req.param("id"),
-      c.req.header("x-rakazo-bot-id"),
-      c.req.header("x-rakazo-space-id"),
+      c.req.header("x-tangow-bot-id"),
+      c.req.header("x-tangow-space-id"),
     );
     const relative = normalizeWorkspaceRelative(c.req.query("path") ?? "");
     const target = workspaceTarget(relative, computerWorkspace(info.Config.Labels));
@@ -648,8 +648,8 @@ app.post("/computers/:id/files", async (c) => {
   try {
     const { container, info } = await managedContainer(
       c.req.param("id"),
-      c.req.header("x-rakazo-bot-id"),
-      c.req.header("x-rakazo-space-id"),
+      c.req.header("x-tangow-bot-id"),
+      c.req.header("x-tangow-space-id"),
     );
     const target = workspaceTarget(
       normalizeWorkspaceRelative(body.path),
@@ -673,10 +673,10 @@ app.get("/computers/:id/screen", async (c) => {
   try {
     const { container, info, layout, viewToken } = await managedScreen(
       id,
-      c.req.header("x-rakazo-bot-id"),
-      c.req.header("x-rakazo-space-id"),
-      c.req.header("x-rakazo-screen-id"),
-      c.req.header("x-rakazo-screen-lease-id"),
+      c.req.header("x-tangow-bot-id"),
+      c.req.header("x-tangow-space-id"),
+      c.req.header("x-tangow-screen-id"),
+      c.req.header("x-tangow-screen-lease-id"),
     );
     const screenUrl = await publishedScreenUrl(container, info, layout.viewPort);
     return c.redirect(screenUrlWithToken(screenUrl, viewToken));
@@ -701,10 +701,10 @@ app.post("/computers/:id/screen-mode", async (c) => {
     .parse(await c.req.json());
   try {
     const id = c.req.param("id");
-    const botId = c.req.header("x-rakazo-bot-id");
-    const spaceId = c.req.header("x-rakazo-space-id");
-    const screenId = c.req.header("x-rakazo-screen-id");
-    const screenLeaseId = c.req.header("x-rakazo-screen-lease-id");
+    const botId = c.req.header("x-tangow-bot-id");
+    const spaceId = c.req.header("x-tangow-space-id");
+    const screenId = c.req.header("x-tangow-screen-id");
+    const screenLeaseId = c.req.header("x-tangow-screen-lease-id");
     const { container, info } = await managedContainer(id, botId, spaceId);
     const { layout, viewToken } = await withComputerScreenLock(id, async () => {
       const screen = await ensureManagedScreen(id, container, info, botId, screenId, screenLeaseId);
@@ -748,10 +748,10 @@ app.post("/computers/:id/input", async (c) => {
   try {
     const { container, layout } = await managedScreen(
       id,
-      c.req.header("x-rakazo-bot-id"),
-      c.req.header("x-rakazo-space-id"),
-      c.req.header("x-rakazo-screen-id"),
-      c.req.header("x-rakazo-screen-lease-id"),
+      c.req.header("x-tangow-bot-id"),
+      c.req.header("x-tangow-space-id"),
+      c.req.header("x-tangow-screen-id"),
+      c.req.header("x-tangow-screen-lease-id"),
     );
     const result = await runContainerCommand(container, [
       "env",
@@ -773,15 +773,15 @@ app.delete("/computers/:id/screen", async (c) => {
     const id = c.req.param("id");
     const { container } = await managedContainer(
       id,
-      c.req.header("x-rakazo-bot-id"),
-      c.req.header("x-rakazo-space-id"),
+      c.req.header("x-tangow-bot-id"),
+      c.req.header("x-tangow-space-id"),
     );
-    const screenId = c.req.header("x-rakazo-screen-id") || c.req.header("x-rakazo-bot-id") || id;
-    const cancelRunWork = c.req.header("x-rakazo-cancel-run-work") === "1";
-    const screenLeaseId = c.req.header("x-rakazo-screen-lease-id");
+    const screenId = c.req.header("x-tangow-screen-id") || c.req.header("x-tangow-bot-id") || id;
+    const cancelRunWork = c.req.header("x-tangow-cancel-run-work") === "1";
+    const screenLeaseId = c.req.header("x-tangow-screen-lease-id");
     // Only a leased release can be kept: a bot's deletion or archive has none and must close it.
     const preserve =
-      c.req.header("x-rakazo-preserve-screen") === "1" && !cancelRunWork && Boolean(screenLeaseId);
+      c.req.header("x-tangow-preserve-screen") === "1" && !cancelRunWork && Boolean(screenLeaseId);
     let kept = false;
     let refused = false;
     await withComputerScreenLock(id, async () => {
@@ -833,8 +833,8 @@ app.post("/computers/:id/stop", async (c) => {
   try {
     const { container } = await managedContainer(
       id,
-      c.req.header("x-rakazo-bot-id"),
-      c.req.header("x-rakazo-space-id"),
+      c.req.header("x-tangow-bot-id"),
+      c.req.header("x-tangow-space-id"),
     );
     await withComputerScreenLock(id, async () => {
       const info = await container.inspect();
@@ -871,11 +871,11 @@ app.post("/computers/:id/stop", async (c) => {
 
 app.delete("/computers/:id", async (c) => {
   const id = c.req.param("id");
-  const botId = c.req.header("x-rakazo-bot-id");
+  const botId = c.req.header("x-tangow-bot-id");
   try {
     if (!botId) throw new Error("missing computer identity");
     return await withBotLifecycleLock(botId, async () => {
-      const { container } = await managedContainer(id, botId, c.req.header("x-rakazo-space-id"));
+      const { container } = await managedContainer(id, botId, c.req.header("x-tangow-space-id"));
       await withComputerScreenLock(id, async () => {
         await container.remove({ force: true }).catch(() => undefined);
         clearComputerScreenRegistry(computerScreens, id);
@@ -1001,7 +1001,7 @@ export async function upgradeWorkerGuest(
   }
   const match = /^\/workers\/([A-Za-z0-9]{1,64})\/guest$/.exec(request.url ?? "");
   if (!match) return refuse("404 Not Found");
-  const capability = request.headers["x-rakazo-worker-capability"];
+  const capability = request.headers["x-tangow-worker-capability"];
   if (typeof capability !== "string" || capability.length === 0) return refuse("400 Bad Request");
   try {
     const container = docker.getContainer(match[1]!);

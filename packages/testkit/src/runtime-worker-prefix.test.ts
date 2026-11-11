@@ -330,7 +330,7 @@ describe("prompt bytes at the provider boundary", () => {
       expect(text(request)).not.toContain("&lt;fake-secret&gt;");
     }
     expect(first!.tools?.map((tool) => tool.function.name)).toEqual(
-      expect.arrayContaining(["mcp__rakazo__a_lookup", "mcp__rakazo__z_lookup"]),
+      expect.arrayContaining(["mcp__tangow__a_lookup", "mcp__tangow__z_lookup"]),
     );
     for (const stale of ["DURABLE_FIRST", "RECALL_FIRST", "WORK_FIRST"]) {
       expect(text(second!)).not.toContain(stale);

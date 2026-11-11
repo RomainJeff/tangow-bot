@@ -7,7 +7,7 @@ import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import type { GuestTool } from "@tangow/adapter-kit";
 import { afterEach, describe, expect, it } from "vitest";
 import type { HarnessHost, InformativeBody } from "./harness.js";
-import { rakazoMcpServer, rakazoMcpTools } from "./tangow-mcp.js";
+import { tangowMcpServer, tangowMcpTools } from "./tangow-mcp.js";
 
 const cleanups: Array<() => Promise<unknown>> = [];
 afterEach(async () => {
@@ -74,7 +74,7 @@ async function connect(
   options = { nativeToolSearch: false },
 ) {
   const screensDir = await mkdtemp(path.join(tmpdir(), "tangow-mcp-screens-"));
-  const server = rakazoMcpServer(tools, host, screensDir, options);
+  const server = tangowMcpServer(tools, host, screensDir, options);
   const [clientEnd, serverEnd] = InMemoryTransport.createLinkedPair();
   serverEnd.onmessage = (message) => void server.send(message as never);
   server.onMessage((message) => void serverEnd.send(message as JSONRPCMessage));
@@ -158,7 +158,7 @@ describe("the Tangow MCP server", () => {
     const result = await client.callTool({ name: "computer_observe", arguments: {} });
 
     const [name] = await readdir(screensDir);
-    expect(name).toMatch(/^\.rakazo-screen-[0-9a-f-]{36}\.png$/);
+    expect(name).toMatch(/^\.tangow-screen-[0-9a-f-]{36}\.png$/);
     const file = path.join(screensDir, name!);
     expect(result).toEqual({
       content: [
@@ -238,7 +238,7 @@ describe("a connector result through the Tangow MCP server", () => {
     });
 
     const [name] = await readdir(screensDir);
-    expect(name).toMatch(/^\.rakazo-screen-[0-9a-f-]{36}\.png$/);
+    expect(name).toMatch(/^\.tangow-screen-[0-9a-f-]{36}\.png$/);
     const file = path.join(screensDir, name!);
     expect(result).toEqual({
       content: [
@@ -285,7 +285,7 @@ describe("a long result with an image through the Tangow MCP server", () => {
     expect(texts.join("").length).toBeLessThanOrEqual(12_000);
     expect(texts[0]).toMatch(/^a+\n\[\d+ more characters cut\]$/);
     expect(texts[1]).toMatch(
-      /^Screenshot saved at .+\.rakazo-screen-[0-9a-f-]{36}\.png\. Read it to see it again\.$/,
+      /^Screenshot saved at .+\.tangow-screen-[0-9a-f-]{36}\.png\. Read it to see it again\.$/,
     );
   });
 
@@ -318,7 +318,7 @@ describe("a large connector catalog through the Tangow MCP server", () => {
       nativeToolSearch: true,
     });
 
-    const listed = rakazoMcpTools([...PRODUCT_TOOLS, ...CATALOG_TOOLS], true);
+    const listed = tangowMcpTools([...PRODUCT_TOOLS, ...CATALOG_TOOLS], true);
     expect(listed.filter((tool) => tool.exposure === "direct").map((tool) => tool.name)).toEqual([
       "remember",
       "schedule_create",

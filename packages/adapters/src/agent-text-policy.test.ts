@@ -59,12 +59,12 @@ describe("describeToolActivity", () => {
   });
 
   it.each([
-    ["mcp__rakazo__web_search", "Searching the web"],
-    ["mcp__rakazo__browser_snapshot", "Reading the page"],
-    ["mcp__rakazo__computer_act", "Taking the mouse"],
-    ["mcp__rakazo__run_subagent", "Briefing a helper"],
-    ["mcp__rakazo__remember", "Tucking it into memory"],
-    ["mcp__rakazo__mcp__notion__read_file", "Seeing to it"],
+    ["mcp__tangow__web_search", "Searching the web"],
+    ["mcp__tangow__browser_snapshot", "Reading the page"],
+    ["mcp__tangow__computer_act", "Taking the mouse"],
+    ["mcp__tangow__run_subagent", "Briefing a helper"],
+    ["mcp__tangow__remember", "Tucking it into memory"],
+    ["mcp__tangow__mcp__notion__read_file", "Seeing to it"],
     ["mcp__other__read_file", "Seeing to it"],
   ])("describes %s without exposing its MCP name", (name, label) => {
     expect(describeToolActivity(name)).toBe(label);

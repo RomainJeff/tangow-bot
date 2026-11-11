@@ -82,8 +82,8 @@ describe("computer loopback provision lifecycle", () => {
       method: "POST",
       headers: {
         authorization: `Bearer ${resolveSupervisorToken(process.env)}`,
-        "x-rakazo-bot-id": "bot",
-        "x-rakazo-space-id": "space",
+        "x-tangow-bot-id": "bot",
+        "x-tangow-space-id": "space",
       },
     });
     expect(response.status).toBe(status);
@@ -107,8 +107,8 @@ describe("computer loopback provision lifecycle", () => {
       method: "POST",
       headers: {
         authorization: `Bearer ${resolveSupervisorToken(process.env)}`,
-        "x-rakazo-bot-id": "bot",
-        "x-rakazo-space-id": "space",
+        "x-tangow-bot-id": "bot",
+        "x-tangow-space-id": "space",
       },
     });
     expect(response.status).toBe(403);
@@ -150,8 +150,8 @@ describe("computer loopback provision lifecycle", () => {
         method: "POST",
         headers: {
           authorization: `Bearer ${resolveSupervisorToken(process.env)}`,
-          "x-rakazo-bot-id": "bot",
-          "x-rakazo-space-id": "space",
+          "x-tangow-bot-id": "bot",
+          "x-tangow-space-id": "space",
         },
       });
     const first = stop();
@@ -185,8 +185,8 @@ describe("computer loopback provision lifecycle", () => {
       method: "POST",
       headers: {
         authorization: `Bearer ${resolveSupervisorToken(process.env)}`,
-        "x-rakazo-bot-id": "bot",
-        "x-rakazo-space-id": "space",
+        "x-tangow-bot-id": "bot",
+        "x-tangow-space-id": "space",
       },
     });
     expect(response.status).toBe(500);
@@ -248,8 +248,8 @@ describe("computer loopback provision lifecycle", () => {
       headers: {
         authorization: `Bearer ${resolveSupervisorToken(process.env)}`,
         "content-type": "application/json",
-        "x-rakazo-bot-id": "bot",
-        "x-rakazo-space-id": "space",
+        "x-tangow-bot-id": "bot",
+        "x-tangow-space-id": "space",
       },
       body: JSON.stringify({ botId: "bot", spaceId: "space", userId: "user", homePath }),
     });
@@ -301,8 +301,8 @@ describe("provisioning network rollback", () => {
       headers: {
         authorization: `Bearer ${resolveSupervisorToken(process.env)}`,
         "content-type": "application/json",
-        "x-rakazo-bot-id": "bot",
-        "x-rakazo-space-id": "space",
+        "x-tangow-bot-id": "bot",
+        "x-tangow-space-id": "space",
       },
       body: JSON.stringify({ botId: "bot", spaceId: "space", userId: "user", homePath }),
     });
@@ -487,8 +487,8 @@ describe("space computer limit enforcement", () => {
       headers: {
         authorization: `Bearer ${resolveSupervisorToken(process.env)}`,
         "content-type": "application/json",
-        "x-rakazo-bot-id": botId,
-        "x-rakazo-space-id": spaceId,
+        "x-tangow-bot-id": botId,
+        "x-tangow-space-id": spaceId,
       },
       body: JSON.stringify({ botId, spaceId, userId, homePath }),
     });
@@ -617,8 +617,8 @@ describe("space computer limit enforcement", () => {
         headers: {
           authorization: `Bearer ${resolveSupervisorToken(process.env)}`,
           "content-type": "application/json",
-          "x-rakazo-bot-id": "bot-shared",
-          "x-rakazo-space-id": "space-1",
+          "x-tangow-bot-id": "bot-shared",
+          "x-tangow-space-id": "space-1",
         },
         body: JSON.stringify({
           botId: "bot-shared",

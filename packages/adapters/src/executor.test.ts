@@ -1657,7 +1657,7 @@ describe("buildSystemInstructions", () => {
   it("gives both harness paths the same tool preference and connector recovery policy", () => {
     for (const [instructions, prefix] of [
       [buildSystemInstructions(parts), ""],
-      [buildHarnessAddendum(parts), "mcp__rakazo__"],
+      [buildHarnessAddendum(parts), "mcp__tangow__"],
     ]) {
       expect(instructions).toContain("Connected tool catalog: mcp__mail__send");
       expect(instructions).toContain("Use the simplest suitable method");
@@ -1706,16 +1706,16 @@ describe("buildSystemInstructions", () => {
       "schedule_create",
       "schedule_list",
     ]) {
-      expect(instructions).toContain(`mcp__rakazo__${name}`);
+      expect(instructions).toContain(`mcp__tangow__${name}`);
       if (name !== "remember") {
         expect(instructions).not.toMatch(new RegExp(`(?<![A-Za-z0-9_])${name}\\b`));
       }
     }
-    expect(instructions).toContain("Call mcp__rakazo__remember the moment");
+    expect(instructions).toContain("Call mcp__tangow__remember the moment");
     expect(instructions).toContain("remember that when you can");
     expect(instructions).toContain("Use native read, write, edit and bash");
-    expect(instructions).not.toContain("mcp__rakazo__bash");
-    expect(instructions).not.toContain("mcp__rakazo__mcp__rakazo__");
+    expect(instructions).not.toContain("mcp__tangow__bash");
+    expect(instructions).not.toContain("mcp__tangow__mcp__tangow__");
   });
 
   it("tells both harnesses to call the send tool for a message the user wants to approve first", () => {
@@ -1734,8 +1734,8 @@ describe("buildSystemInstructions", () => {
     expect(addendum).not.toContain("Environment: linux");
     expect(instructions).toContain("run_subagent");
     expect(addendum).not.toContain("subagent");
-    expect(addendum).toContain("mcp__rakazo__message_user");
-    expect(addendum).not.toMatch(/(?<!mcp__rakazo__)message_user/);
+    expect(addendum).toContain("mcp__tangow__message_user");
+    expect(addendum).not.toMatch(/(?<!mcp__tangow__)message_user/);
   });
 
   it("is byte-identical across runs when the directory is unchanged", () => {

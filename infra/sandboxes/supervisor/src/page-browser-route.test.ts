@@ -46,10 +46,10 @@ async function snapshot(id: string, screen: string, lease: string, home = "home"
     headers: {
       authorization: `Bearer ${resolveSupervisorToken(process.env)}`,
       "content-type": "application/json",
-      "x-rakazo-bot-id": home,
-      "x-rakazo-space-id": "space",
-      "x-rakazo-screen-id": screen,
-      "x-rakazo-screen-lease-id": lease,
+      "x-tangow-bot-id": home,
+      "x-tangow-space-id": "space",
+      "x-tangow-screen-id": screen,
+      "x-tangow-screen-lease-id": lease,
     },
     body: JSON.stringify({ command: "snapshot" }),
   });
@@ -130,8 +130,8 @@ it("closes helper stdin when the request is cancelled", async () => {
     headers: {
       authorization: `Bearer ${resolveSupervisorToken(process.env)}`,
       "content-type": "application/json",
-      "x-rakazo-bot-id": "home",
-      "x-rakazo-space-id": "space",
+      "x-tangow-bot-id": "home",
+      "x-tangow-space-id": "space",
     },
     body: JSON.stringify({ command: "act", actions: [{ kind: "click", ref: "test-ref" }] }),
   });

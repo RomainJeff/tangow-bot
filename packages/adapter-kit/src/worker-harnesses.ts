@@ -6,7 +6,7 @@ export const PI_NATIVE_HARNESS: HarnessDeclaration = {
 };
 
 /** What a worker harness calls a Tangow tool: the controller's MCP server is named `rakazo`. */
-export const TANGOW_TOOL_PREFIX = "mcp__rakazo__";
+export const TANGOW_TOOL_PREFIX = "mcp__tangow__";
 
 /** Resolve the controller's selected harness without loading a guest implementation. */
 export function workerHarness(name: string): HarnessDeclaration {

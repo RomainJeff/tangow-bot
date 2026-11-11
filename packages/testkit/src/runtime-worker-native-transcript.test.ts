@@ -110,7 +110,7 @@ it("logs native and controller calls along the session in the order the harness 
       response: {
         type: "tool",
         id: "note",
-        name: "mcp__rakazo__scratchpad_add",
+        name: "mcp__tangow__scratchpad_add",
         arguments: { title: "between" },
       },
     },

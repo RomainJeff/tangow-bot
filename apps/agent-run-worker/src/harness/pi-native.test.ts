@@ -11,7 +11,7 @@ import { capturePiSnapshot } from "./pi-snapshot.js";
 
 let dir: string;
 beforeEach(async () => {
-  dir = await mkdtemp(path.join(tmpdir(), "rakazo-pi-native-"));
+  dir = await mkdtemp(path.join(tmpdir(), "tangow-pi-native-"));
   vi.stubEnv("HOME", dir);
 });
 afterEach(async () => {
@@ -96,10 +96,10 @@ it("loads original connector names through pi's real MCP registration and wrappe
   const long = "GITHUB_GET_A_THREAD_SUBSCRIPTION_FOR_THE_AUTHENTICATED_USER_WITH_NOTIFICATIONS";
   const hyphenated = "mail.send-message";
   const assigned = [
-    "mcp__rakazo__GITHUB_GET_A_THREAD_SUBSCRIPTION_FOR_THE_A_4a24c604",
-    "mcp__rakazo__mail_send_message",
+    "mcp__tangow__GITHUB_GET_A_THREAD_SUBSCRIPTION_FOR_THE_A_fd56c008",
+    "mcp__tangow__mail_send_message",
   ];
-  const queries = [`${long}, mcp__rakazo__${hyphenated}`, assigned.join(", ")];
+  const queries = [`${long}, mcp__tangow__${hyphenated}`, assigned.join(", ")];
   const transcripts: unknown[] = [];
   const { host } = recordingHost(new AbortController().signal);
   host.decide = (async (body, expected) => {
@@ -203,7 +203,7 @@ it.each([
                 {
                   type: "toolCall",
                   id: "widget-1",
-                  name: "mcp__rakazo__show_widget",
+                  name: "mcp__tangow__show_widget",
                   arguments: args,
                 },
               ]
@@ -272,7 +272,7 @@ it("returns a controller tool result that arrives after pi's 60 s request defaul
           message: {
             role: "assistant",
             content: call
-              ? [{ type: "toolCall", id: "slow-1", name: "mcp__rakazo__slow", arguments: {} }]
+              ? [{ type: "toolCall", id: "slow-1", name: "mcp__tangow__slow", arguments: {} }]
               : [{ type: "text", text: "Done." }],
             api: "openai-completions",
             provider: "openai-compatible",

@@ -46,7 +46,7 @@ struct ShareSession {
       "origin": "rakazo://",
       "authorization": "Bearer \(token)",
     ]
-    if let space = Keychain.read(Key.space), !space.isEmpty { headers["x-rakazo-space-id"] = space }
+    if let space = Keychain.read(Key.space), !space.isEmpty { headers["x-tangow-space-id"] = space }
     if let access = access(base: base, defaultBase: defaultBase, info: info) {
       headers["CF-Access-Client-Id"] = access.clientId
       headers["CF-Access-Client-Secret"] = access.clientSecret
@@ -181,7 +181,7 @@ struct ShareClient {
     var request = URLRequest(url: url, timeoutInterval: 20)
     request.httpMethod = "POST"
     session.headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
-    if let spaceId { request.setValue(spaceId, forHTTPHeaderField: "x-rakazo-space-id") }
+    if let spaceId { request.setValue(spaceId, forHTTPHeaderField: "x-tangow-space-id") }
     request.httpBody = try JSONSerialization.data(withJSONObject: ["json": input])
     let (data, response) = try await URLSession.shared.data(for: request)
     let status = (response as? HTTPURLResponse)?.statusCode ?? 0

@@ -16,7 +16,7 @@ const text = (reply: string): ModelEmulatorStep => ({
 });
 const tool = (id: string, name: string, args: Record<string, unknown>): ModelEmulatorStep => ({
   expect() {},
-  response: { type: "tool", id, name: `mcp__rakazo__${name}`, arguments: args, usage },
+  response: { type: "tool", id, name: `mcp__tangow__${name}`, arguments: args, usage },
 });
 
 /** A turn's answer, sent to the person, then the turn's end. */

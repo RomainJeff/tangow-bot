@@ -230,8 +230,8 @@ describe("sandbox supervisor HTTP boundary", () => {
       headers: {
         authorization: `Bearer ${token}`,
         "content-type": "application/json",
-        "x-rakazo-bot-id": "other-bot",
-        "x-rakazo-space-id": "workspace",
+        "x-tangow-bot-id": "other-bot",
+        "x-tangow-space-id": "workspace",
       },
       body: JSON.stringify({
         botId: "bot",
@@ -256,8 +256,8 @@ describe("sandbox supervisor HTTP boundary", () => {
         headers: {
           authorization: `Bearer ${token}`,
           "content-type": "application/json",
-          "x-rakazo-bot-id": "bot",
-          "x-rakazo-space-id": "workspace",
+          "x-tangow-bot-id": "bot",
+          "x-tangow-space-id": "workspace",
         },
         body: JSON.stringify({ botId: "bot", homePath: "/tmp/never-used", ...ids }),
       });
@@ -898,7 +898,7 @@ describe("docker worker guest upgrade", () => {
   }
 
   it("checks the supervisor token itself, before anything else", async () => {
-    const capability = { "x-rakazo-worker-capability": "capability" };
+    const capability = { "x-tangow-worker-capability": "capability" };
     expect(await upgrade("/workers/abc/guest", capability)).toBe(401);
     expect(await upgrade("/elsewhere", capability)).toBe(401);
     expect(
@@ -915,7 +915,7 @@ describe("docker worker guest upgrade", () => {
     const [socket] = duplexPair();
     const request = Object.assign(new http.IncomingMessage(new net.Socket()), {
       url: "/workers/abc/guest",
-      headers: { authorization: `Bearer ${token}`, "x-rakazo-worker-capability": "capability" },
+      headers: { authorization: `Bearer ${token}`, "x-tangow-worker-capability": "capability" },
     });
     const upgrading = upgradeWorkerGuest(request, socket);
     expect(() => socket.emit("error", new Error("read ECONNRESET"))).not.toThrow();

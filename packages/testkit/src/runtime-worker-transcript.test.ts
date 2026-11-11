@@ -73,7 +73,7 @@ const calls: GuestBody = {
         { type: "toolCall", id: "c2", name: "remember", arguments: { text: "y" } },
         { type: "toolCall", id: "c3", name: "bash", arguments: { command: "cat notes.md" } },
         { type: "toolCall", id: "c4", name: "ask_user", arguments: { question: "Delete?" } },
-        { type: "toolCall", id: "c5", name: "mcp__rakazo__delete_all", arguments: {} },
+        { type: "toolCall", id: "c5", name: "mcp__tangow__delete_all", arguments: {} },
       ],
     },
   ],
@@ -144,7 +144,7 @@ describe("a native harness's transcript", () => {
         { kind: "controller", turn: 0, name: "remember" },
         { kind: "call", turn: 0, callId: "c3", name: "bash", args: { command: "cat notes.md" } },
         { kind: "controller", turn: 0, name: "ask_user" },
-        { kind: "controller", turn: 0, name: "mcp__rakazo__delete_all" },
+        { kind: "controller", turn: 0, name: "mcp__tangow__delete_all" },
       ],
       unverifiedCalls: 0,
     });

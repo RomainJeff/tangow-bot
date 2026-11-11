@@ -38,14 +38,14 @@ export function clearSpaceSelection(): void {
   }
 }
 
-/** Adds `x-rakazo-space-id` when a space is selected. */
+/** Adds `x-tangow-space-id` when a space is selected. */
 export function withSpaceHeaders(
   init?: HeadersInit,
   spaceId: string | null = selectedSpaceId(),
 ): Headers {
   const headers = new Headers(init);
-  if (spaceId) headers.set("x-rakazo-space-id", spaceId);
-  else headers.delete("x-rakazo-space-id");
+  if (spaceId) headers.set("x-tangow-space-id", spaceId);
+  else headers.delete("x-tangow-space-id");
   return headers;
 }
 

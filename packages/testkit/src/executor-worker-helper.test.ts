@@ -288,20 +288,20 @@ it("runs native Pi helpers in separate persisted sessions and resumes the parent
         response: {
           type: "tool",
           id: "helper",
-          name: "mcp__rakazo__run_subagent",
+          name: "mcp__tangow__run_subagent",
           arguments: { category: "everyday", name: "Planner", task: "Choose a city" },
         },
       },
       {
         expect(request) {
           const tools = request.tools?.map((tool) => tool.function.name) ?? [];
-          expect(tools).not.toContain("mcp__rakazo__run_subagent");
-          expect(tools).not.toContain("mcp__rakazo__message_user");
+          expect(tools).not.toContain("mcp__tangow__run_subagent");
+          expect(tools).not.toContain("mcp__tangow__message_user");
         },
         response: {
           type: "tool",
           id: "question",
-          name: "mcp__rakazo__ask_user",
+          name: "mcp__tangow__ask_user",
           arguments: { question: "Which city?", options: ["Paris", "Lyon"] },
         },
       },

@@ -11,7 +11,7 @@ import { DONE, journey, reply, rpc, WAITING } from "./pi-journey.test-support.js
 
 /** The tools a worker offers the model, by their own names: the controller's carry an MCP prefix. */
 const offeredTools = (request: ModelEmulatorRequest) =>
-  request.tools?.map((tool) => tool.function.name.replace(/^mcp__rakazo__/, ""));
+  request.tools?.map((tool) => tool.function.name.replace(/^mcp__tangow__/, ""));
 
 const databaseAvailable = process.env.VERIFY_DATABASE === "1" && Boolean(process.env.DATABASE_URL);
 

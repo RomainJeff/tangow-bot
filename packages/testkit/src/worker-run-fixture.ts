@@ -51,7 +51,7 @@ export const afterPrivateText: ModelEmulatorStep = {
   expect(request) {
     assert.match(
       JSON.stringify(request.messages.at(-1)),
-      /Nothing you wrote reached the user: only mcp__rakazo__message_user does/,
+      /Nothing you wrote reached the user: only mcp__tangow__message_user does/,
     );
   },
   response: { type: "text", text: "" },
@@ -65,9 +65,9 @@ export function offeredToolNames(step: ModelEmulatorStep): ModelEmulatorStep {
       if (reply.type !== "tool") return reply;
       const offered = new Set(request.tools?.map((tool) => tool.function.name));
       const name = (called: string) =>
-        offered.has(called) || !offered.has(`mcp__rakazo__${called}`)
+        offered.has(called) || !offered.has(`mcp__tangow__${called}`)
           ? called
-          : `mcp__rakazo__${called}`;
+          : `mcp__tangow__${called}`;
       return {
         ...reply,
         name: name(reply.name),

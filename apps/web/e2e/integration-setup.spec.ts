@@ -146,7 +146,7 @@ test("Executor reconnect saves a replacement token before authorization", async 
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-rakazo-space-id": localStorage.getItem("rakazo:space-id") ?? "",
+        "x-tangow-space-id": localStorage.getItem("rakazo:space-id") ?? "",
       },
       body: JSON.stringify({
         json: {

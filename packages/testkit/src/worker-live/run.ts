@@ -135,4 +135,4 @@ export const finish = (
   { expect() {}, response: { type: "text", text: recap(what) } },
 ];
 export const toolNames = (request: ModelEmulatorRequest) =>
-  (request.tools ?? []).map((tool) => tool.function.name.replace(/^mcp__rakazo__/, ""));
+  (request.tools ?? []).map((tool) => tool.function.name.replace(/^mcp__tangow__/, ""));

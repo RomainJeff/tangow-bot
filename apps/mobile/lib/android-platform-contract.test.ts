@@ -66,7 +66,7 @@ describe("Android mobile platform contract", () => {
       /export async function resumeLiveNotifications[\s\S]*normalizeApiBase\(endpoint\)[\s\S]*nativeNotifications\.resume\(\s*parsed\.url/,
     );
     expect(service).toContain(
-      'connection.setRequestProperty("x-rakazo-space-id", session.spaceId)',
+      'connection.setRequestProperty("x-tangow-space-id", session.spaceId)',
     );
     // The Access service token must ride along with every polled request.
     expect(service).toContain('connection.setRequestProperty("CF-Access-Client-Id"');
