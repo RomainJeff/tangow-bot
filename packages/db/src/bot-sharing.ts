@@ -152,7 +152,7 @@ export function botConnectors(value: Prisma.JsonValue): BotSharing["connectors"]
 
 /**
  * The owner sets who uses the bot. People are kept only for `people`; whoever loses access keeps
- * their thread, hidden, and their runs in it and their routines on the bot stop.
+ * their thread, hidden, and their runs of the bot, in it or in a group, and their routines on it stop.
  */
 export async function setBotSharing(
   prisma: PrismaClient,
@@ -181,9 +181,11 @@ export async function setBotSharing(
     });
     if (input.visibility !== "space") {
       const runs = await tx.run.findMany({
+        // Their runs of the bot anywhere: their own thread with it, and every group it is in.
         where: {
+          botId: input.botId,
+          userId: { notIn: [...userIds, actor.userId] },
           status: { in: [...ACTIVE_RUN_STATUSES] },
-          thread: { memberBotId: input.botId, userId: { notIn: userIds } },
         },
         select: { id: true, taskId: true },
       });
