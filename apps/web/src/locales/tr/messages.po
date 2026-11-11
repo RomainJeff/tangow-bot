@@ -176,8 +176,8 @@ msgstr "{days} g önce"
 msgid "{failures, plural, one {# failure since {since}} other {# failures since {since}}}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:345
-#: src/pages/shell/thread-row.tsx:348
+#: src/pages/shell/message-view.tsx:360
+#: src/pages/shell/thread-row.tsx:351
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -237,7 +237,7 @@ msgstr ""
 msgid "{what} · paused"
 msgstr "{what} · duraklatıldı"
 
-#: src/pages/shell/transcript.tsx:224
+#: src/pages/shell/transcript.tsx:228
 msgid "{workingBotName} is working"
 msgstr "{workingBotName} çalışıyor"
 
@@ -675,7 +675,7 @@ msgstr "saat {timeSelect}"
 msgid "Attach file"
 msgstr "Dosya ekle"
 
-#: src/pages/shell/message-view.tsx:89
+#: src/pages/shell/message-view.tsx:91
 msgid "Attachment"
 msgstr "Ek"
 
@@ -763,17 +763,17 @@ msgstr "Canlı masaüstü başlatılıyor…"
 msgid "Booting up {0}’s computer"
 msgstr "{0} adlı botun bilgisayarı başlatılıyor"
 
-#: src/pages/shell/message-view.tsx:333
-#: src/pages/shell/message-view.tsx:334
-#: src/pages/shell/thread-row.tsx:339
-#: src/pages/shell/thread-row.tsx:340
+#: src/pages/shell/message-view.tsx:348
+#: src/pages/shell/message-view.tsx:349
+#: src/pages/shell/thread-row.tsx:342
+#: src/pages/shell/thread-row.tsx:343
 msgid "bot"
 msgstr "bot"
 
 #: src/pages/IntegrationSetup.tsx:51
-#: src/pages/shell/message-view.tsx:230
-#: src/pages/shell/message-view.tsx:437
-#: src/pages/shell/thread-row.tsx:307
+#: src/pages/shell/message-view.tsx:245
+#: src/pages/shell/message-view.tsx:452
+#: src/pages/shell/thread-row.tsx:310
 #: src/pages/shell/use-composer-draft.ts:53
 msgid "Bot"
 msgstr "Bot"
@@ -810,7 +810,7 @@ msgstr ""
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "Botlar varsayılan olarak sormadan hareket eder. Yalnızca belirli bir işlem türünü önce incelemek istediğinde istisna ekle."
 
-#: src/pages/shell/transcript.tsx:225
+#: src/pages/shell/transcript.tsx:229
 msgid "Bots are working"
 msgstr "Botlar çalışıyor"
 
@@ -1257,7 +1257,7 @@ msgstr ""
 msgid "Continue with email"
 msgstr "E-posta ile devam et"
 
-#: src/pages/shell/thread-row.tsx:425
+#: src/pages/shell/thread-row.tsx:428
 msgid "Conversation cleared"
 msgstr ""
 
@@ -2068,11 +2068,11 @@ msgstr "Taslak beceri"
 msgid "Duplicate"
 msgstr "Çoğalt"
 
-#: src/pages/shell/message-view.tsx:205
+#: src/pages/shell/message-view.tsx:210
 msgid "Earlier message"
 msgstr "Önceki mesaj"
 
-#: src/pages/shell/thread-row.tsx:422
+#: src/pages/shell/thread-row.tsx:425
 msgid "Earlier messages summarized"
 msgstr ""
 
@@ -2321,7 +2321,7 @@ msgstr ""
 msgid "Fullscreen"
 msgstr "Tam ekran"
 
-#: src/pages/shell/thread-row.tsx:374
+#: src/pages/shell/thread-row.tsx:377
 msgid "FYI"
 msgstr ""
 
@@ -2455,11 +2455,11 @@ msgstr "Bunu duyduysan ses hazır."
 msgid "Ignore"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:447
+#: src/pages/shell/message-view.tsx:462
 msgid "Image {n} of {total}, from {sender}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:447
+#: src/pages/shell/message-view.tsx:462
 msgid "Image, from {sender}"
 msgstr ""
 
@@ -2559,7 +2559,7 @@ msgstr ""
 msgid "Jump to latest"
 msgstr "En son mesaja git"
 
-#: src/pages/shell/message-view.tsx:200
+#: src/pages/shell/message-view.tsx:205
 msgid "Jump to replied message"
 msgstr "Yanıtlanan mesaja git"
 
@@ -2638,7 +2638,7 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:264
+#: src/pages/shell/transcript.tsx:268
 msgid "Load earlier messages"
 msgstr "Önceki mesajları yükle"
 
@@ -2680,7 +2680,7 @@ msgstr "Ses sağlayıcıları yükleniyor…"
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
 #: src/pages/shell/session-view.tsx:129
-#: src/pages/shell/transcript.tsx:264
+#: src/pages/shell/transcript.tsx:268
 msgid "Loading…"
 msgstr "Yükleniyor…"
 
@@ -2796,7 +2796,7 @@ msgstr ""
 
 #: src/pages/bot-page/BotActivity.tsx:358
 #: src/pages/shell/composer.tsx:296
-#: src/pages/shell/message-view.tsx:91
+#: src/pages/shell/message-view.tsx:93
 msgid "Message"
 msgstr "Mesaj"
 
@@ -2817,7 +2817,7 @@ msgstr ""
 msgid "Message composer"
 msgstr "Mesaj düzenleyici"
 
-#: src/pages/shell/thread-row.tsx:424
+#: src/pages/shell/thread-row.tsx:427
 msgid "Message edited"
 msgstr ""
 
@@ -2825,8 +2825,8 @@ msgstr ""
 msgid "Message event"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:376
-#: src/pages/shell/thread-row.tsx:415
+#: src/pages/shell/thread-row.tsx:379
+#: src/pages/shell/thread-row.tsx:418
 msgid "Message from {peer}"
 msgstr "{peer} botundan mesaj"
 
@@ -2834,8 +2834,8 @@ msgstr "{peer} botundan mesaj"
 msgid "Message…"
 msgstr "Mesaj…"
 
-#: src/pages/shell/thread-row.tsx:376
-#: src/pages/shell/thread-row.tsx:415
+#: src/pages/shell/thread-row.tsx:379
+#: src/pages/shell/thread-row.tsx:418
 msgid "Messaged {peer}"
 msgstr "{peer} botuna mesaj gönderildi"
 
@@ -3466,7 +3466,7 @@ msgstr "Sağlayıcı"
 msgid "Providers"
 msgstr "Sağlayıcılar"
 
-#: src/pages/shell/thread-row.tsx:372
+#: src/pages/shell/thread-row.tsx:375
 msgid "Question"
 msgstr ""
 
@@ -3707,7 +3707,7 @@ msgstr "Birkaç kısa mesajla yanıtla"
 msgid "Replying to {replyName}"
 msgstr "{replyName} yanıtlanıyor"
 
-#: src/pages/shell/thread-row.tsx:370
+#: src/pages/shell/thread-row.tsx:373
 msgid "Request"
 msgstr ""
 
@@ -3763,7 +3763,7 @@ msgstr "Kaydedilmemiş metni geri yükle"
 msgid "Restoring your workspace"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:371
+#: src/pages/shell/thread-row.tsx:374
 msgid "Result"
 msgstr ""
 
@@ -3888,7 +3888,7 @@ msgstr "Kaydet"
 msgid "Saved"
 msgstr "Kaydedildi"
 
-#: src/pages/shell/thread-row.tsx:479
+#: src/pages/shell/thread-row.tsx:482
 msgid "Saved for the team"
 msgstr ""
 
@@ -4125,15 +4125,15 @@ msgstr "Kaydol"
 msgid "Skill {0}"
 msgstr "Beceri: {0}"
 
-#: src/pages/shell/message-view.tsx:106
+#: src/pages/shell/message-view.tsx:108
 msgid "Skill deleted · {name}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:103
+#: src/pages/shell/message-view.tsx:105
 msgid "Skill learned · {name}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:105
+#: src/pages/shell/message-view.tsx:107
 msgid "Skill updated · {name}"
 msgstr ""
 
@@ -4222,7 +4222,7 @@ msgstr "Başlıyor"
 msgid "Starting…"
 msgstr "Başlatılıyor…"
 
-#: src/pages/shell/thread-row.tsx:373
+#: src/pages/shell/thread-row.tsx:376
 msgid "Status"
 msgstr ""
 
@@ -4307,7 +4307,7 @@ msgstr ""
 msgid "Teach a task"
 msgstr "Görev öğret"
 
-#: src/pages/shell/shell-main.tsx:240
+#: src/pages/shell/shell-main.tsx:241
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "Öğretme sürüyor. Yeni mesaj göndermeden önce öğretmeyi durdur."
 
@@ -4435,7 +4435,7 @@ msgstr "Kime:"
 #: src/pages/bot-page/BotActivity.tsx:256
 #: src/pages/PeerMessagesOverlay.tsx:180
 #: src/pages/shell/image-viewer.tsx:164
-#: src/pages/shell/thread-row.tsx:107
+#: src/pages/shell/thread-row.tsx:109
 msgid "Today"
 msgstr "Bugün"
 
@@ -4719,13 +4719,13 @@ msgstr "Her yıl {date} {time}"
 #: src/pages/bot-page/BotActivity.tsx:257
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/image-viewer.tsx:165
-#: src/pages/shell/thread-row.tsx:108
+#: src/pages/shell/thread-row.tsx:110
 msgid "Yesterday"
 msgstr "Dün"
 
 #: src/components/DraftCard.tsx:53
 #: src/pages/Shell.tsx:139
-#: src/pages/shell/message-view.tsx:437
+#: src/pages/shell/message-view.tsx:452
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"
 msgstr "Sen"

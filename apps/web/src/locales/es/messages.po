@@ -176,8 +176,8 @@ msgstr "hace {days} d"
 msgid "{failures, plural, one {# failure since {since}} other {# failures since {since}}}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:345
-#: src/pages/shell/thread-row.tsx:348
+#: src/pages/shell/message-view.tsx:360
+#: src/pages/shell/thread-row.tsx:351
 msgid "{from} handed the thread to {to}"
 msgstr ""
 
@@ -237,7 +237,7 @@ msgstr ""
 msgid "{what} · paused"
 msgstr "{what} · en pausa"
 
-#: src/pages/shell/transcript.tsx:224
+#: src/pages/shell/transcript.tsx:228
 msgid "{workingBotName} is working"
 msgstr "{workingBotName} está trabajando"
 
@@ -675,7 +675,7 @@ msgstr "a las {timeSelect}"
 msgid "Attach file"
 msgstr "Adjuntar archivo"
 
-#: src/pages/shell/message-view.tsx:89
+#: src/pages/shell/message-view.tsx:91
 msgid "Attachment"
 msgstr "Archivo adjunto"
 
@@ -763,17 +763,17 @@ msgstr "Iniciando escritorio en vivo…"
 msgid "Booting up {0}’s computer"
 msgstr "Iniciando la computadora de {0}"
 
-#: src/pages/shell/message-view.tsx:333
-#: src/pages/shell/message-view.tsx:334
-#: src/pages/shell/thread-row.tsx:339
-#: src/pages/shell/thread-row.tsx:340
+#: src/pages/shell/message-view.tsx:348
+#: src/pages/shell/message-view.tsx:349
+#: src/pages/shell/thread-row.tsx:342
+#: src/pages/shell/thread-row.tsx:343
 msgid "bot"
 msgstr "bot"
 
 #: src/pages/IntegrationSetup.tsx:51
-#: src/pages/shell/message-view.tsx:230
-#: src/pages/shell/message-view.tsx:437
-#: src/pages/shell/thread-row.tsx:307
+#: src/pages/shell/message-view.tsx:245
+#: src/pages/shell/message-view.tsx:452
+#: src/pages/shell/thread-row.tsx:310
 #: src/pages/shell/use-composer-draft.ts:53
 msgid "Bot"
 msgstr "Bot"
@@ -810,7 +810,7 @@ msgstr ""
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "Los bots actúan sin preguntar de forma predeterminada. Agrega una excepción solo cuando quieras revisar primero un tipo de acción."
 
-#: src/pages/shell/transcript.tsx:225
+#: src/pages/shell/transcript.tsx:229
 msgid "Bots are working"
 msgstr "Los bots están trabajando"
 
@@ -1257,7 +1257,7 @@ msgstr ""
 msgid "Continue with email"
 msgstr "Continuar con el correo"
 
-#: src/pages/shell/thread-row.tsx:425
+#: src/pages/shell/thread-row.tsx:428
 msgid "Conversation cleared"
 msgstr ""
 
@@ -2068,11 +2068,11 @@ msgstr "Habilidad en borrador"
 msgid "Duplicate"
 msgstr "Duplicar"
 
-#: src/pages/shell/message-view.tsx:205
+#: src/pages/shell/message-view.tsx:210
 msgid "Earlier message"
 msgstr "Mensaje anterior"
 
-#: src/pages/shell/thread-row.tsx:422
+#: src/pages/shell/thread-row.tsx:425
 msgid "Earlier messages summarized"
 msgstr ""
 
@@ -2321,7 +2321,7 @@ msgstr ""
 msgid "Fullscreen"
 msgstr "Pantalla completa"
 
-#: src/pages/shell/thread-row.tsx:374
+#: src/pages/shell/thread-row.tsx:377
 msgid "FYI"
 msgstr ""
 
@@ -2455,11 +2455,11 @@ msgstr "Si escuchaste eso, la voz está lista."
 msgid "Ignore"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:447
+#: src/pages/shell/message-view.tsx:462
 msgid "Image {n} of {total}, from {sender}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:447
+#: src/pages/shell/message-view.tsx:462
 msgid "Image, from {sender}"
 msgstr ""
 
@@ -2559,7 +2559,7 @@ msgstr ""
 msgid "Jump to latest"
 msgstr "Ir al más reciente"
 
-#: src/pages/shell/message-view.tsx:200
+#: src/pages/shell/message-view.tsx:205
 msgid "Jump to replied message"
 msgstr "Ir al mensaje respondido"
 
@@ -2638,7 +2638,7 @@ msgstr ""
 msgid "Listening"
 msgstr ""
 
-#: src/pages/shell/transcript.tsx:264
+#: src/pages/shell/transcript.tsx:268
 msgid "Load earlier messages"
 msgstr "Cargar mensajes anteriores"
 
@@ -2680,7 +2680,7 @@ msgstr "Cargando proveedores de voz…"
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
 #: src/pages/shell/session-view.tsx:129
-#: src/pages/shell/transcript.tsx:264
+#: src/pages/shell/transcript.tsx:268
 msgid "Loading…"
 msgstr "Cargando…"
 
@@ -2796,7 +2796,7 @@ msgstr ""
 
 #: src/pages/bot-page/BotActivity.tsx:358
 #: src/pages/shell/composer.tsx:296
-#: src/pages/shell/message-view.tsx:91
+#: src/pages/shell/message-view.tsx:93
 msgid "Message"
 msgstr "Mensaje"
 
@@ -2817,7 +2817,7 @@ msgstr ""
 msgid "Message composer"
 msgstr "Redactor de mensajes"
 
-#: src/pages/shell/thread-row.tsx:424
+#: src/pages/shell/thread-row.tsx:427
 msgid "Message edited"
 msgstr ""
 
@@ -2825,8 +2825,8 @@ msgstr ""
 msgid "Message event"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:376
-#: src/pages/shell/thread-row.tsx:415
+#: src/pages/shell/thread-row.tsx:379
+#: src/pages/shell/thread-row.tsx:418
 msgid "Message from {peer}"
 msgstr "Mensaje de {peer}"
 
@@ -2834,8 +2834,8 @@ msgstr "Mensaje de {peer}"
 msgid "Message…"
 msgstr "Mensaje…"
 
-#: src/pages/shell/thread-row.tsx:376
-#: src/pages/shell/thread-row.tsx:415
+#: src/pages/shell/thread-row.tsx:379
+#: src/pages/shell/thread-row.tsx:418
 msgid "Messaged {peer}"
 msgstr "Mensaje enviado a {peer}"
 
@@ -3466,7 +3466,7 @@ msgstr "Proveedor"
 msgid "Providers"
 msgstr "Proveedores"
 
-#: src/pages/shell/thread-row.tsx:372
+#: src/pages/shell/thread-row.tsx:375
 msgid "Question"
 msgstr ""
 
@@ -3707,7 +3707,7 @@ msgstr "Responder en varios mensajes cortos"
 msgid "Replying to {replyName}"
 msgstr "Respondiendo a {replyName}"
 
-#: src/pages/shell/thread-row.tsx:370
+#: src/pages/shell/thread-row.tsx:373
 msgid "Request"
 msgstr ""
 
@@ -3763,7 +3763,7 @@ msgstr "Restaurar el texto sin guardar"
 msgid "Restoring your workspace"
 msgstr ""
 
-#: src/pages/shell/thread-row.tsx:371
+#: src/pages/shell/thread-row.tsx:374
 msgid "Result"
 msgstr ""
 
@@ -3888,7 +3888,7 @@ msgstr "Guardar"
 msgid "Saved"
 msgstr "Guardado"
 
-#: src/pages/shell/thread-row.tsx:479
+#: src/pages/shell/thread-row.tsx:482
 msgid "Saved for the team"
 msgstr ""
 
@@ -4125,15 +4125,15 @@ msgstr "Registrarse"
 msgid "Skill {0}"
 msgstr "Habilidad {0}"
 
-#: src/pages/shell/message-view.tsx:106
+#: src/pages/shell/message-view.tsx:108
 msgid "Skill deleted · {name}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:103
+#: src/pages/shell/message-view.tsx:105
 msgid "Skill learned · {name}"
 msgstr ""
 
-#: src/pages/shell/message-view.tsx:105
+#: src/pages/shell/message-view.tsx:107
 msgid "Skill updated · {name}"
 msgstr ""
 
@@ -4222,7 +4222,7 @@ msgstr "Iniciando"
 msgid "Starting…"
 msgstr "Iniciando…"
 
-#: src/pages/shell/thread-row.tsx:373
+#: src/pages/shell/thread-row.tsx:376
 msgid "Status"
 msgstr ""
 
@@ -4307,7 +4307,7 @@ msgstr ""
 msgid "Teach a task"
 msgstr "Enseñar una tarea"
 
-#: src/pages/shell/shell-main.tsx:240
+#: src/pages/shell/shell-main.tsx:241
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "Enseñanza en curso: detén la enseñanza antes de enviar un nuevo mensaje."
 
@@ -4435,7 +4435,7 @@ msgstr "Para:"
 #: src/pages/bot-page/BotActivity.tsx:256
 #: src/pages/PeerMessagesOverlay.tsx:180
 #: src/pages/shell/image-viewer.tsx:164
-#: src/pages/shell/thread-row.tsx:107
+#: src/pages/shell/thread-row.tsx:109
 msgid "Today"
 msgstr "Hoy"
 
@@ -4719,13 +4719,13 @@ msgstr "Cada año el {date} a las {time}"
 #: src/pages/bot-page/BotActivity.tsx:257
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/image-viewer.tsx:165
-#: src/pages/shell/thread-row.tsx:108
+#: src/pages/shell/thread-row.tsx:110
 msgid "Yesterday"
 msgstr "Ayer"
 
 #: src/components/DraftCard.tsx:53
 #: src/pages/Shell.tsx:139
-#: src/pages/shell/message-view.tsx:437
+#: src/pages/shell/message-view.tsx:452
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"
 msgstr "Tú"

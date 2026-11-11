@@ -1,4 +1,4 @@
-import type { Run } from "@rakazo/contracts";
+import type { GroupPerson, Run } from "@rakazo/contracts";
 import type { ThreadView } from "@rakazo/core";
 import {
   answersPendingQuestion,
@@ -53,7 +53,7 @@ export function waitingAsk(
 
 /** What the open thread's snapshot shows: its rows, who is working, and who a send answers. */
 export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
-  const { groupId, inGroup, active, activeGroup, bots } = roster;
+  const { groupId, inGroup, active, activeGroup, bots, bootstrapMe } = roster;
   const activeSnapshot = inGroup
     ? snapshot?.groupId === groupId
       ? snapshot
@@ -163,6 +163,25 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
     workingRuns.length > 0
       ? Math.min(...workingRuns.map((run) => new Date(run.startedAt ?? run.createdAt).getTime()))
       : undefined;
+  const people = activeSnapshot?.people ?? activeGroup?.people;
+  // A message naming no author is the creator's, the group's first person.
+  const creatorId = activeGroup?.people[0]?.userId;
+  const viewerId = bootstrapMe?.userId;
+  const personOf = useCallback(
+    (message: MessageItem): GroupPerson | undefined => {
+      if (!inGroup || message.role !== "user") return undefined;
+      const authorId = message.authorId ?? creatorId;
+      if (!authorId || !viewerId || authorId === viewerId) return undefined;
+      return (
+        people?.find((person) => person.userId === authorId) ?? {
+          userId: authorId,
+          name: "",
+          image: null,
+        }
+      );
+    },
+    [inGroup, creatorId, viewerId, people],
+  );
   const resolveTranscriptMemberName = useCallback(
     (botId: string | undefined) => memberName(transcriptMembers, botId),
     [transcriptMembers],
@@ -181,6 +200,7 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
     transcriptArtifactTarget,
     resolveTranscriptBot,
     resolveTranscriptMemberName,
+    personOf,
     answerName,
     workingBots,
     workingStartedAt,

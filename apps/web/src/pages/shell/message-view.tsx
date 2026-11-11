@@ -1,7 +1,7 @@
 import { t } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown } from "@rakazo/chat-ui/web";
-import type { MessageBlock } from "@rakazo/contracts";
+import type { GroupPerson, MessageBlock } from "@rakazo/contracts";
 import type {
   ImageStack as ImageStackModel,
   LinkMentionResolver,
@@ -26,6 +26,7 @@ import {
   MessageMeta,
   MessageRow,
   StackedAvatars,
+  UserAvatar,
   UserBubble,
 } from "@rakazo/ui-web";
 import { BookOpen, Clock } from "lucide-react";
@@ -44,6 +45,7 @@ import { hasRenderableBlock, isHiddenActivityBlock } from "../../lib/message-blo
 import { messageProviderLabel } from "../../lib/messaging";
 import type { MessageItem, SessionViewTarget } from "../../lib/thread-items";
 import { botIdOf } from "../../lib/thread-items";
+import { userInitials } from "../../lib/user-initials";
 import {
   ChildBotCard,
   ComputerCard,
@@ -115,6 +117,7 @@ export const MessageView = memo(function MessageView({
   chrome,
   viewerUserId,
   message,
+  person,
   inGroup,
   showAuthor,
   showAvatar,
@@ -141,6 +144,8 @@ export const MessageView = memo(function MessageView({
   chrome: "row" | "aside";
   viewerUserId?: string;
   message: MessageItem;
+  /** Who wrote it, when it is someone else's message in a group. */
+  person?: GroupPerson;
   /** True in a multi-bot (group) thread: a bot row reserves an avatar column
    * and its bubble caps at 88% of the content column. False in a single-bot
    * (mono) thread: no avatar column, no name, and the bubble caps at 82% of
@@ -206,6 +211,8 @@ export const MessageView = memo(function MessageView({
     </button>
   ) : null;
   const author = peerBot(botId ?? "");
+  // Someone else's message reads like a bot's: on the start side, under their name and face.
+  const side = message.role === "user" && !person ? "user" : "bot";
   const avatarOf = (botId: string): StackedAvatarItem => {
     const bot = peerBot(botId);
     return {
@@ -220,14 +227,22 @@ export const MessageView = memo(function MessageView({
   const botRow = (children: ReactNode) => (
     <MessageRow
       avatar={
-        <BotAvatar
-          color={author?.color ?? FALLBACK_BOT_COLOR}
-          identity={botId}
-          shapeSeed={author?.shapeSeed}
-          size={26}
-        />
+        person ? (
+          <UserAvatar
+            initials={userInitials(person.name)}
+            image={person.image}
+            className="size-message text-label"
+          />
+        ) : (
+          <BotAvatar
+            color={author?.color ?? FALLBACK_BOT_COLOR}
+            identity={botId}
+            shapeSeed={author?.shapeSeed}
+            size={26}
+          />
+        )
       }
-      author={<span dir="auto">{speakerName ?? author?.name ?? t`Bot`}</span>}
+      author={<span dir="auto">{person?.name ?? speakerName ?? author?.name ?? t`Bot`}</span>}
       hasAvatarColumn={inGroup}
       showAuthor={showAuthor}
       showAvatar={showAvatar}
@@ -260,7 +275,7 @@ export const MessageView = memo(function MessageView({
         key={key}
         card={previewCard}
         artifactTarget={artifactTarget}
-        side={message.role === "user" ? "user" : "bot"}
+        side={side}
         inGroup={inGroup}
       />
     ) : null;
@@ -433,8 +448,8 @@ export const MessageView = memo(function MessageView({
       }
       if (block.kind === "image") {
         if (i !== firstImageBlock) return null;
-        const side = message.role === "user" ? "user" : "bot";
-        const sender = side === "user" ? t`You` : (speakerName ?? author?.name ?? t`Bot`);
+        const sender =
+          side === "user" ? t`You` : (person?.name ?? speakerName ?? author?.name ?? t`Bot`);
         return (
           <ImageStack
             key={i}
@@ -451,10 +466,7 @@ export const MessageView = memo(function MessageView({
       }
       if (block.kind === "file") {
         return (
-          <div
-            key={i}
-            className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-          >
+          <div key={i} className={`flex ${side === "user" ? "justify-end" : "justify-start"}`}>
             <ArtifactFileCard
               target={artifactTarget}
               artifactId={block.artifactId}
@@ -468,7 +480,7 @@ export const MessageView = memo(function MessageView({
       if (block.kind === "text") {
         const shown = bubbleText(block.text);
         if (shown === undefined) return null;
-        if (message.role === "user") {
+        if (side === "user") {
           return (
             <UserBubble
               key={i}
@@ -488,7 +500,11 @@ export const MessageView = memo(function MessageView({
             dir="auto"
             meta={i === skillLineBubble && skillLines.length > 0 ? skillLines : undefined}
           >
-            <ChatMarkdown mentions={mentions}>{shown}</ChatMarkdown>
+            {person ? (
+              <UserText text={shown} mentions={mentions} />
+            ) : (
+              <ChatMarkdown mentions={mentions}>{shown}</ChatMarkdown>
+            )}
           </MessageBubble>
         );
       }
@@ -536,9 +552,9 @@ export const MessageView = memo(function MessageView({
   // messages, not something a bot said, so it keeps no author and no bubble.
   // A bot's question or approval is a normal row too: its FramedBlock card
   // (with no header, or a name-less "Needs your call") is just the row's body.
-  // Only a bot wears the avatar-and-name row; a user's own message is its
-  // right-aligned bubble alone, never wrapped in an author header.
-  return chrome === "row" && message.role === "bot" ? botRow(body) : body;
+  // A bot, or someone else in a group, wears the avatar-and-name row; your own
+  // message is its right-aligned bubble alone, never wrapped in an author header.
+  return chrome === "row" && side === "bot" ? botRow(body) : body;
 });
 
 async function noAnswer(): Promise<void> {}

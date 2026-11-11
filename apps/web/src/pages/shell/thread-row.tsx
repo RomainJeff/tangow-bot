@@ -1,7 +1,7 @@
 import { i18n } from "@lingui/core";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown, truncateMarkdownForRender } from "@rakazo/chat-ui/web";
-import type { MessageBlock, ThreadItem } from "@rakazo/contracts";
+import type { GroupPerson, MessageBlock, ThreadItem } from "@rakazo/contracts";
 import { isLinkPreviewCard } from "@rakazo/contracts";
 import type { RoutineItem, SkillSourceBlock, ThreadRow, WaitingCard } from "@rakazo/core";
 import {
@@ -46,6 +46,8 @@ export type RowContext = {
   artifactTarget: ArtifactTarget;
   inGroup: boolean;
   viewerUserId?: string;
+  /** Who wrote a message, when it is someone else's in a group. */
+  personOf?: (message: MessageItem) => GroupPerson | undefined;
   waiting: WaitingCard | null;
   /** The item whose computer card is live and opens the bot's screen. */
   takeoverItemId?: string | null;
@@ -218,6 +220,7 @@ function MessageRowView({
       artifactTarget={context.artifactTarget}
       chrome={chrome}
       message={item}
+      person={context.personOf?.(item)}
       inGroup={context.inGroup}
       showAuthor={context.inGroup && showAuthor}
       showAvatar={context.inGroup && showAvatar}

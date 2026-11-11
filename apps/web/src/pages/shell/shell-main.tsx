@@ -186,6 +186,7 @@ export function ShellMain({
               olderCursor={activeSnapshot?.olderCursor ?? null}
               loadingOlder={transcriptWindow.loadingOlder}
               viewerUserId={userId}
+              personOf={thread.personOf}
               takeoverItemId={thread.takeoverItemId}
               onOpenComputer={onOpenComputer}
               running={thread.transcriptRunning}
