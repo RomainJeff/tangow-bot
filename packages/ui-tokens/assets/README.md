@@ -1,9 +1,9 @@
 # App icon source
 
-`Rakazo.icon` is the shared editable source for macOS and iOS: the black clay bot
-from the tangow site on a linen gradient, kept in both light and dark appearances.
-Open it in Apple's Icon Composer with Xcode 26 or newer. `clay-bot.svg` is the
-editable drawing behind its `Assets/clay-bot.png` layer.
+`Rakazo.icon` is the shared editable source for macOS and iOS: the one-stroke
+"tw" in linen (`#F5F0E6`) on solid ink (`#151517`), in both light and dark
+appearances. Open it in Apple's Icon Composer with Xcode 26 or newer. `tw.svg` is
+the editable drawing behind its full-canvas `Assets/tw.png` layer.
 
 macOS packaging compiles the source into a Tahoe asset catalog and generates the
 legacy ICNS fallback. Expo copies the same source into the iOS project.
