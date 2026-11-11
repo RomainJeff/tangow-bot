@@ -3,7 +3,7 @@ import {
   GROUP_MEMBER_MAX,
   GROUP_MEMBER_MIN,
 } from "@rakazo/contracts";
-import { applyPicks } from "@rakazo/core";
+import { applyPicks, groupLeadBotId } from "@rakazo/core";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, TextInput } from "react-native";
@@ -15,6 +15,22 @@ import { type MobileBot, type MobileGroup, rpc } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
 import { serverMessage } from "../lib/server-error";
+
+/**
+ * The lead the creator picked while it is still in the group, else the group's own, else its first
+ * bot, as the server picks it.
+ */
+function leadOf(
+  botIds: readonly string[],
+  picked: string | null,
+  current: string | null | undefined,
+): string | undefined {
+  const kept = [picked, current].find((id) => id && botIds.includes(id));
+  return groupLeadBotId(
+    botIds.map((id) => ({ id })),
+    kept,
+  );
+}
 
 function sameIds(left: readonly string[], right: readonly string[]) {
   return left.length === right.length && left.every((id) => right.includes(id));
@@ -72,8 +88,10 @@ export default function GroupSettingsScreen() {
       .filter((member) => !bots.some((bot) => bot.id === member.botId))
       .map((member) => ({ ...member, id: member.botId })),
   ];
-  // A lead that left the group gives way to its first bot, as the server does.
-  const lead = leadBotId && selected.includes(leadBotId) ? leadBotId : selected[0];
+  const groupBotIds = group?.members.map((member) => member.botId) ?? [];
+  // The bots as they will be saved, the group's own first, so the lead shown is the one saved.
+  const nextBotIds = applyPicks(groupBotIds, groupBotIds, selected);
+  const lead = leadOf(nextBotIds, leadBotId, group?.leadBotId);
   const leadBot = selectable.find((bot) => bot.id === lead);
 
   async function save() {
@@ -102,8 +120,12 @@ export default function GroupSettingsScreen() {
       if (description.trim() !== (latest.description ?? "")) input.description = description.trim();
       if (!sameIds(botIds, botIdsOf(latest))) input.botIds = botIds;
       if (!sameIds(nextPeople, peopleOf(latest))) input.userIds = nextPeople;
-      if (leadBotId && leadBotId !== latest.leadBotId && botIds.includes(leadBotId))
-        input.leadBotId = leadBotId;
+      // Unchanged bots keep the lead the server already gives the group; changed ones save the
+      // lead shown, rather than leaving the server to pick the first of the new list.
+      const savedLead = leadOf(botIds, leadBotId, latest.leadBotId);
+      const picked = leadBotId !== group.leadBotId;
+      if ((input.botIds || picked) && savedLead && savedLead !== latest.leadBotId)
+        input.leadBotId = savedLead;
       if (Object.keys(input).length > 1) await rpc("groups/update", input);
       router.back();
     } catch (err) {
@@ -260,7 +282,7 @@ export default function GroupSettingsScreen() {
           onChange={setSelected}
           disabled={pending}
         />
-        {selected.length > 1 && lead ? (
+        {nextBotIds.length > 1 && lead ? (
           <>
             <Text style={label}>{t("Lead bot")}</Text>
             <NativeMenu
@@ -269,7 +291,7 @@ export default function GroupSettingsScreen() {
               accessibilityLabel={t("Lead bot")}
               accessibilityValue={leadBot?.name}
               disabled={pending}
-              options={selected.flatMap((id) => {
+              options={nextBotIds.flatMap((id) => {
                 const bot = selectable.find((candidate) => candidate.id === id);
                 return bot ? [{ value: bot.id, label: bot.name }] : [];
               })}
