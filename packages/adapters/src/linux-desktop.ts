@@ -211,7 +211,7 @@ export class LinuxDesktop {
           key,
           context.screenLeaseId,
           env,
-          ["/usr/local/bin/rakazo-page-browser", request.command, JSON.stringify(request)],
+          ["/usr/local/bin/tangow-page-browser", request.command, JSON.stringify(request)],
           timeoutMs,
         ),
         boundedContext,

@@ -95,7 +95,7 @@ describe("desktop session permissions", () => {
 
   it.each([
     "rakazo-model-oauth",
-    "rakazo-mcp-oauth",
+    "tangow-mcp-oauth",
     "rakazo-app-connect",
     "rakazo-plugin-connect",
   ])("allows %s navigation without granting permissions to its popup", (name) => {

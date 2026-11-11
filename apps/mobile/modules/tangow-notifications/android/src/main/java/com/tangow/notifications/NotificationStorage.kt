@@ -1,4 +1,4 @@
-package com.rakazo.notifications
+package com.tangow.notifications
 
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
@@ -129,7 +129,7 @@ internal class NotificationStorage(context: Context) {
   }
 
   private companion object {
-    const val PREFERENCES = "com.rakazo.notifications"
+    const val PREFERENCES = "com.tangow.notifications"
     const val LIVE = "live_connection"
     const val MESSAGES = "messages"
     const val SCHEDULED = "scheduled_tasks"

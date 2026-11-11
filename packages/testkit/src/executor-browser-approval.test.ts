@@ -23,9 +23,9 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
       process.env.COMPUTER_TEST_IMAGE ?? "rakazo/computer:local",
     );
     cleanups.push(() => machine.close());
-    const helper = await machine.exec("sha256sum /usr/local/bin/rakazo-page-browser");
+    const helper = await machine.exec("sha256sum /usr/local/bin/tangow-page-browser");
     const bytes = await readFile(
-      new URL("../../../infra/sandboxes/computer/rakazo-page-browser", import.meta.url),
+      new URL("../../../infra/sandboxes/computer/tangow-page-browser", import.meta.url),
     );
     expect(helper.stdout.split(" ")[0]).toBe(createHash("sha256").update(bytes).digest("hex"));
     const html = `<title>Pending approval</title><label>Note<input></label><button onclick="document.title='Approved '+(++window.effects);fetch('/submit',{method:'POST'})">Submit</button><script>window.effects=0</script>`;

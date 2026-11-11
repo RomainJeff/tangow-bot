@@ -401,7 +401,7 @@ when taking upstream security updates; changing only the visible major tag does 
 content while a digest is present.
 
 For the single-VM production layout, install `infra/compose/backup-prod.sh` as
-`/usr/local/sbin/rakazo-backup` and enable the supplied `rakazo-backup.timer`. It creates a verified
+`/usr/local/sbin/tangow-backup` and enable the supplied `tangow-backup.timer`. It creates a verified
 Postgres custom-format dump plus an application-data archive under `/var/backups/rakazo`, with mode
 `0600` and seven-day rotation. These local snapshots help with operator mistakes but are not a
 substitute for an encrypted off-host backup or provider snapshot.

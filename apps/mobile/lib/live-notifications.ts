@@ -45,7 +45,7 @@ type NativeNotifications = {
 
 const nativeNotifications =
   Platform.OS === "android"
-    ? requireNativeModule<NativeNotifications>("RakazoNotifications")
+    ? requireNativeModule<NativeNotifications>("TangowNotifications")
     : null;
 
 export type NotificationThreadTarget = { botId?: string; threadId?: string };

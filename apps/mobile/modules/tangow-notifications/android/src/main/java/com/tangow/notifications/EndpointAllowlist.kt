@@ -1,4 +1,4 @@
-package com.rakazo.notifications
+package com.tangow.notifications
 
 import java.net.URI
 

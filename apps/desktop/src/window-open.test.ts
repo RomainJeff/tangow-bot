@@ -16,7 +16,7 @@ describe("desktop child windows", () => {
 
   it.each([
     "rakazo-model-oauth",
-    "rakazo-mcp-oauth",
+    "tangow-mcp-oauth",
     "rakazo-app-connect",
     "rakazo-plugin-connect",
   ])("keeps the intentional %s flow in an Electron popup", (frameName) => {

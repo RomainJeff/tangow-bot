@@ -64,9 +64,9 @@ HOME=/tmp/fluxbox-home /tmp/fluxbox-home/.fluxbox/startup >/tmp/rakazo/fluxbox.l
 
 register_browser_handler() {
   local mime="$1"
-  if ! xdg-mime default rakazo-browser.desktop "$mime" >/dev/null 2>&1 \
-    || [[ "$(xdg-mime query default "$mime" 2>/dev/null || true)" != "rakazo-browser.desktop" ]]; then
-    echo "failed to register rakazo-browser for $mime" >&2
+  if ! xdg-mime default tangow-browser.desktop "$mime" >/dev/null 2>&1 \
+    || [[ "$(xdg-mime query default "$mime" 2>/dev/null || true)" != "tangow-browser.desktop" ]]; then
+    echo "failed to register tangow-browser for $mime" >&2
     exit 1
   fi
 }
@@ -98,9 +98,9 @@ for mime in \
   application/vnd.ms-powerpoint application/vnd.oasis.opendocument.presentation; do
   register_handler libreoffice-impress.desktop "$mime"
 done
-if ! xdg-settings set default-web-browser rakazo-browser.desktop >/dev/null 2>&1 \
-  || [[ "$(xdg-settings get default-web-browser 2>/dev/null || true)" != "rakazo-browser.desktop" ]]; then
-  echo "failed to set default web browser to rakazo-browser" >&2
+if ! xdg-settings set default-web-browser tangow-browser.desktop >/dev/null 2>&1 \
+  || [[ "$(xdg-settings get default-web-browser 2>/dev/null || true)" != "tangow-browser.desktop" ]]; then
+  echo "failed to set default web browser to tangow-browser" >&2
   exit 1
 fi
 

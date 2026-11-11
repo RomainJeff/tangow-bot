@@ -1,7 +1,7 @@
 import type { McpTransportFactory } from "@earendil-works/pi-coding-agent";
 import type { GuestTool } from "@tangow/adapter-kit";
 import type { HarnessHost } from "../harness.js";
-import { rakazoMcpServer } from "../rakazo-mcp.js";
+import { rakazoMcpServer } from "../tangow-mcp.js";
 
 type Transport = ReturnType<McpTransportFactory>;
 

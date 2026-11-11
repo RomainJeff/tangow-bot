@@ -44,10 +44,10 @@ describe.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
       const f = await dockerE2BMachine(image);
       try {
         const localHelper = await readFile(
-          new URL("../../../infra/sandboxes/computer/rakazo-page-browser", import.meta.url),
+          new URL("../../../infra/sandboxes/computer/tangow-page-browser", import.meta.url),
         );
         expect(
-          (await f.exec("sha256sum /usr/local/bin/rakazo-page-browser")).stdout.split(" ")[0],
+          (await f.exec("sha256sum /usr/local/bin/tangow-page-browser")).stdout.split(" ")[0],
         ).toBe(createHash("sha256").update(localHelper).digest("hex"));
         const html =
           "<title>Browser form</title><h1>Browser agreement</h1><label>Name<input id=\"name\"></label><button onclick=\"document.title='Saved '+document.querySelector('#name').value;document.querySelector('h1').textContent=document.title\">Save</button>";
@@ -188,7 +188,7 @@ describe.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
             f,
             lockWait
               ? `pgrep -f '^flock -w .* 8$' >/dev/null`
-              : "pgrep -f '^python3 /usr/local/bin/rakazo-page-browser snapshot' >/dev/null",
+              : "pgrep -f '^python3 /usr/local/bin/tangow-page-browser snapshot' >/dev/null",
           );
           const pid = f.pid;
           if (!lockWait) {
@@ -202,7 +202,7 @@ describe.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
             `! ps -eo pgid=,stat= | awk '$1 == ${pid} && $2 !~ /^Z/ { found=1 } END { exit !found }'`,
           );
           expect(
-            (await f.exec("pgrep -f '^python3 /usr/local/bin/rakazo-page-browser' || true")).stdout,
+            (await f.exec("pgrep -f '^python3 /usr/local/bin/tangow-page-browser' || true")).stdout,
           ).toBe("");
         }
       } finally {

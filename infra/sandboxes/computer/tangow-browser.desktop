@@ -2,7 +2,7 @@
 Type=Application
 Name=Rakazo Browser
 Comment=Chromium with Rakazo container flags and profile isolation
-Exec=/usr/local/bin/rakazo-browser %U
+Exec=/usr/local/bin/tangow-browser %U
 Icon=google-chrome
 Terminal=false
 Categories=Network;WebBrowser;

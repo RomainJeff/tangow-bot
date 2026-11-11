@@ -47,7 +47,7 @@
       "main": "dist/main.js"
     },
     "mac": {
-      "icon": "../../packages/ui-tokens/assets/Rakazo.icon",
+      "icon": "../../packages/ui-tokens/assets/Tangow.icon",
       "category": "public.app-category.productivity",
       "target": [
         "dmg",

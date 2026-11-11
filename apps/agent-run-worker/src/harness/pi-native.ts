@@ -26,12 +26,12 @@ import {
 } from "@tangow/adapters/runtime-worker/pi-ai";
 import { skillReadName } from "@tangow/adapters/volume-skills";
 import type { DoneBody, GuestHarness, HarnessHost } from "../harness.js";
-import { mcpResult, rakazoMcpTools } from "../rakazo-mcp.js";
+import { mcpResult, rakazoMcpTools } from "../tangow-mcp.js";
 import { durableBashTool } from "./durable-bash.js";
 import { exactToolSearchExtension } from "./exact-tool-search.js";
 import { relayModelRuntime } from "./pi-session.js";
 import { callOccurrenceId, capturePiSnapshot, restorePiSnapshot } from "./pi-snapshot.js";
-import { rakazoMcpTransport } from "./rakazo-mcp.js";
+import { rakazoMcpTransport } from "./tangow-mcp.js";
 
 type SteeringMessage = Extract<ReplyFinal, { type: "steering" }>["messages"][number];
 type TranscriptMessage = Extract<GuestBody, { type: "transcript" }>["messages"][number];

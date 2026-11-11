@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Files
-Exec=/usr/local/bin/rakazo-files
+Exec=/usr/local/bin/tangow-files
 Icon=system-file-manager
 Terminal=false
 Categories=System;FileManager;

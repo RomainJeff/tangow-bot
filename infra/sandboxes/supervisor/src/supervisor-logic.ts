@@ -376,7 +376,7 @@ export function containerActionStep(
       "env",
       `DISPLAY=${display}`,
       ...(browser && browserProfile ? [`TANGOW_BROWSER_PROFILE=${browserProfile}`] : []),
-      browser ? "rakazo-browser" : action.application,
+      browser ? "tangow-browser" : action.application,
       ...(action.uri ? [action.uri] : []),
     ];
   }

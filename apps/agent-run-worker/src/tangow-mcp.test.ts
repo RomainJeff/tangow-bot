@@ -7,7 +7,7 @@ import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
 import type { GuestTool } from "@tangow/adapter-kit";
 import { afterEach, describe, expect, it } from "vitest";
 import type { HarnessHost, InformativeBody } from "./harness.js";
-import { rakazoMcpServer, rakazoMcpTools } from "./rakazo-mcp.js";
+import { rakazoMcpServer, rakazoMcpTools } from "./tangow-mcp.js";
 
 const cleanups: Array<() => Promise<unknown>> = [];
 afterEach(async () => {
@@ -73,7 +73,7 @@ async function connect(
   host: HarnessHost,
   options = { nativeToolSearch: false },
 ) {
-  const screensDir = await mkdtemp(path.join(tmpdir(), "rakazo-mcp-screens-"));
+  const screensDir = await mkdtemp(path.join(tmpdir(), "tangow-mcp-screens-"));
   const server = rakazoMcpServer(tools, host, screensDir, options);
   const [clientEnd, serverEnd] = InMemoryTransport.createLinkedPair();
   serverEnd.onmessage = (message) => void server.send(message as never);

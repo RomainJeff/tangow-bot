@@ -28,7 +28,7 @@ function write(file: string, content: string) {
 }
 
 function fixture() {
-  const root = mkdtempSync(path.join(os.tmpdir(), "rakazo-backup-"));
+  const root = mkdtempSync(path.join(os.tmpdir(), "tangow-backup-"));
   temporaryDirectories.push(root);
   const checkout = path.join(root, "checkout with spaces");
   const snapshots = path.join(root, "snapshots");
@@ -272,7 +272,7 @@ describe("production backup deployment and archive behavior", () => {
 
   it("provides optional systemd configuration for installed copies", () => {
     const service = readFileSync(
-      path.join(repoRoot, "infra/systemd/rakazo-backup.service"),
+      path.join(repoRoot, "infra/systemd/tangow-backup.service"),
       "utf8",
     );
     expect(service).toContain("EnvironmentFile=-/etc/rakazo/backup.env");

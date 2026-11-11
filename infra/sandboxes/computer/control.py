@@ -21,14 +21,14 @@ KNOWN_LAUNCH = frozenset(
     {
         "libreoffice",
         "pcmanfm",
-        "rakazo-browser",
-        "rakazo-terminal",
+        "tangow-browser",
+        "tangow-terminal",
     }
 )
 WORKSPACE = "/home/rakazo"
 WORKSPACE_PATH_APPS = {"libreoffice", "pcmanfm"}
 # A terminal argument is a command to run, so the launcher takes none.
-NO_ARGUMENT_APPS = {"rakazo-terminal"}
+NO_ARGUMENT_APPS = {"tangow-terminal"}
 CONTROL_TIMEOUT_SEC = 10
 LAUNCH_SPAWN_POLL_SEC = 0.2
 NATIVE_CAPTURES = {}
@@ -178,7 +178,7 @@ def allowed_control_argv(argv, display):
         profile = argv[2].removeprefix("TANGOW_BROWSER_PROFILE=")
         if not re.fullmatch(r"/home/rakazo/\.browser-profiles/chromium-bot-[a-f0-9]{32}", profile):
             return False
-        if command not in ("xdg-open", "rakazo-browser"):
+        if command not in ("xdg-open", "tangow-browser"):
             return False
     if command == "xdotool":
         return allowed_xdotool_argv(argv)

@@ -1,6 +1,6 @@
 const OAUTH_POPUP_NAMES = new Set([
   "rakazo-app-connect",
-  "rakazo-mcp-oauth",
+  "tangow-mcp-oauth",
   "rakazo-model-oauth",
   "rakazo-plugin-connect",
 ]);

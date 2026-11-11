@@ -11,7 +11,7 @@ export const BROWSER_APPLICATIONS = new Set([
   "firefox",
   "google-chrome",
   "google-chrome-stable",
-  "rakazo-browser",
+  "tangow-browser",
 ]);
 export interface DesktopEnvironment {
   homeDir: string;
@@ -132,7 +132,7 @@ function browserLauncherCommand(
       ? // biome-ignore lint/suspicious/noTemplateCurlyInString: generated shell parameter expansion
         ['desktop_display="${0##*-}"', "desktop_debug=$((9221 + desktop_display))"]
       : []),
-    "browser=$(command -v rakazo-browser || command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser)",
+    "browser=$(command -v tangow-browser || command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser)",
     `export DISPLAY=${layout.display} HOME=${shellQuote(env.homeDir)}`,
     `exec "$browser" --no-sandbox --no-first-run --no-default-browser-check --disable-dev-shm-usage --password-store=basic --remote-debugging-address=127.0.0.1 --remote-debugging-port=${layout.debugPort} --user-data-dir=${shellQuote(browserProfilePathForScreen(screenId, env))} "$@"`,
   ].join("\n");

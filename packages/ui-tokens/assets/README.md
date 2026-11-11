@@ -1,6 +1,6 @@
 # App icon source
 
-`Rakazo.icon` is the shared editable source for macOS and iOS: the one-stroke
+`Tangow.icon` is the shared editable source for macOS and iOS: the one-stroke
 "tw" in linen (`#F5F0E6`) on solid ink (`#151517`), in both light and dark
 appearances. Open it in Apple's Icon Composer with Xcode 26 or newer. `tw.svg` is
 the editable drawing behind its full-canvas `Assets/tw.png` layer.

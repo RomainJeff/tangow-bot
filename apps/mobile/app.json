@@ -65,7 +65,7 @@
       "bundleIdentifier": "com.romainjeff.tangow",
       "buildNumber": "1",
       "supportsTablet": false,
-      "icon": "../../packages/ui-tokens/assets/Rakazo.icon",
+      "icon": "../../packages/ui-tokens/assets/Tangow.icon",
       "config": {
         "usesNonExemptEncryption": false
       },

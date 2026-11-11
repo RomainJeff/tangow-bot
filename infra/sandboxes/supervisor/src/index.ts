@@ -455,7 +455,7 @@ app.post("/computers/:id/browser", async (c) => {
     );
     const result = await runContainerCommand(
       container,
-      ["/usr/local/bin/rakazo-page-browser", body.command, JSON.stringify(body)],
+      ["/usr/local/bin/tangow-page-browser", body.command, JSON.stringify(body)],
       {
         env: [
           `DISPLAY=${layout.display}`,
@@ -1155,12 +1155,12 @@ async function ensureComputerImage() {
             "start.sh",
             "control.py",
             "xcapture.c",
-            "rakazo-browser",
-            "rakazo-page-browser",
-            "rakazo-terminal",
+            "tangow-browser",
+            "tangow-page-browser",
+            "tangow-terminal",
             "terminalrc",
             "zshrc",
-            "rakazo-browser.desktop",
+            "tangow-browser.desktop",
             "embed.html",
             "clipboard-bridge.js",
             "mobile-keyboard.js",

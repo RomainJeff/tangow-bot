@@ -1,4 +1,4 @@
-package com.rakazo.notifications
+package com.tangow.notifications
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -53,7 +53,7 @@ private data class RunRecord(
 
 private class ApiException(val status: Int) : IOException()
 
-class RakazoNotificationService : Service() {
+class TangowNotificationService : Service() {
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   private lateinit var manager: NotificationManager
   private var pollJob: Job? = null
@@ -226,7 +226,7 @@ class RakazoNotificationService : Service() {
   private fun post(run: RunRecord, copy: NotificationCopy) {
     if (!run.notificationsEnabled || isOpenThread(run)) return
     val notification = builder(copy.channel)
-      .setSmallIcon(R.drawable.ic_rakazo_notification)
+      .setSmallIcon(R.drawable.ic_tangow_notification)
       .setContentTitle(copy.title)
       .setContentText(copy.body)
       .setStyle(Notification.BigTextStyle().bigText(copy.body))
@@ -281,7 +281,7 @@ class RakazoNotificationService : Service() {
 
   private fun liveStatusIcon(run: RunRecord, avatarStyle: String): Icon {
     if (avatarStyle != "organic") {
-      return Icon.createWithResource(this, R.drawable.ic_rakazo_notification)
+      return Icon.createWithResource(this, R.drawable.ic_tangow_notification)
     }
     val bitmap = Bitmap.createBitmap(96, 96, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
@@ -362,7 +362,7 @@ class RakazoNotificationService : Service() {
 
   companion object {
     private const val LIVE_NOTIFICATION_ID = 1101
-    private const val ACTION_THREAD_CHANGED = "com.rakazo.notifications.THREAD_CHANGED"
+    private const val ACTION_THREAD_CHANGED = "com.tangow.notifications.THREAD_CHANGED"
     private const val PROMOTED_ONGOING_EXTRA = "android.requestPromotedOngoing"
     private const val POLL_INTERVAL_MS = 8_000L
     private const val STATE_PREFERENCES = "com.rakazo.notification_state"
@@ -376,12 +376,12 @@ class RakazoNotificationService : Service() {
     private var openThreadId: String? = null
 
     fun start(context: Context) {
-      val intent = Intent(context, RakazoNotificationService::class.java)
+      val intent = Intent(context, TangowNotificationService::class.java)
       context.startService(intent)
     }
 
     fun stop(context: Context) {
-      context.stopService(Intent(context, RakazoNotificationService::class.java))
+      context.stopService(Intent(context, TangowNotificationService::class.java))
     }
 
     fun setOpenThread(context: Context, botId: String?, threadId: String?) {
@@ -393,7 +393,7 @@ class RakazoNotificationService : Service() {
         context.getSystemService(NotificationManager::class.java).cancel(threadId.hashCode())
       }
       context.startService(
-        Intent(context, RakazoNotificationService::class.java).setAction(ACTION_THREAD_CHANGED),
+        Intent(context, TangowNotificationService::class.java).setAction(ACTION_THREAD_CHANGED),
       )
     }
 

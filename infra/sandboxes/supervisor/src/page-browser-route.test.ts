@@ -25,7 +25,7 @@ beforeEach(() => {
     start: async () =>
       Readable.from([
         Buffer.from(
-          options.Cmd.includes("/usr/local/bin/rakazo-page-browser")
+          options.Cmd.includes("/usr/local/bin/tangow-page-browser")
             ? JSON.stringify({
                 ok: true,
                 url: "https://example.test",
@@ -113,7 +113,7 @@ it("closes helper stdin when the request is cancelled", async () => {
   });
   const defaultExec = mock.exec.getMockImplementation()!;
   mock.exec.mockImplementation(async (options: { Cmd: string[]; AttachStdin?: boolean }) => {
-    if (!options.Cmd.includes("/usr/local/bin/rakazo-page-browser")) return defaultExec(options);
+    if (!options.Cmd.includes("/usr/local/bin/tangow-page-browser")) return defaultExec(options);
     expect(options.AttachStdin).toBe(true);
     return {
       start: async (options: { stdin: boolean }) => {

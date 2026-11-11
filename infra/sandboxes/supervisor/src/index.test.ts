@@ -348,7 +348,7 @@ describe("sandbox supervisor input containment", () => {
       expect(
         containerActionStep({ kind: "launch", application, uri: "https://example.com" }, ":2"),
       ).toEqual({
-        argv: ["env", "DISPLAY=:2", "rakazo-browser", "https://example.com"],
+        argv: ["env", "DISPLAY=:2", "tangow-browser", "https://example.com"],
       });
     }
     expect(containerActionStep({ kind: "launch", application: "xterm" }, ":3")).toEqual({
@@ -364,7 +364,7 @@ describe("sandbox supervisor input containment", () => {
       expect(
         containerActionStep({ kind: "launch", application, uri: "https://example.com" }, ":2"),
       ).toEqual({
-        argv: ["env", "DISPLAY=:2", "rakazo-browser", "https://example.com"],
+        argv: ["env", "DISPLAY=:2", "tangow-browser", "https://example.com"],
       });
     }
     expect(containerActionStep({ kind: "launch", application: "XTerm" }, ":3")).toEqual({
@@ -381,7 +381,7 @@ describe("sandbox supervisor input containment", () => {
           "env",
           "DISPLAY=:2",
           `TANGOW_BROWSER_PROFILE=${profile}`,
-          "rakazo-browser",
+          "tangow-browser",
           "https://example.com",
         ],
       },

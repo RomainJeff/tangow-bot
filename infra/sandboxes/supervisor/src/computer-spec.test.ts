@@ -170,23 +170,23 @@ describe("graphical computer spec", () => {
     const root = path.resolve(import.meta.dirname, "../../computer");
     const dockerfile = readFileSync(path.join(root, "Dockerfile"), "utf8");
     const start = readFileSync(path.join(root, "start.sh"), "utf8");
-    const browser = readFileSync(path.join(root, "rakazo-browser"), "utf8");
-    const desktop = readFileSync(path.join(root, "rakazo-browser.desktop"), "utf8");
+    const browser = readFileSync(path.join(root, "tangow-browser"), "utf8");
+    const desktop = readFileSync(path.join(root, "tangow-browser.desktop"), "utf8");
     expect(dockerfile).toMatch(/google-chrome-stable/);
-    expect(dockerfile).toMatch(/rakazo-browser\.desktop/);
+    expect(dockerfile).toMatch(/tangow-browser\.desktop/);
     expect(dockerfile).toMatch(/control.py/);
     expect(dockerfile).toMatch(/USER 1000:1000/);
     expect(start).toMatch(/rakazo-computer-control/);
-    expect(start).toMatch(/rakazo-browser/);
+    expect(start).toMatch(/tangow-browser/);
     expect(start).not.toMatch(/browser\.log/);
-    expect(start).toMatch(/xdg-mime default rakazo-browser\.desktop/);
+    expect(start).toMatch(/xdg-mime default tangow-browser\.desktop/);
     expect(start).toMatch(/register_browser_handler x-scheme-handler\/http/);
     expect(start).toMatch(/register_browser_handler x-scheme-handler\/https/);
     expect(start).toMatch(/register_browser_handler text\/html/);
     expect(start).toMatch(/xdg-mime query default/);
-    expect(start).toMatch(/failed to register rakazo-browser/);
+    expect(start).toMatch(/failed to register tangow-browser/);
     expect(start).toMatch(/failed to set default web browser/);
-    expect(start).toMatch(/xdg-settings set default-web-browser rakazo-browser\.desktop/);
+    expect(start).toMatch(/xdg-settings set default-web-browser tangow-browser\.desktop/);
     expect(start).toMatch(/register_handler pcmanfm\.desktop inode\/directory/);
     expect(start).toMatch(/register_handler libreoffice-writer\.desktop/);
     expect(start).toMatch(/register_handler libreoffice-calc\.desktop/);
@@ -194,22 +194,22 @@ describe("graphical computer spec", () => {
     expect(start).toMatch(/-f "\/usr\/share\/applications\/\$desktop"/);
     expect(start).toMatch(/failed to register \$desktop/);
     expect(dockerfile).toMatch(/UserInstallation=file:\/\/\/tmp\//);
-    expect(start).not.toMatch(/xdg-mime default rakazo-browser\.desktop .*\|\| true/);
+    expect(start).not.toMatch(/xdg-mime default tangow-browser\.desktop .*\|\| true/);
     expect(start).toMatch(/x11vnc .* -viewonly /);
     expect(browser).toMatch(/\.browser-profiles\/chrome"/);
     expect(browser).toMatch(/chrome-screen-\$DISPLAY_NUM/);
     expect(browser).toMatch(/USER_DATA_DIR_SET/);
     expect(browser).toMatch(/TANGOW_BROWSER_PROFILE/);
-    expect(desktop).toMatch(/Exec=\/usr\/local\/bin\/rakazo-browser %U/);
-    const terminal = readFileSync(path.join(root, "rakazo-terminal"), "utf8");
+    expect(desktop).toMatch(/Exec=\/usr\/local\/bin\/tangow-browser %U/);
+    const terminal = readFileSync(path.join(root, "tangow-terminal"), "utf8");
     const menu = readFileSync(path.join(root, "fluxbox.menu"), "utf8");
     expect(dockerfile).toMatch(/xfce4-terminal/);
     expect(dockerfile).not.toMatch(/^\s+xterm \\$/m);
     expect(dockerfile).toMatch(/--shell \/bin\/zsh rakazo/);
     expect(terminal).toMatch(/exec xfce4-terminal --disable-server$/m);
-    expect(menu).toMatch(/\(Terminal\) \{rakazo-terminal\}/);
+    expect(menu).toMatch(/\(Terminal\) \{tangow-terminal\}/);
     expect(start).toMatch(/source \/etc\/rakazo\/zshrc/);
-    expect(dockerfile).toMatch(/rakazo-page-browser/);
+    expect(dockerfile).toMatch(/tangow-page-browser/);
     expect(browser).toMatch(/remote-debugging-port/);
     expect(desktop).toMatch(/x-scheme-handler\/http/);
     expect(desktop).toMatch(/x-scheme-handler\/https/);
@@ -239,7 +239,7 @@ describe("graphical computer spec", () => {
     "selects a display-specific browser profile and preserves explicit profiles",
     () => {
       const root = path.resolve(import.meta.dirname, "../../computer");
-      const temp = mkdtempSync(path.join(tmpdir(), "rakazo-browser-wrapper-"));
+      const temp = mkdtempSync(path.join(tmpdir(), "tangow-browser-wrapper-"));
       const bin = path.join(temp, "bin");
       const capture = path.join(temp, "args");
       const home = path.join(temp, "home");
@@ -249,7 +249,7 @@ describe("graphical computer spec", () => {
       chmodSync(chrome, 0o755);
 
       const run = (display: string, args: string[] = []) => {
-        const result = spawnSync("sh", [path.join(root, "rakazo-browser"), ...args], {
+        const result = spawnSync("sh", [path.join(root, "tangow-browser"), ...args], {
           env: {
             ...process.env,
             DISPLAY: display,
@@ -290,7 +290,7 @@ describe("graphical computer spec", () => {
     "clears crashed state from Chromium preferences and Local State",
     () => {
       const root = path.resolve(import.meta.dirname, "../../computer");
-      const temp = mkdtempSync(path.join(tmpdir(), "rakazo-browser-crash-"));
+      const temp = mkdtempSync(path.join(tmpdir(), "tangow-browser-crash-"));
       const bin = path.join(temp, "bin");
       const home = path.join(temp, "home");
       const chrome = path.join(bin, "google-chrome-stable");
@@ -311,7 +311,7 @@ describe("graphical computer spec", () => {
       writeFileSync(localStatePath, '{\n  "profile": {\n    "exited_cleanly": false\n  }\n}\n');
 
       try {
-        const result = spawnSync("bash", [path.join(root, "rakazo-browser")], {
+        const result = spawnSync("bash", [path.join(root, "tangow-browser")], {
           env: {
             ...process.env,
             DISPLAY: ":1",
@@ -339,7 +339,7 @@ describe("graphical computer spec", () => {
 
         writeFileSync(prefsPath, '{\n  "profile": {\n    "exit_type": "Crashed"\n  }\n}\n');
         symlinkSync("testhost-12345", path.join(profile, "SingletonLock"));
-        const skipped = spawnSync("bash", [path.join(root, "rakazo-browser")], {
+        const skipped = spawnSync("bash", [path.join(root, "tangow-browser")], {
           env: {
             ...process.env,
             DISPLAY: ":1",
@@ -608,11 +608,11 @@ describe("graphical computer spec", () => {
           "assert allow(['env', 'DISPLAY=:1', 'xdotool', 'click', '--repeat', '3', '4'], ':1')",
           "assert allow(['env', 'DISPLAY=:1', 'xdotool', 'type', '--clearmodifiers', '--', 'hi'], ':1')",
           "assert allow(['env', 'DISPLAY=:2', 'xdg-open', 'https://example.com'], ':2')",
-          "assert allow(['env', 'DISPLAY=:1', 'rakazo-browser'], ':1')",
-          "assert allow(['env', 'DISPLAY=:2', 'rakazo-browser', 'https://example.com'], ':2')",
-          "assert allow(['env', 'DISPLAY=:1', 'rakazo-terminal'], ':1')",
-          "assert not allow(['env', 'DISPLAY=:1', 'rakazo-terminal', 'id'], ':1')",
-          "assert not allow(['env', 'DISPLAY=:1', 'rakazo-terminal', '-x'], ':1')",
+          "assert allow(['env', 'DISPLAY=:1', 'tangow-browser'], ':1')",
+          "assert allow(['env', 'DISPLAY=:2', 'tangow-browser', 'https://example.com'], ':2')",
+          "assert allow(['env', 'DISPLAY=:1', 'tangow-terminal'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'tangow-terminal', 'id'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'tangow-terminal', '-x'], ':1')",
           "assert not allow(['env', 'DISPLAY=:1', 'xterm'], ':1')",
           "assert allow(['env', 'DISPLAY=:1', 'pcmanfm', '/home/rakazo'], ':1')",
           "assert allow(['env', 'DISPLAY=:1', 'libreoffice', '/home/rakazo/report.docx'], ':1')",
@@ -626,9 +626,9 @@ describe("graphical computer spec", () => {
           "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', '/home/rakazo/../../etc/passwd'], ':1')",
           "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', '/home/rakazoevil/x.docx'], ':1')",
           "assert not allow(['env', 'DISPLAY=:1', 'pcmanfm', '/etc'], ':1')",
-          "assert long_lived(['env', 'DISPLAY=:1', 'rakazo-browser'])",
-          "assert long_lived(['env', 'DISPLAY=:1', 'rakazo-browser', 'https://example.com'])",
-          "assert long_lived(['env', 'DISPLAY=:1', 'rakazo-terminal'])",
+          "assert long_lived(['env', 'DISPLAY=:1', 'tangow-browser'])",
+          "assert long_lived(['env', 'DISPLAY=:1', 'tangow-browser', 'https://example.com'])",
+          "assert long_lived(['env', 'DISPLAY=:1', 'tangow-terminal'])",
           "assert long_lived(['env', 'DISPLAY=:1', 'xdg-open', 'https://example.com'])",
           "assert not long_lived(['env', 'DISPLAY=:1', 'xdotool', 'key', '--clearmodifiers', 'a'])",
           "assert not allow(['env', 'DISPLAY=:1', 'chromium', 'https://example.com'], ':1')",
