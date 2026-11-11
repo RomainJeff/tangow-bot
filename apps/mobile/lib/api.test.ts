@@ -20,6 +20,7 @@ import {
   deleteAccount,
   earliestRunStartMs,
   keepUnchangedRows,
+  listGroups,
   loadApiBase,
   MAX_MOBILE_AUTH_RESPONSE_BYTES,
   MAX_MOBILE_RPC_RESPONSE_BYTES,
@@ -363,6 +364,26 @@ describe("mobile API authentication", () => {
       }),
     );
     await expect(rpc("bots/get", { botId: "missing" })).rejects.toThrow("Bot does not exist");
+  });
+
+  it("reads a group from an older server as the viewer's own", async () => {
+    vi.mocked(SecureStore.getItemAsync).mockResolvedValue("session-token");
+    const member = { botId: "bot-1", name: "Ada", color: "#000000", shapeSeed: null };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse({ json: [{ id: "group-1", name: "Team", members: [member] }] }),
+      ),
+    );
+
+    const [group] = await listGroups();
+
+    expect(group).toMatchObject({
+      members: [{ ...member, canUse: true }],
+      people: [],
+      canManage: true,
+      leadBotId: null,
+    });
   });
 
   it("reports the reason the server gives for refusing an input", async () => {

@@ -164,6 +164,7 @@ import {
   copyableMobileMessageText,
   currentApiBase,
   keepUnchangedRows,
+  listGroups,
   loadSessionToken,
   type MobileBot,
   type MobileGroup,
@@ -778,7 +779,7 @@ function Thread() {
   const groupsRefreshGeneration = useRef(0);
   const refreshGroups = useCallback(async () => {
     const generation = ++groupsRefreshGeneration.current;
-    const groups = await rpc<MobileGroup[]>("groups/list").catch(() => null);
+    const groups = await listGroups().catch(() => null);
     // Keep the last known groups if a refresh fails or a newer one has started.
     if (groups && generation === groupsRefreshGeneration.current) setMentionGroups(groups);
   }, []);

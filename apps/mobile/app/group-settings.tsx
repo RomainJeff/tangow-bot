@@ -11,7 +11,7 @@ import { BotAvatar } from "../components/bot-avatar";
 import { BotMemberPicker, PersonPicker, useSpacePeople } from "../components/bot-member-picker";
 import { NativeMenu } from "../components/native-menu";
 import { NativeSymbol } from "../components/native-symbol";
-import { type MobileBot, type MobileGroup, rpc } from "../lib/api";
+import { listGroups, type MobileBot, type MobileGroup, rpc } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
 import { serverMessage } from "../lib/server-error";
@@ -55,9 +55,7 @@ export default function GroupSettingsScreen() {
   useEffect(() => {
     if (!groupId) return;
     void Promise.all([
-      rpc<MobileGroup[]>("groups/list").then(
-        (groups) => groups.find((row) => row.id === groupId) ?? null,
-      ),
+      listGroups().then((groups) => groups.find((row) => row.id === groupId) ?? null),
       rpc<MobileBot[]>("bots/list"),
     ])
       .then(([nextGroup, nextBots]) => {
@@ -109,8 +107,7 @@ export default function GroupSettingsScreen() {
       } = { groupId };
       // What was switched in or out since the screen opened, applied to the group as it is now,
       // so someone who left meanwhile is not added back.
-      const latest =
-        (await rpc<MobileGroup[]>("groups/list")).find((row) => row.id === groupId) ?? group;
+      const latest = (await listGroups()).find((row) => row.id === groupId) ?? group;
       const botIdsOf = (of: MobileGroup) => of.members.map((member) => member.botId);
       // Its creator comes first and is always in it.
       const peopleOf = (of: MobileGroup) => of.people.slice(1).map((person) => person.userId);
