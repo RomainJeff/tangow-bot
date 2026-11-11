@@ -50,6 +50,12 @@ test("an invite for an email survives sign up and joins only that account to the
   };
 
   await guest.goto(inviteUrl);
+  await signUpOnSignIn(`invite-other-${stamp}@rakazo.test`, "Sam Other");
+  await expect(guest.getByText(`This invite is for ${guestEmail}.`)).toBeVisible();
+  await expect(guest.getByRole("button", { name: "Join", exact: true })).toHaveCount(0);
+  await captureScreenshot(guest, testInfo, "invite-another-account");
+  await guest.getByRole("button", { name: "Use another account" }).click();
+
   await signUpOnSignIn(guestEmail, "Grace Guest");
   await expect(guest.getByRole("heading", { name: "Join Family" })).toBeVisible();
   await expect(guest.getByText("Invited by Ada Owner")).toBeVisible();

@@ -3,12 +3,20 @@ import { Button } from "@rakazo/ui-web";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { LoadingState } from "../components/ai/primitives";
+import { authClient } from "../lib/auth";
 import { dropInvite } from "../lib/pending-invite";
-import { rpc, selectSpace } from "../lib/rpc";
+import { clearSpaceSelection, rpc, selectSpace } from "../lib/rpc";
 
 type InviteState =
   | { kind: "loading" }
-  | { kind: "ready"; spaceName: string; inviterName: string; joining: boolean }
+  | {
+      kind: "ready";
+      spaceName: string;
+      inviterName: string;
+      email: string;
+      forYou: boolean;
+      joining: boolean;
+    }
   | { kind: "unavailable" };
 
 export function InvitePage() {
@@ -56,17 +64,35 @@ export function InvitePage() {
           <h1 className="text-4xl font-medium tracking-tight">
             <Trans>Join {state.spaceName}</Trans>
           </h1>
-          <p className="mt-3 text-muted-foreground">
-            <Trans>Invited by {state.inviterName}</Trans>
-          </p>
-          <Button
-            size="lg"
-            className="mt-9 h-12 w-full rounded-full text-base"
-            disabled={state.joining}
-            onClick={() => void join()}
-          >
-            <Trans>Join</Trans>
-          </Button>
+          {state.forYou ? (
+            <>
+              <p className="mt-3 text-muted-foreground">
+                <Trans>Invited by {state.inviterName}</Trans>
+              </p>
+              <Button
+                size="lg"
+                className="mt-9 h-12 w-full rounded-full text-base"
+                disabled={state.joining}
+                onClick={() => void join()}
+              >
+                <Trans>Join</Trans>
+              </Button>
+            </>
+          ) : (
+            <>
+              <p className="mt-3 text-muted-foreground">
+                <Trans>This invite is for {state.email}.</Trans>
+              </p>
+              {/* Signed out, the invite route holds the link until they sign in again. */}
+              <Button
+                size="lg"
+                className="mt-9 h-12 w-full rounded-full text-base"
+                onClick={() => void authClient.signOut().then(clearSpaceSelection)}
+              >
+                <Trans>Use another account</Trans>
+              </Button>
+            </>
+          )}
         </div>
       ) : null}
       {state.kind === "unavailable" ? (
