@@ -1978,7 +1978,8 @@ function Thread() {
               },
             ]
           : []),
-        ...(linkPreviewCardOf(message)
+        // A link's preview is its author's to remove.
+        ...(linkPreviewCardOf(message) && !messagePerson(message)
           ? [
               {
                 name: "removeLinkPreview",
