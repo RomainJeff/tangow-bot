@@ -13,7 +13,7 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#: src/pages/shell/sidebar-roster.tsx:274
+#: src/pages/shell/sidebar-roster.tsx:281
 msgid " (unread)"
 msgstr " (unread)"
 
@@ -164,7 +164,7 @@ msgstr "{count} · next {next}"
 msgid "{count} more"
 msgstr "{count} more"
 
-#: src/pages/SpaceGeneralSettings.tsx:251
+#: src/pages/SpaceGeneralSettings.tsx:254
 msgid "{days, plural, one {Expires in # day} other {Expires in # days}}"
 msgstr "{days, plural, one {Expires in # day} other {Expires in # days}}"
 
@@ -296,10 +296,10 @@ msgstr "Action confirmations"
 #. placeholder {0}: bot.name
 #. placeholder {0}: group.spaceName
 #. placeholder {0}: sectionMenu.section.name
-#: src/pages/bot-page/BotPage.tsx:347
+#: src/pages/bot-page/BotPage.tsx:344
 #: src/pages/BotContextMenu.tsx:101
 #: src/pages/shell/shell-overlays.tsx:424
-#: src/pages/shell/sidebar-roster.tsx:149
+#: src/pages/shell/sidebar-roster.tsx:150
 msgid "Actions for {0}"
 msgstr "Actions for {0}"
 
@@ -332,7 +332,7 @@ msgstr "Active: {0}"
 msgid "Activity"
 msgstr "Activity"
 
-#: src/pages/bot-page/BotPage.tsx:272
+#: src/pages/bot-page/BotPage.tsx:269
 msgid "Activity, last run failed"
 msgstr "Activity, last run failed"
 
@@ -601,7 +601,7 @@ msgstr "Approve this server to let your agent use its tools."
 msgid "Apps this bot can use"
 msgstr "Apps this bot can use"
 
-#: src/pages/bot-page/BotPage.tsx:380
+#: src/pages/bot-page/BotPage.tsx:377
 #: src/pages/BotContextMenu.tsx:176
 msgid "Archive"
 msgstr "Archive"
@@ -912,6 +912,10 @@ msgstr "Changing…"
 msgid "Channels"
 msgstr "Channels"
 
+#: src/pages/bot-page/BotPage.tsx:167
+msgid "Chat"
+msgstr "Chat"
+
 #: src/pages/MessagingSettingsOverlay.tsx:113
 msgid "Chat apps"
 msgstr "Chat apps"
@@ -969,7 +973,7 @@ msgstr "Clear"
 msgid "Clear {0}’s conversation?"
 msgstr "Clear {0}’s conversation?"
 
-#: src/pages/bot-page/BotPage.tsx:376
+#: src/pages/bot-page/BotPage.tsx:373
 #: src/pages/BotContextMenu.tsx:170
 #: src/pages/BotContextMenu.tsx:201
 msgid "Clear conversation"
@@ -995,6 +999,7 @@ msgstr "Client ID"
 msgid "Client secret"
 msgstr "Client secret"
 
+#: src/pages/CustomizeOverlay.tsx:125
 #: src/pages/KnowledgeSection.tsx:692
 #: src/pages/KnowledgeSection.tsx:848
 #: src/pages/MessagingSettingsOverlay.tsx:362
@@ -1014,7 +1019,7 @@ msgstr "Close computer"
 msgid "Close image preview"
 msgstr "Close image preview"
 
-#: src/pages/CustomizeOverlay.tsx:110
+#: src/pages/CustomizeOverlay.tsx:122
 msgid "Close integrations"
 msgstr "Close integrations"
 
@@ -1023,7 +1028,7 @@ msgid "Close MCP servers"
 msgstr "Close MCP servers"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:146
+#: src/pages/SettingsOverlay.tsx:152
 msgid "Close memory settings"
 msgstr "Close memory settings"
 
@@ -1032,11 +1037,11 @@ msgid "Close messaging settings"
 msgstr "Close messaging settings"
 
 #: src/pages/ModelSettingsOverlay.tsx:51
-#: src/pages/SettingsOverlay.tsx:144
+#: src/pages/SettingsOverlay.tsx:150
 msgid "Close model settings"
 msgstr "Close model settings"
 
-#: src/pages/bot-page/BotPage.tsx:184
+#: src/pages/bot-page/BotPage.tsx:179
 #: src/pages/shell/side-panel.tsx:166
 msgid "Close panel"
 msgstr "Close panel"
@@ -1045,15 +1050,15 @@ msgstr "Close panel"
 msgid "Close preview"
 msgstr "Close preview"
 
-#: src/pages/CustomizeOverlay.tsx:110
+#: src/pages/CustomizeOverlay.tsx:124
 msgid "Close skills"
 msgstr "Close skills"
 
-#: src/pages/SettingsOverlay.tsx:149
+#: src/pages/SettingsOverlay.tsx:155
 msgid "Close user settings"
 msgstr "Close user settings"
 
-#: src/pages/SettingsOverlay.tsx:148
+#: src/pages/SettingsOverlay.tsx:154
 #: src/pages/VoiceSettingsOverlay.tsx:141
 msgid "Close voice settings"
 msgstr "Close voice settings"
@@ -1067,7 +1072,7 @@ msgid "Code"
 msgstr "Code"
 
 #. placeholder {0}: group.title
-#: src/pages/shell/sidebar-roster.tsx:127
+#: src/pages/shell/sidebar-roster.tsx:128
 msgid "Collapse {0}"
 msgstr "Collapse {0}"
 
@@ -1095,7 +1100,7 @@ msgstr "Complex"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:136
+#: src/pages/SettingsOverlay.tsx:142
 #: src/pages/shell/block-views.tsx:136
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
@@ -1262,7 +1267,7 @@ msgstr "Continue with email"
 msgid "Conversation cleared"
 msgstr "Conversation cleared"
 
-#: src/pages/SpaceGeneralSettings.tsx:257
+#: src/pages/SpaceGeneralSettings.tsx:260
 msgid "Copied"
 msgstr "Copied"
 
@@ -1281,7 +1286,7 @@ msgstr "Copy {label}"
 msgid "Copy diagnostic"
 msgstr "Copy diagnostic"
 
-#: src/pages/SpaceGeneralSettings.tsx:257
+#: src/pages/SpaceGeneralSettings.tsx:260
 msgid "Copy link"
 msgstr "Copy link"
 
@@ -1681,7 +1686,7 @@ msgstr "Could not update the default memory scope"
 msgid "Could not update your photo"
 msgstr "Could not update your photo"
 
-#: src/pages/SpaceGeneralSettings.tsx:191
+#: src/pages/SpaceGeneralSettings.tsx:194
 msgid "Couldn't copy the link"
 msgstr "Couldn't copy the link"
 
@@ -1707,7 +1712,7 @@ msgid "Couldn't load messaging settings"
 msgstr "Couldn't load messaging settings"
 
 #. placeholder {0}: member.name
-#: src/pages/SpaceGeneralSettings.tsx:232
+#: src/pages/SpaceGeneralSettings.tsx:235
 msgid "Couldn't remove {0}"
 msgstr "Couldn't remove {0}"
 
@@ -1715,7 +1720,7 @@ msgstr "Couldn't remove {0}"
 msgid "Couldn't rename the space"
 msgstr "Couldn't rename the space"
 
-#: src/pages/SpaceGeneralSettings.tsx:269
+#: src/pages/SpaceGeneralSettings.tsx:272
 msgid "Couldn't revoke the invite link"
 msgstr "Couldn't revoke the invite link"
 
@@ -1831,8 +1836,10 @@ msgstr "Current password"
 msgid "Customer support"
 msgstr "Customer support"
 
-#: src/pages/CustomizeOverlay.tsx:32
-#: src/pages/CustomizeOverlay.tsx:36
+#: src/pages/CustomizeOverlay.tsx:38
+#: src/pages/CustomizeOverlay.tsx:42
+#: src/pages/CustomizeOverlay.tsx:150
+#: src/pages/CustomizeOverlay.tsx:157
 #: src/pages/shell/sidebar-footer.tsx:191
 msgid "Customize"
 msgstr "Customize"
@@ -1854,7 +1861,7 @@ msgstr "days"
 msgid "Debug mode"
 msgstr "Debug mode"
 
-#: src/pages/SettingsOverlay.tsx:135
+#: src/pages/SettingsOverlay.tsx:141
 msgid "Decision Model"
 msgstr "Decision Model"
 
@@ -1881,7 +1888,7 @@ msgstr "Default ({0})"
 msgid "Default scope"
 msgstr "Default scope"
 
-#: src/pages/bot-page/BotPage.tsx:386
+#: src/pages/bot-page/BotPage.tsx:383
 #: src/pages/BotContextMenu.tsx:182
 #: src/pages/KnowledgeSection.tsx:687
 #: src/pages/McpServersOverlay.tsx:591
@@ -2073,7 +2080,7 @@ msgstr "Downloading…"
 msgid "Draft skill"
 msgstr "Draft skill"
 
-#: src/pages/bot-page/BotPage.tsx:367
+#: src/pages/bot-page/BotPage.tsx:364
 #: src/pages/BotContextMenu.tsx:163
 msgid "Duplicate"
 msgstr "Duplicate"
@@ -2124,7 +2131,7 @@ msgstr "Effort"
 msgid "Email"
 msgstr "Email"
 
-#: src/pages/SpaceGeneralSettings.tsx:288
+#: src/pages/SpaceGeneralSettings.tsx:291
 msgid "Emails to invite"
 msgstr "Emails to invite"
 
@@ -2211,11 +2218,11 @@ msgid "Executor token"
 msgstr "Executor token"
 
 #. placeholder {0}: group.title
-#: src/pages/shell/sidebar-roster.tsx:126
+#: src/pages/shell/sidebar-roster.tsx:127
 msgid "Expand {0}"
 msgstr "Expand {0}"
 
-#: src/pages/bot-page/BotPage.tsx:371
+#: src/pages/bot-page/BotPage.tsx:368
 msgid "Export"
 msgstr "Export"
 
@@ -2339,7 +2346,7 @@ msgstr "Fullscreen"
 msgid "FYI"
 msgstr "FYI"
 
-#: src/pages/SettingsOverlay.tsx:131
+#: src/pages/SettingsOverlay.tsx:137
 msgid "General"
 msgstr "General"
 
@@ -2528,8 +2535,8 @@ msgstr "Integration domain"
 msgid "Integration options"
 msgstr "Integration options"
 
-#: src/pages/CustomizeOverlay.tsx:27
-#: src/pages/CustomizeOverlay.tsx:103
+#: src/pages/CustomizeOverlay.tsx:23
+#: src/pages/CustomizeOverlay.tsx:159
 msgid "Integrations"
 msgstr "Integrations"
 
@@ -2546,7 +2553,7 @@ msgstr "Interval amount"
 msgid "Interval unit"
 msgstr "Interval unit"
 
-#: src/pages/SpaceGeneralSettings.tsx:292
+#: src/pages/SpaceGeneralSettings.tsx:295
 msgid "Invite"
 msgstr "Invite"
 
@@ -2790,7 +2797,7 @@ msgstr "MCP servers"
 msgid "Medium"
 msgstr "Medium"
 
-#: src/pages/SpaceGeneralSettings.tsx:206
+#: src/pages/SpaceGeneralSettings.tsx:209
 msgid "Members"
 msgstr "Members"
 
@@ -2804,7 +2811,7 @@ msgstr "Members (pick {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:38
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:134
+#: src/pages/SettingsOverlay.tsx:140
 msgid "Memory"
 msgstr "Memory"
 
@@ -2935,7 +2942,7 @@ msgstr "Model updated."
 #: src/pages/ModelSettingsOverlay.tsx:44
 #: src/pages/ProvidersSettings.tsx:114
 #: src/pages/ProvidersSettings.tsx:116
-#: src/pages/SettingsOverlay.tsx:132
+#: src/pages/SettingsOverlay.tsx:138
 #: src/pages/usage-settings.tsx:69
 msgid "Models"
 msgstr "Models"
@@ -3293,7 +3300,7 @@ msgid "Open"
 msgstr "Open"
 
 #. placeholder {0}: group.title
-#: src/pages/shell/sidebar-roster.tsx:124
+#: src/pages/shell/sidebar-roster.tsx:125
 msgid "Open {0}"
 msgstr "Open {0}"
 
@@ -3382,7 +3389,7 @@ msgstr "Other…"
 msgid "Output"
 msgstr "Output"
 
-#: src/pages/SpaceGeneralSettings.tsx:219
+#: src/pages/SpaceGeneralSettings.tsx:222
 msgid "Owner"
 msgstr "Owner"
 
@@ -3474,7 +3481,7 @@ msgstr "Private Computer"
 msgid "Private workspace with its own bots and groups."
 msgstr "Private workspace with its own bots and groups."
 
-#: src/pages/SettingsOverlay.tsx:128
+#: src/pages/SettingsOverlay.tsx:134
 msgid "Profile"
 msgstr "Profile"
 
@@ -3492,7 +3499,7 @@ msgstr "Project ID"
 msgid "Provider"
 msgstr "Provider"
 
-#: src/pages/SettingsOverlay.tsx:129
+#: src/pages/SettingsOverlay.tsx:135
 #: src/pages/VoiceSettingsOverlay.tsx:154
 msgid "Providers"
 msgstr "Providers"
@@ -3640,7 +3647,7 @@ msgstr "Release interrupted computer?"
 #: src/pages/plugins/advanced-integrations.tsx:377
 #: src/pages/plugins/connection-detail.tsx:110
 #: src/pages/ScratchpadSection.tsx:165
-#: src/pages/SpaceGeneralSettings.tsx:236
+#: src/pages/SpaceGeneralSettings.tsx:239
 msgid "Remove"
 msgstr "Remove"
 
@@ -3776,7 +3783,7 @@ msgstr "Resetting…"
 msgid "Restart to update"
 msgstr "Restart to update"
 
-#: src/pages/bot-page/BotPage.tsx:357
+#: src/pages/bot-page/BotPage.tsx:354
 #: src/pages/shell/sidebar-footer.tsx:90
 #: src/pages/shell/sidebar-footer.tsx:123
 msgid "Restore"
@@ -3826,7 +3833,7 @@ msgid "rev {0}"
 msgstr "rev {0}"
 
 #: src/pages/MessagingSettingsOverlay.tsx:325
-#: src/pages/SpaceGeneralSettings.tsx:273
+#: src/pages/SpaceGeneralSettings.tsx:276
 msgid "Revoke"
 msgstr "Revoke"
 
@@ -4053,7 +4060,9 @@ msgstr "Server URL"
 
 #: src/pages/bot-page/BotPage.tsx:102
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:193
+#: src/pages/SettingsOverlay.tsx:146
+#: src/pages/SettingsOverlay.tsx:221
+#: src/pages/SettingsOverlay.tsx:263
 #: src/pages/shell/sidebar-footer.tsx:211
 #: src/pages/shell/sidebar-footer.tsx:218
 msgid "Settings"
@@ -4077,7 +4086,7 @@ msgstr "Setup help"
 msgid "Shape {0}"
 msgstr "Shape {0}"
 
-#: src/pages/bot-page/BotPage.tsx:363
+#: src/pages/bot-page/BotPage.tsx:360
 #: src/pages/BotContextMenu.tsx:157
 msgid "Share"
 msgstr "Share"
@@ -4169,8 +4178,8 @@ msgid "Skill updated · {name}"
 msgstr "Skill updated · {name}"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:70
-#: src/pages/CustomizeOverlay.tsx:28
-#: src/pages/CustomizeOverlay.tsx:103
+#: src/pages/CustomizeOverlay.tsx:24
+#: src/pages/CustomizeOverlay.tsx:161
 msgid "Skills"
 msgstr "Skills"
 
@@ -4316,7 +4325,7 @@ msgstr "Supports thinking"
 msgid "Switch bot"
 msgstr "Switch bot"
 
-#: src/pages/SettingsOverlay.tsx:421
+#: src/pages/SettingsOverlay.tsx:499
 msgid "Switch space"
 msgstr "Switch space"
 
@@ -4552,8 +4561,8 @@ msgstr "Update all computers"
 
 #: src/components/ComputerMaintenanceActions.tsx:116
 #: src/components/SoftwareUpdateSection.tsx:260
-#: src/pages/SettingsOverlay.tsx:361
-#: src/pages/SettingsOverlay.tsx:361
+#: src/pages/SettingsOverlay.tsx:397
+#: src/pages/SettingsOverlay.tsx:397
 #: src/pages/shell/computer-preview.tsx:75
 msgid "Update available"
 msgstr "Update available"
@@ -4581,7 +4590,7 @@ msgstr "Update progress"
 msgid "Updated"
 msgstr "Updated"
 
-#: src/pages/SettingsOverlay.tsx:130
+#: src/pages/SettingsOverlay.tsx:136
 msgid "Updates"
 msgstr "Updates"
 
@@ -4609,7 +4618,7 @@ msgstr "Updating Team Computer"
 msgid "Updating…"
 msgstr "Updating…"
 
-#: src/pages/SettingsOverlay.tsx:137
+#: src/pages/SettingsOverlay.tsx:143
 #: src/pages/shell/sidebar-footer.tsx:223
 #: src/pages/shell/sidebar-footer.tsx:230
 msgid "Usage"
@@ -4645,7 +4654,7 @@ msgstr "Verifying…"
 #: src/pages/bot-page/SettingDetails.tsx:189
 #: src/pages/ProvidersSettings.tsx:159
 #: src/pages/ProvidersSettings.tsx:161
-#: src/pages/SettingsOverlay.tsx:133
+#: src/pages/SettingsOverlay.tsx:139
 #: src/pages/shell/thread-header.tsx:142
 #: src/pages/shell/thread-header.tsx:143
 #: src/pages/VoiceSettingsOverlay.tsx:137
