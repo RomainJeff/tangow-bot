@@ -144,7 +144,7 @@ msgstr "{0} will still respond to direct mentions."
 msgid "{0}'s screen"
 msgstr "{0}'s screen"
 
-#: src/components/DraftCard.tsx:262
+#: src/components/DraftCard.tsx:265
 msgid "{app} is disconnected."
 msgstr "{app} is disconnected."
 
@@ -160,7 +160,7 @@ msgstr "{botName}’s computer"
 msgid "{count} · next {next}"
 msgstr "{count} · next {next}"
 
-#: src/components/ask/QuestionCard.tsx:244
+#: src/components/ask/QuestionCard.tsx:248
 msgid "{count} more"
 msgstr "{count} more"
 
@@ -176,8 +176,8 @@ msgstr "{days}d ago"
 msgid "{failures, plural, one {# failure since {since}} other {# failures since {since}}}"
 msgstr "{failures, plural, one {# failure since {since}} other {# failures since {since}}}"
 
-#: src/pages/shell/message-view.tsx:360
-#: src/pages/shell/thread-row.tsx:351
+#: src/pages/shell/message-view.tsx:363
+#: src/pages/shell/thread-row.tsx:354
 msgid "{from} handed the thread to {to}"
 msgstr "{from} handed the thread to {to}"
 
@@ -237,7 +237,7 @@ msgstr "{toolCount, plural, one {# tool} other {# tools}}"
 msgid "{what} · paused"
 msgstr "{what} · paused"
 
-#: src/pages/shell/transcript.tsx:229
+#: src/pages/shell/transcript.tsx:235
 msgid "{workingBotName} is working"
 msgstr "{workingBotName} is working"
 
@@ -298,7 +298,7 @@ msgstr "Action confirmations"
 #. placeholder {0}: sectionMenu.section.name
 #: src/pages/bot-page/BotPage.tsx:347
 #: src/pages/BotContextMenu.tsx:101
-#: src/pages/shell/shell-overlays.tsx:411
+#: src/pages/shell/shell-overlays.tsx:424
 #: src/pages/shell/sidebar-roster.tsx:149
 msgid "Actions for {0}"
 msgstr "Actions for {0}"
@@ -524,7 +524,7 @@ msgstr "Always allow this tool"
 msgid "Always allowed"
 msgstr "Always allowed"
 
-#: src/components/ask/QuestionCard.tsx:309
+#: src/components/ask/QuestionCard.tsx:313
 msgid "Answer"
 msgstr "Answer"
 
@@ -606,7 +606,7 @@ msgstr "Apps this bot can use"
 msgid "Archive"
 msgstr "Archive"
 
-#: src/pages/shell/sidebar-footer.tsx:57
+#: src/pages/shell/sidebar-footer.tsx:59
 msgid "Archived"
 msgstr "Archived"
 
@@ -745,7 +745,7 @@ msgstr "Back to sign in"
 msgid "Base URL"
 msgstr "Base URL"
 
-#: src/components/DraftCard.tsx:255
+#: src/components/DraftCard.tsx:258
 msgid "Bcc"
 msgstr "Bcc"
 
@@ -763,17 +763,17 @@ msgstr "Booting live desktop…"
 msgid "Booting up {0}’s computer"
 msgstr "Booting up {0}’s computer"
 
-#: src/pages/shell/message-view.tsx:348
-#: src/pages/shell/message-view.tsx:349
-#: src/pages/shell/thread-row.tsx:342
-#: src/pages/shell/thread-row.tsx:343
+#: src/pages/shell/message-view.tsx:351
+#: src/pages/shell/message-view.tsx:352
+#: src/pages/shell/thread-row.tsx:345
+#: src/pages/shell/thread-row.tsx:346
 msgid "bot"
 msgstr "bot"
 
 #: src/pages/IntegrationSetup.tsx:51
-#: src/pages/shell/message-view.tsx:245
-#: src/pages/shell/message-view.tsx:452
-#: src/pages/shell/thread-row.tsx:310
+#: src/pages/shell/message-view.tsx:248
+#: src/pages/shell/message-view.tsx:455
+#: src/pages/shell/thread-row.tsx:313
 #: src/pages/shell/use-composer-draft.ts:53
 msgid "Bot"
 msgstr "Bot"
@@ -792,7 +792,7 @@ msgid "Bot screen preview"
 msgstr "Bot screen preview"
 
 #: src/pages/shell/composer-pickers.tsx:300
-#: src/pages/shell/shell-overlays.tsx:172
+#: src/pages/shell/shell-overlays.tsx:174
 #: src/pages/shell/thread-header.tsx:174
 #: src/pages/shell/thread-header.tsx:175
 msgid "Bot settings"
@@ -810,7 +810,7 @@ msgstr "Bots"
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 
-#: src/pages/shell/transcript.tsx:230
+#: src/pages/shell/transcript.tsx:236
 msgid "Bots are working"
 msgstr "Bots are working"
 
@@ -854,6 +854,7 @@ msgstr "Can't reach the server."
 #: src/pages/shell/dialogs.tsx:305
 #: src/pages/shell/dialogs.tsx:395
 #: src/pages/shell/dialogs.tsx:448
+#: src/pages/shell/dialogs.tsx:505
 msgid "Cancel"
 msgstr "Cancel"
 
@@ -869,7 +870,7 @@ msgstr "Cancel edit"
 msgid "Cancel new bot"
 msgstr "Cancel new bot"
 
-#: src/pages/GroupPanel.tsx:246
+#: src/pages/GroupPanel.tsx:248
 msgid "Cancel new group"
 msgstr "Cancel new group"
 
@@ -891,7 +892,7 @@ msgstr "Categories"
 msgid "Category"
 msgstr "Category"
 
-#: src/components/DraftCard.tsx:255
+#: src/components/DraftCard.tsx:258
 msgid "Cc"
 msgstr "Cc"
 
@@ -1257,11 +1258,11 @@ msgstr "Continue in Background"
 msgid "Continue with email"
 msgstr "Continue with email"
 
-#: src/pages/shell/thread-row.tsx:428
+#: src/pages/shell/thread-row.tsx:431
 msgid "Conversation cleared"
 msgstr "Conversation cleared"
 
-#: src/components/DraftCard.tsx:299
+#: src/components/DraftCard.tsx:302
 #: src/pages/shell/message-actions-sheet.tsx:76
 #: src/pages/shell/message-hover-actions.tsx:98
 #: src/pages/shell/message-hover-actions.tsx:170
@@ -1362,7 +1363,7 @@ msgstr "Could not continue"
 msgid "Could not create bot"
 msgstr "Could not create bot"
 
-#: src/pages/GroupPanel.tsx:231
+#: src/pages/GroupPanel.tsx:233
 msgid "Could not create group"
 msgstr "Could not create group"
 
@@ -1439,7 +1440,8 @@ msgstr "Could not import skill"
 msgid "Could not install connector"
 msgstr "Could not install connector"
 
-#: src/pages/GroupPanel.tsx:373
+#: src/pages/GroupPanel.tsx:379
+#: src/pages/shell/dialogs.tsx:514
 msgid "Could not leave group"
 msgstr "Could not leave group"
 
@@ -1546,7 +1548,7 @@ msgstr "Could not remove"
 msgid "Could not remove connector"
 msgstr "Could not remove connector"
 
-#: src/pages/GroupPanel.tsx:372
+#: src/pages/GroupPanel.tsx:378
 msgid "Could not remove group"
 msgstr "Could not remove group"
 
@@ -1586,7 +1588,7 @@ msgstr "Could not save"
 msgid "Could not save Auto Review"
 msgstr "Could not save Auto Review"
 
-#: src/pages/GroupPanel.tsx:370
+#: src/pages/GroupPanel.tsx:376
 msgid "Could not save group"
 msgstr "Could not save group"
 
@@ -1635,9 +1637,9 @@ msgstr "Could not start OAuth"
 msgid "Could not start teaching"
 msgstr "Could not start teaching"
 
-#: src/components/AskCard.tsx:199
-#: src/components/DraftCard.tsx:157
-#: src/components/DraftCard.tsx:170
+#: src/components/AskCard.tsx:202
+#: src/components/DraftCard.tsx:160
+#: src/components/DraftCard.tsx:173
 msgid "Could not submit this answer"
 msgstr "Could not submit this answer"
 
@@ -1742,11 +1744,11 @@ msgstr "Create account"
 msgid "Create bot"
 msgstr "Create bot"
 
-#: src/components/AskCard.tsx:421
+#: src/components/AskCard.tsx:428
 msgid "Create bot?"
 msgstr "Create bot?"
 
-#: src/pages/GroupPanel.tsx:297
+#: src/pages/GroupPanel.tsx:299
 msgid "Create group"
 msgstr "Create group"
 
@@ -1781,7 +1783,7 @@ msgid "Created"
 msgstr "Created"
 
 #: src/components/AskCard.tsx:65
-#: src/pages/GroupPanel.tsx:297
+#: src/pages/GroupPanel.tsx:299
 #: src/pages/shell/bot-panel.tsx:155
 #: src/pages/shell/dialogs.tsx:91
 #: src/pages/shell/dialogs.tsx:202
@@ -1823,7 +1825,7 @@ msgstr "Customer support"
 
 #: src/pages/CustomizeOverlay.tsx:32
 #: src/pages/CustomizeOverlay.tsx:36
-#: src/pages/shell/sidebar-footer.tsx:175
+#: src/pages/shell/sidebar-footer.tsx:191
 msgid "Customize"
 msgstr "Customize"
 
@@ -1877,15 +1879,15 @@ msgstr "Default scope"
 #: src/pages/McpServersOverlay.tsx:591
 #: src/pages/shell/dialogs.tsx:409
 #: src/pages/shell/dialogs.tsx:470
-#: src/pages/shell/sidebar-footer.tsx:97
-#: src/pages/shell/sidebar-footer.tsx:128
+#: src/pages/shell/sidebar-footer.tsx:99
+#: src/pages/shell/sidebar-footer.tsx:132
 msgid "Delete"
 msgstr "Delete"
 
 #. placeholder {0}: bot.name
 #. placeholder {0}: group.name
-#: src/pages/shell/sidebar-footer.tsx:94
-#: src/pages/shell/sidebar-footer.tsx:125
+#: src/pages/shell/sidebar-footer.tsx:96
+#: src/pages/shell/sidebar-footer.tsx:129
 msgid "Delete {0}"
 msgstr "Delete {0}"
 
@@ -1896,7 +1898,7 @@ msgstr "Delete {0}"
 msgid "Delete {0}?"
 msgstr "Delete {0}?"
 
-#: src/pages/GroupPanel.tsx:502
+#: src/pages/GroupPanel.tsx:512
 msgid "Delete group"
 msgstr "Delete group"
 
@@ -1921,7 +1923,7 @@ msgstr "Deleted"
 msgid "Deleted bot"
 msgstr "Deleted bot"
 
-#: src/pages/GroupPanel.tsx:502
+#: src/pages/GroupPanel.tsx:512
 #: src/pages/shell/dialogs.tsx:409
 #: src/pages/shell/dialogs.tsx:470
 msgid "Deleting…"
@@ -1945,8 +1947,8 @@ msgstr "Describe what this bot does"
 
 #: src/pages/bot-page/SettingDetails.tsx:53
 #: src/pages/bot-page/SettingsTab.tsx:27
-#: src/pages/GroupPanel.tsx:269
-#: src/pages/GroupPanel.tsx:449
+#: src/pages/GroupPanel.tsx:271
+#: src/pages/GroupPanel.tsx:455
 #: src/pages/shell/bot-panel.tsx:131
 msgid "Description"
 msgstr "Description"
@@ -1976,12 +1978,12 @@ msgstr "Direct MCP"
 msgid "Disabled"
 msgstr "Disabled"
 
-#: src/components/DraftCard.tsx:290
+#: src/components/DraftCard.tsx:293
 msgid "Discard"
 msgstr "Discard"
 
-#: src/components/DraftCard.tsx:222
-#: src/components/DraftCard.tsx:232
+#: src/components/DraftCard.tsx:225
+#: src/components/DraftCard.tsx:235
 msgid "Discarded"
 msgstr "Discarded"
 
@@ -2068,15 +2070,15 @@ msgstr "Draft skill"
 msgid "Duplicate"
 msgstr "Duplicate"
 
-#: src/pages/shell/message-view.tsx:210
+#: src/pages/shell/message-view.tsx:213
 msgid "Earlier message"
 msgstr "Earlier message"
 
-#: src/pages/shell/thread-row.tsx:425
+#: src/pages/shell/thread-row.tsx:428
 msgid "Earlier messages summarized"
 msgstr "Earlier messages summarized"
 
-#: src/components/AskCard.tsx:325
+#: src/components/AskCard.tsx:332
 msgid "Edit"
 msgstr "Edit"
 
@@ -2085,19 +2087,19 @@ msgstr "Edit"
 msgid "Edit and resend"
 msgstr "Edit and resend"
 
-#: src/components/DraftCard.tsx:392
+#: src/components/DraftCard.tsx:395
 msgid "Edit message"
 msgstr "Edit message"
 
-#: src/pages/shell/shell-overlays.tsx:172
+#: src/pages/shell/shell-overlays.tsx:174
 msgid "Edit Profile"
 msgstr "Edit Profile"
 
-#: src/components/DraftCard.tsx:259
+#: src/components/DraftCard.tsx:262
 msgid "Edited"
 msgstr "Edited"
 
-#: src/components/DraftCard.tsx:258
+#: src/components/DraftCard.tsx:261
 msgid "Editing"
 msgstr "Editing"
 
@@ -2313,7 +2315,7 @@ msgstr "Forgot password?"
 msgid "Free"
 msgstr "Free"
 
-#: src/components/DraftCard.tsx:335
+#: src/components/DraftCard.tsx:338
 msgid "From"
 msgstr "From"
 
@@ -2321,7 +2323,7 @@ msgstr "From"
 msgid "Fullscreen"
 msgstr "Fullscreen"
 
-#: src/pages/shell/thread-row.tsx:377
+#: src/pages/shell/thread-row.tsx:380
 msgid "FYI"
 msgstr "FYI"
 
@@ -2352,8 +2354,8 @@ msgstr "Global"
 msgid "Group"
 msgstr "Group"
 
-#: src/pages/GroupPanel.tsx:395
-#: src/pages/GroupPanel.tsx:431
+#: src/pages/GroupPanel.tsx:401
+#: src/pages/GroupPanel.tsx:437
 msgid "Group settings"
 msgstr "Group settings"
 
@@ -2455,11 +2457,11 @@ msgstr "If you heard that, voice is ready."
 msgid "Ignore"
 msgstr "Ignore"
 
-#: src/pages/shell/message-view.tsx:462
+#: src/pages/shell/message-view.tsx:465
 msgid "Image {n} of {total}, from {sender}"
 msgstr "Image {n} of {total}, from {sender}"
 
-#: src/pages/shell/message-view.tsx:462
+#: src/pages/shell/message-view.tsx:465
 msgid "Image, from {sender}"
 msgstr "Image, from {sender}"
 
@@ -2500,7 +2502,7 @@ msgstr "Instance API key"
 msgid "Instruction"
 msgstr "Instruction"
 
-#: src/components/AskCard.tsx:363
+#: src/components/AskCard.tsx:370
 #: src/pages/bot-page/SettingDetails.tsx:53
 #: src/pages/bot-page/SettingsTab.tsx:26
 msgid "Instructions"
@@ -2559,7 +2561,7 @@ msgstr "Join {0}"
 msgid "Jump to latest"
 msgstr "Jump to latest"
 
-#: src/pages/shell/message-view.tsx:205
+#: src/pages/shell/message-view.tsx:208
 msgid "Jump to replied message"
 msgstr "Jump to replied message"
 
@@ -2585,7 +2587,7 @@ msgstr "Knowledge"
 msgid "Language"
 msgstr "Language"
 
-#: src/components/ask/QuestionCard.tsx:245
+#: src/components/ask/QuestionCard.tsx:249
 msgid "Last one"
 msgstr "Last one"
 
@@ -2597,20 +2599,33 @@ msgstr "Last run failed"
 msgid "Later"
 msgstr "Later"
 
-#: src/pages/GroupPanel.tsx:474
+#: src/pages/GroupPanel.tsx:480
 msgid "Lead bot"
 msgstr "Lead bot"
 
 #: src/pages/MessagingSettingsOverlay.tsx:250
+#: src/pages/shell/dialogs.tsx:519
+#: src/pages/shell/sidebar-footer.tsx:143
 msgid "Leave"
 msgstr "Leave"
 
+#. placeholder {0}: group.name
+#: src/pages/shell/sidebar-footer.tsx:140
+msgid "Leave {0}"
+msgstr "Leave {0}"
+
+#. placeholder {0}: group.name
+#: src/pages/shell/dialogs.tsx:496
+msgid "Leave {0}?"
+msgstr "Leave {0}?"
+
 #: src/pages/BotContextMenu.tsx:188
-#: src/pages/GroupPanel.tsx:421
+#: src/pages/GroupPanel.tsx:427
 msgid "Leave group"
 msgstr "Leave group"
 
-#: src/pages/GroupPanel.tsx:421
+#: src/pages/GroupPanel.tsx:427
+#: src/pages/shell/dialogs.tsx:519
 msgid "Leaving…"
 msgstr "Leaving…"
 
@@ -2638,7 +2653,7 @@ msgstr "Listen"
 msgid "Listening"
 msgstr "Listening"
 
-#: src/pages/shell/transcript.tsx:269
+#: src/pages/shell/transcript.tsx:275
 msgid "Load earlier messages"
 msgstr "Load earlier messages"
 
@@ -2680,7 +2695,7 @@ msgstr "Loading voice providers…"
 #: src/pages/Onboarding.tsx:378
 #: src/pages/PeerMessagesOverlay.tsx:142
 #: src/pages/shell/session-view.tsx:129
-#: src/pages/shell/transcript.tsx:269
+#: src/pages/shell/transcript.tsx:275
 msgid "Loading…"
 msgstr "Loading…"
 
@@ -2688,7 +2703,7 @@ msgstr "Loading…"
 msgid "Local"
 msgstr "Local"
 
-#: src/pages/shell/sidebar-footer.tsx:227
+#: src/pages/shell/sidebar-footer.tsx:243
 msgid "Log out"
 msgstr "Log out"
 
@@ -2767,11 +2782,11 @@ msgstr "Medium"
 msgid "Members"
 msgstr "Members"
 
-#: src/pages/GroupPanel.tsx:462
+#: src/pages/GroupPanel.tsx:468
 msgid "Members ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgstr "Members ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 
-#: src/pages/GroupPanel.tsx:282
+#: src/pages/GroupPanel.tsx:284
 msgid "Members (pick {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgstr "Members (pick {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 
@@ -2817,7 +2832,7 @@ msgstr "Message actions"
 msgid "Message composer"
 msgstr "Message composer"
 
-#: src/pages/shell/thread-row.tsx:427
+#: src/pages/shell/thread-row.tsx:430
 msgid "Message edited"
 msgstr "Message edited"
 
@@ -2825,8 +2840,8 @@ msgstr "Message edited"
 msgid "Message event"
 msgstr "Message event"
 
-#: src/pages/shell/thread-row.tsx:379
-#: src/pages/shell/thread-row.tsx:418
+#: src/pages/shell/thread-row.tsx:382
+#: src/pages/shell/thread-row.tsx:421
 msgid "Message from {peer}"
 msgstr "Message from {peer}"
 
@@ -2834,8 +2849,8 @@ msgstr "Message from {peer}"
 msgid "Message…"
 msgstr "Message…"
 
-#: src/pages/shell/thread-row.tsx:379
-#: src/pages/shell/thread-row.tsx:418
+#: src/pages/shell/thread-row.tsx:382
+#: src/pages/shell/thread-row.tsx:421
 msgid "Messaged {peer}"
 msgstr "Messaged {peer}"
 
@@ -2942,14 +2957,14 @@ msgstr "Move to"
 msgid "Mute"
 msgstr "Mute"
 
-#: src/components/AskCard.tsx:344
+#: src/components/AskCard.tsx:351
 #: src/components/teach/SkillDraftCard.tsx:79
 #: src/pages/Auth.tsx:132
 #: src/pages/bot-page/BotHero.tsx:49
 #: src/pages/bot-page/RoutineCreateForm.tsx:74
 #: src/pages/bot-page/RoutineDetail.tsx:111
-#: src/pages/GroupPanel.tsx:259
-#: src/pages/GroupPanel.tsx:440
+#: src/pages/GroupPanel.tsx:261
+#: src/pages/GroupPanel.tsx:446
 #: src/pages/shell/bot-panel.tsx:109
 #: src/pages/shell/dialogs.tsx:72
 #: src/pages/shell/dialogs.tsx:187
@@ -2962,7 +2977,7 @@ msgstr "Name"
 msgid "Name this bot"
 msgstr "Name this bot"
 
-#: src/pages/GroupPanel.tsx:264
+#: src/pages/GroupPanel.tsx:266
 msgid "Name this group"
 msgstr "Name this group"
 
@@ -2978,7 +2993,7 @@ msgstr "Needs takeover"
 msgid "Needs you"
 msgstr "Needs you"
 
-#: src/components/AskCard.tsx:239
+#: src/components/AskCard.tsx:244
 msgid "Needs your call"
 msgstr "Needs your call"
 
@@ -2986,7 +3001,7 @@ msgstr "Needs your call"
 msgid "New bot"
 msgstr "New bot"
 
-#: src/pages/GroupPanel.tsx:241
+#: src/pages/GroupPanel.tsx:243
 msgid "New group"
 msgstr "New group"
 
@@ -3018,8 +3033,8 @@ msgstr "New skill"
 msgid "New space"
 msgstr "New space"
 
-#: src/components/ask/QuestionCard.tsx:205
-#: src/components/ask/QuestionCard.tsx:306
+#: src/components/ask/QuestionCard.tsx:209
+#: src/components/ask/QuestionCard.tsx:310
 msgid "Next"
 msgstr "Next"
 
@@ -3079,9 +3094,9 @@ msgstr "No group chats yet."
 msgid "No integrations installed yet."
 msgstr "No integrations installed yet."
 
-#: src/components/ask/AskSettled.tsx:28
-#: src/components/AskCard.tsx:260
-#: src/components/DraftCard.tsx:239
+#: src/components/ask/AskSettled.tsx:41
+#: src/components/AskCard.tsx:267
+#: src/components/DraftCard.tsx:242
 msgid "No longer active"
 msgstr "No longer active"
 
@@ -3176,7 +3191,7 @@ msgstr "Not now"
 msgid "Not recorded"
 msgstr "Not recorded"
 
-#: src/components/DraftCard.tsx:257
+#: src/components/DraftCard.tsx:260
 msgid "Not sent"
 msgstr "Not sent"
 
@@ -3246,9 +3261,13 @@ msgstr "on the 1st at {0}"
 msgid "One-time"
 msgstr "One-time"
 
-#: src/pages/shell/shell-overlays.tsx:337
+#: src/pages/shell/shell-overlays.tsx:350
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
 msgstr "Only empty spaces can be deleted. Delete its bots and groups first."
+
+#: src/pages/shell/dialogs.tsx:499
+msgid "Only its creator can add you back."
+msgstr "Only its creator can add you back."
 
 #: src/pages/SkillsOverlay.tsx:47
 msgid "Only the first 50 skills are shown to the agent."
@@ -3332,7 +3351,7 @@ msgstr "Organic"
 msgid "Organization API key"
 msgstr "Organization API key"
 
-#: src/components/ask/QuestionCard.tsx:309
+#: src/components/ask/QuestionCard.tsx:313
 msgid "Other answer"
 msgstr "Other answer"
 
@@ -3342,8 +3361,8 @@ msgstr "Other answer"
 msgid "Other model…"
 msgstr "Other model…"
 
-#: src/components/ask/QuestionCard.tsx:310
-#: src/components/ask/QuestionCard.tsx:322
+#: src/components/ask/QuestionCard.tsx:314
+#: src/components/ask/QuestionCard.tsx:326
 msgid "Other…"
 msgstr "Other…"
 
@@ -3397,7 +3416,7 @@ msgstr "Paste your API key"
 msgid "Paused"
 msgstr "Paused"
 
-#: src/pages/GroupPanel.tsx:138
+#: src/pages/GroupPanel.tsx:140
 msgid "People"
 msgstr "People"
 
@@ -3466,7 +3485,7 @@ msgstr "Provider"
 msgid "Providers"
 msgstr "Providers"
 
-#: src/pages/shell/thread-row.tsx:375
+#: src/pages/shell/thread-row.tsx:378
 msgid "Question"
 msgstr "Question"
 
@@ -3510,15 +3529,15 @@ msgstr "Recall only"
 msgid "Recent"
 msgstr "Recent"
 
-#: src/components/ask/QuestionCard.tsx:160
+#: src/components/ask/QuestionCard.tsx:164
 msgid "Recommended"
 msgstr "Recommended"
 
-#: src/components/ask/QuestionCard.tsx:160
+#: src/components/ask/QuestionCard.tsx:164
 msgid "Recommended · {description}"
 msgstr "Recommended · {description}"
 
-#: src/components/DraftCard.tsx:315
+#: src/components/DraftCard.tsx:318
 msgid "Reconnect {app}"
 msgstr "Reconnect {app}"
 
@@ -3671,7 +3690,7 @@ msgstr "Removing…"
 
 #: src/pages/BotContextMenu.tsx:138
 #: src/pages/shell/dialogs.tsx:246
-#: src/pages/shell/shell-overlays.tsx:426
+#: src/pages/shell/shell-overlays.tsx:439
 msgid "Rename section"
 msgstr "Rename section"
 
@@ -3689,7 +3708,7 @@ msgstr "Replace API key"
 msgid "Replace key"
 msgstr "Replace key"
 
-#: src/components/DraftCard.tsx:236
+#: src/components/DraftCard.tsx:239
 msgid "Replaced"
 msgstr "Replaced"
 
@@ -3707,7 +3726,7 @@ msgstr "Reply in several short messages"
 msgid "Replying to {replyName}"
 msgstr "Replying to {replyName}"
 
-#: src/pages/shell/thread-row.tsx:373
+#: src/pages/shell/thread-row.tsx:376
 msgid "Request"
 msgstr "Request"
 
@@ -3746,8 +3765,8 @@ msgid "Restart to update"
 msgstr "Restart to update"
 
 #: src/pages/bot-page/BotPage.tsx:357
-#: src/pages/shell/sidebar-footer.tsx:88
-#: src/pages/shell/sidebar-footer.tsx:119
+#: src/pages/shell/sidebar-footer.tsx:90
+#: src/pages/shell/sidebar-footer.tsx:123
 msgid "Restore"
 msgstr "Restore"
 
@@ -3763,7 +3782,7 @@ msgstr "Restore unsaved text"
 msgid "Restoring your workspace"
 msgstr "Restoring your workspace"
 
-#: src/pages/shell/thread-row.tsx:374
+#: src/pages/shell/thread-row.tsx:377
 msgid "Result"
 msgstr "Result"
 
@@ -3870,10 +3889,10 @@ msgstr "Running…"
 msgid "Runs when this bot receives a verified message from this provider."
 msgstr "Runs when this bot receives a verified message from this provider."
 
-#: src/components/AskCard.tsx:405
+#: src/components/AskCard.tsx:412
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:255
-#: src/pages/GroupPanel.tsx:494
+#: src/pages/GroupPanel.tsx:504
 #: src/pages/KnowledgeSection.tsx:235
 #: src/pages/KnowledgeSection.tsx:706
 #: src/pages/model-settings/model-detail.tsx:329
@@ -3888,7 +3907,7 @@ msgstr "Save"
 msgid "Saved"
 msgstr "Saved"
 
-#: src/pages/shell/thread-row.tsx:482
+#: src/pages/shell/thread-row.tsx:486
 msgid "Saved for the team"
 msgstr "Saved for the team"
 
@@ -3909,10 +3928,10 @@ msgstr "Saving your workspace"
 msgid "Saving..."
 msgstr "Saving..."
 
-#: src/components/AskCard.tsx:405
+#: src/components/AskCard.tsx:412
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/bot-page/page-kit.tsx:49
-#: src/pages/GroupPanel.tsx:494
+#: src/pages/GroupPanel.tsx:504
 #: src/pages/model-settings/model-detail.tsx:327
 #: src/pages/shell/dialogs.tsx:266
 msgid "Saving…"
@@ -3979,9 +3998,9 @@ msgstr "Searching…"
 msgid "Select a bot"
 msgstr "Select a bot"
 
-#: src/components/ask/QuestionCard.tsx:205
-#: src/components/ask/QuestionCard.tsx:306
-#: src/components/DraftCard.tsx:326
+#: src/components/ask/QuestionCard.tsx:209
+#: src/components/ask/QuestionCard.tsx:310
+#: src/components/DraftCard.tsx:329
 #: src/pages/shell/composer.tsx:410
 msgid "Send"
 msgstr "Send"
@@ -3994,8 +4013,8 @@ msgstr "Send <0>{linkCode}</0> to the line from your chat app within 10 minutes.
 msgid "Send reset link"
 msgstr "Send reset link"
 
-#: src/components/AskCard.tsx:304
-#: src/components/DraftCard.tsx:326
+#: src/components/AskCard.tsx:311
+#: src/components/DraftCard.tsx:329
 msgid "Sending…"
 msgstr "Sending…"
 
@@ -4023,8 +4042,8 @@ msgstr "Server URL"
 #: src/pages/bot-page/BotPage.tsx:102
 #: src/pages/MessagingSettingsOverlay.tsx:362
 #: src/pages/SettingsOverlay.tsx:193
-#: src/pages/shell/sidebar-footer.tsx:195
-#: src/pages/shell/sidebar-footer.tsx:202
+#: src/pages/shell/sidebar-footer.tsx:211
+#: src/pages/shell/sidebar-footer.tsx:218
 msgid "Settings"
 msgstr "Settings"
 
@@ -4147,7 +4166,7 @@ msgstr "Skills"
 msgid "Skills this bot can use"
 msgstr "Skills this bot can use"
 
-#: src/components/ask/QuestionCard.tsx:194
+#: src/components/ask/QuestionCard.tsx:198
 #: src/components/integrations/IntegrationSetup.tsx:359
 #: src/pages/shell/side-panel.tsx:498
 msgid "Skip"
@@ -4157,8 +4176,8 @@ msgstr "Skip"
 msgid "Skip or deploy key"
 msgstr "Skip or deploy key"
 
-#: src/components/ask/AskSettled.tsx:9
-#: src/components/ask/QuestionCard.tsx:217
+#: src/components/ask/AskSettled.tsx:20
+#: src/components/ask/QuestionCard.tsx:221
 msgid "Skipped"
 msgstr "Skipped"
 
@@ -4222,7 +4241,7 @@ msgstr "Starting"
 msgid "Starting…"
 msgstr "Starting…"
 
-#: src/pages/shell/thread-row.tsx:376
+#: src/pages/shell/thread-row.tsx:379
 msgid "Status"
 msgstr "Status"
 
@@ -4260,8 +4279,8 @@ msgstr "Stored encrypted"
 msgid "Stored securely. Never shown here."
 msgstr "Stored securely. Never shown here."
 
-#: src/components/DraftCard.tsx:375
-#: src/components/DraftCard.tsx:382
+#: src/components/DraftCard.tsx:378
+#: src/components/DraftCard.tsx:385
 msgid "Subject"
 msgstr "Subject"
 
@@ -4307,7 +4326,7 @@ msgstr "Take control"
 msgid "Teach a task"
 msgstr "Teach a task"
 
-#: src/pages/shell/shell-main.tsx:243
+#: src/pages/shell/shell-main.tsx:244
 msgid "Teaching in progress. Stop teaching before sending a new message."
 msgstr "Teaching in progress. Stop teaching before sending a new message."
 
@@ -4420,7 +4439,7 @@ msgstr "Time of day"
 msgid "Title"
 msgstr "Title"
 
-#: src/components/DraftCard.tsx:255
+#: src/components/DraftCard.tsx:258
 msgid "To"
 msgstr "To"
 
@@ -4435,7 +4454,7 @@ msgstr "To:"
 #: src/pages/bot-page/BotActivity.tsx:256
 #: src/pages/PeerMessagesOverlay.tsx:180
 #: src/pages/shell/image-viewer.tsx:164
-#: src/pages/shell/thread-row.tsx:109
+#: src/pages/shell/thread-row.tsx:111
 msgid "Today"
 msgstr "Today"
 
@@ -4463,12 +4482,12 @@ msgstr "Treg token"
 msgid "Trigger"
 msgstr "Trigger"
 
-#: src/components/DraftCard.tsx:326
+#: src/components/DraftCard.tsx:329
 #: src/pages/Onboarding.tsx:685
 msgid "Try again"
 msgstr "Try again"
 
-#: src/components/ask/QuestionCard.tsx:310
+#: src/components/ask/QuestionCard.tsx:314
 msgid "Type your answer"
 msgstr "Type your answer"
 
@@ -4480,7 +4499,7 @@ msgstr "Unassigned"
 msgid "Unavailable"
 msgstr "Unavailable"
 
-#: src/components/DraftCard.tsx:228
+#: src/components/DraftCard.tsx:231
 msgid "Undo"
 msgstr "Undo"
 
@@ -4574,8 +4593,8 @@ msgid "Updating…"
 msgstr "Updating…"
 
 #: src/pages/SettingsOverlay.tsx:137
-#: src/pages/shell/sidebar-footer.tsx:207
-#: src/pages/shell/sidebar-footer.tsx:214
+#: src/pages/shell/sidebar-footer.tsx:223
+#: src/pages/shell/sidebar-footer.tsx:230
 msgid "Usage"
 msgstr "Usage"
 
@@ -4621,6 +4640,12 @@ msgstr "Voice and replies"
 #: src/pages/bot-page/BotActivity.tsx:350
 msgid "Waiting"
 msgstr "Waiting"
+
+#: src/components/ask/AskSettled.tsx:41
+#: src/components/AskCard.tsx:265
+#: src/components/DraftCard.tsx:242
+msgid "Waiting for {waitingOn}"
+msgstr "Waiting for {waitingOn}"
 
 #: src/pages/model-settings/subscription-sign-in.tsx:66
 #: src/pages/model-settings/subscription-sign-in.tsx:88
@@ -4677,8 +4702,8 @@ msgstr "What should this routine do each time it runs?"
 msgid "What this bot is for"
 msgstr "What this bot is for"
 
-#: src/pages/GroupPanel.tsx:275
-#: src/pages/GroupPanel.tsx:455
+#: src/pages/GroupPanel.tsx:277
+#: src/pages/GroupPanel.tsx:461
 msgid "What this group is for"
 msgstr "What this group is for"
 
@@ -4719,13 +4744,13 @@ msgstr "Yearly on {date} at {time}"
 #: src/pages/bot-page/BotActivity.tsx:257
 #: src/pages/PeerMessagesOverlay.tsx:181
 #: src/pages/shell/image-viewer.tsx:165
-#: src/pages/shell/thread-row.tsx:110
+#: src/pages/shell/thread-row.tsx:112
 msgid "Yesterday"
 msgstr "Yesterday"
 
 #: src/components/DraftCard.tsx:53
 #: src/pages/Shell.tsx:139
-#: src/pages/shell/message-view.tsx:452
+#: src/pages/shell/message-view.tsx:455
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"
 msgstr "You"
@@ -4743,7 +4768,7 @@ msgstr "You can close this window."
 msgid "You have control"
 msgstr "You have control"
 
-#: src/components/ask/AskSettled.tsx:33
+#: src/components/ask/AskSettled.tsx:47
 msgid "Your answer: {answer}"
 msgstr "Your answer: {answer}"
 
