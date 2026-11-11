@@ -22,7 +22,7 @@ export default function GroupSettingsScreen() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   const [group, setGroup] = useState<MobileGroup | null>(null);
   const [bots, setBots] = useState<MobileBot[]>([]);
-  const people = useSpacePeople();
+  const spacePeople = useSpacePeople();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
@@ -48,14 +48,28 @@ export default function GroupSettingsScreen() {
         // Its creator comes first and is always in it.
         setUserIds(nextGroup.people.slice(1).map((person) => person.userId));
         setLeadBotId(nextGroup.leadBotId);
-        setBots(nextBots.filter((bot) => !bot.archivedAt));
+        setBots(nextBots);
       })
       .catch((err) => setError(err instanceof Error ? err.message : t("Could not load group")));
   }, [groupId]);
 
+  // Someone the Space no longer lists stays pickable, so the creator can still take them out.
+  const people = [
+    ...spacePeople,
+    ...(group?.people.slice(1) ?? []).filter(
+      (person) => !spacePeople.some((other) => other.userId === person.userId),
+    ),
+  ];
+  // A member the creator can no longer use stays listed, so they can still take it out.
+  const selectable = [
+    ...bots.filter((bot) => !bot.archivedAt),
+    ...(group?.members ?? [])
+      .filter((member) => !bots.some((bot) => bot.id === member.botId))
+      .map((member) => ({ ...member, id: member.botId })),
+  ];
   // A lead that left the group gives way to its first bot, as the server does.
   const lead = leadBotId && selected.includes(leadBotId) ? leadBotId : selected[0];
-  const leadBot = bots.find((bot) => bot.id === lead);
+  const leadBot = selectable.find((bot) => bot.id === lead);
 
   async function save() {
     if (!groupId || !group || pending) return;
@@ -230,7 +244,7 @@ export default function GroupSettingsScreen() {
         ) : null}
         <Text style={label}>{t("Bots")}</Text>
         <BotMemberPicker
-          bots={bots}
+          bots={selectable}
           selected={selected}
           onChange={setSelected}
           disabled={pending}
@@ -245,7 +259,7 @@ export default function GroupSettingsScreen() {
               accessibilityValue={leadBot?.name}
               disabled={pending}
               options={selected.flatMap((id) => {
-                const bot = bots.find((candidate) => candidate.id === id);
+                const bot = selectable.find((candidate) => candidate.id === id);
                 return bot ? [{ value: bot.id, label: bot.name }] : [];
               })}
               selected={lead}
