@@ -10,7 +10,7 @@ import {
   sanitizeMessagingLabel,
 } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
-import { threadEntryByNonce, threadEventSeq } from "@rakazo/db";
+import { markThreadsUnread, threadEntryByNonce, threadEventSeq } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { appendBotMessageInTransaction, resolveRunHop } from "./bot-messages.js";
 
@@ -289,10 +289,7 @@ export async function messageConnectedAgent(
       return { ok: false as const, error: "connection is no longer approved" };
     }
 
-    await tx.thread.updateMany({
-      where: { id: { in: [run.threadId, targetThreadId] } },
-      data: { unread: true },
-    });
+    await markThreadsUnread(tx, [run.threadId, targetThreadId]);
     const receivedId = randomUUID();
     await appendBotMessageInTransaction(tx, {
       sender: {

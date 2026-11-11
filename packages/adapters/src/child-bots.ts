@@ -7,10 +7,11 @@ import type {
   SandboxProvider,
 } from "@rakazo/adapter-kit";
 import { routineJobKey, runContinueJob, runJobKey } from "@rakazo/adapter-kit";
-import { type Actor, type Bot, type ComputerMode, GROUP_MEMBER_MIN } from "@rakazo/contracts";
+import type { Actor, Bot, ComputerMode } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
+  archiveGroupsLeftWithoutBots,
   cancelRunsInTransaction,
   createRepos,
   createThreadMessageInTransaction,
@@ -309,10 +310,11 @@ export async function archiveBot(
         data: { state: "stopped" },
       });
     }
-    await tx.bot.update({
+    const { userId } = await tx.bot.update({
       where: { id: bot.id },
       data: { archivedAt: bot.archivedAt ?? now, pinned: false },
     });
+    await archiveGroupsLeftWithoutBots(tx, { botIds: [bot.id], ownerId: userId });
   });
   await Promise.allSettled([
     ...activeRuns.map((run) => deps.jobs.cancel(runJobKey(run.id))),
@@ -378,8 +380,10 @@ export async function destroyBot(
   await deps.workerLifecycle?.releaseOwnerWorkers({ botId: bot.id }, context);
   const deletion = await withTransactionRetry(() =>
     deps.prisma.$transaction(async (tx) => {
-      const locked = await tx.$queryRaw<Array<{ id: string; webhookSecretId: string | null }>>`
-        SELECT id, "webhookSecretId"
+      const locked = await tx.$queryRaw<
+        Array<{ id: string; userId: string; webhookSecretId: string | null }>
+      >`
+        SELECT id, "userId", "webhookSecretId"
         FROM bots
         WHERE id = ${bot.id} AND "spaceId" = ${bot.spaceId}
         FOR UPDATE
@@ -394,7 +398,10 @@ export async function destroyBot(
       await tx.artifact.deleteMany({
         where: { botId: bot.id, groupId: null, spaceId: bot.spaceId },
       });
-      const groupCleanup = await detachBotFromGroups(tx, bot.id);
+      const groupCleanup = await detachBotFromGroups(tx, {
+        id: bot.id,
+        userId: locked[0]?.userId ?? bot.userId,
+      });
       await tx.computerExecutionLease.deleteMany({ where: { botId: bot.id } });
       await tx.computer.updateMany({
         where: {
@@ -482,41 +489,28 @@ export async function destroyBot(
   }
 }
 
-async function detachBotFromGroups(tx: Prisma.TransactionClient, botId: string) {
-  await tx.$queryRaw<Array<{ id: string }>>`
-    SELECT groups.id
-    FROM chat_groups AS groups
-    INNER JOIN chat_group_members AS members ON members."groupId" = groups.id
-    WHERE members."botId" = ${botId}
-    ORDER BY groups.id
-    FOR UPDATE OF groups
-  `;
-  const affectedGroups = await tx.chatGroup.findMany({
-    where: { members: { some: { botId } } },
-    include: {
-      members: {
-        select: { botId: true, bot: { select: { archivedAt: true } } },
-      },
-      thread: { select: { id: true } },
-    },
+/**
+ * Takes a deleted bot out of its groups. A group left with no active bot is dissolved when the
+ * bot's owner created it; someone else's, built with a bot shared with them, is archived with its
+ * history instead.
+ */
+async function detachBotFromGroups(
+  tx: Prisma.TransactionClient,
+  bot: { id: string; userId: string | undefined },
+) {
+  const botId = bot.id;
+  const closedGroups = await archiveGroupsLeftWithoutBots(tx, {
+    botIds: [botId],
+    ownerId: bot.userId,
   });
-  const dissolvedGroupIds: string[] = [];
-  for (const group of affectedGroups) {
-    const activeMembersAfterDeletion = group.members.filter(
-      (member) => member.botId !== botId && member.bot.archivedAt === null,
-    ).length;
-    if (activeMembersAfterDeletion < GROUP_MEMBER_MIN) {
-      dissolvedGroupIds.push(group.id);
-    }
-  }
-  const dissolvedGroupIdSet = new Set(dissolvedGroupIds);
-  const dissolvedThreadIds = affectedGroups
-    .filter((group) => dissolvedGroupIdSet.has(group.id))
-    .flatMap((group) => (group.thread ? [group.thread.id] : []));
-  const activeRuns = dissolvedThreadIds.length
+  const dissolvedGroupIds = closedGroups
+    .filter((group) => group.userId === bot.userId)
+    .map((group) => group.id);
+  const closedThreadIds = closedGroups.flatMap((group) => (group.thread ? [group.thread.id] : []));
+  const activeRuns = closedThreadIds.length
     ? await tx.run.findMany({
         where: {
-          threadId: { in: dissolvedThreadIds },
+          threadId: { in: closedThreadIds },
           status: { in: [...ACTIVE_RUN_STATUSES] },
         },
         select: {
@@ -545,9 +539,7 @@ async function detachBotFromGroups(tx: Prisma.TransactionClient, botId: string) 
       },
     });
   }
-  if (affectedGroups.length) {
-    await tx.chatGroupMember.deleteMany({ where: { botId } });
-  }
+  await tx.chatGroupMember.deleteMany({ where: { botId } });
   const groupArtifacts = dissolvedGroupIds.length
     ? await tx.artifact.findMany({
         where: { groupId: { in: dissolvedGroupIds } },

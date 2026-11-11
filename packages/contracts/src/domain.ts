@@ -121,8 +121,18 @@ export const GroupMemberSchema = z.object({
   color: z.string(),
   shapeSeed: ShapeSeedSchema.nullable(),
   status: z.string().optional(),
+  /** Whether the actor owns the bot or it is shared with them: only then can they wake it. */
+  canUse: z.boolean(),
 });
 export type GroupMember = z.infer<typeof GroupMemberSchema>;
+
+/** A person in a group, or one who wrote in its thread, as a group's people are shown. */
+export const GroupPersonSchema = z.object({
+  userId: Id,
+  name: z.string(),
+  image: z.string().nullable(),
+});
+export type GroupPerson = z.infer<typeof GroupPersonSchema>;
 
 /** Selected-text excerpt carried by a reply; capped so a quote stays a quote. */
 export const REPLY_QUOTE_MAX_LENGTH = 2_000;
@@ -140,6 +150,14 @@ export const GroupSchema = z.object({
   sectionId: Id.nullable(),
   archivedAt: z.string().nullable(),
   members: z.array(GroupMemberSchema),
+  /** Everyone in the group, its creator first while they are in the Space. */
+  people: z.array(GroupPersonSchema),
+  /** Who made the group: a message in it naming no author is theirs. */
+  creatorId: Id,
+  /** Whether the actor created the group: only they change its people, bots, name and lead. */
+  canManage: z.boolean(),
+  /** The bot that answers a message naming no bot; null is the first bot. */
+  leadBotId: Id.nullable(),
   threadId: Id,
   preview: z.string(),
   unread: z.boolean(),
@@ -154,10 +172,16 @@ const GroupBotIds = z
   .max(GROUP_MEMBER_MAX)
   .refine((ids) => new Set(ids).size === ids.length, { error: "botIds must be distinct" });
 
+/** The Space's other people in a group; its creator is always in it. */
+const GroupUserIds = z
+  .array(Id)
+  .refine((ids) => new Set(ids).size === ids.length, { error: "userIds must be distinct" });
+
 export const CreateGroupInput = z.object({
   name: z.string().trim().min(1).max(80),
   description: z.string().trim().max(GROUP_DESCRIPTION_MAX_LENGTH).default(""),
   botIds: GroupBotIds,
+  userIds: GroupUserIds.optional(),
 });
 export type CreateGroupInput = z.infer<typeof CreateGroupInput>;
 
@@ -166,6 +190,8 @@ export const UpdateGroupInput = z.object({
   name: z.string().trim().min(1).max(80).optional(),
   description: z.string().trim().max(GROUP_DESCRIPTION_MAX_LENGTH).optional(),
   botIds: GroupBotIds.optional(),
+  userIds: GroupUserIds.optional(),
+  leadBotId: Id.nullable().optional(),
   pinned: z.boolean().optional(),
   sectionId: Id.nullable().optional(),
 });
@@ -963,6 +989,11 @@ export type MessagingAgentConnection = z.infer<typeof MessagingAgentConnectionSc
 export const RunSchema = z.object({
   id: Id,
   botId: Id,
+  /**
+   * The person the run acts for: in a group, only they answer its asks, approvals and takeover.
+   * Absent from older servers and from a run the client has only seen start.
+   */
+  userId: Id.optional(),
   threadId: Id,
   taskId: Id,
   status: RunStatus,
@@ -1007,6 +1038,8 @@ export const ThreadSnapshotSchema = z.object({
   groupId: Id.optional(),
   groupName: z.string().optional(),
   members: z.array(GroupMemberSchema).optional(),
+  /** A group's people and anyone who wrote in it since leaving, for its messages' `authorId`. */
+  people: z.array(GroupPersonSchema).optional(),
   run: RunSchema.nullable(),
   activeRuns: z.array(RunSchema).optional(),
   computer: ComputerStatusSchema.optional(),

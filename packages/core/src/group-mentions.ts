@@ -27,31 +27,45 @@ export function parseMentionNames(text: string): string[] {
   return [...names];
 }
 
+/** The bot that answers a group message naming none: its lead while a member, else the first. */
+export function groupLeadBotId(
+  members: ReadonlyArray<{ id: string }>,
+  leadBotId: string | null | undefined,
+): string | undefined {
+  return (members.find((member) => member.id === leadBotId) ?? members[0])?.id;
+}
+
+/**
+ * The bots a person's group message wakes: those it names, every one for @everyone, or the lead
+ * when it names none. A bot the sender cannot use wakes for nothing: its name stays plain text.
+ */
 export function resolveGroupTargetBotIds(input: {
   text: string;
   members: GroupMemberRef[];
   /** Bot ids from typed mention chips (non-members are ignored for wake). */
   explicitMentions?: string[];
+  leadBotId?: string | null;
+  /** The members the sender owns or has been shared. */
+  usableBotIds: ReadonlySet<string>;
 }): string[] {
-  const membersById = new Map(input.members.map((member) => [member.id, member]));
+  const usable = input.members.filter((member) => input.usableBotIds.has(member.id));
   const targetIds = new Set<string>();
 
   for (const mentionId of input.explicitMentions ?? []) {
     // Out-of-chat bots stay as @Name in the prompt; only members are woken here.
-    if (membersById.has(mentionId)) targetIds.add(mentionId);
+    if (usable.some((member) => member.id === mentionId)) targetIds.add(mentionId);
   }
 
   if (hasMentionToken(input.text, "everyone")) {
-    for (const member of input.members) targetIds.add(member.id);
+    for (const member of usable) targetIds.add(member.id);
   } else {
-    for (const member of input.members) {
+    for (const member of usable) {
       if (hasMentionToken(input.text, member.name)) targetIds.add(member.id);
     }
   }
 
-  if (targetIds.size === 0 && input.members[0]) {
-    targetIds.add(input.members[0].id);
-  }
+  const lead = groupLeadBotId(input.members, input.leadBotId);
+  if (targetIds.size === 0 && lead && input.usableBotIds.has(lead)) targetIds.add(lead);
 
   return [...targetIds];
 }

@@ -4,6 +4,8 @@ import { extractLinksFromText, matchesSearchQuery, snippetAroundMatch } from "@r
 import type { SessionEntryRow } from "@rakazo/db";
 import {
   ENTRY_ON_CHAIN,
+  groupMembershipFilter,
+  groupPersonSql,
   Prisma,
   type PrismaClient,
   sessionEntryFromRow,
@@ -78,6 +80,10 @@ async function findArtifactMessages(
   if (artifacts.length === 0) return new Map();
   const targetColumn =
     target === "bot" ? Prisma.sql`COALESCE(t."botId", t."memberBotId")` : Prisma.sql`t."groupId"`;
+  const threadOwner =
+    target === "bot"
+      ? Prisma.sql`t."userId" = ${actor.userId}`
+      : groupPersonSql(actor.userId, Prisma.sql`t."groupId"`);
   const candidates = Prisma.join(
     artifacts.map(({ id, targetId }) => Prisma.sql`(${id}, ${targetId})`),
   );
@@ -91,7 +97,7 @@ async function findArtifactMessages(
         INNER JOIN sessions s ON s.id = e."sessionId" AND s.kind = 'thread'
         INNER JOIN threads t ON t.id = s."threadId"
         WHERE t."spaceId" = ${actor.spaceId}
-          AND t."userId" = ${actor.userId}
+          AND ${threadOwner}
           AND ${targetColumn} = candidate."targetId"
           AND ${ownBotThread(sharedBotIds)}
           AND e.type IN ${MESSAGE_ENTRY_TYPES}
@@ -167,8 +173,7 @@ export async function querySpaceSearch(
 
   const groups = await prisma.chatGroup.findMany({
     where: {
-      spaceId: actor.spaceId,
-      userId: actor.userId,
+      ...groupMembershipFilter(actor.userId, actor.spaceId),
       name: { contains: query, mode: "insensitive" },
     },
     take: CONVERSATION_HIT_LIMIT,
@@ -237,11 +242,11 @@ export async function querySpaceSearch(
     );
   }
 
+  // A group's files are everyone's in it, whoever added them.
   const groupArtifacts = await prisma.artifact.findMany({
     where: {
       spaceId: actor.spaceId,
-      userId: actor.userId,
-      groupId: { not: null },
+      group: groupMembershipFilter(actor.userId),
       ...userFileArtifact,
       name: { contains: query, mode: "insensitive" },
     },
@@ -357,7 +362,7 @@ export async function querySpaceSearch(
     INNER JOIN threads t ON t.id = s."threadId"
     INNER JOIN chat_groups g ON g.id = t."groupId"
     WHERE t."spaceId" = ${actor.spaceId}
-      AND t."userId" = ${actor.userId}
+      AND ${groupPersonSql(actor.userId, Prisma.sql`g.id`)}
       AND e.type IN ${MESSAGE_ENTRY_TYPES}
       AND jsonb_path_query_array(e.payload -> 'blocks', ${SEARCHABLE_BLOCKS}::jsonpath)::text ILIKE ${pattern}
       AND ${ENTRY_ON_CHAIN}

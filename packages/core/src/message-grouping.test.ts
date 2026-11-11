@@ -153,6 +153,22 @@ describe("computeMessageGroups", () => {
     ]);
   });
 
+  it("two people's messages in a row each open their own group", () => {
+    const from = (authorId: string, minute: number) => ({
+      ...makeMessage({
+        role: "user",
+        botId: undefined,
+        createdAt: localIso(2026, 9, 2, 12, minute),
+      }),
+      authorId,
+    });
+    expect(computeMessageGroups([from("ada", 0), from("grace", 1), from("grace", 2)])).toEqual([
+      { isFirstOfGroup: true, isLastOfGroup: true },
+      { isFirstOfGroup: true, isLastOfGroup: false },
+      { isFirstOfGroup: false, isLastOfGroup: true },
+    ]);
+  });
+
   it("a non-text user block (attachment) breaks the group on both sides", () => {
     const messages = [
       makeMessage({

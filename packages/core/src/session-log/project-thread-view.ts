@@ -60,7 +60,10 @@ export type ThreadView = {
   rows: ThreadRow[];
   /** The tool the newest live run is on, which no row shows. */
   activityLabel: string | undefined;
+  /** The viewer's newest card still waiting on an answer: the one they answer now. */
   waiting: WaitingCard | null;
+  /** Every card still waiting on an answer, oldest first, the viewer's or another person's. */
+  open: readonly WaitingCard[];
   rowOf: ReadonlyMap<string, EntryId>;
 };
 
@@ -74,6 +77,11 @@ export type ThreadViewOptions = {
   progress?: ProgressLayer;
   /** Joins the image-only messages that follow a message with images into its row. */
   imageStacks?: boolean;
+  /**
+   * A run another person of a group woke: its cards show, but only that person answers them, so
+   * they never become the viewer's `waiting`.
+   */
+  othersRun?: (runId: string) => boolean;
 };
 
 const SHOWN_NOTES: ReadonlySet<string> = new Set(["skill.learnt", "system.note"]);
@@ -124,7 +132,7 @@ export function projectThreadView(
   entries: readonly ThreadEntry[],
   options: ThreadViewOptions = {},
 ): ThreadView {
-  const projected = projectThread(onChain(entries));
+  const projected = projectThread(onChain(entries), options.othersRun);
   const drawn = applyProgressLayer(projected.items, options.progress ?? new Map()).filter(
     (item) => !options.rendersNothing?.(item),
   );
@@ -184,6 +192,7 @@ export function projectThreadView(
     rows,
     activityLabel: latestActivityLabel(options.progress ?? new Map()),
     waiting: projected.waiting,
+    open: projected.open,
     rowOf,
   };
 }

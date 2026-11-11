@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@rakazo/db";
 import { appendSessionEntryInTransaction } from "@rakazo/db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { handoffToGroupBot } from "./group-handoff.js";
+import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
 
 vi.mock("../../db/src/sessions.js", async () =>
   (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
@@ -36,6 +36,8 @@ function harness(
   source: Source,
   existing?: { sourceRuns: { id: string; botId: string }[] },
   runRow: { routineId?: string | null; trigger?: string; inheritedHop?: number | null } = {},
+  /** The bots the run's person can use. */
+  usable = ["bot-a", "bot-b", "bot-c"],
 ) {
   const runCreate = vi.fn(async () => ({ id: "run-b" }));
   const tx = {
@@ -43,6 +45,11 @@ function harness(
     sessionEntry: {
       findUnique: vi.fn(async () => source),
       findFirst: vi.fn(async () => existing ?? null),
+    },
+    bot: {
+      findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
+        where.id.in.filter((id) => usable.includes(id)).map((id) => ({ id })),
+      ),
     },
     chatGroup: {
       findFirst: vi.fn(async () => ({
@@ -66,7 +73,11 @@ function harness(
       create: runCreate,
     },
     routine: { findUnique: vi.fn(async () => ({ inheritedHop: runRow.inheritedHop ?? null })) },
-    thread: { update: vi.fn(async () => ({ nextEventSeq: 2 })) },
+    thread: {
+      update: vi.fn(async () => ({ nextEventSeq: 2 })),
+      updateMany: vi.fn(async () => ({ count: 1 })),
+    },
+    chatGroupPerson: { updateMany: vi.fn(async () => ({ count: 1 })) },
     task: { create: vi.fn(async () => ({ id: "task-b" })) },
     event: {
       findFirst: vi.fn(async () => ({ seq: 1 })),
@@ -127,6 +138,19 @@ describe("group handoff ownership", () => {
     ).resolves.toEqual({
       error:
         "do not hand this stage back to its sender; post the result in the shared thread instead",
+    });
+    expect(runCreate).not.toHaveBeenCalled();
+  });
+
+  it("refuses a handoff to a bot the run's person cannot use", async () => {
+    const { deps, runCreate } = harness({ type: "user.message", payload: {} }, undefined, {}, [
+      "bot-a",
+    ]);
+
+    await expect(
+      handoffToGroupBot(deps as never, run, "group-1", { bot_id: "bot-b", message: "Next" }),
+    ).resolves.toEqual({
+      error: "the person you are answering cannot use that bot; finish this stage yourself",
     });
     expect(runCreate).not.toHaveBeenCalled();
   });
@@ -194,5 +218,44 @@ describe("group handoff ownership", () => {
     ).resolves.toMatchObject({ ok: true, botId: "bot-b", runId: "run-b" });
     expect(handoffs()).toEqual([]);
     expect(runCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe("group context", () => {
+  it("names the group's people, its creator owning unattributed messages, and whom the run answers", async () => {
+    const prisma = {
+      chatGroup: {
+        findUnique: vi.fn(async () => ({
+          name: "Trip",
+          description: "",
+          userId: "ana",
+          members: [{ bot: { id: "bot-a", name: "Planner", title: "", description: "" } }],
+          people: [{ userId: "ana" }, { userId: "bo" }],
+        })),
+      },
+      chatGroupPerson: {
+        findMany: vi.fn(async () => [
+          { user: { id: "ana", name: "Ana", image: null } },
+          { user: { id: "bo", name: "Bo", image: null } },
+        ]),
+      },
+      $queryRaw: vi.fn(async () => []),
+    } as unknown as PrismaClient;
+
+    const group = await loadGroupContext(
+      prisma,
+      { groupId: "group-1", sessionId: "session-1" },
+      { id: "bot-a", name: "Planner" },
+      "bo",
+    );
+
+    expect(group?.speakers).toEqual({
+      names: new Map([
+        ["ana", "Ana"],
+        ["bo", "Bo"],
+      ]),
+      ownerId: "ana",
+    });
+    expect(group?.context).toContain("You are answering Bo, who woke you.");
   });
 });

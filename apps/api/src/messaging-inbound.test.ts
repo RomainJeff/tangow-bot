@@ -78,6 +78,7 @@ function createDeps(
   };
   const outboundRows: Array<Record<string, unknown>> = [];
   const txMock = {
+    $queryRaw: vi.fn(async () => []),
     thread: { findUniqueOrThrow: vi.fn(async () => ({ sessionId: "session-1", botId: "bot-1" })) },
     run: { findUnique: vi.fn(async () => null) },
   };

@@ -41,6 +41,7 @@ import type { BrowserApprovalCheckpoint } from "./browser-approval-checkpoint.js
 import { cancelRunsInTransaction } from "./cancel-runs.js";
 import type { Prisma, PrismaClient, Run } from "./client.js";
 import { expireComputerExecutionLeases } from "./computers.js";
+import { markThreadsUnread } from "./groups.js";
 import { createBotMessageInTransaction, createThreadMessageInTransaction } from "./messages.js";
 import {
   appendCardStateInTransaction,
@@ -90,7 +91,13 @@ export interface ThreadEvents {
   startInboundRoutineRuns(
     input: StartInboundRoutineRunsInput,
   ): Promise<StartInboundRoutineRunsResult>;
-  follow(threadId: string, cursor: number, signal?: AbortSignal): AsyncGenerator<ProductEvent>;
+  /** `allowed` is asked again whenever new events arrive; once false, the stream ends. */
+  follow(
+    threadId: string,
+    cursor: number,
+    signal?: AbortSignal,
+    allowed?: () => Promise<boolean>,
+  ): AsyncGenerator<ProductEvent>;
 }
 
 export interface ClearThreadInput {
@@ -367,8 +374,8 @@ export function createThreadEvents(
     pauseRunForTakeover: (input) => pauseRunForTakeover(prisma, input, realtime),
     sendUserMessage: (input) => sendUserMessage(prisma, input, realtime),
     startInboundRoutineRuns: (input) => startInboundRoutineRuns(prisma, input, realtime),
-    follow: (threadId, cursor, signal) =>
-      followThreadEvents(prisma, threadId, cursor, realtime, signal, options.catchUpMs),
+    follow: (threadId, cursor, signal, allowed) =>
+      followThreadEvents(prisma, threadId, cursor, realtime, signal, options.catchUpMs, allowed),
   };
 }
 
@@ -386,6 +393,14 @@ interface TruncateThreadResult {
   cancelledRunIds: string[];
 }
 
+/** A group with more than one person keeps its history: nobody clears it or rewinds it. */
+export class SharedGroupHistoryError extends Error {
+  constructor() {
+    super("A group's history is shared by its people");
+    this.name = "SharedGroupHistoryError";
+  }
+}
+
 /**
  * Shared by clearThread (cut at zero) and rewindThread (cut at a message): stop the thread's
  * work, release its computer, and drop the feed at or after the cut. The entry that cuts the
@@ -395,6 +410,9 @@ async function truncateThreadInTransaction(
   tx: Prisma.TransactionClient,
   input: TruncateThreadInput,
 ): Promise<TruncateThreadResult> {
+  // Thread row first, as every send and finalizeRun take it: a group's update below writes no
+  // column, so Prisma only reads the row and the person rows would be locked ahead of it.
+  await tx.$queryRaw`SELECT id FROM threads WHERE id = ${input.threadId} FOR UPDATE`;
   const thread = await tx.thread.update({
     where: {
       id: input.threadId,
@@ -403,9 +421,22 @@ async function truncateThreadInTransaction(
         ? { groupId: input.groupId }
         : { OR: [{ botId: input.botId }, { memberBotId: input.botId }] }),
     },
-    data: { unread: false },
+    // A group keeps each person's read mark on their own row.
+    data: input.groupId ? {} : { unread: false },
     select: { sessionId: true },
   });
+  if (
+    input.groupId &&
+    (await tx.chatGroupPerson.count({ where: { groupId: input.groupId } })) > 1
+  ) {
+    throw new SharedGroupHistoryError();
+  }
+  if (input.groupId && input.userId) {
+    await tx.chatGroupPerson.updateMany({
+      where: { groupId: input.groupId, userId: input.userId },
+      data: { unread: false },
+    });
+  }
   const activeRuns = await tx.run.findMany({
     where: {
       spaceId: input.spaceId,
@@ -793,6 +824,7 @@ export async function claimSteering(
       },
       select: {
         id: true,
+        userId: true,
         trigger: true,
         sessionId: true,
         historyThroughSeq: true,
@@ -816,6 +848,8 @@ export async function claimSteering(
             }
           : {
               OR: [{ runId: null }, { runId: input.runId }],
+              // In a group, two people can each have a run of the bot: one steers only their own.
+              userId: run.userId,
               message: {
                 sessionId: run.thread.sessionId,
                 // Private follow-ups remain unclaimed for the existing private continuation.
@@ -1034,6 +1068,8 @@ export async function answerRunInputInTransaction(
           blocks: [{ kind: "text", text }],
           replyTo: { entryId: askId },
           source: "card",
+          // In a group, whom the bot reads as answering.
+          authorId: input.answeredByUserId,
         },
       });
     // Edits only apply to an approval card (a Create bot card or a mail draft), answered "allow"
@@ -1683,7 +1719,7 @@ export async function pauseRunForInput(
         where: { id: input.runId },
         select: { sessionId: true },
       });
-      await tx.thread.update({ where: { id: input.threadId }, data: { unread: true } });
+      await markThreadsUnread(tx, [input.threadId]);
       await appendSessionEntryInTransaction(tx, {
         type: "effect.requested",
         sessionId: sessionId as SessionId,
@@ -1779,7 +1815,7 @@ export async function pauseRunForParent(
  */
 export async function messageHelper(
   prisma: PrismaClient,
-  input: { threadId: string; botId: string; helperId: string; text: string },
+  input: { threadId: string; botId: string; userId: string; helperId: string; text: string },
 ): Promise<"answered" | "steered" | "ended" | "unknown"> {
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.$queryRaw`SELECT id FROM threads WHERE id = ${input.threadId} FOR UPDATE`;
@@ -1788,6 +1824,8 @@ export async function messageHelper(
         id: input.helperId,
         threadId: input.threadId,
         botId: input.botId,
+        // A helper runs as its parent's person; another person's is not this run's to message.
+        userId: input.userId,
         trigger: "helper",
       },
       select: { status: true, sessionId: true, userId: true },
@@ -2347,16 +2385,26 @@ async function finalizeRunOnce(
   });
 }
 
-type WakeScope = Pick<FinalizeRunBase, "spaceId" | "threadId" | "botId">;
+type WakeScope = Pick<FinalizeRunBase, "spaceId" | "threadId" | "botId" | "runId">;
 
+/**
+ * Continues the person whose run is ending: in a group, two people can each have runs of the bot,
+ * and one person's messages never steer, or wake the bot as, another. Their pending messages are
+ * continued when one of their own runs ends.
+ */
 async function createSteeringContinuation(
   tx: Prisma.TransactionClient,
   input: WakeScope,
 ): Promise<string | null> {
+  const { userId } = await tx.run.findUniqueOrThrow({
+    where: { id: input.runId },
+    select: { userId: true },
+  });
   const active = await tx.run.findFirst({
     where: {
       threadId: input.threadId,
       botId: input.botId,
+      userId,
       ...conversationRunFilter,
       status: { in: [...ACTIVE_RUN_STATUSES] },
     },
@@ -2366,6 +2414,7 @@ async function createSteeringContinuation(
   const pending = await tx.steeringMessage.findMany({
     where: {
       botId: input.botId,
+      userId,
       runId: null,
       message: { session: { threadId: input.threadId, kind: "thread" } },
     },
@@ -2398,20 +2447,12 @@ async function createSteeringContinuation(
   };
   if (pending.length === 0) {
     // As the source message, the entry would stand in for the prompt and never reach the model.
-    if (!(await hasUnreadHelperEntry(tx, input))) return null;
-    const { userId } = await tx.thread.findUniqueOrThrow({
-      where: { id: input.threadId },
-      select: { userId: true },
-    });
+    if (!(await hasUnreadHelperEntry(tx, input, userId))) return null;
     const woken = await followUp(userId, "A helper you started wrote back.", null);
     return woken.id;
   }
   const last = pending.at(-1)!;
-  const run = await followUp(
-    pending[0]!.userId,
-    "Respond to the user's steering context.",
-    last.message.id,
-  );
+  const run = await followUp(userId, "Respond to the user's steering context.", last.message.id);
   await tx.steeringMessage.updateMany({
     where: { id: { in: pending.map((item) => item.id) }, runId: null },
     data: { runId: run.id, claimedAt: null },
@@ -2420,22 +2461,25 @@ async function createSteeringContinuation(
 }
 
 /**
- * Whether the bot's newest helper report or question in the thread came after every history its
- * turns read, so no turn has seen it yet. Session seqs order the two without any clock.
+ * Whether the newest report or question of the person's helpers of the bot in the thread came
+ * after every history their turns read, so none of their turns has seen it yet. Session seqs order
+ * the two without any clock. A helper runs as its parent's person, and wakes only that person.
  */
-async function hasUnreadHelperEntry(tx: Prisma.TransactionClient, input: WakeScope) {
-  const report = await tx.sessionEntry.findFirst({
-    where: {
-      botId: input.botId,
-      type: { in: ["helper.report", "helper.question"] },
-      session: { threadId: input.threadId, kind: "thread" },
-    },
-    orderBy: { seq: "desc" },
-    select: { seq: true },
-  });
+async function hasUnreadHelperEntry(
+  tx: Prisma.TransactionClient,
+  input: WakeScope,
+  userId: string,
+) {
+  const [report] = await tx.$queryRaw<Array<{ seq: number }>>`
+    SELECT e.seq FROM session_entries e
+    JOIN sessions s ON s.id = e."sessionId"
+    JOIN runs helper ON helper.id = e.payload ->> 'helperId'
+    WHERE e."botId" = ${input.botId} AND e.type IN ('helper.report', 'helper.question')
+      AND s."threadId" = ${input.threadId} AND s.kind = 'thread' AND helper."userId" = ${userId}
+    ORDER BY e.seq DESC LIMIT 1`;
   if (!report) return false;
   const { _max: read } = await tx.run.aggregate({
-    where: { threadId: input.threadId, botId: input.botId, ...conversationRunFilter },
+    where: { threadId: input.threadId, botId: input.botId, userId, ...conversationRunFilter },
     _max: { historyThroughSeq: true },
   });
   return read.historyThroughSeq == null || report.seq >= read.historyThroughSeq;
@@ -2523,6 +2567,7 @@ export async function* followThreadEvents(
   realtime?: RealtimeFanout,
   signal?: AbortSignal,
   catchUpMs = realtime ? PUSH_CATCH_UP_MS : POLL_ONLY_CATCH_UP_MS,
+  allowed?: () => Promise<boolean>,
 ): AsyncGenerator<ProductEvent> {
   let seq = cursor;
   const latch = new ChangeLatch();
@@ -2538,6 +2583,7 @@ export async function* followThreadEvents(
       do {
         const events = await eventsAfter(prisma, threadId, seq, EVENT_BATCH_SIZE);
         batchSize = events.length;
+        if (batchSize > 0 && allowed && !(await allowed())) return;
         for (const event of events) {
           seq = event.seq;
           yield mapProductEvent(event);

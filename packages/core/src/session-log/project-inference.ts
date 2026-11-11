@@ -24,6 +24,11 @@ export interface InferenceProjectionOptions {
   runHistory?: { activeRunId?: string };
   /** Bot id to display name, for group members and handoffs. */
   botNames?: ReadonlyMap<string, string>;
+  /**
+   * A group of several people: who wrote each person's message, by user id. A message naming no
+   * author is the thread's own person's, `ownerId`.
+   */
+  speakers?: { names: ReadonlyMap<string, string>; ownerId: string };
   /** Finds a replied-to entry the chain no longer holds, such as one older than the compaction. */
   resolveReplyTarget?: (entryId: EntryId) => SessionEntry | undefined;
 }
@@ -124,8 +129,14 @@ function conversationEntries(
   const recapped = new Set(
     entries.flatMap((entry) => (entry.type === "run.recap" ? [entry.runId] : [])),
   );
+  const { activeRunId } = options.runHistory;
+  // Only the reading run keeps its tool parts: in a group, another person's run of the bot can
+  // still be working, and its tools ran with that person's accounts.
+  const compacted = (runId: string) =>
+    finished.has(runId) ||
+    (activeRunId !== undefined && runId !== activeRunId && !routines.has(runId));
   return entries.flatMap((entry): SessionEntry[] => {
-    if (!entry.runId || !finished.has(entry.runId)) return [entry];
+    if (!entry.runId || !compacted(entry.runId)) return [entry];
     switch (entry.type) {
       case "assistant.text":
         return entry.payload.toPerson !== false || needsThePerson(entry.payload.blocks)
@@ -202,6 +213,7 @@ function renderTurn(
       return {
         role: "user",
         content: [
+          speakerLine(segment.payload, options.speakers),
           replyContext(segment, targetOf, botNames),
           historyText(segment.payload.blocks, botNames),
         ]
@@ -306,6 +318,16 @@ function renderTurn(
       segment satisfies Exclude<ThreadEntry, InferenceEntry>;
       return undefined;
   }
+}
+
+/** `[from Name]`, the person who wrote a message in a group of several people. */
+function speakerLine(
+  message: { source: string; authorId?: string },
+  speakers: InferenceProjectionOptions["speakers"],
+): string | undefined {
+  if (!speakers || message.source === "channel" || message.source === "routine") return undefined;
+  const name = speakers.names.get(message.authorId ?? speakers.ownerId);
+  return name ? `[from ${escapeDirectoryField(name)}]` : undefined;
 }
 
 function speakerTurn(

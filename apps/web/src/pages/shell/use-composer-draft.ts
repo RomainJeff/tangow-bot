@@ -18,7 +18,7 @@ import type { ThreadViewState } from "./use-thread-view";
 export function useComposerDraft({ roster, thread }: { roster: Roster; thread: ThreadViewState }) {
   const { t } = useLingui();
   const { active, groupId, inGroup, activeBotId, activeGroupId } = roster;
-  const { activeSnapshot, view, rowIndexOf, resolveTranscriptMemberName } = thread;
+  const { activeSnapshot, view, rowIndexOf, resolveTranscriptMemberName, personOf } = thread;
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [replyTarget, setReplyTarget] = useState<MessageItem | null>(null);
   const [rewindTarget, setRewindTarget] = useState<MessageItem | null>(null);
@@ -49,7 +49,7 @@ export function useComposerDraft({ roster, thread }: { roster: Roster; thread: T
   }, []);
   const replyTargetName = activeReplyTarget
     ? activeReplyTarget.role === "user"
-      ? t`You`
+      ? (personOf(activeReplyTarget)?.name ?? t`You`)
       : (resolveTranscriptMemberName(activeReplyTarget.botId) ?? active?.name ?? t`Bot`)
     : undefined;
   const rewindIndex = activeRewindTarget ? (rowIndexOf.get(activeRewindTarget.id) ?? -1) : -1;

@@ -1,8 +1,9 @@
-import type { Run } from "@rakazo/contracts";
+import type { GroupPerson, Run } from "@rakazo/contracts";
 import type { ThreadView } from "@rakazo/core";
 import {
   answersPendingQuestion,
   drawsNothing,
+  groupLeadBotId,
   isActive,
   latestTakeoverItemId,
   projectThreadView,
@@ -52,7 +53,7 @@ export function waitingAsk(
 
 /** What the open thread's snapshot shows: its rows, who is working, and who a send answers. */
 export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
-  const { groupId, inGroup, active, activeGroup, bots } = roster;
+  const { groupId, inGroup, active, activeGroup, bots, bootstrapMe } = roster;
   const activeSnapshot = inGroup
     ? snapshot?.groupId === groupId
       ? snapshot
@@ -63,6 +64,18 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
   const showSteps = useDebugMode();
   const activeEntries = activeSnapshot?.entries;
   const activeLayer = activeSnapshot?.layer;
+  const currentRuns = useMemo(() => activeThreadRuns(activeSnapshot), [activeSnapshot]);
+  const viewerId = bootstrapMe?.userId;
+  // Another person's run in a group waits on them alone: its cards show here, but answer nothing.
+  const othersRuns = useMemo(
+    () =>
+      new Map(
+        currentRuns.flatMap((run) =>
+          run.userId && viewerId && run.userId !== viewerId ? [[run.id, run.userId] as const] : [],
+        ),
+      ),
+    [currentRuns, viewerId],
+  );
   const view = useMemo(
     () =>
       projectThreadView(activeEntries ?? [], {
@@ -70,8 +83,9 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
           drawsNothing(item, (blocks) => hasRenderableBlock(blocks, showSteps)),
         progress: activeLayer,
         imageStacks: true,
+        othersRun: (runId) => othersRuns.has(runId),
       }),
-    [activeEntries, activeLayer, showSteps],
+    [activeEntries, activeLayer, showSteps, othersRuns],
   );
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -85,14 +99,13 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
     }
     return indexes;
   }, [view.rows, view.rowOf]);
-  const currentRuns = useMemo(() => activeThreadRuns(activeSnapshot), [activeSnapshot]);
   const takeoverItemId = useMemo(
     () =>
       latestTakeoverItemId(
         view.rows.map((row) => row.item),
-        currentRuns,
+        currentRuns.filter((run) => !othersRuns.has(run.id)),
       ),
-    [view.rows, currentRuns],
+    [view.rows, currentRuns, othersRuns],
   );
   const workingRuns = currentRuns.filter((run) => isWorking(run, view));
   const transcriptRunning = workingRuns.length > 0;
@@ -135,8 +148,13 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
     },
     [bots, transcriptMembers],
   );
-  // A send without a mention goes to the bot, or to a group's first member.
-  const sendsTo = inGroup ? transcriptMembers?.[0]?.botId : active?.id;
+  // A send without a mention goes to the bot, or to a group's lead.
+  const sendsTo = inGroup
+    ? groupLeadBotId(
+        (transcriptMembers ?? []).map((member) => ({ id: member.botId })),
+        activeGroup?.leadBotId,
+      )
+    : active?.id;
   const answerName =
     sendsTo && answersPendingQuestion(view, sendsTo, currentRuns)
       ? resolveTranscriptBot(sendsTo)?.name
@@ -157,6 +175,40 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
     workingRuns.length > 0
       ? Math.min(...workingRuns.map((run) => new Date(run.startedAt ?? run.createdAt).getTime()))
       : undefined;
+  // The snapshot names everyone who ever wrote, the live group whoever joined since it was taken.
+  const snapshotPeople = activeSnapshot?.people;
+  const groupPeople = activeGroup?.people;
+  // A message naming no author is the creator's.
+  const creatorId = activeGroup?.creatorId;
+  const personOf = useCallback(
+    (message: MessageItem): GroupPerson | undefined => {
+      if (!inGroup || message.role !== "user") return undefined;
+      const authorId = message.authorId ?? creatorId;
+      if (!authorId || !viewerId || authorId === viewerId) return undefined;
+      return (
+        snapshotPeople?.find((person) => person.userId === authorId) ??
+        groupPeople?.find((person) => person.userId === authorId) ?? {
+          userId: authorId,
+          name: "",
+          image: null,
+        }
+      );
+    },
+    [inGroup, creatorId, viewerId, snapshotPeople, groupPeople],
+  );
+  // The cards other people's runs wait on, each with the name of who answers it.
+  const waitingOn = useMemo(() => {
+    const nameOf = (userId: string) =>
+      snapshotPeople?.find((person) => person.userId === userId)?.name ??
+      groupPeople?.find((person) => person.userId === userId)?.name ??
+      "";
+    return new Map(
+      view.open.flatMap((card) => {
+        const userId = othersRuns.get(card.runId);
+        return userId ? [[card.itemId as string, nameOf(userId)] as const] : [];
+      }),
+    );
+  }, [view.open, othersRuns, snapshotPeople, groupPeople]);
   const resolveTranscriptMemberName = useCallback(
     (botId: string | undefined) => memberName(transcriptMembers, botId),
     [transcriptMembers],
@@ -175,6 +227,8 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
     transcriptArtifactTarget,
     resolveTranscriptBot,
     resolveTranscriptMemberName,
+    personOf,
+    waitingOn,
     answerName,
     workingBots,
     workingStartedAt,

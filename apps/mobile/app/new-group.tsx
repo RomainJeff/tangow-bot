@@ -6,7 +6,7 @@ import {
 import { Stack, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput } from "react-native";
-import { BotMemberPicker } from "../components/bot-member-picker";
+import { BotMemberPicker, PersonPicker, useSpacePeople } from "../components/bot-member-picker";
 import { type MobileBot, rpc } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
@@ -19,6 +19,8 @@ export default function NewGroup() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
+  const people = useSpacePeople();
+  const [userIds, setUserIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -43,6 +45,7 @@ export default function NewGroup() {
         name: name.trim(),
         description: description.trim(),
         botIds: selected,
+        ...(userIds.length ? { userIds } : {}),
       });
       router.replace({
         pathname: "/group-thread",
@@ -98,8 +101,21 @@ export default function NewGroup() {
             textAlignVertical: "top",
           }}
         />
+        {people.length > 0 ? (
+          <>
+            <Text style={{ color: tokens.mutedForeground, fontSize: 14, marginTop: 20 }}>
+              {t("People")}
+            </Text>
+            <PersonPicker
+              people={people}
+              selected={userIds}
+              onChange={setUserIds}
+              disabled={pending}
+            />
+          </>
+        ) : null}
         <Text style={{ color: tokens.mutedForeground, fontSize: 14, marginTop: 20 }}>
-          {t("Members")}
+          {t("Bots")}
         </Text>
         <BotMemberPicker
           bots={bots}

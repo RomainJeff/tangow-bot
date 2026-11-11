@@ -11,6 +11,7 @@ const members = [
   { id: "b", name: "BotB" },
   { id: "c", name: "Writer" },
 ];
+const usableBotIds = new Set(["a", "b", "c"]);
 
 describe("hasMentionToken", () => {
   it("requires a boundary after the complete member name", () => {
@@ -33,6 +34,7 @@ describe("resolveGroupTargetBotIds", () => {
       resolveGroupTargetBotIds({
         text: "@BotA gather sources. @BotB summarize.",
         members,
+        usableBotIds,
       }),
     ).toEqual(["a", "b"]);
   });
@@ -42,6 +44,7 @@ describe("resolveGroupTargetBotIds", () => {
       resolveGroupTargetBotIds({
         text: "@everyone please review",
         members,
+        usableBotIds,
       }),
     ).toEqual(["a", "b", "c"]);
   });
@@ -52,6 +55,7 @@ describe("resolveGroupTargetBotIds", () => {
         text: "hello",
         members,
         explicitMentions: ["b"],
+        usableBotIds,
       }),
     ).toEqual(["b"]);
   });
@@ -67,6 +71,7 @@ describe("resolveGroupTargetBotIds", () => {
       resolveGroupTargetBotIds({
         text: "@Research Writer compare this with @Éditeur and @Anna.",
         members: namedMembers,
+        usableBotIds: new Set(namedMembers.map((member) => member.id)),
       }),
     ).toEqual(["research", "edit", "anna"]);
   });
@@ -77,17 +82,30 @@ describe("resolveGroupTargetBotIds", () => {
         text: "hello",
         members,
         explicitMentions: ["b", "outsider"],
+        usableBotIds,
       }),
     ).toEqual(["b"]);
   });
 
-  it("picks the first member when unmentioned", () => {
-    expect(
+  it("wakes the lead when unmentioned, or the first member once the lead is gone", () => {
+    const wake = (leadBotId: string | null) =>
+      resolveGroupTargetBotIds({ text: "hello team", members, leadBotId, usableBotIds });
+    expect(wake("b")).toEqual(["b"]);
+    expect(wake("gone")).toEqual(["a"]);
+  });
+
+  it("wakes only the bots the sender can use, and nothing when the lead is not one", () => {
+    const wake = (text: string, explicitMentions?: string[]) =>
       resolveGroupTargetBotIds({
-        text: "hello team",
+        text,
         members,
-      }),
-    ).toEqual(["a"]);
+        explicitMentions,
+        usableBotIds: new Set(["b"]),
+      });
+    expect(wake("@everyone review")).toEqual(["b"]);
+    expect(wake("@BotA and @BotB", ["a"])).toEqual(["b"]);
+    expect(wake("hello team")).toEqual([]);
+    expect(wake("@BotA look")).toEqual([]);
   });
 });
 

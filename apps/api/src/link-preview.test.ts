@@ -130,7 +130,7 @@ describe("links.preview: access first (CA 19, CA 54)", () => {
     expect(read).not.toHaveBeenCalled();
   });
 
-  it("looks the thread up by the actor's own space and user, on a live bot, group or shared bot", async () => {
+  it("looks the thread up in the actor's space: their live or shared bot's, or a live group they are in", async () => {
     const { deps, prisma } = composer();
 
     await previewLinkForComposer(
@@ -144,11 +144,10 @@ describe("links.preview: access first (CA 19, CA 54)", () => {
       where: {
         id: "thread-1",
         spaceId: "space-1",
-        userId: "user-1",
         OR: [
-          { bot: { archivedAt: null } },
-          { group: { archivedAt: null } },
-          { memberBot: sharedWithFilter("user-1", "space-1") },
+          { userId: "user-1", bot: { archivedAt: null } },
+          { userId: "user-1", memberBot: sharedWithFilter("user-1", "space-1") },
+          { group: { archivedAt: null, people: { some: { userId: "user-1" } } } },
         ],
       },
       select: { id: true },
@@ -588,24 +587,24 @@ describe("messages.removeLinkPreview (CA 16, CA 19, CA 54)", () => {
       removeMessageLinkPreview(deps, actor, { messageId: "message-x" }),
     ).rejects.toBeInstanceOf(IsolationError);
 
-    expect(prisma.sessionEntry.findFirst).toHaveBeenCalledWith({
-      where: {
-        id: "message-x",
-        session: {
-          kind: "thread",
-          thread: {
-            spaceId: "space-1",
-            userId: "user-1",
-            OR: [
-              { bot: { archivedAt: null } },
-              { group: { archivedAt: null } },
-              { memberBot: sharedWithFilter("user-1", "space-1") },
-            ],
+    expect(prisma.sessionEntry.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: "message-x",
+          session: {
+            kind: "thread",
+            thread: {
+              spaceId: "space-1",
+              OR: [
+                { userId: "user-1", bot: { archivedAt: null } },
+                { userId: "user-1", memberBot: sharedWithFilter("user-1", "space-1") },
+                { group: { archivedAt: null, people: { some: { userId: "user-1" } } } },
+              ],
+            },
           },
         },
-      },
-      select: { id: true, session: { select: { threadId: true } } },
-    });
+      }),
+    );
     expect(appendCardStateInTransaction).not.toHaveBeenCalled();
     expect(artifacts.remove).not.toHaveBeenCalled();
     expect(notify).not.toHaveBeenCalled();

@@ -140,7 +140,9 @@ export async function openThreadDb(): Promise<ThreadDb> {
     async seedThread({ id, spaceId = "space-1", userId = "user-1", botId = "bot-1", group }) {
       await owner(spaceId, userId);
       if (group) {
-        await prisma.chatGroup.create({ data: { id: group.id, spaceId, userId, name: group.id } });
+        await prisma.chatGroup.create({
+          data: { id: group.id, spaceId, userId, name: group.id, people: { create: { userId } } },
+        });
         for (const [index, memberId] of group.memberBotIds.entries()) {
           await bot(memberId, spaceId, userId);
           await prisma.chatGroupMember.create({

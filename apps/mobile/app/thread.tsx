@@ -11,6 +11,7 @@ import type {
   Connection,
   ConnectionCatalogItem,
   EntryId,
+  GroupPerson,
   MessageBlock,
   Routine,
   SessionEntry,
@@ -37,6 +38,7 @@ import {
   drawsNothing,
   editedWaitingDraft,
   failureSinceLabel,
+  groupLeadBotId,
   imagesOf,
   isApprovalAskBlock,
   isAsideOnlyMessage,
@@ -153,6 +155,7 @@ import { StopContour } from "../components/stop-contour";
 import { Surface } from "../components/surface";
 import { TablePreview } from "../components/table-preview";
 import { TypingBubble } from "../components/typing-bubble";
+import { UserAvatar } from "../components/user-avatar";
 import { UserBubble } from "../components/user-bubble";
 import { WidgetCard } from "../components/widget-card";
 import {
@@ -161,6 +164,7 @@ import {
   copyableMobileMessageText,
   currentApiBase,
   keepUnchangedRows,
+  listGroups,
   loadSessionToken,
   type MobileBot,
   type MobileGroup,
@@ -204,6 +208,7 @@ import {
   setImageViewerPayload,
   useThreadHeldByImageViewer,
 } from "../lib/image-viewer";
+import { userInitials } from "../lib/inbox";
 import { unreadConversationCount } from "../lib/inbox-spaces";
 import { useKeyboardSlide } from "../lib/keyboard-slide";
 import { saveLastBotId } from "../lib/last-bot";
@@ -559,7 +564,35 @@ function Thread() {
     () => ({ open: setTablePreview, label: () => t("Table"), hint: t("Opens the full table") }),
     [t],
   );
+  // Only the run's owner may edit a Create bot card; until this loads, nobody gets Edit.
+  const [viewerUserId, setViewerUserId] = useState<string>();
+  useEffect(() => {
+    rpc<MobileMe>("me")
+      .then((me) => setViewerUserId(me.userId))
+      .catch(() => undefined);
+  }, []);
   const showSteps = useDebugMode();
+  const currentGroup = groupId ? mentionGroups.find((group) => group.id === groupId) : undefined;
+  // A message carrying no author is the creator's.
+  const creatorId = currentGroup?.creatorId;
+  // Several people share a group's history: nobody rewinds it under the others.
+  const sharedHistory = (currentGroup?.people.length ?? 0) > 1;
+  const threadRuns = useMemo(
+    () => snap?.activeRuns ?? (snap?.run ? [snap.run] : []),
+    [snap?.activeRuns, snap?.run],
+  );
+  // Another person's run waits on them alone: its card shows, with nothing to answer here. A run
+  // that does not say whose it is (an older server, or one seen only starting) stays answerable,
+  // and the server decides.
+  const othersRuns = useMemo(
+    () =>
+      new Set(
+        threadRuns.flatMap((run) =>
+          run.userId && viewerUserId && run.userId !== viewerUserId ? [run.id] : [],
+        ),
+      ),
+    [threadRuns, viewerUserId],
+  );
   const drawnRows = useRef<ReadonlyMap<string, ThreadRow>>(new Map());
   const liveView = useMemo((): ThreadView => {
     const projected = projectThreadView(snap?.entries ?? [], {
@@ -567,11 +600,12 @@ function Thread() {
         drawsNothing(item, (blocks) => hasVisibleMessagePresentation(blocks, showSteps)),
       progress: snap?.layer,
       imageStacks: true,
+      othersRun: (runId) => othersRuns.has(runId),
     });
     const rows = keepUnchangedRows(drawnRows.current, projected.rows);
     drawnRows.current = new Map(rows.map((row) => [row.item.id, row]));
     return { ...projected, rows };
-  }, [snap?.entries, snap?.layer, showSteps]);
+  }, [snap?.entries, snap?.layer, showSteps, othersRuns]);
   // The image viewer zooms out of a stack in the list. A run adding images, a helper's report or a
   // recap while it is open can fold that stack's row away, and the list would recycle the very view
   // the system hid as the zoom's source, leaving a hole. So the thread keeps the view it had until
@@ -659,18 +693,14 @@ function Thread() {
   const hasLiveProgress = liveItems.length > 0;
   // One bot only: an activity line names one bot's tool, so it would mislabel a group.
   const activityLabel = view.activityLabel;
-  const threadRuns = useMemo(
-    () => snap?.activeRuns ?? (snap?.run ? [snap.run] : []),
-    [snap?.activeRuns, snap?.run],
-  );
   // Liveness comes from the run, never from the card's own state.
   const takeoverItemId = useMemo(
     () =>
       latestTakeoverItemId(
         view.rows.map((row) => row.item),
-        threadRuns,
+        threadRuns.filter((run) => !othersRuns.has(run.id)),
       ),
-    [view.rows, threadRuns],
+    [view.rows, threadRuns, othersRuns],
   );
   const busyRuns = useMemo(
     () => threadRuns.filter((run) => isWorkingStatus(run.status)),
@@ -696,8 +726,13 @@ function Thread() {
   const stoppable = inGroup
     ? threadRuns.some((run) => isActiveStatus(run.status))
     : isActiveStatus(currentBotStatus);
-  // A send without a mention goes to the bot, or to a group's first member.
-  const sendsTo = inGroup ? snap?.members?.[0]?.botId : botId;
+  // A send without a mention goes to the bot, or to a group's lead.
+  const sendsTo = inGroup
+    ? groupLeadBotId(
+        (snap?.members ?? []).map((member) => ({ id: member.botId })),
+        currentGroup?.leadBotId,
+      )
+    : botId;
   const answerName =
     sendsTo && answersPendingQuestion(view, sendsTo, threadRuns)
       ? (mentionBots.find((bot) => bot.id === sendsTo)?.name ??
@@ -739,11 +774,22 @@ function Thread() {
     }
   }, [botId, groupId, router]);
 
+  // Who is in a group, its lead and its creator decide what the thread offers, so they follow
+  // the group as it changes, not as it was when the thread opened.
+  const groupsRefreshGeneration = useRef(0);
+  const refreshGroups = useCallback(async () => {
+    const generation = ++groupsRefreshGeneration.current;
+    const groups = await listGroups().catch(() => null);
+    // Keep the last known groups if a refresh fails or a newer one has started.
+    if (groups && generation === groupsRefreshGeneration.current) setMentionGroups(groups);
+  }, []);
+  const knownPeople = useRef<ReadonlySet<string>>(new Set());
+  knownPeople.current = new Set(
+    mentionGroups.flatMap((group) => group.people.map((person) => person.userId)),
+  );
+
   useEffect(() => {
     void refreshMentionBots();
-    void rpc<MobileGroup[]>("groups/list")
-      .then(setMentionGroups)
-      .catch(() => setMentionGroups([]));
   }, [refreshMentionBots]);
 
   useEffect(() => {
@@ -1148,11 +1194,12 @@ function Thread() {
         }).catch(() => undefined);
       }
       void refreshMentionBots();
+      void refreshGroups();
       markReadIfVisible();
       return () => {
         void setOpenNotificationThread(null).catch(() => undefined);
       };
-    }, [botId, markReadIfVisible, notificationThreadId, refreshMentionBots]),
+    }, [botId, markReadIfVisible, notificationThreadId, refreshMentionBots, refreshGroups]),
   );
 
   useEffect(() => {
@@ -1217,6 +1264,19 @@ function Thread() {
               setSnap((prev) => applyMobileThreadEvent(prev, event));
               if (event.type === "bot.updated") {
                 void refreshMentionBots();
+                void refreshGroups();
+              }
+              // Someone writing who was not in the group when it loaded has joined it since.
+              if (
+                groupId &&
+                appended.some(
+                  (entry) =>
+                    entry.type === "user.message" &&
+                    entry.payload.authorId !== undefined &&
+                    !knownPeople.current.has(entry.payload.authorId),
+                )
+              ) {
+                void refreshGroups();
               }
               if (botWordsOf(event).length > 0) {
                 readVisibleTarget.current = null;
@@ -1225,6 +1285,7 @@ function Thread() {
               if (isRunTerminalEvent(event)) {
                 if (botId) noteBotRunEnded(botId);
                 void refreshMentionBots();
+                if (groupId) void refreshGroups();
                 if (!jumpScrollTarget.current && !expandedHistoryThread.current) {
                   void refresh().catch(() => undefined);
                 }
@@ -1246,7 +1307,7 @@ function Thread() {
     return () => {
       abort.abort();
     };
-  }, [botId, groupId, markReadIfVisible, refreshMentionBots]);
+  }, [botId, groupId, markReadIfVisible, refreshMentionBots, refreshGroups]);
 
   useEffect(() => {
     if (!botId && !groupId) return;
@@ -1768,13 +1829,6 @@ function Thread() {
     syncSpawnBotEdit(answerableAskMessageId);
     if (threadKey) syncDraftEdit(threadKey, answerableAskMessageId);
   }, [threadKey, answerableAskMessageId]);
-  // Only the run's owner may edit a Create bot card; until this loads, nobody gets Edit.
-  const [viewerUserId, setViewerUserId] = useState<string>();
-  useEffect(() => {
-    rpc<MobileMe>("me")
-      .then((me) => setViewerUserId(me.userId))
-      .catch(() => undefined);
-  }, []);
   const listExtraData = useMemo(
     () => ({ answerableAskMessageId, viewerUserId }),
     [answerableAskMessageId, viewerUserId],
@@ -1919,7 +1973,7 @@ function Thread() {
               },
             ]
           : []),
-        ...(message.role === "user"
+        ...(message.role === "user" && !sharedHistory
           ? [
               {
                 name: "rewind",
@@ -1951,7 +2005,8 @@ function Thread() {
               },
             ]
           : []),
-        ...(linkPreviewCardOf(message)
+        // A link's preview is its author's to remove.
+        ...(linkPreviewCardOf(message) && !messagePerson(message)
           ? [
               {
                 name: "removeLinkPreview",
@@ -2025,13 +2080,14 @@ function Thread() {
 
   // One props object per message whose handlers reach the latest render, so
   // `MessageBubble` can skip re-rendering while the thread scrolls or the
-  // composer changes. Rebuilt with the language: its labels are translated.
+  // composer changes. Rebuilt with the language, its labels being translated, and with who reads a
+  // group and who is in it, which decide its actions.
   const latestActions = useRef({ messageActions, showMessageActions });
   latestActions.current = { messageActions, showMessageActions };
   const actionPropsCache = useMemo(
     () =>
       new WeakMap<MobileMessage, { messageId: EntryId | undefined; props: MessageActionProps }>(),
-    [locale],
+    [locale, viewerUserId, creatorId, sharedHistory],
   );
   function messageActionProps(
     message: MobileMessage,
@@ -2066,6 +2122,19 @@ function Thread() {
       name: member?.name ?? bot?.name ?? displayName ?? t("Bot"),
       shapeSeed: member?.shapeSeed ?? bot?.shapeSeed,
     };
+  }
+
+  /** Another person of the group behind a message; your own messages and bots' have none. */
+  function messagePerson(message: MobileMessage): GroupPerson | undefined {
+    const authorId = message.role === "user" ? (message.authorId ?? creatorId) : undefined;
+    if (!authorId || !viewerUserId || authorId === viewerUserId) return undefined;
+    return (
+      snap?.people?.find((candidate) => candidate.userId === authorId) ?? {
+        userId: authorId,
+        name: "",
+        image: null,
+      }
+    );
   }
 
   function gapBeforeRow(row: ThreadRow, previous: ThreadRow | undefined): number {
@@ -2173,6 +2242,9 @@ function Thread() {
     const chrome: MessageChrome = isAsideOnlyMessage(drawnBlocks) ? "aside" : "row";
     const authorBotId = message.role === "bot" ? message.botId : botId;
     const author = messageBot(authorBotId);
+    const person = messagePerson(message);
+    // Your own words sit on the trailing edge; a bot's and another person's on the leading one.
+    const mine = message.role === "user" && !person;
     const authorStatus = isLiveMessage(message)
       ? (snap?.activeRuns?.find((run) => run.botId === authorBotId)?.status ??
         (snap?.run?.botId === authorBotId ? snap?.run?.status : currentBotStatus))
@@ -2215,7 +2287,8 @@ function Thread() {
             stack.front.item.id !== message.id &&
             newMessageIds.has(stack.front.item.id),
         )}
-        authorName={message.role === "user" ? t("You") : author.name}
+        authorName={person?.name ?? (message.role === "user" ? t("You") : author.name)}
+        incoming={Boolean(person)}
         // The card shows the link, so the bubble does not repeat the line that is only that link.
         previewedUrl={previewCard && !cardReplacesBubbleView ? previewCard.url : undefined}
         onOpenSession={openStepSession}
@@ -2232,7 +2305,7 @@ function Thread() {
           card={previewCard}
           target={groupId ? { groupId } : { botId: botId ?? snap?.members?.[0]?.botId ?? "" }}
           mono={message.role === "user" || !inGroup}
-          align={message.role === "user" ? "end" : "start"}
+          align={mine ? "end" : "start"}
           onLongPress={actionProps.onLongPress}
           accessibilityActions={actionProps.accessibilityActions}
           onAccessibilityAction={actionProps.onAccessibilityAction}
@@ -2243,7 +2316,7 @@ function Thread() {
       previewNode ? (
         cardReplacesBubbleView ? (
           // The card takes the bubble's place: the quote it carried stays above it, its skill lines under it.
-          <View style={{ alignItems: message.role === "user" ? "flex-end" : "flex-start" }}>
+          <View style={{ alignItems: mine ? "flex-end" : "flex-start" }}>
             <ReplyQuote message={message} replyPreview={replyPreviewNode} />
             {previewNode}
             <CardSkillLines message={message} isNew={isNew} />
@@ -2257,6 +2330,48 @@ function Thread() {
       ) : (
         content
       );
+    // The person's bubbles: theirs on the trailing edge, another person's under their name.
+    const personBubbles =
+      chrome === "row" && message.role === "user"
+        ? withPreview(
+            stack ? (
+              // The bubble's hold would race the stack's own long press, so the words and the
+              // stack are two bubbles: the words keep the hold on the host's actions, the stack
+              // keeps the entrance and its own long press on the newest message's.
+              <View style={{ gap: 8, alignItems: mine ? "flex-end" : "flex-start" }}>
+                {message.blocks.some((block) => block.kind !== "image") || replyTo ? (
+                  <AnimatedMessageBubble
+                    variant="user"
+                    isNew={isNew}
+                    onLongPress={actionProps.onLongPress}
+                    accessibilityActions={actionProps.accessibilityActions}
+                    onAccessibilityAction={actionProps.onAccessibilityAction}
+                  >
+                    {bubblePart("words")}
+                  </AnimatedMessageBubble>
+                ) : null}
+                <AnimatedMessageBubble
+                  variant="user"
+                  isNew={isNew}
+                  entranceOnly
+                  onLongPress={frontActionProps.onLongPress}
+                >
+                  {bubblePart("images")}
+                </AnimatedMessageBubble>
+              </View>
+            ) : (
+              <AnimatedMessageBubble
+                variant="user"
+                isNew={isNew}
+                onLongPress={actionProps.onLongPress}
+                accessibilityActions={actionProps.accessibilityActions}
+                onAccessibilityAction={actionProps.onAccessibilityAction}
+              >
+                {bubble}
+              </AnimatedMessageBubble>
+            ),
+          )
+        : null;
     return (
       <>
         {chrome === "row" && message.role === "bot" ? (
@@ -2311,45 +2426,23 @@ function Thread() {
               ),
             )}
           </MessageRow>
+        ) : chrome === "row" && person ? (
+          <MessageRow
+            avatar={
+              <UserAvatar
+                initials={userInitials(person.name)}
+                image={person.image}
+                size={sizes.message}
+              />
+            }
+            author={person.name}
+            showAuthor={row.firstOfGroup}
+            showAvatar={row.lastOfGroup}
+          >
+            {personBubbles}
+          </MessageRow>
         ) : chrome === "row" ? (
-          withPreview(
-            stack ? (
-              // The bubble's hold would race the stack's own long press, so the words and the
-              // stack are two bubbles: the words keep the hold on the host's actions, the stack
-              // keeps the entrance and its own long press on the newest message's.
-              <View style={{ gap: 8, alignItems: "flex-end" }}>
-                {message.blocks.some((block) => block.kind !== "image") || replyTo ? (
-                  <AnimatedMessageBubble
-                    variant="user"
-                    isNew={isNew}
-                    onLongPress={actionProps.onLongPress}
-                    accessibilityActions={actionProps.accessibilityActions}
-                    onAccessibilityAction={actionProps.onAccessibilityAction}
-                  >
-                    {bubblePart("words")}
-                  </AnimatedMessageBubble>
-                ) : null}
-                <AnimatedMessageBubble
-                  variant="user"
-                  isNew={isNew}
-                  entranceOnly
-                  onLongPress={frontActionProps.onLongPress}
-                >
-                  {bubblePart("images")}
-                </AnimatedMessageBubble>
-              </View>
-            ) : (
-              <AnimatedMessageBubble
-                variant="user"
-                isNew={isNew}
-                onLongPress={actionProps.onLongPress}
-                accessibilityActions={actionProps.accessibilityActions}
-                onAccessibilityAction={actionProps.onAccessibilityAction}
-              >
-                {bubble}
-              </AnimatedMessageBubble>
-            ),
-          )
+          personBubbles
         ) : (
           <View>{bubble}</View>
         )}
@@ -2360,9 +2453,8 @@ function Thread() {
               flexWrap: "wrap",
               gap: 4,
               marginTop: 6,
-              marginStart:
-                chrome === "row" && message.role === "bot" && inGroup ? FRAMED_INDENT : 0,
-              justifyContent: message.role === "user" ? "flex-end" : "flex-start",
+              marginStart: chrome === "row" && !mine && inGroup ? FRAMED_INDENT : 0,
+              justifyContent: mine ? "flex-end" : "flex-start",
             }}
           >
             {messageReactions.map(([emoji, count]) => (
@@ -3521,6 +3613,7 @@ const MessageBubble = memo(function MessageBubble({
   imageArrival,
   imagePart,
   authorName,
+  incoming = false,
   openImageViewer,
   previewedUrl,
   onOpenSession,
@@ -3550,6 +3643,8 @@ const MessageBubble = memo(function MessageBubble({
   imagePart?: "words" | "images";
   /** Who sent it, as assistive tech names the images. */
   authorName: string;
+  /** Another person's message in a group, drawn on the leading edge under their name. */
+  incoming?: boolean;
   /** Opens the image viewer from inside a native modal, where a link would dismiss the modal. */
   openImageViewer?: (payload: ImageViewerPayload) => void;
   /** The link its card shows: a line that is only this link is left out of the text drawn. */
@@ -3845,8 +3940,8 @@ const MessageBubble = memo(function MessageBubble({
         style={{
           maxWidth: "100%",
           gap: 8,
-          alignSelf: message.role === "user" ? "flex-end" : "flex-start",
-          alignItems: message.role === "user" ? "flex-end" : "flex-start",
+          alignSelf: message.role === "user" && !incoming ? "flex-end" : "flex-start",
+          alignItems: message.role === "user" && !incoming ? "flex-end" : "flex-start",
         }}
       >
         {images.length > 0 && words && imagePart !== "images" ? (
@@ -3856,7 +3951,7 @@ const MessageBubble = memo(function MessageBubble({
           <ImageStack
             images={images}
             target={artifactTarget}
-            align={message.role === "user" ? "end" : "start"}
+            align={message.role === "user" && !incoming ? "end" : "start"}
             mono={mono || message.role === "user"}
             author={authorName}
             arrival={imageArrival ?? false}
@@ -3959,6 +4054,7 @@ const MessageBubble = memo(function MessageBubble({
             replyPreview={index === firstContent ? replyPreview : undefined}
             actionProps={actionProps}
             mono={mono}
+            incoming={incoming}
             meta={index === lastContent ? metaLines : undefined}
             mentions={mentions}
           />
@@ -4714,6 +4810,7 @@ function MessageText({
   replyPreview,
   actionProps,
   mono = false,
+  incoming = false,
   meta,
   mentions,
 }: {
@@ -4721,6 +4818,8 @@ function MessageText({
   replyPreview?: MobileMessage;
   actionProps: MessageActionProps;
   mono?: boolean;
+  /** Another person's words: their bubble on the leading edge. */
+  incoming?: boolean;
   /** The skill lines under its last bubble. */
   meta?: readonly BotBubbleMeta[];
   /** The whole message's link mentions: a segment's blocks may not carry them. */
@@ -4738,9 +4837,10 @@ function MessageText({
   // still live on the bubble itself.
   if (message.role === "user") {
     return (
-      <View style={{ alignItems: "flex-end" }}>
+      <View style={{ alignItems: incoming ? "flex-start" : "flex-end" }}>
         {parent}
         <UserBubble
+          style={incoming ? { alignSelf: "flex-start" } : undefined}
           accessibilityActions={actionProps.accessibilityActions}
           onAccessibilityAction={actionProps.onAccessibilityAction}
         >

@@ -359,6 +359,8 @@ export const appContract = {
     archive: oc.input(groupId).output(z.object({ ok: z.literal(true) })),
     restore: oc.input(groupId).output(z.object({ ok: z.literal(true) })),
     remove: oc.input(groupId).output(z.object({ ok: z.literal(true) })),
+    /** Someone other than its creator leaves a group. */
+    leave: oc.input(groupId).output(z.object({ ok: z.literal(true) })),
   },
   botSections: {
     list: oc.output(z.array(BotSectionSchema)),
@@ -391,8 +393,9 @@ export const appContract = {
       .output(eventIterator(ProductEventSchema)),
     send: oc.input(threadSendInput).output(
       z.object({
-        taskId: Id,
-        runId: Id,
+        /** Absent when no bot answers: a group message naming no bot its sender can use. */
+        taskId: Id.optional(),
+        runId: Id.optional(),
         seq: z.number().int(),
         runIds: z.array(Id).optional(),
       }),

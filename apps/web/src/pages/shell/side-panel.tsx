@@ -21,6 +21,7 @@ import { TeachRecordingChrome, TeachStopButton } from "../../components/teach/Te
 import { desktopBridge } from "../../lib/desktop";
 import { rpc } from "../../lib/rpc";
 import { BotPage } from "../bot-page/BotPage";
+import type { GroupInput } from "../GroupPanel";
 import { CreateGroupForm, GroupSettings } from "../GroupPanel";
 import { WindowChrome } from "../WindowChrome";
 import type { BotCommands } from "./bot-commands";
@@ -40,6 +41,7 @@ export function SidePanel({
   onBotPage,
   commands,
   userId,
+  spaceId,
   pageBot,
   active,
   activeGroup,
@@ -71,6 +73,8 @@ export function SidePanel({
   onBotPage: (view: BotPageView) => void;
   commands: BotCommands;
   userId: string;
+  /** The open Space, whose people a new group can take in. */
+  spaceId: string | undefined;
   /** The bot the bot page shows: the thread's, or an archived one opened from the sidebar. */
   pageBot: Bot | undefined;
   active: Bot | undefined;
@@ -94,7 +98,7 @@ export function SidePanel({
   groups: Group[];
   setGroups: Dispatch<SetStateAction<Group[]>>;
   navigate: (path: string, options?: { replace?: boolean }) => void;
-  createGroup: (input: { name: string; description: string; botIds: string[] }) => Promise<void>;
+  createGroup: (input: GroupInput) => Promise<void>;
   createBot: (input: {
     name: string;
     title: string;
@@ -109,6 +113,14 @@ export function SidePanel({
     [onBotPage, botPage.tab],
   );
   const closePanel = useCallback(() => setPanel(null), [setPanel]);
+  /** The group is gone for this person, deleted or left: open their next thread. */
+  async function closeGroup(groupId: string) {
+    const remainingGroups = groups.filter((group) => group.id !== groupId);
+    setGroups(remainingGroups);
+    setPanel(null);
+    navigate(firstThreadRoute(bots, remainingGroups), { replace: true });
+    await refreshBots().catch(() => undefined);
+  }
   usePanelEscape({
     enabled: open && escapeCloses,
     editorOpen: panel === "bot" && botPage.detail !== null,
@@ -174,6 +186,8 @@ export function SidePanel({
                 {panel === "create-group" ? (
                   <CreateGroupForm
                     bots={bots}
+                    spaceId={spaceId}
+                    userId={userId}
                     onCancel={() => setPanel(null)}
                     onCreate={(input) => createGroup(input)}
                   />
@@ -183,6 +197,7 @@ export function SidePanel({
                     key={activeGroup.id}
                     group={activeGroup}
                     bots={bots}
+                    userId={userId}
                     onSave={async (input) => {
                       const updated = await rpc.groups.update({
                         groupId: activeGroup.id,
@@ -198,11 +213,11 @@ export function SidePanel({
                     }}
                     onRemove={async () => {
                       await rpc.groups.remove({ groupId: activeGroup.id });
-                      const remainingGroups = groups.filter((group) => group.id !== activeGroup.id);
-                      setGroups(remainingGroups);
-                      setPanel(null);
-                      navigate(firstThreadRoute(bots, remainingGroups), { replace: true });
-                      await refreshBots().catch(() => undefined);
+                      await closeGroup(activeGroup.id);
+                    }}
+                    onLeave={async () => {
+                      await rpc.groups.leave({ groupId: activeGroup.id });
+                      await closeGroup(activeGroup.id);
                     }}
                   />
                 ) : null}

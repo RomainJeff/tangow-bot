@@ -9,6 +9,8 @@ export const MESSAGE_GROUP_WINDOW_MS = 5 * 60 * 1000;
 export type GroupableMessage = Pick<ThreadMessage, "role" | "blocks" | "replyToMessageId"> & {
   botId?: ThreadMessage["botId"];
   createdAt?: ThreadMessage["createdAt"];
+  /** The person who wrote a user message in a group; absent, the thread's own person. */
+  authorId?: string;
 };
 
 /**
@@ -105,7 +107,10 @@ function continuesGroup(
     message.botId === previous.botId &&
     isNarrationMessage(previous) &&
     isNarrationMessage(message);
-  const bothUserNarration = isUserNarrationMessage(previous) && isUserNarrationMessage(message);
+  const bothUserNarration =
+    isUserNarrationMessage(previous) &&
+    isUserNarrationMessage(message) &&
+    previous.authorId === message.authorId;
   if (!bothBotNarration && !bothUserNarration) return false;
 
   return withinGroupWindow(previous.createdAt, message.createdAt, windowMs);
@@ -139,7 +144,7 @@ export function continuesImageStack(
   const sameAuthor =
     message.role === "bot"
       ? previous.role === "bot" && message.botId != null && message.botId === previous.botId
-      : previous.role === "user";
+      : previous.role === "user" && previous.authorId === message.authorId;
   return sameAuthor && withinGroupWindow(previous.createdAt, message.createdAt, windowMs);
 }
 
@@ -164,6 +169,7 @@ export function groupableItem(item: ThreadItem): GroupableMessage {
         blocks: item.blocks,
         createdAt: item.ts,
         replyToMessageId: item.replyTo?.entryId,
+        authorId: item.authorId,
       }
     : { role: "bot", blocks: item.blocks, createdAt: item.ts, botId: item.botId };
 }

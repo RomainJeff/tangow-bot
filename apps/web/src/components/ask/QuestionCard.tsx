@@ -22,12 +22,15 @@ export function QuestionCard({
   form,
   messageId,
   canAnswer,
+  waitingOn,
   onAnswer,
 }: {
   block: AskCardBlock;
   form: AskForm;
   messageId: string;
   canAnswer: boolean;
+  /** The person who answers it instead, when it waits on someone else's run in a group. */
+  waitingOn?: string;
   onAnswer: (wire: string) => Promise<void>;
 }) {
   const { t } = useLingui();
@@ -144,6 +147,7 @@ export function QuestionCard({
     return shell(
       <AskSettled
         view={view.settled}
+        waitingOn={waitingOn}
         className={
           openedHere && !leaving.current
             ? "animate-in fade-in duration-(--duration-arrive)"

@@ -26,6 +26,7 @@ export type SidebarArchivedProps = {
   onOpenArchivedBot: (botId: string) => void;
   onRestoreBot: (botId: string) => void;
   setDeleteGroupTarget: Dispatch<SetStateAction<Group | null>>;
+  setLeaveGroupTarget: Dispatch<SetStateAction<Group | null>>;
   initials: string;
   userImage: string | null;
 };
@@ -40,6 +41,7 @@ export function SidebarArchived({
   onOpenArchivedBot,
   onRestoreBot,
   setDeleteGroupTarget,
+  setLeaveGroupTarget,
   initials,
   userImage,
 }: SidebarArchivedProps) {
@@ -109,24 +111,38 @@ export function SidebarArchived({
               <span className="min-w-0 flex-1 truncate text-capsule text-foreground/75" dir="auto">
                 {group.name}
               </span>
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() =>
-                  void rpc.groups.restore({ groupId: group.id }).then(() => refreshBots(true))
-                }
-              >
-                <Trans>Restore</Trans>
-              </Button>
-              <Button
-                variant="ghost"
-                size="xs"
-                className="text-destructive hover:text-destructive"
-                aria-label={t`Delete ${group.name}`}
-                onClick={() => setDeleteGroupTarget(group)}
-              >
-                <Trans>Delete</Trans>
-              </Button>
+              {group.canManage ? (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() =>
+                      void rpc.groups.restore({ groupId: group.id }).then(() => refreshBots(true))
+                    }
+                  >
+                    <Trans>Restore</Trans>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    className="text-destructive hover:text-destructive"
+                    aria-label={t`Delete ${group.name}`}
+                    onClick={() => setDeleteGroupTarget(group)}
+                  >
+                    <Trans>Delete</Trans>
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="text-destructive hover:text-destructive"
+                  aria-label={t`Leave ${group.name}`}
+                  onClick={() => setLeaveGroupTarget(group)}
+                >
+                  <Trans>Leave</Trans>
+                </Button>
+              )}
             </div>
           ))}
         </>

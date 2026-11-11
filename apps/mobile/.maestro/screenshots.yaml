@@ -230,11 +230,19 @@ tags:
 - tapOn: "Open in full screen"
 - takeScreenshot: "19b-widget-full-screen"
 - tapOn: "Close preview"
+# The teammate's message sits under her name, before the user's own exchange.
+- scrollUntilVisible:
+    element: "I'll take the press quote."
+    direction: UP
+- assertVisible: "Grace Hopper"
+- takeScreenshot: "19c-group-thread-people"
 
 - openLink: "rakazo:///group-settings?groupId=${RAKAZO_SCREENSHOT_GROUP_ID}"
 - extendedWaitUntil:
     visible: "Delete group"
     timeout: 10000
+- assertVisible: "Grace Hopper"
+- assertVisible: "Lead bot"
 - takeScreenshot: "20-group-settings"
 
 - openLink: "rakazo:///bot-routine?botId=${RAKAZO_SCREENSHOT_BOT_ID}&routineId=${RAKAZO_SCREENSHOT_ROUTINE_ID}"
@@ -314,6 +322,19 @@ tags:
     visible: "Team memory"
     timeout: 10000
 - takeScreenshot: "34-team-memory"
+
+# A group the teammate created with the user: who is in it, read-only, and Leave group.
+- openLink: "rakazo:///group-settings?groupId=${RAKAZO_SCREENSHOT_MEMBER_GROUP_ID}"
+# iOS asks before opening its own link.
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Leave group"
+    timeout: 10000
+- assertVisible: "Grace Hopper"
+- assertNotVisible: "Delete group"
+- takeScreenshot: "35-group-settings-member"
 
 # Verify saved appearance changes on already-mounted screens and modal routes.
 - openLink: "rakazo:///account"

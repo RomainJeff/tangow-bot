@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import { scheduleFocusPrompt } from "../../lib/focus-prompt";
 import { rpc } from "../../lib/rpc";
+import type { GroupInput } from "../GroupPanel";
 import type { Panel } from "./layout";
 import type { Roster } from "./use-roster";
 
@@ -45,7 +46,7 @@ export function useCreateChat({
 
   useEffect(() => () => cancelFocusPrompt(), []);
 
-  async function createGroup(input: { name: string; description: string; botIds: string[] }) {
+  async function createGroup(input: GroupInput) {
     const group = await rpc.groups.create(input);
     setGroups((current) =>
       current.some((item) => item.id === group.id) ? current : [group, ...current],

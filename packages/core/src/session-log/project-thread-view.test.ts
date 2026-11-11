@@ -363,6 +363,24 @@ describe("projectThreadView cards", () => {
     expect(projectThreadView(chain.slice(3)).rows).toEqual([]);
   });
 
+  it("in a group, waits on the viewer's own card while another person's newer card stays open", () => {
+    const ask = (runId: string, question: string) => ({
+      botId: "bot_ada",
+      runId,
+      type: "assistant.ask",
+      payload: { block: { kind: "ask", text: question } },
+    });
+    const chain = linkEntries("two", [
+      { ...started, runId: "run_mine" },
+      ask("run_mine", "Which day?"),
+      { ...started, runId: "run_theirs" },
+      ask("run_theirs", "Which city?"),
+    ]);
+    const view = projectThreadView(chain, { othersRun: (runId) => runId === "run_theirs" });
+    expect(view.waiting).toEqual({ itemId: "two-1", entryId: "two-1", runId: "run_mine" });
+    expect(view.open.map((card) => card.runId)).toEqual(["run_mine", "run_theirs"]);
+  });
+
   it("shows a multi-question card's answers given in the card", () => {
     const ask = {
       kind: "ask",

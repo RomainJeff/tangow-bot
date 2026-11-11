@@ -279,6 +279,7 @@ describe("destroyBot", () => {
           findMany: vi.fn().mockResolvedValue([]),
           deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
         },
+        chatGroupMember: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
         artifact: { findMany: findArtifacts, deleteMany: deleteArtifacts },
         computerExecutionLease: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
         computer: { updateMany: releaseComputers },
@@ -357,8 +358,9 @@ describe("destroyBot", () => {
     expect(removeArtifact).toHaveBeenCalledWith("stored-artifact", context);
   });
 
-  it("dissolves groups left with no active members after deleting the bot", async () => {
+  it("dissolves its owner's groups left with no active members, and archives others'", async () => {
     const deleteGroups = vi.fn().mockResolvedValue({ count: 1 });
+    const archiveGroups = vi.fn().mockResolvedValue({ count: 1 });
     const deleteMemberships = vi.fn().mockResolvedValue({ count: 1 });
     const cancel = vi.fn().mockResolvedValue(undefined);
     const releaseScreen = vi.fn().mockResolvedValue(undefined);
@@ -368,7 +370,10 @@ describe("destroyBot", () => {
     const deleteExecutionLeases = vi.fn().mockResolvedValue({ count: 1 });
     const expireExecutionLeases = vi.fn().mockResolvedValue({ count: 1 });
     const clearExecution = vi.fn().mockResolvedValue({ count: 1 });
-    const queryRaw = vi.fn().mockResolvedValue([{ id: "group-1" }, { id: "group-2" }]);
+    const queryRaw = vi
+      .fn()
+      .mockResolvedValueOnce([{ id: "bot-1", userId: "user-1", webhookSecretId: null }])
+      .mockResolvedValue([{ id: "group-1" }, { id: "group-2" }]);
     const findRuns = vi
       .fn()
       .mockResolvedValueOnce([
@@ -389,11 +394,13 @@ describe("destroyBot", () => {
           findMany: vi.fn().mockResolvedValue([
             {
               id: "group-1",
+              userId: "user-1",
               thread: { id: "thread-1" },
               members: [{ botId: "bot-1", bot: { archivedAt: null } }],
             },
             {
               id: "group-2",
+              userId: "user-1",
               thread: { id: "thread-2" },
               members: [
                 { botId: "bot-1", bot: { archivedAt: null } },
@@ -403,15 +410,24 @@ describe("destroyBot", () => {
             },
             {
               id: "group-3",
+              userId: "user-1",
               thread: { id: "thread-3" },
               members: [
                 { botId: "bot-1", bot: { archivedAt: null } },
                 { botId: "bot-2", bot: { archivedAt: new Date() } },
               ],
             },
+            {
+              id: "group-4",
+              userId: "user-2",
+              thread: { id: "thread-4" },
+              members: [{ botId: "bot-1", bot: { archivedAt: null } }],
+            },
           ]),
           deleteMany: deleteGroups,
+          updateMany: archiveGroups,
         },
+        chatGroupPerson: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
         run: {
           findMany: findRuns,
           updateMany: cancelRuns,
@@ -470,6 +486,10 @@ describe("destroyBot", () => {
     );
 
     expect(deleteGroups).toHaveBeenCalledWith({ where: { id: { in: ["group-1", "group-3"] } } });
+    expect(archiveGroups).toHaveBeenCalledWith({
+      where: { id: { in: ["group-4"] }, archivedAt: null },
+      data: { archivedAt: expect.any(Date) },
+    });
     expect(deleteMemberships).toHaveBeenCalledWith({ where: { botId: "bot-1" } });
     expect(deleteMemberships.mock.invocationCallOrder[0]!).toBeLessThan(
       deleteGroups.mock.invocationCallOrder[0]!,
@@ -480,7 +500,7 @@ describe("destroyBot", () => {
     expect(findRuns).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          threadId: { in: ["thread-1", "thread-3"] },
+          threadId: { in: ["thread-1", "thread-3", "thread-4"] },
         }),
       }),
     );
@@ -539,6 +559,7 @@ describe("destroyBot", () => {
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([]),
       chatGroup: { findMany: vi.fn().mockResolvedValue([]) },
+      chatGroupMember: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
       artifact: {
         findMany: vi.fn().mockResolvedValue([]),
         deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
