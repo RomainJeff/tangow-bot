@@ -112,6 +112,7 @@ import {
   AttachmentValidationError,
   containsSecret,
   expandSkillReferencesInPrompt,
+  groupLeadBotId,
   hasMixedOneShotSchedule,
   isOneShotRoutineCrons,
   MODEL_PROVIDER_NOT_CONNECTED_MESSAGE,
@@ -168,6 +169,7 @@ import {
   removeSpaceMember,
   renewSpaceDeletionClaim,
   revokeSpaceInvitation,
+  SharedGroupHistoryError,
   SPACE_DELETION_CLAIM_TIMEOUT_MS,
   SpaceDeletionInProgressError,
   SpaceInvitationUnavailableError,
@@ -182,6 +184,7 @@ import {
   sharedBotThread,
   threadEventSeq,
   touchGroupUpdatedAt,
+  usableBotIds,
   usageBreakdown,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -1810,13 +1813,15 @@ export function createRouter(deps: RouterDeps) {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
         const contextBotId = target.kind === "bot" ? target.botId : target.memberBotIds[0];
         if (!contextBotId) throw new IsolationError();
-        const { cancelledRunIds, historyGeneration } = await deps.events.clearThread({
-          spaceId: context.actor.spaceId,
-          threadId: target.threadId,
-          botId: contextBotId,
-          userId: context.actor.userId,
-          ...(target.kind === "group" ? { groupId: target.groupId } : {}),
-        });
+        const { cancelledRunIds, historyGeneration } = await deps.events
+          .clearThread({
+            spaceId: context.actor.spaceId,
+            threadId: target.threadId,
+            botId: contextBotId,
+            userId: context.actor.userId,
+            ...(target.kind === "group" ? { groupId: target.groupId } : {}),
+          })
+          .catch(refuseSharedGroupHistory);
         await Promise.all(
           cancelledRunIds.map((runId) => deps.jobs.cancel(runJobKey(runId)).catch(() => undefined)),
         );
@@ -1842,14 +1847,16 @@ export function createRouter(deps: RouterDeps) {
         if (message.type !== "user.message") {
           throw new ORPCError("BAD_REQUEST", { message: "Only your own messages can be edited" });
         }
-        const rewound = await deps.events.rewindThread({
-          spaceId: context.actor.spaceId,
-          threadId: target.threadId,
-          botId: contextBotId,
-          userId: context.actor.userId,
-          messageId: input.messageId,
-          ...(target.kind === "group" ? { groupId: target.groupId } : {}),
-        });
+        const rewound = await deps.events
+          .rewindThread({
+            spaceId: context.actor.spaceId,
+            threadId: target.threadId,
+            botId: contextBotId,
+            userId: context.actor.userId,
+            messageId: input.messageId,
+            ...(target.kind === "group" ? { groupId: target.groupId } : {}),
+          })
+          .catch(refuseSharedGroupHistory);
         if (!rewound) throw new ORPCError("NOT_FOUND", { message: "Message not found" });
         await Promise.all(
           rewound.cancelledRunIds.map((runId) =>
@@ -1897,9 +1904,15 @@ export function createRouter(deps: RouterDeps) {
               archivedAt: null,
               thread: { id: target.threadId },
             },
-            include: { members: { orderBy: { createdAt: "asc" } } },
+            include: {
+              members: { where: { bot: { archivedAt: null } }, orderBy: { createdAt: "asc" } },
+            },
           });
-          const botId = group?.members[0]?.botId;
+          if (!group) throw new IsolationError();
+          const botId = groupLeadBotId(
+            group.members.map((member) => ({ id: member.botId })),
+            group.leadBotId,
+          );
           if (!botId) throw new IsolationError();
           const blocks = buildFollowUpBlocks(input.text, { linkPreview: input.linkPreview });
           const message = await createThreadMessageInTransaction(tx, {
@@ -1909,10 +1922,23 @@ export function createRouter(deps: RouterDeps) {
             feedBotId: botId,
             authorId: context.actor.userId,
           });
+          // The lead runs as the sender: a lead they cannot use leaves the message unanswered.
+          const usable = await usableBotIds(tx, context.actor.userId, context.actor.spaceId, [
+            botId,
+          ]);
+          if (!usable.has(botId)) {
+            await touchGroupUpdatedAt(tx, target.groupId);
+            return {
+              runId: undefined,
+              eventSeq: await threadEventSeq(tx, target.threadId),
+              messageId: message.id,
+            };
+          }
           const active = await tx.run.findFirst({
             where: {
               threadId: target.threadId,
               botId,
+              userId: context.actor.userId,
               status: { in: [...ACTIVE_RUN_STATUSES] },
               ...conversationRunFilter,
             },
@@ -1973,6 +1999,13 @@ export function createRouter(deps: RouterDeps) {
       }),
       answer: authed.threads.answer.handler(async ({ context, input }) => {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
+        // In a group, a run's cards are its person's: nobody else answers them.
+        if (target.kind === "group") {
+          const own = await deps.prisma.run.count({
+            where: { id: input.runId, threadId: target.threadId, userId: context.actor.userId },
+          });
+          if (own === 0) throw new ORPCError("FORBIDDEN");
+        }
         const answered = await deps.events
           .answerRunInput({
             spaceId: context.actor.spaceId,
@@ -5423,6 +5456,12 @@ async function computerStatus(
  * The bot whose computer the actor reaches: their own, or a bot shared with them (`memberId`),
  * whose computer they reach only for their own run's screen. Everything else stays the owner's.
  */
+/** Clearing or rewinding a group of several people is refused: its history is theirs too. */
+function refuseSharedGroupHistory(error: unknown): never {
+  if (error instanceof SharedGroupHistoryError) throw new ORPCError("FORBIDDEN");
+  throw error;
+}
+
 async function computerBot(deps: RouterDeps, actor: Actor, botId: string) {
   const owned = await createRepos(deps.prisma)
     .getBot(actor, botId)
@@ -5505,7 +5544,8 @@ async function memberComputerRun(
       id: lease.runId,
       botId: bot.id,
       userId: memberId,
-      threadId: bot.thread.id,
+      // Their own thread with the bot, or a group they are in.
+      OR: [{ threadId: bot.thread.id }, { thread: { group: groupMembershipFilter(memberId) } }],
       status: { in: [...ACTIVE_RUN_STATUSES] },
     },
     select: { id: true, status: true },

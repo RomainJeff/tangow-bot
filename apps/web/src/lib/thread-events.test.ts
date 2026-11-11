@@ -305,7 +305,14 @@ describe("thread event reduction", () => {
       botId: undefined,
       groupId: "group-1",
       members: [
-        { botId: "bot-member", name: "Member", color: "#8B5CF6", shapeSeed: null, status: "idle" },
+        {
+          botId: "bot-member",
+          name: "Member",
+          color: "#8B5CF6",
+          shapeSeed: null,
+          status: "idle",
+          canUse: true,
+        },
       ],
     };
 

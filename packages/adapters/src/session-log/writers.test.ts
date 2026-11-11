@@ -1982,6 +1982,7 @@ describe("session log writers", () => {
                 blocks: [{ kind: "text", text: reply }],
                 replyTo: { entryId: target },
                 source: "card",
+                authorId: USER,
               },
             },
           ]);
@@ -2007,6 +2008,7 @@ describe("session log writers", () => {
               blocks: [{ kind: "text", text: "Lyon" }],
               replyTo: { entryId: askId },
               source: "card",
+              authorId: USER,
             },
           },
         ]);

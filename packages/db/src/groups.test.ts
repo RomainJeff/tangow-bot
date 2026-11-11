@@ -48,6 +48,7 @@ describe("listSpaceGroupsForSpaces", () => {
     ]);
     const repos = createGroupRepos({
       chatGroup: { findMany },
+      bot: { findMany: vi.fn().mockResolvedValue([{ id: "bot-1" }]) },
       $queryRaw,
     } as unknown as PrismaClient);
     const actor = {
@@ -65,8 +66,14 @@ describe("listSpaceGroupsForSpaces", () => {
         pinned: true,
         sectionId: null,
         members: [
-          { botId: "bot-1", name: "Triage", color: "#111", status: "idle" },
-          { botId: "bot-2", name: "Responder", color: "#222", status: "running" },
+          { botId: "bot-1", name: "Triage", color: "#111", status: "idle", canUse: true },
+          {
+            botId: "bot-2",
+            name: "Responder",
+            color: "#222",
+            status: "running",
+            canUse: false,
+          },
         ],
         preview: "Escalation pending",
         unread: true,

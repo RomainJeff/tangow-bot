@@ -208,6 +208,17 @@ describe("directory", () => {
 });
 
 describe("group members roster", () => {
+  it("lists a group's people and names the one the run answers", () => {
+    const members = [{ id: "b_1", name: "Researcher" }];
+    const context = renderGroupMembersContext("Trip", members, members[0]!, "", {
+      names: ["Ana", "Bo"],
+      answering: "Bo",
+    });
+    expect(context).toContain("<group_people>\n- Ana\n- Bo\n</group_people>");
+    expect(context).toContain("You are answering Bo, who woke you.");
+    expect(renderGroupMembersContext("Trip", members, members[0]!)).not.toContain("group_people");
+  });
+
   it("lists titles and descriptions so group bots can pick a specialist", () => {
     const context = renderGroupMembersContext(
       "Launch desk",

@@ -123,6 +123,7 @@ it("resumes a background helper in its own native session with its parent's full
     await messageHelper(run.prisma, {
       threadId: run.thread.id,
       botId: run.bot.id,
+      userId: helper.userId,
       helperId: helper.id,
       text: answer,
     }),

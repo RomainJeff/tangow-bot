@@ -1391,6 +1391,66 @@ it("stops one helper by id, then every other one with all, and no report follows
   ]);
 });
 
+it("neither lists, messages nor stops another person's helper of the same bot", async () => {
+  let helperId = "";
+  const results: string[] = [];
+  const record = (request: ModelEmulatorRequest) => results.push(resultOf(request));
+  const { run, childOf } = await fixture([
+    ...startedTurn,
+    {
+      expect() {},
+      response: {
+        type: "tool",
+        id: "status",
+        name: "helper_status",
+        arguments: {},
+      },
+    },
+    {
+      expect: record,
+      response: () => ({
+        type: "tool",
+        id: "tell",
+        name: "helper_message",
+        arguments: { helperId, message: ANSWER },
+      }),
+    },
+    {
+      expect: record,
+      response: {
+        type: "tool",
+        id: "stop",
+        name: "helper_stop",
+        arguments: { helperId: "all" },
+      },
+    },
+    { expect: record, response: say("Nothing of yours is at work.") },
+    { expect() {}, response: { type: "text", text: recap } },
+  ] as ModelEmulatorStep[]);
+  const parentId = await run.send("Book me a hotel in Lisbon.");
+  await run.continueRun(parentId);
+  const helper = await childOf(parentId);
+  helperId = helper.id;
+  // Another person in a group woke the same bot, and this helper is theirs.
+  await run.prisma.user.create({
+    data: { id: "other", name: "Other", email: "other@rakazo.test" },
+  });
+  await run.prisma.run.update({
+    where: { id: helper.id },
+    data: { userId: "other" },
+  });
+
+  await run.continueRun(await run.send("What are your helpers doing?"));
+  run.model.assertComplete();
+
+  expect(results).toEqual([
+    JSON.stringify({ helpers: [] }),
+    `Helper ${helper.id} is not one of yours here.`,
+    "No helper of yours is at work here.",
+  ]);
+  expect((await childOf(parentId)).status).toBe("queued");
+});
+
 it("ends a stopped helper's guest at its next lease renewal", async () => {
   const childAsked = Promise.withResolvers<void>();
   const never = Promise.withResolvers<void>();

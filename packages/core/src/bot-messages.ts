@@ -159,6 +159,8 @@ export function renderGroupMembersContext(
   members: readonly BotAddress[],
   self: Pick<BotAddress, "id" | "name">,
   description = "",
+  /** A group of several people: their names, and the one this run answers. */
+  people?: { names: readonly string[]; answering: string },
 ): string {
   const name = escapeDirectoryField(groupName.trim());
   const selfName = escapeDirectoryField(self.name.trim());
@@ -179,6 +181,15 @@ export function renderGroupMembersContext(
     "<group_members>",
     ...formatBotRosterLines(members),
     "</group_members>",
+    ...(people
+      ? [
+          "People write here too; each person's message opens with [from their name].",
+          "<group_people>",
+          ...people.names.map((person) => `- ${escapeDirectoryField(person)}`),
+          "</group_people>",
+          `You are answering ${escapeDirectoryField(people.answering)}, who woke you.`,
+        ]
+      : []),
     "Post in this shared thread. When another teammate is genuinely needed for a distinct next stage, use handoff_to_bot instead of telling the user to switch chats.",
     "A handoff transfers ownership. Complete a stage handed to you yourself, then post its result here. Do not hand it back merely to report or ask the previous bot to do the same work. Never bounce a stage between members. One bot owns each stage.",
   ].join("\n");

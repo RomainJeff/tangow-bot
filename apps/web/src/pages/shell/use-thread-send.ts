@@ -236,15 +236,13 @@ export function useThreadSend({
             linkPreview: options.linkPreview,
             draft: replaced?.draft,
           });
-          if (activeBotId.current === botTarget) {
+          const { runId, taskId } = sent;
+          // A bot's own thread always answers with a run; only a group message may have none.
+          if (activeBotId.current === botTarget && runId && taskId) {
             updateSnapshot((current) =>
               applyThreadSendReceipt(
                 current,
-                {
-                  botId: botTarget,
-                  runId: sent.runId,
-                  taskId: sent.taskId,
-                },
+                { botId: botTarget, runId, taskId },
                 terminalRunReceipts.current,
               ),
             );

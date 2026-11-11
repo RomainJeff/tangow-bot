@@ -1368,36 +1368,47 @@ export function createRunExecutor(deps: ExecutorDeps) {
         include: { thread: true },
       });
       if (!bot?.thread) return;
-      // A member's routine on a shared bot runs in their own thread, while it is still shared with
-      // them, and never falls back to the owner's.
+      // A member's routine on a shared bot runs in their own thread, or a group they are in, while
+      // the bot is still shared with them, and never falls back to the owner's.
       const memberRoutine = routine.userId !== bot.userId;
+      if (
+        memberRoutine &&
+        !(await deps.prisma.bot.count({
+          where: { id: bot.id, ...sharedWithFilter(routine.userId, routine.spaceId) },
+        }))
+      ) {
+        return;
+      }
       const targetThread = routine.threadId
         ? await deps.prisma.thread.findFirst({
             where: {
               id: routine.threadId,
               spaceId: routine.spaceId,
-              OR: memberRoutine
-                ? [
-                    {
-                      memberBotId: bot.id,
-                      userId: routine.userId,
-                      memberBot: sharedWithFilter(routine.userId, routine.spaceId),
-                    },
-                  ]
-                : [
-                    { botId: bot.id },
-                    {
-                      group: {
-                        archivedAt: null,
-                        members: { some: { botId: bot.id } },
-                      },
-                    },
-                  ],
+              OR: [
+                memberRoutine ? { memberBotId: bot.id, userId: routine.userId } : { botId: bot.id },
+                {
+                  group: {
+                    archivedAt: null,
+                    members: { some: { botId: bot.id } },
+                    people: { some: { userId: routine.userId } },
+                  },
+                },
+              ],
             },
             select: { id: true },
           })
         : null;
       if (memberRoutine && !targetThread) return;
+      // Nor does a routine post anywhere once its person has left the group it posted in.
+      if (
+        !targetThread &&
+        routine.threadId &&
+        (await deps.prisma.thread.count({
+          where: { id: routine.threadId, group: { people: { none: { userId: routine.userId } } } },
+        }))
+      ) {
+        return;
+      }
       const thread = targetThread ?? bot.thread;
       // A schedule with no valid parseable cron among its crons (e.g. a
       // legacy row accepted before cron validation was added) fires the
@@ -1999,7 +2010,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // Loaded before history so a member's turn can be attributed to its author; the
         // rendered half feeds the group prompt further down.
         const group = thread.groupId
-          ? await loadGroupContext(deps.prisma, thread.groupId, { id: bot.id, name: bot.name })
+          ? await loadGroupContext(
+              deps.prisma,
+              { groupId: thread.groupId, sessionId: thread.sessionId },
+              { id: bot.id, name: bot.name },
+              run.userId,
+            )
           : undefined;
         const projectStartedAt = performance.now();
         const [first] = historyEntries;
@@ -2015,6 +2031,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             selfBotId: bot.id,
             ...(archiveHistory ? { runHistory: { activeRunId: run.id } } : {}),
             botNames: group?.memberNames,
+            speakers: group?.speakers,
             resolveReplyTarget: (entryId) => outside.get(entryId),
           });
           const uncompacted = compaction ? turns.slice(1) : turns;
@@ -4833,6 +4850,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             const routed = await messageHelper(deps.prisma, {
               threadId: run.threadId,
               botId: run.botId,
+              userId: run.userId,
               helperId,
               text,
             });
@@ -8199,13 +8217,15 @@ function isErrorResult(result: unknown): boolean {
   return Boolean(result) && typeof result === "object" && "error" in (result as object);
 }
 
-type HelperScope = { threadId: string; botId: string };
+/** A run's helpers run as its person: in a group, another person's helpers are never its own. */
+type HelperScope = { threadId: string; botId: string; userId: string };
 
 async function helperStatus(prisma: PrismaClient, scope: HelperScope) {
   const runs = await prisma.run.findMany({
     where: {
       threadId: scope.threadId,
       botId: scope.botId,
+      userId: scope.userId,
       trigger: "helper",
       status: { in: [...ACTIVE_RUN_STATUSES] },
     },
@@ -8273,6 +8293,7 @@ async function stopHelpers(
       where: {
         threadId: scope.threadId,
         botId: scope.botId,
+        userId: scope.userId,
         trigger: "helper",
         status: { in: [...ACTIVE_RUN_STATUSES] },
         ...(helperId === "all" ? {} : { id: helperId }),

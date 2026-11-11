@@ -23,6 +23,7 @@ import {
 import {
   ACTIVE_RUN_STATUSES,
   blocksToAgentHistoryText,
+  groupLeadBotId,
   isActive,
   resolveGroupTargetBotIds,
   runFailureError,
@@ -52,6 +53,7 @@ import {
   threadEventSeq,
   threadOfSession,
   touchGroupUpdatedAt,
+  usableBotIds,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import {
@@ -296,7 +298,9 @@ async function replayExistingSend(
   const runs = [...created, ...steered, ...answered].toSorted(
     (a, b) => order(a.botId) - order(b.botId),
   );
-  if (runs.length === 0) return null;
+  // A group message that woke no bot records no target, and answers with no run.
+  const wokeNoBot = message.type === "user.message" && message.payload.targets?.length === 0;
+  if (runs.length === 0 && !wokeNoBot) return null;
   await enqueueRunsNeedingContinue(deps.jobs, runs);
   await deps.events.notify(threadId, await threadEventSeq(deps.prisma, threadId)).catch((error) => {
     // Subscribers catch up from the durable event cursor after a missed realtime wake.
@@ -307,10 +311,9 @@ async function replayExistingSend(
 
 function sendResult(message: { seq: number }, runs: ReadonlyArray<{ id: string; taskId: string }>) {
   const first = runs[0];
-  if (!first) throw new IsolationError("Send did not create a run");
   return {
-    taskId: first.taskId,
-    runId: first.id,
+    taskId: first?.taskId,
+    runId: first?.id,
     seq: message.seq,
     runIds: runs.map((run) => run.id),
   };
@@ -333,14 +336,16 @@ async function findConversationRunIds(
   return new Set(rows.map((row) => row.id));
 }
 
+/** A new message supersedes its sender's own queued runs, never another person's in a group. */
 export async function cancelSupersededQueuedRuns(
   tx: Prisma.TransactionClient,
-  input: { threadId: string; botIds: string[]; keepRunIds: string[] },
+  input: { threadId: string; botIds: string[]; userId: string; keepRunIds: string[] },
 ) {
   const superseded = await tx.run.findMany({
     where: {
       threadId: input.threadId,
       botId: { in: input.botIds },
+      userId: input.userId,
       status: "queued",
       OR: [{ trigger: "user", sourceMessage: { type: "user.message" } }, { trigger: "reaction" }],
       id: { notIn: input.keepRunIds },
@@ -376,11 +381,21 @@ async function lockAndLoadGroupMembers(
     },
   });
   if (!group || group.members.length < GROUP_MEMBER_MIN) throw new IsolationError();
-  return group.members.map((member) => ({
+  const members = group.members.map((member) => ({
     botId: member.bot.id,
     name: member.bot.name,
     color: member.bot.color,
   }));
+  return {
+    members,
+    leadBotId: group.leadBotId,
+    usableBotIds: await usableBotIds(
+      tx,
+      actor.userId,
+      actor.spaceId,
+      members.map((member) => member.botId),
+    ),
+  };
 }
 
 export async function resolveThreadTarget(
@@ -412,12 +427,19 @@ export async function resolveThreadTarget(
   if (input.groupId) {
     const group = await groupRepos.getGroupTarget(actor, input.groupId);
     if (!group.thread) throw new IsolationError();
+    const usable = await usableBotIds(
+      prisma,
+      actor.userId,
+      actor.spaceId,
+      group.members.map((member) => member.bot.id),
+    );
     const members = group.members.map((member) => ({
       botId: member.bot.id,
       name: member.bot.name,
       color: member.bot.color,
       shapeSeed: member.bot.shapeSeed,
       status: member.bot.runs[0]?.status ?? "idle",
+      canUse: usable.has(member.bot.id),
     }));
     return {
       kind: "group",
@@ -441,7 +463,7 @@ export async function readSessionEntries(
     threadOfSession(deps.prisma, sessionId, actor.spaceId),
     deps.prisma.run.findFirst({
       where: { sessionId, session: { kind: { not: "thread" } } },
-      select: { id: true },
+      select: { id: true, userId: true },
     }),
   ]);
   const thread = threadId
@@ -457,7 +479,11 @@ export async function readSessionEntries(
   });
   // A shared bot has a thread per person: reaching the bot is not reaching this one.
   if (target.threadId !== threadId) throw new IsolationError();
-  if (!run) throw new IsolationError();
+  // In a group, a run's trace is its person's alone, as with runs.entries: it ran with their
+  // accounts.
+  if (!run || (target.kind === "group" && run.userId !== actor.userId)) {
+    throw new IsolationError();
+  }
   return readCappedRun(deps.sessionLog, run.id);
 }
 
@@ -914,6 +940,7 @@ export async function sendThreadMessage(
         await cancelSupersededQueuedRuns(tx, {
           threadId: target.threadId,
           botIds: [target.botId],
+          userId: actor.userId,
           keepRunIds: [run.id],
         });
         return {
@@ -923,13 +950,17 @@ export async function sendThreadMessage(
         };
       }
 
-      const members = await lockAndLoadGroupMembers(tx, actor, target);
+      const group = await lockAndLoadGroupMembers(tx, actor, target);
+      const { members } = group;
       const memberBotIds = members.map((member) => member.botId);
       const mentionTargets = splitMentionTargets(input.mentions);
+      // Each woken bot runs as the sender, so only a bot they can use wakes.
       const targetBotIds = resolveGroupTargetBotIds({
         text: input.text ?? "",
         members: members.map((member) => ({ id: member.botId, name: member.name })),
         explicitMentions: mentionTargets.botMentionIds,
+        leadBotId: group.leadBotId,
+        usableBotIds: group.usableBotIds,
       });
       const { blocks: attachmentBlocks, artifacts } = await resolveGroupSendAttachments(
         { prisma: tx },
@@ -946,14 +977,23 @@ export async function sendThreadMessage(
       const blocks = buildUserMessageBlocks(input.text, attachmentBlocks, {
         linkPreview: input.linkPreview,
       });
-      // Each targeted bot gets a run in turn, so the first run is always the first target's.
-      const eventBotId = targetBotIds[0];
+      // Each targeted bot gets a run in turn, so the first run is always the first target's. A
+      // message waking no bot still reaches the group's people, fed as its lead's.
+      const eventBotId =
+        targetBotIds[0] ??
+        groupLeadBotId(
+          members.map((member) => ({ id: member.botId })),
+          group.leadBotId,
+        );
       if (!eventBotId) throw new IsolationError("Group send did not resolve a target");
       await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
+      // Only the sender's own runs take this message: another person's run on the same bot keeps
+      // its course, its asks and cards stay theirs, and the sender gets a run of their own.
       const activeRuns = await tx.run.findMany({
         where: {
           threadId: target.threadId,
           botId: { in: targetBotIds },
+          userId: actor.userId,
           parentRunId: null,
           status: { in: [...ACTIVE_RUN_STATUSES] },
         },
@@ -1080,6 +1120,7 @@ export async function sendThreadMessage(
         await cancelSupersededQueuedRuns(tx, {
           threadId: target.threadId,
           botIds: createdRuns.map((run) => run.botId),
+          userId: actor.userId,
           keepRunIds: createdRuns.map((run) => run.id),
         });
       }

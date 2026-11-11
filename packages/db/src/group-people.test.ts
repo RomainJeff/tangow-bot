@@ -2,7 +2,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { bootstrapUserSpace } from "./bootstrap-user.js";
 import { setBotSharing } from "./bot-sharing.js";
 import type { PrismaClient } from "./client.js";
+import { claimSteering, finalizeRun } from "./events.js";
 import { createGroupRepos, GroupCreatorCannotLeaveError } from "./groups.js";
+import { createThreadMessageInTransaction } from "./messages.js";
 import { openPgliteDatabase, type PgliteDatabase } from "./pglite.test-support.js";
 import { createRepos } from "./repos.js";
 import { IsolationError } from "./scope.js";
@@ -55,6 +57,57 @@ describe("a group's people, bots and lead", () => {
       data: { ...owned, taskId: task.id, status: "running", trigger: "user" },
     });
   };
+  /** A run of the shared bot someone woke in the group, held by a worker. */
+  const holdRun = async (
+    userId: string,
+    threadId: string,
+    extra: { trigger?: string; parentRunId?: string } = {},
+  ) => {
+    const owned = { spaceId: space, botId: sharedBot, threadId, userId };
+    const task = await prisma.task.create({
+      data: { ...owned, prompt: "Work", status: "running" },
+    });
+    const run = await prisma.run.create({
+      data: {
+        ...owned,
+        taskId: task.id,
+        status: "running",
+        trigger: extra.trigger ?? "user",
+        parentRunId: extra.parentRunId,
+        leaseOwner: "worker",
+        leaseFence: 1,
+      },
+    });
+    await prisma.attempt.create({ data: { runId: run.id, fence: 1, status: "running" } });
+    return run;
+  };
+  const fail = async (run: { id: string; taskId: string; threadId: string }) =>
+    finalizeRun(prisma, {
+      spaceId: space,
+      threadId: run.threadId,
+      botId: sharedBot,
+      runId: run.id,
+      taskId: run.taskId,
+      attemptId: (await prisma.attempt.findFirstOrThrow({ where: { runId: run.id } })).id,
+      leaseOwner: "worker",
+      leaseFence: 1,
+      outcome: "failed",
+      error: "failed",
+    });
+  /** What someone sent a run of theirs while it worked. */
+  const steer = (userId: string, threadId: string, runId: string) =>
+    prisma.$transaction(async (tx) => {
+      const message = await createThreadMessageInTransaction(tx, {
+        threadId,
+        role: "user",
+        authorId: userId,
+        feedBotId: sharedBot,
+        blocks: [{ kind: "text", text: `From ${userId}` }],
+      });
+      await tx.steeringMessage.create({
+        data: { messageId: message.id, botId: sharedBot, userId, runId },
+      });
+    });
   const status = async (runId: string) =>
     (await prisma.run.findUniqueOrThrow({ where: { id: runId } })).status;
 
@@ -102,6 +155,22 @@ describe("a group's people, bots and lead", () => {
         botIds: [privateBot],
       }),
     ).rejects.toBeInstanceOf(IsolationError);
+  });
+
+  it("tells each person which of the group's bots they can wake", async () => {
+    const groups = createGroupRepos(prisma);
+    const group = await newGroup(["ben"]);
+    const usable = async (userId: string) =>
+      (await groups.mapGroup(await groups.getGroup(actor(userId), group.id), userId)).members.map(
+        (member) => [member.botId, member.canUse],
+      );
+    expect(group.members.every((member) => member.canUse)).toBe(true);
+    expect(await usable("ben")).toEqual([
+      [creatorBot, false],
+      [sharedBot, true],
+    ]);
+    const [listed] = await groups.listSpaceGroupsForSpaces(actor("ben"), [space]);
+    expect(listed?.members.map((member) => member.canUse)).toEqual([false, true]);
   });
 
   it("keeps the lead among the group's bots, and drops it when its bot leaves", async () => {
@@ -152,5 +221,51 @@ describe("a group's people, bots and lead", () => {
     expect(await prisma.chatGroupPerson.count({ where: { userId: "ben" } })).toBe(0);
     expect(await status(benRun!.id)).toBe("cancelled");
     expect(await status(anaRun!.id)).toBe("running");
+  });
+
+  it("keeps each person's messages to their own runs of a bot", async () => {
+    const group = await newGroup(["ana"]);
+    const anaRun = await holdRun("ana", group.threadId);
+    const creatorRun = await holdRun("creator", group.threadId);
+    await steer("creator", group.threadId, creatorRun.id);
+    const claim = () =>
+      claimSteering(prisma, {
+        threadId: group.threadId,
+        botId: sharedBot,
+        runId: anaRun.id,
+        leaseOwner: "worker",
+        leaseFence: 1,
+        seenIds: [],
+      });
+
+    const ended = await fail(creatorRun);
+    const continuation = await prisma.run.findUniqueOrThrow({
+      where: { id: (ended && ended.continuationRunId) || "" },
+    });
+    expect(continuation.userId).toBe("creator");
+    expect(await claim()).toEqual([]);
+
+    await prisma.steeringMessage.updateMany({
+      where: { userId: "creator" },
+      data: { runId: null },
+    });
+    expect(await claim()).toEqual([]);
+  });
+
+  it("wakes the bot for a helper's report as the person whose run started it", async () => {
+    const group = await newGroup(["ana"]);
+    await holdRun("creator", group.threadId);
+    const anaRun = await holdRun("ana", group.threadId);
+    const helper = await holdRun("ana", group.threadId, {
+      trigger: "helper",
+      parentRunId: anaRun.id,
+    });
+    await prisma.run.update({ where: { id: anaRun.id }, data: { status: "completed" } });
+
+    const ended = await fail(helper);
+    const woken = await prisma.run.findUniqueOrThrow({
+      where: { id: (ended && ended.continuationRunId) || "" },
+    });
+    expect(woken.userId).toBe("ana");
   });
 });

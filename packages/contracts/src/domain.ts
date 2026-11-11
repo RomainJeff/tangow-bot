@@ -121,6 +121,8 @@ export const GroupMemberSchema = z.object({
   color: z.string(),
   shapeSeed: ShapeSeedSchema.nullable(),
   status: z.string().optional(),
+  /** Whether the actor owns the bot or it is shared with them: only then can they wake it. */
+  canUse: z.boolean(),
 });
 export type GroupMember = z.infer<typeof GroupMemberSchema>;
 

@@ -298,7 +298,7 @@ function fixture(
       ),
     },
     chatGroup: {
-      findUnique: vi.fn(async () => ({ name: "Trip", description: "", members: [] })),
+      findUnique: vi.fn(async () => ({ name: "Trip", description: "", members: [], people: [] })),
     },
     routine: {
       create: routineCreate,

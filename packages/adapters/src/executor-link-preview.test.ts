@@ -242,6 +242,7 @@ function fixture({
         name: "Crew",
         description: "",
         members: [],
+        people: [],
       })),
     },
     chatGroupMember: { findMany: vi.fn(async () => []) },
