@@ -185,6 +185,36 @@ describe("a group's people, bots and lead", () => {
     expect(without.group.leadBotId).toBeNull();
   });
 
+  it("lets the creator change the bots around one no longer shared with them", async () => {
+    const groups = createGroupRepos(prisma);
+    const unshared = await newBot("ana", "Scout");
+    await setBotSharing(prisma, actor("ana"), {
+      botId: unshared,
+      visibility: "space",
+      userIds: [],
+    });
+    const { id: groupId } = await groups.createGroup(actor("creator"), {
+      name: "Crew",
+      botIds: [creatorBot, unshared],
+    });
+    await setBotSharing(prisma, actor("ana"), {
+      botId: unshared,
+      visibility: "private",
+      userIds: [],
+    });
+
+    const changed = await groups.updateGroup(actor("creator"), {
+      groupId,
+      botIds: [unshared, sharedBot],
+    });
+    expect(changed.group.members.map((member) => member.botId).sort()).toEqual(
+      [unshared, sharedBot].sort(),
+    );
+    await expect(
+      groups.updateGroup(actor("creator"), { groupId, botIds: [unshared, privateBot] }),
+    ).rejects.toBeInstanceOf(IsolationError);
+  });
+
   it("stops only the runs of whoever is taken out or leaves", async () => {
     const groups = createGroupRepos(prisma);
     const group = await newGroup(["ana", "ben"]);

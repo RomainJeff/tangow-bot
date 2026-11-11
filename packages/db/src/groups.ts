@@ -145,16 +145,25 @@ function hasMinimumActiveMembers(members: readonly unknown[]) {
   return members.length >= GROUP_MEMBER_MIN;
 }
 
-/** The bots a group's creator puts in it: their own, or ones shared with them. */
-async function assertUsableBots(prisma: PrismaClient, actor: Actor, botIds: string[]) {
+/**
+ * The bots a group's creator puts in it: their own, or ones shared with them. A bot already in
+ * the group may stay though they can no longer use it, so they can still change the others.
+ */
+async function assertUsableBots(
+  db: Pick<Prisma.TransactionClient, "bot">,
+  actor: Actor,
+  botIds: string[],
+  kept: readonly string[] = [],
+) {
   const unique = [...new Set(botIds)];
   if (unique.length < GROUP_MEMBER_MIN || unique.length > GROUP_MEMBER_MAX) {
     throw new IsolationError(
       `Groups require ${GROUP_MEMBER_MIN} to ${GROUP_MEMBER_MAX} distinct bots`,
     );
   }
-  const usable = await usableBotIds(prisma, actor.userId, actor.spaceId, unique);
-  if (usable.size !== unique.length) throw new IsolationError();
+  const added = unique.filter((botId) => !kept.includes(botId));
+  const usable = await usableBotIds(db, actor.userId, actor.spaceId, added);
+  if (usable.size !== added.length) throw new IsolationError();
   return unique.map((botId) => ({ botId }));
 }
 
@@ -428,14 +437,11 @@ export function createGroupRepos(prisma: PrismaClient) {
         sectionId?: string | null;
       },
     ): Promise<{ group: Group; cancelledRunIds: string[] }> {
-      const members = input.botIds
-        ? await assertUsableBots(prisma, actor, input.botIds)
-        : undefined;
       const people = input.userIds
         ? await assertSpacePeople(prisma, actor, input.userIds)
         : undefined;
       // Anyone in the group pins and files it for themselves; only its creator changes it.
-      const manages = [input.name, input.description, members, people, input.leadBotId].some(
+      const manages = [input.name, input.description, input.botIds, people, input.leadBotId].some(
         (value) => value !== undefined,
       );
       const updated = await prisma.$transaction(async (tx) => {
@@ -449,10 +455,20 @@ export function createGroupRepos(prisma: PrismaClient) {
           },
         });
         if (!current?.thread) throw new IsolationError();
+        const members = input.botIds
+          ? await assertUsableBots(
+              tx,
+              actor,
+              input.botIds,
+              current.members.map((member) => member.botId),
+            )
+          : undefined;
+        const archived = new Set(
+          current.members.filter((member) => member.bot.archivedAt).map((member) => member.botId),
+        );
         if (
-          !members &&
           !hasMinimumActiveMembers(
-            current.members.filter((member) => member.bot.archivedAt === null),
+            (members ?? current.members).filter((member) => !archived.has(member.botId)),
           )
         ) {
           throw new IsolationError();
