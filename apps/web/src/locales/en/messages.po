@@ -597,7 +597,7 @@ msgstr "Approve it in the chat, or say no to cancel."
 msgid "Approve this server to let your agent use its tools."
 msgstr "Approve this server to let your agent use its tools."
 
-#: src/pages/ShareBotDialog.tsx:253
+#: src/pages/ShareBotDialog.tsx:206
 msgid "Apps this bot can use"
 msgstr "Apps this bot can use"
 
@@ -759,7 +759,7 @@ msgid "Booting live desktop…"
 msgstr "Booting live desktop…"
 
 #. placeholder {0}: active?.name
-#: src/pages/shell/side-panel.tsx:280
+#: src/pages/shell/side-panel.tsx:291
 msgid "Booting up {0}’s computer"
 msgstr "Booting up {0}’s computer"
 
@@ -783,7 +783,7 @@ msgstr "Bot"
 msgid "Bot"
 msgstr "Bot"
 
-#: src/pages/shell/side-panel.tsx:409
+#: src/pages/shell/side-panel.tsx:421
 msgid "Bot screen"
 msgstr "Bot screen"
 
@@ -869,7 +869,7 @@ msgstr "Cancel edit"
 msgid "Cancel new bot"
 msgstr "Cancel new bot"
 
-#: src/pages/GroupPanel.tsx:120
+#: src/pages/GroupPanel.tsx:238
 msgid "Cancel new group"
 msgstr "Cancel new group"
 
@@ -1005,7 +1005,7 @@ msgstr "Client secret"
 msgid "Close"
 msgstr "Close"
 
-#: src/pages/shell/side-panel.tsx:386
+#: src/pages/shell/side-panel.tsx:398
 msgid "Close computer"
 msgstr "Close computer"
 
@@ -1036,7 +1036,7 @@ msgid "Close model settings"
 msgstr "Close model settings"
 
 #: src/pages/bot-page/BotPage.tsx:184
-#: src/pages/shell/side-panel.tsx:154
+#: src/pages/shell/side-panel.tsx:166
 msgid "Close panel"
 msgstr "Close panel"
 
@@ -1104,7 +1104,7 @@ msgstr "Computer"
 msgid "Computer failed to boot"
 msgstr "Computer failed to boot"
 
-#: src/pages/shell/side-panel.tsx:436
+#: src/pages/shell/side-panel.tsx:448
 msgid "Computer is asleep"
 msgstr "Computer is asleep"
 
@@ -1362,7 +1362,7 @@ msgstr "Could not continue"
 msgid "Could not create bot"
 msgstr "Could not create bot"
 
-#: src/pages/GroupPanel.tsx:105
+#: src/pages/GroupPanel.tsx:223
 msgid "Could not create group"
 msgstr "Could not create group"
 
@@ -1439,7 +1439,7 @@ msgstr "Could not import skill"
 msgid "Could not install connector"
 msgstr "Could not install connector"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:181
+#: src/pages/bot-page/KnowledgeTab.tsx:180
 #: src/pages/bot-page/page-kit.tsx:80
 #: src/pages/KnowledgeSection.tsx:90
 #: src/pages/KnowledgeSection.tsx:119
@@ -1542,7 +1542,7 @@ msgstr "Could not remove"
 msgid "Could not remove connector"
 msgstr "Could not remove connector"
 
-#: src/pages/GroupPanel.tsx:210
+#: src/pages/GroupPanel.tsx:355
 msgid "Could not remove group"
 msgstr "Could not remove group"
 
@@ -1582,7 +1582,7 @@ msgstr "Could not save"
 msgid "Could not save Auto Review"
 msgstr "Could not save Auto Review"
 
-#: src/pages/GroupPanel.tsx:209
+#: src/pages/GroupPanel.tsx:354
 msgid "Could not save group"
 msgstr "Could not save group"
 
@@ -1680,7 +1680,7 @@ msgstr "Couldn't create"
 msgid "Couldn't create an invite link"
 msgstr "Couldn't create an invite link"
 
-#: src/pages/ShareBotDialog.tsx:119
+#: src/pages/ShareBotDialog.tsx:85
 msgid "Couldn't load"
 msgstr "Couldn't load"
 
@@ -1705,8 +1705,8 @@ msgstr "Couldn't rename the space"
 msgid "Couldn't revoke the invite link"
 msgstr "Couldn't revoke the invite link"
 
-#: src/pages/ShareBotDialog.tsx:152
-#: src/pages/ShareBotDialog.tsx:167
+#: src/pages/ShareBotDialog.tsx:118
+#: src/pages/ShareBotDialog.tsx:133
 msgid "Couldn't save"
 msgstr "Couldn't save"
 
@@ -1742,7 +1742,7 @@ msgstr "Create bot"
 msgid "Create bot?"
 msgstr "Create bot?"
 
-#: src/pages/GroupPanel.tsx:170
+#: src/pages/GroupPanel.tsx:289
 msgid "Create group"
 msgstr "Create group"
 
@@ -1777,7 +1777,7 @@ msgid "Created"
 msgstr "Created"
 
 #: src/components/AskCard.tsx:65
-#: src/pages/GroupPanel.tsx:170
+#: src/pages/GroupPanel.tsx:289
 #: src/pages/shell/bot-panel.tsx:155
 #: src/pages/shell/dialogs.tsx:91
 #: src/pages/shell/dialogs.tsx:202
@@ -1892,7 +1892,7 @@ msgstr "Delete {0}"
 msgid "Delete {0}?"
 msgstr "Delete {0}?"
 
-#: src/pages/GroupPanel.tsx:287
+#: src/pages/GroupPanel.tsx:458
 msgid "Delete group"
 msgstr "Delete group"
 
@@ -1908,7 +1908,7 @@ msgstr "Delete routine"
 msgid "Delete space"
 msgstr "Delete space"
 
-#: src/pages/ShareBotDialog.tsx:130
+#: src/pages/ShareBotDialog.tsx:96
 #: src/pages/usage-settings.tsx:197
 msgid "Deleted"
 msgstr "Deleted"
@@ -1917,7 +1917,7 @@ msgstr "Deleted"
 msgid "Deleted bot"
 msgstr "Deleted bot"
 
-#: src/pages/GroupPanel.tsx:287
+#: src/pages/GroupPanel.tsx:458
 #: src/pages/shell/dialogs.tsx:409
 #: src/pages/shell/dialogs.tsx:470
 msgid "Deleting…"
@@ -1941,8 +1941,8 @@ msgstr "Describe what this bot does"
 
 #: src/pages/bot-page/SettingDetails.tsx:53
 #: src/pages/bot-page/SettingsTab.tsx:27
-#: src/pages/GroupPanel.tsx:143
-#: src/pages/GroupPanel.tsx:252
+#: src/pages/GroupPanel.tsx:261
+#: src/pages/GroupPanel.tsx:422
 #: src/pages/shell/bot-panel.tsx:131
 msgid "Description"
 msgstr "Description"
@@ -2179,12 +2179,12 @@ msgstr "Every week"
 msgid "Everyday"
 msgstr "Everyday"
 
-#: src/pages/ShareBotDialog.tsx:200
-#: src/pages/ShareBotDialog.tsx:202
+#: src/pages/ShareBotDialog.tsx:159
+#: src/pages/ShareBotDialog.tsx:161
 msgid "Everyone in {spaceName}"
 msgstr "Everyone in {spaceName}"
 
-#: src/pages/ShareBotDialog.tsx:268
+#: src/pages/ShareBotDialog.tsx:221
 msgid "Everyone who uses this bot can see its files and browser sign-ins."
 msgstr "Everyone who uses this bot can see its files and browser sign-ins."
 
@@ -2227,14 +2227,14 @@ msgstr "Failed"
 msgid "Failed {when}"
 msgstr "Failed {when}"
 
+#: src/pages/shell/use-thread-send.ts:287
 #: src/pages/shell/use-thread-send.ts:289
 #: src/pages/shell/use-thread-send.ts:291
-#: src/pages/shell/use-thread-send.ts:293
 msgid "Failed to send message"
 msgstr "Failed to send message"
 
-#: src/pages/shell/use-thread-send.ts:329
-#: src/pages/shell/use-thread-send.ts:348
+#: src/pages/shell/use-thread-send.ts:327
+#: src/pages/shell/use-thread-send.ts:346
 msgid "Failed to stop"
 msgstr "Failed to stop"
 
@@ -2260,7 +2260,7 @@ msgstr "Fast"
 msgid "Featured"
 msgstr "Featured"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:66
+#: src/pages/bot-page/KnowledgeTab.tsx:67
 msgid "Files"
 msgstr "Files"
 
@@ -2348,7 +2348,8 @@ msgstr "Global"
 msgid "Group"
 msgstr "Group"
 
-#: src/pages/GroupPanel.tsx:234
+#: src/pages/GroupPanel.tsx:376
+#: src/pages/GroupPanel.tsx:404
 msgid "Group settings"
 msgstr "Group settings"
 
@@ -2438,7 +2439,7 @@ msgstr "How this bot should behave"
 msgid "How to check"
 msgstr "How to check"
 
-#: src/pages/shell/side-panel.tsx:485
+#: src/pages/shell/side-panel.tsx:497
 msgid "I’m done"
 msgstr "I’m done"
 
@@ -2466,7 +2467,7 @@ msgstr "Import"
 msgid "Import OpenAPI JSON"
 msgstr "Import OpenAPI JSON"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:137
+#: src/pages/bot-page/KnowledgeTab.tsx:136
 msgid "Inherit default"
 msgstr "Inherit default"
 
@@ -2532,7 +2533,7 @@ msgstr "Interval unit"
 msgid "Invited by {0}"
 msgstr "Invited by {0}"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:138
+#: src/pages/bot-page/KnowledgeTab.tsx:137
 #: src/pages/MemorySettingsOverlay.tsx:49
 msgid "Isolated"
 msgstr "Isolated"
@@ -2749,22 +2750,22 @@ msgstr "Medium"
 msgid "Members"
 msgstr "Members"
 
-#: src/pages/GroupPanel.tsx:264
+#: src/pages/GroupPanel.tsx:435
 msgid "Members ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgstr "Members ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 
-#: src/pages/GroupPanel.tsx:155
+#: src/pages/GroupPanel.tsx:274
 msgid "Members (pick {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgstr "Members (pick {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:37
+#: src/pages/bot-page/KnowledgeTab.tsx:38
 #: src/pages/MemorySettingsOverlay.tsx:159
 #: src/pages/SettingsOverlay.tsx:134
 msgid "Memory"
 msgstr "Memory"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:128
-#: src/pages/bot-page/KnowledgeTab.tsx:132
+#: src/pages/bot-page/KnowledgeTab.tsx:127
+#: src/pages/bot-page/KnowledgeTab.tsx:131
 msgid "Memory scope"
 msgstr "Memory scope"
 
@@ -2930,8 +2931,8 @@ msgstr "Mute"
 #: src/pages/bot-page/BotHero.tsx:49
 #: src/pages/bot-page/RoutineCreateForm.tsx:74
 #: src/pages/bot-page/RoutineDetail.tsx:111
-#: src/pages/GroupPanel.tsx:133
-#: src/pages/GroupPanel.tsx:243
+#: src/pages/GroupPanel.tsx:251
+#: src/pages/GroupPanel.tsx:413
 #: src/pages/shell/bot-panel.tsx:109
 #: src/pages/shell/dialogs.tsx:72
 #: src/pages/shell/dialogs.tsx:187
@@ -2944,7 +2945,7 @@ msgstr "Name"
 msgid "Name this bot"
 msgstr "Name this bot"
 
-#: src/pages/GroupPanel.tsx:138
+#: src/pages/GroupPanel.tsx:256
 msgid "Name this group"
 msgstr "Name this group"
 
@@ -2956,7 +2957,7 @@ msgstr "Name this routine"
 msgid "Needs takeover"
 msgstr "Needs takeover"
 
-#: src/pages/shell/side-panel.tsx:329
+#: src/pages/shell/side-panel.tsx:340
 msgid "Needs you"
 msgstr "Needs you"
 
@@ -2968,7 +2969,7 @@ msgstr "Needs your call"
 msgid "New bot"
 msgstr "New bot"
 
-#: src/pages/GroupPanel.tsx:115
+#: src/pages/GroupPanel.tsx:233
 msgid "New group"
 msgstr "New group"
 
@@ -3166,8 +3167,8 @@ msgstr "Not sent"
 msgid "Nothing is still running"
 msgstr "Nothing is still running"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:43
-#: src/pages/bot-page/KnowledgeTab.tsx:55
+#: src/pages/bot-page/KnowledgeTab.tsx:44
+#: src/pages/bot-page/KnowledgeTab.tsx:56
 #: src/pages/KnowledgeSection.tsx:42
 msgid "Nothing remembered yet"
 msgstr "Nothing remembered yet"
@@ -3379,6 +3380,10 @@ msgstr "Paste your API key"
 msgid "Paused"
 msgstr "Paused"
 
+#: src/pages/GroupPanel.tsx:130
+msgid "People"
+msgstr "People"
+
 #: src/pages/usage-settings.tsx:97
 msgid "Period"
 msgstr "Period"
@@ -3568,7 +3573,7 @@ msgstr "Refresh view"
 msgid "Refreshing…"
 msgstr "Refreshing…"
 
-#: src/pages/shell/side-panel.tsx:475
+#: src/pages/shell/side-panel.tsx:487
 msgid "Release"
 msgstr "Release"
 
@@ -3851,7 +3856,7 @@ msgstr "Runs when this bot receives a verified message from this provider."
 #: src/components/AskCard.tsx:405
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:255
-#: src/pages/GroupPanel.tsx:279
+#: src/pages/GroupPanel.tsx:450
 #: src/pages/KnowledgeSection.tsx:235
 #: src/pages/KnowledgeSection.tsx:706
 #: src/pages/model-settings/model-detail.tsx:329
@@ -3890,7 +3895,7 @@ msgstr "Saving..."
 #: src/components/AskCard.tsx:405
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/bot-page/page-kit.tsx:49
-#: src/pages/GroupPanel.tsx:279
+#: src/pages/GroupPanel.tsx:450
 #: src/pages/model-settings/model-detail.tsx:327
 #: src/pages/shell/dialogs.tsx:266
 msgid "Saving…"
@@ -4030,11 +4035,11 @@ msgid "Share"
 msgstr "Share"
 
 #. placeholder {0}: bot.name
-#: src/pages/ShareBotDialog.tsx:194
+#: src/pages/ShareBotDialog.tsx:153
 msgid "Share {0}"
 msgstr "Share {0}"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:139
+#: src/pages/bot-page/KnowledgeTab.tsx:138
 #: src/pages/MemorySettingsOverlay.tsx:49
 msgid "Shared"
 msgstr "Shared"
@@ -4115,19 +4120,19 @@ msgstr "Skill learned · {name}"
 msgid "Skill updated · {name}"
 msgstr "Skill updated · {name}"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:69
+#: src/pages/bot-page/KnowledgeTab.tsx:70
 #: src/pages/CustomizeOverlay.tsx:28
 #: src/pages/CustomizeOverlay.tsx:103
 msgid "Skills"
 msgstr "Skills"
 
-#: src/pages/ShareBotDialog.tsx:240
+#: src/pages/ShareBotDialog.tsx:193
 msgid "Skills this bot can use"
 msgstr "Skills this bot can use"
 
 #: src/components/ask/QuestionCard.tsx:194
 #: src/components/integrations/IntegrationSetup.tsx:359
-#: src/pages/shell/side-panel.tsx:482
+#: src/pages/shell/side-panel.tsx:494
 msgid "Skip"
 msgstr "Skip"
 
@@ -4209,8 +4214,8 @@ msgid "Steps"
 msgstr "Steps"
 
 #: src/pages/shell/composer.tsx:302
-#: src/pages/shell/side-panel.tsx:345
-#: src/pages/shell/side-panel.tsx:350
+#: src/pages/shell/side-panel.tsx:356
+#: src/pages/shell/side-panel.tsx:361
 msgid "Stop"
 msgstr "Stop"
 
@@ -4275,7 +4280,7 @@ msgstr "Switching…"
 msgid "System"
 msgstr "System"
 
-#: src/pages/shell/side-panel.tsx:460
+#: src/pages/shell/side-panel.tsx:472
 msgid "Take control"
 msgstr "Take control"
 
@@ -4304,7 +4309,7 @@ msgstr "Team Computer"
 msgid "Team conversations"
 msgstr "Team conversations"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:49
+#: src/pages/bot-page/KnowledgeTab.tsx:50
 msgid "Team memory"
 msgstr "Team memory"
 
@@ -4655,8 +4660,8 @@ msgstr "What should this routine do each time it runs?"
 msgid "What this bot is for"
 msgstr "What this bot is for"
 
-#: src/pages/GroupPanel.tsx:149
-#: src/pages/GroupPanel.tsx:258
+#: src/pages/GroupPanel.tsx:267
+#: src/pages/GroupPanel.tsx:428
 msgid "What this group is for"
 msgstr "What this group is for"
 
@@ -4702,7 +4707,7 @@ msgid "Yesterday"
 msgstr "Yesterday"
 
 #: src/components/DraftCard.tsx:53
-#: src/pages/Shell.tsx:138
+#: src/pages/Shell.tsx:139
 #: src/pages/shell/message-view.tsx:437
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"
@@ -4717,7 +4722,7 @@ msgid "You can close this window."
 msgstr "You can close this window."
 
 #: src/pages/ComputerSettingsPanel.tsx:121
-#: src/pages/shell/side-panel.tsx:333
+#: src/pages/shell/side-panel.tsx:344
 msgid "You have control"
 msgstr "You have control"
 

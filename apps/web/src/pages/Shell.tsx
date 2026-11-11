@@ -278,6 +278,7 @@ export function ShellPage() {
         onBotPage={panels.setBotPage}
         commands={botCommands}
         userId={userId ?? ""}
+        spaceId={roster.bootstrapMe?.spaceId}
         pageBot={pageBot}
         active={active}
         activeGroup={activeGroup}

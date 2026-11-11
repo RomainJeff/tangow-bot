@@ -597,7 +597,7 @@ msgstr "请在聊天中批准，或说“不”以取消。"
 msgid "Approve this server to let your agent use its tools."
 msgstr "批准此服务器后，Agent 才能使用它的工具。"
 
-#: src/pages/ShareBotDialog.tsx:253
+#: src/pages/ShareBotDialog.tsx:206
 msgid "Apps this bot can use"
 msgstr ""
 
@@ -759,7 +759,7 @@ msgid "Booting live desktop…"
 msgstr "正在启动实时桌面…"
 
 #. placeholder {0}: active?.name
-#: src/pages/shell/side-panel.tsx:280
+#: src/pages/shell/side-panel.tsx:291
 msgid "Booting up {0}’s computer"
 msgstr "正在启动 {0} 的电脑"
 
@@ -783,7 +783,7 @@ msgstr "Bot"
 msgid "Bot"
 msgstr "Bot"
 
-#: src/pages/shell/side-panel.tsx:409
+#: src/pages/shell/side-panel.tsx:421
 msgid "Bot screen"
 msgstr "Bot 屏幕"
 
@@ -869,7 +869,7 @@ msgstr "取消编辑"
 msgid "Cancel new bot"
 msgstr "取消新建 Bot"
 
-#: src/pages/GroupPanel.tsx:120
+#: src/pages/GroupPanel.tsx:238
 msgid "Cancel new group"
 msgstr "取消新建群组"
 
@@ -1005,7 +1005,7 @@ msgstr ""
 msgid "Close"
 msgstr "关闭"
 
-#: src/pages/shell/side-panel.tsx:386
+#: src/pages/shell/side-panel.tsx:398
 msgid "Close computer"
 msgstr "关闭电脑"
 
@@ -1036,7 +1036,7 @@ msgid "Close model settings"
 msgstr "关闭模型设置"
 
 #: src/pages/bot-page/BotPage.tsx:184
-#: src/pages/shell/side-panel.tsx:154
+#: src/pages/shell/side-panel.tsx:166
 msgid "Close panel"
 msgstr "关闭面板"
 
@@ -1104,7 +1104,7 @@ msgstr "电脑"
 msgid "Computer failed to boot"
 msgstr "电脑启动失败"
 
-#: src/pages/shell/side-panel.tsx:436
+#: src/pages/shell/side-panel.tsx:448
 msgid "Computer is asleep"
 msgstr "电脑已休眠"
 
@@ -1362,7 +1362,7 @@ msgstr "无法继续"
 msgid "Could not create bot"
 msgstr "无法创建 Bot"
 
-#: src/pages/GroupPanel.tsx:105
+#: src/pages/GroupPanel.tsx:223
 msgid "Could not create group"
 msgstr "无法创建群组"
 
@@ -1439,7 +1439,7 @@ msgstr "无法导入技能"
 msgid "Could not install connector"
 msgstr "无法安装连接器"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:181
+#: src/pages/bot-page/KnowledgeTab.tsx:180
 #: src/pages/bot-page/page-kit.tsx:80
 #: src/pages/KnowledgeSection.tsx:90
 #: src/pages/KnowledgeSection.tsx:119
@@ -1542,7 +1542,7 @@ msgstr "无法移除"
 msgid "Could not remove connector"
 msgstr "无法移除连接器"
 
-#: src/pages/GroupPanel.tsx:210
+#: src/pages/GroupPanel.tsx:355
 msgid "Could not remove group"
 msgstr "无法移除群组"
 
@@ -1582,7 +1582,7 @@ msgstr "无法保存"
 msgid "Could not save Auto Review"
 msgstr "无法保存自动审核"
 
-#: src/pages/GroupPanel.tsx:209
+#: src/pages/GroupPanel.tsx:354
 msgid "Could not save group"
 msgstr "无法保存群组"
 
@@ -1680,7 +1680,7 @@ msgstr "无法创建"
 msgid "Couldn't create an invite link"
 msgstr ""
 
-#: src/pages/ShareBotDialog.tsx:119
+#: src/pages/ShareBotDialog.tsx:85
 msgid "Couldn't load"
 msgstr ""
 
@@ -1705,8 +1705,8 @@ msgstr "无法重命名空间"
 msgid "Couldn't revoke the invite link"
 msgstr ""
 
-#: src/pages/ShareBotDialog.tsx:152
-#: src/pages/ShareBotDialog.tsx:167
+#: src/pages/ShareBotDialog.tsx:118
+#: src/pages/ShareBotDialog.tsx:133
 msgid "Couldn't save"
 msgstr ""
 
@@ -1742,7 +1742,7 @@ msgstr "创建 Bot"
 msgid "Create bot?"
 msgstr "创建 Bot？"
 
-#: src/pages/GroupPanel.tsx:170
+#: src/pages/GroupPanel.tsx:289
 msgid "Create group"
 msgstr "创建群组"
 
@@ -1777,7 +1777,7 @@ msgid "Created"
 msgstr "已创建"
 
 #: src/components/AskCard.tsx:65
-#: src/pages/GroupPanel.tsx:170
+#: src/pages/GroupPanel.tsx:289
 #: src/pages/shell/bot-panel.tsx:155
 #: src/pages/shell/dialogs.tsx:91
 #: src/pages/shell/dialogs.tsx:202
@@ -1892,7 +1892,7 @@ msgstr "删除 {0}"
 msgid "Delete {0}?"
 msgstr "删除 {0}？"
 
-#: src/pages/GroupPanel.tsx:287
+#: src/pages/GroupPanel.tsx:458
 msgid "Delete group"
 msgstr "删除群组"
 
@@ -1908,7 +1908,7 @@ msgstr "删除例行任务"
 msgid "Delete space"
 msgstr ""
 
-#: src/pages/ShareBotDialog.tsx:130
+#: src/pages/ShareBotDialog.tsx:96
 #: src/pages/usage-settings.tsx:197
 msgid "Deleted"
 msgstr ""
@@ -1917,7 +1917,7 @@ msgstr ""
 msgid "Deleted bot"
 msgstr ""
 
-#: src/pages/GroupPanel.tsx:287
+#: src/pages/GroupPanel.tsx:458
 #: src/pages/shell/dialogs.tsx:409
 #: src/pages/shell/dialogs.tsx:470
 msgid "Deleting…"
@@ -1941,8 +1941,8 @@ msgstr "描述这个 Bot 做什么"
 
 #: src/pages/bot-page/SettingDetails.tsx:53
 #: src/pages/bot-page/SettingsTab.tsx:27
-#: src/pages/GroupPanel.tsx:143
-#: src/pages/GroupPanel.tsx:252
+#: src/pages/GroupPanel.tsx:261
+#: src/pages/GroupPanel.tsx:422
 #: src/pages/shell/bot-panel.tsx:131
 msgid "Description"
 msgstr "描述"
@@ -2179,12 +2179,12 @@ msgstr "每周"
 msgid "Everyday"
 msgstr "日常"
 
-#: src/pages/ShareBotDialog.tsx:200
-#: src/pages/ShareBotDialog.tsx:202
+#: src/pages/ShareBotDialog.tsx:159
+#: src/pages/ShareBotDialog.tsx:161
 msgid "Everyone in {spaceName}"
 msgstr ""
 
-#: src/pages/ShareBotDialog.tsx:268
+#: src/pages/ShareBotDialog.tsx:221
 msgid "Everyone who uses this bot can see its files and browser sign-ins."
 msgstr ""
 
@@ -2227,14 +2227,14 @@ msgstr "失败"
 msgid "Failed {when}"
 msgstr "{when}失败"
 
+#: src/pages/shell/use-thread-send.ts:287
 #: src/pages/shell/use-thread-send.ts:289
 #: src/pages/shell/use-thread-send.ts:291
-#: src/pages/shell/use-thread-send.ts:293
 msgid "Failed to send message"
 msgstr "发送消息失败"
 
-#: src/pages/shell/use-thread-send.ts:329
-#: src/pages/shell/use-thread-send.ts:348
+#: src/pages/shell/use-thread-send.ts:327
+#: src/pages/shell/use-thread-send.ts:346
 msgid "Failed to stop"
 msgstr "停止失败"
 
@@ -2260,7 +2260,7 @@ msgstr "快速"
 msgid "Featured"
 msgstr "精选"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:66
+#: src/pages/bot-page/KnowledgeTab.tsx:67
 msgid "Files"
 msgstr "文件"
 
@@ -2348,7 +2348,8 @@ msgstr "全局"
 msgid "Group"
 msgstr "群组"
 
-#: src/pages/GroupPanel.tsx:234
+#: src/pages/GroupPanel.tsx:376
+#: src/pages/GroupPanel.tsx:404
 msgid "Group settings"
 msgstr "群组设置"
 
@@ -2438,7 +2439,7 @@ msgstr "此机器人应如何表现"
 msgid "How to check"
 msgstr "如何检查"
 
-#: src/pages/shell/side-panel.tsx:485
+#: src/pages/shell/side-panel.tsx:497
 msgid "I’m done"
 msgstr "我做完了"
 
@@ -2466,7 +2467,7 @@ msgstr "导入"
 msgid "Import OpenAPI JSON"
 msgstr "导入 OpenAPI JSON"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:137
+#: src/pages/bot-page/KnowledgeTab.tsx:136
 msgid "Inherit default"
 msgstr "沿用默认"
 
@@ -2532,7 +2533,7 @@ msgstr "间隔单位"
 msgid "Invited by {0}"
 msgstr ""
 
-#: src/pages/bot-page/KnowledgeTab.tsx:138
+#: src/pages/bot-page/KnowledgeTab.tsx:137
 #: src/pages/MemorySettingsOverlay.tsx:49
 msgid "Isolated"
 msgstr "隔离"
@@ -2749,22 +2750,22 @@ msgstr "中"
 msgid "Members"
 msgstr ""
 
-#: src/pages/GroupPanel.tsx:264
+#: src/pages/GroupPanel.tsx:435
 msgid "Members ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgstr "成员（{GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX}）"
 
-#: src/pages/GroupPanel.tsx:155
+#: src/pages/GroupPanel.tsx:274
 msgid "Members (pick {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgstr "成员（选择 {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX} 个）"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:37
+#: src/pages/bot-page/KnowledgeTab.tsx:38
 #: src/pages/MemorySettingsOverlay.tsx:159
 #: src/pages/SettingsOverlay.tsx:134
 msgid "Memory"
 msgstr "记忆"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:128
-#: src/pages/bot-page/KnowledgeTab.tsx:132
+#: src/pages/bot-page/KnowledgeTab.tsx:127
+#: src/pages/bot-page/KnowledgeTab.tsx:131
 msgid "Memory scope"
 msgstr "记忆范围"
 
@@ -2930,8 +2931,8 @@ msgstr ""
 #: src/pages/bot-page/BotHero.tsx:49
 #: src/pages/bot-page/RoutineCreateForm.tsx:74
 #: src/pages/bot-page/RoutineDetail.tsx:111
-#: src/pages/GroupPanel.tsx:133
-#: src/pages/GroupPanel.tsx:243
+#: src/pages/GroupPanel.tsx:251
+#: src/pages/GroupPanel.tsx:413
 #: src/pages/shell/bot-panel.tsx:109
 #: src/pages/shell/dialogs.tsx:72
 #: src/pages/shell/dialogs.tsx:187
@@ -2944,7 +2945,7 @@ msgstr "名称"
 msgid "Name this bot"
 msgstr "给这个 Bot 命名"
 
-#: src/pages/GroupPanel.tsx:138
+#: src/pages/GroupPanel.tsx:256
 msgid "Name this group"
 msgstr "给这个群组命名"
 
@@ -2956,7 +2957,7 @@ msgstr "给这个例行任务命名"
 msgid "Needs takeover"
 msgstr "需要接管"
 
-#: src/pages/shell/side-panel.tsx:329
+#: src/pages/shell/side-panel.tsx:340
 msgid "Needs you"
 msgstr "需要你处理"
 
@@ -2968,7 +2969,7 @@ msgstr ""
 msgid "New bot"
 msgstr "新建 Bot"
 
-#: src/pages/GroupPanel.tsx:115
+#: src/pages/GroupPanel.tsx:233
 msgid "New group"
 msgstr "新建群组"
 
@@ -3166,8 +3167,8 @@ msgstr ""
 msgid "Nothing is still running"
 msgstr "没有仍在运行的任务"
 
-#: src/pages/bot-page/KnowledgeTab.tsx:43
-#: src/pages/bot-page/KnowledgeTab.tsx:55
+#: src/pages/bot-page/KnowledgeTab.tsx:44
+#: src/pages/bot-page/KnowledgeTab.tsx:56
 #: src/pages/KnowledgeSection.tsx:42
 msgid "Nothing remembered yet"
 msgstr "暂无记忆"
@@ -3379,6 +3380,10 @@ msgstr "粘贴你的 API 密钥"
 msgid "Paused"
 msgstr "已暂停"
 
+#: src/pages/GroupPanel.tsx:130
+msgid "People"
+msgstr "成员"
+
 #: src/pages/usage-settings.tsx:97
 msgid "Period"
 msgstr ""
@@ -3568,7 +3573,7 @@ msgstr "刷新视图"
 msgid "Refreshing…"
 msgstr "正在刷新…"
 
-#: src/pages/shell/side-panel.tsx:475
+#: src/pages/shell/side-panel.tsx:487
 msgid "Release"
 msgstr "释放"
 
@@ -3851,7 +3856,7 @@ msgstr ""
 #: src/components/AskCard.tsx:405
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:255
-#: src/pages/GroupPanel.tsx:279
+#: src/pages/GroupPanel.tsx:450
 #: src/pages/KnowledgeSection.tsx:235
 #: src/pages/KnowledgeSection.tsx:706
 #: src/pages/model-settings/model-detail.tsx:329
@@ -3890,7 +3895,7 @@ msgstr ""
 #: src/components/AskCard.tsx:405
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/bot-page/page-kit.tsx:49
-#: src/pages/GroupPanel.tsx:279
+#: src/pages/GroupPanel.tsx:450
 #: src/pages/model-settings/model-detail.tsx:327
 #: src/pages/shell/dialogs.tsx:266
 msgid "Saving…"
@@ -4030,11 +4035,11 @@ msgid "Share"
 msgstr ""
 
 #. placeholder {0}: bot.name
-#: src/pages/ShareBotDialog.tsx:194
+#: src/pages/ShareBotDialog.tsx:153
 msgid "Share {0}"
 msgstr ""
 
-#: src/pages/bot-page/KnowledgeTab.tsx:139
+#: src/pages/bot-page/KnowledgeTab.tsx:138
 #: src/pages/MemorySettingsOverlay.tsx:49
 msgid "Shared"
 msgstr "共享"
@@ -4115,19 +4120,19 @@ msgstr ""
 msgid "Skill updated · {name}"
 msgstr ""
 
-#: src/pages/bot-page/KnowledgeTab.tsx:69
+#: src/pages/bot-page/KnowledgeTab.tsx:70
 #: src/pages/CustomizeOverlay.tsx:28
 #: src/pages/CustomizeOverlay.tsx:103
 msgid "Skills"
 msgstr "技能"
 
-#: src/pages/ShareBotDialog.tsx:240
+#: src/pages/ShareBotDialog.tsx:193
 msgid "Skills this bot can use"
 msgstr ""
 
 #: src/components/ask/QuestionCard.tsx:194
 #: src/components/integrations/IntegrationSetup.tsx:359
-#: src/pages/shell/side-panel.tsx:482
+#: src/pages/shell/side-panel.tsx:494
 msgid "Skip"
 msgstr "跳过"
 
@@ -4209,8 +4214,8 @@ msgid "Steps"
 msgstr "步骤"
 
 #: src/pages/shell/composer.tsx:302
-#: src/pages/shell/side-panel.tsx:345
-#: src/pages/shell/side-panel.tsx:350
+#: src/pages/shell/side-panel.tsx:356
+#: src/pages/shell/side-panel.tsx:361
 msgid "Stop"
 msgstr "停止"
 
@@ -4275,7 +4280,7 @@ msgstr "正在切换…"
 msgid "System"
 msgstr "系统"
 
-#: src/pages/shell/side-panel.tsx:460
+#: src/pages/shell/side-panel.tsx:472
 msgid "Take control"
 msgstr ""
 
@@ -4304,7 +4309,7 @@ msgstr "团队电脑"
 msgid "Team conversations"
 msgstr ""
 
-#: src/pages/bot-page/KnowledgeTab.tsx:49
+#: src/pages/bot-page/KnowledgeTab.tsx:50
 msgid "Team memory"
 msgstr ""
 
@@ -4655,8 +4660,8 @@ msgstr "每次运行时，这个例行任务应做什么？"
 msgid "What this bot is for"
 msgstr "这个 Bot 是做什么的"
 
-#: src/pages/GroupPanel.tsx:149
-#: src/pages/GroupPanel.tsx:258
+#: src/pages/GroupPanel.tsx:267
+#: src/pages/GroupPanel.tsx:428
 msgid "What this group is for"
 msgstr "这个群组是做什么的"
 
@@ -4702,7 +4707,7 @@ msgid "Yesterday"
 msgstr "昨天"
 
 #: src/components/DraftCard.tsx:53
-#: src/pages/Shell.tsx:138
+#: src/pages/Shell.tsx:139
 #: src/pages/shell/message-view.tsx:437
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"
@@ -4717,7 +4722,7 @@ msgid "You can close this window."
 msgstr "可以关闭此窗口。"
 
 #: src/pages/ComputerSettingsPanel.tsx:121
-#: src/pages/shell/side-panel.tsx:333
+#: src/pages/shell/side-panel.tsx:344
 msgid "You have control"
 msgstr "你已接管"
 
