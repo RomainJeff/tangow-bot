@@ -3,7 +3,7 @@ import { bootstrapUserSpace } from "./bootstrap-user.js";
 import { setBotSharing } from "./bot-sharing.js";
 import type { PrismaClient } from "./client.js";
 import { claimSteering, finalizeRun } from "./events.js";
-import { createGroupRepos, GroupCreatorCannotLeaveError } from "./groups.js";
+import { createGroupRepos, GroupCreatorCannotLeaveError, groupThreadPeople } from "./groups.js";
 import { createThreadMessageInTransaction } from "./messages.js";
 import { openPgliteDatabase, type PgliteDatabase } from "./pglite.test-support.js";
 import { createRepos } from "./repos.js";
@@ -114,7 +114,7 @@ describe("a group's people, bots and lead", () => {
   beforeAll(async () => {
     database = await openPgliteDatabase();
     prisma = database.prisma;
-    for (const id of ["creator", "ana", "ben", "stranger"]) {
+    for (const id of ["creator", "ana", "ben", "cleo", "dan", "stranger"]) {
       await prisma.user.create({ data: { id, name: id, email: `${id}@rakazo.test` } });
       await bootstrapUserSpace(prisma, { id }, env);
     }
@@ -123,7 +123,7 @@ describe("a group's people, bots and lead", () => {
     space = (
       await createSpaceForMember(prisma, { currentSpaceId: home, userId: "creator", name: "Team" })
     ).id;
-    for (const userId of ["ana", "ben"]) {
+    for (const userId of ["ana", "ben", "cleo", "dan"]) {
       const { token } = await createSpaceInvitation(prisma, { spaceId: space, userId: "creator" });
       await acceptSpaceInvitation(prisma, { token, userId });
     }
@@ -185,6 +185,36 @@ describe("a group's people, bots and lead", () => {
     expect(without.group.leadBotId).toBeNull();
   });
 
+  it("lets the creator change the bots around one no longer shared with them", async () => {
+    const groups = createGroupRepos(prisma);
+    const unshared = await newBot("ana", "Scout");
+    await setBotSharing(prisma, actor("ana"), {
+      botId: unshared,
+      visibility: "space",
+      userIds: [],
+    });
+    const { id: groupId } = await groups.createGroup(actor("creator"), {
+      name: "Crew",
+      botIds: [creatorBot, unshared],
+    });
+    await setBotSharing(prisma, actor("ana"), {
+      botId: unshared,
+      visibility: "private",
+      userIds: [],
+    });
+
+    const changed = await groups.updateGroup(actor("creator"), {
+      groupId,
+      botIds: [unshared, sharedBot],
+    });
+    expect(changed.group.members.map((member) => member.botId).sort()).toEqual(
+      [unshared, sharedBot].sort(),
+    );
+    await expect(
+      groups.updateGroup(actor("creator"), { groupId, botIds: [unshared, privateBot] }),
+    ).rejects.toBeInstanceOf(IsolationError);
+  });
+
   it("stops only the runs of whoever is taken out or leaves", async () => {
     const groups = createGroupRepos(prisma);
     const group = await newGroup(["ana", "ben"]);
@@ -221,6 +251,42 @@ describe("a group's people, bots and lead", () => {
     expect(await prisma.chatGroupPerson.count({ where: { userId: "ben" } })).toBe(0);
     expect(await status(benRun!.id)).toBe("cancelled");
     expect(await status(anaRun!.id)).toBe("running");
+  });
+
+  it("archives for everyone a group whose only bots leave with their owner's Space removal", async () => {
+    const groups = createGroupRepos(prisma);
+    const cleoBot = await newBot("cleo", "Tutor");
+    await setBotSharing(prisma, actor("cleo"), {
+      botId: cleoBot,
+      visibility: "space",
+      userIds: [],
+    });
+    const group = await groups.createGroup(actor("creator"), {
+      name: "Lessons",
+      botIds: [cleoBot],
+      userIds: ["ana"],
+    });
+    await removeSpaceMember(prisma, { spaceId: space, userId: "creator", memberUserId: "cleo" });
+
+    const archived = await groups.listGroups(actor("ana"), { archived: true });
+    expect(archived.map((listed) => listed.id)).toContain(group.id);
+  });
+
+  it("still names a group's creator once they are removed from the Space", async () => {
+    const groups = createGroupRepos(prisma);
+    const { id: groupId, threadId } = await groups.createGroup(actor("dan"), {
+      name: "Trip",
+      botIds: [sharedBot],
+      userIds: ["ana"],
+    });
+    await removeSpaceMember(prisma, { spaceId: space, userId: "creator", memberUserId: "dan" });
+
+    const listed = (await groups.listGroups(actor("ana"))).find((group) => group.id === groupId);
+    expect(listed).toMatchObject({ creatorId: "dan", people: [{ userId: "ana" }] });
+    const { sessionId } = await prisma.thread.findUniqueOrThrow({ where: { id: threadId } });
+    expect(
+      (await groupThreadPeople(prisma, { groupId, sessionId })).map((person) => person.userId),
+    ).toEqual(["ana", "dan"]);
   });
 
   it("keeps each person's messages to their own runs of a bot", async () => {

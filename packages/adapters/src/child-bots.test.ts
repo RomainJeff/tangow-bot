@@ -279,6 +279,7 @@ describe("destroyBot", () => {
           findMany: vi.fn().mockResolvedValue([]),
           deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
         },
+        chatGroupMember: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
         artifact: { findMany: findArtifacts, deleteMany: deleteArtifacts },
         computerExecutionLease: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
         computer: { updateMany: releaseComputers },
@@ -558,6 +559,7 @@ describe("destroyBot", () => {
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([]),
       chatGroup: { findMany: vi.fn().mockResolvedValue([]) },
+      chatGroupMember: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
       artifact: {
         findMany: vi.fn().mockResolvedValue([]),
         deleteMany: vi.fn().mockResolvedValue({ count: 0 }),

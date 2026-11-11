@@ -782,7 +782,26 @@ export type MobileGroup = Pick<
   | "canManage"
   | "leadBotId"
 > &
-  Partial<Pick<Group, "spaceId">>;
+  Partial<Pick<Group, "spaceId" | "creatorId">>;
+
+/** A group as an older server sends it, from before groups held people. */
+type ServerGroup = Omit<MobileGroup, "people" | "canManage" | "leadBotId" | "members"> &
+  Partial<Pick<MobileGroup, "people" | "canManage" | "leadBotId">> & {
+    members: (Omit<MobileGroup["members"][number], "canUse"> & { canUse?: boolean })[];
+  };
+
+/** The Space's groups; one from an older server is the viewer's own, with only their bots. */
+export async function listGroups(): Promise<MobileGroup[]> {
+  return (await rpc<ServerGroup[]>("groups/list")).map((group) => ({
+    ...group,
+    members: group.members.map((member) => ({ ...member, canUse: member.canUse ?? true })),
+    people: group.people ?? [],
+    canManage: group.canManage ?? true,
+    leadBotId: group.leadBotId ?? null,
+    // A server from before it said who made a group lists them first.
+    creatorId: group.creatorId ?? group.people?.[0]?.userId,
+  }));
+}
 
 export type MobileSpace = Space;
 export type MobileSpaceNavigation = SpaceNavigation;

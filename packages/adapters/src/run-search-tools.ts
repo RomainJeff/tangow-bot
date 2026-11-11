@@ -2,7 +2,7 @@ import type { RunSearchInput, SessionLog } from "@rakazo/adapter-kit";
 import { FactualRunRecapSchema, SessionId } from "@rakazo/contracts";
 import { matchesSearchQuery, snippetAroundMatch } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
-import { ENTRY_ON_CHAIN, groupMembershipFilter, Prisma } from "@rakazo/db";
+import { ENTRY_ON_CHAIN, groupMembershipFilter, Prisma, sharedWithFilter } from "@rakazo/db";
 import { z } from "zod";
 import {
   decodeSearchCursor,
@@ -194,14 +194,19 @@ export async function searchRunsFromTool(
         OR: [{ userId: actor.userId }, { group: groupMembershipFilter(actor.userId) }],
       },
     });
-    // In a member's thread with a shared bot, the bot is the owner's and the run the member's.
+    // In a member's thread with a shared bot, the bot is the owner's and the run the member's;
+    // in a group, it is one the person who woke it owns or that is shared with them.
     const memberThread = Boolean(thread?.memberBotId) && thread?.memberBotId === actor.botId;
     const bot = await tx.bot.findFirst({
       where: {
         id: actor.botId,
         spaceId: actor.spaceId,
         archivedAt: null,
-        ...(memberThread ? {} : { userId: actor.userId }),
+        ...(memberThread
+          ? {}
+          : thread?.groupId
+            ? { OR: [{ userId: actor.userId }, sharedWithFilter(actor.userId)] }
+            : { userId: actor.userId }),
       },
     });
     if (!thread || !bot || thread.externalConversationId) return DENIED;

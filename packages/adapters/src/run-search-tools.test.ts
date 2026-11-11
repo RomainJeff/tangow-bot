@@ -626,6 +626,35 @@ describe("search_runs authorization and archive discovery", () => {
     read.mockRestore();
   });
 
+  it("searches a person's runs of a bot shared with them in a group", async () => {
+    const c = await conversation();
+    await database.prisma.user.create({
+      data: { id: "group-person", name: "Person", email: "person@rakazo.test" },
+    });
+    await database.prisma.bot.update({ where: { id: c.bot.id }, data: { visibility: "space" } });
+    const group = await database.prisma.chatGroup.create({
+      data: {
+        spaceId: c.bot.spaceId,
+        userId: c.bot.userId,
+        name: "Crew",
+        members: { create: { botId: c.bot.id } },
+        people: { create: [{ userId: c.bot.userId }, { userId: "group-person" }] },
+      },
+    });
+    const thread = await database.prisma.thread.create({
+      data: { spaceId: c.bot.spaceId, userId: c.bot.userId, groupId: group.id },
+    });
+    const inGroup = { ...c, thread, sessionId: SessionId.parse(thread.sessionId) };
+    const current = await runOf(inGroup, "Now", { userId: "group-person" });
+    await text(current, "Ready");
+    const earlier = await runOf(inGroup, "Earlier receipt", { userId: "group-person" });
+    await text(earlier, "receipt found");
+
+    expect(await search(current.id, { runId: earlier.id, query: "receipt" })).toMatchObject({
+      hits: [{ excerpt: "receipt found" }],
+    });
+  });
+
   it("revokes a source removed by rewind even when the run has new active text", async () => {
     const c = await conversation();
     const current = await caller(c);

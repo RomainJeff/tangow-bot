@@ -113,6 +113,7 @@ function mapGroup(group: GroupRecord, preview: string, userId: string, usable: S
         name: person.user.name,
         image: person.user.image,
       })),
+    creatorId: group.userId,
     canManage: group.userId === userId,
     leadBotId: group.leadBotId,
     threadId: group.thread.id,
@@ -145,16 +146,25 @@ function hasMinimumActiveMembers(members: readonly unknown[]) {
   return members.length >= GROUP_MEMBER_MIN;
 }
 
-/** The bots a group's creator puts in it: their own, or ones shared with them. */
-async function assertUsableBots(prisma: PrismaClient, actor: Actor, botIds: string[]) {
+/**
+ * The bots a group's creator puts in it: their own, or ones shared with them. A bot already in
+ * the group may stay though they can no longer use it, so they can still change the others.
+ */
+async function assertUsableBots(
+  db: Pick<Prisma.TransactionClient, "bot">,
+  actor: Actor,
+  botIds: string[],
+  kept: readonly string[] = [],
+) {
   const unique = [...new Set(botIds)];
   if (unique.length < GROUP_MEMBER_MIN || unique.length > GROUP_MEMBER_MAX) {
     throw new IsolationError(
       `Groups require ${GROUP_MEMBER_MIN} to ${GROUP_MEMBER_MAX} distinct bots`,
     );
   }
-  const usable = await usableBotIds(prisma, actor.userId, actor.spaceId, unique);
-  if (usable.size !== unique.length) throw new IsolationError();
+  const added = unique.filter((botId) => !kept.includes(botId));
+  const usable = await usableBotIds(db, actor.userId, actor.spaceId, added);
+  if (usable.size !== added.length) throw new IsolationError();
   return unique.map((botId) => ({ botId }));
 }
 
@@ -428,14 +438,11 @@ export function createGroupRepos(prisma: PrismaClient) {
         sectionId?: string | null;
       },
     ): Promise<{ group: Group; cancelledRunIds: string[] }> {
-      const members = input.botIds
-        ? await assertUsableBots(prisma, actor, input.botIds)
-        : undefined;
       const people = input.userIds
         ? await assertSpacePeople(prisma, actor, input.userIds)
         : undefined;
       // Anyone in the group pins and files it for themselves; only its creator changes it.
-      const manages = [input.name, input.description, members, people, input.leadBotId].some(
+      const manages = [input.name, input.description, input.botIds, people, input.leadBotId].some(
         (value) => value !== undefined,
       );
       const updated = await prisma.$transaction(async (tx) => {
@@ -449,10 +456,20 @@ export function createGroupRepos(prisma: PrismaClient) {
           },
         });
         if (!current?.thread) throw new IsolationError();
+        const members = input.botIds
+          ? await assertUsableBots(
+              tx,
+              actor,
+              input.botIds,
+              current.members.map((member) => member.botId),
+            )
+          : undefined;
+        const archived = new Set(
+          current.members.filter((member) => member.bot.archivedAt).map((member) => member.botId),
+        );
         if (
-          !members &&
           !hasMinimumActiveMembers(
-            current.members.filter((member) => member.bot.archivedAt === null),
+            (members ?? current.members).filter((member) => !archived.has(member.botId)),
           )
         ) {
           throw new IsolationError();
@@ -713,6 +730,58 @@ export async function lockGroupForCreator(
   if (locked.length !== 1) throw new IsolationError();
 }
 
+/**
+ * Locks the groups of bots their owner is archiving or deleting, and returns those the bots leave
+ * with no active bot. Of these, a group someone else made, with bots shared with them, is
+ * archived for everyone with its history: its creator restores it once a bot is back. The owner's
+ * own are left to the caller.
+ */
+export async function archiveGroupsLeftWithoutBots(
+  tx: Prisma.TransactionClient,
+  bots: { botIds: string[]; ownerId: string | undefined },
+) {
+  if (bots.botIds.length === 0) return [];
+  await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT groups.id
+    FROM chat_groups AS groups
+    INNER JOIN chat_group_members AS members ON members."groupId" = groups.id
+    WHERE members."botId" IN (${Prisma.join(bots.botIds)})
+    ORDER BY groups.id
+    FOR UPDATE OF groups
+  `;
+  const groups = await tx.chatGroup.findMany({
+    where: { members: { some: { botId: { in: bots.botIds } } } },
+    select: {
+      id: true,
+      userId: true,
+      members: { select: { botId: true, bot: { select: { archivedAt: true } } } },
+      thread: { select: { id: true } },
+    },
+  });
+  const closed = groups.filter(
+    (group) =>
+      !hasMinimumActiveMembers(
+        group.members.filter(
+          (member) => !bots.botIds.includes(member.botId) && member.bot.archivedAt === null,
+        ),
+      ),
+  );
+  const archivedIds = closed
+    .filter((group) => group.userId !== bots.ownerId)
+    .map((group) => group.id);
+  if (archivedIds.length) {
+    await tx.chatGroup.updateMany({
+      where: { id: { in: archivedIds }, archivedAt: null },
+      data: { archivedAt: new Date() },
+    });
+    await tx.chatGroupPerson.updateMany({
+      where: { groupId: { in: archivedIds } },
+      data: { pinned: false },
+    });
+  }
+  return closed;
+}
+
 export async function touchGroupUpdatedAt(
   prisma: Pick<Prisma.TransactionClient, "chatGroup">,
   groupId: string,
@@ -768,7 +837,7 @@ export async function markThreadsUnread(
 
 /**
  * Whom a group thread's messages name: its people, in the order they joined, then anyone who
- * wrote in it and has left since.
+ * wrote in it and has left since, its creator among them.
  */
 export async function groupThreadPeople(
   prisma: Pick<PrismaClient, "chatGroupPerson" | "user" | "$queryRaw">,
@@ -786,6 +855,8 @@ export async function groupThreadPeople(
       WHERE e."sessionId" = ${group.sessionId}
         AND e.type = 'user.message'
         AND e.payload->>'authorId' IS NOT NULL
+      UNION
+      SELECT g."userId" FROM chat_groups g WHERE g.id = ${group.groupId}
     `,
   ]);
   const current = new Set(people.map((person) => person.user.id));

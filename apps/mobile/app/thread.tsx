@@ -164,6 +164,7 @@ import {
   copyableMobileMessageText,
   currentApiBase,
   keepUnchangedRows,
+  listGroups,
   loadSessionToken,
   type MobileBot,
   type MobileGroup,
@@ -572,8 +573,8 @@ function Thread() {
   }, []);
   const showSteps = useDebugMode();
   const currentGroup = groupId ? mentionGroups.find((group) => group.id === groupId) : undefined;
-  // A message carrying no author is the creator's, who comes first among the group's people.
-  const creatorId = currentGroup?.people[0]?.userId;
+  // A message carrying no author is the creator's.
+  const creatorId = currentGroup?.creatorId;
   // Several people share a group's history: nobody rewinds it under the others.
   const sharedHistory = (currentGroup?.people.length ?? 0) > 1;
   const threadRuns = useMemo(
@@ -778,7 +779,7 @@ function Thread() {
   const groupsRefreshGeneration = useRef(0);
   const refreshGroups = useCallback(async () => {
     const generation = ++groupsRefreshGeneration.current;
-    const groups = await rpc<MobileGroup[]>("groups/list").catch(() => null);
+    const groups = await listGroups().catch(() => null);
     // Keep the last known groups if a refresh fails or a newer one has started.
     if (groups && generation === groupsRefreshGeneration.current) setMentionGroups(groups);
   }, []);

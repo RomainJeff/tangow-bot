@@ -7,10 +7,11 @@ import type {
   SandboxProvider,
 } from "@rakazo/adapter-kit";
 import { routineJobKey, runContinueJob, runJobKey } from "@rakazo/adapter-kit";
-import { type Actor, type Bot, type ComputerMode, GROUP_MEMBER_MIN } from "@rakazo/contracts";
+import type { Actor, Bot, ComputerMode } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
+  archiveGroupsLeftWithoutBots,
   cancelRunsInTransaction,
   createRepos,
   createThreadMessageInTransaction,
@@ -309,10 +310,11 @@ export async function archiveBot(
         data: { state: "stopped" },
       });
     }
-    await tx.bot.update({
+    const { userId } = await tx.bot.update({
       where: { id: bot.id },
       data: { archivedAt: bot.archivedAt ?? now, pinned: false },
     });
+    await archiveGroupsLeftWithoutBots(tx, { botIds: [bot.id], ownerId: userId });
   });
   await Promise.allSettled([
     ...activeRuns.map((run) => deps.jobs.cancel(runJobKey(run.id))),
@@ -497,33 +499,12 @@ async function detachBotFromGroups(
   bot: { id: string; userId: string | undefined },
 ) {
   const botId = bot.id;
-  await tx.$queryRaw<Array<{ id: string }>>`
-    SELECT groups.id
-    FROM chat_groups AS groups
-    INNER JOIN chat_group_members AS members ON members."groupId" = groups.id
-    WHERE members."botId" = ${botId}
-    ORDER BY groups.id
-    FOR UPDATE OF groups
-  `;
-  const affectedGroups = await tx.chatGroup.findMany({
-    where: { members: { some: { botId } } },
-    include: {
-      members: {
-        select: { botId: true, bot: { select: { archivedAt: true } } },
-      },
-      thread: { select: { id: true } },
-    },
+  const closedGroups = await archiveGroupsLeftWithoutBots(tx, {
+    botIds: [botId],
+    ownerId: bot.userId,
   });
-  const closedGroups = affectedGroups.filter(
-    (group) =>
-      group.members.filter((member) => member.botId !== botId && member.bot.archivedAt === null)
-        .length < GROUP_MEMBER_MIN,
-  );
   const dissolvedGroupIds = closedGroups
     .filter((group) => group.userId === bot.userId)
-    .map((group) => group.id);
-  const archivedGroupIds = closedGroups
-    .filter((group) => group.userId !== bot.userId)
     .map((group) => group.id);
   const closedThreadIds = closedGroups.flatMap((group) => (group.thread ? [group.thread.id] : []));
   const activeRuns = closedThreadIds.length
@@ -558,9 +539,7 @@ async function detachBotFromGroups(
       },
     });
   }
-  if (affectedGroups.length) {
-    await tx.chatGroupMember.deleteMany({ where: { botId } });
-  }
+  await tx.chatGroupMember.deleteMany({ where: { botId } });
   const groupArtifacts = dissolvedGroupIds.length
     ? await tx.artifact.findMany({
         where: { groupId: { in: dissolvedGroupIds } },
@@ -569,16 +548,6 @@ async function detachBotFromGroups(
     : [];
   if (dissolvedGroupIds.length) {
     await tx.chatGroup.deleteMany({ where: { id: { in: dissolvedGroupIds } } });
-  }
-  if (archivedGroupIds.length) {
-    await tx.chatGroup.updateMany({
-      where: { id: { in: archivedGroupIds }, archivedAt: null },
-      data: { archivedAt: new Date() },
-    });
-    await tx.chatGroupPerson.updateMany({
-      where: { groupId: { in: archivedGroupIds } },
-      data: { pinned: false },
-    });
   }
   return {
     artifactKeys: groupArtifacts.map((artifact) => artifact.storageKey),

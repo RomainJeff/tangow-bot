@@ -3,6 +3,7 @@ import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import { cancelRunsInTransaction } from "./cancel-runs.js";
 import { Prisma, type PrismaClient } from "./client.js";
 import { expireComputerExecutionLeases } from "./computers.js";
+import { archiveGroupsLeftWithoutBots } from "./groups.js";
 import { IsolationError } from "./scope.js";
 import { withTransactionRetry } from "./transaction-retry.js";
 import { deleteOwnerVolumes } from "./volumes.js";
@@ -713,9 +714,14 @@ export async function removeSpaceMember(
     // Archived, not deleted: archived bots claim no run, webhooks and channels included. Their
     // rows go with the Space.
     const leftovers = { spaceId: input.spaceId, userId: input.memberUserId };
-    await tx.bot.updateMany({
+    const archivedBots = await tx.bot.updateManyAndReturn({
       where: { ...leftovers, archivedAt: null },
       data: { archivedAt: new Date() },
+      select: { id: true },
+    });
+    await archiveGroupsLeftWithoutBots(tx, {
+      botIds: archivedBots.map((bot) => bot.id),
+      ownerId: input.memberUserId,
     });
     await tx.routine.updateMany({ where: leftovers, data: { active: false, nextRunAt: null } });
     // Their threads with bots shared with them stay, hidden: membership gates access to them.

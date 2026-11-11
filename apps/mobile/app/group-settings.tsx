@@ -11,7 +11,7 @@ import { BotAvatar } from "../components/bot-avatar";
 import { BotMemberPicker, PersonPicker, useSpacePeople } from "../components/bot-member-picker";
 import { NativeMenu } from "../components/native-menu";
 import { NativeSymbol } from "../components/native-symbol";
-import { type MobileBot, type MobileGroup, rpc } from "../lib/api";
+import { listGroups, type MobileBot, type MobileGroup, rpc } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
 import { serverMessage } from "../lib/server-error";
@@ -30,6 +30,11 @@ function leadOf(
     botIds.map((id) => ({ id })),
     kept,
   );
+}
+
+/** The people the creator adds or takes out: everyone but themselves, who is always in it. */
+function othersOf(group: MobileGroup) {
+  return group.people.filter((person) => person.userId !== group.creatorId);
 }
 
 function sameIds(left: readonly string[], right: readonly string[]) {
@@ -55,9 +60,7 @@ export default function GroupSettingsScreen() {
   useEffect(() => {
     if (!groupId) return;
     void Promise.all([
-      rpc<MobileGroup[]>("groups/list").then(
-        (groups) => groups.find((row) => row.id === groupId) ?? null,
-      ),
+      listGroups().then((groups) => groups.find((row) => row.id === groupId) ?? null),
       rpc<MobileBot[]>("bots/list"),
     ])
       .then(([nextGroup, nextBots]) => {
@@ -66,8 +69,7 @@ export default function GroupSettingsScreen() {
         setName(nextGroup.name);
         setDescription(nextGroup.description ?? "");
         setSelected(nextGroup.members.map((member) => member.botId));
-        // Its creator comes first and is always in it.
-        setUserIds(nextGroup.people.slice(1).map((person) => person.userId));
+        setUserIds(othersOf(nextGroup).map((person) => person.userId));
         setLeadBotId(nextGroup.leadBotId);
         setBots(nextBots);
       })
@@ -77,7 +79,7 @@ export default function GroupSettingsScreen() {
   // Someone the Space no longer lists stays pickable, so the creator can still take them out.
   const people = [
     ...spacePeople,
-    ...(group?.people.slice(1) ?? []).filter(
+    ...(group ? othersOf(group) : []).filter(
       (person) => !spacePeople.some((other) => other.userId === person.userId),
     ),
   ];
@@ -109,11 +111,9 @@ export default function GroupSettingsScreen() {
       } = { groupId };
       // What was switched in or out since the screen opened, applied to the group as it is now,
       // so someone who left meanwhile is not added back.
-      const latest =
-        (await rpc<MobileGroup[]>("groups/list")).find((row) => row.id === groupId) ?? group;
+      const latest = (await listGroups()).find((row) => row.id === groupId) ?? group;
       const botIdsOf = (of: MobileGroup) => of.members.map((member) => member.botId);
-      // Its creator comes first and is always in it.
-      const peopleOf = (of: MobileGroup) => of.people.slice(1).map((person) => person.userId);
+      const peopleOf = (of: MobileGroup) => othersOf(of).map((person) => person.userId);
       const botIds = applyPicks(botIdsOf(latest), botIdsOf(group), selected);
       const nextPeople = applyPicks(peopleOf(latest), peopleOf(group), userIds);
       if (name.trim() !== latest.name) input.name = name.trim();
