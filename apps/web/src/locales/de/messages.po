@@ -164,8 +164,8 @@ msgstr "{count} · nächste {next}"
 msgid "{count} more"
 msgstr ""
 
-#: src/pages/SpaceGeneralSettings.tsx:233
-msgid "{days, plural, one {Invite link · expires in # day} other {Invite link · expires in # days}}"
+#: src/pages/SpaceGeneralSettings.tsx:251
+msgid "{days, plural, one {Expires in # day} other {Expires in # days}}"
 msgstr ""
 
 #: src/pages/ActivityList.tsx:140
@@ -443,7 +443,7 @@ msgstr "Wird hinzugefügt…"
 #: src/pages/Onboarding.tsx:496
 #: src/pages/plugins/advanced-integrations.tsx:77
 #: src/pages/RoutineSchedule.tsx:47
-#: src/pages/SpaceGeneralSettings.tsx:48
+#: src/pages/SpaceGeneralSettings.tsx:49
 msgid "Advanced"
 msgstr "Erweitert"
 
@@ -758,8 +758,8 @@ msgstr "Bearer-Token"
 msgid "Booting live desktop…"
 msgstr "Live-Desktop wird gestartet…"
 
-#. placeholder {0}: active?.name
-#: src/pages/shell/side-panel.tsx:295
+#. placeholder {0}: bot?.name
+#: src/pages/shell/side-panel.tsx:299
 msgid "Booting up {0}’s computer"
 msgstr "Computer von {0} wird gestartet"
 
@@ -783,7 +783,7 @@ msgstr "Bot"
 msgid "Bot"
 msgstr ""
 
-#: src/pages/shell/side-panel.tsx:425
+#: src/pages/shell/side-panel.tsx:429
 msgid "Bot screen"
 msgstr "Bot-Bildschirm"
 
@@ -870,7 +870,7 @@ msgstr "Bearbeitung abbrechen"
 msgid "Cancel new bot"
 msgstr "Neuen Bot abbrechen"
 
-#: src/pages/GroupPanel.tsx:248
+#: src/pages/GroupPanel.tsx:247
 msgid "Cancel new group"
 msgstr "Neue Gruppe abbrechen"
 
@@ -916,7 +916,7 @@ msgstr "Kanäle"
 msgid "Chat apps"
 msgstr "Chat-Apps"
 
-#: src/pages/SpaceGeneralSettings.tsx:36
+#: src/pages/SpaceGeneralSettings.tsx:37
 msgid "Chat apps, group channels, and agent connections."
 msgstr "Chat-Apps, Gruppenkanäle und Agent-Verbindungen."
 
@@ -1006,7 +1006,7 @@ msgstr ""
 msgid "Close"
 msgstr "Schließen"
 
-#: src/pages/shell/side-panel.tsx:402
+#: src/pages/shell/side-panel.tsx:406
 msgid "Close computer"
 msgstr "Computer schließen"
 
@@ -1096,7 +1096,7 @@ msgstr "Komplex"
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
 #: src/pages/SettingsOverlay.tsx:136
-#: src/pages/shell/block-views.tsx:131
+#: src/pages/shell/block-views.tsx:136
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
 msgstr "Computer"
@@ -1105,7 +1105,7 @@ msgstr "Computer"
 msgid "Computer failed to boot"
 msgstr "Computer konnte nicht gestartet werden"
 
-#: src/pages/shell/side-panel.tsx:452
+#: src/pages/shell/side-panel.tsx:456
 msgid "Computer is asleep"
 msgstr "Computer ist im Ruhezustand"
 
@@ -1245,7 +1245,7 @@ msgid "Context limit"
 msgstr "Kontextlimit"
 
 #: src/components/integrations/IntegrationSetup.tsx:356
-#: src/pages/Invite.tsx:82
+#: src/pages/Invite.tsx:108
 #: src/pages/Onboarding.tsx:664
 msgid "Continue"
 msgstr "Weiter"
@@ -1260,6 +1260,10 @@ msgstr "Mit E-Mail fortfahren"
 
 #: src/pages/shell/thread-row.tsx:431
 msgid "Conversation cleared"
+msgstr ""
+
+#: src/pages/SpaceGeneralSettings.tsx:257
+msgid "Copied"
 msgstr ""
 
 #: src/components/DraftCard.tsx:302
@@ -1277,8 +1281,8 @@ msgstr ""
 msgid "Copy diagnostic"
 msgstr "Diagnose kopieren"
 
-#: src/pages/SpaceGeneralSettings.tsx:265
-msgid "Copy invite link"
+#: src/pages/SpaceGeneralSettings.tsx:257
+msgid "Copy link"
 msgstr ""
 
 #: src/pages/ScratchpadSection.tsx:56
@@ -1350,12 +1354,12 @@ msgid "Could not connect this voice provider"
 msgstr "Stimmanbieter konnte nicht verbunden werden"
 
 #: src/pages/shell/use-computer-screen.tsx:117
-#: src/pages/shell/use-computer-screen.tsx:157
+#: src/pages/shell/use-computer-screen.tsx:162
 msgid "Could not connect to the computer screen"
 msgstr "Verbindung zum Computerbildschirm nicht möglich"
 
 #: src/pages/Auth.tsx:102
-#: src/pages/shell/use-computer-control.ts:194
+#: src/pages/shell/use-computer-control.ts:203
 msgid "Could not continue"
 msgstr "Fortfahren fehlgeschlagen"
 
@@ -1363,7 +1367,7 @@ msgstr "Fortfahren fehlgeschlagen"
 msgid "Could not create bot"
 msgstr "Bot konnte nicht erstellt werden"
 
-#: src/pages/GroupPanel.tsx:233
+#: src/pages/GroupPanel.tsx:232
 msgid "Could not create group"
 msgstr "Gruppe konnte nicht erstellt werden"
 
@@ -1440,7 +1444,7 @@ msgstr "Skill konnte nicht importiert werden"
 msgid "Could not install connector"
 msgstr "Connector konnte nicht installiert werden"
 
-#: src/pages/GroupPanel.tsx:379
+#: src/pages/GroupPanel.tsx:378
 #: src/pages/shell/dialogs.tsx:514
 msgid "Could not leave group"
 msgstr "Gruppe konnte nicht verlassen werden"
@@ -1548,7 +1552,7 @@ msgstr "Entfernen fehlgeschlagen"
 msgid "Could not remove connector"
 msgstr "Connector konnte nicht entfernt werden"
 
-#: src/pages/GroupPanel.tsx:378
+#: src/pages/GroupPanel.tsx:377
 msgid "Could not remove group"
 msgstr "Gruppe konnte nicht entfernt werden"
 
@@ -1588,7 +1592,7 @@ msgstr "Speichern fehlgeschlagen"
 msgid "Could not save Auto Review"
 msgstr "Auto-Review konnte nicht gespeichert werden"
 
-#: src/pages/GroupPanel.tsx:376
+#: src/pages/GroupPanel.tsx:375
 msgid "Could not save group"
 msgstr "Gruppe konnte nicht gespeichert werden"
 
@@ -1643,7 +1647,7 @@ msgstr "Lernmodus konnte nicht gestartet werden"
 msgid "Could not submit this answer"
 msgstr "Antwort konnte nicht gesendet werden"
 
-#: src/pages/shell/use-computer-control.ts:64
+#: src/pages/shell/use-computer-control.ts:73
 msgid "Could not take control"
 msgstr "Kontrolle konnte nicht übernommen werden"
 
@@ -1677,20 +1681,24 @@ msgstr "Standardbereich für Erinnerungen konnte nicht aktualisiert werden"
 msgid "Could not update your photo"
 msgstr ""
 
+#: src/pages/SpaceGeneralSettings.tsx:191
+msgid "Couldn't copy the link"
+msgstr ""
+
 #: src/components/AskCard.tsx:61
 #: src/pages/bot-page/RoutineTriggers.tsx:333
 msgid "Couldn't create"
 msgstr "Konnte nicht erstellt werden"
 
-#: src/pages/SpaceGeneralSettings.tsx:176
-msgid "Couldn't create an invite link"
+#: src/pages/SpaceGeneralSettings.tsx:184
+msgid "Couldn't invite them"
 msgstr ""
 
 #: src/pages/ShareBotDialog.tsx:85
 msgid "Couldn't load"
 msgstr ""
 
-#: src/pages/SpaceGeneralSettings.tsx:155
+#: src/pages/SpaceGeneralSettings.tsx:157
 msgid "Couldn't load members"
 msgstr ""
 
@@ -1699,15 +1707,15 @@ msgid "Couldn't load messaging settings"
 msgstr "Nachrichteneinstellungen konnten nicht geladen werden"
 
 #. placeholder {0}: member.name
-#: src/pages/SpaceGeneralSettings.tsx:215
+#: src/pages/SpaceGeneralSettings.tsx:232
 msgid "Couldn't remove {0}"
 msgstr ""
 
-#: src/pages/SpaceGeneralSettings.tsx:96
+#: src/pages/SpaceGeneralSettings.tsx:97
 msgid "Couldn't rename the space"
 msgstr "Der Space konnte nicht umbenannt werden"
 
-#: src/pages/SpaceGeneralSettings.tsx:248
+#: src/pages/SpaceGeneralSettings.tsx:269
 msgid "Couldn't revoke the invite link"
 msgstr ""
 
@@ -1748,7 +1756,7 @@ msgstr "Bot erstellen"
 msgid "Create bot?"
 msgstr "Bot erstellen?"
 
-#: src/pages/GroupPanel.tsx:299
+#: src/pages/GroupPanel.tsx:298
 msgid "Create group"
 msgstr "Gruppe erstellen"
 
@@ -1783,7 +1791,7 @@ msgid "Created"
 msgstr "Erstellt"
 
 #: src/components/AskCard.tsx:65
-#: src/pages/GroupPanel.tsx:299
+#: src/pages/GroupPanel.tsx:298
 #: src/pages/shell/bot-panel.tsx:155
 #: src/pages/shell/dialogs.tsx:91
 #: src/pages/shell/dialogs.tsx:202
@@ -1898,7 +1906,7 @@ msgstr "{0} löschen"
 msgid "Delete {0}?"
 msgstr "{0} löschen?"
 
-#: src/pages/GroupPanel.tsx:512
+#: src/pages/GroupPanel.tsx:511
 msgid "Delete group"
 msgstr "Gruppe löschen"
 
@@ -1923,7 +1931,7 @@ msgstr ""
 msgid "Deleted bot"
 msgstr ""
 
-#: src/pages/GroupPanel.tsx:512
+#: src/pages/GroupPanel.tsx:511
 #: src/pages/shell/dialogs.tsx:409
 #: src/pages/shell/dialogs.tsx:470
 msgid "Deleting…"
@@ -1947,8 +1955,8 @@ msgstr "Beschreibe, was dieser Bot macht"
 
 #: src/pages/bot-page/SettingDetails.tsx:53
 #: src/pages/bot-page/SettingsTab.tsx:27
-#: src/pages/GroupPanel.tsx:271
-#: src/pages/GroupPanel.tsx:455
+#: src/pages/GroupPanel.tsx:270
+#: src/pages/GroupPanel.tsx:454
 #: src/pages/shell/bot-panel.tsx:131
 msgid "Description"
 msgstr "Beschreibung"
@@ -2115,6 +2123,10 @@ msgstr "Aufwand"
 #: src/pages/Auth.tsx:147
 msgid "Email"
 msgstr "E-Mail"
+
+#: src/pages/SpaceGeneralSettings.tsx:288
+msgid "Emails to invite"
+msgstr ""
 
 #: src/pages/CallView.tsx:422
 msgid "End call"
@@ -2354,8 +2366,8 @@ msgstr "Global"
 msgid "Group"
 msgstr "Gruppe"
 
-#: src/pages/GroupPanel.tsx:401
-#: src/pages/GroupPanel.tsx:437
+#: src/pages/GroupPanel.tsx:400
+#: src/pages/GroupPanel.tsx:436
 msgid "Group settings"
 msgstr "Gruppeneinstellungen"
 
@@ -2445,7 +2457,7 @@ msgstr "Wie sich dieser Bot verhalten soll"
 msgid "How to check"
 msgstr "So wird geprüft"
 
-#: src/pages/shell/side-panel.tsx:501
+#: src/pages/shell/side-panel.tsx:505
 msgid "I’m done"
 msgstr "Ich bin fertig"
 
@@ -2534,8 +2546,12 @@ msgstr "Intervallwert"
 msgid "Interval unit"
 msgstr "Intervalleinheit"
 
+#: src/pages/SpaceGeneralSettings.tsx:292
+msgid "Invite"
+msgstr ""
+
 #. placeholder {0}: state.inviterName
-#: src/pages/Invite.tsx:60
+#: src/pages/Invite.tsx:70
 msgid "Invited by {0}"
 msgstr ""
 
@@ -2548,12 +2564,12 @@ msgstr "Isoliert"
 msgid "Its conversation, files, and routines will be permanently deleted. Bots it created stay in your list."
 msgstr "Seine Unterhaltung, Dateien und Routinen werden dauerhaft gelöscht. Von ihm erstellte Bots bleiben in deiner Liste."
 
-#: src/pages/Invite.tsx:68
+#: src/pages/Invite.tsx:78
 msgid "Join"
 msgstr ""
 
 #. placeholder {0}: state.spaceName
-#: src/pages/Invite.tsx:57
+#: src/pages/Invite.tsx:65
 msgid "Join {0}"
 msgstr ""
 
@@ -2599,7 +2615,7 @@ msgstr "Letzter Lauf fehlgeschlagen"
 msgid "Later"
 msgstr ""
 
-#: src/pages/GroupPanel.tsx:480
+#: src/pages/GroupPanel.tsx:479
 msgid "Lead bot"
 msgstr "Leitender Bot"
 
@@ -2620,11 +2636,11 @@ msgid "Leave {0}?"
 msgstr ""
 
 #: src/pages/BotContextMenu.tsx:188
-#: src/pages/GroupPanel.tsx:427
+#: src/pages/GroupPanel.tsx:426
 msgid "Leave group"
 msgstr "Gruppe verlassen"
 
-#: src/pages/GroupPanel.tsx:427
+#: src/pages/GroupPanel.tsx:426
 #: src/pages/shell/dialogs.tsx:519
 msgid "Leaving…"
 msgstr "Wird verlassen…"
@@ -2640,10 +2656,6 @@ msgstr "Hell"
 #: src/pages/MessagingSettingsOverlay.tsx:176
 msgid "Link a chat app"
 msgstr "Chat-App verknüpfen"
-
-#: src/pages/SpaceGeneralSettings.tsx:265
-msgid "Link copied"
-msgstr ""
 
 #: src/pages/ExternalConversationSettings.tsx:99
 msgid "Listen"
@@ -2721,7 +2733,7 @@ msgstr "Stelle sicher, dass auf diesem Computer nichts mehr läuft."
 msgid "Manage MCP servers"
 msgstr "MCP-Server verwalten"
 
-#: src/pages/SpaceGeneralSettings.tsx:39
+#: src/pages/SpaceGeneralSettings.tsx:40
 msgid "Manage messaging settings"
 msgstr "Nachrichteneinstellungen verwalten"
 
@@ -2778,15 +2790,15 @@ msgstr "MCP-Server"
 msgid "Medium"
 msgstr "Mittel"
 
-#: src/pages/SpaceGeneralSettings.tsx:189
+#: src/pages/SpaceGeneralSettings.tsx:206
 msgid "Members"
 msgstr ""
 
-#: src/pages/GroupPanel.tsx:468
+#: src/pages/GroupPanel.tsx:467
 msgid "Members ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgstr "Mitglieder ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 
-#: src/pages/GroupPanel.tsx:284
+#: src/pages/GroupPanel.tsx:283
 msgid "Members (pick {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgstr "Mitglieder ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX} auswählen)"
 
@@ -2855,7 +2867,7 @@ msgid "Messaged {peer}"
 msgstr "Nachricht an {peer} gesendet"
 
 #: src/pages/MessagingSettingsOverlay.tsx:99
-#: src/pages/SpaceGeneralSettings.tsx:33
+#: src/pages/SpaceGeneralSettings.tsx:34
 msgid "Messaging"
 msgstr "Nachrichten"
 
@@ -2963,13 +2975,13 @@ msgstr ""
 #: src/pages/bot-page/BotHero.tsx:49
 #: src/pages/bot-page/RoutineCreateForm.tsx:74
 #: src/pages/bot-page/RoutineDetail.tsx:111
-#: src/pages/GroupPanel.tsx:261
-#: src/pages/GroupPanel.tsx:446
+#: src/pages/GroupPanel.tsx:260
+#: src/pages/GroupPanel.tsx:445
 #: src/pages/shell/bot-panel.tsx:109
 #: src/pages/shell/dialogs.tsx:72
 #: src/pages/shell/dialogs.tsx:187
 #: src/pages/shell/dialogs.tsx:250
-#: src/pages/SpaceGeneralSettings.tsx:112
+#: src/pages/SpaceGeneralSettings.tsx:113
 msgid "Name"
 msgstr "Name"
 
@@ -2977,7 +2989,7 @@ msgstr "Name"
 msgid "Name this bot"
 msgstr "Bot benennen"
 
-#: src/pages/GroupPanel.tsx:266
+#: src/pages/GroupPanel.tsx:265
 msgid "Name this group"
 msgstr "Gruppe benennen"
 
@@ -2989,7 +3001,7 @@ msgstr "Diese Routine benennen"
 msgid "Needs takeover"
 msgstr "Übernahme erforderlich"
 
-#: src/pages/shell/side-panel.tsx:344
+#: src/pages/shell/side-panel.tsx:348
 msgid "Needs you"
 msgstr "Braucht dich"
 
@@ -3001,7 +3013,7 @@ msgstr ""
 msgid "New bot"
 msgstr "Neuer Bot"
 
-#: src/pages/GroupPanel.tsx:243
+#: src/pages/GroupPanel.tsx:242
 msgid "New group"
 msgstr "Neue Gruppe"
 
@@ -3274,7 +3286,7 @@ msgid "Only the first 50 skills are shown to the agent."
 msgstr "Dem Agenten werden nur die ersten 50 Skills angezeigt."
 
 #: src/pages/ScratchpadSection.tsx:159
-#: src/pages/shell/block-views.tsx:146
+#: src/pages/shell/block-views.tsx:151
 #: src/pages/shell/computer-preview.tsx:63
 #: src/pages/shell/computer-preview.tsx:68
 msgid "Open"
@@ -3327,7 +3339,7 @@ msgstr ""
 msgid "Optional"
 msgstr "Optional"
 
-#: src/pages/SpaceGeneralSettings.tsx:51
+#: src/pages/SpaceGeneralSettings.tsx:52
 msgid "Optional controls most people never need"
 msgstr "Optionale Einstellungen, die die meisten nie benötigen"
 
@@ -3370,7 +3382,7 @@ msgstr ""
 msgid "Output"
 msgstr "Ausgabe"
 
-#: src/pages/SpaceGeneralSettings.tsx:202
+#: src/pages/SpaceGeneralSettings.tsx:219
 msgid "Owner"
 msgstr ""
 
@@ -3416,7 +3428,7 @@ msgstr "Füge deinen API-Schlüssel ein"
 msgid "Paused"
 msgstr "Pausiert"
 
-#: src/pages/GroupPanel.tsx:140
+#: src/pages/GroupPanel.tsx:139
 msgid "People"
 msgstr "Personen"
 
@@ -3609,7 +3621,7 @@ msgstr "Ansicht aktualisieren"
 msgid "Refreshing…"
 msgstr "Wird aktualisiert …"
 
-#: src/pages/shell/side-panel.tsx:491
+#: src/pages/shell/side-panel.tsx:495
 msgid "Release"
 msgstr "Freigeben"
 
@@ -3628,7 +3640,7 @@ msgstr ""
 #: src/pages/plugins/advanced-integrations.tsx:377
 #: src/pages/plugins/connection-detail.tsx:110
 #: src/pages/ScratchpadSection.tsx:165
-#: src/pages/SpaceGeneralSettings.tsx:219
+#: src/pages/SpaceGeneralSettings.tsx:236
 msgid "Remove"
 msgstr "Entfernen"
 
@@ -3800,7 +3812,7 @@ msgstr "Erneut versuchen"
 msgid "Retry now"
 msgstr "Jetzt erneut versuchen"
 
-#: src/pages/shell/use-computer-screen.tsx:164
+#: src/pages/shell/use-computer-screen.tsx:173
 msgid "Retry screen"
 msgstr "Bildschirm erneut versuchen"
 
@@ -3814,7 +3826,7 @@ msgid "rev {0}"
 msgstr "Rev. {0}"
 
 #: src/pages/MessagingSettingsOverlay.tsx:325
-#: src/pages/SpaceGeneralSettings.tsx:252
+#: src/pages/SpaceGeneralSettings.tsx:273
 msgid "Revoke"
 msgstr "Widerrufen"
 
@@ -3892,7 +3904,7 @@ msgstr ""
 #: src/components/AskCard.tsx:412
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:255
-#: src/pages/GroupPanel.tsx:504
+#: src/pages/GroupPanel.tsx:503
 #: src/pages/KnowledgeSection.tsx:235
 #: src/pages/KnowledgeSection.tsx:706
 #: src/pages/model-settings/model-detail.tsx:329
@@ -3931,7 +3943,7 @@ msgstr ""
 #: src/components/AskCard.tsx:412
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/bot-page/page-kit.tsx:49
-#: src/pages/GroupPanel.tsx:504
+#: src/pages/GroupPanel.tsx:503
 #: src/pages/model-settings/model-detail.tsx:327
 #: src/pages/shell/dialogs.tsx:266
 msgid "Saving…"
@@ -4168,7 +4180,7 @@ msgstr ""
 
 #: src/components/ask/QuestionCard.tsx:198
 #: src/components/integrations/IntegrationSetup.tsx:359
-#: src/pages/shell/side-panel.tsx:498
+#: src/pages/shell/side-panel.tsx:502
 msgid "Skip"
 msgstr "Überspringen"
 
@@ -4250,8 +4262,8 @@ msgid "Steps"
 msgstr "Schritte"
 
 #: src/pages/shell/composer.tsx:302
-#: src/pages/shell/side-panel.tsx:360
-#: src/pages/shell/side-panel.tsx:365
+#: src/pages/shell/side-panel.tsx:364
+#: src/pages/shell/side-panel.tsx:369
 msgid "Stop"
 msgstr "Stoppen"
 
@@ -4316,7 +4328,7 @@ msgstr "Wird gewechselt…"
 msgid "System"
 msgstr "System"
 
-#: src/pages/shell/side-panel.tsx:476
+#: src/pages/shell/side-panel.tsx:480
 msgid "Take control"
 msgstr ""
 
@@ -4398,7 +4410,12 @@ msgstr "Dieser Chat ist schreibgeschützt"
 msgid "This file is not valid UTF-8 Markdown."
 msgstr "Diese Datei ist kein gültiges UTF-8-Markdown."
 
-#: src/pages/Invite.tsx:75
+#. placeholder {0}: state.email
+#: src/pages/Invite.tsx:84
+msgid "This invite is for {0}."
+msgstr ""
+
+#: src/pages/Invite.tsx:101
 msgid "This invite link has expired or was already used."
 msgstr ""
 
@@ -4603,6 +4620,10 @@ msgstr "Nutzung"
 msgid "Use a found model"
 msgstr "Gefundenes Modell verwenden"
 
+#: src/pages/Invite.tsx:92
+msgid "Use another account"
+msgstr ""
+
 #: src/pages/ExternalConversationSettings.tsx:129
 #: src/pages/ExternalConversationSettings.tsx:130
 msgid "Use default guidance"
@@ -4644,6 +4665,7 @@ msgstr "Wartet"
 #: src/components/ask/AskSettled.tsx:41
 #: src/components/AskCard.tsx:265
 #: src/components/DraftCard.tsx:242
+#: src/pages/shell/block-views.tsx:161
 msgid "Waiting for {waitingOn}"
 msgstr ""
 
@@ -4702,8 +4724,8 @@ msgstr "Was soll diese Routine bei jedem Lauf tun?"
 msgid "What this bot is for"
 msgstr "Wofür dieser Bot gedacht ist"
 
-#: src/pages/GroupPanel.tsx:277
-#: src/pages/GroupPanel.tsx:461
+#: src/pages/GroupPanel.tsx:276
+#: src/pages/GroupPanel.tsx:460
 msgid "What this group is for"
 msgstr "Wofür diese Gruppe gedacht ist"
 
@@ -4749,7 +4771,7 @@ msgid "Yesterday"
 msgstr "Gestern"
 
 #: src/components/DraftCard.tsx:53
-#: src/pages/Shell.tsx:139
+#: src/pages/Shell.tsx:154
 #: src/pages/shell/message-view.tsx:455
 #: src/pages/shell/use-composer-draft.ts:52
 msgid "You"
@@ -4764,7 +4786,7 @@ msgid "You can close this window."
 msgstr "Du kannst dieses Fenster schließen."
 
 #: src/pages/ComputerSettingsPanel.tsx:121
-#: src/pages/shell/side-panel.tsx:348
+#: src/pages/shell/side-panel.tsx:352
 msgid "You have control"
 msgstr "Du hast die Kontrolle"
 
