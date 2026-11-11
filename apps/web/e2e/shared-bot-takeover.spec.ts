@@ -100,10 +100,16 @@ test("in a group, the person whose run asks takes over its bot's screen", async 
   await captureScreenshot(guest, testInfo, "group-takeover-phone");
   await guest.setViewportSize({ width: 1280, height: 720 });
 
-  // The run is Grace's: Ada sees its card in the group, without a way to open it.
+  // The run is Grace's: Ada sees its card wait on her, without a way to open it.
   await page.goto(`/app/g/${group.id}`);
-  await expect(page.getByTestId("transcript").getByText(/Sign in to continue/)).toBeVisible();
+  await expect(
+    page.getByTestId("transcript").getByText("Waiting for Grace Guest", { exact: true }),
+  ).toBeVisible();
   await expect(page.getByTestId("takeover-open-computer")).toHaveCount(0);
+  await captureScreenshot(page, testInfo, "group-takeover-others");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await captureScreenshot(page, testInfo, "group-takeover-others-phone");
+  await page.setViewportSize({ width: 1280, height: 720 });
 
   await done.click();
   await expect(guest.getByRole("button", { name: "Close computer" })).toBeHidden();

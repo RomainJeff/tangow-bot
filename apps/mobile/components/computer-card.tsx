@@ -10,23 +10,26 @@ import { CapsuleButton } from "./AskActions";
 import { NativeSymbol } from "./native-symbol";
 
 /**
- * The computer's state, and what it is doing, on the bot's paper. `onOpen` is set only on the
- * live Needs you card. Mirrors `ComputerCard` in `apps/web/src/pages/shell/block-views.tsx`.
+ * The computer's state, and what it is doing, on the bot's paper. `onOpen` is set only on your
+ * live Needs you card; `waitingOn` names the person another person's live card waits on.
+ * Mirrors `ComputerCard` in `apps/web/src/pages/shell/block-views.tsx`.
  */
 export function ComputerCard({
   block,
   onOpen,
+  waitingOn,
   accessibilityActions,
   onAccessibilityAction,
 }: {
   block: Extract<MessageBlock, { kind: "computer" }>;
   onOpen?: () => void;
+  waitingOn?: string;
   accessibilityActions?: ViewProps["accessibilityActions"];
   onAccessibilityAction?: ViewProps["onAccessibilityAction"];
 }) {
   const { t } = useI18n();
   const styles = useThemedStyles(createStyles);
-  const needsYou = block.state === "Needs you";
+  const needsYou = block.state === "Needs you" && waitingOn === undefined;
   return (
     <View style={styles.card}>
       <View style={styles.tile}>
@@ -58,7 +61,9 @@ export function ComputerCard({
       ) : (
         <View style={styles.state}>
           {needsYou ? <View style={styles.dot} /> : null}
-          <Text style={needsYou ? styles.stateLive : styles.stateQuiet}>{block.state}</Text>
+          <Text style={needsYou ? styles.stateLive : styles.stateQuiet}>
+            {waitingOn !== undefined ? t("Waiting for {name}", { name: waitingOn }) : block.state}
+          </Text>
         </View>
       )}
     </View>

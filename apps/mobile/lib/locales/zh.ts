@@ -390,6 +390,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Name this bot": "为这个 Bot 命名",
   "Name this group": "为这个群组命名",
   "Needs attention": "需要处理",
+  "Waiting for {name}": "等待 {name}",
   "Waiting for you": "等你回复",
   "Answer {name}…": "回复 {name}…",
   Recommended: "推荐",

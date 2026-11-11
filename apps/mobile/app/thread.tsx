@@ -702,6 +702,20 @@ function Thread() {
       ),
     [view.rows, threadRuns, othersRuns],
   );
+  // Another person's live computer card, with the name of who it waits on.
+  const takeoverWaitingOn = useMemo(() => {
+    const items = view.rows.map((row) => row.item);
+    return new Map(
+      threadRuns.flatMap((run) => {
+        const itemId = othersRuns.has(run.id) ? latestTakeoverItemId(items, [run]) : null;
+        const name =
+          snap?.people?.find((person) => person.userId === run.userId)?.name ??
+          currentGroup?.people.find((person) => person.userId === run.userId)?.name ??
+          "";
+        return itemId ? [[itemId, name] as const] : [];
+      }),
+    );
+  }, [view.rows, threadRuns, othersRuns, snap?.people, currentGroup?.people]);
   const busyRuns = useMemo(
     () => threadRuns.filter((run) => isWorkingStatus(run.status)),
     [threadRuns],
@@ -2273,6 +2287,7 @@ function Thread() {
         replyPreview={replyPreviewNode}
         canAnswer={message.id === answerableAskMessageId}
         takeoverLive={message.id === takeoverItemId}
+        takeoverWaitingOn={takeoverWaitingOn.get(message.id)}
         viewerUserId={viewerUserId}
         onAnswer={answerMessage}
         onOpenBot={openBot}
@@ -3602,6 +3617,7 @@ const MessageBubble = memo(function MessageBubble({
   replyPreview,
   canAnswer,
   takeoverLive,
+  takeoverWaitingOn,
   viewerUserId,
   onAnswer,
   onOpenBot,
@@ -3627,6 +3643,8 @@ const MessageBubble = memo(function MessageBubble({
   canAnswer: boolean;
   /** This message is the computer card of a run still waiting for the user's screen. */
   takeoverLive?: boolean;
+  /** This message is the computer card of another person's run, which waits on them by name. */
+  takeoverWaitingOn?: string;
   viewerUserId?: string;
   onAnswer: (message: MobileMessage, answer: string, edits?: CardEdits) => Promise<void>;
   onOpenBot: (botId: string, name: string) => void;
@@ -3697,6 +3715,7 @@ const MessageBubble = memo(function MessageBubble({
       <ComputerCard
         block={computerBlock}
         onOpen={takeoverLive && onOpenComputer ? () => onOpenComputer(cardBotId) : undefined}
+        waitingOn={takeoverWaitingOn}
         accessibilityActions={actionProps.accessibilityActions}
         onAccessibilityAction={actionProps.onAccessibilityAction}
       />,

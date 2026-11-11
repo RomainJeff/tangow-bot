@@ -536,7 +536,7 @@ export const MessageView = memo(function MessageView({
         );
       }
       if (block.kind === "computer") {
-        return <ComputerCard key={i} block={block} onOpen={onOpenComputer} />;
+        return <ComputerCard key={i} block={block} onOpen={onOpenComputer} waitingOn={waitingOn} />;
       }
       return null;
     })

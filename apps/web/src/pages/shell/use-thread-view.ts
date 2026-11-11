@@ -208,13 +208,20 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
       snapshotPeople?.find((person) => person.userId === userId)?.name ??
       groupPeople?.find((person) => person.userId === userId)?.name ??
       "";
-    return new Map(
-      view.open.flatMap((card) => {
+    const items = view.rows.map((row) => row.item);
+    return new Map([
+      ...view.open.flatMap((card) => {
         const userId = othersRuns.get(card.runId);
         return userId ? [[card.itemId as string, nameOf(userId)] as const] : [];
       }),
-    );
-  }, [view.open, othersRuns, snapshotPeople, groupPeople]);
+      // A computer card waits on them too, while their run waits for its screen.
+      ...currentRuns.flatMap((run) => {
+        const userId = othersRuns.get(run.id);
+        const itemId = userId ? latestTakeoverItemId(items, [run]) : null;
+        return userId && itemId ? [[itemId, nameOf(userId)] as const] : [];
+      }),
+    ]);
+  }, [view.open, view.rows, currentRuns, othersRuns, snapshotPeople, groupPeople]);
   const resolveTranscriptMemberName = useCallback(
     (botId: string | undefined) => memberName(transcriptMembers, botId),
     [transcriptMembers],

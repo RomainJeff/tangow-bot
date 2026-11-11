@@ -392,6 +392,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Name this bot": "Назовите этого бота",
   "Name this group": "Назовите эту группу",
   "Needs attention": "Требует внимания",
+  "Waiting for {name}": "Ждёт {name}",
   "Waiting for you": "Ждёт вас",
   "Answer {name}…": "Ответить {name}…",
   Recommended: "Рекомендуется",
