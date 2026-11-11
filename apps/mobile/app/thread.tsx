@@ -198,7 +198,7 @@ import { useDebugMode } from "../lib/debug-mode";
 import type { CardEdits } from "../lib/draft-edit";
 import { draftEdit, dropDraftEdit, syncDraftEdit } from "../lib/draft-edit";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
-import { messageAuthorId, splitRowsByPerson } from "../lib/group-people";
+import { messageAuthorId, otherPeoplesRunIds, splitRowsByPerson } from "../lib/group-people";
 import { commitHaptic, selectionHaptic, sendHaptic, successHaptic } from "../lib/haptics";
 import { dateLocaleForUi, t, useI18n } from "../lib/i18n";
 import {
@@ -563,6 +563,13 @@ function Thread() {
     () => ({ open: setTablePreview, label: () => t("Table"), hint: t("Opens the full table") }),
     [t],
   );
+  // Only the run's owner may edit a Create bot card; until this loads, nobody gets Edit.
+  const [viewerUserId, setViewerUserId] = useState<string>();
+  useEffect(() => {
+    rpc<MobileMe>("me")
+      .then((me) => setViewerUserId(me.userId))
+      .catch(() => undefined);
+  }, []);
   const showSteps = useDebugMode();
   const currentGroup = groupId ? mentionGroups.find((group) => group.id === groupId) : undefined;
   // A message carrying no author is the creator's, who comes first among the group's people.
@@ -595,8 +602,17 @@ function Thread() {
   const view = heldView.current ?? liveView;
   const rows = view.rows;
   const waiting = view.waiting;
-  const waitingRef = useRef(waiting);
-  waitingRef.current = waiting;
+  // Another person's run waits on them alone: its card shows, with nothing to answer here.
+  const othersRuns = useMemo(
+    () =>
+      sharedHistory
+        ? otherPeoplesRunIds(snap?.entries ?? [], viewerUserId, creatorId)
+        : new Set<string>(),
+    [sharedHistory, snap?.entries, viewerUserId, creatorId],
+  );
+  const ownWaiting = waiting && !othersRuns.has(waiting.runId) ? waiting : null;
+  const waitingRef = useRef(ownWaiting);
+  waitingRef.current = ownWaiting;
   const lastRow = rows.at(-1);
   // An image joining the last stack is the thread's newest message, though it draws no row.
   const latestMessageId = lastRow ? (lastRow.imageStack?.front.item.id ?? lastRow.item.id) : null;
@@ -680,9 +696,9 @@ function Thread() {
     () =>
       latestTakeoverItemId(
         view.rows.map((row) => row.item),
-        threadRuns,
+        threadRuns.filter((run) => !othersRuns.has(run.id)),
       ),
-    [view.rows, threadRuns],
+    [view.rows, threadRuns, othersRuns],
   );
   const busyRuns = useMemo(
     () => threadRuns.filter((run) => isWorkingStatus(run.status)),
@@ -711,7 +727,7 @@ function Thread() {
   // A send without a mention goes to the bot, or to a group's first member.
   const sendsTo = inGroup ? snap?.members?.[0]?.botId : botId;
   const answerName =
-    sendsTo && answersPendingQuestion(view, sendsTo, threadRuns)
+    sendsTo && ownWaiting && answersPendingQuestion(view, sendsTo, threadRuns)
       ? (mentionBots.find((bot) => bot.id === sendsTo)?.name ??
         snap?.members?.find((member) => member.botId === sendsTo)?.name)
       : undefined;
@@ -1774,19 +1790,12 @@ function Thread() {
     );
   }
 
-  const answerableAskMessageId = waiting?.itemId ?? null;
+  const answerableAskMessageId = ownWaiting?.itemId ?? null;
   // The edit sheet lives only while its card can still be answered.
   useEffect(() => {
     syncSpawnBotEdit(answerableAskMessageId);
     if (threadKey) syncDraftEdit(threadKey, answerableAskMessageId);
   }, [threadKey, answerableAskMessageId]);
-  // Only the run's owner may edit a Create bot card; until this loads, nobody gets Edit.
-  const [viewerUserId, setViewerUserId] = useState<string>();
-  useEffect(() => {
-    rpc<MobileMe>("me")
-      .then((me) => setViewerUserId(me.userId))
-      .catch(() => undefined);
-  }, []);
   const listExtraData = useMemo(
     () => ({ answerableAskMessageId, viewerUserId }),
     [answerableAskMessageId, viewerUserId],

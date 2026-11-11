@@ -1,3 +1,4 @@
+import type { ThreadEntry } from "@rakazo/contracts";
 import type { ThreadRow } from "@rakazo/core";
 
 /** Who wrote a person's message in a group: its author, else the group's creator. */
@@ -26,4 +27,38 @@ export function splitRowsByPerson(rows: ThreadRow[], creatorId: string | undefin
       ? row
       : { ...row, firstOfGroup, lastOfGroup };
   });
+}
+
+/**
+ * The runs woken for another person of the group: their cards show, but only that person answers
+ * them. A run nobody's message woke (a routine) stays unattributed, and the server decides.
+ */
+export function otherPeoplesRunIds(
+  entries: readonly ThreadEntry[],
+  viewerId: string | undefined,
+  creatorId: string | undefined,
+): Set<string> {
+  const others = new Set<string>();
+  if (!viewerId) return others;
+  const byId = new Map(entries.map((entry) => [entry.id as string, entry]));
+  const starts = new Map<string, Extract<ThreadEntry, { type: "run.started" }>>();
+  for (const entry of entries) if (entry.type === "run.started") starts.set(entry.runId, entry);
+
+  const personOf = (runId: string, seen: Set<string>): string | undefined => {
+    const trigger = starts.get(runId)?.payload.trigger;
+    if (!trigger || seen.has(runId)) return undefined;
+    seen.add(runId);
+    if (trigger.kind === "retry") return personOf(trigger.previousRunId, seen);
+    if (!("entryId" in trigger)) return undefined;
+    const woke = byId.get(trigger.entryId);
+    if (woke?.type === "user.message") return woke.payload.authorId ?? creatorId;
+    // A handoff or a bot's message answers whoever the run that sent it answered.
+    return woke && "runId" in woke && woke.runId ? personOf(woke.runId, seen) : undefined;
+  };
+
+  for (const runId of starts.keys()) {
+    const person = personOf(runId, new Set());
+    if (person !== undefined && person !== viewerId) others.add(runId);
+  }
+  return others;
 }
