@@ -112,15 +112,20 @@ export function ResultLinesCard({ block }: { block: BlockOf<"card"> }) {
   );
 }
 
-/** The computer's state, and what it is doing. `onOpen` is set only on the live Needs you card. */
+/**
+ * The computer's state, and what it is doing. `onOpen` is set only on your live Needs you card;
+ * `waitingOn` names the person another person's live card waits on.
+ */
 export function ComputerCard({
   block,
   onOpen,
+  waitingOn,
 }: {
   block: BlockOf<"computer">;
   onOpen?: () => void;
+  waitingOn?: string;
 }) {
-  const needsYou = block.state === "Needs you";
+  const needsYou = block.state === "Needs you" && waitingOn === undefined;
   return (
     <Surface className="flex w-link-card max-w-full items-center gap-3 px-4 py-3">
       <span className="grid size-9 shrink-0 place-items-center rounded-row bg-well text-foreground">
@@ -153,7 +158,7 @@ export function ComputerCard({
           )}
         >
           {needsYou ? <span aria-hidden className="size-1.5 rounded-full bg-foreground" /> : null}
-          {block.state}
+          {waitingOn !== undefined ? t`Waiting for ${waitingOn}` : block.state}
         </span>
       )}
     </Surface>

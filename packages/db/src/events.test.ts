@@ -426,6 +426,36 @@ describe("finalizeComputerControlRelease", () => {
     );
   });
 
+  it("releases in the thread where the run asked, such as its group", async () => {
+    const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([{ id: "group-thread", sessionId: "group-session" }]),
+      computer: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      run: {
+        findUnique: vi.fn().mockResolvedValue({ threadId: "group-thread" }),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+      sessionEntry: { findFirst: vi.fn().mockResolvedValue(null) },
+      thread: { update: vi.fn().mockResolvedValue({ nextEventSeq: 8 }) },
+      event: { create: vi.fn().mockResolvedValue(event(7)) },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    } as unknown as PrismaClient;
+
+    await finalizeComputerControlRelease(prisma, {
+      spaceId: "workspace-1",
+      computerId: "computer-1",
+      botId: "bot-1",
+      runId: "run-1",
+      leaseId: "lease-1",
+      holder: "bot",
+      reason: "done",
+    });
+
+    // The thread locked, and so released in, is the run's own.
+    expect(tx.$queryRaw.mock.calls[0]).toContain("group-thread");
+  });
+
   it("clears the lease even if its controlling bot was deleted", async () => {
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([]),

@@ -2320,7 +2320,6 @@ export function createRouter(deps: RouterDeps) {
         if (await holdsComputerControl(deps.prisma, bot.computer, bot, context.actor.userId)) {
           await bindWaitingTakeoverToControl(deps, {
             spaceId: context.actor.spaceId,
-            threadId: bot.thread?.id,
             userId: context.actor.userId,
             botId: bot.id,
             computerId: bot.computer.id,
@@ -2375,7 +2374,12 @@ export function createRouter(deps: RouterDeps) {
         const executionRun = executionLease
           ? await deps.prisma.run.findUnique({
               where: { id: executionLease.runId },
-              select: { botId: true, status: true, userId: true },
+              select: {
+                botId: true,
+                status: true,
+                userId: true,
+                thread: { select: { id: true, sessionId: true } },
+              },
             })
           : null;
         // On a shared bot, another person's run and the takeover it waits for are theirs.
@@ -2403,7 +2407,8 @@ export function createRouter(deps: RouterDeps) {
 
         const leaseId = randomUUID();
         const expiresAt = new Date(Date.now() + takeoverLeaseMs());
-        const thread = bot.thread;
+        // A takeover a run asked for shows where that run asked: its own thread, or its group.
+        const thread = waitingForTakeover ? executionRun.thread : bot.thread;
         // A change of holder and its computer.control entry commit together, the thread locked
         // first as every thread writer does.
         const changeControl = (
@@ -2452,7 +2457,6 @@ export function createRouter(deps: RouterDeps) {
           }
           await bindWaitingTakeoverToControl(deps, {
             spaceId: context.actor.spaceId,
-            threadId: bot.thread?.id,
             userId: context.actor.userId,
             botId: bot.id,
             computerId: current.id,
@@ -2487,10 +2491,10 @@ export function createRouter(deps: RouterDeps) {
           );
           throw error;
         }
-        if (bot.thread) {
+        if (thread) {
           await deps.events.append({
             spaceId: context.actor.spaceId,
-            threadId: bot.thread.id,
+            threadId: thread.id,
             botId: bot.id,
             type: "computer.takeover.granted",
             payload: { leaseId, takeoverRequested: waitingForTakeover },
@@ -5620,7 +5624,6 @@ async function bindWaitingTakeoverToControl(
   deps: RouterDeps,
   input: {
     spaceId: string;
-    threadId: string | null | undefined;
     /** Who takes over: only their own run is bound, never another person's on a shared bot. */
     userId: string;
     botId: string;
@@ -5640,7 +5643,7 @@ async function bindWaitingTakeoverToControl(
 
     const executionRun = await tx.run.findUnique({
       where: { id: executionLease.runId },
-      select: { botId: true, status: true, userId: true },
+      select: { botId: true, status: true, userId: true, threadId: true },
     });
     const waitingForTakeover =
       executionRun?.botId === input.botId &&
@@ -5668,11 +5671,12 @@ async function bindWaitingTakeoverToControl(
       },
       data: { controlRunId: executionLease.runId },
     });
-    if (bound.count !== 1 || !input.threadId) return;
+    if (bound.count !== 1) return;
 
+    // Granted where the run asked: its own thread, or its group.
     await deps.events.append({
       spaceId: input.spaceId,
-      threadId: input.threadId,
+      threadId: executionRun.threadId,
       botId: input.botId,
       type: "computer.takeover.granted",
       payload: { leaseId: input.controlLeaseId, takeoverRequested: true },

@@ -2006,17 +2006,14 @@ export async function finalizeComputerControlRelease(
   realtime?: RealtimeFanout,
 ): Promise<FinalizeComputerControlReleaseResult | false> {
   const committed = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    // The bot's thread before the computer and the run, the order a stop and a grant take. A
-    // member's run on a shared bot waits in their own thread with it, never the owner's.
-    const memberThread = input.runId
-      ? await tx.thread.findFirst({
-          where: { memberBotId: input.botId, runs: { some: { id: input.runId } } },
-          select: { id: true },
-        })
+    // The thread before the computer and the run, the order a stop and a grant take: the run's
+    // own, where it asked (a member's thread with a shared bot, or a group), else the bot's.
+    const run = input.runId
+      ? await tx.run.findUnique({ where: { id: input.runId }, select: { threadId: true } })
       : null;
-    const [thread] = memberThread
+    const [thread] = run
       ? await tx.$queryRaw<Array<{ id: string; sessionId: string }>>`
-          SELECT id, "sessionId" FROM threads WHERE id = ${memberThread.id} FOR UPDATE`
+          SELECT id, "sessionId" FROM threads WHERE id = ${run.threadId} FOR UPDATE`
       : await tx.$queryRaw<Array<{ id: string; sessionId: string }>>`
           SELECT threads.id, threads."sessionId" FROM threads JOIN bots ON bots.id = threads."botId"
           WHERE bots.id = ${input.botId} AND bots."spaceId" = ${input.spaceId}

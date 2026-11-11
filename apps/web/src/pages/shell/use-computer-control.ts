@@ -1,5 +1,5 @@
 import { useLingui } from "@lingui/react/macro";
-import type { ComputerReleaseReason } from "@rakazo/contracts";
+import type { Bot, ComputerReleaseReason } from "@rakazo/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { rpc } from "../../lib/rpc";
 import {
@@ -15,28 +15,37 @@ import type { ThreadStore } from "./use-thread-store";
 import type { ThreadSync } from "./use-thread-sync";
 
 /**
- * Starting, taking and handing back the active bot's computer, its teaching
- * session, and the lifecycle that keeps an open computer alive or closes it.
+ * Starting, taking and handing back `bot`'s computer (the active bot's, or in a group the one
+ * whose run waits for you), the active bot's teaching session, and the lifecycle that keeps an
+ * open computer alive or closes it.
  */
 export function useComputerControl({
   panel,
   roster,
+  bot,
+  runStatus,
   store,
   screen: computerScreen,
   sync,
 }: {
   panel: Panel;
   roster: Roster;
+  bot: Bot | undefined;
+  /** The status of the run `bot`'s computer serves. */
+  runStatus: string | undefined;
   store: ThreadStore;
   screen: ComputerScreen;
   sync: ThreadSync;
 }) {
   const { t } = useLingui();
-  const { active, activeBotId } = roster;
-  const { computer, snapshot, taughtSkills, taughtSkillsBotId } = store;
-  const { screenUrl, screenRequest, computerOpen, setComputerOpen } = computerScreen;
+  const { active, activeBotId, inGroup } = roster;
+  const { computer, taughtSkills, taughtSkillsBotId } = store;
+  const { screenUrl, screenRequest, computerOpen, setComputerOpen, botIdRef } = computerScreen;
   const { setComputerError, setComputerErrorFromScreen, refreshComputerScreen } = computerScreen;
   const { refreshThread, refreshThreadRef } = sync;
+  // A group's snapshot carries no computer: after a change of hands only the computer is read.
+  const refreshAfterControl = (id: string) =>
+    inGroup ? computerScreen.loadComputerStatus(id) : refreshThreadRef.current(id);
   const [booting, setBooting] = useState(false);
   const [opening, setOpening] = useState(false);
   const [teachBusy, setTeachBusy] = useState(false);
@@ -51,15 +60,15 @@ export function useComputerControl({
     overlay: boolean;
     force?: boolean;
   }) {
-    if (!active) return;
+    if (!bot) return;
     const needsBoot = force || computer?.state !== "running" || !screenUrl;
     if (overlay && needsBoot) setBooting(true);
     setComputerError(null);
     setComputerErrorFromScreen(false);
     try {
-      if (needsBoot) await rpc.computer.boot({ botId: active.id });
-      if (takeControl) await rpc.computer.takeover({ botId: active.id });
-      await refreshThread(active.id);
+      if (needsBoot) await rpc.computer.boot({ botId: bot.id });
+      if (takeControl) await rpc.computer.takeover({ botId: bot.id });
+      await refreshAfterControl(bot.id);
     } catch (error) {
       setComputerError(error instanceof Error ? error.message : t`Could not take control`);
       setComputerErrorFromScreen(false);
@@ -114,7 +123,7 @@ export function useComputerControl({
     setComputerOpen(false);
     setComputerError(null);
     setComputerErrorFromScreen(false);
-  }, [active?.id]);
+  }, [bot?.id]);
 
   useEffect(() => {
     if (!computer?.busyBotName) {
@@ -133,12 +142,12 @@ export function useComputerControl({
   }, [computerOpen]);
 
   useEffect(() => {
-    if ((panel !== "computer" && !computerOpen) || !active || computer?.state !== "running") return;
-    const ping = () => void rpc.computer.heartbeat({ botId: active.id }).catch(() => undefined);
+    if ((panel !== "computer" && !computerOpen) || !bot || computer?.state !== "running") return;
+    const ping = () => void rpc.computer.heartbeat({ botId: bot.id }).catch(() => undefined);
     ping();
     const timer = window.setInterval(ping, 60_000);
     return () => window.clearInterval(timer);
-  }, [panel, computerOpen, active?.id, computer?.state]);
+  }, [panel, computerOpen, bot?.id, computer?.state]);
 
   /**
    * Opens the full window to watch, at once: it shows Connecting… while the computer boots and a
@@ -146,11 +155,11 @@ export function useComputerControl({
    * also takes the mouse and keyboard, and opens the window once that has landed.
    */
   async function openComputer({ takeControl = false }: { takeControl?: boolean } = {}) {
-    if (!active) return;
+    if (!bot) return;
     const takeover =
       takeControl &&
-      !userHoldsComputerControl(computer, active.id) &&
-      !computerTakeoverBlocked(computer, snapshot?.run?.status);
+      !userHoldsComputerControl(computer, bot.id) &&
+      !computerTakeoverBlocked(computer, runStatus);
     setOpening(true);
     if (!takeover) setComputerOpen(true);
     try {
@@ -159,7 +168,7 @@ export function useComputerControl({
         overlay: takeover || computer?.state !== "running",
         force: computer?.state !== "running",
       });
-      await refreshComputerScreen(active.id, { visible: true });
+      await refreshComputerScreen(bot.id, { visible: true });
       // Watching opened the window already; reopening here would undo a close made while it loaded.
       if (takeover) setComputerOpen(true);
     } catch {
@@ -170,11 +179,11 @@ export function useComputerControl({
   }
 
   async function takeComputerControl() {
-    if (!active) return;
+    if (!bot) return;
     try {
       await bootComputer({ takeControl: true, overlay: false });
       // The screen URL changes with control: wait for the interactive one before the button settles.
-      await refreshComputerScreen(active.id, { visible: true });
+      await refreshComputerScreen(bot.id, { visible: true });
     } catch {
       // computerError already set in bootComputer
     }
@@ -182,20 +191,20 @@ export function useComputerControl({
 
   const releaseComputer = useCallback(
     async (reason?: ComputerReleaseReason) => {
-      const botId = activeBotId.current;
+      const botId = botIdRef.current;
       if (!botId) return;
       try {
         await rpc.computer.release({ botId, reason });
-        if (activeBotId.current !== botId) return;
+        if (botIdRef.current !== botId) return;
         setComputerOpen(false);
-        await refreshThreadRef.current(botId).catch(() => undefined);
+        await refreshAfterControl(botId).catch(() => undefined);
       } catch {
-        if (activeBotId.current !== botId) return;
+        if (botIdRef.current !== botId) return;
         setComputerError(t`Could not continue`);
         setComputerErrorFromScreen(false);
       }
     },
-    [t],
+    [t, inGroup],
   );
 
   const stopTeaching = useCallback(async () => {
