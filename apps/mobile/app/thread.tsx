@@ -773,11 +773,22 @@ function Thread() {
     }
   }, [botId, groupId, router]);
 
+  // Who is in a group, its lead and its creator decide what the thread offers, so they follow
+  // the group as it changes, not as it was when the thread opened.
+  const groupsRefreshGeneration = useRef(0);
+  const refreshGroups = useCallback(async () => {
+    const generation = ++groupsRefreshGeneration.current;
+    const groups = await rpc<MobileGroup[]>("groups/list").catch(() => null);
+    // Keep the last known groups if a refresh fails or a newer one has started.
+    if (groups && generation === groupsRefreshGeneration.current) setMentionGroups(groups);
+  }, []);
+  const knownPeople = useRef<ReadonlySet<string>>(new Set());
+  knownPeople.current = new Set(
+    mentionGroups.flatMap((group) => group.people.map((person) => person.userId)),
+  );
+
   useEffect(() => {
     void refreshMentionBots();
-    void rpc<MobileGroup[]>("groups/list")
-      .then(setMentionGroups)
-      .catch(() => setMentionGroups([]));
   }, [refreshMentionBots]);
 
   useEffect(() => {
@@ -1182,11 +1193,12 @@ function Thread() {
         }).catch(() => undefined);
       }
       void refreshMentionBots();
+      void refreshGroups();
       markReadIfVisible();
       return () => {
         void setOpenNotificationThread(null).catch(() => undefined);
       };
-    }, [botId, markReadIfVisible, notificationThreadId, refreshMentionBots]),
+    }, [botId, markReadIfVisible, notificationThreadId, refreshMentionBots, refreshGroups]),
   );
 
   useEffect(() => {
@@ -1251,6 +1263,19 @@ function Thread() {
               setSnap((prev) => applyMobileThreadEvent(prev, event));
               if (event.type === "bot.updated") {
                 void refreshMentionBots();
+                void refreshGroups();
+              }
+              // Someone writing who was not in the group when it loaded has joined it since.
+              if (
+                groupId &&
+                appended.some(
+                  (entry) =>
+                    entry.type === "user.message" &&
+                    entry.payload.authorId !== undefined &&
+                    !knownPeople.current.has(entry.payload.authorId),
+                )
+              ) {
+                void refreshGroups();
               }
               if (botWordsOf(event).length > 0) {
                 readVisibleTarget.current = null;
@@ -1259,6 +1284,7 @@ function Thread() {
               if (isRunTerminalEvent(event)) {
                 if (botId) noteBotRunEnded(botId);
                 void refreshMentionBots();
+                if (groupId) void refreshGroups();
                 if (!jumpScrollTarget.current && !expandedHistoryThread.current) {
                   void refresh().catch(() => undefined);
                 }
@@ -1280,7 +1306,7 @@ function Thread() {
     return () => {
       abort.abort();
     };
-  }, [botId, groupId, markReadIfVisible, refreshMentionBots]);
+  }, [botId, groupId, markReadIfVisible, refreshMentionBots, refreshGroups]);
 
   useEffect(() => {
     if (!botId && !groupId) return;
