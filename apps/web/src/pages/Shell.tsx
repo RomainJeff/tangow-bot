@@ -56,7 +56,11 @@ export function ShellPage() {
     listRoute: !botId && !groupId,
     panelOpen: panels.panelOpen,
   });
-  const screen = useComputerScreen({ panel, roster, store });
+  const thread = useThreadView(store.snapshot, roster);
+  // The computer the window opens: the bot's own, or in a group the bot whose run waits for you.
+  const computerBot = inGroup ? bots.find((bot) => bot.id === thread.takeoverRun?.botId) : active;
+  const computerRunStatus = inGroup ? thread.takeoverRun?.status : store.snapshot?.run?.status;
+  const screen = useComputerScreen({ panel, botId: computerBot?.id, store });
   const [agentSkills, refreshAgentSkills] = useAgentSkillCatalog(roster.activeBotId);
   const notifications = useBrowserNotifications(roster.botsRef);
   // The bot page's commands are built below from state these hooks own; reads go through the ref.
@@ -73,7 +77,6 @@ export function ShellPage() {
     notifyBrowserForEvent: notifications.notifyBrowserForEvent,
     refreshRoutines,
   });
-  const thread = useThreadView(store.snapshot, roster);
   const activeSnapshot = thread.activeSnapshot;
   const shellReady =
     roster.initialBotsLoaded &&
@@ -127,7 +130,15 @@ export function ShellPage() {
     flushPendingBrowserNotifications: notifications.flushPendingBrowserNotifications,
     cancelFocusPromptFor,
   });
-  const control = useComputerControl({ panel, roster, store, screen, sync });
+  const control = useComputerControl({
+    panel,
+    roster,
+    bot: computerBot,
+    runStatus: computerRunStatus,
+    store,
+    screen,
+    sync,
+  });
   // The transcript is memoized, so its Needs you card calls the latest openComputer through a ref.
   const openComputerRef = useRef(control.openComputer);
   openComputerRef.current = control.openComputer;
@@ -324,6 +335,7 @@ export function ShellPage() {
       <ComputerOverlay
         booting={control.booting}
         opening={control.opening}
+        bot={computerBot}
         active={active}
         computer={store.computer}
         computerOpen={screen.computerOpen}
@@ -341,8 +353,8 @@ export function ShellPage() {
         sending={send.sending}
         stopRun={send.stopRun}
         canTakeControl={canTakeComputerControl({
-          shared: active?.isOwner === false,
-          runStatus: store.snapshot?.run?.status,
+          shared: computerBot?.isOwner === false,
+          runStatus: computerRunStatus,
           composerRunning: thread.composerRunning,
           busyBotName: store.computer?.busyBotName,
         })}

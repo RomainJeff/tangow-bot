@@ -40,12 +40,17 @@ function applyThreadEvent(
   commitComputer: (next: ComputerStatus | null) => void,
   snapshotRef: RefObject<ThreadState | null>,
   computerRef: RefObject<ComputerStatus | null>,
+  /** A group carries several bots' computer events: only those of its open computer's bot apply. */
+  groupComputerBotId?: string | null,
 ) {
   if (isThreadStateEvent(event)) {
     const next = reduceThreadState(snapshotRef.current, event);
     commitSnapshot(next);
   }
-  if (isComputerStatusEvent(event)) {
+  if (
+    isComputerStatusEvent(event) &&
+    (groupComputerBotId === undefined || event.botId === groupComputerBotId)
+  ) {
     const next = reduceComputerStatus(computerRef.current, event);
     commitComputer(next);
   }
@@ -74,7 +79,7 @@ export function useThreadSync({
   const { manuallyUnread, setGroups, markBotReadIfVisible, refreshBots } = roster;
   const { snapshotRef, computerRef, commitSnapshot, commitComputer, cacheComputerFor } = store;
   const { expandedHistoryThread, historyEpoch, messageScroll, followingEnd } = store;
-  const { refreshComputerScreen, refreshComputerStatus } = screen;
+  const { refreshComputerScreen, refreshComputerStatus, botIdRef: computerBotId } = screen;
   // Mirrors searchParams for effects that only need to read it once on run,
   // not re-run on every unrelated query-param change (e.g. the SSE subscribe
   // effect below, which should only restart when the active bot changes).
@@ -112,7 +117,10 @@ export function useThreadSync({
       expandedHistoryThread.current === snap.threadId,
     );
     commitSnapshot(reconciled.snapshot);
-    commitComputer(null);
+    // The computer of the bot whose run waits for you here stays; any other is not this thread's.
+    if (!computerBotId.current || computerRef.current?.botId !== computerBotId.current) {
+      commitComputer(null);
+    }
     store.setRoutines([]);
     store.setRoutinesBotId(null);
     // Keep the search-jump viewport; expandedHistoryThread merge still accepts live messages.
@@ -320,7 +328,14 @@ export function useThreadSync({
       currentSnapshot: () => snapshotRef.current,
       subscribe: (cursor) => rpc.threads.subscribe({ groupId, cursor }, { signal: abort.signal }),
       applyEvent: (event) =>
-        applyThreadEvent(event, commitSnapshot, commitComputer, snapshotRef, computerRef),
+        applyThreadEvent(
+          event,
+          commitSnapshot,
+          commitComputer,
+          snapshotRef,
+          computerRef,
+          computerBotId.current ?? null,
+        ),
       onEvent: (event, initial) => {
         const eventBot = botsRef.current.find((bot) => bot.id === event.botId);
         notifyBrowserForEvent(
@@ -342,6 +357,8 @@ export function useThreadSync({
         // A started run is read back for whose it is, which its event does not say.
         if (event.type === "run.started" || isRunTerminalEvent(event)) {
           void refreshGroupThread(groupId).catch(() => undefined);
+        } else if (isComputerStatusEvent(event) && event.botId === computerBotId.current) {
+          void refreshComputerStatus(event.botId).catch(() => undefined);
         }
       },
     });

@@ -7,7 +7,6 @@ import { rpc } from "../../lib/rpc";
 import { clearBusyWhileWaitingTakeover, userHoldsComputerControl } from "../../lib/thread-events";
 import type { Panel } from "./layout";
 import type { ScreenLinkHandlers } from "./screen-frame";
-import type { Roster } from "./use-roster";
 import type { ThreadStore } from "./use-thread-store";
 
 function embeddableScreenUrl(url: string | null): string | null {
@@ -27,20 +26,22 @@ function embeddableScreenUrl(url: string | null): string | null {
 }
 
 /**
- * The active bot's computer screen: the URL it embeds, its errors, the full
- * viewer's open state and viewport, and the reads that keep them current.
+ * `botId`'s computer screen: the URL it embeds, its errors, the full viewer's
+ * open state and viewport, and the reads that keep them current.
  */
 export function useComputerScreen({
   panel,
-  roster,
+  botId: computerBotId,
   store,
 }: {
   panel: Panel;
-  roster: Roster;
+  /** The open bot's, or in a group the bot whose run waits for you to take its screen. */
+  botId: string | undefined;
   store: ThreadStore;
 }) {
   const { t } = useLingui();
-  const { active, activeBotId } = roster;
+  const botIdRef = useRef(computerBotId);
+  botIdRef.current = computerBotId;
   const { computer, computerRef, commitComputer, computerCacheRef, cacheComputerFor, snapshotRef } =
     store;
   const [screenUrl, setScreenUrl] = useState<string | null>(null);
@@ -80,10 +81,10 @@ export function useComputerScreen({
   if (computerShown !== computerWasShown) {
     setComputerWasShown(computerShown);
     // A URL kept while the screen was closed may be past its capability; never open it.
-    if (computerShown && active) {
+    if (computerShown && computerBotId) {
       setScreenUrl(
         cachedScreenUrl(
-          computerCacheRef.current.get(active.id)?.screen,
+          computerCacheRef.current.get(computerBotId)?.screen,
           computerRef.current,
           Date.now(),
         ),
@@ -101,13 +102,12 @@ export function useComputerScreen({
     const request = ++screenRequest.current;
     return loadComputerScreen({
       botId: id,
-      status: activeBotId.current === id ? computerRef.current : null,
+      status: botIdRef.current === id ? computerRef.current : null,
       held: computerCacheRef.current.get(id)?.screen,
       force,
       reads: screenReads.current,
       load: () => rpc.computer.screenUrl({ botId: id }),
-      isCurrent: () =>
-        request === screenRequest.current && activeBotId.current === id && isVisible(),
+      isCurrent: () => request === screenRequest.current && botIdRef.current === id && isVisible(),
       commit: (screen, held) => {
         setScreenUrl(screen.url);
         setComputerError(screen.error);
@@ -118,16 +118,21 @@ export function useComputerScreen({
     });
   }
 
-  // Events carry no screen stamp, so the screen decision waits for the server status.
-  async function refreshComputerStatus(id: string) {
-    if (!computerVisible.current) return;
+  /** A group thread carries no computer: its card's bot's is read on its own. */
+  async function loadComputerStatus(id: string) {
     const request = ++computerStatusRequest.current;
     const status = await rpc.computer.status({ botId: id });
-    if (request !== computerStatusRequest.current || activeBotId.current !== id) return;
+    if (request !== computerStatusRequest.current || botIdRef.current !== id) return false;
     const reconciled = clearBusyWhileWaitingTakeover(status, snapshotRef.current?.run?.status);
     commitComputer(reconciled);
     cacheComputerFor(id, { computer: reconciled });
-    await refreshComputerScreen(id);
+    return true;
+  }
+
+  // Events carry no screen stamp, so the screen decision waits for the server status.
+  async function refreshComputerStatus(id: string) {
+    if (!computerVisible.current) return;
+    if (await loadComputerStatus(id)) await refreshComputerScreen(id);
   }
 
   /** A bot switch drops pending screen reads and paints the bot's last-known computer at once. */
@@ -147,7 +152,7 @@ export function useComputerScreen({
   }
 
   const embeddedScreenUrl = embeddableScreenUrl(screenUrl);
-  const hasControl = userHoldsComputerControl(computer, active?.id);
+  const hasControl = userHoldsComputerControl(computer, computerBotId);
   const hideScreenLoadError = computerErrorFromScreen && Boolean(embeddedScreenUrl);
   const screenFailed = embeddedScreenUrl !== null && embeddedScreenUrl === failedScreenUrl;
   const computerScreenErrorText =
@@ -160,7 +165,11 @@ export function useComputerScreen({
     computerScreenErrorText !== null ? (
       <div role="alert" className="flex flex-col items-center gap-3 px-6 text-center text-sm">
         <p className="text-destructive">{computerScreenErrorText}</p>
-        <Button variant="outline" size="sm" onClick={() => active && void retryScreen(active.id)}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => computerBotId && void retryScreen(computerBotId)}
+        >
           <Trans>Retry screen</Trans>
         </Button>
       </div>
@@ -168,16 +177,16 @@ export function useComputerScreen({
 
   async function retryScreen(id: string) {
     await refreshComputerScreen(id, { force: true });
-    if (activeBotId.current === id) setFailedScreenUrl(null);
+    if (botIdRef.current === id) setFailedScreenUrl(null);
   }
 
   const screenLink: ScreenLinkHandlers = {
     onAdjudicate() {
-      const botId = activeBotId.current;
+      const botId = botIdRef.current;
       if (botId) void refreshComputerStatus(botId).catch(() => undefined);
     },
     onReload() {
-      const botId = activeBotId.current;
+      const botId = botIdRef.current;
       if (botId) void refreshComputerScreen(botId, { force: true }).catch(() => null);
     },
     onFailed(url) {
@@ -194,8 +203,10 @@ export function useComputerScreen({
     setComputerError,
     setComputerErrorFromScreen,
     refreshComputerScreen,
+    loadComputerStatus,
     refreshComputerStatus,
     showCachedComputer,
+    botIdRef,
     embeddedScreenUrl,
     hasControl,
     computerScreenError,

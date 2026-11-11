@@ -107,6 +107,12 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
       ),
     [view.rows, currentRuns, othersRuns],
   );
+  // The run behind that card: in a group, its bot is the computer the card opens.
+  const takeoverItem = view.rows.find((row) => row.item.id === takeoverItemId)?.item;
+  const takeoverRun =
+    takeoverItem?.kind === "message" && takeoverItem.role === "bot"
+      ? currentRuns.find((run) => run.id === takeoverItem.runId)
+      : undefined;
   const workingRuns = currentRuns.filter((run) => isWorking(run, view));
   const transcriptRunning = workingRuns.length > 0;
   const composerRunning = currentRuns.some((run) => isActive(run.status));
@@ -222,6 +228,7 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
     transcriptRunning,
     composerRunning,
     takeoverItemId,
+    takeoverRun,
     recentWriting,
     callThread,
     transcriptArtifactTarget,

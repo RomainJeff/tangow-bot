@@ -239,6 +239,7 @@ export function SidePanel({
 export function ComputerOverlay({
   booting,
   opening,
+  bot,
   active,
   computer,
   computerOpen,
@@ -264,6 +265,9 @@ export function ComputerOverlay({
   booting: boolean;
   /** An open is loading a fresh screen URL: the window shows Connecting… until it lands. */
   opening: boolean;
+  /** Whose computer the window shows: the active bot's, or in a group the one whose run waits for you. */
+  bot: Bot | undefined;
+  /** The open bot thread's bot, whose teaching and upkeep the window offers to its owner. */
   active: Bot | undefined;
   computer: ComputerStatus | null;
   computerOpen: boolean;
@@ -292,13 +296,13 @@ export function ComputerOverlay({
   return booting ? (
     <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-[22px] bg-background/95">
       <div className="text-title font-medium text-foreground">
-        <Trans>Booting up {active?.name}’s computer</Trans>
+        <Trans>Booting up {bot?.name}’s computer</Trans>
       </div>
       <div className="h-[5px] w-[min(420px,70%)] overflow-hidden rounded-full bg-accent">
         <div className="h-full w-2/3 rounded-full bg-primary" />
       </div>
     </div>
-  ) : computerOpen && active ? (
+  ) : computerOpen && bot ? (
     <div className="fixed inset-0 z-30 bg-background">
       <div
         data-testid="computer-viewport"
@@ -316,11 +320,11 @@ export function ComputerOverlay({
             {/* The overlay covers the shell header, so it reserves room for the window controls itself. */}
             {desktopBridge() ? <WindowChrome /> : null}
             <BotAvatar
-              color={active.color}
-              identity={active.id}
-              shapeSeed={active.shapeSeed}
+              color={bot.color}
+              identity={bot.id}
+              shapeSeed={bot.shapeSeed}
               size={28}
-              status={active.status}
+              status={bot.status}
             />
             <div className="flex min-w-0 flex-1 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-3">
               {recordingSkill ? (
@@ -335,7 +339,7 @@ export function ComputerOverlay({
                   className="max-w-full truncate text-working font-medium text-foreground"
                   dir="auto"
                 >
-                  {computerLabel(computer?.mode, active.name)}
+                  {computerLabel(computer?.mode, bot.name)}
                 </span>
               )}
               {!recordingSkill && hasControl ? (
@@ -450,7 +454,7 @@ export function ComputerOverlay({
             <div className="grid h-full place-items-center text-meta text-muted-foreground/80">
               {computer?.state === "suspended"
                 ? t`Computer is asleep`
-                : computerLabel(computer?.mode, active.name)}
+                : computerLabel(computer?.mode, bot.name)}
             </div>
           )}
         </div>
