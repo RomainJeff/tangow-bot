@@ -793,6 +793,8 @@ export type MobileSpaceNavigation = SpaceNavigation;
 export type MobileRun = {
   id: string;
   botId?: string;
+  /** The person it acts for: in a group, only they answer its cards. */
+  userId?: string;
   status: string;
   error?: string | null;
   startedAt?: string | null;

@@ -199,7 +199,7 @@ import { useDebugMode } from "../lib/debug-mode";
 import type { CardEdits } from "../lib/draft-edit";
 import { draftEdit, dropDraftEdit, syncDraftEdit } from "../lib/draft-edit";
 import { cancelFocusPrompt, focusPromptThreadActive } from "../lib/focus-prompt";
-import { messageAuthorId, otherPeoplesRunIds, splitRowsByPerson } from "../lib/group-people";
+import { messageAuthorId, splitRowsByPerson } from "../lib/group-people";
 import { commitHaptic, selectionHaptic, sendHaptic, successHaptic } from "../lib/haptics";
 import { dateLocaleForUi, t, useI18n } from "../lib/i18n";
 import {
@@ -603,13 +603,21 @@ function Thread() {
   const view = heldView.current ?? liveView;
   const rows = view.rows;
   const waiting = view.waiting;
-  // Another person's run waits on them alone: its card shows, with nothing to answer here.
+  const threadRuns = useMemo(
+    () => snap?.activeRuns ?? (snap?.run ? [snap.run] : []),
+    [snap?.activeRuns, snap?.run],
+  );
+  // Another person's run waits on them alone: its card shows, with nothing to answer here. A run
+  // that does not say whose it is (an older server, or one seen only starting) stays answerable,
+  // and the server decides.
   const othersRuns = useMemo(
     () =>
-      sharedHistory
-        ? otherPeoplesRunIds(snap?.entries ?? [], viewerUserId, creatorId)
-        : new Set<string>(),
-    [sharedHistory, snap?.entries, viewerUserId, creatorId],
+      new Set(
+        threadRuns.flatMap((run) =>
+          run.userId && viewerUserId && run.userId !== viewerUserId ? [run.id] : [],
+        ),
+      ),
+    [threadRuns, viewerUserId],
   );
   const ownWaiting = waiting && !othersRuns.has(waiting.runId) ? waiting : null;
   const waitingRef = useRef(ownWaiting);
@@ -688,10 +696,6 @@ function Thread() {
   const hasLiveProgress = liveItems.length > 0;
   // One bot only: an activity line names one bot's tool, so it would mislabel a group.
   const activityLabel = view.activityLabel;
-  const threadRuns = useMemo(
-    () => snap?.activeRuns ?? (snap?.run ? [snap.run] : []),
-    [snap?.activeRuns, snap?.run],
-  );
   // Liveness comes from the run, never from the card's own state.
   const takeoverItemId = useMemo(
     () =>
