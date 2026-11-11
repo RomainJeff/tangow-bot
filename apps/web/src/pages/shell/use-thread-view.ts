@@ -76,20 +76,16 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
       ),
     [currentRuns, viewerId],
   );
-  const projected = useMemo(
+  const view = useMemo(
     () =>
       projectThreadView(activeEntries ?? [], {
         rendersNothing: (item) =>
           drawsNothing(item, (blocks) => hasRenderableBlock(blocks, showSteps)),
         progress: activeLayer,
         imageStacks: true,
+        othersRun: (runId) => othersRuns.has(runId),
       }),
-    [activeEntries, activeLayer, showSteps],
-  );
-  const othersWaiting = projected.waiting && othersRuns.get(projected.waiting.runId);
-  const view = useMemo(
-    () => (othersWaiting ? { ...projected, waiting: null } : projected),
-    [projected, othersWaiting],
+    [activeEntries, activeLayer, showSteps, othersRuns],
   );
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -200,19 +196,19 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
     },
     [inGroup, creatorId, viewerId, snapshotPeople, groupPeople],
   );
-  const findPerson = (userId: string) =>
-    snapshotPeople?.find((person) => person.userId === userId) ??
-    groupPeople?.find((person) => person.userId === userId);
-  // The card another person's run waits on, and who answers it.
-  const waitingItemId = othersWaiting ? projected.waiting?.itemId : undefined;
-  const waitingName = othersWaiting ? (findPerson(othersWaiting)?.name ?? "") : undefined;
-  const waitingOn = useMemo(
-    () =>
-      waitingItemId !== undefined && waitingName !== undefined
-        ? { itemId: waitingItemId, name: waitingName }
-        : null,
-    [waitingItemId, waitingName],
-  );
+  // The cards other people's runs wait on, each with the name of who answers it.
+  const waitingOn = useMemo(() => {
+    const nameOf = (userId: string) =>
+      snapshotPeople?.find((person) => person.userId === userId)?.name ??
+      groupPeople?.find((person) => person.userId === userId)?.name ??
+      "";
+    return new Map(
+      view.open.flatMap((card) => {
+        const userId = othersRuns.get(card.runId);
+        return userId ? [[card.itemId as string, nameOf(userId)] as const] : [];
+      }),
+    );
+  }, [view.open, othersRuns, snapshotPeople, groupPeople]);
   const resolveTranscriptMemberName = useCallback(
     (botId: string | undefined) => memberName(transcriptMembers, botId),
     [transcriptMembers],

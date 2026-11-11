@@ -33,7 +33,10 @@ export type ProjectedThread = {
   messageIds: Map<EntryId, EntryId>;
   /** The entry each item's link preview targets, the id the preview is removed by. */
   previewHosts: Map<EntryId, EntryId>;
+  /** The viewer's newest open card: the one they answer now. */
   waiting: WaitingCard | null;
+  /** Every card still waiting on an answer, oldest first: several in a group of several people. */
+  open: WaitingCard[];
 };
 
 const BOT_TEXT_CARD_KINDS = new Set<MessageBlock["kind"]>(["choice", "app_connect", "skill_draft"]);
@@ -48,7 +51,11 @@ export function projectThreadItems(entries: readonly ThreadEntry[]): ThreadItem[
   return projectThread(entries).items;
 }
 
-export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread {
+/** `othersRun`: a run another person of a group woke, whose cards are never the viewer's `waiting`. */
+export function projectThread(
+  entries: readonly ThreadEntry[],
+  othersRun?: (runId: string) => boolean,
+): ProjectedThread {
   const finishedAt = new Map(
     entries.flatMap((entry) =>
       entry.type === "run.finished" || entry.type === "run.recap" ? [[entry.runId, entry.seq]] : [],
@@ -514,10 +521,14 @@ export function projectThread(entries: readonly ThreadEntry[]): ProjectedThread 
     const settled = !slot || ("index" in slot ? isSettled(cardOf(slot)) : slot.item.decision);
     return !settled && (finishedAt.get(card.runId) ?? -1) < card.seq;
   });
-  const last = open.at(-1);
-  const itemId = last && shownBy.get(last.id);
-  const waiting = last && itemId ? { itemId, entryId: last.id, runId: last.runId } : null;
-  return { items, shownBy, messageIds, previewHosts, waiting };
+  const shown = (card: (typeof open)[number]): WaitingCard | null => {
+    const itemId = shownBy.get(card.id);
+    return itemId ? { itemId, entryId: card.id, runId: card.runId } : null;
+  };
+  const last = open.findLast((card) => !othersRun?.(card.runId));
+  const waiting = last ? shown(last) : null;
+  const openCards = open.flatMap((card) => shown(card) ?? []);
+  return { items, shownBy, messageIds, previewHosts, waiting, open: openCards };
 }
 
 function stampDuration(messages: readonly MessageItem[], durationMs: number) {

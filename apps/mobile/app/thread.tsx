@@ -576,29 +576,6 @@ function Thread() {
   const creatorId = currentGroup?.people[0]?.userId;
   // Several people share a group's history: nobody rewinds it under the others.
   const sharedHistory = (currentGroup?.people.length ?? 0) > 1;
-  const drawnRows = useRef<ReadonlyMap<string, ThreadRow>>(new Map());
-  const liveView = useMemo((): ThreadView => {
-    const projected = projectThreadView(snap?.entries ?? [], {
-      rendersNothing: (item) =>
-        drawsNothing(item, (blocks) => hasVisibleMessagePresentation(blocks, showSteps)),
-      progress: snap?.layer,
-      imageStacks: true,
-    });
-    const rows = keepUnchangedRows(drawnRows.current, projected.rows);
-    drawnRows.current = new Map(rows.map((row) => [row.item.id, row]));
-    return { ...projected, rows };
-  }, [snap?.entries, snap?.layer, showSteps]);
-  // The image viewer zooms out of a stack in the list. A run adding images, a helper's report or a
-  // recap while it is open can fold that stack's row away, and the list would recycle the very view
-  // the system hid as the zoom's source, leaving a hole. So the thread keeps the view it had until
-  // the viewer is gone; what arrived meanwhile then comes in as new.
-  const viewerHoldsThread = useThreadHeldByImageViewer();
-  const heldView = useRef<ThreadView | null>(null);
-  if (!viewerHoldsThread) heldView.current = null;
-  else heldView.current ??= liveView;
-  const view = heldView.current ?? liveView;
-  const rows = view.rows;
-  const waiting = view.waiting;
   const threadRuns = useMemo(
     () => snap?.activeRuns ?? (snap?.run ? [snap.run] : []),
     [snap?.activeRuns, snap?.run],
@@ -615,9 +592,32 @@ function Thread() {
       ),
     [threadRuns, viewerUserId],
   );
-  const ownWaiting = waiting && !othersRuns.has(waiting.runId) ? waiting : null;
-  const waitingRef = useRef(ownWaiting);
-  waitingRef.current = ownWaiting;
+  const drawnRows = useRef<ReadonlyMap<string, ThreadRow>>(new Map());
+  const liveView = useMemo((): ThreadView => {
+    const projected = projectThreadView(snap?.entries ?? [], {
+      rendersNothing: (item) =>
+        drawsNothing(item, (blocks) => hasVisibleMessagePresentation(blocks, showSteps)),
+      progress: snap?.layer,
+      imageStacks: true,
+      othersRun: (runId) => othersRuns.has(runId),
+    });
+    const rows = keepUnchangedRows(drawnRows.current, projected.rows);
+    drawnRows.current = new Map(rows.map((row) => [row.item.id, row]));
+    return { ...projected, rows };
+  }, [snap?.entries, snap?.layer, showSteps, othersRuns]);
+  // The image viewer zooms out of a stack in the list. A run adding images, a helper's report or a
+  // recap while it is open can fold that stack's row away, and the list would recycle the very view
+  // the system hid as the zoom's source, leaving a hole. So the thread keeps the view it had until
+  // the viewer is gone; what arrived meanwhile then comes in as new.
+  const viewerHoldsThread = useThreadHeldByImageViewer();
+  const heldView = useRef<ThreadView | null>(null);
+  if (!viewerHoldsThread) heldView.current = null;
+  else heldView.current ??= liveView;
+  const view = heldView.current ?? liveView;
+  const rows = view.rows;
+  const waiting = view.waiting;
+  const waitingRef = useRef(waiting);
+  waitingRef.current = waiting;
   const lastRow = rows.at(-1);
   // An image joining the last stack is the thread's newest message, though it draws no row.
   const latestMessageId = lastRow ? (lastRow.imageStack?.front.item.id ?? lastRow.item.id) : null;
@@ -733,7 +733,7 @@ function Thread() {
       )
     : botId;
   const answerName =
-    sendsTo && ownWaiting && answersPendingQuestion(view, sendsTo, threadRuns)
+    sendsTo && answersPendingQuestion(view, sendsTo, threadRuns)
       ? (mentionBots.find((bot) => bot.id === sendsTo)?.name ??
         snap?.members?.find((member) => member.botId === sendsTo)?.name)
       : undefined;
@@ -1822,7 +1822,7 @@ function Thread() {
     );
   }
 
-  const answerableAskMessageId = ownWaiting?.itemId ?? null;
+  const answerableAskMessageId = waiting?.itemId ?? null;
   // The edit sheet lives only while its card can still be answered.
   useEffect(() => {
     syncSpawnBotEdit(answerableAskMessageId);
