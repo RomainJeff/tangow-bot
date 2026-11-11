@@ -48,7 +48,7 @@ type PersonRecord = {
 
 type SpaceGroupRecord = Pick<
   GroupRecord,
-  "id" | "spaceId" | "name" | "updatedAt" | "members" | "people"
+  "id" | "spaceId" | "name" | "userId" | "updatedAt" | "members" | "people"
 > & {
   thread: { sessionId: string } | null;
 };
@@ -94,6 +94,17 @@ function usableGroupBotIds(
   );
 }
 
+/** The creator first, then everyone else as they joined. */
+function mapGroupPeople(group: Pick<GroupRecord, "userId" | "people">) {
+  return [...group.people]
+    .sort((a, b) => Number(b.userId === group.userId) - Number(a.userId === group.userId))
+    .map((person) => ({
+      userId: person.userId,
+      name: person.user.name,
+      image: person.user.image,
+    }));
+}
+
 function mapGroup(group: GroupRecord, preview: string, userId: string, usable: Set<string>): Group {
   if (!group.thread) throw new IsolationError("Group is missing its thread");
   const { unread, ...organization } = personState(group.people, userId);
@@ -105,14 +116,7 @@ function mapGroup(group: GroupRecord, preview: string, userId: string, usable: S
     ...organization,
     archivedAt: group.archivedAt?.toISOString() ?? null,
     members: mapGroupMembers(group.members, usable),
-    // The creator first, then everyone else as they joined.
-    people: [...group.people]
-      .sort((a, b) => Number(b.userId === group.userId) - Number(a.userId === group.userId))
-      .map((person) => ({
-        userId: person.userId,
-        name: person.user.name,
-        image: person.user.image,
-      })),
+    people: mapGroupPeople(group),
     creatorId: group.userId,
     canManage: group.userId === userId,
     leadBotId: group.leadBotId,
@@ -137,6 +141,7 @@ function mapSpaceGroup(
     name: group.name,
     ...personState(group.people, userId),
     members: mapGroupMembers(group.members, usable),
+    people: mapGroupPeople(group),
     preview,
     updatedAt: group.updatedAt.toISOString(),
   };
@@ -304,6 +309,7 @@ export function createGroupRepos(prisma: PrismaClient) {
         id: true,
         spaceId: true,
         name: true,
+        userId: true,
         updatedAt: true,
         thread: { select: { sessionId: true } },
         members: groupInclude.members,

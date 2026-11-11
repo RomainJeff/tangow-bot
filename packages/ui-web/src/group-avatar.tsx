@@ -11,25 +11,45 @@ export interface GroupAvatarMember {
   status?: string;
 }
 
+export interface GroupAvatarPerson {
+  initials: string;
+  image?: string | null;
+}
+
 export interface GroupAvatarProps {
   members: GroupAvatarMember[];
+  /** The group's other people, shown beside its bots. */
+  people?: GroupAvatarPerson[];
   size?: number;
   className?: string;
-  /** When set, a one-bot group pairs the bot with the user's initials. */
+  /** When set, a one-bot group without other people pairs the bot with the user's initials. */
   userInitials?: string;
   /** Profile photo shown instead of the initials tile, initials on failure. */
   userImage?: string | null;
 }
 
+type Tile = { bot: GroupAvatarMember } | { person: GroupAvatarPerson };
+
 export const GroupAvatar = memo(function GroupAvatar({
   members,
+  people = [],
   size = 38,
   className,
   userInitials,
   userImage,
 }: GroupAvatarProps) {
-  const firstMember = members[0];
-  if (!firstMember) {
+  const bots: Tile[] = members.map((bot) => ({ bot }));
+  const others: Tile[] = people.map((person) => ({ person }));
+  const me: Tile[] =
+    members.length === 1 && others.length === 0 && (userInitials || userImage)
+      ? [{ person: { initials: userInitials ?? "", image: userImage } }]
+      : [];
+  // The first bot and the first person lead, so both kinds stay visible when the rest overflow.
+  const tiles = [bots[0], others[0], ...me, ...bots.slice(1), ...others.slice(1)].filter(
+    (tile) => tile !== undefined,
+  );
+  const firstTile = tiles[0];
+  if (!firstTile) {
     return (
       <div
         className={cn(
@@ -58,21 +78,11 @@ export const GroupAvatar = memo(function GroupAvatar({
     );
   }
 
-  if (members.length === 1 && !userInitials && !userImage) {
-    return (
-      <BotAvatar
-        color={firstMember.color}
-        identity={firstMember.botId ?? firstMember.name}
-        shapeSeed={firstMember.shapeSeed}
-        size={size}
-        status={firstMember.status}
-        className={cn("rakazo-group-avatar", className)}
-      />
-    );
+  if (tiles.length === 1) {
+    return renderTile(firstTile, size, cn("rakazo-group-avatar", className));
   }
 
-  const withUser = members.length === 1;
-  const pair = withUser || members.length === 2;
+  const pair = tiles.length === 2;
   const miniSize = Math.round(size * (pair ? 0.65 : 0.54));
   const positions: CSSProperties[] = pair
     ? [
@@ -84,16 +94,16 @@ export const GroupAvatar = memo(function GroupAvatar({
         { bottom: 0, left: 0 },
         { right: 0, bottom: 0 },
       ];
-  const visibleMembers = members.slice(0, pair || members.length === 3 ? members.length : 2);
+  const visibleTiles = tiles.slice(0, tiles.length <= 3 ? tiles.length : 2);
 
   return (
     <div
       className={cn("rakazo-group-avatar relative rounded-full select-none", className)}
       style={{ width: size, height: size, flex: "none" }}
     >
-      {visibleMembers.map((member, index) => (
+      {visibleTiles.map((tile, index) => (
         <div
-          key={member.botId ?? index}
+          key={"bot" in tile ? (tile.bot.botId ?? index) : `person-${index}`}
           className="absolute rounded-full"
           style={{
             ...positions[index],
@@ -101,29 +111,10 @@ export const GroupAvatar = memo(function GroupAvatar({
             boxShadow: "0 0 0 1.5px var(--accent)",
           }}
         >
-          <BotAvatar
-            color={member.color}
-            identity={member.botId ?? member.name}
-            shapeSeed={member.shapeSeed}
-            size={miniSize}
-            status={member.status}
-          />
+          {renderTile(tile, miniSize)}
         </div>
       ))}
-      {withUser ? (
-        <UserAvatar
-          initials={userInitials ?? ""}
-          image={userImage}
-          className="absolute right-0 bottom-0 z-[2]"
-          style={{
-            width: miniSize,
-            height: miniSize,
-            fontSize: Math.max(8, Math.round(miniSize * 0.4)),
-            boxShadow: "0 0 0 1.5px var(--accent)",
-          }}
-        />
-      ) : null}
-      {members.length > 3 ? (
+      {tiles.length > 3 ? (
         <div
           className="absolute right-0 bottom-0 z-[3] flex items-center justify-center rounded-full bg-accent text-label font-semibold text-foreground"
           style={{
@@ -132,9 +123,34 @@ export const GroupAvatar = memo(function GroupAvatar({
             boxShadow: "0 0 0 1.5px var(--accent)",
           }}
         >
-          {`+${members.length - 2}`}
+          {`+${tiles.length - 2}`}
         </div>
       ) : null}
     </div>
   );
 });
+
+function renderTile(tile: Tile, size: number, className?: string) {
+  if ("bot" in tile) {
+    return (
+      <BotAvatar
+        color={tile.bot.color}
+        identity={tile.bot.botId ?? tile.bot.name}
+        shapeSeed={tile.bot.shapeSeed}
+        size={size}
+        status={tile.bot.status}
+        className={className}
+      />
+    );
+  }
+  return (
+    <UserAvatar
+      // Decorative: the initials would otherwise prefix the row's accessible name.
+      aria-hidden="true"
+      initials={tile.person.initials}
+      image={tile.person.image}
+      className={className}
+      style={{ width: size, height: size, fontSize: Math.max(8, Math.round(size * 0.4)) }}
+    />
+  );
+}

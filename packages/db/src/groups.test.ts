@@ -14,11 +14,24 @@ describe("listSpaceGroupsForSpaces", () => {
         id: "group-1",
         spaceId: "workspace-2",
         name: "Support crew",
+        userId: "user-1",
         updatedAt: new Date("2026-08-20T00:00:00.000Z"),
         thread: { id: "thread-1", sessionId: "session-1" },
         people: [
-          { userId: "user-2", unread: false, pinned: false, sectionId: null },
-          { userId: "user-1", unread: true, pinned: true, sectionId: null },
+          {
+            userId: "user-2",
+            unread: false,
+            pinned: false,
+            sectionId: null,
+            user: { name: "Ada", image: null },
+          },
+          {
+            userId: "user-1",
+            unread: true,
+            pinned: true,
+            sectionId: null,
+            user: { name: "Grace", image: "https://example.test/grace.png" },
+          },
         ],
         members: [
           { bot: { id: "bot-1", name: "Triage", color: "#111", runs: [] } },
@@ -75,13 +88,16 @@ describe("listSpaceGroupsForSpaces", () => {
             canUse: false,
           },
         ],
+        people: [
+          { userId: "user-1", name: "Grace", image: "https://example.test/grace.png" },
+          { userId: "user-2", name: "Ada", image: null },
+        ],
         preview: "Escalation pending",
         unread: true,
         updatedAt: "2026-08-20T00:00:00.000Z",
       },
     ]);
     const query = findMany.mock.calls[0]![0];
-    expect(query.select).not.toHaveProperty("userId");
     expect(query.select).not.toHaveProperty("archivedAt");
     expect(query.select).not.toHaveProperty("createdAt");
   });

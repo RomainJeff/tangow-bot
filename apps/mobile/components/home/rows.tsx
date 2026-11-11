@@ -7,7 +7,7 @@ import { Pressable, Text, View } from "react-native";
 import { activityStatusLabel, formatActivityRelativeTime } from "../../lib/activity";
 import type { MobileBot, MobileGroup } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
-import { botTag, formatThreadTime } from "../../lib/inbox";
+import { botTag, formatThreadTime, userInitials as initialsOf } from "../../lib/inbox";
 import { useThemedStyles } from "../../lib/native";
 import { previewSnippet } from "../../lib/preview";
 import { rosterMuted } from "../../lib/shared-bot";
@@ -243,12 +243,14 @@ export function BotRow({
 
 export function GroupRow({
   group,
+  userId,
   userInitials,
   userImage,
   onPress,
   onLongPress,
 }: {
   group: MobileGroup | SpaceGroup;
+  userId: string | undefined;
   userInitials: string;
   userImage: string | null;
   onPress: () => void;
@@ -273,6 +275,10 @@ export function GroupRow({
       avatar={
         <GroupAvatar
           members={group.members}
+          // A server from before space groups carried people sends none.
+          people={(group.people ?? [])
+            .filter((person) => person.userId !== userId)
+            .map((person) => ({ initials: initialsOf(person.name), image: person.image }))}
           size={sizes.mobileStack}
           userInitials={userInitials}
           userImage={userImage}
