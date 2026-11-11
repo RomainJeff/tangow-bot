@@ -64,6 +64,39 @@ test("icon buttons keep their size and gain a 44px tap area on a phone only", as
   }
 });
 
+test("an icon button's own box wins a tap over a touching neighbour's tap area", async ({
+  page,
+}) => {
+  await open(page, PHONE, "adjacent");
+  const hit = (x: number, y: number) =>
+    page.evaluate(
+      ({ x, y }) => document.elementFromPoint(x, y)?.closest("button")?.dataset.testid ?? null,
+      { x, y },
+    );
+  for (const id of ["a", "b", "c"]) {
+    const rect = await box(page, `[data-testid="${id}"]`);
+    const centerX = rect.x + rect.width / 2;
+    const centerY = rect.y + rect.height / 2;
+    for (const inset of [1, 2, 8, 16]) {
+      for (const [x, y] of [
+        [rect.x + inset, centerY],
+        [rect.x + rect.width - inset, centerY],
+        [centerX, rect.y + inset],
+        [centerX, rect.y + rect.height - inset],
+      ]) {
+        expect(await hit(x, y), `${id} inset ${inset} at ${x},${y}`).toBe(id);
+      }
+    }
+    expect(await hit(centerX, rect.y - 5), `${id} above`).toBe(id);
+    expect(await hit(centerX, rect.y + rect.height + 5), `${id} below`).toBe(id);
+  }
+  const first = await box(page, '[data-testid="a"]');
+  const last = await box(page, '[data-testid="c"]');
+  const middleY = first.y + first.height / 2;
+  expect(await hit(first.x - 5, middleY)).toBe("a");
+  expect(await hit(last.x + last.width + 5, middleY)).toBe("c");
+});
+
 test("text fields are 16px on a phone and keep 14px on desktop", async ({ page }) => {
   const fields = ["input", "textarea", "native-select", "select-trigger"];
   await open(page, PHONE, "fields");

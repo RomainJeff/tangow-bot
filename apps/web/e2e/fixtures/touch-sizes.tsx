@@ -34,9 +34,11 @@ function Case() {
         <div className="flex flex-wrap gap-6 p-8">
           {(["icon", "icon-xs", "icon-sm", "icon-lg", "roundIcon", "roundIconSm"] as const).map(
             (size) => (
-              <Button key={size} variant="ghost" size={size} aria-label={size} data-testid={size}>
-                <Plus />
-              </Button>
+              <div key={size}>
+                <Button variant="ghost" size={size} aria-label={size} data-testid={size}>
+                  <Plus />
+                </Button>
+              </div>
             ),
           )}
           <div className="relative size-40" data-testid="absolute-host">
@@ -50,6 +52,16 @@ function Case() {
               <Plus />
             </Button>
           </div>
+        </div>
+      );
+    case "adjacent":
+      return (
+        <div className="flex w-max items-center rounded-full bg-muted p-0.5 m-8">
+          {["a", "b", "c"].map((id) => (
+            <Button key={id} variant="ghost" size="icon" aria-label={id} data-testid={id}>
+              <Plus />
+            </Button>
+          ))}
         </div>
       );
     case "fields":
