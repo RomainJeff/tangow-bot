@@ -25,31 +25,31 @@ const EMBED = `${ORIGIN}${DIRECTORY}/embed.html?autoconnect=true&resize=scale&vi
 const PLAIN = `${ORIGIN}${DIRECTORY}/vnc.html?autoconnect=true&view_only=true`;
 const OTHER_EMBED = `${ORIGIN}/novnc/session/control/1790000000000.XyZ/embed.html?view_only=false`;
 
-const say = (state: string) => JSON.stringify({ type: "rakazo-screen-state", version: 1, state });
+const say = (state: string) => JSON.stringify({ type: "tangow-screen-state", version: 1, state });
 
 describe("parseScreenLinkMessage", () => {
   it("accepts the three wire keys with a known state", () => {
     expect(
-      parseScreenLinkMessage('{"type":"rakazo-screen-state","version":1,"state":"stalled"}'),
+      parseScreenLinkMessage('{"type":"tangow-screen-state","version":1,"state":"stalled"}'),
     ).toBe("stalled");
     expect(
-      parseScreenLinkMessage('{"state":"connected","version":1,"type":"rakazo-screen-state"}'),
+      parseScreenLinkMessage('{"state":"connected","version":1,"type":"tangow-screen-state"}'),
     ).toBe("connected");
   });
 
   it.each([
-    ["an extra key", '{"type":"rakazo-screen-state","version":1,"state":"failed","url":"x"}'],
-    ["a missing key", '{"type":"rakazo-screen-state","state":"failed"}'],
+    ["an extra key", '{"type":"tangow-screen-state","version":1,"state":"failed","url":"x"}'],
+    ["a missing key", '{"type":"tangow-screen-state","state":"failed"}'],
     [
       "a __proto__ key",
-      '{"type":"rakazo-screen-state","version":1,"__proto__":{"state":"failed"}}',
+      '{"type":"tangow-screen-state","version":1,"__proto__":{"state":"failed"}}',
     ],
-    ["another version", '{"type":"rakazo-screen-state","version":2,"state":"failed"}'],
-    ["a string version", '{"type":"rakazo-screen-state","version":"1","state":"failed"}'],
+    ["another version", '{"type":"tangow-screen-state","version":2,"state":"failed"}'],
+    ["a string version", '{"type":"tangow-screen-state","version":"1","state":"failed"}'],
     ["another type", '{"type":"rakazo-screen","version":1,"state":"failed"}'],
-    ["an unknown state", '{"type":"rakazo-screen-state","version":1,"state":"expired"}'],
-    ["a state from the prototype", '{"type":"rakazo-screen-state","version":1,"state":"toString"}'],
-    ["an array", '["rakazo-screen-state",1,"failed"]'],
+    ["an unknown state", '{"type":"tangow-screen-state","version":1,"state":"expired"}'],
+    ["a state from the prototype", '{"type":"tangow-screen-state","version":1,"state":"toString"}'],
+    ["an array", '["tangow-screen-state",1,"failed"]'],
     ["null", "null"],
     ["a number", "1"],
     ["broken JSON", '{"type":'],
@@ -59,7 +59,7 @@ describe("parseScreenLinkMessage", () => {
 
   it("rejects anything that is not a string, even with the right shape", () => {
     expect(
-      parseScreenLinkMessage({ type: "rakazo-screen-state", version: 1, state: "failed" }),
+      parseScreenLinkMessage({ type: "tangow-screen-state", version: 1, state: "failed" }),
     ).toBe(null);
   });
 

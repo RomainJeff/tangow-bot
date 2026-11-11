@@ -4,7 +4,7 @@
  * that page, so a message can only move the indicator or ask for a status read.
  */
 
-export const SCREEN_LINK_MESSAGE_TYPE = "rakazo-screen-state";
+export const SCREEN_LINK_MESSAGE_TYPE = "tangow-screen-state";
 export const SCREEN_LINK_VERSION = 1;
 export const SCREEN_LINK_STATES = [
   "connecting",

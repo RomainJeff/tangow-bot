@@ -13,8 +13,8 @@ const OTHER_DIRECTORY =
 const OTHER_ORIGIN =
   "https://evil.example.test/novnc/session/view/1900000000.abc_DEF-123/embed.html";
 
-const CONNECTED = JSON.stringify({ type: "rakazo-screen-state", version: 1, state: "connected" });
-const STALLED = JSON.stringify({ type: "rakazo-screen-state", version: 1, state: "stalled" });
+const CONNECTED = JSON.stringify({ type: "tangow-screen-state", version: 1, state: "connected" });
+const STALLED = JSON.stringify({ type: "tangow-screen-state", version: 1, state: "stalled" });
 
 function fakeClock(): ScreenLinkClock & { advance(ms: number): void } {
   let now = 1_000_000;
@@ -74,7 +74,7 @@ describe("screen WebView message gate", () => {
 
   it("passes malformed data to the controller, which ignores it", () => {
     const { post, link } = setup(EMBED);
-    post(EMBED, { type: "rakazo-screen-state", version: 1, state: "connected" });
+    post(EMBED, { type: "tangow-screen-state", version: 1, state: "connected" });
     post(EMBED, `${CONNECTED}${" ".repeat(300)}`);
     expect(link.view()).toBe("connecting");
   });

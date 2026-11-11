@@ -5,7 +5,7 @@ const SCREEN_ORIGIN = "https://screen.example";
 const SCREEN_URL = `${SCREEN_ORIGIN}/novnc/session/view/1.e2e_signature/embed.html`;
 
 function stateMessage(state: string) {
-  return JSON.stringify({ type: "rakazo-screen-state", version: 1, state });
+  return JSON.stringify({ type: "tangow-screen-state", version: 1, state });
 }
 
 test("the bot screen says when it is connecting or reconnecting", async ({ page }, testInfo) => {
