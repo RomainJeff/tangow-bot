@@ -170,6 +170,8 @@ export const Transcript = memo(function Transcript({
       ),
     [rows],
   );
+  // Your own message sits at the end; a bot's, or someone else's in a group, at the start.
+  const isMine = (message: MessageItem) => message.role === "user" && !personOf?.(message);
   const rewindFromIndex =
     rewindFromItemId === null
       ? -1
@@ -274,8 +276,7 @@ export const Transcript = memo(function Transcript({
           const chrome = rowChrome(item, showSteps);
           const message = rowTarget(row);
           const acts = message !== null && chrome === "row";
-          // Your own message sits at the end; a bot's, or someone else's in a group, at the start.
-          const mine = message?.role === "user" && !personOf?.(message);
+          const mine = message !== null && isMine(message);
           const rewound = rewindFromIndex >= 0 && index >= rewindFromIndex;
           const previous = rows[index - 1];
           const prevChrome = previous ? rowChrome(previous.item, showSteps) : undefined;
@@ -331,9 +332,7 @@ export const Transcript = memo(function Transcript({
                         : undefined
                     }
                   >
-                    {acts &&
-                    message.role !== "user" &&
-                    !message.blocks.some((block) => block.kind === "widget") ? (
+                    {acts && !mine && !message.blocks.some((block) => block.kind === "widget") ? (
                       <MessageHoverActions
                         message={message}
                         previewMessageId={row.previewMessageId}
