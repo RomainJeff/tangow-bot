@@ -2447,11 +2447,7 @@ async function createSteeringContinuation(
   };
   if (pending.length === 0) {
     // As the source message, the entry would stand in for the prompt and never reach the model.
-    if (!(await hasUnreadHelperEntry(tx, input))) return null;
-    const { userId } = await tx.thread.findUniqueOrThrow({
-      where: { id: input.threadId },
-      select: { userId: true },
-    });
+    if (!(await hasUnreadHelperEntry(tx, input, userId))) return null;
     const woken = await followUp(userId, "A helper you started wrote back.", null);
     return woken.id;
   }
@@ -2465,22 +2461,25 @@ async function createSteeringContinuation(
 }
 
 /**
- * Whether the bot's newest helper report or question in the thread came after every history its
- * turns read, so no turn has seen it yet. Session seqs order the two without any clock.
+ * Whether the newest report or question of the person's helpers of the bot in the thread came
+ * after every history their turns read, so none of their turns has seen it yet. Session seqs order
+ * the two without any clock. A helper runs as its parent's person, and wakes only that person.
  */
-async function hasUnreadHelperEntry(tx: Prisma.TransactionClient, input: WakeScope) {
-  const report = await tx.sessionEntry.findFirst({
-    where: {
-      botId: input.botId,
-      type: { in: ["helper.report", "helper.question"] },
-      session: { threadId: input.threadId, kind: "thread" },
-    },
-    orderBy: { seq: "desc" },
-    select: { seq: true },
-  });
+async function hasUnreadHelperEntry(
+  tx: Prisma.TransactionClient,
+  input: WakeScope,
+  userId: string,
+) {
+  const [report] = await tx.$queryRaw<Array<{ seq: number }>>`
+    SELECT e.seq FROM session_entries e
+    JOIN sessions s ON s.id = e."sessionId"
+    JOIN runs helper ON helper.id = e.payload ->> 'helperId'
+    WHERE e."botId" = ${input.botId} AND e.type IN ('helper.report', 'helper.question')
+      AND s."threadId" = ${input.threadId} AND s.kind = 'thread' AND helper."userId" = ${userId}
+    ORDER BY e.seq DESC LIMIT 1`;
   if (!report) return false;
   const { _max: read } = await tx.run.aggregate({
-    where: { threadId: input.threadId, botId: input.botId, ...conversationRunFilter },
+    where: { threadId: input.threadId, botId: input.botId, userId, ...conversationRunFilter },
     _max: { historyThroughSeq: true },
   });
   return read.historyThroughSeq == null || report.seq >= read.historyThroughSeq;

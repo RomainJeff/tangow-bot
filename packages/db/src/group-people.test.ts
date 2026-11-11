@@ -271,4 +271,21 @@ describe("a group's people, bots and lead", () => {
     expect(await tell("creator")).toBe("unknown");
     expect(await tell("ana")).toBe("steered");
   });
+
+  it("wakes the bot for a helper's report as the person whose run started it", async () => {
+    const group = await newGroup(["ana"]);
+    await holdRun("creator", group.threadId);
+    const anaRun = await holdRun("ana", group.threadId);
+    const helper = await holdRun("ana", group.threadId, {
+      trigger: "helper",
+      parentRunId: anaRun.id,
+    });
+    await prisma.run.update({ where: { id: anaRun.id }, data: { status: "completed" } });
+
+    const ended = await fail(helper);
+    const woken = await prisma.run.findUniqueOrThrow({
+      where: { id: (ended && ended.continuationRunId) || "" },
+    });
+    expect(woken.userId).toBe("ana");
+  });
 });
