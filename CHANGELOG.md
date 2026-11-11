@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-11-11
+
+#### Added
+
+- **Invite people of your space into a group with bots.** On web, desktop, iPhone and Android, the group's creator adds people and bots, and picks the lead bot that answers a message naming no bot; each bot then answers with the account of the person who asked it, a private bot answers only its owner, and everyone sees each other's messages under their name. The others see who is in the group and can leave it.
+
 ### 2026-11-10
 
 #### Added
