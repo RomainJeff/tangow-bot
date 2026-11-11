@@ -417,7 +417,7 @@ export function Wordmark({ className }: { className?: string }) {
         <span className="h-4 w-[7px] rounded-full bg-primary" />
         <span className="h-4 w-[7px] rounded-full bg-primary" />
       </div>
-      <span className="font-sans text-[28px] tracking-tight text-foreground">Rakazo</span>
+      <span className="font-sans text-[28px] tracking-tight text-foreground">Tangow</span>
     </div>
   );
 }

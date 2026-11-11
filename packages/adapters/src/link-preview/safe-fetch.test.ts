@@ -411,7 +411,7 @@ describe("link preview fetch: request and response rules (injected client)", () 
     });
     const headers = init?.headers as Record<string, string>;
     expect(Object.keys(headers).sort()).toEqual(["accept", "accept-encoding", "user-agent"]);
-    expect(headers["user-agent"]).toMatch(/^Mozilla\/5\.0 \(compatible; RakazoLinkPreview\/\d/);
+    expect(headers["user-agent"]).toMatch(/^Mozilla\/5\.0 \(compatible; TangowLinkPreview\/\d/);
     expect(headers["accept-encoding"]).toBe("gzip, deflate, br");
     expect(init?.redirect).toBe("manual");
   });
@@ -928,7 +928,7 @@ describe("link preview fetch: real undici client against a local server", () => 
     expect(seen.authorization).toBeUndefined();
     expect(seen.referer).toBeUndefined();
     expect(seen["accept-encoding"]).toBe("gzip, deflate, br");
-    expect(seen["user-agent"]).toMatch(/RakazoLinkPreview/);
+    expect(seen["user-agent"]).toMatch(/TangowLinkPreview/);
     expect(seen.accept).toContain("text/html");
     await vi.waitFor(() => expect(server.connections()).toBe(0));
   });

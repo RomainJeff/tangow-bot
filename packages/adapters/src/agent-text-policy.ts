@@ -28,7 +28,7 @@ type TextPolicyOptions = Pick<
   AgentRunRequest,
   "allowSilentEmpty" | "freeTextIsPrivate" | "runRecap" | "emptyResponseText"
 > & {
-  /** What the model calls message_user; tool calls are still matched by Rakazo's names. */
+  /** What the model calls message_user; tool calls are still matched by Tangow's names. */
   messageUserName?: string;
 };
 

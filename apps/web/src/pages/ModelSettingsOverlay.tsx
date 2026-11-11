@@ -32,7 +32,7 @@ export function ModelSettingsOverlay({
   const description = loading ? (
     <Trans>Loading model catalog…</Trans>
   ) : (
-    <Trans>Choose which connected model Rakazo uses.</Trans>
+    <Trans>Choose which connected model Tangow uses.</Trans>
   );
 
   const body = (

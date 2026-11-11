@@ -31,8 +31,8 @@ import {
 import { installSessionPermissions } from "./session-permissions.js";
 import {
   accessHeaders,
-  isRakazoHealth,
   isRedirectCancelled,
+  isTangowHealth,
   normalizeServerUrl,
   parseSetupInput,
   probeFailureMessage,
@@ -344,7 +344,7 @@ function accessHeadersFor(targetUrl: string): Record<string, string> | null {
 function applyAccessHeaders(targetSession: Session, targetUrl: string) {
   const headers = accessHeadersFor(targetUrl);
   // Only one onBeforeSendHeaders listener may exist per session, and this is
-  // the only one Rakazo installs, so clearing it here is safe.
+  // the only one Tangow installs, so clearing it here is safe.
   if (headers === null) {
     targetSession.webRequest.onBeforeSendHeaders(null);
     return;
@@ -467,7 +467,7 @@ function loadAppUrl(win: BrowserWindow, url: string): Promise<void> {
  * not a usable app. After session resolves, wait for a bootstrapped shell
  * (`data-ready` / shell-ready mark) or an auth/welcome/onboarding surface so a
  * bare Suspense fallback or pre-bootstrap ShellPage cannot pass. Plain e2e
- * fixtures omit the Rakazo app-state marker.
+ * fixtures omit the Tangow app-state marker.
  */
 async function waitForMountedAppDocument(contents: Electron.WebContents) {
   const deadline = Date.now() + 8_000;
@@ -502,7 +502,7 @@ async function waitForMountedAppDocument(contents: Electron.WebContents) {
         performance.getEntriesByName("rk:renderer:session-committed").length > 0;
       if (sessionReady && surfaceReady) return true;
 
-      // Desktop e2e fixtures mount a plain page without Rakazo app-state markers.
+      // Desktop e2e fixtures mount a plain page without Tangow app-state markers.
       if (appState === null) {
         const bodyText = (document.body?.innerText || "").trim();
         if (bodyText.includes("Opening your Space")) return false;
@@ -643,7 +643,7 @@ function restoreAppWindowAfterSetup() {
 function installApplicationMenu() {
   const changeServer: Electron.MenuItemConstructorOptions = {
     id: "change-server",
-    label: "Change Rakazo Server…",
+    label: "Change Tangow Server…",
     accelerator: "CmdOrCtrl+Shift+K",
     click: () => showSetupWindow(),
   };
@@ -678,7 +678,7 @@ function installApplicationMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-/** Setup IPC must only answer the setup window, never a connected Rakazo server. */
+/** Setup IPC must only answer the setup window, never a connected Tangow server. */
 function fromSetupWindow(event: Electron.IpcMainInvokeEvent) {
   return (
     setupWindow !== null && !setupWindow.isDestroyed() && event.sender === setupWindow.webContents
@@ -713,12 +713,12 @@ async function probeServer(
       };
     }
     const health = await readProbeJson(response);
-    if (!isRakazoHealth(health)) {
+    if (!isTangowHealth(health)) {
       return {
         ok: false,
         status: response.status,
         url,
-        error: "That address did not respond like a Rakazo server.",
+        error: "That address did not respond like a Tangow server.",
       };
     }
     return {

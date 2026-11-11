@@ -103,7 +103,7 @@ async function nativeRun(
         threadId: "thread",
         runId: "run_native",
         prompt: "Draft a note.",
-        instructions: "Instructions for Rakazo's own loop, never sent to a native harness.",
+        instructions: "Instructions for Tangow's own loop, never sent to a native harness.",
         harnessAddendum: "You are Ada, the user's bot.",
         history: [],
         tools: WORKER_NATIVE_TOOLS.filter((tool) => ["read", "bash"].includes(tool.name)),
@@ -350,7 +350,7 @@ describe("the pi-native harness through the controller", () => {
     expect(await readdir(path.join(result.root, "workspace/bots/bot"))).toEqual([]);
   });
 
-  it("keeps Pi's prompt with the Rakazo addendum, and runs its file tools on the volume without a grant", async () => {
+  it("keeps Pi's prompt with the Tangow addendum, and runs its file tools on the volume without a grant", async () => {
     const { seen, exit, root } = await nativeRun([
       {
         expect(request) {

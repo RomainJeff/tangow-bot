@@ -88,7 +88,7 @@ async function connect(
   return { client, screensDir };
 }
 
-describe("the Rakazo MCP server", () => {
+describe("the Tangow MCP server", () => {
   it("lists only controller tools and relays a call to the controller and back", async () => {
     const { host, announced, calls } = fakeHost((name, args) =>
       name === "remember" ? { ok: true, saved: args.content } : "Reminder set for 9:00.",
@@ -172,7 +172,7 @@ describe("the Rakazo MCP server", () => {
   });
 });
 
-describe("a connector result through the Rakazo MCP server", () => {
+describe("a connector result through the Tangow MCP server", () => {
   const CONNECTOR_TOOLS: GuestTool[] = [
     controller("mcp__charts__render", {
       inputSchema: {
@@ -267,7 +267,7 @@ describe("a connector result through the Rakazo MCP server", () => {
   });
 });
 
-describe("a long result with an image through the Rakazo MCP server", () => {
+describe("a long result with an image through the Tangow MCP server", () => {
   it("keeps the saved screen's name within the text budget", async () => {
     const { host } = fakeHost(() => ({
       content: [
@@ -311,7 +311,7 @@ describe("a long result with an image through the Rakazo MCP server", () => {
   });
 });
 
-describe("a large connector catalog through the Rakazo MCP server", () => {
+describe("a large connector catalog through the Tangow MCP server", () => {
   it("defers every catalog tool for a harness with native tool search and runs one once on the controller", async () => {
     const { host, announced, calls } = fakeHost(() => "tool-ran");
     const { client } = await connect([...PRODUCT_TOOLS, ...CATALOG_TOOLS], host, {

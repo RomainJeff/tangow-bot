@@ -1,6 +1,6 @@
 import { parseArgs } from "node:util";
 
-export const help = `Tangow — operate a Rakazo source deployment
+export const help = `Tangow — operate a Tangow source deployment
 
 Usage: tangow [--path <checkout>] [--sudo] <command>
 

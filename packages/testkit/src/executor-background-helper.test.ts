@@ -758,7 +758,7 @@ it("runs the helper on its call's whole instructions, and on the default brief w
   const instructions = JSON.stringify(
     request.messages.filter((message) => message.role !== "user"),
   );
-  expect(instructions).toContain('You are a Rakazo subagent named \\"Scout\\".');
+  expect(instructions).toContain('You are a Tangow subagent named \\"Scout\\".');
   expect(instructions).toContain("Sign as Scout.");
 });
 

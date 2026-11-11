@@ -376,7 +376,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Leave group": "Покинуть группу",
   "Lead bot": "Ведущий бот",
   People: "Люди",
-  "Enter your Rakazo server address.": "Введите адрес вашего сервера Rakazo.",
+  "Enter your Tangow server address.": "Введите адрес вашего сервера Tangow.",
   "Show less": "Свернуть",
   Members: "Участники",
   "Members ({min}–{max})": "Участники ({min}–{max})",
@@ -440,8 +440,8 @@ export const RU_MESSAGES: Record<string, string> = {
   "Photo library": "Библиотека фотографий",
   Pin: "Закрепить",
   "Please try again.": "Повторите попытку.",
-  "Point this app at your self-hosted Rakazo origin, the same HTTPS URL you open in a browser.":
-    "Направьте это приложение на свой собственный источник Rakazo, тот же URL-адрес HTTPS, который вы открываете в браузере.",
+  "Point this app at your self-hosted Tangow origin, the same HTTPS URL you open in a browser.":
+    "Направьте это приложение на свой собственный источник Tangow, тот же URL-адрес HTTPS, который вы открываете в браузере.",
   Private: "Личный",
   Providers: "Провайдеры",
   "Public servers need https://. HTTP only works on your local network.":
@@ -506,10 +506,10 @@ export const RU_MESSAGES: Record<string, string> = {
   "Show more": "Показать ещё",
   "Show {label}": "Показать {label}",
   "Sign in": "Войти",
-  "Sign in to Rakazo": "Войти в Rakazo",
+  "Sign in to Tangow": "Войти в Tangow",
   "Sign out": "Выйти",
   "Sign up": "Зарегистрироваться",
-  "Sign up for Rakazo": "Зарегистрироваться в Rakazo",
+  "Sign up for Tangow": "Зарегистрироваться в Tangow",
   "Sign-in": "Вход",
   "Sign-up": "Регистрация",
   "Sign-in did not return a session": "Вход не вернул сессию",
@@ -534,7 +534,7 @@ export const RU_MESSAGES: Record<string, string> = {
   Team: "Команда",
   "Team Computer": "Командный компьютер",
   "That doesn’t look like a URL": "Это не похоже на URL",
-  "That URL did not look like a Rakazo server": "Этот адрес не похож на сервер Rakazo",
+  "That URL did not look like a Tangow server": "Этот адрес не похож на сервер Tangow",
   "That URL is missing a host": "Для этого URL-адреса отсутствует хост",
   "The server changed while starting the request": "Сервер изменился при запуске запроса",
   "This permanently deletes your account, bots, conversations, memories, files, and saved connections. This cannot be undone.":
@@ -632,8 +632,8 @@ export const RU_MESSAGES: Record<string, string> = {
   "Open in full window": "Открыть в полном окне",
   "OpenAPI JSON": "OpenAPI JSON",
   "Opened its thread.": "Диалог открыт.",
-  "Paste the OpenAI-compatible address from your server. Rakazo adds /v1 if needed.":
-    "Вставьте OpenAI-совместимый адрес со своего сервера. При необходимости Rakazo добавляет /v1.",
+  "Paste the OpenAI-compatible address from your server. Tangow adds /v1 if needed.":
+    "Вставьте OpenAI-совместимый адрес со своего сервера. При необходимости Tangow добавляет /v1.",
   Paused: "Приостановлено",
   "Recording a live demonstration needs desktop or web with the full computer view. You can still ask this bot to run saved skills from chat.":
     "Для записи живой демонстрации требуется приложение для компьютера или веб-приложение с полным представлением компьютера. Вы по-прежнему можете попросить этого бота запустить сохранённые навыки из чата.",
@@ -647,8 +647,8 @@ export const RU_MESSAGES: Record<string, string> = {
   "This removes the empty space for everyone.": "Это удалит пустое пространство для всех.",
   "This removes every message and stops current work. The bot, computer, memory, and routines are kept.":
     "Это удалит все сообщения и остановит текущую работу. Бот, компьютер, память и задачи сохранятся.",
-  "This subscription sign-in is not available in Rakazo yet. Use a deployment credential or choose another provider.":
-    "Вход по этой подписке пока недоступен в Rakazo. Используйте учётные данные развёртывания или выберите другого провайдера.",
+  "This subscription sign-in is not available in Tangow yet. Use a deployment credential or choose another provider.":
+    "Вход по этой подписке пока недоступен в Tangow. Используйте учётные данные развёртывания или выберите другого провайдера.",
   "Tool sources": "Источники инструментов",
   Tools: "Инструменты",
   Uninstall: "Удалить",

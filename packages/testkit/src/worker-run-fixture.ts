@@ -45,7 +45,7 @@ import { openBenchPostgres } from "./worker-live/database.js";
 
 const MODEL_KEY = "worker-fixture-model-key";
 
-/** Lets a step call a controller tool by its Rakazo name, which Pi native offers over MCP. */
+/** Lets a step call a controller tool by its Tangow name, which Pi native offers over MCP. */
 /** The call after the model ended on text the person never sees: it is told how to reach them. */
 export const afterPrivateText: ModelEmulatorStep = {
   expect(request) {

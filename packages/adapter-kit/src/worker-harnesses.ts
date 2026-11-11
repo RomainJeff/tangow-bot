@@ -5,7 +5,7 @@ export const PI_NATIVE_HARNESS: HarnessDeclaration = {
   capabilities: ["native-loop", "steering", "subagents", "resume"],
 };
 
-/** What a worker harness calls a Rakazo tool: the controller's MCP server is named `rakazo`. */
+/** What a worker harness calls a Tangow tool: the controller's MCP server is named `rakazo`. */
 export const TANGOW_TOOL_PREFIX = "mcp__rakazo__";
 
 /** Resolve the controller's selected harness without loading a guest implementation. */

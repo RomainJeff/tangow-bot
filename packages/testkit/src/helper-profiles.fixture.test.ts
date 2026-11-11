@@ -5,7 +5,7 @@ import { delegatedTools, HELPER_PROFILES, MAIN_BOT_BLOCKED_TOOLS, selectTools } 
 import { expect, it } from "vitest";
 import { researcher, screenOperator } from "./helper-profiles.fixture.js";
 
-/** What a Pi native bot on a worker can be offered: its harness's own tools, then Rakazo's. */
+/** What a Pi native bot on a worker can be offered: its harness's own tools, then Tangow's. */
 const CATALOG = [
   ...nativeToolsForHarness("pi-native").map(({ name }) => ({ name, where: "guest" as const })),
   ...[...builtinAgentTools, computerExecTool].map(({ name }) => ({

@@ -15,7 +15,7 @@ export const laneD: Lane = {
   async run(live) {
     const seen: Record<string, unknown> = {};
     const isHelper = (request: ModelEmulatorRequest) =>
-      JSON.stringify(request.messages[0]?.content ?? "").includes("Rakazo subagent");
+      JSON.stringify(request.messages[0]?.content ?? "").includes("Tangow subagent");
     const worker = await liveRun(live, {
       steps: [
         call("p1", "computer_act", { action: "click", x: 1, y: 1 }, (request) => {

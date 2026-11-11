@@ -956,8 +956,8 @@ msgid "Choose a new password"
 msgstr "Yeni bir parola seçin"
 
 #: src/pages/ModelSettingsOverlay.tsx:35
-msgid "Choose which connected model Rakazo uses."
-msgstr "Rakazo'nun hangi bağlı modeli kullanacağını seç."
+msgid "Choose which connected model Tangow uses."
+msgstr "Tangow'nun hangi bağlı modeli kullanacağını seç."
 
 #: src/pages/bot-page/page-kit.tsx:150
 #: src/pages/shell/dialogs.tsx:319
@@ -1783,8 +1783,8 @@ msgid "Create space"
 msgstr "Alan oluştur"
 
 #: src/pages/Auth.tsx:39
-msgid "Create your Rakazo"
-msgstr "Rakazo hesabını oluştur"
+msgid "Create your Tangow"
+msgstr "Tangow hesabını oluştur"
 
 #: src/components/AskCard.tsx:48
 msgid "Created"
@@ -3417,8 +3417,8 @@ msgid "Paste a replacement key"
 msgstr "Yeni bir anahtar yapıştır"
 
 #: src/pages/model-settings/model-detail.tsx:93
-msgid "Paste the OpenAI-compatible address from your server. Rakazo adds /v1 if needed."
-msgstr "Sunucundaki OpenAI uyumlu adresi yapıştır. Gerekirse Rakazo /v1 ekler."
+msgid "Paste the OpenAI-compatible address from your server. Tangow adds /v1 if needed."
+msgstr "Sunucundaki OpenAI uyumlu adresi yapıştır. Gerekirse Tangow /v1 ekler."
 
 #: src/pages/ProvidersSettings.tsx:225
 msgid "Paste your API key"
@@ -3817,8 +3817,8 @@ msgid "Retry screen"
 msgstr "Ekranı yeniden dene"
 
 #: src/pages/McpOAuthCallback.tsx:62
-msgid "Return to Rakazo"
-msgstr "Rakazo'ya dön"
+msgid "Return to Tangow"
+msgstr "Tangow'ya dön"
 
 #. placeholder {0}: doc.revision
 #: src/pages/KnowledgeSection.tsx:145
@@ -4143,8 +4143,8 @@ msgid "Sign in"
 msgstr "Oturum aç"
 
 #: src/pages/Auth.tsx:37
-msgid "Sign in to Rakazo"
-msgstr "Rakazo'da oturum aç"
+msgid "Sign in to Tangow"
+msgstr "Tangow'da oturum aç"
 
 #: src/pages/Auth.tsx:226
 #: src/pages/Welcome.tsx:32
@@ -4440,8 +4440,8 @@ msgid "This server is already connected. Disconnect it first to authorize again.
 msgstr "Bu sunucu zaten bağlı. Yeniden yetkilendirmek için önce bağlantısını kes."
 
 #: src/pages/model-settings/model-detail.tsx:341
-msgid "This subscription sign-in is not available in Rakazo yet. Use a deployment credential or choose another provider."
-msgstr "Bu abonelik girişi Rakazo'da henüz kullanılamıyor. Bir dağıtım kimlik bilgisi kullan veya başka bir sağlayıcı seç."
+msgid "This subscription sign-in is not available in Tangow yet. Use a deployment credential or choose another provider."
+msgstr "Bu abonelik girişi Tangow'da henüz kullanılamıyor. Bir dağıtım kimlik bilgisi kullan veya başka bir sağlayıcı seç."
 
 #: src/components/AgentSteps.tsx:57
 msgid "Thought for {duration} · {stepCount, plural, one {# step} other {# steps}}"

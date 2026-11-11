@@ -1195,7 +1195,7 @@ async function findBotContainer(botId: string, spaceId: string) {
   for (const item of listed) {
     const container = docker.getContainer(item.Id);
     const info = await container.inspect();
-    if (isRakazoContainer(info, botId, spaceId)) return container;
+    if (isTangowContainer(info, botId, spaceId)) return container;
   }
   return undefined;
 }
@@ -1203,7 +1203,7 @@ async function findBotContainer(botId: string, spaceId: string) {
 /** Count managed computers for a space, including legacy workspaceId / unlabeled-managed. */
 export async function countSpaceContainers(spaceId: string): Promise<number> {
   // Do not filter by rakazo.managed=true: legacy computers are still managed via
-  // COMPUTER_IMAGE + rakazo.workspaceId (same rule as isRakazoContainer).
+  // COMPUTER_IMAGE + rakazo.workspaceId (same rule as isTangowContainer).
   const listed = await docker.listContainers({ all: true });
   let count = 0;
   for (const item of listed) {
@@ -1224,7 +1224,7 @@ async function isManagedSpaceContainer(
     if (labels["rakazo.managed"] === "true" || item.Image === COMPUTER_IMAGE) return true;
     // Space matches but Image may be an ID after the tag moved — confirm via inspect.
   }
-  // Missing list Labels: inspect with the same managed rule as isRakazoContainer.
+  // Missing list Labels: inspect with the same managed rule as isTangowContainer.
   try {
     const info = await docker.getContainer(item.Id).inspect();
     const infoLabels = info.Config?.Labels ?? {};
@@ -1244,7 +1244,7 @@ async function managedContainer(id: string, botId?: string, spaceId?: string) {
   if (!botId || !spaceId) throw new ComputerIdentityError("missing computer identity");
   const container = docker.getContainer(id);
   const info = await container.inspect();
-  if (!isRakazoContainer(info, botId, spaceId))
+  if (!isTangowContainer(info, botId, spaceId))
     throw new ComputerIdentityError("computer identity mismatch");
   return { container, info };
 }
@@ -1311,7 +1311,7 @@ async function ensureManagedScreen(
   };
 }
 
-function isRakazoContainer(info: Docker.ContainerInspectInfo, botId: string, spaceId: string) {
+function isTangowContainer(info: Docker.ContainerInspectInfo, botId: string, spaceId: string) {
   const labels = info.Config.Labels ?? {};
   const managed = labels["rakazo.managed"] === "true" || info.Config.Image === COMPUTER_IMAGE;
   return managed && hasComputerIdentity(labels, botId, spaceId);

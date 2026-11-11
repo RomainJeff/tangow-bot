@@ -1,4 +1,4 @@
-/** Product palette for Expo. Prefer these over hardcoded Rakazo hexes.
+/** Product palette for Expo. Prefer these over hardcoded Tangow hexes.
  * System chrome (nav bars, fills, labels) stays in `./native` via PlatformColor. */
 /**
  * Elevation for Expo: the design contract's CSS `box-shadow` strings as they

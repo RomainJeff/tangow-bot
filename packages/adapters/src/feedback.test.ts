@@ -21,7 +21,7 @@ const input: FeedbackInput = {
 };
 
 describe("feedbackIssue", () => {
-  it("keeps the agent's assessment apart from what Rakazo measured", () => {
+  it("keeps the agent's assessment apart from what Tangow measured", () => {
     const issue = feedbackIssue(input, {
       runId: "run-1",
       threadId: "thread-1",
@@ -35,14 +35,14 @@ describe("feedbackIssue", () => {
 
     expect(issue.title).toBe("Saving a draft took twelve browser actions");
     expect(issue.labels).toEqual(["agent-feedback", "friction"]);
-    const [reported, observed] = issue.body.split("## Observed by Rakazo");
+    const [reported, observed] = issue.body.split("## Observed by Tangow");
     expect(reported).toContain("The save button moved after each click.");
     expect(reported).toContain("**Impact:** Completed with difficulty");
     expect(observed).toContain("- Run: `run-1`");
     expect(observed).toContain("not final totals");
     expect(observed).toContain("- Model calls recorded: 14 (compaction calls included");
     expect(observed).toContain("- Tool calls audited: 22, 3 failed (the audit can miss calls)");
-    expect(observed).not.toContain("Rakazo version");
+    expect(observed).not.toContain("Tangow version");
   });
 
   it.each([

@@ -6,13 +6,13 @@ import {
   desktopOAuthCode,
   oauthStateOf,
   onDesktopOAuthCallback,
-  type RakazoDesktop,
-  type RakazoDesktopOAuthCallback,
   readPageHeadOnDesktop,
+  type TangowDesktop,
+  type TangowDesktopOAuthCallback,
   windowChromeKind,
 } from "./desktop.js";
 
-function desktop(platform: string): RakazoDesktop {
+function desktop(platform: string): TangowDesktop {
   const updateState = {
     phase: "unsupported" as const,
     currentVersion: "0.1.0",
@@ -128,20 +128,20 @@ describe("attempt correlation", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   function bridgeEmitting() {
-    let emit: (callback: RakazoDesktopOAuthCallback) => void = () => undefined;
+    let emit: (callback: TangowDesktopOAuthCallback) => void = () => undefined;
     const unsubscribe = vi.fn();
     vi.stubGlobal("window", {
       rakazoDesktop: {
         ...desktop("linux"),
         oauth: {
-          onCallback: (listener: (callback: RakazoDesktopOAuthCallback) => void) => {
+          onCallback: (listener: (callback: TangowDesktopOAuthCallback) => void) => {
             emit = listener;
             return unsubscribe;
           },
         },
       },
     });
-    return { emit: (c: RakazoDesktopOAuthCallback) => emit(c), unsubscribe };
+    return { emit: (c: TangowDesktopOAuthCallback) => emit(c), unsubscribe };
   }
 
   it("reads the attempt state out of the authorize URL", () => {

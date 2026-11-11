@@ -86,7 +86,7 @@ describe("Space invite links", () => {
   });
 
   it("joins only the invited Space, once, as the invited email, with the guest's own model", async () => {
-    const token = await invite(" Guest@Rakazo.test");
+    const token = await invite(" Guest@Tangow.test");
     await expect(previewSpaceInvitation(prisma, { token, userId: "stranger" })).resolves.toEqual({
       spaceName: "Family",
       inviterName: "Ada",

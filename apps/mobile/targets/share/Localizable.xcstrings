@@ -65,18 +65,18 @@
         }
       }
     },
-    "Sign in to Rakazo": {
+    "Sign in to Tangow": {
       "localizations": {
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Войти в Rakazo"
+            "value": "Войти в Tangow"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "登录 Rakazo"
+            "value": "登录 Tangow"
           }
         }
       }

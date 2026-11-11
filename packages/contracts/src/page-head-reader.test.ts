@@ -186,7 +186,7 @@ describe("readPageHead: one plain request (CA 86)", () => {
       headers: { "user-agent": PAGE_HEAD_USER_AGENT, accept: PAGE_HEAD_ACCEPT },
     });
     expect(Object.keys(init?.headers ?? {}).sort()).toEqual(["accept", "user-agent"]);
-    expect(PAGE_HEAD_USER_AGENT).toMatch(/RakazoLinkPreview/);
+    expect(PAGE_HEAD_USER_AGENT).toMatch(/TangowLinkPreview/);
   });
 
   it("returns the head up to </head> and cancels the rest of the body", async () => {

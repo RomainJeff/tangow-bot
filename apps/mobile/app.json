@@ -72,7 +72,7 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Tangow uses the camera so you can attach photos to a bot message.",
         "NSPhotoLibraryUsageDescription": "Tangow uses your photo library so you can attach images to a bot message.",
-        "NSLocalNetworkUsageDescription": "Tangow connects to a self-hosted Rakazo server on your local network.",
+        "NSLocalNetworkUsageDescription": "Tangow connects to a self-hosted Tangow server on your local network.",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
         },

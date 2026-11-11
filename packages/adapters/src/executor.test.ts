@@ -1668,7 +1668,7 @@ describe("buildSystemInstructions", () => {
     }
   });
 
-  it("uses the worker's Rakazo tool names throughout owned guidance while retaining native names", () => {
+  it("uses the worker's Tangow tool names throughout owned guidance while retaining native names", () => {
     const instructions = buildHarnessAddendum({
       ...parts,
       browserRunAllowed: true,

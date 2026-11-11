@@ -55,7 +55,7 @@ export const GuestModelSchema = z.strictObject({
 });
 export type GuestModel = z.infer<typeof GuestModelSchema>;
 
-/** `guest` tools are the harness's own, run by its loop in the VM; `controller` tools are Rakazo's. */
+/** `guest` tools are the harness's own, run by its loop in the VM; `controller` tools are Tangow's. */
 export const ToolPlacement = z.enum(["controller", "guest"]);
 export type ToolPlacement = z.infer<typeof ToolPlacement>;
 

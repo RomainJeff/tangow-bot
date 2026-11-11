@@ -181,7 +181,7 @@ export function workerStart(
     throw new Error("The run snapshot cannot resume with the selected harness");
   const offered = agentTools(request.tools, harness, mainBotRule(request, harness));
   const profiles = startable(request, harness);
-  // A harness with its own loop keeps its own prompt: Rakazo's part is appended to it.
+  // A harness with its own loop keeps its own prompt: Tangow's part is appended to it.
   const instructions = harness.capabilities.includes("native-loop")
     ? (request.harnessAddendum ?? request.instructions)
     : request.instructions;

@@ -58,7 +58,7 @@ const PI_SETTINGS = {
   steeringMode: "all" as const,
 };
 
-/** Rakazo's hooks into Pi's own loop. Pi awaits each one, so the channel paces the loop. */
+/** Tangow's hooks into Pi's own loop. Pi awaits each one, so the channel paces the loop. */
 function rakazoExtension(
   host: HarnessHost,
   run: GuestRunInput,
@@ -69,7 +69,7 @@ function rakazoExtension(
   steer: (message: SteeringMessage) => void,
   nudge: (text: string, mode: "steer" | "followUp") => void,
 ) {
-  // The same reminders as Rakazo's own loop, worded with the name this model knows.
+  // The same reminders as Tangow's own loop, worded with the name this model knows.
   const textPolicy = createAgentTextPolicy({
     ...run,
     messageUserName: `${TANGOW_TOOL_PREFIX}message_user`,

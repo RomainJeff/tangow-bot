@@ -615,7 +615,7 @@ test("setup configures public hostname and email policy before building without 
   const result = f.invoke(
     ["setup"],
     { TARGET: f.before },
-    `https://app.example.com\n${smtp}\nRakazo <mail@example.com>\nowner@example.com\n\n\n`,
+    `https://app.example.com\n${smtp}\nTangow <mail@example.com>\nowner@example.com\n\n\n`,
   );
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Ready:/);

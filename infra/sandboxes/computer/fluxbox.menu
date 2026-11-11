@@ -1,4 +1,4 @@
-[begin] (Rakazo)
+[begin] (Tangow)
   [exec] (Browser) {tangow-browser}
   [exec] (Files) {tangow-files}
   [exec] (Office) {libreoffice}

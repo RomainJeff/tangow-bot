@@ -121,7 +121,7 @@ describe.skipIf(!databaseAvailable)("mail drafts in a worker run", () => {
       }
       expect(JSON.stringify(third?.messages)).not.toContain("paused: awaiting approval");
       expect(JSON.stringify(third?.messages)).not.toContain(
-        "Rakazo already ran what they approved",
+        "Tangow already ran what they approved",
       );
       expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
         "completed",

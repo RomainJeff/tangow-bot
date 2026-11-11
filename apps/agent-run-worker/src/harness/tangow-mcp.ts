@@ -5,7 +5,7 @@ import { rakazoMcpServer } from "../tangow-mcp.js";
 
 type Transport = ReturnType<McpTransportFactory>;
 
-/** The Rakazo MCP server for Pi's MCP client, whose `tool_search` loads the deferred tools. */
+/** The Tangow MCP server for Pi's MCP client, whose `tool_search` loads the deferred tools. */
 export function rakazoMcpTransport(
   tools: readonly GuestTool[],
   host: HarnessHost,

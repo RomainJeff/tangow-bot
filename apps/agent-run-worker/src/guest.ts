@@ -46,7 +46,7 @@ function deferred<T>() {
 
 /**
  * Runs one attempt's harness against its controller. The guest holds no key and no secret. The
- * harness runs its own tools; every Rakazo tool runs at the controller.
+ * harness runs its own tools; every Tangow tool runs at the controller.
  */
 export async function runGuest(options: GuestOptions): Promise<GuestExit> {
   const worker = capabilityWorker(options.capability);

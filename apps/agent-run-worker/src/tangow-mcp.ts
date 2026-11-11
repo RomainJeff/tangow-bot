@@ -29,7 +29,7 @@ export interface McpClientTransport {
 /** `deferred`: the harness declares the tool to its model only once its own tool search finds it. */
 export type McpExposure = "direct" | "deferred";
 
-export interface RakazoMcpTool {
+export interface TangowMcpTool {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
@@ -40,14 +40,14 @@ export interface RakazoMcpTool {
 }
 
 /**
- * What the Rakazo MCP server lists. Every tool is a controller tool; the harness's own tools stay
+ * What the Tangow MCP server lists. Every tool is a controller tool; the harness's own tools stay
  * native. A harness with native tool search gets each large catalog's tools deferred, and one
  * without gets the catalog's search, load and execute tools instead.
  */
 export function rakazoMcpTools(
   tools: readonly GuestTool[],
   nativeToolSearch: boolean,
-): RakazoMcpTool[] {
+): TangowMcpTool[] {
   return tools
     .filter(
       (tool) =>
@@ -71,7 +71,7 @@ const isBlock = (value: unknown): value is McpBlock =>
   typeof (value as { type?: unknown } | null)?.type === "string";
 
 /**
- * A controller tool's output as one envelope. Rakazo tools return `agent_tool_result` content,
+ * A controller tool's output as one envelope. Tangow tools return `agent_tool_result` content,
  * connectors an MCP result, and a refused or failed call `{ error }`.
  */
 function resultBlocks(output: unknown): { blocks: McpBlock[]; isError: boolean } {
@@ -149,7 +149,7 @@ class McpError extends Error {
 const PROTOCOL_VERSION = "2025-06-18";
 
 /**
- * The Rakazo MCP server in the guest process, one per attempt, as the client end of an in-process
+ * The Tangow MCP server in the guest process, one per attempt, as the client end of an in-process
  * transport. Every call is a `tool.call` to the controller, which keeps approval, journal,
  * redaction and budget. It depends on no harness: an adapter hands the transport to its MCP client.
  */
@@ -203,7 +203,7 @@ export function rakazoMcpServer(
             typeof params.protocolVersion === "string" ? params.protocolVersion : PROTOCOL_VERSION,
           capabilities: { tools: {} },
           serverInfo: { name: "rakazo", version: "1" },
-          instructions: "Rakazo's own tools: your computer, browser, memory, connectors and app.",
+          instructions: "Tangow's own tools: your computer, browser, memory, connectors and app.",
         };
       case "ping":
         return {};

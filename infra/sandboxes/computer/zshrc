@@ -1,4 +1,4 @@
-# Rakazo defaults, sourced from ~/.zshrc. Edit ~/.zshrc to override; this file ships with the image.
+# Tangow defaults, sourced from ~/.zshrc. Edit ~/.zshrc to override; this file ships with the image.
 HISTFILE="$HOME/.zsh_history"
 HISTSIZE=50000
 SAVEHIST=50000

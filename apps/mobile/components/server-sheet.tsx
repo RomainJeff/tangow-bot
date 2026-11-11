@@ -141,7 +141,7 @@ export function ServerSheet({
           >
             <Text style={styles.explanation}>
               {t(
-                "Point this app at your self-hosted Rakazo origin, the same HTTPS URL you open in a browser.",
+                "Point this app at your self-hosted Tangow origin, the same HTTPS URL you open in a browser.",
               )}
             </Text>
             <TextInput

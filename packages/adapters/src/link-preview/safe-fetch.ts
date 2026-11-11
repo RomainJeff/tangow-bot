@@ -37,7 +37,7 @@ const TLS_ERROR_CODE = /^(ERR_TLS|ERR_SSL)|CERT|SELF_SIGNED|^UNABLE_TO_(VERIFY|G
  * neither identifies the person, the space or the page, so they are accepted as they are.
  */
 const FIXED_HEADERS = {
-  "user-agent": "Mozilla/5.0 (compatible; RakazoLinkPreview/1.0)",
+  "user-agent": "Mozilla/5.0 (compatible; TangowLinkPreview/1.0)",
   "accept-encoding": "gzip, deflate, br",
 };
 const ACCEPT = {

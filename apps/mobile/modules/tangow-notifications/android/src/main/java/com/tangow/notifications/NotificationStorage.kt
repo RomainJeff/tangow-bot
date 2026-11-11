@@ -33,7 +33,7 @@ internal data class NotificationSettings(
   }
 }
 
-/** Everything one authenticated request to the Rakazo server needs. */
+/** Everything one authenticated request to the Tangow server needs. */
 internal data class ApiSession(
   val endpoint: String,
   val token: String,

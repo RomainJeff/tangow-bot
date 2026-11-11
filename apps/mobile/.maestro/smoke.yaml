@@ -1,21 +1,21 @@
 appId: com.romainjeff.tangow
-name: Rakazo mobile smoke
+name: Tangow mobile smoke
 ---
 - launchApp:
     clearState: true
 
-- assertVisible: "Sign in to Rakazo"
+- assertVisible: "Sign in to Tangow"
 - assertVisible: "Sign up"
 - tapOn: "Sign up"
-- assertVisible: "Sign up for Rakazo"
+- assertVisible: "Sign up for Tangow"
 - assertVisible: "Name"
 - tapOn: "Sign in"
-- assertVisible: "Sign in to Rakazo"
+- assertVisible: "Sign in to Tangow"
 - tapOn: "Email"
 - inputText: ${TANGOW_E2E_EMAIL}
 - tapOn: "Password"
 - inputText: ${TANGOW_E2E_PASSWORD}
-- tapOn: "Sign in to Rakazo"
+- tapOn: "Sign in to Tangow"
 - tapOn: "Sign in"
 
 - extendedWaitUntil:

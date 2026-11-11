@@ -483,7 +483,7 @@ export default function Providers() {
             {selected.auth === "oauth" && !subscriptionSignIn ? (
               <Text style={styles.secondary}>
                 {t(
-                  "This subscription sign-in is not available in Rakazo yet. Use a deployment credential or choose another provider.",
+                  "This subscription sign-in is not available in Tangow yet. Use a deployment credential or choose another provider.",
                 )}
               </Text>
             ) : null}

@@ -38,7 +38,7 @@ struct ShareSession {
   static func load() -> ShareSession? {
     guard let token = Keychain.read(Key.session), !token.isEmpty else { return nil }
     let info = containingAppInfo()
-    let defaultBase = info["RakazoApiBase"] as? String ?? localApi
+    let defaultBase = info["TangowApiBase"] as? String ?? localApi
     let stored = Keychain.read(Key.apiBase) ?? ""
     let base = stored.isEmpty ? defaultBase : stored
     var headers = [
@@ -69,8 +69,8 @@ struct ShareSession {
       return (id, secret)
     }
     guard base == defaultBase,
-      let id = info["RakazoAccessClientId"] as? String, !id.isEmpty,
-      let secret = info["RakazoAccessClientSecret"] as? String, !secret.isEmpty
+      let id = info["TangowAccessClientId"] as? String, !id.isEmpty,
+      let secret = info["TangowAccessClientSecret"] as? String, !secret.isEmpty
     else { return nil }
     return (id, secret)
   }
