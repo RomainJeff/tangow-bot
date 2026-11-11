@@ -722,10 +722,18 @@ export async function removeSpaceMember(
     await tx.botShare.deleteMany({
       where: { userId: input.memberUserId, bot: { spaceId: input.spaceId } },
     });
+    // They leave the Space's groups too, and the runs they started in them stop below.
+    await tx.chatGroupPerson.deleteMany({
+      where: { userId: input.memberUserId, group: { spaceId: input.spaceId } },
+    });
     // Archiving only stops new claims; a run already going would keep the Space's secrets.
     const activeRuns = await tx.run.findMany({
       where: {
-        OR: [{ bot: leftovers }, { thread: { ...leftovers, memberBotId: { not: null } } }],
+        OR: [
+          { bot: leftovers },
+          { thread: { ...leftovers, memberBotId: { not: null } } },
+          { ...leftovers, thread: { groupId: { not: null } } },
+        ],
         status: { in: [...ACTIVE_RUN_STATUSES] },
       },
       select: { id: true, taskId: true },

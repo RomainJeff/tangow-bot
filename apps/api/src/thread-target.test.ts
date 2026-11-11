@@ -141,13 +141,14 @@ describe("reaction messages", () => {
       $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
     } as unknown as PrismaClient;
     const target = { kind: "bot", botId: "bot-1", threadId: "thread-1" } as ThreadTarget;
+    const actor = { spaceId: "space-1", userId: "user-1" } as Actor;
     for (const [clientNonce, reaction] of [
       ["first", "❤️"],
       ["second", "👍"],
       ["third", "❤️"],
       ["third", "❤️"],
     ] as const) {
-      await reactToThreadMessage({ prisma }, target, {
+      await reactToThreadMessage({ prisma }, actor, target, {
         messageId: "parent",
         reaction,
         clientNonce,
@@ -171,7 +172,7 @@ describe("reaction messages", () => {
     });
     tx.sessionEntry.findFirst.mockResolvedValueOnce(null);
     await expect(
-      reactToThreadMessage({ prisma }, target, {
+      reactToThreadMessage({ prisma }, actor, target, {
         messageId: "elsewhere",
         reaction: "❤️",
         clientNonce: "fourth",
@@ -1168,6 +1169,8 @@ function groupPrisma(
   };
   return {
     $transaction: vi.fn(async (callback: (client: typeof tx) => unknown) => callback(tx)),
+    $queryRaw: vi.fn().mockResolvedValue([]),
+    chatGroupPerson: { findMany: vi.fn().mockResolvedValue([]) },
   } as unknown as PrismaClient;
 }
 

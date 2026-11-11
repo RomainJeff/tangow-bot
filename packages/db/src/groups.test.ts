@@ -14,10 +14,12 @@ describe("listSpaceGroupsForSpaces", () => {
         id: "group-1",
         spaceId: "workspace-2",
         name: "Support crew",
-        pinned: true,
-        sectionId: null,
         updatedAt: new Date("2026-08-20T00:00:00.000Z"),
-        thread: { id: "thread-1", unread: true, sessionId: "session-1" },
+        thread: { id: "thread-1", sessionId: "session-1" },
+        people: [
+          { userId: "user-2", unread: false, pinned: false, sectionId: null },
+          { userId: "user-1", unread: true, pinned: true, sectionId: null },
+        ],
         members: [
           { bot: { id: "bot-1", name: "Triage", color: "#111", runs: [] } },
           {
@@ -97,6 +99,7 @@ describe("archiveGroup", () => {
   let computerUpdateMany: ReturnType<typeof vi.fn>;
   let eventDeleteMany: ReturnType<typeof vi.fn>;
   let groupUpdate: ReturnType<typeof vi.fn>;
+  let personUpdateMany: ReturnType<typeof vi.fn>;
   let prisma: PrismaClient;
 
   beforeEach(() => {
@@ -123,9 +126,11 @@ describe("archiveGroup", () => {
     computerUpdateMany = vi.fn();
     eventDeleteMany = vi.fn();
     groupUpdate = vi.fn();
+    personUpdateMany = vi.fn();
     const tx = {
       $queryRaw: queryRaw,
       chatGroup: { findFirst, update: groupUpdate },
+      chatGroupPerson: { updateMany: personUpdateMany },
       run: { findMany: findManyRuns, updateMany: runUpdateMany },
       attempt: { updateMany: attemptUpdateMany },
       task: { updateMany: taskUpdateMany },
@@ -184,7 +189,11 @@ describe("archiveGroup", () => {
     });
     expect(groupUpdate).toHaveBeenCalledWith({
       where: { id: "group-1" },
-      data: expect.objectContaining({ pinned: false, archivedAt: expect.any(Date) }),
+      data: { archivedAt: expect.any(Date) },
+    });
+    expect(personUpdateMany).toHaveBeenCalledWith({
+      where: { groupId: "group-1" },
+      data: { pinned: false },
     });
   });
 

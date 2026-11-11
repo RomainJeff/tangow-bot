@@ -9,6 +9,7 @@ import {
 import { ensureMemberThreads, sharedWithFilter } from "./bot-sharing.js";
 import type { PrismaClient } from "./client.js";
 import { type ComputerMode, ensureComputerRecord, parseComputerMode } from "./computers.js";
+import { groupMembershipFilter } from "./groups.js";
 import { createThreadMessageInTransaction } from "./messages.js";
 import { BotSectionNameConflictError, IsolationError } from "./scope.js";
 import { lockSpaceForContentCreation } from "./spaces.js";
@@ -253,8 +254,7 @@ export function createRepos(prisma: PrismaClient) {
           : await tx.chatGroup.findFirst({
               where: {
                 id: input.groupId,
-                spaceId: actor.spaceId,
-                userId: actor.userId,
+                ...groupMembershipFilter(actor.userId, actor.spaceId),
                 archivedAt: null,
               },
               select: { id: true },
@@ -286,8 +286,8 @@ export function createRepos(prisma: PrismaClient) {
         if (input.botId) {
           await tx.bot.update({ where: { id: target.id }, data: { sectionId: section.id } });
         } else {
-          await tx.chatGroup.update({
-            where: { id: target.id },
+          await tx.chatGroupPerson.update({
+            where: { groupId_userId: { groupId: target.id, userId: actor.userId } },
             data: { sectionId: section.id },
           });
         }

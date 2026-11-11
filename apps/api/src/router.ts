@@ -145,13 +145,15 @@ import {
   findSpaceDecisionConfig,
   findSpaceMemoryConfig,
   formatMessagingLinkCode,
+  GroupCreatorCannotLeaveError,
   getBotSharing,
+  groupMembershipFilter,
   InvalidAnswerError,
   InvalidSpaceNameError,
   IsolationError,
   issueMessagingLinkCode,
   listSpaceMembers,
-  lockOwnedGroup,
+  lockGroupForPerson,
   NotBotOwnerError,
   NotSpaceMemberError,
   NotSpaceOwnerError,
@@ -391,7 +393,7 @@ async function lockProviderConnectionScope(
 
 function computerContext(
   actor: Pick<Actor, "spaceId" | "userId">,
-  botId: string,
+  botId: string | undefined,
   operationId: string,
   memberId?: string,
 ): AdapterContext {
@@ -400,7 +402,7 @@ function computerContext(
     traceId: operationId,
     spaceId: actor.spaceId,
     userId: actor.userId,
-    botId,
+    ...(botId ? { botId } : {}),
     ...(memberId ? { memberId } : {}),
     signal: new AbortController().signal,
   };
@@ -1585,7 +1587,10 @@ export function createRouter(deps: RouterDeps) {
         groupRepos.listGroups(context.actor, { archived: true }),
       ),
       get: authed.groups.get.handler(async ({ context, input }) =>
-        groupRepos.mapGroup(await groupRepos.getGroup(context.actor, input.groupId)),
+        groupRepos.mapGroup(
+          await groupRepos.getGroup(context.actor, input.groupId),
+          context.actor.userId,
+        ),
       ),
       duplicate: authed.groups.duplicate.handler(async ({ context, input }) => {
         const source = await groupRepos.getGroup(context.actor, input.groupId);
@@ -1662,6 +1667,20 @@ export function createRouter(deps: RouterDeps) {
         await groupRepos.restoreGroup(context.actor, input.groupId);
         return { ok: true as const };
       }),
+      leave: authed.groups.leave.handler(async ({ context, input }) => {
+        const left = await groupRepos.leaveGroup(context.actor, input.groupId).catch((error) => {
+          if (error instanceof GroupCreatorCannotLeaveError) {
+            throw new ORPCError("BAD_REQUEST", { message: error.message });
+          }
+          throw error;
+        });
+        await Promise.all(
+          left.cancelledRunIds.map((runId) =>
+            deps.jobs.cancel(runJobKey(runId)).catch(() => undefined),
+          ),
+        );
+        return { ok: true as const };
+      }),
       remove: authed.groups.remove.handler(async ({ context, input }) => {
         const removed = await groupRepos.removeGroup(context.actor, input.groupId);
         const cleanup = await Promise.allSettled(
@@ -1714,10 +1733,22 @@ export function createRouter(deps: RouterDeps) {
       subscribe: authed.threads.subscribe.handler(async function* ({ context, input }) {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
         const peerRuns = new Map<string, Promise<boolean>>();
+        // A person removed from a group, or who left it, stops seeing it at once.
+        const allowed =
+          target.kind === "group"
+            ? async () =>
+                (await deps.prisma.chatGroup.count({
+                  where: {
+                    id: target.groupId,
+                    ...groupMembershipFilter(context.actor.userId, context.actor.spaceId),
+                  },
+                })) > 0
+            : undefined;
         for await (const event of deps.events.follow(
           target.threadId,
           input.cursor,
           context.signal,
+          allowed,
         )) {
           const forwarded = await forwardedThreadEvent(deps.prisma, event, peerRuns);
           if (forwarded) yield forwarded;
@@ -1750,7 +1781,7 @@ export function createRouter(deps: RouterDeps) {
       }),
       react: authed.threads.react.handler(async ({ context, input }) => {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
-        const result = await reactToThreadMessage(deps, target, input);
+        const result = await reactToThreadMessage(deps, context.actor, target, input);
         if (result.eventSeq != null) {
           await deps.events.notify(target.threadId, result.eventSeq).catch((error) => {
             getLogger().error("thread reaction realtime notification", error);
@@ -1859,7 +1890,7 @@ export function createRouter(deps: RouterDeps) {
           return { ok: true as const };
         }
         const committed = await deps.prisma.$transaction(async (tx) => {
-          await lockOwnedGroup(tx, context.actor, target.groupId);
+          await lockGroupForPerson(tx, context.actor, target.groupId);
           const group = await tx.chatGroup.findFirst({
             where: {
               id: target.groupId,
@@ -1876,6 +1907,7 @@ export function createRouter(deps: RouterDeps) {
             role: "user",
             blocks,
             feedBotId: botId,
+            authorId: context.actor.userId,
           });
           const active = await tx.run.findFirst({
             where: {

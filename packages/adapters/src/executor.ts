@@ -196,6 +196,7 @@ import {
   findDefaultModelCredential,
   findModelCategories,
   findModelCredential,
+  groupMembershipFilter,
   historyGeneration,
   InvalidSpaceNameError,
   isTooManyDatabaseConnections,
@@ -7076,20 +7077,24 @@ export async function unreadConversationCount(
   prisma: PrismaClient,
   userId: string,
 ): Promise<number> {
-  return prisma.thread.count({
-    where: {
-      userId,
-      unread: true,
-      OR: [
-        { bot: { archivedAt: null } },
-        { group: { archivedAt: null } },
-        {
-          memberBot: sharedWithFilter(userId),
-          space: { memberships: { some: { userId } } },
-        },
-      ],
-    },
-  });
+  const [threads, groups] = await Promise.all([
+    prisma.thread.count({
+      where: {
+        userId,
+        unread: true,
+        OR: [
+          { bot: { archivedAt: null } },
+          {
+            memberBot: sharedWithFilter(userId),
+            space: { memberships: { some: { userId } } },
+          },
+        ],
+      },
+    }),
+    // A group's read mark is each person's own.
+    prisma.chatGroupPerson.count({ where: { userId, unread: true, group: { archivedAt: null } } }),
+  ]);
+  return threads + groups;
 }
 
 export async function notificationAvatar(
@@ -7138,7 +7143,12 @@ async function notifyRun(
     }),
     deps.prisma.thread
       .findFirst({
-        where: { id: run.threadId, spaceId: run.spaceId, userId: run.userId },
+        where: {
+          id: run.threadId,
+          spaceId: run.spaceId,
+          // A group's thread belongs to its creator; any of its people can be the one paged.
+          OR: [{ userId: run.userId }, { group: groupMembershipFilter(run.userId) }],
+        },
         select: { groupId: true },
       })
       .catch((error) => {

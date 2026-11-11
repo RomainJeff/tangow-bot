@@ -265,6 +265,21 @@ describe("followThreadEvents", () => {
     abort.abort();
     await stream.return(undefined);
   });
+
+  it("ends without the new events once the follower is no longer allowed", async () => {
+    const findMany = vi
+      .fn()
+      .mockResolvedValueOnce([event(0)])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([event(1)]);
+    const prisma = { event: { findMany } } as unknown as PrismaClient;
+    const allowed = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    const stream = followThreadEvents(prisma, "thread-1", -1, undefined, undefined, 1, allowed);
+
+    await expect(stream.next()).resolves.toMatchObject({ value: { seq: 0 }, done: false });
+    await expect(stream.next()).resolves.toEqual({ value: undefined, done: true });
+    expect(allowed).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("finalizeComputerControlRelease", () => {
@@ -454,7 +469,14 @@ describe("pauseRunForInput", () => {
       attempt: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       thread: {
         update: vi.fn().mockResolvedValue({ sessionId: "session-1", botId: "bot-1" }),
-        findUniqueOrThrow: vi.fn().mockResolvedValue({ nextEventSeq: 9 }),
+        findUniqueOrThrow: vi.fn().mockResolvedValue({
+          id: "thread-1",
+          sessionId: "session-1",
+          botId: "bot-1",
+          groupId: null,
+          userId: "user-1",
+          nextEventSeq: 9,
+        }),
       },
       event: {
         create: vi.fn(async ({ data }: { data: { seq: number; type: string } }) => ({
@@ -517,7 +539,14 @@ describe("pauseRunForInput", () => {
       attempt: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
       thread: {
         update: vi.fn().mockResolvedValue({ sessionId: "session-1", botId: "bot-1" }),
-        findUniqueOrThrow: vi.fn().mockResolvedValue({ nextEventSeq: 9 }),
+        findUniqueOrThrow: vi.fn().mockResolvedValue({
+          id: "thread-1",
+          sessionId: "session-1",
+          botId: "bot-1",
+          groupId: null,
+          userId: "user-1",
+          nextEventSeq: 9,
+        }),
       },
       event: {
         create: vi.fn(async ({ data }: { data: { seq: number; type: string } }) => ({
@@ -2100,6 +2129,7 @@ describe("sendUserMessage", () => {
     const fanout = new TestFanout();
     const publish = vi.spyOn(fanout, "publish");
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       thread: {
         findUniqueOrThrow: vi
           .fn()
@@ -2177,6 +2207,7 @@ describe("sendUserMessage", () => {
     ["messaging", true],
   ] as const)("steers a busy run with a %s message, untrusted: %s", async (trigger, untrusted) => {
     const tx = {
+      $queryRaw: vi.fn().mockResolvedValue([]),
       thread: {
         findUniqueOrThrow: vi
           .fn()

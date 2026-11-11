@@ -5,6 +5,7 @@ import { createBotMessageInTransaction } from "./messages.js";
 function transaction() {
   const thread = { sessionId: "session-1", botId: "bot-1" };
   return {
+    $queryRaw: vi.fn().mockResolvedValue([]),
     thread: {
       update: vi.fn().mockResolvedValue(thread),
       findUniqueOrThrow: vi.fn().mockResolvedValue(thread),

@@ -1,6 +1,12 @@
 import type { Actor, Routine, RunActivityRow, SessionEntry } from "@rakazo/contracts";
 import { ACTIVE_RUN_STATUSES, classifyRunFailure, isTerminal } from "@rakazo/core";
-import { Prisma, type PrismaClient, sessionEntryFromRow, sharedWithFilter } from "@rakazo/db";
+import {
+  groupMembershipFilter,
+  Prisma,
+  type PrismaClient,
+  sessionEntryFromRow,
+  sharedWithFilter,
+} from "@rakazo/db";
 
 const RECENT_LIMIT = 20;
 export const TERMINAL_STATUSES = ["completed", "failed", "cancelled"] as const;
@@ -80,8 +86,9 @@ export function mapRun(row: RunRow): RunActivityRow {
 }
 
 /**
- * The actor's runs they may still see: on their own bots, or in their own thread with a bot still
- * shared with them. Once a bot is unshared, the member's thread is hidden and so are its runs.
+ * The actor's runs they may still see: on their own bots, in their own thread with a bot still
+ * shared with them, or in a group they are still in. Once a bot is unshared, the member's thread is
+ * hidden and so are its runs.
  */
 export function visibleRuns(actor: Actor): Prisma.RunWhereInput {
   return {
@@ -90,6 +97,7 @@ export function visibleRuns(actor: Actor): Prisma.RunWhereInput {
     OR: [
       { bot: { userId: actor.userId } },
       { thread: { memberBot: sharedWithFilter(actor.userId, actor.spaceId) } },
+      { thread: { group: groupMembershipFilter(actor.userId) } },
     ],
   };
 }

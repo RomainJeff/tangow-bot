@@ -79,6 +79,7 @@ function createDeps(
     event: {
       create: vi.fn(async ({ data }: { data: object }) => ({ id: "evt-1", seq: 8, ...data })),
     },
+    chatGroupPerson: { updateMany: vi.fn(async () => ({ count: 0 })) },
     thread: {
       updateMany: vi.fn(async () => ({ count: 2 })),
       findUniqueOrThrow: vi.fn(async () => ({ nextEventSeq: 9 })),

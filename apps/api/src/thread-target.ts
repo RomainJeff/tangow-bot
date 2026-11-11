@@ -37,8 +37,9 @@ import {
   createThreadMessageInTransaction,
   dismissProposalWithTextInTransaction,
   expireComputerExecutionLeases,
+  groupThreadPeople,
   IsolationError,
-  lockOwnedGroup,
+  lockGroupForPerson,
   logCancelledRunsInTransaction,
   type Prisma,
   type PrismaClient,
@@ -363,15 +364,9 @@ async function lockAndLoadGroupMembers(
   actor: Actor,
   target: Extract<ThreadTarget, { kind: "group" }>,
 ) {
-  await lockOwnedGroup(tx, actor, target.groupId);
+  await lockGroupForPerson(tx, actor, target.groupId);
   const group = await tx.chatGroup.findFirst({
-    where: {
-      id: target.groupId,
-      spaceId: actor.spaceId,
-      userId: actor.userId,
-      archivedAt: null,
-      thread: { id: target.threadId },
-    },
+    where: { id: target.groupId, archivedAt: null, thread: { id: target.threadId } },
     include: {
       members: {
         where: { bot: { archivedAt: null } },
@@ -643,6 +638,7 @@ export async function threadSnapshot(
       terminalRun: pickLatestTerminalRun(recentTerminals),
       progress,
       page,
+      sessionId,
     };
   });
   const { page } = core;
@@ -651,6 +647,10 @@ export async function threadSnapshot(
     groupId: target.groupId,
     groupName: target.groupName,
     members: target.members,
+    people: await groupThreadPeople(deps.prisma, {
+      groupId: target.groupId,
+      sessionId: core.sessionId,
+    }),
     threadId: target.threadId,
     cursor: core.last?.seq ?? -1,
     entries: await withoutHiddenPeerRuns(deps.prisma, page.entries),
@@ -989,6 +989,7 @@ export async function sendThreadMessage(
         clientNonce: input.clientNonce,
         feedBotId: eventBotId,
         targets: targetBotIds,
+        authorId: actor.userId,
       });
       // Dispatch per bot in this one transaction (spec ask-answer-via-composer, PR 1): each
       // targeted bot is resolved on its own state — an ask_user run resolves, a steerable run
@@ -1123,6 +1124,7 @@ export async function enqueueLinkPreview(
  */
 export async function reactToThreadMessage(
   deps: { prisma: PrismaClient },
+  actor: Actor,
   target: ThreadTarget,
   input: {
     messageId: string;
@@ -1148,6 +1150,7 @@ export async function reactToThreadMessage(
       replyToMessageId: parent.id,
       clientNonce: input.clientNonce,
       feedBotId: botId,
+      ...(target.kind === "group" ? { authorId: actor.userId } : {}),
     });
     if (target.kind === "group") await touchGroupUpdatedAt(tx, target.groupId);
     return { eventSeq: await threadEventSeq(tx, target.threadId), messageId: message.id };
@@ -1322,6 +1325,13 @@ export async function setThreadUnreadState(
   target: ThreadTarget,
   unread: boolean,
 ) {
+  if (target.kind === "group") {
+    await prisma.chatGroupPerson.updateMany({
+      where: { groupId: target.groupId, userId: actor.userId, unread: { not: unread } },
+      data: { unread },
+    });
+    return;
+  }
   const result = await prisma.thread.updateMany({
     where: {
       id: target.threadId,

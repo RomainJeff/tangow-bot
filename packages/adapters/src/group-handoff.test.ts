@@ -66,7 +66,11 @@ function harness(
       create: runCreate,
     },
     routine: { findUnique: vi.fn(async () => ({ inheritedHop: runRow.inheritedHop ?? null })) },
-    thread: { update: vi.fn(async () => ({ nextEventSeq: 2 })) },
+    thread: {
+      update: vi.fn(async () => ({ nextEventSeq: 2 })),
+      updateMany: vi.fn(async () => ({ count: 1 })),
+    },
+    chatGroupPerson: { updateMany: vi.fn(async () => ({ count: 1 })) },
     task: { create: vi.fn(async () => ({ id: "task-b" })) },
     event: {
       findFirst: vi.fn(async () => ({ seq: 1 })),

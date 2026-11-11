@@ -108,8 +108,9 @@ export async function getSpaceArtifact(
     where: {
       id: input.artifactId,
       groupId: input.groupId,
+      // A group's files are everyone's in it, whoever added them: the caller has checked the
+      // actor is in the group.
       spaceId: actor.spaceId,
-      userId: actor.userId,
     },
   });
   if (!row) throw new IsolationError();

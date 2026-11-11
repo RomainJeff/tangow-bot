@@ -41,6 +41,7 @@ import type { BrowserApprovalCheckpoint } from "./browser-approval-checkpoint.js
 import { cancelRunsInTransaction } from "./cancel-runs.js";
 import type { Prisma, PrismaClient, Run } from "./client.js";
 import { expireComputerExecutionLeases } from "./computers.js";
+import { markThreadsUnread } from "./groups.js";
 import { createBotMessageInTransaction, createThreadMessageInTransaction } from "./messages.js";
 import {
   appendCardStateInTransaction,
@@ -90,7 +91,13 @@ export interface ThreadEvents {
   startInboundRoutineRuns(
     input: StartInboundRoutineRunsInput,
   ): Promise<StartInboundRoutineRunsResult>;
-  follow(threadId: string, cursor: number, signal?: AbortSignal): AsyncGenerator<ProductEvent>;
+  /** `allowed` is asked again whenever new events arrive; once false, the stream ends. */
+  follow(
+    threadId: string,
+    cursor: number,
+    signal?: AbortSignal,
+    allowed?: () => Promise<boolean>,
+  ): AsyncGenerator<ProductEvent>;
 }
 
 export interface ClearThreadInput {
@@ -367,8 +374,8 @@ export function createThreadEvents(
     pauseRunForTakeover: (input) => pauseRunForTakeover(prisma, input, realtime),
     sendUserMessage: (input) => sendUserMessage(prisma, input, realtime),
     startInboundRoutineRuns: (input) => startInboundRoutineRuns(prisma, input, realtime),
-    follow: (threadId, cursor, signal) =>
-      followThreadEvents(prisma, threadId, cursor, realtime, signal, options.catchUpMs),
+    follow: (threadId, cursor, signal, allowed) =>
+      followThreadEvents(prisma, threadId, cursor, realtime, signal, options.catchUpMs, allowed),
   };
 }
 
@@ -395,6 +402,9 @@ async function truncateThreadInTransaction(
   tx: Prisma.TransactionClient,
   input: TruncateThreadInput,
 ): Promise<TruncateThreadResult> {
+  // Thread row first, as every send and finalizeRun take it: a group's update below writes no
+  // column, so Prisma only reads the row and the person rows would be locked ahead of it.
+  await tx.$queryRaw`SELECT id FROM threads WHERE id = ${input.threadId} FOR UPDATE`;
   const thread = await tx.thread.update({
     where: {
       id: input.threadId,
@@ -403,9 +413,16 @@ async function truncateThreadInTransaction(
         ? { groupId: input.groupId }
         : { OR: [{ botId: input.botId }, { memberBotId: input.botId }] }),
     },
-    data: { unread: false },
+    // A group keeps each person's read mark on their own row.
+    data: input.groupId ? {} : { unread: false },
     select: { sessionId: true },
   });
+  if (input.groupId && input.userId) {
+    await tx.chatGroupPerson.updateMany({
+      where: { groupId: input.groupId, userId: input.userId },
+      data: { unread: false },
+    });
+  }
   const activeRuns = await tx.run.findMany({
     where: {
       spaceId: input.spaceId,
@@ -1683,7 +1700,7 @@ export async function pauseRunForInput(
         where: { id: input.runId },
         select: { sessionId: true },
       });
-      await tx.thread.update({ where: { id: input.threadId }, data: { unread: true } });
+      await markThreadsUnread(tx, [input.threadId]);
       await appendSessionEntryInTransaction(tx, {
         type: "effect.requested",
         sessionId: sessionId as SessionId,
@@ -2523,6 +2540,7 @@ export async function* followThreadEvents(
   realtime?: RealtimeFanout,
   signal?: AbortSignal,
   catchUpMs = realtime ? PUSH_CATCH_UP_MS : POLL_ONLY_CATCH_UP_MS,
+  allowed?: () => Promise<boolean>,
 ): AsyncGenerator<ProductEvent> {
   let seq = cursor;
   const latch = new ChangeLatch();
@@ -2538,6 +2556,7 @@ export async function* followThreadEvents(
       do {
         const events = await eventsAfter(prisma, threadId, seq, EVENT_BATCH_SIZE);
         batchSize = events.length;
+        if (batchSize > 0 && allowed && !(await allowed())) return;
         for (const event of events) {
           seq = event.seq;
           yield mapProductEvent(event);
