@@ -1,15 +1,15 @@
 import { mkdtemp, readFile, rm, stat, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { SessionEntryDraft } from "@rakazo/adapter-kit";
-import { SessionId } from "@rakazo/contracts";
-import { decodeEntries, encodeEntries } from "@rakazo/core";
+import type { SessionEntryDraft } from "@tangow/adapter-kit";
+import { SessionId } from "@tangow/contracts";
+import { decodeEntries, encodeEntries } from "@tangow/core";
 import { describe, expect, it } from "vitest";
 import { runSessionLogConformance } from "./conformance.js";
 import { FileSessionLog } from "./file.js";
 
 function temporaryRoot(): Promise<string> {
-  return mkdtemp(path.join(tmpdir(), "rakazo-session-log-"));
+  return mkdtemp(path.join(tmpdir(), "tangow-session-log-"));
 }
 
 runSessionLogConformance(async () => {

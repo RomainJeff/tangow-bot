@@ -1,5 +1,5 @@
 {
-  "name": "@rakazo/agent-run-worker",
+  "name": "@tangow/agent-run-worker",
   "version": "0.1.0",
   "license": "Apache-2.0",
   "type": "module",
@@ -18,8 +18,8 @@
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "1.4.0",
-    "@rakazo/adapter-kit": "workspace:*",
-    "@rakazo/adapters": "workspace:*",
+    "@tangow/adapter-kit": "workspace:*",
+    "@tangow/adapters": "workspace:*",
     "zod": "4.6.2"
   },
   "devDependencies": {

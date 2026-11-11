@@ -1,4 +1,4 @@
-import type { AskDraftEdits, AskDraftRecipient } from "@rakazo/contracts";
+import type { AskDraftEdits, AskDraftRecipient } from "@tangow/contracts";
 import * as fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import type { RecipientSlot } from "./draft-fields.js";

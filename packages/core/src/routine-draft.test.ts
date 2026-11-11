@@ -1,4 +1,4 @@
-import type { Routine } from "@rakazo/contracts";
+import type { Routine } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import { type CronPreset, cronFromPreset, presetFromCron } from "./cron.js";
 import {

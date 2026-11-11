@@ -5,7 +5,7 @@ import {
   shellQuote,
   stopBrowserCommand,
   stopExtraScreenCommand,
-} from "@rakazo/core/node/desktop-runtime";
+} from "@tangow/core/node/desktop-runtime";
 
 export {
   browserProfilePathForScreen,
@@ -14,11 +14,11 @@ export {
   prepareBrowserProfileCommand,
   stopBrowserCommand,
   stopExtraScreenCommand,
-} from "@rakazo/core/node/desktop-runtime";
+} from "@tangow/core/node/desktop-runtime";
 
 import { timingSafeEqual } from "node:crypto";
 import path from "node:path";
-import { canReleaseScreenLease, canTakeScreenLease } from "@rakazo/core";
+import { canReleaseScreenLease, canTakeScreenLease } from "@tangow/core";
 import { z } from "zod";
 import { type SandboxInput, xdotoolCommand } from "./computer-spec.js";
 
@@ -42,7 +42,7 @@ export const computerActionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("launch"), application: z.string(), uri: z.string().optional() }),
 ]);
 
-export { BROWSER_APPLICATIONS as DOCKER_BROWSER_ALIASES } from "@rakazo/core/node/desktop-runtime";
+export { BROWSER_APPLICATIONS as DOCKER_BROWSER_ALIASES } from "@tangow/core/node/desktop-runtime";
 
 export function assertRequestIdentity(
   botId: string | undefined,
@@ -59,8 +59,8 @@ export function hasComputerIdentity(
   botId: string,
   spaceId: string,
 ) {
-  const labeledSpaceId = labels?.["rakazo.spaceId"] ?? labels?.["rakazo.workspaceId"];
-  return labels?.["rakazo.botId"] === botId && labeledSpaceId === spaceId;
+  const labeledSpaceId = labels?.["tangow.spaceId"] ?? labels?.["tangow.workspaceId"];
+  return labels?.["tangow.botId"] === botId && labeledSpaceId === spaceId;
 }
 
 export function hasValidBearerToken(authorization: string | undefined, expectedToken: string) {
@@ -366,7 +366,7 @@ export function containerActionStep(
     argv = [
       "env",
       `DISPLAY=${display}`,
-      ...(browserProfile ? [`RAKAZO_BROWSER_PROFILE=${browserProfile}`] : []),
+      ...(browserProfile ? [`TANGOW_BROWSER_PROFILE=${browserProfile}`] : []),
       "xdg-open",
       target,
     ];
@@ -375,8 +375,8 @@ export function containerActionStep(
     argv = [
       "env",
       `DISPLAY=${display}`,
-      ...(browser && browserProfile ? [`RAKAZO_BROWSER_PROFILE=${browserProfile}`] : []),
-      browser ? "rakazo-browser" : action.application,
+      ...(browser && browserProfile ? [`TANGOW_BROWSER_PROFILE=${browserProfile}`] : []),
+      browser ? "tangow-browser" : action.application,
       ...(action.uri ? [action.uri] : []),
     ];
   }
@@ -402,7 +402,7 @@ export function normalizeWorkspaceRelative(value: string) {
 }
 
 /** The computer user's home, and its workspace until the home moves onto volumes. */
-export const COMPUTER_HOME = "/home/rakazo";
+export const COMPUTER_HOME = "/home/tangow";
 
 export function workspaceTarget(relative: string, workspace = COMPUTER_HOME) {
   return relative ? path.posix.join(workspace, relative) : workspace;

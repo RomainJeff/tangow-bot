@@ -12,13 +12,13 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { SKILL_BUNDLE_MAX_ENTRIES } from "@rakazo/contracts";
+import { SKILL_BUNDLE_MAX_ENTRIES } from "@tangow/contracts";
 import {
   buildSkillMd,
   formatSkillsCatalogInstruction,
   parseSkillMd,
   SANDBOX_SKILL_MOUNTS,
-} from "@rakazo/core";
+} from "@tangow/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { agentConnectionTools, builtinAgentTools } from "./builtin-tools.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
@@ -149,7 +149,7 @@ describe("skill tools", () => {
 
   beforeEach(async () => {
     prisma = makePrisma();
-    dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-skill-tools-"));
+    dataDir = await mkdtemp(path.join(tmpdir(), "tangow-skill-tools-"));
     deps = { prisma: prisma as never, dataDir, learning: "off", lock: createInMemorySkillLock() };
   });
 
@@ -826,7 +826,7 @@ describe("skill drafts", () => {
     let deps: SkillToolDeps;
     beforeEach(async () => {
       prisma = makePrisma();
-      dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-skill-drafts-"));
+      dataDir = await mkdtemp(path.join(tmpdir(), "tangow-skill-drafts-"));
       deps = { prisma: prisma as never, dataDir, learning: "off", lock: createInMemorySkillLock() };
     });
     afterEach(async () => {

@@ -1,4 +1,4 @@
-import type { SessionId, ThreadItem } from "@rakazo/contracts";
+import type { SessionId, ThreadItem } from "@tangow/contracts";
 import type { ArtifactTarget } from "./artifact-open";
 
 export type ItemOf<K extends ThreadItem["kind"]> = Extract<ThreadItem, { kind: K }>;

@@ -1,4 +1,4 @@
-import { LIVE_WORKER_STATES, WORKER_TTL_SECONDS } from "@rakazo/core";
+import { LIVE_WORKER_STATES, WORKER_TTL_SECONDS } from "@tangow/core";
 import { Prisma } from "./client.js";
 
 /** A bot owns its private volume; a space owns its shared one, and is deleted only once empty. */
@@ -58,7 +58,7 @@ export async function deleteOwnerVolumes(
         RETURNING id, "providerKind", "providerRef", "ensureUntil"
       )
       INSERT INTO volume_deletions ("providerKind", "providerRef", "volumeId", "notBefore")
-      SELECT "providerKind", COALESCE("providerRef", 'rakazo-' || id), id,
+      SELECT "providerKind", COALESCE("providerRef", 'tangow-' || id), id,
         COALESCE("ensureUntil", ${now}) FROM deleted
       ON CONFLICT ("providerKind", "providerRef") DO UPDATE SET generation = DEFAULT,
         "notBefore" = GREATEST(volume_deletions."notBefore", EXCLUDED."notBefore")`;

@@ -1,4 +1,4 @@
-import type { AskAnswers } from "@rakazo/contracts";
+import type { AskAnswers } from "@tangow/contracts";
 import { plainText } from "../plain-text.js";
 import type { AskForm, FormQuestion, NonEmpty, StoredAnswer } from "./form.js";
 

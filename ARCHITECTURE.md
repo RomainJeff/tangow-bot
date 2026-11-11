@@ -1,6 +1,6 @@
 # Architecture
 
-Rakazo is one product on the web, the Electron desktop app and the Expo mobile app, and Electron hosts the web app. Shared contracts, logic and UI live in `packages/`. The frontends express intent and render state, and the backend, the API and the worker, owns orchestration, authorization, validation, retries and provider translation. No hosted vendor is required to run the core product, since models, sandboxes, memory and integrations sit behind optional provider-neutral ports. [AGENTS.md](./AGENTS.md) holds these rules.
+Tangow is one product on the web, the Electron desktop app and the Expo mobile app, and Electron hosts the web app. Shared contracts, logic and UI live in `packages/`. The frontends express intent and render state, and the backend, the API and the worker, owns orchestration, authorization, validation, retries and provider translation. No hosted vendor is required to run the core product, since models, sandboxes, memory and integrations sit behind optional provider-neutral ports. [AGENTS.md](./AGENTS.md) holds these rules.
 
 ## Session log
 

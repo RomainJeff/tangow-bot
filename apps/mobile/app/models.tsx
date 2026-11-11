@@ -1,5 +1,5 @@
-import type { ModelCategory, ModelCategoryAssignment, ThinkingLevel } from "@rakazo/contracts";
-import { connectedModelOptions, parseModelOptionKey, thinkingChoices } from "@rakazo/core";
+import type { ModelCategory, ModelCategoryAssignment, ThinkingLevel } from "@tangow/contracts";
+import { connectedModelOptions, parseModelOptionKey, thinkingChoices } from "@tangow/core";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";

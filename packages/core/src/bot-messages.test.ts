@@ -1,4 +1,4 @@
-import { BOT_DESCRIPTION_MAX_LENGTH } from "@rakazo/contracts";
+import { BOT_DESCRIPTION_MAX_LENGTH } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import {
   BOT_DELEGATION_GUIDANCE,

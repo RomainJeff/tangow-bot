@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { routineConfirmationBlock, settleRoutineAsk } from "@rakazo/core";
+import { routineConfirmationBlock, settleRoutineAsk } from "@tangow/core";
 import { act, useLayoutEffect } from "react";
 import type { Root } from "react-dom/client";
 import { createRoot } from "react-dom/client";

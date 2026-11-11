@@ -2,12 +2,12 @@ import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { AdapterContext, PortableFile } from "@rakazo/adapter-kit";
-import { AgentRuntimeBusyError } from "@rakazo/adapter-kit";
-import type { PrismaClient } from "@rakazo/db";
-import { createThreadEvents } from "@rakazo/db";
-import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
-import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
+import type { AdapterContext, PortableFile } from "@tangow/adapter-kit";
+import { AgentRuntimeBusyError } from "@tangow/adapter-kit";
+import type { PrismaClient } from "@tangow/db";
+import { createThreadEvents } from "@tangow/db";
+import type { PgliteDatabase } from "@tangow/db/pglite.test-support";
+import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { ComputerBusyError, provisionComputer } from "./computer-lifecycle.js";
 import { checkpointComputerWorkspace, restoreComputerWorkspace } from "./computer-workspace.js";
@@ -43,7 +43,7 @@ beforeAll(async () => {
 });
 afterAll(() => database.close());
 beforeEach(async () => {
-  root = await mkdtemp(path.join(tmpdir(), "rakazo-home-move-"));
+  root = await mkdtemp(path.join(tmpdir(), "tangow-home-move-"));
   home = new LocalAgentHomeStore(root);
   volumeFiles = new MemoryVolumeFiles();
   provider = new FakeWorkerProvider();
@@ -79,7 +79,7 @@ async function seedHome(
   files: Record<string, string>,
   modes: Record<string, number> = {},
 ) {
-  const staging = await mkdtemp(path.join(tmpdir(), "rakazo-home-seed-"));
+  const staging = await mkdtemp(path.join(tmpdir(), "tangow-home-seed-"));
   try {
     for (const [file, content] of Object.entries(files)) {
       const target = path.join(staging, file);
@@ -116,7 +116,7 @@ async function volumeContents() {
 
 async function volumeRef(where: { botId: string } | { spaceId: string; kind: "space_shared" }) {
   const volume = await prisma.volume.findFirstOrThrow({ where });
-  return `rakazo-${volume.id}`;
+  return `tangow-${volume.id}`;
 }
 
 async function homeStorageOf(computerId: string) {
@@ -417,7 +417,7 @@ describe("moving a home from snapshots to volumes", () => {
     expect(report.outcome === "adopted" && report.manifest.files).toContainEqual({
       homePath: `bots/${ada.id}/notes.md`,
       destination: { scope: "private", botId: ada.id },
-      volumeId: ada_.replace("rakazo-", ""),
+      volumeId: ada_.replace("tangow-", ""),
       volumePath: "notes.md",
       size: 9,
       sha256: sha("ada notes"),

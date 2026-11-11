@@ -1,5 +1,5 @@
-import type { AskDraft } from "@rakazo/contracts";
-import { draftSentLine, draftSentTo } from "@rakazo/core";
+import type { AskDraft } from "@tangow/contracts";
+import { draftSentLine, draftSentTo } from "@tangow/core";
 import { StyleSheet, Text, View } from "react-native";
 import { mobileTokens } from "../lib/appearance";
 import { useI18n } from "../lib/i18n";

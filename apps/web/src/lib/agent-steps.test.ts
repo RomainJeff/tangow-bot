@@ -1,4 +1,4 @@
-import { appendToolStep } from "@rakazo/core";
+import { appendToolStep } from "@tangow/core";
 import { describe, expect, it } from "vitest";
 
 describe("appendToolStep", () => {

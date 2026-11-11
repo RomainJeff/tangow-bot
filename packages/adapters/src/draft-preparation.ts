@@ -1,7 +1,7 @@
-import type { AgentRunRequest, AgentRuntime } from "@rakazo/adapter-kit";
-import { ASK_DRAFT_SUBJECT_MAX_LENGTH, ASK_DRAFT_TEXT_MAX_LENGTH } from "@rakazo/contracts";
-import type { DraftBinding } from "@rakazo/core";
-import { acceptDraftProposal, DRAFT_CARDS, readDraftProposal } from "@rakazo/core";
+import type { AgentRunRequest, AgentRuntime } from "@tangow/adapter-kit";
+import { ASK_DRAFT_SUBJECT_MAX_LENGTH, ASK_DRAFT_TEXT_MAX_LENGTH } from "@tangow/contracts";
+import type { DraftBinding } from "@tangow/core";
+import { acceptDraftProposal, DRAFT_CARDS, readDraftProposal } from "@tangow/core";
 
 const PREPARATION_TIMEOUT_MS = 30_000;
 const RECENT_TOOL_CONTEXT_MAX_LENGTH = 12_000;

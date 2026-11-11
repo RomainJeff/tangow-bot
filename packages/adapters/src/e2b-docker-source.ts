@@ -22,7 +22,7 @@ export async function openE2BDockerSource(options: {
   // A killed operator process can leave its reader VM holding a volume mount.
   const readers = Sandbox.list({
     ...connection,
-    query: { metadata: { rakazo: "volume-files", rakazoMigration: options.operationId } },
+    query: { metadata: { tangow: "volume-files", tangowMigration: options.operationId } },
   });
   while (readers.hasNext) {
     for (const reader of await readers.nextItems()) await destroy(reader.sandboxId);
@@ -32,7 +32,7 @@ export async function openE2BDockerSource(options: {
     e2bVolumeSandbox({
       template: options.template,
       connection,
-      metadata: { rakazoMigration: options.operationId },
+      metadata: { tangowMigration: options.operationId },
     }),
   );
   let currentVolume: string | null = null;

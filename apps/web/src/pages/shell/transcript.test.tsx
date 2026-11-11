@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import type { SessionEntry } from "@rakazo/contracts";
-import { SessionEntrySchema } from "@rakazo/contracts";
-import { drawsNothing, projectThreadView } from "@rakazo/core";
+import type { SessionEntry } from "@tangow/contracts";
+import { SessionEntrySchema } from "@tangow/contracts";
+import { drawsNothing, projectThreadView } from "@tangow/core";
 import type { ComponentProps, ReactNode } from "react";
 import { act, createRef } from "react";
 import { createRoot } from "react-dom/client";

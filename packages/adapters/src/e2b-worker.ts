@@ -4,9 +4,9 @@ import type {
   WorkerCapabilities,
   WorkerProvider,
   WorkerSpec,
-} from "@rakazo/adapter-kit";
-import { workerHarness } from "@rakazo/adapter-kit";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/adapter-kit";
+import { workerHarness } from "@tangow/adapter-kit";
+import { getLogger } from "@tangow/logging";
 import type { ConnectionOpts, SandboxOpts } from "e2b";
 import { CommandExitError, Sandbox, Volume } from "e2b";
 import type { FrameChannel } from "./runtime-worker/framing.js";
@@ -15,7 +15,7 @@ import type { GuestConnector } from "./runtime-worker/launcher.js";
 import { WORKER_LIMITS } from "./runtime-worker/limits.js";
 
 /** Where the worker template puts the guest bundle. */
-export const E2B_WORKER_GUEST_ENTRY = "/opt/rakazo/agent-run-worker.mjs";
+export const E2B_WORKER_GUEST_ENTRY = "/opt/tangow/agent-run-worker.mjs";
 
 /**
  * `ensure` stops creating this long before the shared ensure deadline, so a create the server
@@ -195,7 +195,7 @@ function handoff() {
   };
 }
 
-const attemptTag = (attemptId: string) => ({ rakazo: "worker", attemptId });
+const attemptTag = (attemptId: string) => ({ tangow: "worker", attemptId });
 
 /**
  * Run workers as E2B sandboxes, one per attempt, tagged with its id. The guest is the bundle the
@@ -238,8 +238,8 @@ export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
       secure: true,
       metadata,
       envs: {
-        RAKAZO_WORKER_HARNESS: this.expectedHarness.name,
-        RAKAZO_WORKER_HOME: "/home/user",
+        TANGOW_WORKER_HARNESS: this.expectedHarness.name,
+        TANGOW_WORKER_HOME: "/home/user",
       },
       volumeMounts: Object.fromEntries(spec.mounts.map((mount) => [mount.path, mount.volumeRef])),
       timeoutMs: this.sandboxTimeoutMs(spec),
@@ -349,7 +349,7 @@ export class E2BWorkerProvider implements WorkerProvider, GuestConnector {
       target.providerRef,
       `node ${this.config.guestEntry ?? E2B_WORKER_GUEST_ENTRY}`,
       {
-        envs: { RAKAZO_WORKER_CAPABILITY: capability },
+        envs: { TANGOW_WORKER_CAPABILITY: capability },
         onStdout: (data) => stdout.push(data),
         onStderr: (data) => {
           stderr = (stderr + data).slice(-LOG_TEXT_CHARS);

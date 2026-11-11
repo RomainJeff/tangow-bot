@@ -1,6 +1,6 @@
-import { LINK_MENTION_TITLE_MAX_LENGTH, LINK_PREVIEW_IMAGE_FIT } from "@rakazo/contracts";
-import { previewTitleFromUrl, sanitizePreviewTitle } from "@rakazo/core";
-import type { LinkFacts } from "@rakazo/db";
+import { LINK_MENTION_TITLE_MAX_LENGTH, LINK_PREVIEW_IMAGE_FIT } from "@tangow/contracts";
+import { previewTitleFromUrl, sanitizePreviewTitle } from "@tangow/core";
+import type { LinkFacts } from "@tangow/db";
 import { isTransientReason, LinkPreviewError, type LinkPreviewFailureReason } from "./errors.js";
 import type { LinkPreviewHead } from "./head-parser.js";
 import { parseLinkPreviewHead } from "./head-parser.js";

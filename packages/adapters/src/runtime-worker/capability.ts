@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { sameWorker, type WorkerIdentity, WorkerIdentitySchema } from "@rakazo/adapter-kit";
+import { sameWorker, type WorkerIdentity, WorkerIdentitySchema } from "@tangow/adapter-kit";
 import { z } from "zod";
 import { WORKER_LIMITS } from "./limits.js";
 

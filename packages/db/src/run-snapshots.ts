@@ -1,13 +1,13 @@
 import { isDeepStrictEqual } from "node:util";
-import type { RunPersistence, RunReceipt, RunSnapshot } from "@rakazo/adapter-kit";
+import type { RunPersistence, RunReceipt, RunSnapshot } from "@tangow/adapter-kit";
 import {
   RUN_RECEIPTS_BYTES,
   RUN_SNAPSHOT_BYTES,
   RunReceiptSchema,
   RunResumeError,
   RunSnapshotSchema,
-} from "@rakazo/adapter-kit";
-import { redactSecrets } from "@rakazo/core";
+} from "@tangow/adapter-kit";
+import { redactSecrets } from "@tangow/core";
 import { z } from "zod";
 import type { PrismaClient } from "./client.js";
 

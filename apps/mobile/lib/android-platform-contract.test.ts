@@ -38,10 +38,10 @@ describe("Android mobile platform contract", () => {
   it("requests live-update promotion and exposes its Android settings", () => {
     const nativeRoot = resolve(
       mobileRoot,
-      "modules/rakazo-notifications/android/src/main/java/com/rakazo/notifications",
+      "modules/tangow-notifications/android/src/main/java/com/tangow/notifications",
     );
-    const service = readFileSync(resolve(nativeRoot, "RakazoNotificationService.kt"), "utf8");
-    const module = readFileSync(resolve(nativeRoot, "RakazoNotificationsModule.kt"), "utf8");
+    const service = readFileSync(resolve(nativeRoot, "TangowNotificationService.kt"), "utf8");
+    const module = readFileSync(resolve(nativeRoot, "TangowNotificationsModule.kt"), "utf8");
     const allowlist = readFileSync(resolve(nativeRoot, "EndpointAllowlist.kt"), "utf8");
     const live = readFileSync(resolve(mobileRoot, "lib/live-notifications.ts"), "utf8");
     const thread = readFileSync(resolve(mobileRoot, "app/thread.tsx"), "utf8");
@@ -55,7 +55,7 @@ describe("Android mobile platform contract", () => {
     expect(service).toContain("if (!isAllowedNotificationEndpoint(endpoint)) throw IOException");
     expect(module).toContain("android.settings.APP_NOTIFICATION_PROMOTION_SETTINGS");
     expect(module).not.toContain("settings.copy(liveConnection = false)");
-    expect(module).toContain("RakazoNotificationService.clearSession(context)");
+    expect(module).toContain("TangowNotificationService.clearSession(context)");
     expect(module).toContain("isAllowedNotificationEndpoint(endpoint)");
     expect(module).toContain("storage.spaceId = spaceId");
     expect(allowlist).toContain("isAllowedNotificationEndpoint");
@@ -66,7 +66,7 @@ describe("Android mobile platform contract", () => {
       /export async function resumeLiveNotifications[\s\S]*normalizeApiBase\(endpoint\)[\s\S]*nativeNotifications\.resume\(\s*parsed\.url/,
     );
     expect(service).toContain(
-      'connection.setRequestProperty("x-rakazo-space-id", session.spaceId)',
+      'connection.setRequestProperty("x-tangow-space-id", session.spaceId)',
     );
     // The Access service token must ride along with every polled request.
     expect(service).toContain('connection.setRequestProperty("CF-Access-Client-Id"');
@@ -104,9 +104,9 @@ describe("Android mobile platform contract", () => {
       "fun clearSession(context: Context) {\n      synchronized(sessionLock)",
     );
     expect(service).not.toContain("private fun postCompletion(");
-    expect(service).toContain('"rakazo://group-thread?groupId=');
+    expect(service).toContain('"tangow://group-thread?groupId=');
     expect(service).toMatch(/&spaceId=\$\{Uri\.encode\(run\.spaceId\)\}/);
-    expect(service).toContain('putString("rakazo.spaceId", run.spaceId)');
+    expect(service).toContain('putString("tangow.spaceId", run.spaceId)');
     expect(thread).toContain("export default function ThreadRoute()");
     expect(thread).toContain("selectSpace(requestedSpaceId)");
     expect(thread).toContain("routeMatchesSelectedSpace) return <Thread />");
@@ -121,7 +121,7 @@ describe("Android mobile platform contract", () => {
     const service = readFileSync(
       resolve(
         mobileRoot,
-        "modules/rakazo-notifications/android/src/main/java/com/rakazo/notifications/RakazoNotificationService.kt",
+        "modules/tangow-notifications/android/src/main/java/com/tangow/notifications/TangowNotificationService.kt",
       ),
       "utf8",
     );
@@ -134,7 +134,7 @@ describe("Android mobile platform contract", () => {
     expect(service).toMatch(
       /private fun showLive\(active: List<RunRecord>[\s\S]*val primary = active\.first\(\)/,
     );
-    expect(service).toContain('putString("rakazo.botId", run.botId)');
+    expect(service).toContain('putString("tangow.botId", run.botId)');
     expect(service).toMatch(/if \(working\.isEmpty\(\)\) \{[\s\S]*stop\(\)[\s\S]*return[\s\S]*\}/);
   });
 

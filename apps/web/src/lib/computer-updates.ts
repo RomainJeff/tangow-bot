@@ -1,4 +1,4 @@
-import { createComputerUpdates } from "@rakazo/core";
+import { createComputerUpdates } from "@tangow/core";
 import { rpc } from "./rpc";
 export const computerUpdates = createComputerUpdates({
   list: (ids) => rpc.computer.updates({ ids }),

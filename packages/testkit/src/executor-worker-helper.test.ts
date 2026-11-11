@@ -1,8 +1,8 @@
-import type { HarnessDeclaration } from "@rakazo/adapter-kit";
-import { createWorkerAgentRuntime, WORKER_LIMITS } from "@rakazo/adapters/runtime-worker";
-import { HARNESSES } from "@rakazo/agent-run-worker";
-import type { HelperProfile } from "@rakazo/core";
-import { cancelRunsInTransaction } from "@rakazo/db";
+import type { HarnessDeclaration } from "@tangow/adapter-kit";
+import { createWorkerAgentRuntime, WORKER_LIMITS } from "@tangow/adapters/runtime-worker";
+import { HARNESSES } from "@tangow/agent-run-worker";
+import type { HelperProfile } from "@tangow/core";
+import { cancelRunsInTransaction } from "@tangow/db";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { stopThreadRuns } from "../../../apps/api/src/thread-target.js";
 import {
@@ -288,20 +288,20 @@ it("runs native Pi helpers in separate persisted sessions and resumes the parent
         response: {
           type: "tool",
           id: "helper",
-          name: "mcp__rakazo__run_subagent",
+          name: "mcp__tangow__run_subagent",
           arguments: { category: "everyday", name: "Planner", task: "Choose a city" },
         },
       },
       {
         expect(request) {
           const tools = request.tools?.map((tool) => tool.function.name) ?? [];
-          expect(tools).not.toContain("mcp__rakazo__run_subagent");
-          expect(tools).not.toContain("mcp__rakazo__message_user");
+          expect(tools).not.toContain("mcp__tangow__run_subagent");
+          expect(tools).not.toContain("mcp__tangow__message_user");
         },
         response: {
           type: "tool",
           id: "question",
-          name: "mcp__rakazo__ask_user",
+          name: "mcp__tangow__ask_user",
           arguments: { question: "Which city?", options: ["Paris", "Lyon"] },
         },
       },

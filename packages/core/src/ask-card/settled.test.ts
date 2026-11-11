@@ -1,4 +1,4 @@
-import type { MessageBlock } from "@rakazo/contracts";
+import type { MessageBlock } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import { askFormOf, storedAnswerOf } from "./form.js";
 import { askSettledOf } from "./settled.js";

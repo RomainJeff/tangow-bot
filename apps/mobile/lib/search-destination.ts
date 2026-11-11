@@ -1,4 +1,4 @@
-import type { SearchHit } from "@rakazo/contracts";
+import type { SearchHit } from "@tangow/contracts";
 
 /** `sharedBot`: the hit's bot was shared with you, and its routine screens are its owner's. */
 export function mobileSearchDestination(

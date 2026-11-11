@@ -12,7 +12,7 @@ vi.mock("expo-secure-store", () => ({
   }),
 }));
 
-import { avatarIdentitySeed } from "@rakazo/core";
+import { avatarIdentitySeed } from "@tangow/core";
 import {
   clearMainBotCache,
   loadMainBotCache,
@@ -92,7 +92,7 @@ describe("main bot cache persistence", () => {
   });
 
   it("returns null instead of throwing on malformed stored data", async () => {
-    store.set("rakazo.main_bot", "{not json");
+    store.set("tangow.main_bot", "{not json");
     await expect(loadMainBotCache()).resolves.toBeNull();
   });
 });

@@ -1,4 +1,4 @@
-import type { ArtifactStore } from "@rakazo/adapter-kit";
+import type { ArtifactStore } from "@tangow/adapter-kit";
 import {
   createThumbnailDataUrl,
   type LinkPreviewServiceDeps,
@@ -6,9 +6,9 @@ import {
   removePreviewBytes,
   resolveLinkPreviewDetailed,
   resolveLinkPreviewWithDeviceHead,
-} from "@rakazo/adapters";
-import type { Actor, LinkPreviewDraft } from "@rakazo/contracts";
-import { LINK_PREVIEW_COMPOSER_DEADLINE_MS } from "@rakazo/contracts";
+} from "@tangow/adapters";
+import type { Actor, LinkPreviewDraft } from "@tangow/contracts";
+import { LINK_PREVIEW_COMPOSER_DEADLINE_MS } from "@tangow/contracts";
 import {
   groupMembershipFilter,
   IsolationError,
@@ -16,8 +16,8 @@ import {
   removeLinkPreviewBlock,
   sharedWithFilter,
   type ThreadEvents,
-} from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 
 /** Composer reads one person may have running at once, in this process. */
 export const COMPOSER_PREVIEWS_IN_FLIGHT = 3;

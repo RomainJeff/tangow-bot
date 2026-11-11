@@ -1,6 +1,6 @@
 import { mkdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
-import type { DesktopAccessCredentials } from "@rakazo/contracts";
+import type { DesktopAccessCredentials } from "@tangow/contracts";
 import { safeStorage } from "electron";
 import { ACCESS_FILE_NAME } from "./setup-config.js";
 import { writePrivateFile } from "./setup-store.js";

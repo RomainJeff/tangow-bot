@@ -1,4 +1,4 @@
-import type { AskDraft, EntryId } from "@rakazo/contracts";
+import type { AskDraft, EntryId } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import type { ThreadView } from "./session-log/project-thread-view.js";
 import { editedWaitingDraft, waitingAnswerTarget } from "./waiting-ask.js";

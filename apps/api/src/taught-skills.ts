@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { ORPCError } from "@orpc/server";
-import type { AgentHomeStore, JobPublisher, SandboxProvider } from "@rakazo/adapter-kit";
+import type { AgentHomeStore, JobPublisher, SandboxProvider } from "@tangow/adapter-kit";
 import {
   type AdapterContext,
   runContinueJob,
   skillTeachingExpireJob,
   skillTeachingExpireJobKey,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import {
   acquireComputerExecutionLease,
   appendRecordingEvent,
@@ -30,9 +30,9 @@ import {
   screenLeaseIdForRun,
   type TeachComputerInput,
   teachingControlLeaseExpiresAt,
-} from "@rakazo/adapters";
-import type { Actor, MessageBlock, TaughtSkill } from "@rakazo/contracts";
-import { EntryId } from "@rakazo/contracts";
+} from "@tangow/adapters";
+import type { Actor, MessageBlock, TaughtSkill } from "@tangow/contracts";
+import { EntryId } from "@tangow/contracts";
 import {
   ACTIVE_RUN_STATUSES,
   buildPlaybookFromRecording,
@@ -40,7 +40,7 @@ import {
   type SkillPlaybook,
   type TeachRecordingEvent,
   teachRecordingTtlMs,
-} from "@rakazo/core";
+} from "@tangow/core";
 import {
   appendCardStateInTransaction,
   blocksOf,
@@ -51,7 +51,7 @@ import {
   type PrismaClient,
   type ThreadEvents,
   threadEventSeq,
-} from "@rakazo/db";
+} from "@tangow/db";
 
 type TaughtSkillRow = {
   id: string;

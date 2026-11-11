@@ -4,7 +4,7 @@ import type {
   WorkerCapabilities,
   WorkerProvider,
   WorkerSpec,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 
 export type FakeWorkerCall =
   | { op: "ensure"; spec: WorkerSpec }

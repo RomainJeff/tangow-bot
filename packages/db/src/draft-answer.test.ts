@@ -1,5 +1,5 @@
-import type { SessionId } from "@rakazo/contracts";
-import { replacedDraftResult } from "@rakazo/core";
+import type { SessionId } from "@tangow/contracts";
+import { replacedDraftResult } from "@tangow/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { PrismaClient } from "./client.js";
 import type { AnswerRunInput, DismissProposalWithTextInput } from "./events.js";
@@ -34,7 +34,7 @@ let prisma: PrismaClient;
 beforeAll(async () => {
   database = await openPgliteDatabase();
   prisma = database.prisma;
-  await prisma.user.create({ data: { id: OWNER, name: "U", email: "drafts@rakazo.test" } });
+  await prisma.user.create({ data: { id: OWNER, name: "U", email: "drafts@tangow.test" } });
   await prisma.organization.create({
     data: { id: "org_drafts", name: "O", slug: "org-drafts", createdAt: new Date() },
   });

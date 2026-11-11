@@ -1,5 +1,5 @@
-import type { RunModelDecision } from "@rakazo/contracts";
-import { SessionEntrySchema } from "@rakazo/contracts";
+import type { RunModelDecision } from "@tangow/contracts";
+import { SessionEntrySchema } from "@tangow/contracts";
 import { captureScreenshot, completeOnboarding, openBotPage, signup } from "./helpers";
 import type { Page } from "./test";
 import { expect, test } from "./test";
@@ -19,7 +19,7 @@ test("a helper stays out of the thread, and debug mode opens its session", async
   page,
 }, testInfo) => {
   const desktop = page.viewportSize()!;
-  await signup(page, `helper-session-${Date.now()}@rakazo.test`, "password12", "Helper Session");
+  await signup(page, `helper-session-${Date.now()}@tangow.test`, "password12", "Helper Session");
   await completeOnboarding(page);
 
   await page.getByPlaceholder(/Message/).fill("delegate to a helper to summarize the notes");

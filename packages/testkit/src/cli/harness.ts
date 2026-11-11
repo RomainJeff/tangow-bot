@@ -2,7 +2,7 @@ import { execSync } from "node:child_process";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { Session } from "node:inspector/promises";
 import path from "node:path";
-import { loadRootEnv } from "@rakazo/core/node/load-root-env";
+import { loadRootEnv } from "@tangow/core/node/load-root-env";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import type { createApp } from "../../../../apps/api/src/app.ts";
 import { fileUrlToRepoFile, touchedFiles, writeImpactMap } from "../e2e-impact.js";
@@ -75,8 +75,8 @@ async function main() {
     process.env.SIGNUP_ALLOWLIST = "";
     process.env.CI = "1";
 
-    execSync("pnpm --filter @rakazo/db generate", { stdio: "inherit", env: process.env });
-    execSync("pnpm --filter @rakazo/db exec prisma migrate deploy", {
+    execSync("pnpm --filter @tangow/db generate", { stdio: "inherit", env: process.env });
+    execSync("pnpm --filter @tangow/db exec prisma migrate deploy", {
       stdio: "inherit",
       env: process.env,
       cwd: path.resolve("packages/db"),
@@ -163,7 +163,7 @@ async function main() {
     const [
       { ComposioEmulator, EmailEmulator, PipedreamConnector, ThirdPartyConnectorEmulator },
       { createApp },
-    ] = await Promise.all([import("@rakazo/adapters"), import("../../../../apps/api/src/app.ts")]);
+    ] = await Promise.all([import("@tangow/adapters"), import("../../../../apps/api/src/app.ts")]);
     const { serve } = await import("@hono/node-server");
     const thirdParties = new ThirdPartyConnectorEmulator();
     const pipedream = new PipedreamConnector(
@@ -222,7 +222,7 @@ async function main() {
           "pnpm",
           [
             "--filter",
-            "@rakazo/web",
+            "@tangow/web",
             "exec",
             "playwright",
             "test",

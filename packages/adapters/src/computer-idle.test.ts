@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
-import type { AgentHomeStore, JobPublisher, SandboxProvider } from "@rakazo/adapter-kit";
-import type { PrismaClient, ThreadEvents } from "@rakazo/db";
+import type { AgentHomeStore, JobPublisher, SandboxProvider } from "@tangow/adapter-kit";
+import type { PrismaClient, ThreadEvents } from "@tangow/db";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   BACKGROUND_WORK_LAUNCH,
@@ -56,7 +56,7 @@ describe("sandbox idle", () => {
     expect(harness.sandbox.execute).toHaveBeenCalledWith(
       expect.objectContaining({ id: harness.computer.providerRef }),
       expect.objectContaining({
-        argv: ["bash", "-c", BACKGROUND_WORK_PROBE, "rakazo-background-probe", harness.computer.id],
+        argv: ["bash", "-c", BACKGROUND_WORK_PROBE, "tangow-background-probe", harness.computer.id],
       }),
       expect.anything(),
     );
@@ -260,14 +260,14 @@ describe("background work launch and probe", () => {
       const databaseId = "computer-db-id";
       const providerRef = "provider-ref";
       const launchId = "active";
-      markers.add(`/tmp/rakazo-background-${databaseId}-run-1-${launchId}`);
+      markers.add(`/tmp/tangow-background-${databaseId}-run-1-${launchId}`);
 
       const launched = spawn(
         "bash",
         [
           "-c",
           BACKGROUND_WORK_LAUNCH,
-          "rakazo-background-launch",
+          "tangow-background-launch",
           databaseId,
           "run-1",
           launchId,
@@ -287,8 +287,8 @@ describe("background work launch and probe", () => {
     "cleans a completed marker without blocking a later launch",
     async () => {
       const markerId = "computer-relaunch-id";
-      const completedMarker = `/tmp/rakazo-background-${markerId}-run-1-completed`;
-      const activeMarker = `/tmp/rakazo-background-${markerId}-run-1-active`;
+      const completedMarker = `/tmp/tangow-background-${markerId}-run-1-completed`;
+      const activeMarker = `/tmp/tangow-background-${markerId}-run-1-active`;
       markers.add(completedMarker);
       markers.add(activeMarker);
       const completed = spawn(
@@ -296,7 +296,7 @@ describe("background work launch and probe", () => {
         [
           "-c",
           BACKGROUND_WORK_LAUNCH,
-          "rakazo-background-launch",
+          "tangow-background-launch",
           markerId,
           "run-1",
           "completed",
@@ -315,7 +315,7 @@ describe("background work launch and probe", () => {
         [
           "-c",
           BACKGROUND_WORK_LAUNCH,
-          "rakazo-background-launch",
+          "tangow-background-launch",
           markerId,
           "run-1",
           "active",
@@ -332,8 +332,8 @@ describe("background work launch and probe", () => {
     "does not run the command when its marker cannot be opened",
     async () => {
       const markerId = "computer-marker-error";
-      const marker = `/tmp/rakazo-background-${markerId}-run-1-collision`;
-      const commandRan = `/tmp/rakazo-background-command-ran-${markerId}`;
+      const marker = `/tmp/tangow-background-${markerId}-run-1-collision`;
+      const commandRan = `/tmp/tangow-background-command-ran-${markerId}`;
       markers.add(marker);
       markers.add(commandRan);
       mkdirSync(marker);
@@ -342,7 +342,7 @@ describe("background work launch and probe", () => {
         [
           "-c",
           BACKGROUND_WORK_LAUNCH,
-          "rakazo-background-launch",
+          "tangow-background-launch",
           markerId,
           "run-1",
           "collision",
@@ -361,8 +361,8 @@ describe("background work launch and probe", () => {
     "does not follow a pre-existing marker symlink",
     async () => {
       const markerId = "computer-marker-symlink";
-      const marker = `/tmp/rakazo-background-${markerId}-run-1-collision`;
-      const commandRan = `/tmp/rakazo-background-command-ran-${markerId}`;
+      const marker = `/tmp/tangow-background-${markerId}-run-1-collision`;
+      const commandRan = `/tmp/tangow-background-command-ran-${markerId}`;
       markers.add(marker);
       markers.add(commandRan);
       symlinkSync(commandRan, marker);
@@ -371,7 +371,7 @@ describe("background work launch and probe", () => {
         [
           "-c",
           BACKGROUND_WORK_LAUNCH,
-          "rakazo-background-launch",
+          "tangow-background-launch",
           markerId,
           "run-1",
           "collision",
@@ -392,7 +392,7 @@ describe("background work launch and probe", () => {
       const computerId = "computer-cancel-id";
       const runId = "run-cancel-1";
       const launchId = "active";
-      const marker = `/tmp/rakazo-background-${computerId}-${runId}-${launchId}`;
+      const marker = `/tmp/tangow-background-${computerId}-${runId}-${launchId}`;
       markers.add(marker);
 
       const launched = spawn(
@@ -400,7 +400,7 @@ describe("background work launch and probe", () => {
         [
           "-c",
           BACKGROUND_WORK_LAUNCH,
-          "rakazo-background-launch",
+          "tangow-background-launch",
           computerId,
           runId,
           launchId,
@@ -415,7 +415,7 @@ describe("background work launch and probe", () => {
       const launchedDone = processExit(launched);
       const cancel = spawn(
         "bash",
-        ["-c", CANCEL_COMPUTER_RUN_WORK, "rakazo-cancel-run-work", computerId, runId],
+        ["-c", CANCEL_COMPUTER_RUN_WORK, "tangow-cancel-run-work", computerId, runId],
         { stdio: "ignore" },
       );
       children.push(cancel);
@@ -503,7 +503,7 @@ function idleHarness(
     execute: vi.fn(async function* () {
       const code = backgroundWorkProbeCodes.shift() ?? options.backgroundWorkProbeCode ?? 1;
       if (code === 1 && !options.backgroundWorkProbeFailed) {
-        yield { type: "stdout", data: "rakazo-background-idle\n" } as const;
+        yield { type: "stdout", data: "tangow-background-idle\n" } as const;
       }
       yield { type: "exit", code } as const;
     }),
@@ -549,7 +549,7 @@ function probeBackgroundWork(markerId: string): Promise<number> {
   return new Promise((resolve, reject) => {
     const child = spawn(
       "bash",
-      ["-c", BACKGROUND_WORK_PROBE, "rakazo-background-probe", markerId],
+      ["-c", BACKGROUND_WORK_PROBE, "tangow-background-probe", markerId],
       { stdio: ["ignore", "pipe", "pipe"] },
     );
     child.on("error", reject);

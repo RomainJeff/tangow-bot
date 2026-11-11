@@ -7,20 +7,20 @@ import type {
   AgentSteeringMessage,
   SubagentLog,
   WorkerIdentity,
-} from "@rakazo/adapter-kit";
-import type { LaunchedGuest, WorkerClock } from "@rakazo/adapters/runtime-worker";
+} from "@tangow/adapter-kit";
+import type { LaunchedGuest, WorkerClock } from "@tangow/adapters/runtime-worker";
 import {
   createWorkerAgentRuntime,
   memoryChannelPair,
   WORKER_NATIVE_TOOLS,
-} from "@rakazo/adapters/runtime-worker";
-import { HARNESSES, runGuest } from "@rakazo/agent-run-worker";
+} from "@tangow/adapters/runtime-worker";
+import { HARNESSES, runGuest } from "@tangow/agent-run-worker";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import { startModelEmulator } from "./model-emulator.js";
 
 beforeEach(async () => {
-  const home = await mkdtemp(path.join(tmpdir(), "rakazo-native-home-"));
+  const home = await mkdtemp(path.join(tmpdir(), "tangow-native-home-"));
   vi.stubEnv("HOME", home);
   onTestFinished(() => rm(home, { recursive: true, force: true }));
 });
@@ -52,7 +52,7 @@ async function nativeRun(
 ) {
   const server = await startModelEmulator({ steps, apiKey: "controller-only-key" });
   onTestFinished(() => server.close());
-  const root = fixtureRoot ?? (await mkdtemp(path.join(tmpdir(), "rakazo-native-run-")));
+  const root = fixtureRoot ?? (await mkdtemp(path.join(tmpdir(), "tangow-native-run-")));
   onTestFinished(() => rm(root, { recursive: true, force: true }));
   await mkdir(path.join(root, "workspace/bots/bot"), { recursive: true });
   const exits: Array<Promise<string>> = [];
@@ -103,7 +103,7 @@ async function nativeRun(
         threadId: "thread",
         runId: "run_native",
         prompt: "Draft a note.",
-        instructions: "Instructions for Rakazo's own loop, never sent to a native harness.",
+        instructions: "Instructions for Tangow's own loop, never sent to a native harness.",
         harnessAddendum: "You are Ada, the user's bot.",
         history: [],
         tools: WORKER_NATIVE_TOOLS.filter((tool) => ["read", "bash"].includes(tool.name)),
@@ -155,7 +155,7 @@ describe("the pi-native harness through the controller", () => {
             id: "long",
             name: "bash",
             arguments: {
-              command: `ln -s /tmp .rakazo; seq 1 900000${suffix}`,
+              command: `ln -s /tmp .tangow; seq 1 900000${suffix}`,
               ...(status === "timeout" ? { timeout: 0.2 } : {}),
             },
           },
@@ -206,7 +206,7 @@ describe("the pi-native harness through the controller", () => {
   );
 
   it("retains the complete stream when native bash is cancelled", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "rakazo-native-cancel-"));
+    const root = await mkdtemp(path.join(tmpdir(), "tangow-native-cancel-"));
     const volume = path.join(root, "workspace/bots/bot");
     const cancel = new AbortController();
     const pending = nativeRun(
@@ -231,13 +231,13 @@ describe("the pi-native harness through the controller", () => {
     await expect
       .poll(async () => {
         const files = await readdir(volume).catch(() => []);
-        const spool = files.find((file) => file.startsWith(".rakazo-bash-"));
+        const spool = files.find((file) => file.startsWith(".tangow-bash-"));
         return spool ? (await readFile(path.join(volume, spool))).byteLength : 0;
       })
       .toBe(Buffer.byteLength(expected));
     cancel.abort();
     await rejected;
-    const spool = (await readdir(volume)).find((file) => file.startsWith(".rakazo-bash-"));
+    const spool = (await readdir(volume)).find((file) => file.startsWith(".tangow-bash-"));
     expect(await readFile(path.join(volume, spool!), "utf8")).toBe(expected);
   });
 
@@ -281,12 +281,12 @@ describe("the pi-native harness through the controller", () => {
           response: {
             type: "tool",
             id: "one",
-            name: "mcp__rakazo__run_subagent",
+            name: "mcp__tangow__run_subagent",
             arguments: { category: "everyday", name: "slow", task: "slow-task" },
             siblings: [
               {
                 id: "two",
-                name: "mcp__rakazo__run_subagent",
+                name: "mcp__tangow__run_subagent",
                 arguments: { category: "everyday", name: "peer", task: "peer-task" },
               },
             ],
@@ -350,7 +350,7 @@ describe("the pi-native harness through the controller", () => {
     expect(await readdir(path.join(result.root, "workspace/bots/bot"))).toEqual([]);
   });
 
-  it("keeps Pi's prompt with the Rakazo addendum, and runs its file tools on the volume without a grant", async () => {
+  it("keeps Pi's prompt with the Tangow addendum, and runs its file tools on the volume without a grant", async () => {
     const { seen, exit, root } = await nativeRun([
       {
         expect(request) {
@@ -420,7 +420,7 @@ describe("the pi-native harness through the controller", () => {
           expect(request) {
             const names = request.tools?.map((tool) => tool.function.name) ?? [];
             expect(names).toContain("tool_search");
-            expect(names).not.toContain("mcp__rakazo__publish_note");
+            expect(names).not.toContain("mcp__tangow__publish_note");
           },
           response: {
             type: "tool",
@@ -432,13 +432,13 @@ describe("the pi-native harness through the controller", () => {
         {
           expect(request) {
             expect(request.tools?.map((tool) => tool.function.name)).toContain(
-              "mcp__rakazo__publish_note",
+              "mcp__tangow__publish_note",
             );
           },
           response: {
             type: "tool",
             id: "publish",
-            name: "mcp__rakazo__publish_note",
+            name: "mcp__tangow__publish_note",
             arguments: { title: "Plan" },
           },
         },
@@ -494,10 +494,10 @@ describe("the pi-native harness through the controller", () => {
       { label, name, other, deferred: false, reverseCatalog: false },
     ]),
     ...[false, true].flatMap((reverseCatalog) =>
-      ["mcp__rakazo__remember", "remember"].map((name) => ({
+      ["mcp__tangow__remember", "remember"].map((name) => ({
         label: `canonical alias overlap ${name}, reversed=${reverseCatalog}`,
         name,
-        other: name === "remember" ? "mcp__rakazo__remember" : "remember",
+        other: name === "remember" ? "mcp__tangow__remember" : "remember",
         deferred: false,
         reverseCatalog,
       })),
@@ -557,9 +557,9 @@ describe("the pi-native harness through the controller", () => {
               const loaded = request.tools?.map((tool) => tool.function.name) ?? [];
               assigned =
                 loaded.find((tool) =>
-                  ["remember", "mcp__rakazo__remember"].includes(name)
-                    ? tool === `mcp__rakazo__${name}`
-                    : tool.startsWith("mcp__rakazo__"),
+                  ["remember", "mcp__tangow__remember"].includes(name)
+                    ? tool === `mcp__tangow__${name}`
+                    : tool.startsWith("mcp__tangow__"),
                 ) ?? "";
               expect(assigned).toBeTruthy();
             },
@@ -685,13 +685,13 @@ describe("the pi-native harness through the controller", () => {
             expect(request) {
               expect(JSON.stringify(request.messages)).toContain("parent-private-context");
               expect(request.tools?.map((tool) => tool.function.name)).toContain(
-                "mcp__rakazo__run_subagent",
+                "mcp__tangow__run_subagent",
               );
             },
             response: {
               type: "tool",
               id: "delegate",
-              name: "mcp__rakazo__run_subagent",
+              name: "mcp__tangow__run_subagent",
               arguments: { category: "everyday", name: "scout", task: "Find the child note." },
             },
           },
@@ -703,10 +703,10 @@ describe("the pi-native harness through the controller", () => {
               expect(context).not.toContain("Draft a note.");
               expect(systemOf(request)).toContain('named "scout"');
               expect(request.tools?.map((tool) => tool.function.name)).toEqual([
-                "mcp__rakazo__remember",
+                "mcp__tangow__remember",
               ]);
             },
-            response: { type: "tool", id: "save", name: "mcp__rakazo__remember", arguments: {} },
+            response: { type: "tool", id: "save", name: "mcp__tangow__remember", arguments: {} },
           },
           ...(outcome === "paused"
             ? []
@@ -729,7 +729,7 @@ describe("the pi-native harness through the controller", () => {
                     : "Stopped: the run is waiting for the user.",
               );
               expect(context).not.toContain("child-only-result");
-              expect(context).not.toContain('"name":"mcp__rakazo__remember"');
+              expect(context).not.toContain('"name":"mcp__tangow__remember"');
             },
             response: { type: "text", text: "Parent finished." },
           },
@@ -851,7 +851,7 @@ describe("the pi-native harness through the controller", () => {
                   slowClosed = true;
                 },
               }
-            : { type: "tool", id: "pause", name: "mcp__rakazo__remember", arguments: {} };
+            : { type: "tool", id: "pause", name: "mcp__tangow__remember", arguments: {} };
         },
       };
       const pending = nativeRun(
@@ -861,12 +861,12 @@ describe("the pi-native harness through the controller", () => {
             response: {
               type: "tool",
               id: "slow",
-              name: "mcp__rakazo__run_subagent",
+              name: "mcp__tangow__run_subagent",
               arguments: { category: "everyday", name: "slow", task: "slow-task" },
               siblings: [
                 {
                   id: "peer",
-                  name: "mcp__rakazo__run_subagent",
+                  name: "mcp__tangow__run_subagent",
                   arguments: { category: "everyday", name: "peer", task: "peer-task" },
                 },
               ],

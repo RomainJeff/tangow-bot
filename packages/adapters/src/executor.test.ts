@@ -1,15 +1,15 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { MessageBlock } from "@rakazo/contracts";
+import type { MessageBlock } from "@tangow/contracts";
 import {
   avatarIdentitySeed,
   BOT_DELEGATION_GUIDANCE,
   BOT_OFFER_DEDICATED_BOT,
   ONCE_ROUTINE_CRON,
   SHAPES,
-} from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+} from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
 import { describe, expect, it, vi } from "vitest";
 import {
   appendToolCompletionAudit,
@@ -789,7 +789,7 @@ description: Prepare standup notes
 
 1. Summarize wins.
 `;
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-executor-skills-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-executor-skills-"));
     const skillDir = path.join(
       userSkillsRoot(dataDir, { spaceId: "ws-1", userId: "user-1" }),
       skillDirName("Daily standup"),
@@ -1501,7 +1501,7 @@ description: Prepare standup notes
     const fromCatalog = await executor.resolveModel(scope);
     expect(fromCatalog.contextWindow).toBe(1_000_000);
 
-    bot.modelId = "rakazo-test/unknown-future-model";
+    bot.modelId = "tangow-test/unknown-future-model";
     const unknown = await executor.resolveModel(scope);
     expect(unknown.contextWindow).toBeUndefined();
   });
@@ -1657,7 +1657,7 @@ describe("buildSystemInstructions", () => {
   it("gives both harness paths the same tool preference and connector recovery policy", () => {
     for (const [instructions, prefix] of [
       [buildSystemInstructions(parts), ""],
-      [buildHarnessAddendum(parts), "mcp__rakazo__"],
+      [buildHarnessAddendum(parts), "mcp__tangow__"],
     ]) {
       expect(instructions).toContain("Connected tool catalog: mcp__mail__send");
       expect(instructions).toContain("Use the simplest suitable method");
@@ -1668,7 +1668,7 @@ describe("buildSystemInstructions", () => {
     }
   });
 
-  it("uses the worker's Rakazo tool names throughout owned guidance while retaining native names", () => {
+  it("uses the worker's Tangow tool names throughout owned guidance while retaining native names", () => {
     const instructions = buildHarnessAddendum({
       ...parts,
       browserRunAllowed: true,
@@ -1706,16 +1706,16 @@ describe("buildSystemInstructions", () => {
       "schedule_create",
       "schedule_list",
     ]) {
-      expect(instructions).toContain(`mcp__rakazo__${name}`);
+      expect(instructions).toContain(`mcp__tangow__${name}`);
       if (name !== "remember") {
         expect(instructions).not.toMatch(new RegExp(`(?<![A-Za-z0-9_])${name}\\b`));
       }
     }
-    expect(instructions).toContain("Call mcp__rakazo__remember the moment");
+    expect(instructions).toContain("Call mcp__tangow__remember the moment");
     expect(instructions).toContain("remember that when you can");
     expect(instructions).toContain("Use native read, write, edit and bash");
-    expect(instructions).not.toContain("mcp__rakazo__bash");
-    expect(instructions).not.toContain("mcp__rakazo__mcp__rakazo__");
+    expect(instructions).not.toContain("mcp__tangow__bash");
+    expect(instructions).not.toContain("mcp__tangow__mcp__tangow__");
   });
 
   it("tells both harnesses to call the send tool for a message the user wants to approve first", () => {
@@ -1734,8 +1734,8 @@ describe("buildSystemInstructions", () => {
     expect(addendum).not.toContain("Environment: linux");
     expect(instructions).toContain("run_subagent");
     expect(addendum).not.toContain("subagent");
-    expect(addendum).toContain("mcp__rakazo__message_user");
-    expect(addendum).not.toMatch(/(?<!mcp__rakazo__)message_user/);
+    expect(addendum).toContain("mcp__tangow__message_user");
+    expect(addendum).not.toMatch(/(?<!mcp__tangow__)message_user/);
   });
 
   it("is byte-identical across runs when the directory is unchanged", () => {

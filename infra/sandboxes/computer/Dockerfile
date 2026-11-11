@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /build
 COPY xcapture.c .
-RUN cc -O3 -fPIC -shared -Wall -Wextra -Werror -o librakazo-xcapture.so xcapture.c \
+RUN cc -O3 -fPIC -shared -Wall -Wextra -Werror -o libtangow-xcapture.so xcapture.c \
     -lX11 -lXext -lXdamage -lXfixes -lXtst -lpng
 
 FROM debian:bookworm-slim
@@ -52,9 +52,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     > /etc/apt/sources.list.d/google-chrome.list \
   && apt-get update && apt-get install -y --no-install-recommends google-chrome-stable \
   && rm -rf /var/lib/apt/lists/* \
-  && groupadd --gid 1000 rakazo \
-  && useradd --uid 1000 --gid rakazo --create-home --shell /bin/zsh rakazo \
-  && mkdir -p /etc/rakazo/fluxbox /etc/rakazo/plank/dock1/launchers /etc/xdg/xfce4/terminal \
+  && groupadd --gid 1000 tangow \
+  && useradd --uid 1000 --gid tangow --create-home --shell /bin/zsh tangow \
+  && mkdir -p /etc/tangow/fluxbox /etc/tangow/plank/dock1/launchers /etc/xdg/xfce4/terminal \
   && rm -f /etc/zsh/newuser.zshrc.recommended \
   && printf '%s\n' '#!/bin/sh' 'exec xsetroot -solid "#111113" "$@"' > /usr/bin/fbsetbg \
   && chmod +x /usr/bin/fbsetbg \
@@ -112,33 +112,33 @@ RUN npm install -g "opencode-ai@${OPENCODE_VERSION}" && npm cache clean --force 
 # Keep the pinned version: the self-updater would otherwise install a newer binary into the persistent home.
 ENV OPENCODE_DISABLE_AUTOUPDATE=1
 ENV DISPLAY=:1
-ENV HOME=/home/rakazo
+ENV HOME=/home/tangow
 # LibreOffice profile outside the workspace so it never lands in checkpoints.
 ENV UserInstallation=file:///tmp/libreoffice-profile
-WORKDIR /home/rakazo
+WORKDIR /home/tangow
 # --chmod normalizes modes: a restrictive host umask (e.g. 077 on hardened hosts) would
 # otherwise leave these files unreadable to USER 1000 at runtime.
-COPY --chmod=755 start.sh /usr/local/bin/rakazo-computer
-COPY --chmod=755 control.py /usr/local/bin/rakazo-computer-control
-COPY --from=capture-builder /build/librakazo-xcapture.so /usr/local/lib/librakazo-xcapture.so
-COPY --chmod=755 rakazo-browser /usr/local/bin/rakazo-browser
-COPY --chmod=755 rakazo-page-browser /usr/local/bin/rakazo-page-browser
-COPY --chmod=755 rakazo-terminal /usr/local/bin/rakazo-terminal
-COPY --chmod=755 rakazo-files /usr/local/bin/rakazo-files
+COPY --chmod=755 start.sh /usr/local/bin/tangow-computer
+COPY --chmod=755 control.py /usr/local/bin/tangow-computer-control
+COPY --from=capture-builder /build/libtangow-xcapture.so /usr/local/lib/libtangow-xcapture.so
+COPY --chmod=755 tangow-browser /usr/local/bin/tangow-browser
+COPY --chmod=755 tangow-page-browser /usr/local/bin/tangow-page-browser
+COPY --chmod=755 tangow-terminal /usr/local/bin/tangow-terminal
+COPY --chmod=755 tangow-files /usr/local/bin/tangow-files
 COPY --chmod=644 terminalrc /etc/xdg/xfce4/terminal/terminalrc
-COPY --chmod=644 zshrc /etc/rakazo/zshrc
+COPY --chmod=644 zshrc /etc/tangow/zshrc
 COPY --chmod=644 zshrc /etc/zsh/zshrc
-COPY --chmod=644 rakazo-browser.desktop /usr/share/applications/rakazo-browser.desktop
-COPY --chmod=644 rakazo-terminal.desktop /usr/share/applications/rakazo-terminal.desktop
-COPY --chmod=644 rakazo-files.desktop /usr/share/applications/rakazo-files.desktop
-COPY --chmod=644 plank-settings /etc/rakazo/plank/dock1/settings
-COPY --chmod=644 rakazo-browser.dockitem /etc/rakazo/plank/dock1/launchers/rakazo-browser.dockitem
-COPY --chmod=644 rakazo-files.dockitem /etc/rakazo/plank/dock1/launchers/rakazo-files.dockitem
-COPY --chmod=644 rakazo-terminal.dockitem /etc/rakazo/plank/dock1/launchers/rakazo-terminal.dockitem
-COPY --chmod=644 fluxbox.init /etc/rakazo/fluxbox/init
-COPY --chmod=644 fluxbox.apps /etc/rakazo/fluxbox/apps
-COPY --chmod=644 fluxbox.menu /etc/rakazo/fluxbox/menu
-COPY --chmod=644 libreoffice.xcd /usr/lib/libreoffice/share/registry/rakazo.xcd
+COPY --chmod=644 tangow-browser.desktop /usr/share/applications/tangow-browser.desktop
+COPY --chmod=644 tangow-terminal.desktop /usr/share/applications/tangow-terminal.desktop
+COPY --chmod=644 tangow-files.desktop /usr/share/applications/tangow-files.desktop
+COPY --chmod=644 plank-settings /etc/tangow/plank/dock1/settings
+COPY --chmod=644 tangow-browser.dockitem /etc/tangow/plank/dock1/launchers/tangow-browser.dockitem
+COPY --chmod=644 tangow-files.dockitem /etc/tangow/plank/dock1/launchers/tangow-files.dockitem
+COPY --chmod=644 tangow-terminal.dockitem /etc/tangow/plank/dock1/launchers/tangow-terminal.dockitem
+COPY --chmod=644 fluxbox.init /etc/tangow/fluxbox/init
+COPY --chmod=644 fluxbox.apps /etc/tangow/fluxbox/apps
+COPY --chmod=644 fluxbox.menu /etc/tangow/fluxbox/menu
+COPY --chmod=644 libreoffice.xcd /usr/lib/libreoffice/share/registry/tangow.xcd
 COPY --chmod=644 embed.html /usr/share/novnc/embed.html
 COPY --chmod=644 clipboard-bridge.js /usr/share/novnc/clipboard-bridge.js
 COPY --chmod=644 mobile-keyboard.js /usr/share/novnc/mobile-keyboard.js
@@ -146,9 +146,9 @@ COPY --chmod=644 screen-link-machine.js /usr/share/novnc/screen-link-machine.js
 COPY --chmod=644 screen-link-session.js /usr/share/novnc/screen-link-session.js
 # Strip CR so shebangs work even if the build context came from a CRLF checkout.
 RUN ldconfig \
-  && sed -i 's/\r$//' /usr/local/bin/rakazo-computer /usr/local/bin/rakazo-computer-control /usr/local/bin/rakazo-browser /usr/local/bin/rakazo-page-browser \
-    /usr/local/bin/rakazo-terminal /usr/local/bin/rakazo-files /etc/rakazo/zshrc /etc/xdg/xfce4/terminal/terminalrc \
-    /etc/rakazo/fluxbox/init /etc/rakazo/fluxbox/apps /etc/rakazo/fluxbox/menu
+  && sed -i 's/\r$//' /usr/local/bin/tangow-computer /usr/local/bin/tangow-computer-control /usr/local/bin/tangow-browser /usr/local/bin/tangow-page-browser \
+    /usr/local/bin/tangow-terminal /usr/local/bin/tangow-files /etc/tangow/zshrc /etc/xdg/xfce4/terminal/terminalrc \
+    /etc/tangow/fluxbox/init /etc/tangow/fluxbox/apps /etc/tangow/fluxbox/menu
 EXPOSE 7070 6080 6081 6082 6083 6084 6085 6086 6087 6088 6089 6090 6091 6092 6093 6094 6095
 USER 1000:1000
-CMD ["/usr/local/bin/rakazo-computer"]
+CMD ["/usr/local/bin/tangow-computer"]

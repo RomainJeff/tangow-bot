@@ -1,5 +1,5 @@
-import { escapePromptData } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+import { escapePromptData } from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
 import { listScratchpadItems, type ScratchpadToolDeps } from "./scratchpad-tools.js";
 
 const MAX_SCRATCHPAD_CONTEXT_BYTES = 4 * 1024;

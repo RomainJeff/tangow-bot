@@ -1,4 +1,4 @@
-import type { ComputerStatus } from "@rakazo/contracts";
+import type { ComputerStatus } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import type { HeldScreenUrl } from "./computer-screen-url.js";
 import {

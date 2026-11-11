@@ -1,7 +1,7 @@
-import type { ConnectorProvider, SandboxProvider, WorkerProvider } from "@rakazo/adapter-kit";
-import type { GuestConnector } from "@rakazo/adapters/runtime-worker";
-import { volumeMountPath } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+import type { ConnectorProvider, SandboxProvider, WorkerProvider } from "@tangow/adapter-kit";
+import type { GuestConnector } from "@tangow/adapters/runtime-worker";
+import { volumeMountPath } from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "../model-emulator.js";
 import type { Seen } from "../worker-channel-tap.js";
 import { parse, tapConnector } from "../worker-channel-tap.js";
@@ -135,4 +135,4 @@ export const finish = (
   { expect() {}, response: { type: "text", text: recap(what) } },
 ];
 export const toolNames = (request: ModelEmulatorRequest) =>
-  (request.tools ?? []).map((tool) => tool.function.name.replace(/^mcp__rakazo__/, ""));
+  (request.tools ?? []).map((tool) => tool.function.name.replace(/^mcp__tangow__/, ""));

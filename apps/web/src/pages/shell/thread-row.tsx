@@ -1,16 +1,16 @@
 import { i18n } from "@lingui/core";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { ChatMarkdown, truncateMarkdownForRender } from "@rakazo/chat-ui/web";
-import type { GroupPerson, MessageBlock, ThreadItem } from "@rakazo/contracts";
-import { isLinkPreviewCard } from "@rakazo/contracts";
-import type { RoutineItem, SkillSourceBlock, ThreadRow, WaitingCard } from "@rakazo/core";
+import { ChatMarkdown, truncateMarkdownForRender } from "@tangow/chat-ui/web";
+import type { GroupPerson, MessageBlock, ThreadItem } from "@tangow/contracts";
+import { isLinkPreviewCard } from "@tangow/contracts";
+import type { RoutineItem, SkillSourceBlock, ThreadRow, WaitingCard } from "@tangow/core";
 import {
   isAsideOnlyMessage,
   sessionOriginOf,
   textWithoutPreviewedLinkLine,
   threadTimeMarkerLabel,
-} from "@rakazo/core";
-import type { StackedAvatarItem } from "@rakazo/ui-web";
+} from "@tangow/core";
+import type { StackedAvatarItem } from "@tangow/ui-web";
 import {
   BotAvatar,
   cn,
@@ -20,7 +20,7 @@ import {
   MessageRow,
   Separator,
   StackedAvatars,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import type { ReactNode } from "react";
 import type { CardEdits } from "../../components/AskCard";
 import { AskCard } from "../../components/AskCard";

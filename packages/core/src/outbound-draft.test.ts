@@ -1,4 +1,4 @@
-import { askDraftState } from "@rakazo/contracts";
+import { askDraftState } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import { withValueAt } from "./draft-fields.js";
 import { readDraft } from "./outbound-draft.js";

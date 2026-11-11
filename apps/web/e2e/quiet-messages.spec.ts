@@ -97,7 +97,7 @@ async function setAppearance(page: Page, theme: "light" | "dark") {
 
 test("the thread reads as names, prose and asides", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `quiet-messages-${stamp}@rakazo.test`, "password12", "Quiet Messages");
+  await signup(page, `quiet-messages-${stamp}@tangow.test`, "password12", "Quiet Messages");
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);

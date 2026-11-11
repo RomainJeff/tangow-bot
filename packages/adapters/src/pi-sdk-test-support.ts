@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { Type } from "@earendil-works/pi-ai";
 import type { AgentSession, ToolDefinition } from "@earendil-works/pi-coding-agent";
-import type { AgentSteeringMessage } from "@rakazo/adapter-kit";
+import type { AgentSteeringMessage } from "@tangow/adapter-kit";
 import { afterEach, beforeEach } from "vitest";
 import type { WireFixture, WireProtocol, WireStep } from "./pi-sdk-proof-support.js";
 import { createProofSession, proofModelRuntime, startWireFixture } from "./pi-sdk-proof-support.js";
@@ -31,7 +31,7 @@ async function seedPoison(base: string) {
     ".pi/agent/auth.json": JSON.stringify(
       Object.fromEntries(
         PROTOCOLS.map((protocol) => [
-          `rakazo-proof-${protocol}`,
+          `tangow-proof-${protocol}`,
           { type: "api_key", key: `${POISON}-key` },
         ]),
       ),

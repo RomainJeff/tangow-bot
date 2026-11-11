@@ -1,5 +1,5 @@
-import type { ConnectorProvider } from "@rakazo/adapter-kit";
-import { EncryptedSecretStore, McpConnector, McpOAuthBroker } from "@rakazo/adapters";
+import type { ConnectorProvider } from "@tangow/adapter-kit";
+import { EncryptedSecretStore, McpConnector, McpOAuthBroker } from "@tangow/adapters";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import type { Seen } from "./worker-channel-tap.js";
@@ -206,7 +206,7 @@ function lazySteps(seen: { executed?: string }, between: () => Promise<void> = a
     },
     {
       async expect(request) {
-        expect(toolNames(request)).toContain("mcp__rakazo__mcp__demo__tool_29");
+        expect(toolNames(request)).toContain("mcp__tangow__mcp__demo__tool_29");
         expect(JSON.stringify(request.tools)).toContain("schema-marker-29");
         await between();
       },

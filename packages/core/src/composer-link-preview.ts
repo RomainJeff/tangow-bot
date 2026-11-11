@@ -1,9 +1,9 @@
-import type { LinkPreviewDraft } from "@rakazo/contracts";
+import type { LinkPreviewDraft } from "@tangow/contracts";
 import {
   LINK_PREVIEW_IMAGE_FIT,
   LINK_PREVIEW_THUMBNAIL_MAX_LENGTH,
   LINK_PREVIEW_THUMBNAIL_PREFIX,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import { linkMentionCandidates, previewSiteLabel, sanitizePreviewTitle } from "./link-preview.js";
 import { extractLinkOccurrences } from "./search.js";
 

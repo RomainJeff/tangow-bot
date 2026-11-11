@@ -1,10 +1,10 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { E2BSandboxProvider, ModelCallRuntime } from "@rakazo/adapters";
-import type { RunStatus } from "@rakazo/contracts";
-import { isTerminal } from "@rakazo/core";
-import { loadRootEnv } from "@rakazo/core/node/load-root-env";
+import { E2BSandboxProvider, ModelCallRuntime } from "@tangow/adapters";
+import type { RunStatus } from "@tangow/contracts";
+import { isTerminal } from "@tangow/core";
+import { loadRootEnv } from "@tangow/core/node/load-root-env";
 import { afterAll, describe, expect, it } from "vitest";
 import { sessionCookieHeader } from "./index.js";
 import { computerOnVolumes, localWorkerApp } from "./local-worker-provider.js";
@@ -30,7 +30,7 @@ describeE2b("live E2B canary", () => {
       signal: new AbortController().signal,
     };
     const computer = await sandbox.provision(
-      { botId: "canary", homePath: "/home/user/rakazo-home" },
+      { botId: "canary", homePath: "/home/user/tangow-home" },
       ctx,
     );
     try {
@@ -95,7 +95,7 @@ describePiApp("live OpenRouter product journey", () => {
 
   it("completes a bot turn in a worker with the live model", async () => {
     const { createApp } = await import("../../../apps/api/src/app.ts");
-    dataDir = mkdtempSync(path.join(tmpdir(), "rakazo-canary-"));
+    dataDir = mkdtempSync(path.join(tmpdir(), "tangow-canary-"));
     const local = localWorkerApp(path.join(dataDir, "workers"));
     const handles = await createApp({
       databaseUrl: process.env.DATABASE_URL!,
@@ -111,7 +111,7 @@ describePiApp("live OpenRouter product journey", () => {
       }
     };
     const stamp = Date.now();
-    const email = `pi-${stamp}@rakazo.test`;
+    const email = `pi-${stamp}@tangow.test`;
     const signup = await handles.app.request("/api/auth/sign-up/email", {
       method: "POST",
       headers: { "content-type": "application/json", origin: "http://127.0.0.1:5173" },

@@ -2,9 +2,9 @@ import { spawnSync } from "node:child_process";
 import http from "node:http";
 import net from "node:net";
 import { duplexPair } from "node:stream";
-import { resolveSupervisorToken } from "@rakazo/core";
-import { stopBrowserCommand } from "@rakazo/core/node/desktop-runtime";
-import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
+import { resolveSupervisorToken } from "@tangow/core";
+import { stopBrowserCommand } from "@tangow/core/node/desktop-runtime";
+import { createLogger, createTestSink, installLogger } from "@tangow/logging";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   MAX_SUPERVISOR_FILE_REQUEST_BYTES,
@@ -230,8 +230,8 @@ describe("sandbox supervisor HTTP boundary", () => {
       headers: {
         authorization: `Bearer ${token}`,
         "content-type": "application/json",
-        "x-rakazo-bot-id": "other-bot",
-        "x-rakazo-space-id": "workspace",
+        "x-tangow-bot-id": "other-bot",
+        "x-tangow-space-id": "workspace",
       },
       body: JSON.stringify({
         botId: "bot",
@@ -256,8 +256,8 @@ describe("sandbox supervisor HTTP boundary", () => {
         headers: {
           authorization: `Bearer ${token}`,
           "content-type": "application/json",
-          "x-rakazo-bot-id": "bot",
-          "x-rakazo-space-id": "workspace",
+          "x-tangow-bot-id": "bot",
+          "x-tangow-space-id": "workspace",
         },
         body: JSON.stringify({ botId: "bot", homePath: "/tmp/never-used", ...ids }),
       });
@@ -270,11 +270,11 @@ describe("skills binds", () => {
   it("derives read-only skills binds from ids and the translated data dir", () => {
     expect(
       skillsBindsFor("/data", { spaceId: "s1", userId: "u1" }, (p) =>
-        p.replace("/data", "/var/rakazo"),
+        p.replace("/data", "/var/tangow"),
       ),
     ).toEqual([
-      "/var/rakazo/skills/user/s1/u1:/skills/user:ro",
-      "/var/rakazo/managed-skills:/managed-skills:ro",
+      "/var/tangow/skills/user/s1/u1:/skills/user:ro",
+      "/var/tangow/managed-skills:/managed-skills:ro",
     ]);
   });
 });
@@ -290,12 +290,12 @@ describe("sandbox supervisor input containment", () => {
 
   it("runs commands from the same relative place once the workspace is the volumes' root", () => {
     expect(commandWorkingDir(undefined, "/workspace")).toBe("/workspace");
-    expect(commandWorkingDir("/home/rakazo/bots/ada", "/workspace")).toBe("/workspace/bots/ada");
+    expect(commandWorkingDir("/home/tangow/bots/ada", "/workspace")).toBe("/workspace/bots/ada");
     expect(commandWorkingDir("/workspace/shared/x", "/workspace/bots/ada")).toBe(
       "/workspace/shared/x",
     );
-    expect(commandWorkingDir("/workspace/shared", undefined)).toBe("/home/rakazo/workspace/shared");
-    expect(commandWorkingDir("/home/rakazo/notes")).toBe("/home/rakazo/notes");
+    expect(commandWorkingDir("/workspace/shared", undefined)).toBe("/home/tangow/workspace/shared");
+    expect(commandWorkingDir("/home/tangow/notes")).toBe("/home/tangow/notes");
     expect(() => commandWorkingDir("/workspace/../etc", "/workspace")).toThrow(/escapes/);
   });
 
@@ -313,11 +313,11 @@ describe("sandbox supervisor input containment", () => {
 
   it("accepts the legacy workspace label without weakening container identity", () => {
     expect(
-      hasComputerIdentity({ "rakazo.botId": "bot", "rakazo.workspaceId": "space" }, "bot", "space"),
+      hasComputerIdentity({ "tangow.botId": "bot", "tangow.workspaceId": "space" }, "bot", "space"),
     ).toBe(true);
     expect(
       hasComputerIdentity(
-        { "rakazo.botId": "bot", "rakazo.workspaceId": "other-space" },
+        { "tangow.botId": "bot", "tangow.workspaceId": "other-space" },
         "bot",
         "space",
       ),
@@ -325,9 +325,9 @@ describe("sandbox supervisor input containment", () => {
     expect(
       hasComputerIdentity(
         {
-          "rakazo.botId": "bot",
-          "rakazo.spaceId": "space",
-          "rakazo.workspaceId": "other-space",
+          "tangow.botId": "bot",
+          "tangow.spaceId": "space",
+          "tangow.workspaceId": "other-space",
         },
         "bot",
         "space",
@@ -348,7 +348,7 @@ describe("sandbox supervisor input containment", () => {
       expect(
         containerActionStep({ kind: "launch", application, uri: "https://example.com" }, ":2"),
       ).toEqual({
-        argv: ["env", "DISPLAY=:2", "rakazo-browser", "https://example.com"],
+        argv: ["env", "DISPLAY=:2", "tangow-browser", "https://example.com"],
       });
     }
     expect(containerActionStep({ kind: "launch", application: "xterm" }, ":3")).toEqual({
@@ -364,7 +364,7 @@ describe("sandbox supervisor input containment", () => {
       expect(
         containerActionStep({ kind: "launch", application, uri: "https://example.com" }, ":2"),
       ).toEqual({
-        argv: ["env", "DISPLAY=:2", "rakazo-browser", "https://example.com"],
+        argv: ["env", "DISPLAY=:2", "tangow-browser", "https://example.com"],
       });
     }
     expect(containerActionStep({ kind: "launch", application: "XTerm" }, ":3")).toEqual({
@@ -380,8 +380,8 @@ describe("sandbox supervisor input containment", () => {
         argv: [
           "env",
           "DISPLAY=:2",
-          `RAKAZO_BROWSER_PROFILE=${profile}`,
-          "rakazo-browser",
+          `TANGOW_BROWSER_PROFILE=${profile}`,
+          "tangow-browser",
           "https://example.com",
         ],
       },
@@ -393,7 +393,7 @@ describe("sandbox supervisor input containment", () => {
         argv: [
           "env",
           "DISPLAY=:2",
-          `RAKAZO_BROWSER_PROFILE=${profile}`,
+          `TANGOW_BROWSER_PROFILE=${profile}`,
           "xdg-open",
           "https://example.com",
         ],
@@ -553,7 +553,7 @@ describe("sandbox supervisor input containment", () => {
     expect(interactiveScreenCommand(true, "lease-new")).toMatch(/6080/);
     expect(interactiveScreenCommand(true, "lease-new")).not.toContain("sockets/view-1-");
     expect(interactiveScreenCommand(false, "lease-old")).toContain("= 'lease-old'");
-    expect(interactiveScreenCommand(false, "lease-old")).toContain("RAKAZO_CONTROL_RELEASED");
+    expect(interactiveScreenCommand(false, "lease-old")).toContain("TANGOW_CONTROL_RELEASED");
   });
 
   it("assigns distinct screen indexes per Team bot and starts extra displays", () => {
@@ -614,8 +614,8 @@ describe("sandbox supervisor input containment", () => {
   it("resets stale managed screens without killing unrelated container jobs", () => {
     const command = resetManagedScreensCommand();
     expect(command).toContain("chromium-bot-*");
-    expect(command).toContain("for marker in /tmp/rakazo/browser-profile-*");
-    expect(command).toContain("/tmp/rakazo/browser-pid-*");
+    expect(command).toContain("for marker in /tmp/tangow/browser-profile-*");
+    expect(command).toContain("/tmp/tangow/browser-pid-*");
     expect(command).not.toContain("pkill -9 -1");
   });
 
@@ -628,11 +628,11 @@ describe("sandbox supervisor input containment", () => {
     expect(command).toContain(writer);
     expect(ensureScreenCommand(3, "writer", "view-token")).toContain(writer);
     expect(ensureScreenCommand(0, "researcher", "view-token")).toContain(researcher);
-    expect(command).not.toContain("/home/rakazo/.browser-profiles/chromium/.");
-    expect(command).not.toContain(".rakazo-base-generation");
+    expect(command).not.toContain("/home/tangow/.browser-profiles/chromium/.");
+    expect(command).not.toContain(".tangow-base-generation");
     expect(command).toContain("browser-pid-");
     expect(browserProfilePathForScreen("../../writer")).toMatch(
-      /^\/home\/rakazo\/\.browser-profiles\/chromium-bot-[0-9a-f]+$/,
+      /^\/home\/tangow\/\.browser-profiles\/chromium-bot-[0-9a-f]+$/,
     );
   });
 
@@ -750,7 +750,7 @@ describe("sandbox supervisor input containment", () => {
     expect(primary).not.toContain("websockify");
     expect(primary).toContain("sockets/view-1-");
     expect(primary).toContain("sockets/control-1-");
-    expect(primary).toContain("rm -f /tmp/rakazo/control-token-1");
+    expect(primary).toContain("rm -f /tmp/tangow/control-token-1");
     expect(primary).toContain("transport failed to stop");
 
     const extra = stopExtraScreenCommand(1, "researcher");
@@ -885,7 +885,7 @@ describe("docker worker guest upgrade", () => {
           host: "127.0.0.1",
           port: address.port,
           path,
-          headers: { connection: "Upgrade", upgrade: "rakazo-guest", ...headers },
+          headers: { connection: "Upgrade", upgrade: "tangow-guest", ...headers },
         });
         request.on("response", (response) => resolve(response.statusCode));
         request.on("upgrade", () => resolve(101));
@@ -898,7 +898,7 @@ describe("docker worker guest upgrade", () => {
   }
 
   it("checks the supervisor token itself, before anything else", async () => {
-    const capability = { "x-rakazo-worker-capability": "capability" };
+    const capability = { "x-tangow-worker-capability": "capability" };
     expect(await upgrade("/workers/abc/guest", capability)).toBe(401);
     expect(await upgrade("/elsewhere", capability)).toBe(401);
     expect(
@@ -915,7 +915,7 @@ describe("docker worker guest upgrade", () => {
     const [socket] = duplexPair();
     const request = Object.assign(new http.IncomingMessage(new net.Socket()), {
       url: "/workers/abc/guest",
-      headers: { authorization: `Bearer ${token}`, "x-rakazo-worker-capability": "capability" },
+      headers: { authorization: `Bearer ${token}`, "x-tangow-worker-capability": "capability" },
     });
     const upgrading = upgradeWorkerGuest(request, socket);
     expect(() => socket.emit("error", new Error("read ECONNRESET"))).not.toThrow();

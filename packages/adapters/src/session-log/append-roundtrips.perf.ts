@@ -6,9 +6,9 @@
  *
  *   DATABASE_URL=postgres://... pnpm exec tsx packages/adapters/src/session-log/append-roundtrips.perf.ts
  */
-import type { SessionEntryDraft } from "@rakazo/adapter-kit";
-import { EntryId, SessionId } from "@rakazo/contracts";
-import { createDb } from "@rakazo/db";
+import type { SessionEntryDraft } from "@tangow/adapter-kit";
+import { EntryId, SessionId } from "@tangow/contracts";
+import { createDb } from "@tangow/db";
 import { PostgresSessionLog } from "./postgres.js";
 
 const url = process.env.DATABASE_URL;
@@ -42,7 +42,7 @@ async function counted(label: string, appends: number, work: () => Promise<unkno
   for (const text of statements) print(`  ${text}`);
 }
 
-await prisma.user.create({ data: { id: tag, name: "RT", email: `${tag}@rakazo.test` } });
+await prisma.user.create({ data: { id: tag, name: "RT", email: `${tag}@tangow.test` } });
 await prisma.organization.create({
   data: { id: tag, name: "RT", slug: tag, createdAt: new Date() },
 });

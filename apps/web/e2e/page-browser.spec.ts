@@ -9,7 +9,7 @@ import { chromium, expect, test } from "./test";
 const execute = promisify(execFile);
 const helper = path.resolve(
   import.meta.dirname,
-  "../../../infra/sandboxes/computer/rakazo-page-browser",
+  "../../../infra/sandboxes/computer/tangow-page-browser",
 );
 
 test("live page helper preserves identity, masks passwords, and reports partial actions", async () => {
@@ -22,7 +22,7 @@ test("live page helper preserves identity, masks passwords, and reports partial 
       <label><input type="checkbox">Agree</label><button disabled>Disabled</button><button aria-disabled="true">Later</button>
       <iframe style="display:none"></iframe><iframe width="1" height="1"></iframe>
       <select aria-label="Month"><option value="">Choose</option><option value="2027-04">avril 2027</option><option disabled>mars 2027</option><option hidden>juin 2027</option></select>
-      <script>window.__rakazoPageBrowser={snapshot:()=>({title:'spoofed'})};</script>`);
+      <script>window.__tangowPageBrowser={snapshot:()=>({title:'spoofed'})};</script>`);
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
@@ -40,7 +40,7 @@ test("live page helper preserves identity, masks passwords, and reports partial 
     }).toPass({ timeout: 5_000 });
     async function command(name: string, args: Record<string, unknown> = {}) {
       const { stdout } = await execute("python3", [helper, name, JSON.stringify(args)], {
-        env: { ...process.env, RAKAZO_CDP_PORT: port },
+        env: { ...process.env, TANGOW_CDP_PORT: port },
         timeout: 30_000,
       });
       return JSON.parse(stdout);

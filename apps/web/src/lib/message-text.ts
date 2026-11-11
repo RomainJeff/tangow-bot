@@ -1,4 +1,4 @@
-import type { MessageBlock } from "@rakazo/contracts";
+import type { MessageBlock } from "@tangow/contracts";
 import { messageProviderLabel } from "./messaging";
 
 /** Plain message text for clipboard copy — text/ask/progress only, no chrome. */

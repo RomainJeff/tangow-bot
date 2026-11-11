@@ -1,5 +1,5 @@
-import type { AdapterContext, DecisionProvider, DecisionRequest } from "@rakazo/adapter-kit";
-import { ModelCategorySchema } from "@rakazo/contracts";
+import type { AdapterContext, DecisionProvider, DecisionRequest } from "@tangow/adapter-kit";
+import { ModelCategorySchema } from "@tangow/contracts";
 import { redactToolArgsForReview } from "./auto-review.js";
 import { decideWithin } from "./decision.js";
 import type { ModelRouteClassification } from "./model-selection.js";

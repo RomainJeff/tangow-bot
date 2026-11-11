@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
-import type { RunSearchInput } from "@rakazo/adapter-kit";
+import type { RunSearchInput } from "@tangow/adapter-kit";
 import type {
   RunSearchHit,
   RunSearchLimitation,
   RunSearchPage,
   SessionEntry,
-} from "@rakazo/contracts";
-import { EntryId } from "@rakazo/contracts";
-import { matchesSearchQuery, snippetAroundMatch } from "@rakazo/core";
+} from "@tangow/contracts";
+import { EntryId } from "@tangow/contracts";
+import { matchesSearchQuery, snippetAroundMatch } from "@tangow/core";
 import { z } from "zod";
 
 export const RUN_SEARCH_RECORD_BYTES = 1024 * 1024;

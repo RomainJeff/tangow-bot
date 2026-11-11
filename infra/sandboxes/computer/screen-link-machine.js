@@ -1,12 +1,12 @@
 /**
  * Reconnect machine for the chrome-less noVNC embed. Pure: the session feeds events stamped
  * with `now`, runs the returned effects, and calls `step` again with `tick` at `nextWake`.
- * The wire constants mirror `@rakazo/core`'s screen-link contract; a drift test in core
+ * The wire constants mirror `@tangow/core`'s screen-link contract; a drift test in core
  * equates them, because this file ships alone in the computer image.
  */
 
 export const SCREEN_STATES = ["connecting", "connected", "reconnecting", "stalled", "failed"];
-export const MESSAGE_TYPE = "rakazo-screen-state";
+export const MESSAGE_TYPE = "tangow-screen-state";
 export const MESSAGE_VERSION = 1;
 
 const BACKOFF_MS = [1_000, 2_000, 4_000, 8_000, 15_000];

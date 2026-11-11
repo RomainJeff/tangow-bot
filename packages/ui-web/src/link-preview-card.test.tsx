@@ -133,13 +133,13 @@ describe("LinkPreviewCard", () => {
         format="compact"
         href="https://accounts.google.com.evil.example/"
         site="accounts.google.com.evil.example"
-        title="Rakazo : approuver"
+        title="Tangow : approuver"
       />,
     );
 
     expect(html).toContain("wrap-anywhere");
     expect(html).not.toContain("truncate");
-    expect(html).toContain('aria-label="Rakazo : approuver, accounts.google.com.evil.example"');
+    expect(html).toContain('aria-label="Tangow : approuver, accounts.google.com.evil.example"');
   });
 
   it("renders the title as text, never as markup", () => {

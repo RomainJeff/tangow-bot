@@ -1,4 +1,4 @@
-import type { AskDraftEdits, MessageBlock } from "@rakazo/contracts";
+import type { AskDraftEdits, MessageBlock } from "@tangow/contracts";
 import { draftChanges } from "./draft-card-view.js";
 import { draftFieldsError } from "./draft-fields.js";
 import type { ThreadView } from "./session-log/project-thread-view.js";

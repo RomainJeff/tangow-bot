@@ -12,9 +12,9 @@ import type {
   DecisionRequest,
   DecisionResult,
   ToolCallTrace,
-} from "@rakazo/adapter-kit";
-import { abortableDelay, redactSecrets } from "@rakazo/core";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/adapter-kit";
+import { abortableDelay, redactSecrets } from "@tangow/core";
+import { getLogger } from "@tangow/logging";
 import { decideWithin, topChoices } from "./decision.js";
 
 /**

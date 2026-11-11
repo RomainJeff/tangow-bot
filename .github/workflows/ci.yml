@@ -44,7 +44,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:generate
         env:
-          DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
+          DATABASE_URL: postgres://tangow:tangow@127.0.0.1:5433/tangow
       # One tsc at a time: two large projects checked together got killed for memory.
       - run: pnpm check --concurrency=1
 
@@ -68,7 +68,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:generate
         env:
-          DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
+          DATABASE_URL: postgres://tangow:tangow@127.0.0.1:5433/tangow
       - run: pnpm run test --shard=${{ matrix.shard }}/2
 
   test-deployment:

@@ -9,8 +9,8 @@ import type {
   SpaceMemoryConfig,
   TaughtSkill,
   ThreadSnapshot,
-} from "@rakazo/contracts";
-import { BotAvatar, Button } from "@rakazo/ui-web";
+} from "@tangow/contracts";
+import { BotAvatar, Button } from "@tangow/ui-web";
 import { X } from "lucide-react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useCallback, useState } from "react";

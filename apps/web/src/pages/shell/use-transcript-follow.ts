@@ -1,4 +1,4 @@
-import type { ThreadView } from "@rakazo/core";
+import type { ThreadView } from "@tangow/core";
 import type { HTMLAttributes, RefObject } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {

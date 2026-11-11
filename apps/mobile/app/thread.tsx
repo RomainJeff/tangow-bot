@@ -1,11 +1,11 @@
-import type { GridNode, NativeLinkMentions, TableActions } from "@rakazo/chat-ui/native";
+import type { GridNode, NativeLinkMentions, TableActions } from "@tangow/chat-ui/native";
 import {
   ChatMarkdown,
   hasMarkdownTable,
   LinkifiedText,
   TableActionsProvider,
   truncateMarkdownForRender,
-} from "@rakazo/chat-ui/native";
+} from "@tangow/chat-ui/native";
 import type {
   AgentSkillCatalogEntry,
   Connection,
@@ -18,13 +18,13 @@ import type {
   SessionId,
   ThreadItem,
   ThreadMessagePage,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import {
   canReactToThreadMessage,
   MESSAGE_REACTIONS,
   type MessageReaction,
-} from "@rakazo/contracts";
-import type { ImageStack as ImageStackModel } from "@rakazo/core";
+} from "@tangow/contracts";
+import type { ImageStack as ImageStackModel } from "@tangow/core";
 import {
   ACTIVE_RUN_STATUSES,
   abortableDelay,
@@ -67,8 +67,8 @@ import {
   truncateSlashDescription,
   unshownRunReport,
   waitingAnswerTarget,
-} from "@rakazo/core";
-import { ambientFloor, botAccentOn, motion, radii, sizes } from "@rakazo/ui-tokens";
+} from "@tangow/core";
+import { ambientFloor, botAccentOn, motion, radii, sizes } from "@tangow/ui-tokens";
 import * as Clipboard from "expo-clipboard";
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useHeaderHeight } from "expo-router/react-navigation";

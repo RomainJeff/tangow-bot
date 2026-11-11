@@ -5,7 +5,7 @@ import type {
   VolumeAccess,
   VolumeKind,
   WorkerState,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 
 export const LIVE_WORKER_STATES = [
   "requested",

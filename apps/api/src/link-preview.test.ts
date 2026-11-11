@@ -1,11 +1,11 @@
 import { RPCHandler } from "@orpc/server/fetch";
-import type { Actor } from "@rakazo/contracts";
+import type { Actor } from "@tangow/contracts";
 import {
   appendCardStateInTransaction,
   IsolationError,
   type PrismaClient,
   sharedWithFilter,
-} from "@rakazo/db";
+} from "@tangow/db";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createInFlightGuard,
@@ -16,7 +16,7 @@ import {
 import { createRouter, type RouterDeps } from "./router.js";
 
 vi.mock("../../../packages/db/src/sessions.js", async () =>
-  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+  (await import("@tangow/db/sessions.test-support")).stubbedDbSessions(),
 );
 
 const actor = { spaceId: "space-1", userId: "user-1" } as Actor;

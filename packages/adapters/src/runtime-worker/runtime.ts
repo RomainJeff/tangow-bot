@@ -1,8 +1,8 @@
-import type { AdapterContext, AgentRuntime } from "@rakazo/adapter-kit";
-import type { LaunchPlan, RunNeeds, WorkerLaunch } from "@rakazo/core";
-import { redactSecrets } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
-import { redactSensitiveText } from "@rakazo/logging";
+import type { AdapterContext, AgentRuntime } from "@tangow/adapter-kit";
+import type { LaunchPlan, RunNeeds, WorkerLaunch } from "@tangow/core";
+import { redactSecrets } from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
+import { redactSensitiveText } from "@tangow/logging";
 import { RunTraceRecorder } from "../pi-run-trace.js";
 import type { TraceExporter } from "../trace-export.js";
 import type { WorkerLifecycle } from "../worker-lifecycle.js";

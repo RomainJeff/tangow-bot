@@ -52,7 +52,7 @@
       const result = await bridge.test(value, accessInput());
       if (result.ok) {
         serverUrl.value = result.url;
-        setStatus(`Rakazo answered at ${result.url}.`, "ok");
+        setStatus(`Tangow answered at ${result.url}.`, "ok");
       } else {
         setStatus(result.error ?? "Could not reach that address.", "error");
       }

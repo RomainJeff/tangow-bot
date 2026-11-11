@@ -1,6 +1,6 @@
 import { Readable } from "node:stream";
-import { resolveSupervisorToken } from "@rakazo/core";
-import { screenPorts } from "@rakazo/core/node/desktop-runtime";
+import { resolveSupervisorToken } from "@tangow/core";
+import { screenPorts } from "@tangow/core/node/desktop-runtime";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mock = vi.hoisted(() => ({ exec: vi.fn(), inspect: vi.fn() }));
@@ -35,7 +35,7 @@ beforeEach(() => {
   mock.inspect.mockReset();
   mock.inspect.mockResolvedValue({
     Config: {
-      Labels: { "rakazo.managed": "true", "rakazo.botId": "home", "rakazo.spaceId": "space" },
+      Labels: { "tangow.managed": "true", "tangow.botId": "home", "tangow.spaceId": "space" },
     },
   });
   runCommands(() => 0);
@@ -45,9 +45,9 @@ function headers(extra: Record<string, string> = {}) {
   return {
     authorization: `Bearer ${resolveSupervisorToken(process.env)}`,
     "content-type": "application/json",
-    "x-rakazo-bot-id": "home",
-    "x-rakazo-space-id": "space",
-    "x-rakazo-screen-id": "writer",
+    "x-tangow-bot-id": "home",
+    "x-tangow-space-id": "space",
+    "x-tangow-screen-id": "writer",
     ...extra,
   };
 }
@@ -55,7 +55,7 @@ function headers(extra: Record<string, string> = {}) {
 async function claim(computer: string, lease: string) {
   await supervisorApp.request(`/computers/${computer}/browser`, {
     method: "POST",
-    headers: headers({ "x-rakazo-screen-lease-id": lease }),
+    headers: headers({ "x-tangow-screen-lease-id": lease }),
     body: JSON.stringify({ command: "snapshot" }),
   });
 }
@@ -74,8 +74,8 @@ async function release(computer: string, extra: Record<string, string>) {
 
 const teardown = stopExtraScreenCommand(0, "writer");
 const keep = {
-  "x-rakazo-screen-lease-id": "run-1:1",
-  "x-rakazo-preserve-screen": "1",
+  "x-tangow-screen-lease-id": "run-1:1",
+  "x-tangow-preserve-screen": "1",
 };
 
 describe("releasing a screen to keep it", () => {
@@ -94,7 +94,7 @@ describe("releasing a screen to keep it", () => {
 
     const { response, commands } = await release("keep-cancel", {
       ...keep,
-      "x-rakazo-cancel-run-work": "1",
+      "x-tangow-cancel-run-work": "1",
     });
 
     expect(await response.json()).toEqual({ ok: true });
@@ -105,7 +105,7 @@ describe("releasing a screen to keep it", () => {
     await claim("keep-no-lease", "run-1:1");
 
     const { response, commands } = await release("keep-no-lease", {
-      "x-rakazo-preserve-screen": "1",
+      "x-tangow-preserve-screen": "1",
     });
 
     expect(await response.json()).toEqual({ ok: true });

@@ -13,7 +13,7 @@ import {
   pointerLook,
   RAYON,
   SHAPES,
-} from "@rakazo/core";
+} from "@tangow/core";
 import type { CSSProperties } from "react";
 import { memo, useEffect, useId, useRef, useState } from "react";
 import { type AvatarStyle, useAvatarStyle } from "./avatar-style.js";
@@ -77,22 +77,22 @@ export const BotAvatar = memo(function BotAvatar({
   const idleDelay = (-(((seed * 13) % 45) / 10)).toFixed(2);
   const eyeGlow = `0 0 4px #FFFFFF, 0 0 8px #FFFFFF, 0 0 14px ${lightenColor(color, 20)}`;
   const idleEyeAnimation = {
-    "--rakazo-eye-animation-name": `rakazo-eyes-idle-${eyeVariant}`,
-    "--rakazo-eye-animation-duration": `${idleDuration}s`,
-    "--rakazo-eye-animation-easing": "cubic-bezier(0.4, 0, 0.2, 1)",
-    "--rakazo-eye-animation-delay": `${idleDelay}s`,
+    "--tangow-eye-animation-name": `tangow-eyes-idle-${eyeVariant}`,
+    "--tangow-eye-animation-duration": `${idleDuration}s`,
+    "--tangow-eye-animation-easing": "cubic-bezier(0.4, 0, 0.2, 1)",
+    "--tangow-eye-animation-delay": `${idleDelay}s`,
   } as CSSProperties;
   const workingEyeAnimation = {
-    "--rakazo-eye-animation-name": "rakazo-eyes-working",
-    "--rakazo-eye-animation-duration": "1.4s",
-    "--rakazo-eye-animation-easing": "ease-in-out",
-    "--rakazo-eye-animation-delay": "0s",
+    "--tangow-eye-animation-name": "tangow-eyes-working",
+    "--tangow-eye-animation-duration": "1.4s",
+    "--tangow-eye-animation-easing": "ease-in-out",
+    "--tangow-eye-animation-delay": "0s",
   } as CSSProperties;
 
   return (
     <div
       className={cn(
-        "rakazo-bot-avatar group relative flex items-center justify-center rounded-full select-none",
+        "tangow-bot-avatar group relative flex items-center justify-center rounded-full select-none",
         className,
       )}
       data-working={isWorking}
@@ -107,7 +107,7 @@ export const BotAvatar = memo(function BotAvatar({
       }}
     >
       <svg
-        className="rakazo-bot-avatar-ring absolute pointer-events-none"
+        className="tangow-bot-avatar-ring absolute pointer-events-none"
         style={{
           inset: -4,
           width: size + 8,
@@ -137,7 +137,7 @@ export const BotAvatar = memo(function BotAvatar({
       </svg>
 
       <div
-        className="rakazo-bot-avatar-visor relative flex items-center justify-center overflow-hidden transition-transform duration-200 group-hover:scale-[1.04]"
+        className="tangow-bot-avatar-visor relative flex items-center justify-center overflow-hidden transition-transform duration-200 group-hover:scale-[1.04]"
         style={{
           width: visorW,
           height: visorH,
@@ -158,7 +158,7 @@ export const BotAvatar = memo(function BotAvatar({
         {(["idle", "working"] as const).map((mode) => (
           <div
             key={mode}
-            className={`rakazo-bot-avatar-eyes rakazo-bot-avatar-eyes-${mode} absolute inset-0 z-10 flex items-center justify-center`}
+            className={`tangow-bot-avatar-eyes tangow-bot-avatar-eyes-${mode} absolute inset-0 z-10 flex items-center justify-center`}
             style={{
               gap: eyeGap,
               ...(mode === "idle" ? idleEyeAnimation : workingEyeAnimation),
@@ -188,7 +188,7 @@ export const BotAvatar = memo(function BotAvatar({
 const BLOUB_HALF_VIEWBOX = RAYON * 1.12;
 
 /**
- * The organic avatar, drawn by the vendored bloub engine (`@rakazo/core/bloub`): a
+ * The organic avatar, drawn by the vendored bloub engine (`@tangow/core/bloub`): a
  * morphing ink body with the eyes punched out as holes and idle blinks. While a run
  * is active the bot glances around and changes mood at random intervals.
  */
@@ -316,7 +316,7 @@ function BloubAvatar({
       ref={svgRef}
       viewBox={`${-VB} ${-VB} ${VB * 2} ${VB * 2}`}
       aria-hidden="true"
-      className={cn("rakazo-organic-avatar overflow-visible select-none", className)}
+      className={cn("tangow-organic-avatar overflow-visible select-none", className)}
       data-working={isWorking}
       style={{
         width: size,
@@ -417,7 +417,7 @@ export function Wordmark({ className }: { className?: string }) {
         <span className="h-4 w-[7px] rounded-full bg-primary" />
         <span className="h-4 w-[7px] rounded-full bg-primary" />
       </div>
-      <span className="font-sans text-[28px] tracking-tight text-foreground">Rakazo</span>
+      <span className="font-sans text-[28px] tracking-tight text-foreground">Tangow</span>
     </div>
   );
 }

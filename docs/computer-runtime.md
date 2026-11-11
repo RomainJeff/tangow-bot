@@ -1,16 +1,16 @@
 # Computer runtime
 
-Rakazo keeps the agent runtime and the computer runtime separate:
+Tangow keeps the agent runtime and the computer runtime separate:
 
 ```text
-chat/API -> worker (Pi native) -> Rakazo computer tools -> SandboxProvider -> E2B
+chat/API -> worker (Pi native) -> Tangow computer tools -> SandboxProvider -> E2B
                                                      |-> Docker
                                                      |-> fake
 
-SandboxProvider workspace <-> AgentHomeStore <-> Rakazo-owned DATA_DIR
+SandboxProvider workspace <-> AgentHomeStore <-> Tangow-owned DATA_DIR
 ```
 
-Every run starts Pi in a short-lived worker of its own: an E2B sandbox or a Docker container, with the bot's and the space's files on volumes. Rakazo tools and model keys stay in the Rakazo process (see [E2B workers](self-host-e2b-workers.md)). The built-in tools are ordinary Pi tools, not Claude- or MCP-specific tools, so any model exposed through Pi can call them. Screen operation still requires a model that can accept image tool results and reason about screenshots.
+Every run starts Pi in a short-lived worker of its own: an E2B sandbox or a Docker container, with the bot's and the space's files on volumes. Tangow tools and model keys stay in the Tangow process (see [E2B workers](self-host-e2b-workers.md)). The built-in tools are ordinary Pi tools, not Claude- or MCP-specific tools, so any model exposed through Pi can call them. Screen operation still requires a model that can accept image tool results and reason about screenshots.
 
 ## Computer contract
 
@@ -55,7 +55,7 @@ The database stores the provider kind and opaque `providerRef`. That reference i
 
 ## Developer tooling
 
-The Docker computer image ships `git`, GitHub CLI (`gh`), Node.js LTS with npm and Corepack (`pnpm`, `yarn`), `build-essential`, Python with `pip` and `venv`, `ripgrep` and `fd`. The desktop terminal is Xfce Terminal with zsh as the login shell; its defaults live in `/etc/rakazo/zshrc`, which the seeded `~/.zshrc` sources, so edits to `~/.zshrc` persist. Shell tool commands still run under `bash -c`. Bots run without root, so further tools go into the workspace: `npm install -g` and `pip install` land in `~/.local`, which persists with the home.
+The Docker computer image ships `git`, GitHub CLI (`gh`), Node.js LTS with npm and Corepack (`pnpm`, `yarn`), `build-essential`, Python with `pip` and `venv`, `ripgrep` and `fd`. The desktop terminal is Xfce Terminal with zsh as the login shell; its defaults live in `/etc/tangow/zshrc`, which the seeded `~/.zshrc` sources, so edits to `~/.zshrc` persist. Shell tool commands still run under `bash -c`. Bots run without root, so further tools go into the workspace: `npm install -g` and `pip install` land in `~/.local`, which persists with the home.
 
 [OpenCode](https://opencode.ai) is installed in the image (version pinned in `infra/sandboxes/computer/Dockerfile`). Run `opencode auth login` in the computer's terminal once; the token lives in `~/.local/share/opencode/` in the persistent home and is excluded from `backup-prod.sh` archives. Skills versioned in the repository's `skills/` directory are mounted read-only at `/managed-skills`; `start.sh` links `/managed-skills/computer` to `~/.config/opencode/skills` so OpenCode loads the `computer` family (see `skills/README.md`).
 
@@ -63,11 +63,11 @@ To let a bot use GitHub, store a token as the `GH_TOKEN` agent secret. It reache
 
 ## Persistence
 
-The portable computer workspace is the durable boundary. E2B uses `/home/user/rakazo-home`; Docker and local providers expose the equivalent home. Browser profiles are rooted under `.browser-profiles` in that workspace on E2B. Rakazo checkpoints transferred workspaces into `AgentHomeStore` at run completion or failure, before explicit stop, and before idle suspension. Docker mounts the Rakazo-owned home directly and only advances its revision marker at those boundaries. New or replacement machines import the latest stored workspace before use.
+The portable computer workspace is the durable boundary. E2B uses `/home/user/tangow-home`; Docker and local providers expose the equivalent home. Browser profiles are rooted under `.browser-profiles` in that workspace on E2B. Tangow checkpoints transferred workspaces into `AgentHomeStore` at run completion or failure, before explicit stop, and before idle suspension. Docker mounts the Tangow-owned home directly and only advances its revision marker at those boundaries. New or replacement machines import the latest stored workspace before use.
 
-A computer whose home is on volumes skips this checkpoint. Its bots' folders live on each bot's private volume and the shared folder on the space's volume, and the computer and the run workers mount the same volumes at `/workspace/bots/<botId>` and `/workspace/shared`. New spaces start on volumes. Existing E2B homes move once, as [E2B workers](self-host-e2b-workers.md) describes; existing Docker homes move by themselves, as [homes on volumes](self-host-sandbox-providers.md#homes-on-volumes) describes. A Docker computer keeps `/home/rakazo`, with its dotfiles and browser profiles, on its home directory.
+A computer whose home is on volumes skips this checkpoint. Its bots' folders live on each bot's private volume and the shared folder on the space's volume, and the computer and the run workers mount the same volumes at `/workspace/bots/<botId>` and `/workspace/shared`. New spaces start on volumes. Existing E2B homes move once, as [E2B workers](self-host-e2b-workers.md) describes; existing Docker homes move by themselves, as [homes on volumes](self-host-sandbox-providers.md#homes-on-volumes) describes. A Docker computer keeps `/home/tangow`, with its dotfiles and browser profiles, on its home directory.
 
-`LocalAgentHomeStore` currently keeps the latest workspace under `DATA_DIR/homes/<computer-home-key>` and checkpoint metadata separately under `DATA_DIR/home-revisions`. Replacements are staged before the current copy is swapped, and checkpoints are serialized per computer. This implementation is latest-only rather than an immutable revision archive. Production deployments must put `DATA_DIR` on a Rakazo-owned persistent volume, encrypt that volume at rest, and include it in off-host backups. The storage interface is deliberately independent of E2B so an object-store-backed implementation can replace the local volume without changing agent tools or sandbox providers.
+`LocalAgentHomeStore` currently keeps the latest workspace under `DATA_DIR/homes/<computer-home-key>` and checkpoint metadata separately under `DATA_DIR/home-revisions`. Replacements are staged before the current copy is swapped, and checkpoints are serialized per computer. This implementation is latest-only rather than an immutable revision archive. Production deployments must put `DATA_DIR` on a Tangow-owned persistent volume, encrypt that volume at rest, and include it in off-host backups. The storage interface is deliberately independent of E2B so an object-store-backed implementation can replace the local volume without changing agent tools or sandbox providers.
 
 Before exporting a remote workspace, remote backends quiesce desktop browsers so profile databases and login state are copied consistently. Run checkpoints defer while another bot holds an execution or user-control lease; the last finishing run or idle job saves the shared workspace. Idle shutdown claims the computer before exporting, preventing a new bot from starting during the snapshot. They exclude only transient cache/lock files inside `.browser-profiles`; similarly named project files remain durable.
 
@@ -81,7 +81,7 @@ The live vision acceptance test (`pnpm test:computer`) drove the in-process agen
 
 ### Docker desktop lifecycle regression
 
-Build the computer image, then run `VERIFY_DOCKER_TEAM_SCREENS=1 pnpm exec vitest run infra/sandboxes/supervisor/src/team-desktops.docker.test.ts`. Set `RAKAZO_COMPUTER_IMAGE` to select a prebuilt image. The test uses an isolated Docker container with networking disabled and fake browser state; it verifies parallel Chrome desktops visiting local fixture sites, independent cookies, profile persistence after release, transport teardown, and rejection of old view/control tokens after slot reuse. It runs both Docker supervision and the command path used by remote providers. Default unit tests exercise profile persistence, allocation, and lease fencing offline without Docker.
+Build the computer image, then run `VERIFY_DOCKER_TEAM_SCREENS=1 pnpm exec vitest run infra/sandboxes/supervisor/src/team-desktops.docker.test.ts`. Set `TANGOW_COMPUTER_IMAGE` to select a prebuilt image. The test uses an isolated Docker container with networking disabled and fake browser state; it verifies parallel Chrome desktops visiting local fixture sites, independent cookies, profile persistence after release, transport teardown, and rejection of old view/control tokens after slot reuse. It runs both Docker supervision and the command path used by remote providers. Default unit tests exercise profile persistence, allocation, and lease fencing offline without Docker.
 
 ## Computer maintenance
 

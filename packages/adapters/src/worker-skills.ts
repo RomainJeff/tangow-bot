@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
-import type { WorkerSkill } from "@rakazo/adapter-kit";
-import { containsSecret, parseSkillMd } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+import type { WorkerSkill } from "@tangow/adapter-kit";
+import { containsSecret, parseSkillMd } from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 import type { EncryptedSecretStore } from "./secrets.js";
 
 /** Reports are observations by an untrusted guest. Reject secrets instead of storing masked skills. */

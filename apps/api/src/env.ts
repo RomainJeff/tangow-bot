@@ -1,19 +1,19 @@
-import type { WorkerProviderConfig } from "@rakazo/adapters";
+import type { WorkerProviderConfig } from "@tangow/adapters";
 import {
   resolveDeploymentModel,
   resolveSandboxProvider,
   resolveWorkerProvider,
-} from "@rakazo/adapters";
-import type { SkillLearningMode } from "@rakazo/core";
+} from "@tangow/adapters";
+import type { SkillLearningMode } from "@tangow/core";
 import {
   parseSkillLearningMode,
   resolveAuthSecret,
   resolveEncryptionKey,
   resolveScreenProxySecret,
   resolveSupervisorToken,
-} from "@rakazo/core";
+} from "@tangow/core";
 
-export { resolveSandboxProvider } from "@rakazo/adapters";
+export { resolveSandboxProvider } from "@tangow/adapters";
 
 export interface AppEnv {
   nodeEnv: string;
@@ -93,8 +93,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
   const authSecret = resolveAuthSecret(source);
   const sandboxProvider = resolveSandboxProvider(source);
   const deploymentModel = resolveDeploymentModel(source);
-  const updaterUrl = optional(source.RAKAZO_UPDATER_URL);
-  const updaterToken = optional(source.RAKAZO_UPDATER_TOKEN);
+  const updaterUrl = optional(source.TANGOW_UPDATER_URL);
+  const updaterToken = optional(source.TANGOW_UPDATER_TOKEN);
   return {
     nodeEnv: source.NODE_ENV ?? "",
     databaseUrl: required(source, "DATABASE_URL"),
@@ -147,7 +147,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     larkEncryptKey: optional(source.LARK_ENCRYPT_KEY),
     larkDomain: optional(source.LARK_DOMAIN),
     messagingOpenSignup: source.MESSAGING_OPEN_SIGNUP === "true",
-    teamChatBotId: optional(source.TEAM_CHAT_BOT_ID) ?? optional(source.SLACK_RAKAZO_BOT_ID),
+    teamChatBotId: optional(source.TEAM_CHAT_BOT_ID) ?? optional(source.SLACK_TANGOW_BOT_ID),
     teamChatJudgeProvider: optional(source.TEAM_CHAT_JUDGE_PROVIDER),
     teamChatJudgeModel: optional(source.TEAM_CHAT_JUDGE_MODEL),
     defaultProvider: deploymentModel.provider,
@@ -159,10 +159,10 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
       .map((value) => value.trim())
       .filter(Boolean),
     port: Number(source.API_PORT ?? 3100),
-    gitSha: optional(source.GIT_SHA) ?? optional(source.RAKAZO_GIT_SHA),
+    gitSha: optional(source.GIT_SHA) ?? optional(source.TANGOW_GIT_SHA),
     updaterUrl,
     updaterToken,
-    imageTag: optional(source.RAKAZO_IMAGE_TAG),
+    imageTag: optional(source.TANGOW_IMAGE_TAG),
   };
 }
 

@@ -1,4 +1,4 @@
-import { askDraftState } from "@rakazo/contracts";
+import { askDraftState } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import { fixtureChain, linkEntries } from "./fixtures/read-fixture.js";
 import { projectThread, projectThreadItems } from "./project-ui.js";

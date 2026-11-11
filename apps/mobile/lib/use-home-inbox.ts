@@ -1,4 +1,4 @@
-import type { RunActivityRow, SearchHit } from "@rakazo/contracts";
+import type { RunActivityRow, SearchHit } from "@tangow/contracts";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, AppState } from "react-native";

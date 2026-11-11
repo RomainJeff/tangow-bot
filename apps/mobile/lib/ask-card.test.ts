@@ -1,6 +1,6 @@
-import type { MessageBlock } from "@rakazo/contracts";
-import type { Clock, OptionId } from "@rakazo/core";
-import { askSettledOf, createAskCard, storedAnswerOf } from "@rakazo/core";
+import type { MessageBlock } from "@tangow/contracts";
+import type { Clock, OptionId } from "@tangow/core";
+import { askSettledOf, createAskCard, storedAnswerOf } from "@tangow/core";
 import { describe, expect, it } from "vitest";
 import {
   answerLines,

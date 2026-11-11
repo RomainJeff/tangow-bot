@@ -1,7 +1,7 @@
 import { chmod, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { ServerUpdateRun } from "@rakazo/contracts";
+import type { ServerUpdateRun } from "@tangow/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   commandEnvironment,
@@ -14,8 +14,8 @@ import { resolveUpdaterConfig } from "./updater-logic.js";
 const token = "fake-review-updater-token-000000000000";
 const app = createUpdaterApp(
   resolveUpdaterConfig({
-    RAKAZO_DEPLOY_DIR: "/rakazo-updater-tests-no-such-directory",
-    RAKAZO_UPDATER_TOKEN: token,
+    TANGOW_DEPLOY_DIR: "/tangow-updater-tests-no-such-directory",
+    TANGOW_UPDATER_TOKEN: token,
   }),
 );
 const authorized = { authorization: `Bearer ${token}`, "content-type": "application/json" };
@@ -29,13 +29,13 @@ afterEach(async () => {
   );
 });
 
-async function deployment(env = "RAKAZO_IMAGE_TAG=v1.0.0\nRAKAZO_IMAGE_TAG_PREVIOUS=v0.9.0\n") {
-  const deployDir = await mkdtemp(path.join(os.tmpdir(), "rakazo-updater-test-"));
+async function deployment(env = "TANGOW_IMAGE_TAG=v1.0.0\nTANGOW_IMAGE_TAG_PREVIOUS=v0.9.0\n") {
+  const deployDir = await mkdtemp(path.join(os.tmpdir(), "tangow-updater-test-"));
   temporaryDirectories.push(deployDir);
   await writeFile(path.join(deployDir, ".env"), env);
   return {
     deployDir,
-    config: resolveUpdaterConfig({ RAKAZO_DEPLOY_DIR: deployDir, RAKAZO_UPDATER_TOKEN: token }),
+    config: resolveUpdaterConfig({ TANGOW_DEPLOY_DIR: deployDir, TANGOW_UPDATER_TOKEN: token }),
   };
 }
 
@@ -121,7 +121,7 @@ describe("updater HTTP surface", () => {
     const response = await createUpdaterApp(fixture.config).request("/apply", {
       method: "POST",
       headers: authorized,
-      body: JSON.stringify({ repoUrl: "https://github.com/someone/rakazo", branch: "main" }),
+      body: JSON.stringify({ repoUrl: "https://github.com/someone/tangow", branch: "main" }),
     });
     expect(response.status).toBe(400);
     const payload = (await response.json()) as { error: string };
@@ -129,7 +129,7 @@ describe("updater HTTP surface", () => {
   });
 
   it("refuses a rollback when no previous tag was recorded", async () => {
-    const fixture = await deployment("RAKAZO_IMAGE_TAG=v1.0.0\n");
+    const fixture = await deployment("TANGOW_IMAGE_TAG=v1.0.0\n");
     const response = await createUpdaterApp(fixture.config).request("/rollback", {
       method: "POST",
       headers: authorized,
@@ -252,10 +252,10 @@ describe("updater orchestration", () => {
     expect(waitTimeout(composeUp[0]?.args)).toBe("3600");
     expect(composeUp[0]?.args).not.toContain("--no-deps");
     expect(composeUp[1]?.args).toContain("--no-deps");
-    expect(composeUp[0]?.env?.RAKAZO_IMAGE_TAG).toBe(`sha-${targetCommit}`);
-    expect(composeUp[1]?.env?.RAKAZO_IMAGE_TAG).toBe("v1.0.0");
+    expect(composeUp[0]?.env?.TANGOW_IMAGE_TAG).toBe(`sha-${targetCommit}`);
+    expect(composeUp[1]?.env?.TANGOW_IMAGE_TAG).toBe("v1.0.0");
     expect(await readFile(path.join(fixture.deployDir, ".env"), "utf8")).toContain(
-      "RAKAZO_IMAGE_TAG=v1.0.0",
+      "TANGOW_IMAGE_TAG=v1.0.0",
     );
 
     const state = await subject.request("/state", { method: "GET", headers: authorized });
@@ -289,7 +289,7 @@ describe("updater orchestration", () => {
   });
 
   it("resets a fork checkout when recreate fails after the fast-forward", async () => {
-    const fixture = await deployment("RAKAZO_IMAGE_TAG=local\n");
+    const fixture = await deployment("TANGOW_IMAGE_TAG=local\n");
     await mkdir(path.join(fixture.deployDir, ".git"));
     const calls: string[][] = [];
     let upCalls = 0;
@@ -328,12 +328,12 @@ describe("updater orchestration", () => {
     ]);
     expect(calls).toContainEqual(["checkout", "-B", "main", currentCommit]);
     expect(await readFile(path.join(fixture.deployDir, ".env"), "utf8")).toContain(
-      "RAKAZO_IMAGE_TAG=local",
+      "TANGOW_IMAGE_TAG=local",
     );
   });
 
   it("restores the prior branch when merge fails after checkout switches", async () => {
-    const fixture = await deployment("RAKAZO_IMAGE_TAG=local\n");
+    const fixture = await deployment("TANGOW_IMAGE_TAG=local\n");
     await mkdir(path.join(fixture.deployDir, ".git"));
     const calls: string[][] = [];
     const run: UpdaterCommandRunner = async (_command, args) => {
@@ -398,7 +398,7 @@ describe("updater orchestration", () => {
   });
 
   it("preserves the environment owner and surrounding values with mode 0600", async () => {
-    const fixture = await deployment("FAKE_SETTING=kept\nRAKAZO_IMAGE_TAG=v1.0.0\n");
+    const fixture = await deployment("FAKE_SETTING=kept\nTANGOW_IMAGE_TAG=v1.0.0\n");
     const envFile = path.join(fixture.deployDir, ".env");
     await chmod(envFile, 0o644);
     const before = await lstat(envFile);
@@ -423,7 +423,7 @@ describe("updater orchestration", () => {
     const fixture = await deployment();
     const envFile = path.join(fixture.deployDir, ".env");
     const target = path.join(fixture.deployDir, "fake-target");
-    await writeFile(target, "RAKAZO_IMAGE_TAG=v1.0.0\n");
+    await writeFile(target, "TANGOW_IMAGE_TAG=v1.0.0\n");
     await rm(envFile);
     await symlink(target, envFile);
     const run: UpdaterCommandRunner = async (command) =>
@@ -437,7 +437,7 @@ describe("updater orchestration", () => {
       ok: false,
       error: expect.stringMatching(/persist/),
     });
-    expect(await readFile(target, "utf8")).toBe("RAKAZO_IMAGE_TAG=v1.0.0\n");
+    expect(await readFile(target, "utf8")).toBe("TANGOW_IMAGE_TAG=v1.0.0\n");
   });
 
   it("fails closed when it cannot verify checkout cleanliness", async () => {
@@ -467,18 +467,18 @@ describe("child process environment", () => {
     // The child environment is rebuilt from an allowlist, so GIT_CONFIG_* set on the Compose
     // service never reaches git. Without these three, every git call exits 128 with "detected
     // dubious ownership" on the layout docs/self-host.md recommends.
-    const env = commandEnvironment({ RAKAZO_DEPLOY_DIR: "/srv/rakazo" });
+    const env = commandEnvironment({ TANGOW_DEPLOY_DIR: "/srv/tangow" });
     expect(env.GIT_CONFIG_COUNT).toBe("1");
     expect(env.GIT_CONFIG_KEY_0).toBe("safe.directory");
-    expect(env.GIT_CONFIG_VALUE_0).toBe("/srv/rakazo");
+    expect(env.GIT_CONFIG_VALUE_0).toBe("/srv/tangow");
   });
 
   it("keeps the exemption scoped to the deployment directory, whoever calls it", () => {
     const env = commandEnvironment(
-      { RAKAZO_DEPLOY_DIR: "/opt/rakazo" },
+      { TANGOW_DEPLOY_DIR: "/opt/tangow" },
       { GIT_CONFIG_VALUE_0: "*", GIT_CONFIG_COUNT: "9" },
     );
-    expect(env.GIT_CONFIG_VALUE_0).toBe("/opt/rakazo");
+    expect(env.GIT_CONFIG_VALUE_0).toBe("/opt/tangow");
     expect(env.GIT_CONFIG_COUNT).toBe("1");
   });
 
@@ -499,12 +499,12 @@ describe("child process environment", () => {
         AXIOM_TOKEN: "fake-axiom-token",
         LOG_LEVEL: "debug",
       },
-      { RAKAZO_IMAGE_TAG: "sha-123" },
+      { TANGOW_IMAGE_TAG: "sha-123" },
     );
     expect(env).toMatchObject({
       PATH: "/usr/bin",
       HTTPS_PROXY: "http://proxy.invalid",
-      RAKAZO_IMAGE_TAG: "sha-123",
+      TANGOW_IMAGE_TAG: "sha-123",
       GIT_TERMINAL_PROMPT: "0",
     });
     expect(env.BETTER_AUTH_SECRET).toBeUndefined();

@@ -1,6 +1,6 @@
 ---
 name: tangow
-description: Use when operating a Rakazo source server with Tangow, including updates, Docker or E2B computer builds, provider migration, restarts, cleanup, or recovery after an interrupted deployment.
+description: Use when operating a Tangow source server with the `./tangow` CLI, including updates, Docker or E2B computer builds, provider migration, restarts, cleanup, or recovery after an interrupted deployment.
 ---
 
 # Tangow
@@ -26,7 +26,7 @@ If Tangow is absent, first check that its commit is on `origin/main`. Bootstrap 
 fast-forwardable server checkout to that revision using Git as its owner, then run Tangow.
 Stop on local changes or divergent commits; do not reset history to make deployment succeed.
 
-Every real run uses a worker: one Docker `rakazo/worker` container per attempt through the
+Every real run uses a worker: one Docker `tangow/worker` container per attempt through the
 supervisor, or an E2B worker VM. `PiAgentRuntime` and `AGENT_RUNTIME=pi` are gone. Tangow removes
 the legacy Pi environment entry on update; `scripted` is test-only. Empty/`none` providers, E2B
 without its key, and production Docker without its supervisor token are configuration errors.
@@ -36,7 +36,7 @@ Fix configuration rather than disabling workers or using the scripted runtime.
 
 | Request | Command on the server | Result to verify |
 | --- | --- | --- |
-| Update Rakazo | `./tangow update` | Target main revision, provider, application images and readiness; Docker app/worker guest revisions must match; both E2B templates rebuild automatically. |
+| Update Tangow | `./tangow update` | Target main revision, provider, application images and readiness; Docker app/worker guest revisions must match; both E2B templates rebuild automatically. |
 | Restart existing services | `./tangow restart` | Same running revision and images return; this does not deploy newer checkout code. |
 | Inspect a failure | `./tangow status`, `./tangow logs worker` or `./tangow logs api` | Failed stage and checkout/runtime mismatch. |
 | Rebuild only computers/templates | `./tangow computers build` | Source must match the running API and worker; use `update` for a new revision. |
@@ -54,7 +54,7 @@ credentials in private configuration or the secret-entry mechanism available in 
 
 `update` waits for Compose `migrate` and verifies its exit code and target app image before
 starting API/worker. It runs backfill plus `scripts/migrate-docker-homes.ts`. Docker homes move
-by rename into `DATA_DIR/volumes/rakazo-<volumeId>` only while idle; `.rakazo-move-pending` guards
+by rename into `DATA_DIR/volumes/tangow-<volumeId>` only while idle; `.tangow-move-pending` guards
 partial moves. Tangow reports computers still deferred with bot/state context. Busy homes retry
 on suspend; conflicts need inspection. Keep markers intact. User skills copy once to the shared
 space volume. A deferred computer does not mean the migration service failed, nor does a zero

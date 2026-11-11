@@ -6,7 +6,7 @@ import {
   isAttachmentImageMimeType,
   LINK_BLOCK_KINDS,
   type MessageBlock,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import { humanizeToolName } from "./events.js";
 
 export class AttachmentValidationError extends Error {

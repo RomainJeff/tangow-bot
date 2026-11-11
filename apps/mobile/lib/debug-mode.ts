@@ -5,7 +5,7 @@ import { useSyncExternalStore } from "react";
  * Debug mode, kept on this device only: agent steps and every run in Activity. Default off. The
  * key is the one "Display agent steps" used, which debug mode took over.
  */
-export const DEBUG_MODE_KEY = "rakazo.display-agent-steps";
+export const DEBUG_MODE_KEY = "tangow.display-agent-steps";
 
 let enabled = false;
 const listeners = new Set<() => void>();

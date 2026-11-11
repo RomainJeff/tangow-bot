@@ -1,5 +1,5 @@
-import type { UsageCell, UsagePeriod } from "@rakazo/contracts";
-import { UsageCategorySchema } from "@rakazo/contracts";
+import type { UsageCell, UsagePeriod } from "@tangow/contracts";
+import { UsageCategorySchema } from "@tangow/contracts";
 import type { PrismaClient } from "./client.js";
 
 const PERIOD_DAYS: Record<UsagePeriod, number | null> = { "7d": 7, "30d": 30, all: null };

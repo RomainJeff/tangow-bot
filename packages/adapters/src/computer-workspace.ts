@@ -7,11 +7,11 @@ import type {
   ComputerRef,
   PortableFile,
   SandboxProvider,
-} from "@rakazo/adapter-kit";
-import type { ComputerMode, HomeStorage } from "@rakazo/contracts";
-import type { HomePersistence } from "@rakazo/core";
-import { homePersistence, parseScreenLeaseId } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+} from "@tangow/adapter-kit";
+import type { ComputerMode, HomeStorage } from "@tangow/contracts";
+import type { HomePersistence } from "@tangow/core";
+import { homePersistence, parseScreenLeaseId } from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
 import { normalizeWorkspacePath, teamBotWorkspaceDirectory } from "./computer-support.js";
 import type { LocalAgentHomeStore } from "./home.js";
 
@@ -109,7 +109,7 @@ export async function archiveDiscardedWorkspace(
   files: AsyncIterable<PortableFile>,
   context: AdapterContext,
 ): Promise<void> {
-  const staging = await mkdtemp(path.join(tmpdir(), "rakazo-discarded-"));
+  const staging = await mkdtemp(path.join(tmpdir(), "tangow-discarded-"));
   try {
     let kept = 0;
     for await (const file of files) {
@@ -133,7 +133,7 @@ export async function checkpointComputerWorkspace(
   if (persistence === "volumes") return record.homeRevision;
   // Only the local-fs store is mounted: its directory is the Docker computer's disk.
   if (persistence === "mounted") return (home as LocalAgentHomeStore).revise(record.homeKey);
-  const staging = await mkdtemp(path.join(tmpdir(), "rakazo-workspace-"));
+  const staging = await mkdtemp(path.join(tmpdir(), "tangow-workspace-"));
   try {
     for await (const file of sandbox.exportWorkspace(computer, context)) {
       await writePortableFile(staging, file);

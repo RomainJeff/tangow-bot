@@ -1,7 +1,7 @@
-import type { JobPublisher } from "@rakazo/adapter-kit";
-import type { PrismaClient } from "@rakazo/db";
-import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
-import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
+import type { JobPublisher } from "@tangow/adapter-kit";
+import type { PrismaClient } from "@tangow/db";
+import type { PgliteDatabase } from "@tangow/db/pglite.test-support";
+import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FakeWorkerProvider } from "./fake-worker-provider.js";
 import { createJobReconciler } from "./job-reconciler.js";
@@ -13,7 +13,7 @@ describe("the worker provider a deployment runs", () => {
     [
       "E2B workers with the default template on an E2B deployment",
       { SANDBOX_PROVIDER: "e2b", E2B_API_KEY: "e2b-key" },
-      { kind: "e2b", apiKey: "e2b-key", template: "rakazo-worker-pi-native" },
+      { kind: "e2b", apiKey: "e2b-key", template: "tangow-worker-pi-native" },
     ],
     [
       "E2B workers with a template of its own",

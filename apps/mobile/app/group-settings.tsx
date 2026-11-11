@@ -2,8 +2,8 @@ import {
   GROUP_DESCRIPTION_MAX_LENGTH,
   GROUP_MEMBER_MAX,
   GROUP_MEMBER_MIN,
-} from "@rakazo/contracts";
-import { applyPicks, groupLeadBotId } from "@rakazo/core";
+} from "@tangow/contracts";
+import { applyPicks, groupLeadBotId } from "@tangow/core";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, TextInput } from "react-native";

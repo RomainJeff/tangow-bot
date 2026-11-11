@@ -8,8 +8,8 @@ import type {
   DecisionResult,
   DecisionUnavailableReason,
   ToolCallTrace,
-} from "@rakazo/adapter-kit";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/adapter-kit";
+import { getLogger } from "@tangow/logging";
 import { combineSignals } from "./connector-safety.js";
 
 const PROBABILITY_TOLERANCE = 1e-3;

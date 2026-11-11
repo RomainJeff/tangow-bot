@@ -1,8 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Terminal
-Exec=/usr/local/bin/rakazo-terminal
-Icon=utilities-terminal
-Terminal=false
-Categories=System;TerminalEmulator;
-StartupNotify=false

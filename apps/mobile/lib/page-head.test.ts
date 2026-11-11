@@ -35,7 +35,7 @@ describe("iOS page reader (spec 22, CA 86)", () => {
     expect(url).toBe("https://www.lefigaro.fr/some-article");
     expect(init).toMatchObject({ credentials: "omit", redirect: "manual", method: "GET" });
     const headers = init?.headers as Record<string, string>;
-    expect(headers["user-agent"]).toMatch(/RakazoLinkPreview/);
+    expect(headers["user-agent"]).toMatch(/TangowLinkPreview/);
     expect(Object.keys(headers).sort()).toEqual(["accept", "user-agent"]);
   });
 

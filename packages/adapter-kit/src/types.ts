@@ -5,8 +5,8 @@ import type {
   ModelCategory,
   RunModelDecision,
   SandboxKind,
-} from "@rakazo/contracts";
-import type { HelperProfile } from "@rakazo/core";
+} from "@tangow/contracts";
+import type { HelperProfile } from "@tangow/core";
 import type { RunPersistence, RunResumeEvent } from "./run-snapshot.js";
 import type { SkillCollision, WorkerSkill } from "./worker-protocol.js";
 
@@ -443,7 +443,7 @@ export interface AgentRunRequest {
   sourceMessageId?: string | null;
   prompt: string;
   instructions: string;
-  /** For a harness that keeps its own system prompt: what Rakazo appends to it instead. */
+  /** For a harness that keeps its own system prompt: what Tangow appends to it instead. */
   harnessAddendum?: string;
   history: AgentHistoryTurn[];
   currentTurnImages?: AgentInputImage[];

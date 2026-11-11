@@ -1,4 +1,4 @@
-import { motion } from "@rakazo/ui-tokens";
+import { motion } from "@tangow/ui-tokens";
 import { useEffect, useRef } from "react";
 import { ScrollView, Text } from "react-native";
 import Animated, {

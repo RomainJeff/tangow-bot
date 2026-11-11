@@ -1,5 +1,5 @@
-import type { MessageBlock, SessionEntryType, ThreadEntry } from "@rakazo/contracts";
-import { ThreadEntrySchema } from "@rakazo/contracts";
+import type { MessageBlock, SessionEntryType, ThreadEntry } from "@tangow/contracts";
+import { ThreadEntrySchema } from "@tangow/contracts";
 import { rpc } from "./helpers";
 import type { Page, Request, Route } from "./test";
 

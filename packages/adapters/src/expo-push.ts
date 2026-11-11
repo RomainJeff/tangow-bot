@@ -5,8 +5,8 @@ import type {
   AdapterContext,
   NotificationMessage,
   NotificationProvider,
-} from "@rakazo/adapter-kit";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/adapter-kit";
+import { getLogger } from "@tangow/logging";
 import { combineSignals } from "./connector-safety.js";
 import { readBodyCapped, withAbort } from "./web-ssrf.js";
 

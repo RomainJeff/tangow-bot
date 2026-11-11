@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { PostgresSessionLog } from "@rakazo/adapters";
-import type { AskDraftEdits } from "@rakazo/contracts";
-import { LIVE_WORKER_STATES } from "@rakazo/core";
+import { PostgresSessionLog } from "@tangow/adapters";
+import type { AskDraftEdits } from "@tangow/contracts";
+import { LIVE_WORKER_STATES } from "@tangow/core";
 import { expect } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
 import { sessionCookieHeader } from "./index.js";
@@ -62,7 +62,7 @@ export async function journey(
     apiKey: fixtureKey,
     steps: steps.map(offeredToolNames),
   });
-  const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-offline-product-"));
+  const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-offline-product-"));
   let stop: (() => Promise<void>) | undefined;
   try {
     const { createApp } = await import("../../../apps/api/src/app.ts");
@@ -80,7 +80,7 @@ export async function journey(
       ...app,
     });
     stop = handles.stop;
-    const email = `offline-pi-${randomUUID()}@rakazo.test`;
+    const email = `offline-pi-${randomUUID()}@tangow.test`;
     const signup = await handles.app.request("/api/auth/sign-up/email", {
       method: "POST",
       headers: { "content-type": "application/json", origin: fixtureOrigin },

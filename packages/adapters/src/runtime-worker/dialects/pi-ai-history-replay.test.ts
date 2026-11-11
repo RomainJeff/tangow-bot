@@ -1,7 +1,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Api, Message, Model } from "@earendil-works/pi-ai";
 import { transformMessages } from "@earendil-works/pi-ai/api/transform-messages";
-import { renderBotMessageBlock } from "@rakazo/core";
+import { renderBotMessageBlock } from "@tangow/core";
 import { describe, expect, it } from "vitest";
 import { toHistory } from "./pi-ai-history.js";
 
@@ -50,7 +50,7 @@ describe("toHistory", () => {
       content: [{ type: "text", text: "on it" }],
       api: "anthropic-messages",
       provider: "anthropic",
-      model: "rakazo-replayed-history",
+      model: "tangow-replayed-history",
       usage: {
         input: 0,
         output: 0,

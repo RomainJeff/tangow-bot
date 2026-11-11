@@ -1,6 +1,6 @@
-import type { MessageBlock } from "@rakazo/contracts";
-import { buildWidgetDocument, parseWidgetHeightMessage } from "@rakazo/core/widget";
-import { radii, sizes } from "@rakazo/ui-tokens";
+import type { MessageBlock } from "@tangow/contracts";
+import { buildWidgetDocument, parseWidgetHeightMessage } from "@tangow/core/widget";
+import { radii, sizes } from "@tangow/ui-tokens";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Linking, Modal, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
 import Animated, {
@@ -72,7 +72,7 @@ function WidgetWebView({
   const [height, setHeight] = useState(192);
   const frame = useRef<WebView>(null);
   const [source] = useState(() => ({ html: buildWidgetDocument({ html, theme }) }));
-  const themeScript = `window.postMessage(${JSON.stringify({ rakazoWidgetTheme: theme })}, "*"); true;`;
+  const themeScript = `window.postMessage(${JSON.stringify({ tangowWidgetTheme: theme })}, "*"); true;`;
   useEffect(() => {
     frame.current?.injectJavaScript(themeScript);
   }, [themeScript]);

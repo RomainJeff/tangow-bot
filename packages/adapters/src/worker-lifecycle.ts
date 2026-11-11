@@ -5,15 +5,15 @@ import type {
   WorkerSpec,
   WorkerStartV1,
   WorkerStatusV1,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import {
   AgentRuntimeBusyError,
   AgentRuntimeUnavailableError,
   WORKER_PROTOCOL_VERSION,
-} from "@rakazo/adapter-kit";
-import type { HomeStorage } from "@rakazo/contracts";
-import { WorkerState } from "@rakazo/contracts";
-import type { LaunchPlan, MountRefusal, RunNeeds, VolumeRow, WorkerLaunch } from "@rakazo/core";
+} from "@tangow/adapter-kit";
+import type { HomeStorage } from "@tangow/contracts";
+import { WorkerState } from "@tangow/contracts";
+import type { LaunchPlan, MountRefusal, RunNeeds, VolumeRow, WorkerLaunch } from "@tangow/core";
 import {
   attemptHoldsFence,
   attemptOwnsFence,
@@ -27,9 +27,9 @@ import {
   WORKSPACE_ROOT,
   workerEnsureDeadline,
   workerStatesInto,
-} from "@rakazo/core";
-import type { PrismaClient, VolumeOwnerRef } from "@rakazo/db";
-import { Prisma } from "@rakazo/db";
+} from "@tangow/core";
+import type { PrismaClient, VolumeOwnerRef } from "@tangow/db";
+import { Prisma } from "@tangow/db";
 import { WORKER_LIMITS } from "./runtime-worker/limits.js";
 
 /** The attempt no longer holds its run's fence, its worker was started already, or torn down. */
@@ -314,7 +314,7 @@ export function createWorkerLifecycle(deps: {
     });
     if (volume.mode === "ready") return volume.providerRef;
     const { providerRef } = await provider.ensureVolume(
-      { name: `rakazo-${volumeId}`, ensureDeadline: volume.ensureUntil },
+      { name: `tangow-${volumeId}`, ensureDeadline: volume.ensureUntil },
       context,
     );
     // Locked like `deleteOwnerVolumes`, so the ref lands either on the row or in a deletion record.

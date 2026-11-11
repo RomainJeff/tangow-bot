@@ -1,6 +1,6 @@
-import { SELECTABLE_BOT_COLORS } from "@rakazo/contracts";
-import { SHAPES } from "@rakazo/core";
-import { radii } from "@rakazo/ui-tokens";
+import { SELECTABLE_BOT_COLORS } from "@tangow/contracts";
+import { SHAPES } from "@tangow/core";
+import { radii } from "@tangow/ui-tokens";
 import { useLocalSearchParams } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useAvatarStyle } from "../components/avatar-style";

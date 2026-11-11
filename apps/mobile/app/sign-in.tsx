@@ -1,4 +1,4 @@
-import type { IntegrationSetupState } from "@rakazo/contracts";
+import type { IntegrationSetupState } from "@tangow/contracts";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -160,9 +160,9 @@ export default function SignIn() {
                 {resetSent
                   ? t("Check your email")
                   : mode === "in"
-                    ? t("Sign in to Rakazo")
+                    ? t("Sign in to Tangow")
                     : mode === "up"
-                      ? t("Sign up for Rakazo")
+                      ? t("Sign up for Tangow")
                       : t("Reset your password")}
               </Text>
               {resetSent ? (

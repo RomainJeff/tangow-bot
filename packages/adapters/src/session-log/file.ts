@@ -16,18 +16,18 @@ import type {
   SessionEntryDraft,
   SessionHead,
   SessionLog,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import {
   assertEntryCount,
   nextSessionEntry,
   SessionAppendError,
   SessionReadError,
   sessionEntryNonce,
-} from "@rakazo/adapter-kit";
-import type { EntryId, RunSearchLimitation, RunSearchPage, SessionEntry } from "@rakazo/contracts";
-import { isCardState, SessionEntrySchema, SessionId } from "@rakazo/contracts";
-import type { TailSource } from "@rakazo/core";
-import { decodeEntries, readTailFromEnd, SessionEntryMissingParentError } from "@rakazo/core";
+} from "@tangow/adapter-kit";
+import type { EntryId, RunSearchLimitation, RunSearchPage, SessionEntry } from "@tangow/contracts";
+import { isCardState, SessionEntrySchema, SessionId } from "@tangow/contracts";
+import type { TailSource } from "@tangow/core";
+import { decodeEntries, readTailFromEnd, SessionEntryMissingParentError } from "@tangow/core";
 
 import {
   boundedSearchPage,

@@ -1,12 +1,12 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { ThinkingLevel } from "@rakazo/contracts";
+import type { ThinkingLevel } from "@tangow/contracts";
 import {
   Button,
   Input,
   ModelThinkingOptions,
   NativeSelect,
   NativeSelectOption,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import { ModelPicker } from "./model-picker";
 import { SubscriptionSignIn } from "./subscription-sign-in";
 import type { ModelSettings } from "./use-model-settings";
@@ -90,7 +90,7 @@ export function ModelDetail({ settings }: { settings: ModelSettings }) {
                     <Trans>Setup help</Trans>
                   </summary>
                   <p className="mt-1">
-                    {t`Paste the OpenAI-compatible address from your server. Rakazo adds /v1 if needed.`}
+                    {t`Paste the OpenAI-compatible address from your server. Tangow adds /v1 if needed.`}
                   </p>
                 </details>
                 <div className="mt-3 flex items-center gap-2">
@@ -339,7 +339,7 @@ export function ModelDetail({ settings }: { settings: ModelSettings }) {
           {selected.auth === "oauth" && !subscriptionSignIn ? (
             <p className="mt-5 text-sm leading-[1.5] text-muted-foreground">
               <Trans>
-                This subscription sign-in is not available in Rakazo yet. Use a deployment
+                This subscription sign-in is not available in Tangow yet. Use a deployment
                 credential or choose another provider.
               </Trans>
             </p>

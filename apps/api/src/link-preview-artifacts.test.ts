@@ -1,6 +1,6 @@
 import { RPCHandler } from "@orpc/server/fetch";
-import type { Actor } from "@rakazo/contracts";
-import { IsolationError, type PrismaClient } from "@rakazo/db";
+import type { Actor } from "@tangow/contracts";
+import { IsolationError, type PrismaClient } from "@tangow/db";
 import { describe, expect, it, vi } from "vitest";
 import {
   getOwnedArtifact,

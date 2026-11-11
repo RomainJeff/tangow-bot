@@ -1,5 +1,5 @@
 import { fallbackORPCErrorMessage, ORPCError } from "@orpc/client";
-import { createSaveStore } from "@rakazo/core";
+import { createSaveStore } from "@tangow/core";
 
 const EXPLAINED = new Set(["BAD_REQUEST", "CONFLICT", "FORBIDDEN", "NOT_FOUND"]);
 

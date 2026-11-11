@@ -1,11 +1,11 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Button, Field, FieldLabel, Input, UserAvatar } from "@rakazo/ui-web";
+import { Button, Field, FieldLabel, Input, UserAvatar } from "@tangow/ui-web";
 import { useId, useRef, useState } from "react";
 import { SuccessPop } from "../components/ai/primitives";
 import { authClient } from "../lib/auth";
 
 const PROFILE_PHOTO_SIZE = 128;
-// Mirrors the server guard in @rakazo/auth: the photo rides in every session payload.
+// Mirrors the server guard in @tangow/auth: the photo rides in every session payload.
 const PROFILE_PHOTO_MAX_LENGTH = 32 * 1024;
 
 /** Centre-cropped square WebP data URL, small enough to live on the session user. */

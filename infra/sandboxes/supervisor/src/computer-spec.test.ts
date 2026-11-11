@@ -73,22 +73,22 @@ describe("graphical computer spec", () => {
 
   it("creates a VNC desktop, not an alpine sleep fallback", () => {
     const options = containerCreateOptions({
-      name: "rakazo-bot-abc",
+      name: "tangow-bot-abc",
       image: COMPUTER_IMAGE,
       botId: "abc",
       spaceId: "ws",
-      homePath: "/var/rakazo/homes/abc",
-      networkMode: "rakazo_default",
+      homePath: "/var/tangow/homes/abc",
+      networkMode: "tangow_default",
     });
-    expect(options.Image).toBe("rakazo/computer:local");
+    expect(options.Image).toBe("tangow/computer:local");
     expect(options.Image).not.toMatch(/alpine/);
     expect(options).not.toHaveProperty("Entrypoint");
     expect(JSON.stringify(options)).not.toMatch(/sleep/);
-    expect(options.HostConfig.Binds).toEqual(["/var/rakazo/homes/abc:/home/rakazo"]);
+    expect(options.HostConfig.Binds).toEqual(["/var/tangow/homes/abc:/home/tangow"]);
     expect(options.Env).toContain(
-      "PATH=/home/rakazo/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+      "PATH=/home/tangow/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
     );
-    expect(options.Env).toContain("NPM_CONFIG_PREFIX=/home/rakazo/.local");
+    expect(options.Env).toContain("NPM_CONFIG_PREFIX=/home/tangow/.local");
     expect(options.Env?.join("\n")).not.toMatch(/AXIOM_|LOG_LEVEL|LOG_FORMAT/);
     expect(options.ExposedPorts).toEqual({ "6080/tcp": {} });
     // Browser debugging stays inside the computer trust boundary.
@@ -110,21 +110,21 @@ describe("graphical computer spec", () => {
     expect(options.HostConfig.SecurityOpt).toEqual(["no-new-privileges:true"]);
     expect(options.HostConfig.PidsLimit).toBe(2048);
     expect(options.HostConfig.ReadonlyPaths).toContain("/usr/share/novnc");
-    expect(options.HostConfig.NetworkMode).toBe("rakazo_default");
+    expect(options.HostConfig.NetworkMode).toBe("tangow_default");
   });
 
   it("appends read-only skills binds after the home bind", () => {
     const options = containerCreateOptions({
-      name: "rakazo-bot-abc",
+      name: "tangow-bot-abc",
       image: COMPUTER_IMAGE,
       botId: "abc",
       spaceId: "ws",
-      homePath: "/var/rakazo/homes/abc",
-      skillsBinds: ["/var/rakazo/skills/user/s/u:/skills/user:ro"],
+      homePath: "/var/tangow/homes/abc",
+      skillsBinds: ["/var/tangow/skills/user/s/u:/skills/user:ro"],
     });
     expect(options.HostConfig.Binds).toEqual([
-      "/var/rakazo/homes/abc:/home/rakazo",
-      "/var/rakazo/skills/user/s/u:/skills/user:ro",
+      "/var/tangow/homes/abc:/home/tangow",
+      "/var/tangow/skills/user/s/u:/skills/user:ro",
     ]);
   });
 
@@ -135,10 +135,10 @@ describe("graphical computer spec", () => {
       image: COMPUTER_IMAGE,
       botId: "bot_isolation",
       spaceId: "ws",
-      homePath: "/var/rakazo/homes/bot_isolation",
+      homePath: "/var/tangow/homes/bot_isolation",
       networkMode,
     });
-    expect(networkMode).toMatch(/^rakazo-computer-bot_isolation-[0-9a-f]{32}$/);
+    expect(networkMode).toMatch(/^tangow-computer-bot_isolation-[0-9a-f]{32}$/);
     expect(options.HostConfig.NetworkMode).toBe(networkMode);
     expect(options.HostConfig.PortBindings["6080/tcp"]).toEqual([
       { HostIp: "127.0.0.1", HostPort: "0" },
@@ -154,7 +154,7 @@ describe("graphical computer spec", () => {
   it("lists prior network name variants for cleanup", () => {
     const names = computerNetworkNamesForCleanup("bot_1");
     expect(names[0]).toBe(computerNetworkNameFor("bot_1"));
-    expect(names).toContain("rakazo-computer-bot_1");
+    expect(names).toContain("tangow-computer-bot_1");
     expect(names.some((name) => /-[0-9a-f]{8}$/.test(name))).toBe(true);
     expect(names.some((name) => /-[0-9a-f]{32}$/.test(name))).toBe(true);
   });
@@ -170,23 +170,23 @@ describe("graphical computer spec", () => {
     const root = path.resolve(import.meta.dirname, "../../computer");
     const dockerfile = readFileSync(path.join(root, "Dockerfile"), "utf8");
     const start = readFileSync(path.join(root, "start.sh"), "utf8");
-    const browser = readFileSync(path.join(root, "rakazo-browser"), "utf8");
-    const desktop = readFileSync(path.join(root, "rakazo-browser.desktop"), "utf8");
+    const browser = readFileSync(path.join(root, "tangow-browser"), "utf8");
+    const desktop = readFileSync(path.join(root, "tangow-browser.desktop"), "utf8");
     expect(dockerfile).toMatch(/google-chrome-stable/);
-    expect(dockerfile).toMatch(/rakazo-browser\.desktop/);
+    expect(dockerfile).toMatch(/tangow-browser\.desktop/);
     expect(dockerfile).toMatch(/control.py/);
     expect(dockerfile).toMatch(/USER 1000:1000/);
-    expect(start).toMatch(/rakazo-computer-control/);
-    expect(start).toMatch(/rakazo-browser/);
+    expect(start).toMatch(/tangow-computer-control/);
+    expect(start).toMatch(/tangow-browser/);
     expect(start).not.toMatch(/browser\.log/);
-    expect(start).toMatch(/xdg-mime default rakazo-browser\.desktop/);
+    expect(start).toMatch(/xdg-mime default tangow-browser\.desktop/);
     expect(start).toMatch(/register_browser_handler x-scheme-handler\/http/);
     expect(start).toMatch(/register_browser_handler x-scheme-handler\/https/);
     expect(start).toMatch(/register_browser_handler text\/html/);
     expect(start).toMatch(/xdg-mime query default/);
-    expect(start).toMatch(/failed to register rakazo-browser/);
+    expect(start).toMatch(/failed to register tangow-browser/);
     expect(start).toMatch(/failed to set default web browser/);
-    expect(start).toMatch(/xdg-settings set default-web-browser rakazo-browser\.desktop/);
+    expect(start).toMatch(/xdg-settings set default-web-browser tangow-browser\.desktop/);
     expect(start).toMatch(/register_handler pcmanfm\.desktop inode\/directory/);
     expect(start).toMatch(/register_handler libreoffice-writer\.desktop/);
     expect(start).toMatch(/register_handler libreoffice-calc\.desktop/);
@@ -194,22 +194,22 @@ describe("graphical computer spec", () => {
     expect(start).toMatch(/-f "\/usr\/share\/applications\/\$desktop"/);
     expect(start).toMatch(/failed to register \$desktop/);
     expect(dockerfile).toMatch(/UserInstallation=file:\/\/\/tmp\//);
-    expect(start).not.toMatch(/xdg-mime default rakazo-browser\.desktop .*\|\| true/);
+    expect(start).not.toMatch(/xdg-mime default tangow-browser\.desktop .*\|\| true/);
     expect(start).toMatch(/x11vnc .* -viewonly /);
     expect(browser).toMatch(/\.browser-profiles\/chrome"/);
     expect(browser).toMatch(/chrome-screen-\$DISPLAY_NUM/);
     expect(browser).toMatch(/USER_DATA_DIR_SET/);
-    expect(browser).toMatch(/RAKAZO_BROWSER_PROFILE/);
-    expect(desktop).toMatch(/Exec=\/usr\/local\/bin\/rakazo-browser %U/);
-    const terminal = readFileSync(path.join(root, "rakazo-terminal"), "utf8");
+    expect(browser).toMatch(/TANGOW_BROWSER_PROFILE/);
+    expect(desktop).toMatch(/Exec=\/usr\/local\/bin\/tangow-browser %U/);
+    const terminal = readFileSync(path.join(root, "tangow-terminal"), "utf8");
     const menu = readFileSync(path.join(root, "fluxbox.menu"), "utf8");
     expect(dockerfile).toMatch(/xfce4-terminal/);
     expect(dockerfile).not.toMatch(/^\s+xterm \\$/m);
-    expect(dockerfile).toMatch(/--shell \/bin\/zsh rakazo/);
+    expect(dockerfile).toMatch(/--shell \/bin\/zsh tangow/);
     expect(terminal).toMatch(/exec xfce4-terminal --disable-server$/m);
-    expect(menu).toMatch(/\(Terminal\) \{rakazo-terminal\}/);
-    expect(start).toMatch(/source \/etc\/rakazo\/zshrc/);
-    expect(dockerfile).toMatch(/rakazo-page-browser/);
+    expect(menu).toMatch(/\(Terminal\) \{tangow-terminal\}/);
+    expect(start).toMatch(/source \/etc\/tangow\/zshrc/);
+    expect(dockerfile).toMatch(/tangow-page-browser/);
     expect(browser).toMatch(/remote-debugging-port/);
     expect(desktop).toMatch(/x-scheme-handler\/http/);
     expect(desktop).toMatch(/x-scheme-handler\/https/);
@@ -239,23 +239,23 @@ describe("graphical computer spec", () => {
     "selects a display-specific browser profile and preserves explicit profiles",
     () => {
       const root = path.resolve(import.meta.dirname, "../../computer");
-      const temp = mkdtempSync(path.join(tmpdir(), "rakazo-browser-wrapper-"));
+      const temp = mkdtempSync(path.join(tmpdir(), "tangow-browser-wrapper-"));
       const bin = path.join(temp, "bin");
       const capture = path.join(temp, "args");
       const home = path.join(temp, "home");
       const chrome = path.join(bin, "google-chrome-stable");
       mkdirSync(bin);
-      writeFileSync(chrome, '#!/bin/sh\nprintf "%s\\n" "$@" > "$RAKAZO_TEST_ARGS"\n');
+      writeFileSync(chrome, '#!/bin/sh\nprintf "%s\\n" "$@" > "$TANGOW_TEST_ARGS"\n');
       chmodSync(chrome, 0o755);
 
       const run = (display: string, args: string[] = []) => {
-        const result = spawnSync("sh", [path.join(root, "rakazo-browser"), ...args], {
+        const result = spawnSync("sh", [path.join(root, "tangow-browser"), ...args], {
           env: {
             ...process.env,
             DISPLAY: display,
             HOME: home,
             PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`,
-            RAKAZO_TEST_ARGS: capture,
+            TANGOW_TEST_ARGS: capture,
           },
           encoding: "utf8",
         });
@@ -290,13 +290,13 @@ describe("graphical computer spec", () => {
     "clears crashed state from Chromium preferences and Local State",
     () => {
       const root = path.resolve(import.meta.dirname, "../../computer");
-      const temp = mkdtempSync(path.join(tmpdir(), "rakazo-browser-crash-"));
+      const temp = mkdtempSync(path.join(tmpdir(), "tangow-browser-crash-"));
       const bin = path.join(temp, "bin");
       const home = path.join(temp, "home");
       const chrome = path.join(bin, "google-chrome-stable");
       const capture = path.join(temp, "args");
       mkdirSync(bin);
-      writeFileSync(chrome, '#!/bin/sh\nprintf "%s\\n" "$@" > "$RAKAZO_TEST_ARGS"\n');
+      writeFileSync(chrome, '#!/bin/sh\nprintf "%s\\n" "$@" > "$TANGOW_TEST_ARGS"\n');
       chmodSync(chrome, 0o755);
 
       const profile = path.join(home, ".browser-profiles/chrome");
@@ -311,13 +311,13 @@ describe("graphical computer spec", () => {
       writeFileSync(localStatePath, '{\n  "profile": {\n    "exited_cleanly": false\n  }\n}\n');
 
       try {
-        const result = spawnSync("bash", [path.join(root, "rakazo-browser")], {
+        const result = spawnSync("bash", [path.join(root, "tangow-browser")], {
           env: {
             ...process.env,
             DISPLAY: ":1",
             HOME: home,
             PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`,
-            RAKAZO_TEST_ARGS: capture,
+            TANGOW_TEST_ARGS: capture,
           },
           encoding: "utf8",
         });
@@ -339,13 +339,13 @@ describe("graphical computer spec", () => {
 
         writeFileSync(prefsPath, '{\n  "profile": {\n    "exit_type": "Crashed"\n  }\n}\n');
         symlinkSync("testhost-12345", path.join(profile, "SingletonLock"));
-        const skipped = spawnSync("bash", [path.join(root, "rakazo-browser")], {
+        const skipped = spawnSync("bash", [path.join(root, "tangow-browser")], {
           env: {
             ...process.env,
             DISPLAY: ":1",
             HOME: home,
             PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`,
-            RAKAZO_TEST_ARGS: capture,
+            TANGOW_TEST_ARGS: capture,
           },
           encoding: "utf8",
         });
@@ -358,7 +358,7 @@ describe("graphical computer spec", () => {
   );
 
   it("keeps container names stable so a bot can resume", () => {
-    expect(containerNameFor("bot_1")).toBe("rakazo-bot-bot_1");
+    expect(containerNameFor("bot_1")).toBe("tangow-bot-bot_1");
     expect(containerNameFor("bot_1")).toBe(containerNameFor("bot_1"));
   });
 
@@ -411,7 +411,7 @@ describe("graphical computer spec", () => {
   });
 
   it("uses the container IP only for the internal screen network topology", () => {
-    const networkMode = "rakazo_default";
+    const networkMode = "tangow_default";
     expect(
       resolveScreenPublishTarget({
         screenNetwork: "internal",
@@ -424,8 +424,8 @@ describe("graphical computer spec", () => {
     expect(
       resolveScreenPublishTarget({
         screenNetwork: "isolated",
-        networkMode: "rakazo-computer-bot-1",
-        networks: { "rakazo-computer-bot-1": { IPAddress: "172.20.0.4" } },
+        networkMode: "tangow-computer-bot-1",
+        networks: { "tangow-computer-bot-1": { IPAddress: "172.20.0.4" } },
         hostPort: "49152",
         containerPort: "6080",
       }),
@@ -434,11 +434,11 @@ describe("graphical computer spec", () => {
 
   it("does not publish computer control port 7070 on the host", () => {
     const options = containerCreateOptions({
-      name: "rakazo-bot-ctrl",
+      name: "tangow-bot-ctrl",
       image: COMPUTER_IMAGE,
       botId: "ctrl",
       spaceId: "ws",
-      homePath: "/var/rakazo/homes/ctrl",
+      homePath: "/var/tangow/homes/ctrl",
     });
     expect(options.HostConfig.PortBindings["7070/tcp"]).toBeUndefined();
     expect(options.ExposedPorts["7070/tcp"]).toBeUndefined();
@@ -447,11 +447,11 @@ describe("graphical computer spec", () => {
 
   it("publishes the control port to loopback only when explicitly opted in", () => {
     const options = containerCreateOptions({
-      name: "rakazo-bot-ctrl",
+      name: "tangow-bot-ctrl",
       image: COMPUTER_IMAGE,
       botId: "ctrl",
       spaceId: "ws",
-      homePath: "/var/rakazo/homes/ctrl",
+      homePath: "/var/tangow/homes/ctrl",
       publishControlPort: true,
     });
     expect(options.ExposedPorts["7070/tcp"]).toEqual({});
@@ -461,7 +461,7 @@ describe("graphical computer spec", () => {
   });
 
   it("resolves computer control through the container network IP, never a host mapping", () => {
-    const networkMode = "rakazo_default";
+    const networkMode = "tangow_default";
     expect(
       resolveComputerControlEndpoint({
         token: "secret",
@@ -493,7 +493,7 @@ describe("graphical computer spec", () => {
   });
 
   it("resolves computer control through a published loopback port when provided", () => {
-    const networkMode = "rakazo_default";
+    const networkMode = "tangow_default";
     expect(
       resolveComputerControlEndpoint({
         token: "secret",
@@ -567,7 +567,7 @@ describe("graphical computer spec", () => {
   );
 
   it("does not fall back to the container IP when a published control port is required", () => {
-    const networkMode = "rakazo_default";
+    const networkMode = "tangow_default";
     expect(
       resolveComputerControlEndpoint({
         token: "secret",
@@ -608,14 +608,14 @@ describe("graphical computer spec", () => {
           "assert allow(['env', 'DISPLAY=:1', 'xdotool', 'click', '--repeat', '3', '4'], ':1')",
           "assert allow(['env', 'DISPLAY=:1', 'xdotool', 'type', '--clearmodifiers', '--', 'hi'], ':1')",
           "assert allow(['env', 'DISPLAY=:2', 'xdg-open', 'https://example.com'], ':2')",
-          "assert allow(['env', 'DISPLAY=:1', 'rakazo-browser'], ':1')",
-          "assert allow(['env', 'DISPLAY=:2', 'rakazo-browser', 'https://example.com'], ':2')",
-          "assert allow(['env', 'DISPLAY=:1', 'rakazo-terminal'], ':1')",
-          "assert not allow(['env', 'DISPLAY=:1', 'rakazo-terminal', 'id'], ':1')",
-          "assert not allow(['env', 'DISPLAY=:1', 'rakazo-terminal', '-x'], ':1')",
+          "assert allow(['env', 'DISPLAY=:1', 'tangow-browser'], ':1')",
+          "assert allow(['env', 'DISPLAY=:2', 'tangow-browser', 'https://example.com'], ':2')",
+          "assert allow(['env', 'DISPLAY=:1', 'tangow-terminal'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'tangow-terminal', 'id'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'tangow-terminal', '-x'], ':1')",
           "assert not allow(['env', 'DISPLAY=:1', 'xterm'], ':1')",
-          "assert allow(['env', 'DISPLAY=:1', 'pcmanfm', '/home/rakazo'], ':1')",
-          "assert allow(['env', 'DISPLAY=:1', 'libreoffice', '/home/rakazo/report.docx'], ':1')",
+          "assert allow(['env', 'DISPLAY=:1', 'pcmanfm', '/home/tangow'], ':1')",
+          "assert allow(['env', 'DISPLAY=:1', 'libreoffice', '/home/tangow/report.docx'], ':1')",
           "assert long_lived(['env', 'DISPLAY=:1', 'libreoffice'])",
           "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', '--accept=socket,port=2002;urp;'], ':1')",
           "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', 'macro:///Standard.Module1.Main'], ':1')",
@@ -623,12 +623,12 @@ describe("graphical computer spec", () => {
           "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', 'https://example.com/x.docx'], ':1')",
           "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', 'file:///etc/passwd'], ':1')",
           "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', '/etc/passwd'], ':1')",
-          "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', '/home/rakazo/../../etc/passwd'], ':1')",
-          "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', '/home/rakazoevil/x.docx'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', '/home/tangow/../../etc/passwd'], ':1')",
+          "assert not allow(['env', 'DISPLAY=:1', 'libreoffice', '/home/tangowevil/x.docx'], ':1')",
           "assert not allow(['env', 'DISPLAY=:1', 'pcmanfm', '/etc'], ':1')",
-          "assert long_lived(['env', 'DISPLAY=:1', 'rakazo-browser'])",
-          "assert long_lived(['env', 'DISPLAY=:1', 'rakazo-browser', 'https://example.com'])",
-          "assert long_lived(['env', 'DISPLAY=:1', 'rakazo-terminal'])",
+          "assert long_lived(['env', 'DISPLAY=:1', 'tangow-browser'])",
+          "assert long_lived(['env', 'DISPLAY=:1', 'tangow-browser', 'https://example.com'])",
+          "assert long_lived(['env', 'DISPLAY=:1', 'tangow-terminal'])",
           "assert long_lived(['env', 'DISPLAY=:1', 'xdg-open', 'https://example.com'])",
           "assert not long_lived(['env', 'DISPLAY=:1', 'xdotool', 'key', '--clearmodifiers', 'a'])",
           "assert not allow(['env', 'DISPLAY=:1', 'chromium', 'https://example.com'], ':1')",
@@ -703,9 +703,9 @@ describe("graphical computer spec", () => {
 
 describe("computer resource limits", () => {
   const KEYS = [
-    "RAKAZO_COMPUTER_MEMORY",
-    "RAKAZO_COMPUTER_CPUS",
-    "RAKAZO_COMPUTER_PIDS_LIMIT",
+    "TANGOW_COMPUTER_MEMORY",
+    "TANGOW_COMPUTER_CPUS",
+    "TANGOW_COMPUTER_PIDS_LIMIT",
   ] as const;
   const saved = new Map<string, string | undefined>();
 
@@ -724,11 +724,11 @@ describe("computer resource limits", () => {
   });
 
   const createInput = {
-    name: "rakazo-bot-x",
-    image: "rakazo/computer:local",
+    name: "tangow-bot-x",
+    image: "tangow/computer:local",
     botId: "bot-x",
     spaceId: "ws",
-    homePath: "/var/rakazo/homes/bot-x",
+    homePath: "/var/tangow/homes/bot-x",
   };
 
   it("caps memory and cpu by default and keeps #343's pids ceiling", () => {
@@ -740,21 +740,21 @@ describe("computer resource limits", () => {
   });
 
   it("pins MemorySwap to Memory so the ceiling cannot be swapped past", () => {
-    process.env.RAKAZO_COMPUTER_MEMORY = "1536m";
+    process.env.TANGOW_COMPUTER_MEMORY = "1536m";
     const { HostConfig } = containerCreateOptions(createInput);
     expect(HostConfig.Memory).toBe(1536 * 1024 ** 2);
     expect(HostConfig.MemorySwap).toBe(1536 * 1024 ** 2);
   });
 
   it("accepts fractional CPUs", () => {
-    process.env.RAKAZO_COMPUTER_CPUS = "1.5";
+    process.env.TANGOW_COMPUTER_CPUS = "1.5";
     expect(containerCreateOptions(createInput).HostConfig.NanoCpus).toBe(1_500_000_000);
   });
 
   it("lets an operator opt out explicitly", () => {
-    process.env.RAKAZO_COMPUTER_MEMORY = "unlimited";
-    process.env.RAKAZO_COMPUTER_CPUS = "0";
-    process.env.RAKAZO_COMPUTER_PIDS_LIMIT = "none";
+    process.env.TANGOW_COMPUTER_MEMORY = "unlimited";
+    process.env.TANGOW_COMPUTER_CPUS = "0";
+    process.env.TANGOW_COMPUTER_PIDS_LIMIT = "none";
     const { HostConfig } = containerCreateOptions(createInput);
     expect(HostConfig.Memory).toBe(0);
     expect(HostConfig.NanoCpus).toBe(0);
@@ -762,44 +762,44 @@ describe("computer resource limits", () => {
   });
 
   it("rejects a malformed size instead of silently falling back", () => {
-    process.env.RAKAZO_COMPUTER_MEMORY = "2 gigs";
-    expect(() => containerCreateOptions(createInput)).toThrow(/RAKAZO_COMPUTER_MEMORY/);
+    process.env.TANGOW_COMPUTER_MEMORY = "2 gigs";
+    expect(() => containerCreateOptions(createInput)).toThrow(/TANGOW_COMPUTER_MEMORY/);
   });
 
   it("rejects a negative cpu count", () => {
-    process.env.RAKAZO_COMPUTER_CPUS = "-1";
-    expect(() => containerCreateOptions(createInput)).toThrow(/RAKAZO_COMPUTER_CPUS/);
+    process.env.TANGOW_COMPUTER_CPUS = "-1";
+    expect(() => containerCreateOptions(createInput)).toThrow(/TANGOW_COMPUTER_CPUS/);
   });
 
   it("rejects a pids limit that is not a positive integer", () => {
-    process.env.RAKAZO_COMPUTER_PIDS_LIMIT = "12.5";
-    expect(() => containerCreateOptions(createInput)).toThrow(/RAKAZO_COMPUTER_PIDS_LIMIT/);
+    process.env.TANGOW_COMPUTER_PIDS_LIMIT = "12.5";
+    expect(() => containerCreateOptions(createInput)).toThrow(/TANGOW_COMPUTER_PIDS_LIMIT/);
   });
 
   it("rejects a memory limit below Docker's 6 MiB minimum", () => {
     // The daemon refuses these at container creation, so accepting them here would turn a typo
     // into a 500 on the first bot rather than a startup failure naming the variable.
     for (const value of ["1", "1m", "5m", "5242880"]) {
-      process.env.RAKAZO_COMPUTER_MEMORY = value;
-      expect(() => containerCreateOptions(createInput)).toThrow(/RAKAZO_COMPUTER_MEMORY/);
+      process.env.TANGOW_COMPUTER_MEMORY = value;
+      expect(() => containerCreateOptions(createInput)).toThrow(/TANGOW_COMPUTER_MEMORY/);
     }
-    process.env.RAKAZO_COMPUTER_MEMORY = "6m";
+    process.env.TANGOW_COMPUTER_MEMORY = "6m";
     expect(containerCreateOptions(createInput).HostConfig.Memory).toBe(6 * 1024 ** 2);
   });
 
   it("rejects a CPU count that would floor to Docker's unlimited", () => {
     // Math.floor(1e-10 * 1e9) is 0, and 0 NanoCpus means uncapped. An accepted value must never
     // turn a ceiling into no ceiling.
-    process.env.RAKAZO_COMPUTER_CPUS = "0.0000000001";
-    expect(() => containerCreateOptions(createInput)).toThrow(/RAKAZO_COMPUTER_CPUS/);
+    process.env.TANGOW_COMPUTER_CPUS = "0.0000000001";
+    expect(() => containerCreateOptions(createInput)).toThrow(/TANGOW_COMPUTER_CPUS/);
   });
 
   it("rejects a CPU count that leaves the safe-integer NanoCpus range", () => {
     // 1e300 is finite, but Math.floor(1e300 * 1e9) is Infinity. 1e7 CPUs yields a non-safe
     // integer. Both must fail closed rather than reach HostConfig.NanoCpus.
     for (const value of ["1e300", "10000000"]) {
-      process.env.RAKAZO_COMPUTER_CPUS = value;
-      expect(() => containerCreateOptions(createInput)).toThrow(/RAKAZO_COMPUTER_CPUS/);
+      process.env.TANGOW_COMPUTER_CPUS = value;
+      expect(() => containerCreateOptions(createInput)).toThrow(/TANGOW_COMPUTER_CPUS/);
     }
   });
 
@@ -833,7 +833,7 @@ describe("computer home storage", () => {
       {
         Type: "volume",
         Source: "example_appdata",
-        Target: "/home/rakazo",
+        Target: "/home/tangow",
         VolumeOptions: { NoCopy: true, Subpath: "homes/bot" },
       },
     ]);
@@ -890,10 +890,10 @@ describe("docker worker spec", () => {
       user: "1001:1001",
     });
     expect(options).toMatchObject({
-      Image: "rakazo/worker:local",
+      Image: "tangow/worker:local",
       User: "1001:1001",
       Cmd: ["sleep", "600"],
-      Labels: { "rakazo.worker": "true", "rakazo.attempt": "attempt-1" },
+      Labels: { "tangow.worker": "true", "tangow.attempt": "attempt-1" },
       HostConfig: {
         Init: true,
         AutoRemove: true,
@@ -913,13 +913,13 @@ describe("docker worker spec", () => {
 
   it("derives mounts from volume names, as binds or as subpaths of the data volume", () => {
     const requested = [
-      { volume: "rakazo-private", path: "/workspace/bot", readOnly: false },
-      { volume: "rakazo-shared", path: "/workspace/space", readOnly: true },
+      { volume: "tangow-private", path: "/workspace/bot", readOnly: false },
+      { volume: "tangow-shared", path: "/workspace/space", readOnly: true },
     ];
     const bound = workerMounts(requested, "/data", undefined);
     expect(bound.map((mount) => mount.source)).toEqual([
-      { bind: "/data/volumes/rakazo-private" },
-      { bind: "/data/volumes/rakazo-shared" },
+      { bind: "/data/volumes/tangow-private" },
+      { bind: "/data/volumes/tangow-shared" },
     ]);
     const options = workerCreateOptions({
       attemptId: "attempt-1",
@@ -933,20 +933,20 @@ describe("docker worker spec", () => {
         Source: "example_appdata",
         Target: "/workspace/bot",
         ReadOnly: false,
-        VolumeOptions: { NoCopy: true, Subpath: "volumes/rakazo-private" },
+        VolumeOptions: { NoCopy: true, Subpath: "volumes/tangow-private" },
       },
       {
         Type: "volume",
         Source: "example_appdata",
         Target: "/workspace/space",
         ReadOnly: true,
-        VolumeOptions: { NoCopy: true, Subpath: "volumes/rakazo-shared" },
+        VolumeOptions: { NoCopy: true, Subpath: "volumes/tangow-shared" },
       },
     ]);
   });
 
   it("rejects volume names and targets that could escape their roots", () => {
-    for (const volume of ["../homes/bot", "rakazo-a/../../b", "rakazo-", "homes", "rakazo-a b"])
+    for (const volume of ["../homes/bot", "tangow-a/../../b", "tangow-", "homes", "tangow-a b"])
       expect(() =>
         workerMounts([{ volume, path: "/workspace/a", readOnly: false }], "/data", undefined),
       ).toThrow(/volume name/);
@@ -958,7 +958,7 @@ describe("docker worker spec", () => {
       "/workspace/a/./b",
     ])
       expect(() =>
-        workerMounts([{ volume: "rakazo-a", path: target, readOnly: false }], "/data", undefined),
+        workerMounts([{ volume: "tangow-a", path: target, readOnly: false }], "/data", undefined),
       ).toThrow(/under \/workspace/);
   });
 });
@@ -967,8 +967,8 @@ describe("computer on volumes", () => {
   const team = {
     root: "/workspace",
     mounts: [
-      { volume: "rakazo-ada", path: "/workspace/bots/ada" },
-      { volume: "rakazo-space", path: "/workspace/shared" },
+      { volume: "tangow-ada", path: "/workspace/bots/ada" },
+      { volume: "tangow-space", path: "/workspace/shared" },
     ],
   };
 
@@ -982,26 +982,26 @@ describe("computer on volumes", () => {
       homePath: "/data/homes/team",
       volumeHome,
     });
-    expect(options.HostConfig.Binds).toEqual(["/data/homes/team:/home/rakazo"]);
+    expect(options.HostConfig.Binds).toEqual(["/data/homes/team:/home/tangow"]);
     expect(options.HostConfig.Mounts).toEqual([
       {
         Type: "bind",
-        Source: "/data/volumes/rakazo-ada",
+        Source: "/data/volumes/tangow-ada",
         Target: "/workspace/bots/ada",
         ReadOnly: false,
       },
       {
         Type: "bind",
-        Source: "/data/volumes/rakazo-space",
+        Source: "/data/volumes/tangow-space",
         Target: "/workspace/shared",
         ReadOnly: false,
       },
     ]);
     expect(options.WorkingDir).toBe("/workspace");
     expect(options.Labels).toMatchObject({
-      "rakazo.home": "volumes",
-      "rakazo.mounts": volumeHome.digest,
-      "rakazo.workspace": "/workspace",
+      "tangow.home": "volumes",
+      "tangow.mounts": volumeHome.digest,
+      "tangow.workspace": "/workspace",
     });
     expect(computerWorkspace(options.Labels)).toBe("/workspace");
     expect(volumeHomeMatches(options.Labels, volumeHome)).toBe(true);
@@ -1010,16 +1010,16 @@ describe("computer on volumes", () => {
   it("is replaced once its mounts change, or when it was created before its home moved", () => {
     const volumeHome = computerVolumeHome(team, "/data", undefined);
     const added = computerVolumeHome(
-      { ...team, mounts: [...team.mounts, { volume: "rakazo-bob", path: "/workspace/bots/bob" }] },
+      { ...team, mounts: [...team.mounts, { volume: "tangow-bob", path: "/workspace/bots/bob" }] },
       "/data",
       undefined,
     );
-    const labels = { "rakazo.mounts": volumeHome.digest };
+    const labels = { "tangow.mounts": volumeHome.digest };
     expect(volumeHomeMatches(labels, added)).toBe(false);
     expect(volumeHomeMatches({}, volumeHome)).toBe(false);
     expect(volumeHomeMatches(labels, undefined)).toBe(false);
     expect(volumeHomeMatches({}, undefined)).toBe(true);
-    expect(computerWorkspace({})).toBe("/home/rakazo");
+    expect(computerWorkspace({})).toBe("/home/tangow");
   });
 
   it("refuses a workspace outside its volumes and volume names that could escape", () => {

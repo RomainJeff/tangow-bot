@@ -2,7 +2,7 @@
 
 ![tangow](docs/assets/readme-header.png)
 
-Rakazo is an open-source platform for running persistent AI teammates. It is available on the web,
+Tangow is an open-source platform for running persistent AI teammates. It is available on the web,
 as an Electron desktop app, and through an Expo mobile app. Bring your own model and computer
 provider, or run the complete stack locally.
 
@@ -19,7 +19,7 @@ provider, or run the complete stack locally.
 - Docker and E2B
 - Composio, Pipedream Connect, MCP, and OpenAPI integrations
 
-For an existing source deployment, use [Tangow](./docs/tangow.md) on the server to update Rakazo,
+For an existing source deployment, use the [`./tangow` operator CLI](./docs/tangow.md) on the server to update it,
 inspect services, rebuild workers and computers, or migrate Docker homes to E2B.
 
 ## Getting started
@@ -109,22 +109,22 @@ setup, host hardening, provider selection, backups, and upgrades. In the desktop
 
 ## Desktop and mobile
 
-The Electron and Expo apps are clients of the same Rakazo API used by the web app.
+The Electron and Expo apps are clients of the same Tangow API used by the web app.
 
 With the development stack running, launch Electron with:
 
 ```bash
-pnpm --filter @rakazo/desktop dev
+pnpm --filter @tangow/desktop dev
 ```
 
-On first run the desktop app asks for the address of a Rakazo server. Developers running
+On first run the desktop app asks for the address of a Tangow server. Developers running
 `pnpm dev` enter `http://127.0.0.1:5173`. Public servers must use HTTPS; HTTP is accepted only for
-loopback and private LAN addresses (not link-local). The app verifies Rakazo's health endpoint
+loopback and private LAN addresses (not link-local). The app verifies Tangow's health endpoint
 before saving, and later launches go straight to that instance.
 
-Use **Change Rakazo Server…** in the application menu to reconnect. Closing that window without
-saving returns to the previous instance. For development automation, set `RAKAZO_WEB_URL` to point
-the shell somewhere else without changing the saved instance, or `RAKAZO_FORCE_SETUP=1` to run
+Use **Change Tangow Server…** in the application menu to reconnect. Closing that window without
+saving returns to the previous instance. For development automation, set `TANGOW_WEB_URL` to point
+the shell somewhere else without changing the saved instance, or `TANGOW_FORCE_SETUP=1` to run
 setup again.
 
 Mobile build and release instructions live in [docs/mobile-release.md](./docs/mobile-release.md).
@@ -165,6 +165,6 @@ Contributions are welcome. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) befo
 request. For security vulnerabilities, follow [SECURITY.md](./SECURITY.md) instead of filing a public
 issue.
 
-Rakazo is licensed under the [Apache License 2.0](./LICENSE).
+Tangow is licensed under the [Apache License 2.0](./LICENSE).
 
-Questions and ideas are welcome in the [Rakazo Discord community](https://discord.gg/RWwKa2Sn7h).
+Questions and ideas are welcome in the [Tangow Discord community](https://discord.gg/RWwKa2Sn7h).

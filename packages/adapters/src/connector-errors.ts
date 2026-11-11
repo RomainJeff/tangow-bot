@@ -2,7 +2,7 @@ import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
 import { SseError } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StreamableHTTPError } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
-import type { ConnectorEvent, ConnectorFailureKind } from "@rakazo/adapter-kit";
+import type { ConnectorEvent, ConnectorFailureKind } from "@tangow/adapter-kit";
 import { z } from "zod";
 import { ConnectorError } from "./connector-error.js";
 import { redactConnectorPayload, sanitizeConnectorError } from "./connector-safety.js";

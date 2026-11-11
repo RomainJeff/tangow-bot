@@ -1,7 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
-import type { ModelCategory, ThinkingLevel } from "@rakazo/contracts";
-import { connectedModelOptions, parseModelOptionKey, thinkingChoices } from "@rakazo/core";
-import { ModelThinkingOptions, NativeSelect, NativeSelectOption } from "@rakazo/ui-web";
+import type { ModelCategory, ThinkingLevel } from "@tangow/contracts";
+import { connectedModelOptions, parseModelOptionKey, thinkingChoices } from "@tangow/core";
+import { ModelThinkingOptions, NativeSelect, NativeSelectOption } from "@tangow/ui-web";
 import { useId, useState } from "react";
 import { rpc } from "../../lib/rpc";
 import { thinkingLevelLabel } from "../bot-page/model-options";

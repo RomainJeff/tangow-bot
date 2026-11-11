@@ -18,7 +18,7 @@ import type {
   PiAiModelEvent,
   ReplyFinal,
   ReplyPart,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import { conversationSessionId, streamRunModel } from "../../pi-run-model.js";
 import { billedPromptTokens, providerCacheTokens } from "../../pi-runtime-limits.js";
 import type { ModelRelay, RelayUsage } from "../model-relay.js";

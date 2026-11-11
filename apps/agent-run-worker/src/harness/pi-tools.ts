@@ -7,7 +7,7 @@ import {
   createReadTool,
   createWriteTool,
 } from "@earendil-works/pi-coding-agent";
-import type { ConnectorTool } from "@rakazo/adapter-kit";
+import type { ConnectorTool } from "@tangow/adapter-kit";
 
 /** Pi's own tools, as the SDK-free manifest the controller reads. */
 export function piToolManifest(): ConnectorTool[] {

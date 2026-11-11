@@ -1,7 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
-import type { Routine } from "@rakazo/contracts";
-import { routineFailing, saveKey } from "@rakazo/core";
-import { Button, type FieldSave, SaveMeta, SettingRow, Switch, useFieldSave } from "@rakazo/ui-web";
+import type { Routine } from "@tangow/contracts";
+import { routineFailing, saveKey } from "@tangow/core";
+import { Button, type FieldSave, SaveMeta, SettingRow, Switch, useFieldSave } from "@tangow/ui-web";
 import { Plus } from "lucide-react";
 import type { BotDetail } from "../shell/layout";
 import { type BotPageContext, PendingRead, SettingsGroup, useSaveLabels } from "./page-kit";

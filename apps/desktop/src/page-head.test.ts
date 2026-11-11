@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { PAGE_HEAD_MAX_BYTES, PAGE_HEAD_USER_AGENT } from "@rakazo/contracts/page-head-reader";
+import { PAGE_HEAD_MAX_BYTES, PAGE_HEAD_USER_AGENT } from "@tangow/contracts/page-head-reader";
 import { describe, expect, it, vi } from "vitest";
 import type { PageRequest } from "./page-head.js";
 import { createPageFetch, createPageHeadReader } from "./page-head.js";

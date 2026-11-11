@@ -1,4 +1,4 @@
-import type { EntryId, RunSearchPage, SessionEntry, SessionId } from "@rakazo/contracts";
+import type { EntryId, RunSearchPage, SessionEntry, SessionId } from "@tangow/contracts";
 import type { NewSession, RunSearchInput, SessionEntryDraft } from "./session-log.js";
 import type {
   AdapterContext,

@@ -1,5 +1,5 @@
-import type { AskOutcome, MessageBlock, ProposalKind, RunTrigger } from "@rakazo/contracts";
-import { ASK_DISMISSED_ANSWER } from "@rakazo/contracts";
+import type { AskOutcome, MessageBlock, ProposalKind, RunTrigger } from "@tangow/contracts";
+import { ASK_DISMISSED_ANSWER } from "@tangow/contracts";
 import { botNameKey, hasHiddenText, LINK_LIKE_NAME } from "./spawn-bot.js";
 
 /**

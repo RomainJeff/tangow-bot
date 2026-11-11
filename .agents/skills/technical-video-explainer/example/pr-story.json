@@ -1,7 +1,7 @@
 {
   "source": {
     "kind": "pr",
-    "ref": "rakazo-bot#258",
+    "ref": "tangow-bot#258",
     "url": "https://github.com/RomainJeff/tangow-bot/pull/258"
   },
   "voice": "af_heart",
@@ -9,7 +9,7 @@
   "scenes": [
     {
       "type": "title",
-      "kicker": "rakazo-bot · PR #258",
+      "kicker": "tangow-bot · PR #258",
       "title": "Skills, *without* the marketplace",
       "vo": "Pull request two fifty eight removes the skills marketplace. Skills now come from two places only."
     },
@@ -158,7 +158,7 @@
           ]
         }
       ],
-      "vo": "Now a bot sees your own skills and Rakazo's built-in ones. The catalog opens directly, on web, desktop and mobile."
+      "vo": "Now a bot sees your own skills and Tangow's built-in ones. The catalog opens directly, on web, desktop and mobile."
     },
     {
       "type": "kinetic",

@@ -4,10 +4,10 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import type { AdapterContext, PortableFile } from "@rakazo/adapter-kit";
-import { AgentRuntimeBusyError } from "@rakazo/adapter-kit";
-import type { PrismaClient } from "@rakazo/db";
-import { createDb, deleteOwnerVolumes, OwnerWorkerLiveError } from "@rakazo/db";
+import type { AdapterContext, PortableFile } from "@tangow/adapter-kit";
+import { AgentRuntimeBusyError } from "@tangow/adapter-kit";
+import type { PrismaClient } from "@tangow/db";
+import { createDb, deleteOwnerVolumes, OwnerWorkerLiveError } from "@tangow/db";
 import type { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { inspectLocalVolume } from "./docker-volume-import.js";
@@ -42,7 +42,7 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
   it.each(["docker", "e2b"])(
     "refuses %s provider cutover after database expiry despite a slow process clock",
     async (kind) => {
-      const root = await mkdtemp(path.join(tmpdir(), "rakazo-cutover-clock-"));
+      const root = await mkdtemp(path.join(tmpdir(), "tangow-cutover-clock-"));
       const spaceId = await fixture.seedSpace();
       const computer = await fixture.seedComputer(spaceId, {
         kind,
@@ -50,7 +50,7 @@ describePostgres("worker lifecycle under concurrent transactions (PostgreSQL)", 
         homeStorage: "volumes",
       });
       const bot = await fixture.seedBot(spaceId, computer.id);
-      const ref = `rakazo-${randomUUID()}`;
+      const ref = `tangow-${randomUUID()}`;
       const volume = await fixture.seedVolume("bot_private", spaceId, bot.id, ref);
       await prisma.volume.update({
         where: { id: volume.id },

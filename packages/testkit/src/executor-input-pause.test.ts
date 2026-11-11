@@ -1,6 +1,6 @@
-import type { AgentRunRequest } from "@rakazo/adapter-kit";
-import { ScriptedAgentRuntime } from "@rakazo/adapters";
-import type { PrismaClient } from "@rakazo/db";
+import type { AgentRunRequest } from "@tangow/adapter-kit";
+import { ScriptedAgentRuntime } from "@tangow/adapters";
+import type { PrismaClient } from "@tangow/db";
 import { afterEach, expect, it } from "vitest";
 import { startWorkerRun } from "./worker-run-fixture.js";
 

@@ -12,9 +12,9 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
-import type { AdapterContext } from "@rakazo/adapter-kit";
-import type { PrismaClient } from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+import type { AdapterContext } from "@tangow/adapter-kit";
+import type { PrismaClient } from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 import { DockerVolumeFiles } from "./docker-volume-files.js";
 import { migrateUserSkillsToShared } from "./skill-volume-migration.js";
 import type { HomeAdoption, HomeMoveBlocker, WorkerLifecycle } from "./worker-lifecycle.js";
@@ -54,13 +54,13 @@ type Rename =
 
 const RENEW_AFTER_MS = HOME_MOVE_TTL_MS / 3;
 /** A dot entry, so it stays in the home and is never one of the entries the move renames. */
-export const HOME_MOVE_MARKER = ".rakazo-move-pending";
+export const HOME_MOVE_MARKER = ".tangow-move-pending";
 
 /**
  * Moves one idle Docker computer's home onto its volumes by renaming, on the storage that holds
  * both `DATA_DIR/homes` and `DATA_DIR/volumes`. A team home gives `bots/<botId>` to each bot's
  * private volume and `shared` to the space volume; a dedicated home gives every root entry but its
- * dot entries to its bot's private volume. Dotfiles and browser profiles stay in `/home/rakazo`.
+ * dot entries to its bot's private volume. Dotfiles and browser profiles stay in `/home/tangow`.
  *
  * Every conflict is checked first. Then a marker file in the home directory records the move, the
  * computer adopts its volumes, the renames run, and the marker goes. While the marker exists the

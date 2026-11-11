@@ -1,4 +1,4 @@
-import { radii } from "@rakazo/ui-tokens";
+import { radii } from "@tangow/ui-tokens";
 import type { ComponentProps } from "react";
 import { useState } from "react";
 import {

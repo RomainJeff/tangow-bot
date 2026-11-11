@@ -1,6 +1,6 @@
-import type { AdapterContext, FeedbackIssue, FeedbackProvider } from "@rakazo/adapter-kit";
-import { redactSecrets } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+import type { AdapterContext, FeedbackIssue, FeedbackProvider } from "@tangow/adapter-kit";
+import { redactSecrets } from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
 import { z } from "zod";
 import { sanitizeConnectorError } from "./connector-safety.js";
 import { GITHUB_REPOSITORY_PATTERN, GithubFeedbackProvider } from "./github-feedback.js";
@@ -19,7 +19,7 @@ export const FeedbackInput = z.object({
 });
 export type FeedbackInput = z.infer<typeof FeedbackInput>;
 
-/** What Rakazo itself knows about the run when the model reports. */
+/** What Tangow itself knows about the run when the model reports. */
 export interface FeedbackContext {
   runId: string;
   threadId: string;
@@ -87,7 +87,7 @@ export function feedbackIssue(input: FeedbackInput, context: FeedbackContext): F
     `- Bot: \`${context.botId}\``,
     `- Model: ${context.model ?? "unknown"}`,
     `- Harness: ${context.harness}`,
-    ...(context.version ? [`- Rakazo version: ${context.version}`] : []),
+    ...(context.version ? [`- Tangow version: ${context.version}`] : []),
     `- Reported at: ${context.reportedAt.toISOString()}`,
     "",
     "Counted while the run was still going, so these are not final totals:",
@@ -105,7 +105,7 @@ export function feedbackIssue(input: FeedbackInput, context: FeedbackContext): F
       "",
       ...reported,
       "",
-      "## Observed by Rakazo",
+      "## Observed by Tangow",
       "",
       ...observed,
     ].join("\n"),

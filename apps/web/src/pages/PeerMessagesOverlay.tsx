@@ -1,15 +1,15 @@
 import { i18n } from "@lingui/core";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { ChatMarkdown } from "@rakazo/chat-ui/web";
-import type { ThreadEntry } from "@rakazo/contracts";
+import { ChatMarkdown } from "@tangow/chat-ui/web";
+import type { ThreadEntry } from "@tangow/contracts";
 import {
   computeMessageGroups,
   peerConversations,
   showsTimeMarker,
   stripPeerAddressPrefix,
   threadTimeMarkerLabel,
-} from "@rakazo/core";
-import { BotAvatar, Button, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
+} from "@tangow/core";
+import { BotAvatar, Button, Dialog, DialogClose, DialogContent, DialogTitle } from "@tangow/ui-web";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { desktopBridge } from "../lib/desktop";
 import { loadPeerHistory } from "../lib/peer-history";

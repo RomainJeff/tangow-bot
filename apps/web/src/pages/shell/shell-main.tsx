@@ -1,7 +1,7 @@
 import { Trans } from "@lingui/react/macro";
-import type { AgentSkillCatalogEntry } from "@rakazo/contracts";
-import type { ComposerMention, SkillSourceBlock } from "@rakazo/core";
-import { Button } from "@rakazo/ui-web";
+import type { AgentSkillCatalogEntry } from "@tangow/contracts";
+import type { ComposerMention, SkillSourceBlock } from "@tangow/core";
+import { Button } from "@tangow/ui-web";
 import { Plus } from "lucide-react";
 import { lazy, Suspense, useCallback } from "react";
 import type { NavigateFunction } from "react-router-dom";

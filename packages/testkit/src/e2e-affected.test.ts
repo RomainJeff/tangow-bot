@@ -151,8 +151,8 @@ describe("buildImporters", () => {
       "apps/web/src/main.tsx": [
         'import { App } from "./app";',
         'import "./styles.css";',
-        'import { Button } from "@rakazo/ui-web/components/ui/button";',
-        'import { plot } from "@rakazo/core/plot";',
+        'import { Button } from "@tangow/ui-web/components/ui/button";',
+        'import { plot } from "@tangow/core/plot";',
         'import { z } from "zod";',
       ].join("\n"),
       "apps/web/src/app.tsx": 'import { format } from "../../../packages/core/src/format.js";',
@@ -163,11 +163,11 @@ describe("buildImporters", () => {
     };
     const packages = new Map([
       [
-        "@rakazo/core",
+        "@tangow/core",
         { dir: "packages/core", exports: { "./plot": { development: "./src/plot/plot-spec.ts" } } },
       ],
       [
-        "@rakazo/ui-web",
+        "@tangow/ui-web",
         { dir: "packages/ui-web", exports: { "./components/ui/*": "./src/components/ui/*.tsx" } },
       ],
     ]);

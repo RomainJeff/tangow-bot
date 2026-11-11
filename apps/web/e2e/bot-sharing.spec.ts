@@ -1,4 +1,4 @@
-import type { BotSharing } from "@rakazo/contracts";
+import type { BotSharing } from "@tangow/contracts";
 import {
   captureScreenshot,
   completeOnboarding,
@@ -15,11 +15,11 @@ test("a bot shared with one person gives them their own thread until it is unsha
   baseURL,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `share-owner-${stamp}@rakazo.test`, "password12", "Ada Owner");
+  await signup(page, `share-owner-${stamp}@tangow.test`, "password12", "Ada Owner");
   await completeOnboarding(page);
   const { spaceId } = await rpc<{ spaceId: string }>(page, "me", undefined);
   await rpc(page, "spaces/rename", { spaceId, name: "Studio" });
-  const guestEmail = `share-guest-${stamp}@rakazo.test`;
+  const guestEmail = `share-guest-${stamp}@tangow.test`;
   const inviteUrl = await inviteToSpace(page, spaceId, guestEmail);
   const botId = await createNamedBot(page, "Release notes");
   await rpc(page, "agentSkills/create", {

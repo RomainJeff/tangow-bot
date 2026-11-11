@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
-import type { MessageBlock } from "@rakazo/contracts";
-import { buildWidgetDocument, parseWidgetHeightMessage } from "@rakazo/core/widget";
+import type { MessageBlock } from "@tangow/contracts";
+import { buildWidgetDocument, parseWidgetHeightMessage } from "@tangow/core/widget";
 import {
   Button,
   Dialog,
@@ -9,7 +9,7 @@ import {
   DialogTitle,
   Skeleton,
   Surface,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import { Maximize2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ArtifactTarget } from "../../lib/artifact-open";
@@ -46,7 +46,7 @@ function WidgetFrame({
   const [height, setHeight] = useState(192);
   const [document] = useState(() => buildWidgetDocument({ html, theme }));
   useEffect(() => {
-    frame.current?.contentWindow?.postMessage({ rakazoWidgetTheme: theme }, "*");
+    frame.current?.contentWindow?.postMessage({ tangowWidgetTheme: theme }, "*");
   }, [theme]);
   useEffect(() => {
     if (fullscreen) return;
@@ -73,7 +73,7 @@ function WidgetFrame({
       onLoad={() => {
         loads.current += 1;
         if (loads.current > 1) setNavigated(true);
-        else frame.current?.contentWindow?.postMessage({ rakazoWidgetTheme: theme }, "*");
+        else frame.current?.contentWindow?.postMessage({ tangowWidgetTheme: theme }, "*");
       }}
       className={
         navigated

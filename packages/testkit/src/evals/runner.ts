@@ -1,17 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { type AgentRuntime, type JobPublisher, runJobKey } from "@rakazo/adapter-kit";
+import { type AgentRuntime, type JobPublisher, runJobKey } from "@tangow/adapter-kit";
 import {
   MessagingTeamChatEmulator,
   skillDirName,
   skillLinesByRun,
   userSkillsRoot,
-} from "@rakazo/adapters";
-import type { ModelConnectInput, RunStatus, ThreadSnapshot } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, isTerminal, projectThreadItems } from "@rakazo/core";
-import type { createDb } from "@rakazo/db";
-import { runMessages } from "@rakazo/db";
+} from "@tangow/adapters";
+import type { ModelConnectInput, RunStatus, ThreadSnapshot } from "@tangow/contracts";
+import { ACTIVE_RUN_STATUSES, isTerminal, projectThreadItems } from "@tangow/core";
+import type { createDb } from "@tangow/db";
+import { runMessages } from "@tangow/db";
 import { sessionCookieHeader } from "../index.js";
 import type { EvalCase, Evidence } from "./cases.js";
 import { emptyTrial, type FailureCategory, redact, type TrialResult } from "./report.js";

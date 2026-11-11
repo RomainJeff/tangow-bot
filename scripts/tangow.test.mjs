@@ -548,7 +548,7 @@ test("setup creates private configuration, deploys HEAD and preserves secrets on
   const filename = path.join(f.root, ".env");
   const first = parseEnv(readFileSync(filename, "utf8"));
   assert.equal(first.WEB_ORIGIN, "http://127.0.0.1:5173");
-  assert.equal(first.RAKAZO_HOST, "127.0.0.1");
+  assert.equal(first.TANGOW_HOST, "127.0.0.1");
   assert.equal(first.GIT_SHA, f.before);
   assert.match(first.ENCRYPTION_KEY, /^[a-f0-9]{64}$/);
   const secretNames = [
@@ -615,7 +615,7 @@ test("setup configures public hostname and email policy before building without 
   const result = f.invoke(
     ["setup"],
     { TARGET: f.before },
-    `https://app.example.com\n${smtp}\nRakazo <mail@example.com>\nowner@example.com\n\n\n`,
+    `https://app.example.com\n${smtp}\nTangow <mail@example.com>\nowner@example.com\n\n\n`,
   );
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Ready:/);
@@ -627,7 +627,7 @@ test("setup configures public hostname and email policy before building without 
   assert.equal(saved.WEB_ORIGIN, "https://app.example.com");
   assert.equal(saved.BETTER_AUTH_URL, "https://app.example.com");
   assert.equal(saved.API_URL, "https://app.example.com");
-  assert.equal(saved.RAKAZO_HOST, "app.example.com");
+  assert.equal(saved.TANGOW_HOST, "app.example.com");
   assert.equal(saved.SIGNUP_ALLOWLIST, "owner@example.com");
   const compose = spawnSync(
     "docker",

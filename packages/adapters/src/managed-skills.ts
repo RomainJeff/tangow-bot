@@ -1,8 +1,8 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseSkillMd } from "@rakazo/core";
-import { getLogger } from "@rakazo/logging";
+import { parseSkillMd } from "@tangow/core";
+import { getLogger } from "@tangow/logging";
 import { skillDirName } from "./skill-store.js";
 
 /**

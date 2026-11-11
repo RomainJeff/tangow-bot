@@ -5,11 +5,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { queryObjects } from "node:v8";
 import type { CommandHandle, CommandStartOpts } from "@e2b/desktop";
-import type { ConnectorProvider } from "@rakazo/adapter-kit";
-import { E2BSandboxProvider } from "@rakazo/adapters";
-import type { GuestHarness } from "@rakazo/agent-run-worker";
-import { HARNESSES } from "@rakazo/agent-run-worker";
-import { HELPER_PROFILES } from "@rakazo/core";
+import type { ConnectorProvider } from "@tangow/adapter-kit";
+import { E2BSandboxProvider } from "@tangow/adapters";
+import type { GuestHarness } from "@tangow/agent-run-worker";
+import { HARNESSES } from "@tangow/agent-run-worker";
+import { HELPER_PROFILES } from "@tangow/core";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { fakeE2BMachine } from "../../adapters/src/e2b-machine.test-support.js";
 import type { E2BSandboxSdk } from "../../adapters/src/e2b-sandbox.js";
@@ -169,13 +169,13 @@ describe("a worker run's computer", () => {
         {
           expect(request) {
             const names = request.tools?.map((tool) => tool.function.name) ?? [];
-            expect(names).toContain("mcp__rakazo__browser_snapshot");
-            expect(names).not.toContain("mcp__rakazo__browser_run");
+            expect(names).toContain("mcp__tangow__browser_snapshot");
+            expect(names).not.toContain("mcp__tangow__browser_run");
           },
           response: {
             type: "tool",
             id: "page",
-            name: "mcp__rakazo__browser_snapshot",
+            name: "mcp__tangow__browser_snapshot",
             arguments: {},
           },
         },
@@ -186,7 +186,7 @@ describe("a worker run's computer", () => {
           response: {
             type: "tool",
             id: "say",
-            name: "mcp__rakazo__message_user",
+            name: "mcp__tangow__message_user",
             arguments: { message: "Done." },
           },
         },
@@ -461,7 +461,7 @@ describe("a worker run's screens by path", () => {
     const results: Record<string, unknown> = {};
     const read = { type: "tool" as const, id: "see", name: "read", arguments: { path: "" } };
     // Stands for another bot's folder that the guest links from its own volume.
-    const elsewhere = await mkdtemp(path.join(tmpdir(), "rakazo-other-bot-"));
+    const elsewhere = await mkdtemp(path.join(tmpdir(), "tangow-other-bot-"));
     cleanups.push(() => rm(elsewhere, { recursive: true, force: true }));
     const run = await startWorkerRun({
       steps: [
@@ -472,7 +472,7 @@ describe("a worker run's screens by path", () => {
             id: "link",
             name: "bash",
             arguments: {
-              command: `mkdir -p .rakazo && ln -s ${elsewhere} .rakazo/screens && ln -s ${elsewhere} screens`,
+              command: `mkdir -p .tangow && ln -s ${elsewhere} .tangow/screens && ln -s ${elsewhere} screens`,
             },
           },
         },
@@ -512,7 +512,7 @@ describe("a worker run's screens by path", () => {
     run.model.assertComplete();
 
     expect(await readdir(elsewhere)).toEqual([]);
-    const screen = "\\.rakazo-screen-[\\w-]{36}\\.png";
+    const screen = "\\.tangow-screen-[\\w-]{36}\\.png";
     expect(String(results.look)).toMatch(
       new RegExp(
         `^computer observed\\n\\{"frameId":"[^"]+",.*"width":\\d+,"height":\\d+.*"path":"${screen}"\\}\\nScreen saved at ${screen}\\. Read it to see it\\.$`,
@@ -526,7 +526,7 @@ describe("a worker run's screens by path", () => {
     });
     expect(
       (await readdir(run.provider.volumePath(volume.providerRef!))).filter((name) =>
-        name.startsWith(".rakazo-screen-"),
+        name.startsWith(".tangow-screen-"),
       ),
     ).toEqual([]);
     const fromController = seen
@@ -540,7 +540,7 @@ describe("a worker run's screens by path", () => {
 describe("computer_exec", () => {
   const terminals = (request: ModelEmulatorRequest) =>
     (request.tools ?? [])
-      .map((tool) => tool.function.name.replace(/^mcp__rakazo__/, ""))
+      .map((tool) => tool.function.name.replace(/^mcp__tangow__/, ""))
       .filter((name) => ["bash", "shell", "computer_exec"].includes(name))
       .sort();
 
@@ -735,7 +735,7 @@ it("hands the computer to computer-use: the bot that can start it has none of it
       {
         expect(request) {
           names = (request.tools ?? []).map((tool) =>
-            tool.function.name.replace(/^mcp__rakazo__/, ""),
+            tool.function.name.replace(/^mcp__tangow__/, ""),
           );
         },
         response: finish[0]!.response,

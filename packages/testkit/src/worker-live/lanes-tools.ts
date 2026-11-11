@@ -15,7 +15,7 @@ export const laneD: Lane = {
   async run(live) {
     const seen: Record<string, unknown> = {};
     const isHelper = (request: ModelEmulatorRequest) =>
-      JSON.stringify(request.messages[0]?.content ?? "").includes("Rakazo subagent");
+      JSON.stringify(request.messages[0]?.content ?? "").includes("Tangow subagent");
     const worker = await liveRun(live, {
       steps: [
         call("p1", "computer_act", { action: "click", x: 1, y: 1 }, (request) => {
@@ -199,7 +199,7 @@ export const laneEAnthropic: Lane = {
 };
 
 /** Where the refusal lane writes the hand-written guest in each worker VM. */
-const HOSTILE_GUEST = "/tmp/rakazo-hostile-guest.mjs";
+const HOSTILE_GUEST = "/tmp/tangow-hostile-guest.mjs";
 
 /**
  * The hand-written guest: the copy the live bundle carries beside it, or, from source, a bundle

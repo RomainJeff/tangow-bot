@@ -1,10 +1,10 @@
-import { SPECIAL_BOT_COLORS } from "@rakazo/contracts";
+import { SPECIAL_BOT_COLORS } from "@tangow/contracts";
 import {
   LAUNCH_CHOREOGRAPHY,
   LAUNCH_LOOP_FROM_INDEX,
   LAUNCH_WAKE_UP_MINIMUM_SECONDS,
   SHAPES,
-} from "@rakazo/core";
+} from "@tangow/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, useColorScheme, View } from "react-native";
 import Animated, {

@@ -1,7 +1,7 @@
 # Shared by the api and worker services, which run the same image against the same
 # database and sandbox supervisor. Each merges it and adds only what it alone needs.
 x-app-env: &app-env
-  DATABASE_URL: postgres://${POSTGRES_USER:-rakazo}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-rakazo}
+  DATABASE_URL: postgres://${POSTGRES_USER:-tangow}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-tangow}
   DATA_DIR: /data
   SANDBOX_SUPERVISOR_URL: http://supervisor:7091
   WAKEUP_DRIVER: graphile
@@ -22,19 +22,19 @@ services:
       # USER/PASSWORD/DB apply only on first pgdata init. Keep existing values in
       # .env, or ALTER ROLE / rename in place. Recreate pgdata only after backup
       # (or when the volume is disposable); down -v deletes all DB state.
-      POSTGRES_USER: ${POSTGRES_USER:-rakazo}
+      POSTGRES_USER: ${POSTGRES_USER:-tangow}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      POSTGRES_DB: ${POSTGRES_DB:-rakazo}
+      POSTGRES_DB: ${POSTGRES_DB:-tangow}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rakazo} -d ${POSTGRES_DB:-rakazo}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tangow} -d ${POSTGRES_DB:-tangow}"]
       interval: 3s
       timeout: 5s
       retries: 20
 
   supervisor:
-    image: rakazo/supervisor:local
+    image: tangow/supervisor:local
     restart: unless-stopped
     build:
       context: ../..
@@ -44,11 +44,11 @@ services:
       SUPERVISOR_HOST: "0.0.0.0"
       SUPERVISOR_PORT: "7091"
       DOCKER_SOCKET: /var/run/docker.sock
-      RAKAZO_COMPUTER_IMAGE: rakazo/computer:local
-      RAKAZO_WORKER_IMAGE: rakazo/worker:local
-      RAKAZO_COMPUTER_MEMORY: ${RAKAZO_COMPUTER_MEMORY:-8g}
-      RAKAZO_COMPUTER_CPUS: ${RAKAZO_COMPUTER_CPUS:-4}
-      RAKAZO_COMPUTER_PIDS_LIMIT: ${RAKAZO_COMPUTER_PIDS_LIMIT:-2048}
+      TANGOW_COMPUTER_IMAGE: tangow/computer:local
+      TANGOW_WORKER_IMAGE: tangow/worker:local
+      TANGOW_COMPUTER_MEMORY: ${TANGOW_COMPUTER_MEMORY:-8g}
+      TANGOW_COMPUTER_CPUS: ${TANGOW_COMPUTER_CPUS:-4}
+      TANGOW_COMPUTER_PIDS_LIMIT: ${TANGOW_COMPUTER_PIDS_LIMIT:-2048}
       SANDBOX_COMMAND_TIMEOUT_MS: ${SANDBOX_COMMAND_TIMEOUT_MS:-300000}
       SANDBOX_TEAM_SCREEN_LIMIT: ${SANDBOX_TEAM_SCREEN_LIMIT:-0}
       SANDBOX_SUPERVISOR_TOKEN: ${SANDBOX_SUPERVISOR_TOKEN:?Set SANDBOX_SUPERVISOR_TOKEN in .env}
@@ -69,14 +69,14 @@ services:
         condition: service_completed_successfully
 
   computer:
-    image: rakazo/computer:local
+    image: tangow/computer:local
     build:
       context: ../sandboxes/computer
     command: ["true"]
     restart: "no"
 
   worker-image:
-    image: rakazo/worker:local
+    image: tangow/worker:local
     build:
       context: ../..
       dockerfile: apps/agent-run-worker/Dockerfile
@@ -94,7 +94,7 @@ services:
   # legacy messages first when an upgrade needs it. On a large database that takes minutes. Then
   # moves each idle computer's home onto its volumes, on the same /data as the supervisor.
   migrate:
-    image: rakazo/app:local
+    image: tangow/app:local
     pull_policy: never
     command:
       - sh
@@ -118,11 +118,11 @@ services:
     # derive a per-service tag and keep three copies of the same 6 GB image.
     # worker and web reuse this tag with `pull_policy: never`: no registry serves
     # `:local`, and this build is what puts it on the host.
-    image: rakazo/app:local
+    image: tangow/app:local
     build:
       context: ../..
       dockerfile: infra/compose/Dockerfile
-    command: ["pnpm", "--filter", "@rakazo/api", "start"]
+    command: ["pnpm", "--filter", "@tangow/api", "start"]
     env_file:
       - ../../.env
     environment:
@@ -141,10 +141,10 @@ services:
         condition: service_completed_successfully
 
   worker:
-    image: rakazo/app:local
+    image: tangow/app:local
     restart: unless-stopped
     pull_policy: never
-    command: ["pnpm", "--filter", "@rakazo/worker", "start"]
+    command: ["pnpm", "--filter", "@tangow/worker", "start"]
     env_file:
       - ../../.env
     environment:
@@ -162,14 +162,14 @@ services:
         condition: service_completed_successfully
 
   web:
-    image: rakazo/app:local
+    image: tangow/app:local
     restart: unless-stopped
     pull_policy: never
-    command: ["pnpm", "--filter", "@rakazo/web", "preview", "--host", "0.0.0.0", "--port", "5173"]
+    command: ["pnpm", "--filter", "@tangow/web", "preview", "--host", "0.0.0.0", "--port", "5173"]
     environment:
       API_PROXY_TARGET: http://api:3100
       SCREEN_PROXY_SECRET: ${SCREEN_PROXY_SECRET:?Set SCREEN_PROXY_SECRET in .env}
-      RAKAZO_HOST: ${RAKAZO_HOST:-localhost}
+      TANGOW_HOST: ${TANGOW_HOST:-localhost}
     ports:
       - "127.0.0.1:5173:5173"
     depends_on:

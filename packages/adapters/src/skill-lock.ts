@@ -1,4 +1,4 @@
-import { getLogger } from "@rakazo/logging";
+import { getLogger } from "@tangow/logging";
 import type { Pool } from "pg";
 
 export type SkillOwner = { spaceId: string; userId: string };

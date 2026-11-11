@@ -1,11 +1,11 @@
 ---
 name: release
-description: Release Rakazo clients with automatic Home Assistant style calendar versions based on changes, production iOS EAS build and submission, desktop packaging and installation, and a GitHub Release with IPA and DMG. Use for /release, release desktop, or release mobile. With no argument, release both clients.
+description: Release Tangow clients with automatic Home Assistant style calendar versions based on changes, production iOS EAS build and submission, desktop packaging and installation, and a GitHub Release with IPA and DMG. Use for /release, release desktop, or release mobile. With no argument, release both clients.
 ---
 
 # Release
 
-Run this workflow from the Rakazo checkout on macOS. Invoking it authorizes the
+Run this workflow from the Tangow checkout on macOS. Invoking it authorizes the
 selected version changes and their release commit, builds, iOS submission, local
 desktop installation, tag push, and GitHub Release publication. A request to
 create or edit this skill does not run a release.
@@ -34,7 +34,7 @@ produce native release artifacts, even when an OTA update would be possible.
   `gh auth status`, dependencies, and signing credentials through the existing
   private configuration. For mobile, verify EAS authentication with
   `npx eas-cli@latest whoami` from `apps/mobile` and run
-  `pnpm --filter @rakazo/mobile exec expo install --check` from the root.
+  `pnpm --filter @tangow/mobile exec expo install --check` from the root.
   Do not print credentials, disable signing or notarization, or commit build outputs.
 - Record which output files already exist. Use only artifacts produced by this run,
   never an old IPA or a DMG selected merely because it is the newest in a directory.
@@ -110,11 +110,11 @@ Run from `apps/mobile`, stopping immediately on either command's failure:
 
 ```sh
 mkdir -p builds
-npx eas-cli@latest build --platform ios --profile production --local --output builds/rakazo-production.ipa
-npx eas-cli@latest submit --platform ios --profile production --path builds/rakazo-production.ipa --wait
+npx eas-cli@latest build --platform ios --profile production --local --output builds/tangow-production.ipa
+npx eas-cli@latest submit --platform ios --profile production --path builds/tangow-production.ipa --wait
 ```
 
-Before building, move an existing `builds/rakazo-production.ipa` into an ignored
+Before building, move an existing `builds/tangow-production.ipa` into an ignored
 backup location so a failed build cannot be mistaken for a fresh artifact.
 Require the new IPA to be nonempty before submission. Inspect its
 `CFBundleShortVersionString` and `CFBundleVersion` to verify the chosen marketing
@@ -150,7 +150,7 @@ Do not pick an older file left in `out`.
 
 Mount the selected DMG read-only with `hdiutil attach -readonly -nobrowse` and
 record the mount point. Locate the `.app` inside it and read its bundle identifier,
-name, and version rather than assuming the product is named Rakazo. The current
+name, and version rather than assuming the product is named Tangow. The current
 desktop product name is Tangow.
 
 Quit that app gracefully if running. Install the mounted `.app` into `/Applications`

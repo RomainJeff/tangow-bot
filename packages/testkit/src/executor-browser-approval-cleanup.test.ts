@@ -3,13 +3,13 @@ import type {
   ComputerRef,
   PageBrowserCommand,
   SandboxProvider,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import {
   E2BSandboxEmulator,
   InMemoryJobQueue,
   recoverBrowserApprovalScreens,
-} from "@rakazo/adapters";
-import { browserApprovalCheckpointOf } from "@rakazo/db";
+} from "@tangow/adapters";
+import { browserApprovalCheckpointOf } from "@tangow/db";
 import { afterEach, expect, it, vi } from "vitest";
 import type { RouterDeps } from "../../../apps/api/src/router.js";
 import { createRouter } from "../../../apps/api/src/router.js";
@@ -379,7 +379,7 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
   "Stop kills pre-approval background work during an active continuation",
   async () => {
     const machine = await dockerE2BMachine(
-      process.env.COMPUTER_TEST_IMAGE ?? "rakazo/computer:local",
+      process.env.COMPUTER_TEST_IMAGE ?? "tangow/computer:local",
     );
     cleanups.push(() => machine.close());
     const entered = Promise.withResolvers<void>();
@@ -542,7 +542,7 @@ it.skipIf(process.env.VERIFY_DATABASE !== "1" || !process.env.DATABASE_URL)(
           actor: {
             spaceId: fixture.run.spaceId,
             userId: fixture.run.userId,
-            email: "worker@rakazo.test",
+            email: "worker@tangow.test",
             isDeploymentOwner: true,
           },
         },

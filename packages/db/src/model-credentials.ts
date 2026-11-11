@@ -1,4 +1,4 @@
-import type { ModelCategory, ModelCategoryAssignment } from "@rakazo/contracts";
+import type { ModelCategory, ModelCategoryAssignment } from "@tangow/contracts";
 import type { PrismaClient } from "./client.js";
 
 export const newestCredentialOrder = [

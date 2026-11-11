@@ -1,4 +1,4 @@
-import type { UsageCell } from "@rakazo/contracts";
+import type { UsageCell } from "@tangow/contracts";
 import { captureScreenshot, completeOnboarding, openUserSettings, signup } from "./helpers";
 import { expect, test } from "./test";
 
@@ -63,7 +63,7 @@ test("usage settings break spend down by bot, model and category, input and outp
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `usage-settings-${stamp}@rakazo.test`, "password12", `Usage ${stamp}`);
+  await signup(page, `usage-settings-${stamp}@tangow.test`, "password12", `Usage ${stamp}`);
   await completeOnboarding(page);
   const periods: string[] = [];
   await page.route("**/rpc/usage/breakdown", async (route) => {

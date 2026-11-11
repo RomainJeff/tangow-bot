@@ -1,5 +1,5 @@
-import type { ThreadItem } from "@rakazo/contracts";
-import { ThreadItemSchema } from "@rakazo/contracts";
+import type { ThreadItem } from "@tangow/contracts";
+import { ThreadItemSchema } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import { routineRoles } from "./routine-roles.js";
 

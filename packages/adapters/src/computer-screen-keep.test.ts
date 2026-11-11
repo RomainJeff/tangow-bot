@@ -4,8 +4,8 @@ import type {
   ComputerRef,
   JobPublisher,
   SandboxProvider,
-} from "@rakazo/adapter-kit";
-import type { PrismaClient, ThreadEvents } from "@rakazo/db";
+} from "@tangow/adapter-kit";
+import type { PrismaClient, ThreadEvents } from "@tangow/db";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sleepBotScreenIfIdle } from "./computer-idle.js";
 import { releaseBotScreen } from "./computer-lifecycle.js";

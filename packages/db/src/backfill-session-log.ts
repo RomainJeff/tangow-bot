@@ -1,11 +1,11 @@
 import { randomUUID } from "node:crypto";
-import type { EntryId, MessageBlock, SessionRunTrigger } from "@rakazo/contracts";
+import type { EntryId, MessageBlock, SessionRunTrigger } from "@tangow/contracts";
 import {
   BotMessageIntent,
   isLinkPreviewCard,
   isRunTrace,
   parseKnownMessageBlocks,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import * as z from "zod";
 import type { PrismaClient } from "./client.js";
 import { Prisma } from "./client.js";

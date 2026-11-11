@@ -1,5 +1,5 @@
-import type { MessageBlock } from "@rakazo/contracts";
-import type { spawnBotEdits } from "@rakazo/core";
+import type { MessageBlock } from "@tangow/contracts";
+import type { spawnBotEdits } from "@tangow/core";
 
 type SpawnBotFields = NonNullable<Extract<MessageBlock, { kind: "ask" }>["spawnBot"]>;
 export type SpawnBotEdits = NonNullable<ReturnType<typeof spawnBotEdits>>;

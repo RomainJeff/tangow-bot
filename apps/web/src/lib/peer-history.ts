@@ -1,5 +1,5 @@
-import type { EntryId, ThreadEntry, ThreadMessagePage } from "@rakazo/contracts";
-import { mergeEntries } from "@rakazo/core";
+import type { EntryId, ThreadEntry, ThreadMessagePage } from "@tangow/contracts";
+import { mergeEntries } from "@tangow/core";
 
 const PEER_HISTORY_PAGE_TIMEOUT_MS = 15_000;
 const PEER_HISTORY_TOTAL_TIMEOUT_MS = 60_000;

@@ -1,8 +1,8 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { buildSkillMd } from "@rakazo/core";
-import { createPool } from "@rakazo/db";
+import { buildSkillMd } from "@tangow/core";
+import { createPool } from "@tangow/db";
 import { describe, expect, it, vi } from "vitest";
 import { listUserSkills, userSkillsRoot, writeUserSkill } from "./skill-store.js";
 
@@ -43,7 +43,7 @@ describePostgres("skill owner lock (PostgreSQL contract)", () => {
   });
 
   it("orders two processes editing one skill, losing neither edit", async () => {
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-skill-lock-pg-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-skill-lock-pg-"));
     const owner = { spaceId: "skill-lock-test", userId: `pid-${process.pid}` };
     const root = userSkillsRoot(dataDir, owner);
     const pools = ["api", "worker"].map((name) =>

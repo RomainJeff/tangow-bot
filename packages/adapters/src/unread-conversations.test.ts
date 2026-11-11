@@ -5,9 +5,9 @@ import {
   createSpaceInvitations,
   setBotSharing,
   sharedBotThread,
-} from "@rakazo/db";
-import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
-import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
+} from "@tangow/db";
+import type { PgliteDatabase } from "@tangow/db/pglite.test-support";
+import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { unreadConversationCount } from "./executor.js";
 
@@ -22,20 +22,20 @@ it("counts unread threads of live bots, a member's with a shared bot until it is
   const { prisma } = database;
   const env = { signupsEnabled: "true", signupAllowlist: undefined };
   for (const id of ["owner", "member"]) {
-    await prisma.user.create({ data: { id, name: id, email: `${id}@rakazo.test` } });
+    await prisma.user.create({ data: { id, name: id, email: `${id}@tangow.test` } });
   }
   const spaceId = (await bootstrapUserSpace(prisma, { id: "owner" }, env)).spaceId;
   await bootstrapUserSpace(prisma, { id: "member" }, env);
   const [invitation] = await createSpaceInvitations(prisma, {
     spaceId,
     userId: "owner",
-    emails: ["member@rakazo.test"],
+    emails: ["member@tangow.test"],
   });
   await acceptSpaceInvitation(prisma, { token: invitation!.id, userId: "member" });
   const actor = (userId: string) => ({
     userId,
     spaceId,
-    email: `${userId}@rakazo.test`,
+    email: `${userId}@tangow.test`,
     isDeploymentOwner: false,
   });
   const bot = await createRepos(prisma).createBot(actor("owner"), {

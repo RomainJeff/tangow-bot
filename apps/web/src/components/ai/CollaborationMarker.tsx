@@ -1,5 +1,5 @@
-import type { GroupAvatarMember, StackedAvatarItem } from "@rakazo/ui-web";
-import { cn, GroupAvatar, Interstitial, StackedAvatars, WorkingLine } from "@rakazo/ui-web";
+import type { GroupAvatarMember, StackedAvatarItem } from "@tangow/ui-web";
+import { cn, GroupAvatar, Interstitial, StackedAvatars, WorkingLine } from "@tangow/ui-web";
 import type { ReactNode } from "react";
 
 /** Lightweight peer event shown without exposing the exchanged message body. */

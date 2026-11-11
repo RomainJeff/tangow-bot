@@ -1,4 +1,4 @@
-import { SessionEntrySchema } from "@rakazo/contracts";
+import { SessionEntrySchema } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import { activityNotificationsEnabled, activityPromptSnippet } from "./runs.js";
 

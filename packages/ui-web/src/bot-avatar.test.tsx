@@ -1,4 +1,4 @@
-import { avatarIdentitySeed, SHAPES } from "@rakazo/core";
+import { avatarIdentitySeed, SHAPES } from "@tangow/core";
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { AvatarStyleProvider } from "./avatar-style.js";
@@ -41,13 +41,13 @@ describe("BotAvatar", () => {
   it("keeps the working ring mounted when idle so its timeline does not reset", () => {
     const html = renderToString(<BotAvatar color="#F59E0B" status="idle" variant="robot" />);
     expect(html).toContain('data-working="false"');
-    expect(html).toContain("rakazo-bot-avatar-ring");
+    expect(html).toContain("tangow-bot-avatar-ring");
   });
 
   it("defaults to the organic avatar when no style preference is provided", () => {
     const html = renderToString(<BotAvatar color="#D9508A" identity="maya" status="running" />);
-    expect(html).toContain("rakazo-organic-avatar");
-    expect(html).not.toContain("rakazo-bot-avatar-ring");
+    expect(html).toContain("tangow-organic-avatar");
+    expect(html).not.toContain("tangow-bot-avatar-ring");
   });
 
   it("draws the organic avatar with the bloub engine", () => {
@@ -55,10 +55,10 @@ describe("BotAvatar", () => {
       <BotAvatar color="#D9508A" identity="maya" size={28} status="running" variant="organic" />,
     );
 
-    expect(html).toContain("rakazo-organic-avatar");
+    expect(html).toContain("tangow-organic-avatar");
     expect(html).toContain('data-working="true"');
     expect(html).toContain("<clipPath");
-    expect(html).not.toContain("rakazo-bot-avatar-visor");
+    expect(html).not.toContain("tangow-bot-avatar-visor");
   });
 
   it("paints two eyes over an idle body", () => {
@@ -114,6 +114,6 @@ describe("BotAvatar", () => {
       </AvatarStyleProvider>,
     );
 
-    expect(html).toContain("rakazo-organic-avatar");
+    expect(html).toContain("tangow-organic-avatar");
   });
 });

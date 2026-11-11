@@ -1,13 +1,13 @@
-import type { LinkPreviewBlock, LinkPreviewCard, MessageBlock } from "@rakazo/contracts";
-import { isLinkPreviewCard, isPreviewableUrl } from "@rakazo/contracts";
+import type { LinkPreviewBlock, LinkPreviewCard, MessageBlock } from "@tangow/contracts";
+import { isLinkPreviewCard, isPreviewableUrl } from "@tangow/contracts";
 import {
   isLinkOnlyMessage,
   messageHostsLinkPreview,
   previewSiteLabel,
   sanitizePreviewTitle,
   textWithoutPreviewedLinkLine,
-} from "@rakazo/core";
-import { linkLargeImageRatio, sizes } from "@rakazo/ui-tokens";
+} from "@tangow/core";
+import { linkLargeImageRatio, sizes } from "@tangow/ui-tokens";
 
 /**
  * The card a message shows, or undefined when it shows none. Blocks reach the phone from live

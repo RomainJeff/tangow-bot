@@ -7,7 +7,7 @@ import { clearSetup, readSetup, setupFilePath, writeSetup } from "./setup-store.
 let userData: string;
 
 beforeEach(async () => {
-  userData = await mkdtemp(path.join(tmpdir(), "rakazo-setup-"));
+  userData = await mkdtemp(path.join(tmpdir(), "tangow-setup-"));
 });
 
 afterEach(async () => {
@@ -20,14 +20,14 @@ describe("setup store", () => {
   });
 
   it("keeps the chosen instance across launches", async () => {
-    await writeSetup(userData, { serverUrl: "https://rakazo.example.com" });
+    await writeSetup(userData, { serverUrl: "https://tangow.example.com" });
     await expect(readSetup(userData)).resolves.toEqual({
-      serverUrl: "https://rakazo.example.com",
+      serverUrl: "https://tangow.example.com",
     });
   });
 
   it("clears saved setup so first-run runs again", async () => {
-    await writeSetup(userData, { serverUrl: "https://rakazo.example.com" });
+    await writeSetup(userData, { serverUrl: "https://tangow.example.com" });
     await clearSetup(userData);
     await expect(readSetup(userData)).resolves.toBeNull();
   });
@@ -41,7 +41,7 @@ describe("setup store", () => {
   });
 
   it.runIf(process.platform !== "win32")("keeps the saved address private", async () => {
-    await writeSetup(userData, { serverUrl: "https://rakazo.example.com" });
+    await writeSetup(userData, { serverUrl: "https://tangow.example.com" });
     const info = await stat(setupFilePath(userData));
     expect(info.mode & 0o777).toBe(0o600);
   });
@@ -50,7 +50,7 @@ describe("setup store", () => {
     "does not load setup through a final symlink",
     async () => {
       const target = path.join(userData, "linked-setup.json");
-      await writeFile(target, JSON.stringify({ serverUrl: "https://rakazo.example.com" }), "utf8");
+      await writeFile(target, JSON.stringify({ serverUrl: "https://tangow.example.com" }), "utf8");
       await symlink(target, setupFilePath(userData));
 
       await expect(readSetup(userData)).resolves.toBeNull();
@@ -64,10 +64,10 @@ describe("setup store", () => {
       await writeFile(victim, "untouched", "utf8");
       await symlink(victim, setupFilePath(userData));
 
-      await writeSetup(userData, { serverUrl: "https://rakazo.example.com" });
+      await writeSetup(userData, { serverUrl: "https://tangow.example.com" });
 
       await expect(readSetup(userData)).resolves.toEqual({
-        serverUrl: "https://rakazo.example.com",
+        serverUrl: "https://tangow.example.com",
       });
       await expect(readFile(victim, "utf8")).resolves.toBe("untouched");
     },

@@ -1,21 +1,21 @@
 import { readdir, unlink } from "node:fs/promises";
 import path from "node:path";
-import type { GuestBody, ReplyFinal, ReplyPart, WorkerStartV1 } from "@rakazo/adapter-kit";
-import { FRAME_CAPABILITY, sameWorker, WORKER_PROTOCOL_VERSION } from "@rakazo/adapter-kit";
-import type { FrameChannel } from "@rakazo/adapters/runtime-worker/wire";
+import type { GuestBody, ReplyFinal, ReplyPart, WorkerStartV1 } from "@tangow/adapter-kit";
+import { FRAME_CAPABILITY, sameWorker, WORKER_PROTOCOL_VERSION } from "@tangow/adapter-kit";
+import type { FrameChannel } from "@tangow/adapters/runtime-worker/wire";
 import {
   capabilityWorker,
   encodeMessage,
   isToolPauseResult,
   readControllerFrame,
   WORKER_LIMITS,
-} from "@rakazo/adapters/runtime-worker/wire";
-import type { SkillRoot } from "@rakazo/adapters/volume-skills";
+} from "@tangow/adapters/runtime-worker/wire";
+import type { SkillRoot } from "@tangow/adapters/volume-skills";
 import {
   convergeSkills,
   discoverVolumeSkills,
   reportVolumeSkill,
-} from "@rakazo/adapters/volume-skills";
+} from "@tangow/adapters/volume-skills";
 import type { GuestHarness, HarnessHost, InformativeBody } from "./harness.js";
 import type { Outbox } from "./outbox.js";
 import { createOutbox } from "./outbox.js";
@@ -46,7 +46,7 @@ function deferred<T>() {
 
 /**
  * Runs one attempt's harness against its controller. The guest holds no key and no secret. The
- * harness runs its own tools; every Rakazo tool runs at the controller.
+ * harness runs its own tools; every Tangow tool runs at the controller.
  */
 export async function runGuest(options: GuestOptions): Promise<GuestExit> {
   const worker = capabilityWorker(options.capability);
@@ -341,7 +341,7 @@ async function runAttempt(
       const name = entry.name;
       if (
         !entry.isDirectory() &&
-        /^\.rakazo-screen-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.png$/.test(name)
+        /^\.tangow-screen-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.png$/.test(name)
       ) {
         await unlink(path.join(cwd, name)).catch(reportCleanupError);
       }

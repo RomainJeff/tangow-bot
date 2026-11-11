@@ -2,7 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
 import { ANTHROPIC_MODELS } from "@earendil-works/pi-ai/providers/anthropic.models";
-import { relayPiAiCall } from "@rakazo/adapters/runtime-worker/pi-ai";
+import { relayPiAiCall } from "@tangow/adapters/runtime-worker/pi-ai";
 import { afterEach, describe, expect, it } from "vitest";
 import { toolResult } from "./file-task.js";
 import type { ModelEmulatorRequest } from "./model-emulator.js";

@@ -1,4 +1,4 @@
-import { motion } from "@rakazo/ui-tokens";
+import { motion } from "@tangow/ui-tokens";
 
 export const PROOF_LINE_GAP = 8;
 

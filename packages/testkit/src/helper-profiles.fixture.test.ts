@@ -1,11 +1,11 @@
-import { builtinAgentTools, computerExecTool } from "@rakazo/adapters";
-import { nativeToolsForHarness } from "@rakazo/adapters/runtime-worker";
-import type { HelperProfile } from "@rakazo/core";
-import { delegatedTools, HELPER_PROFILES, MAIN_BOT_BLOCKED_TOOLS, selectTools } from "@rakazo/core";
+import { builtinAgentTools, computerExecTool } from "@tangow/adapters";
+import { nativeToolsForHarness } from "@tangow/adapters/runtime-worker";
+import type { HelperProfile } from "@tangow/core";
+import { delegatedTools, HELPER_PROFILES, MAIN_BOT_BLOCKED_TOOLS, selectTools } from "@tangow/core";
 import { expect, it } from "vitest";
 import { researcher, screenOperator } from "./helper-profiles.fixture.js";
 
-/** What a Pi native bot on a worker can be offered: its harness's own tools, then Rakazo's. */
+/** What a Pi native bot on a worker can be offered: its harness's own tools, then Tangow's. */
 const CATALOG = [
   ...nativeToolsForHarness("pi-native").map(({ name }) => ({ name, where: "guest" as const })),
   ...[...builtinAgentTools, computerExecTool].map(({ name }) => ({

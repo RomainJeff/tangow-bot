@@ -1,7 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
-import { ASK_DRAFT_SUBJECT_MAX_LENGTH } from "@rakazo/contracts";
-import { heldBack, LINE_BREAKS, takeAddresses } from "@rakazo/core";
-import { Textarea } from "@rakazo/ui-web";
+import { ASK_DRAFT_SUBJECT_MAX_LENGTH } from "@tangow/contracts";
+import { heldBack, LINE_BREAKS, takeAddresses } from "@tangow/core";
+import { Textarea } from "@tangow/ui-web";
 import { X } from "lucide-react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useId, useRef, useState } from "react";

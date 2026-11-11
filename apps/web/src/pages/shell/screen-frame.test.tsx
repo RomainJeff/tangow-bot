@@ -19,7 +19,7 @@ const EMBED_URL = "https://screen.example/novnc/session/control/1.abc_DEF/embed.
 const PLAIN_URL = "https://screen.example/vnc.html";
 
 function state(value: string) {
-  return JSON.stringify({ type: "rakazo-screen-state", version: 1, state: value });
+  return JSON.stringify({ type: "tangow-screen-state", version: 1, state: value });
 }
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

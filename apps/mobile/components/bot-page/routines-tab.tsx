@@ -1,5 +1,5 @@
-import type { Routine } from "@rakazo/contracts";
-import { routineFailing } from "@rakazo/core";
+import type { Routine } from "@tangow/contracts";
+import { routineFailing } from "@tangow/core";
 import { Pressable, StyleSheet, View } from "react-native";
 import { mobileTokens } from "../../lib/appearance";
 import {

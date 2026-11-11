@@ -6,7 +6,7 @@ import { Template } from "e2b";
 export const COMPUTER_PROFILE = { cpuCount: 2, memoryMB: 4096 } as const;
 
 /**
- * E2B's sandbox user is `user` with its own uid; the canonical image runs as `rakazo` 1000:1000.
+ * E2B's sandbox user is `user` with its own uid; the canonical image runs as `tangow` 1000:1000.
  * This gives `user` uid/gid 1000 and moves the image's home to /home/user, keeping file ownership.
  */
 const RECONCILE_ACCOUNT = String.raw`set -eu
@@ -17,22 +17,22 @@ def require(ok, message):
     if not ok:
         raise SystemExit("E2B canonical account reconciliation: " + message)
 
-canonical, provider = pwd.getpwnam("rakazo"), pwd.getpwnam("user")
-old, new = pathlib.Path("/home/rakazo"), pathlib.Path("/home/user")
+canonical, provider = pwd.getpwnam("tangow"), pwd.getpwnam("user")
+old, new = pathlib.Path("/home/tangow"), pathlib.Path("/home/user")
 require(os.getuid() == 0, "requires build root before volumes mount")
 require((canonical.pw_uid, canonical.pw_gid, canonical.pw_dir) == (1000, 1000, str(old)),
         "unexpected canonical identity")
 require(provider.pw_uid != 1000 and provider.pw_gid != 1000 and provider.pw_dir == str(new),
         "unexpected provider identity")
 for account in pwd.getpwall():
-    require(account.pw_name in ("rakazo", "user") or
+    require(account.pw_name in ("tangow", "user") or
             (account.pw_uid not in (1000, provider.pw_uid) and
              account.pw_gid not in (1000, provider.pw_gid) and account.pw_dir not in (str(old), str(new))),
             "shared account identity or home")
-require(grp.getgrnam("rakazo").gr_gid == 1000 and
+require(grp.getgrnam("tangow").gr_gid == 1000 and
         grp.getgrnam("user").gr_gid == provider.pw_gid and
-        all(g.gr_name in ("rakazo", "user") or g.gr_gid not in (1000, provider.pw_gid)
-            for g in grp.getgrall()) and not grp.getgrnam("rakazo").gr_mem,
+        all(g.gr_name in ("tangow", "user") or g.gr_gid not in (1000, provider.pw_gid)
+            for g in grp.getgrall()) and not grp.getgrnam("tangow").gr_mem,
         "shared primary group identity")
 for home in (pathlib.Path("/home"), old, new):
     require(stat.S_ISDIR(home.lstat().st_mode), "home must be a real directory")
@@ -43,7 +43,7 @@ cache = new / ".cache"
 require(not cache.is_symlink() and (not cache.exists() or cache.is_dir()), "cache must be a real directory")
 require(not (old / ".cache").is_symlink() and
         (not (old / ".cache").exists() or (old / ".cache").is_dir()), "canonical cache must be a real directory")
-for command in (("userdel", "rakazo"), ("groupmod", "--gid", "1000", "user"),
+for command in (("userdel", "tangow"), ("groupmod", "--gid", "1000", "user"),
                 ("usermod", "--uid", "1000", "--gid", "1000", "user")):
     subprocess.run(command, check=True)
 backup = None
@@ -96,7 +96,7 @@ export function computerTemplate(imageDigest: string): ReturnType<TemplateBuilde
     .setUser("user")
     .setWorkdir("/home/user")
     .setStartCmd(
-      "/usr/local/bin/rakazo-computer",
+      "/usr/local/bin/tangow-computer",
       "until DISPLAY=:1 xdpyinfo >/dev/null 2>&1 && curl -fsS http://127.0.0.1:6080/vnc.html >/dev/null; do sleep 0.2; done",
     );
 }

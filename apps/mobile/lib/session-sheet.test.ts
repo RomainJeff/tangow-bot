@@ -1,5 +1,5 @@
-import { SessionEntrySchema } from "@rakazo/contracts";
-import { projectThreadView } from "@rakazo/core";
+import { SessionEntrySchema } from "@tangow/contracts";
+import { projectThreadView } from "@tangow/core";
 import { describe, expect, it } from "vitest";
 import { isViewedRunLine, originSession } from "./session-sheet";
 

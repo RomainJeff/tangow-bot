@@ -17,7 +17,7 @@ Aujourd'hui, pour envoyer un article à un bot, il faut copier le lien, ouvrir T
 | --- | --- |
 | Envoyer | `threads/send` `{ botId \| groupId, clientNonce, text }`. Le serveur ajoute l'aperçu du lien tout seul (`apps/mobile/app/thread.tsx:1508`). Aucun changement serveur pour les lots 1 et 2. |
 | Lister les cibles | `spaces/list` : bots et groupes actifs de chaque espace (avec `color`, `shapeSeed`, `updatedAt`). |
-| Session | Items SecureStore : `rakazo.session_token`, `rakazo.api_base`, `rakazo.space_id`, `rakazo.cf_access`. |
+| Session | Items SecureStore : `tangow.session_token`, `tangow.api_base`, `tangow.space_id`, `tangow.cf_access`. |
 | Targets natives | `@bacons/apple-targets` (déjà utilisé pour la notification service). |
 
 ## Architecture
@@ -40,8 +40,8 @@ Pourquoi native : une extension de partage a une limite mémoire stricte, et y e
 - la règle de `accessFor` (`lib/access-store.ts:13`) : le jeton stocké seulement si son origine correspond, le jeton de build seulement si la base est celle par défaut.
 
 **Client Swift minimal** (`ShareClient.swift`) :
-- `POST {base}/rpc/{proc}` avec le corps `{ json: input }` et les en-têtes `authorization: Bearer`, `x-rakazo-space-id`, `origin: rakazo://` et Access ;
-- `spaces/list` : les bots et groupes actifs de tous les espaces, triés par `updatedAt`, avec le nom de l'espace quand il y en a plusieurs ; l'envoi passe l'espace de la cible dans `x-rakazo-space-id` ;
+- `POST {base}/rpc/{proc}` avec le corps `{ json: input }` et les en-têtes `authorization: Bearer`, `x-tangow-space-id`, `origin: tangow://` et Access ;
+- `spaces/list` : les bots et groupes actifs de tous les espaces, triés par `updatedAt`, avec le nom de l'espace quand il y en a plusieurs ; l'envoi passe l'espace de la cible dans `x-tangow-space-id` ;
 - `threads/send` avec `text = note.isEmpty ? url : "\(note)\n\n\(url)"`.
 
 **« À » par défaut.** L'extension garde sa propre dernière cible de partage `{ kind, id }` (UserDefaults de l'extension). Si cette cible est dans la liste, on la prend. Sinon, notamment au tout premier partage, « À » reste vide : Envoyer est désactivé tant qu'on n'a pas choisi. `last-bot.ts` reste tel quel.
@@ -62,17 +62,17 @@ Pourquoi native : une extension de partage a une limite mémoire stricte, et y e
 Sur Android, le modèle natif est que l'app s'ouvre (WhatsApp fait pareil).
 
 - `app.json` → `android.intentFilters` : `SEND`, `DEFAULT`, `text/plain`.
-- Un module Expo local Android (`modules/rakazo-share`) expose `EXTRA_TEXT` / `EXTRA_SUBJECT` au lancement et sur `onNewIntent`. Expo Linking ne voit pas ces extras.
+- Un module Expo local Android (`modules/tangow-share`) expose `EXTRA_TEXT` / `EXTRA_SUBJECT` au lancement et sur `onNewIntent`. Expo Linking ne voit pas ces extras.
 - Une route Expo Router `/share` (feuille modale) reprend C·1 / C·2 avec les primitives existantes : `BotAvatar`, `GroupAvatar`, le kit `Group` / `Row`, les tokens via `lib/appearance`, et `rpc()`, donc espace et en-têtes gratuits.
 - La logique pure va dans `lib/share.ts`, testée : extraire l'URL, composer le corps, choisir la cible par défaut. Même règle qu'iOS : la dernière cible de partage (stockée par l'écran `/share`) si elle est dans la liste, sinon « À » vide.
-- Après l'envoi : retour à l'app d'origine (`moveTaskToBack` exposé par `rakazo-share`).
+- Après l'envoi : retour à l'app d'origine (`moveTaskToBack` exposé par `tangow-share`).
 
 ## Découpage (PR indépendantes vers `main`)
 
 1. **iOS — extension de partage.** Entitlement du trousseau, target `share`, `ShareClient.swift`, C·1 / C·2.
    - Étape 1, avant le reste : un build de développement sur l'appareil qui prouve la lecture de la session sans reconnexion.
    - Entrée CHANGELOG.
-2. **Android — cible de partage.** Filtre d'intent, module `rakazo-share`, route `/share`, `lib/share.ts`.
+2. **Android — cible de partage.** Filtre d'intent, module `tangow-share`, route `/share`, `lib/share.ts`.
    - Entrée CHANGELOG (ou une seule entrée commune si 1 et 2 sortent le même jour).
 3. **Après les lots 1–2 : partage direct** (la rangée ① de la maquette). Elle montre les bots et groupes avec qui on a échangé récemment. Il faut :
    - côté serveur, ajouter `groupName` + `spaceId` au payload push ;
@@ -84,7 +84,7 @@ Sur Android, le modèle natif est que l'app s'ouvre (WhatsApp fait pareil).
 ## Tests
 
 - `lib/share.ts` : texte avec titre + URL, URL seule, pas d'URL ; corps envoyé ; cible par défaut absente, archivée ou supprimée → « À » vide.
-- Test de contrat TS, dans le style string-match de `android-platform-contract.test.ts` : `ShareClient.swift` contient bien les clés `rakazo.session_token`, `rakazo.api_base`, `rakazo.space_id`, `rakazo.cf_access`, le service `app:no-auth` et les champs JSON Access. Une clé renommée échouerait en silence (« Sign in… ») ; un nom de procédure faux échoue bruyamment dès le premier partage, donc on ne le teste pas.
+- Test de contrat TS, dans le style string-match de `android-platform-contract.test.ts` : `ShareClient.swift` contient bien les clés `tangow.session_token`, `tangow.api_base`, `tangow.space_id`, `tangow.cf_access`, le service `app:no-auth` et les champs JSON Access. Une clé renommée échouerait en silence (« Sign in… ») ; un nom de procédure faux échoue bruyamment dès le premier partage, donc on ne le teste pas.
 - Captures : iOS à la main sur l'appareil (l'extension ne se pilote pas) ; Android via `adb shell am start -a android.intent.action.SEND …`. Les deux sont signalées dans les PR.
 
 ## Livraison

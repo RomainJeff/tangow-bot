@@ -1,16 +1,16 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { SkillOwnerLock } from "@rakazo/adapters";
+import type { SkillOwnerLock } from "@tangow/adapters";
 import {
   createInMemorySkillLock,
   listUserSkills,
   skillCreateFromTool,
   userSkillsRoot,
-} from "@rakazo/adapters";
-import { buildSkillMd } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
-import { IsolationError } from "@rakazo/db";
+} from "@tangow/adapters";
+import { buildSkillMd } from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
+import { IsolationError } from "@tangow/db";
 import { create as tarCreate } from "tar";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ZipFile } from "yazl";
@@ -76,7 +76,7 @@ describe("agent skills service (filesystem)", () => {
   };
 
   beforeEach(async () => {
-    dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-api-skills-"));
+    dataDir = await mkdtemp(path.join(tmpdir(), "tangow-api-skills-"));
     prisma = {
       $transaction: vi.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
       bot: {
@@ -297,7 +297,7 @@ describe("agent skills service (filesystem)", () => {
   it("imports a tar.gz bundle with its extra files, rejecting bad frontmatter and duplicates", async () => {
     const skills = service();
     async function bundle(skillMd: string): Promise<string> {
-      const src = await mkdtemp(path.join(tmpdir(), "rakazo-bundle-"));
+      const src = await mkdtemp(path.join(tmpdir(), "tangow-bundle-"));
       try {
         await mkdir(path.join(src, "scripts"));
         await writeFile(path.join(src, "SKILL.md"), skillMd, "utf8");

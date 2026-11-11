@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { BotEngine } from "@rakazo/core";
+import { BotEngine } from "@tangow/core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";

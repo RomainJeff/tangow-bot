@@ -5,7 +5,7 @@ import {
   type BotSection,
   type MessageBlock,
   type SpaceBot,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import { ensureMemberThreads, sharedWithFilter } from "./bot-sharing.js";
 import type { PrismaClient } from "./client.js";
 import { type ComputerMode, ensureComputerRecord, parseComputerMode } from "./computers.js";

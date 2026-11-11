@@ -1,6 +1,6 @@
 import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
-import type { MessageBlock } from "@rakazo/contracts";
+import type { MessageBlock } from "@tangow/contracts";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { MessageItem } from "../../src/lib/thread-items";

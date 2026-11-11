@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import type { LinkPreviewDraft } from "@rakazo/contracts";
+import type { LinkPreviewDraft } from "@tangow/contracts";
 import type { ComponentProps, ReactNode } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

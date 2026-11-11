@@ -1,9 +1,9 @@
 import { useLingui } from "@lingui/react/macro";
-import type { AgentSkillCatalogEntry } from "@rakazo/contracts";
-import type { ComposerChange, ComposerMention, SlashActionId } from "@rakazo/core";
-import { mentionChipKey, resolveMentionPickerKey, serializeComposerPrompt } from "@rakazo/core";
-import type { ComposerState } from "@rakazo/ui-web";
-import { Button, ComposerShell, StopContour } from "@rakazo/ui-web";
+import type { AgentSkillCatalogEntry } from "@tangow/contracts";
+import type { ComposerChange, ComposerMention, SlashActionId } from "@tangow/core";
+import { mentionChipKey, resolveMentionPickerKey, serializeComposerPrompt } from "@tangow/core";
+import type { ComposerState } from "@tangow/ui-web";
+import { Button, ComposerShell, StopContour } from "@tangow/ui-web";
 import { ArrowUp } from "lucide-react";
 import type { ClipboardEvent, RefObject } from "react";
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";

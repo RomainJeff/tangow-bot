@@ -6,17 +6,17 @@ import {
   computerSleepJob,
   type JobPublisher,
   type SandboxProvider,
-} from "@rakazo/adapter-kit";
-import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
-import type { PrismaClient, ThreadEvents } from "@rakazo/db";
+} from "@tangow/adapter-kit";
+import { ACTIVE_RUN_STATUSES } from "@tangow/core";
+import type { PrismaClient, ThreadEvents } from "@tangow/db";
 import { recoverBrowserApprovalScreens } from "./browser-approval.js";
 import { expireComputerControl, hasActiveComputerControl } from "./computer-control.js";
 import { releaseBotScreen, toComputerRef } from "./computer-lifecycle.js";
 import { sandboxIdleMs, scheduleBotScreenSleep } from "./computer-support.js";
 import { checkpointComputerWorkspace } from "./computer-workspace.js";
 
-const BACKGROUND_WORK_MARKER_PREFIX = "/tmp/rakazo-background-";
-const BACKGROUND_WORK_IDLE_SENTINEL = "rakazo-background-idle";
+const BACKGROUND_WORK_MARKER_PREFIX = "/tmp/tangow-background-";
+const BACKGROUND_WORK_IDLE_SENTINEL = "tangow-background-idle";
 
 export const BACKGROUND_WORK_LAUNCH = [
   `marker="${BACKGROUND_WORK_MARKER_PREFIX}$1-$2-$3"`,
@@ -34,7 +34,7 @@ export const CANCEL_COMPUTER_RUN_WORK = [
   `prefix="${BACKGROUND_WORK_MARKER_PREFIX}$computerId-$runId-"`,
   "signal_run_work() {",
   // Match the timeout wrapper cmdline (still contains the launch tag after exec into the user command).
-  '  pkill "-$1" -f "rakazo-background-launch ${computerId} ${runId} " 2>/dev/null || true',
+  '  pkill "-$1" -f "tangow-background-launch ${computerId} ${runId} " 2>/dev/null || true',
   "  if [ -d /proc ]; then",
   // One find instead of a readlink fork per fd: scanning every fd that way takes seconds on a busy host.
   '    for fd in $(find /proc/[0-9]*/fd -lname "$prefix*" 2>/dev/null); do',
@@ -94,7 +94,7 @@ export const CANCEL_PRIMARY_BROWSER_WORK = [
 ].join("; ");
 
 export function cancelComputerRunWorkArgv(computerId: string, runId: string): string[] {
-  return ["bash", "-c", CANCEL_COMPUTER_RUN_WORK, "rakazo-cancel-run-work", computerId, runId];
+  return ["bash", "-c", CANCEL_COMPUTER_RUN_WORK, "tangow-cancel-run-work", computerId, runId];
 }
 
 export async function cancelComputerRunWork(
@@ -402,7 +402,7 @@ async function hasActiveBackgroundWork(
     for await (const event of sandbox.execute(
       computer,
       {
-        argv: ["bash", "-c", BACKGROUND_WORK_PROBE, "rakazo-background-probe", computerId],
+        argv: ["bash", "-c", BACKGROUND_WORK_PROBE, "tangow-background-probe", computerId],
         timeoutMs: 10_000,
       },
       context,

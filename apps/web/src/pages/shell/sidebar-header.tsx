@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
-import type { Bot } from "@rakazo/contracts";
-import { Button, Popover, PopoverContent, PopoverTrigger } from "@rakazo/ui-web";
+import type { Bot } from "@tangow/contracts";
+import { Button, Popover, PopoverContent, PopoverTrigger } from "@tangow/ui-web";
 import { Bell, PanelLeftClose, Plus } from "lucide-react";
 import type { Dispatch, SetStateAction } from "react";
 import { desktopBridge } from "../../lib/desktop";

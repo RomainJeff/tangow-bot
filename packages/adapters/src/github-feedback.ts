@@ -1,4 +1,4 @@
-import type { AdapterContext, FeedbackIssue, FeedbackProvider } from "@rakazo/adapter-kit";
+import type { AdapterContext, FeedbackIssue, FeedbackProvider } from "@tangow/adapter-kit";
 import { z } from "zod";
 import { combineSignals } from "./connector-safety.js";
 
@@ -35,7 +35,7 @@ export class GithubFeedbackProvider implements FeedbackProvider {
           accept: "application/vnd.github+json",
           authorization: `Bearer ${this.token}`,
           "content-type": "application/json",
-          "user-agent": "rakazo-feedback",
+          "user-agent": "tangow-feedback",
           "x-github-api-version": "2022-11-28",
         },
         body: JSON.stringify(issue),

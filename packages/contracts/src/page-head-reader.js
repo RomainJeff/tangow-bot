@@ -10,7 +10,7 @@
  * 512 KiB) is kept, one character per byte, and handed to the server, which treats it as untrusted.
  */
 
-export const PAGE_HEAD_USER_AGENT = "Mozilla/5.0 (compatible; RakazoLinkPreview/1.0)";
+export const PAGE_HEAD_USER_AGENT = "Mozilla/5.0 (compatible; TangowLinkPreview/1.0)";
 export const PAGE_HEAD_ACCEPT = "text/html,application/xhtml+xml;q=0.9";
 export const PAGE_HEAD_MAX_BYTES = 512 * 1024;
 export const PAGE_HEAD_TIMEOUT_MS = 8_000;

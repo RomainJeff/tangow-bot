@@ -1,6 +1,6 @@
-import type { PrismaClient } from "@rakazo/db";
-import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
-import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
+import type { PrismaClient } from "@tangow/db";
+import type { PgliteDatabase } from "@tangow/db/pglite.test-support";
+import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeWorkerProvider } from "./fake-worker-provider.js";
 import { WORKER_LIMITS } from "./runtime-worker/limits.js";

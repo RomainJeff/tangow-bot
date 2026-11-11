@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { chmod, lstat, mkdir, open, readdir, rename, rm, statfs } from "node:fs/promises";
 import path from "node:path";
-import type { AdapterContext } from "@rakazo/adapter-kit";
-import { isPortablePath } from "@rakazo/adapter-kit";
+import type { AdapterContext } from "@tangow/adapter-kit";
+import { isPortablePath } from "@tangow/adapter-kit";
 import { z } from "zod";
 
 // Reads are bounded because the provider's file API returns a single byte array.

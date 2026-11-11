@@ -1,5 +1,5 @@
-import type { SearchHit } from "@rakazo/contracts";
-import { groupBotsForSidebar } from "@rakazo/core";
+import type { SearchHit } from "@tangow/contracts";
+import { groupBotsForSidebar } from "@tangow/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import { readActivityMode, writeActivityMode } from "../../lib/activity-mode";
@@ -10,7 +10,7 @@ import type { Roster } from "./use-roster";
 
 function collapsedSidebarSectionsStorageKey(userId: string | null | undefined): string | null {
   if (!userId) return null;
-  return `rakazo:collapsed-sidebar-sections:${userId}`;
+  return `tangow:collapsed-sidebar-sections:${userId}`;
 }
 
 function readCollapsedSidebarSections(userId: string | null | undefined): Set<string> {

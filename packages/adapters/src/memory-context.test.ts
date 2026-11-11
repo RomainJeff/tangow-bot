@@ -3,7 +3,7 @@ import type {
   MemoryReadRequest,
   MemorySnapshot,
   MemoryStore,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import { describe, expect, it, vi } from "vitest";
 import { loadAgentMemoryContext } from "./memory-context.js";
 

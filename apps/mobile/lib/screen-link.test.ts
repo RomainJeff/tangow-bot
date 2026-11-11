@@ -1,20 +1,20 @@
-import type { ScreenLinkClock, ScreenLinkView } from "@rakazo/core";
-import { createScreenLink } from "@rakazo/core";
+import type { ScreenLinkClock, ScreenLinkView } from "@tangow/core";
+import { createScreenLink } from "@tangow/core";
 import type { AppStateStatus } from "react-native";
 import type { WebViewMessageEvent } from "react-native-webview";
 import { describe, expect, it, vi } from "vitest";
 import { screenLinkEffects, screenWebViewProps, trackScreenVisibility } from "./screen-link";
 
-const EMBED = "https://rakazo.example.test/novnc/session/view/1900000000.abc_DEF-123/embed.html";
-const PLAIN = "https://rakazo.example.test/novnc/session/view/1900000000.abc_DEF-123/vnc.html";
-const SAME_DIRECTORY = "https://rakazo.example.test/novnc/session/view/1900000000.abc_DEF-123/x.js";
+const EMBED = "https://tangow.example.test/novnc/session/view/1900000000.abc_DEF-123/embed.html";
+const PLAIN = "https://tangow.example.test/novnc/session/view/1900000000.abc_DEF-123/vnc.html";
+const SAME_DIRECTORY = "https://tangow.example.test/novnc/session/view/1900000000.abc_DEF-123/x.js";
 const OTHER_DIRECTORY =
-  "https://rakazo.example.test/novnc/session/view/1900000000.other/embed.html";
+  "https://tangow.example.test/novnc/session/view/1900000000.other/embed.html";
 const OTHER_ORIGIN =
   "https://evil.example.test/novnc/session/view/1900000000.abc_DEF-123/embed.html";
 
-const CONNECTED = JSON.stringify({ type: "rakazo-screen-state", version: 1, state: "connected" });
-const STALLED = JSON.stringify({ type: "rakazo-screen-state", version: 1, state: "stalled" });
+const CONNECTED = JSON.stringify({ type: "tangow-screen-state", version: 1, state: "connected" });
+const STALLED = JSON.stringify({ type: "tangow-screen-state", version: 1, state: "stalled" });
 
 function fakeClock(): ScreenLinkClock & { advance(ms: number): void } {
   let now = 1_000_000;
@@ -74,7 +74,7 @@ describe("screen WebView message gate", () => {
 
   it("passes malformed data to the controller, which ignores it", () => {
     const { post, link } = setup(EMBED);
-    post(EMBED, { type: "rakazo-screen-state", version: 1, state: "connected" });
+    post(EMBED, { type: "tangow-screen-state", version: 1, state: "connected" });
     post(EMBED, `${CONNECTED}${" ".repeat(300)}`);
     expect(link.view()).toBe("connecting");
   });

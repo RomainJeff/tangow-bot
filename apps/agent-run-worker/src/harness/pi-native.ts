@@ -11,27 +11,27 @@ import {
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import type { GuestBody, GuestImage, GuestRunInput, ReplyFinal } from "@rakazo/adapter-kit";
-import { PI_NATIVE_HARNESS, RAKAZO_TOOL_PREFIX } from "@rakazo/adapter-kit";
+import type { GuestBody, GuestImage, GuestRunInput, ReplyFinal } from "@tangow/adapter-kit";
+import { PI_NATIVE_HARNESS, TANGOW_TOOL_PREFIX } from "@tangow/adapter-kit";
 import {
   createAgentTextPolicy,
   describeToolActivity,
   stripModelControlTokens,
-} from "@rakazo/adapters/agent-text-policy";
-import { guestRuntimeModel } from "@rakazo/adapters/pi-run-model";
+} from "@tangow/adapters/agent-text-policy";
+import { guestRuntimeModel } from "@tangow/adapters/pi-run-model";
 import {
   piAiProviderStream,
   projectPiAi,
   relayedModel,
-} from "@rakazo/adapters/runtime-worker/pi-ai";
-import { skillReadName } from "@rakazo/adapters/volume-skills";
+} from "@tangow/adapters/runtime-worker/pi-ai";
+import { skillReadName } from "@tangow/adapters/volume-skills";
 import type { DoneBody, GuestHarness, HarnessHost } from "../harness.js";
-import { mcpResult, rakazoMcpTools } from "../rakazo-mcp.js";
+import { mcpResult, tangowMcpTools } from "../tangow-mcp.js";
 import { durableBashTool } from "./durable-bash.js";
 import { exactToolSearchExtension } from "./exact-tool-search.js";
 import { relayModelRuntime } from "./pi-session.js";
 import { callOccurrenceId, capturePiSnapshot, restorePiSnapshot } from "./pi-snapshot.js";
-import { rakazoMcpTransport } from "./rakazo-mcp.js";
+import { tangowMcpTransport } from "./tangow-mcp.js";
 
 type SteeringMessage = Extract<ReplyFinal, { type: "steering" }>["messages"][number];
 type TranscriptMessage = Extract<GuestBody, { type: "transcript" }>["messages"][number];
@@ -58,8 +58,8 @@ const PI_SETTINGS = {
   steeringMode: "all" as const,
 };
 
-/** Rakazo's hooks into Pi's own loop. Pi awaits each one, so the channel paces the loop. */
-function rakazoExtension(
+/** Tangow's hooks into Pi's own loop. Pi awaits each one, so the channel paces the loop. */
+function tangowExtension(
   host: HarnessHost,
   run: GuestRunInput,
   cwd: string,
@@ -69,10 +69,10 @@ function rakazoExtension(
   steer: (message: SteeringMessage) => void,
   nudge: (text: string, mode: "steer" | "followUp") => void,
 ) {
-  // The same reminders as Rakazo's own loop, worded with the name this model knows.
+  // The same reminders as Tangow's own loop, worded with the name this model knows.
   const textPolicy = createAgentTextPolicy({
     ...run,
-    messageUserName: `${RAKAZO_TOOL_PREFIX}message_user`,
+    messageUserName: `${TANGOW_TOOL_PREFIX}message_user`,
   });
   return (pi: ExtensionAPI) => {
     pi.on("message_update", async (event) => {
@@ -150,7 +150,7 @@ export const piNativeHarness: GuestHarness = {
       }),
     );
     // Pi's config home for this attempt only: nothing from the image or an earlier run loads.
-    const agentDir = await mkdtemp(path.join(tmpdir(), "rakazo-pi-"));
+    const agentDir = await mkdtemp(path.join(tmpdir(), "tangow-pi-"));
     // One untrusted, in-memory settings store: no settings file is read, the volume's least of all.
     const settingsManager = SettingsManager.inMemory(PI_SETTINGS, {
       projectTrusted: false,
@@ -183,8 +183,8 @@ export const piNativeHarness: GuestHarness = {
       const controllerTools = run.tools.filter((tool) => tool.where === "controller");
       const assignedNames = new Map<string, string>();
       const controllerNames = new Map<string, string>();
-      const listed = rakazoMcpTools(controllerTools, true);
-      const byLabel = new Map(listed.map((tool) => [`rakazo/${tool.name}`, tool]));
+      const listed = tangowMcpTools(controllerTools, true);
+      const byLabel = new Map(listed.map((tool) => [`tangow/${tool.name}`, tool]));
       const projected = restored
         ? []
         : projectPiAi(run.history, run.prompt, model, run.sourceMessageId);
@@ -207,7 +207,7 @@ export const piNativeHarness: GuestHarness = {
           exactToolSearchExtension(
             (term) =>
               assignedNames.get(
-                term.startsWith(RAKAZO_TOOL_PREFIX) ? term.slice(RAKAZO_TOOL_PREFIX.length) : term,
+                term.startsWith(TANGOW_TOOL_PREFIX) ? term.slice(TANGOW_TOOL_PREFIX.length) : term,
               ) ?? term,
           ),
           (pi) =>
@@ -215,11 +215,11 @@ export const piNativeHarness: GuestHarness = {
               loadConfig: () => ({
                 servers: [
                   {
-                    name: "rakazo",
-                    source: "rakazo",
+                    name: "tangow",
+                    source: "tangow",
                     scope: "extension",
                     config: {
-                      command: "rakazo-in-process",
+                      command: "tangow-in-process",
                       // The controller bounds every call (budgets, stop, cancel); pi's 60 s default would drop the result of a long one.
                       timeout: 0,
                       exposure: "direct",
@@ -233,7 +233,7 @@ export const piNativeHarness: GuestHarness = {
                 autoEnableCodemode: false,
               }),
               createTransport: () =>
-                rakazoMcpTransport(
+                tangowMcpTransport(
                   controllerTools,
                   {
                     ...host,
@@ -335,7 +335,7 @@ export const piNativeHarness: GuestHarness = {
               }),
             );
           },
-          rakazoExtension(
+          tangowExtension(
             host,
             run,
             cwd,
@@ -377,7 +377,7 @@ export const piNativeHarness: GuestHarness = {
         settingsManager,
         tools: [
           ...run.tools.filter((tool) => tool.where === "guest").map((tool) => tool.name),
-          `${RAKAZO_TOOL_PREFIX}*`,
+          `${TANGOW_TOOL_PREFIX}*`,
           ...(controllerTools.some((tool) => typeof tool.catalog === "object")
             ? ["tool_search"]
             : []),
@@ -463,7 +463,7 @@ export const piNativeHarness: GuestHarness = {
                       {
                         type: "text" as const,
                         text:
-                          receipt || !block.name.startsWith(RAKAZO_TOOL_PREFIX)
+                          receipt || !block.name.startsWith(TANGOW_TOOL_PREFIX)
                             ? "The interrupted call has an unknown outcome. It was not replayed."
                             : "This call was not started before interruption. It was not replayed.",
                       },
@@ -497,7 +497,7 @@ export const piNativeHarness: GuestHarness = {
               .some(
                 (entry) =>
                   entry.type === "custom_message" &&
-                  entry.customType === "rakazo.controller-result" &&
+                  entry.customType === "tangow.controller-result" &&
                   entry.details &&
                   typeof entry.details === "object" &&
                   "callId" in entry.details &&
@@ -510,7 +510,7 @@ export const piNativeHarness: GuestHarness = {
             )
               continue;
             await active.sendCustomMessage({
-              customType: "rakazo.controller-result",
+              customType: "tangow.controller-result",
               content: [
                 {
                   type: "text",
@@ -524,7 +524,7 @@ export const piNativeHarness: GuestHarness = {
           for (const event of run.resumeEvents ?? []) {
             if (deliveredEvents.includes(event.id)) continue;
             await active.sendCustomMessage({
-              customType: "rakazo.event",
+              customType: "tangow.event",
               content: event.text,
               display: false,
               details: { eventId: event.id },
@@ -538,7 +538,7 @@ export const piNativeHarness: GuestHarness = {
           for (const message of steering.messages) {
             seenIds.push(message.id);
             await active.sendCustomMessage({
-              customType: "rakazo.steering",
+              customType: "tangow.steering",
               content: [{ type: "text", text: message.text }, ...piImages(message.images ?? [])],
               display: false,
               details: { steeringId: message.id },
@@ -546,7 +546,7 @@ export const piNativeHarness: GuestHarness = {
           }
           await active.sendCustomMessage(
             {
-              customType: "rakazo.resume",
+              customType: "tangow.resume",
               content: [
                 {
                   type: "text",

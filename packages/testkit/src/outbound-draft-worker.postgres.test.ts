@@ -1,7 +1,7 @@
-import type { HarnessDeclaration } from "@rakazo/adapter-kit";
-import { createWorkerAgentRuntime } from "@rakazo/adapters/runtime-worker";
-import { HELPER_STOPPED_FOR_PAUSE } from "@rakazo/contracts";
-import { DRAFT_CARDS } from "@rakazo/core";
+import type { HarnessDeclaration } from "@tangow/adapter-kit";
+import { createWorkerAgentRuntime } from "@tangow/adapters/runtime-worker";
+import { HELPER_STOPPED_FOR_PAUSE } from "@tangow/contracts";
+import { DRAFT_CARDS } from "@tangow/core";
 import { describe, expect, it, vi } from "vitest";
 import {
   manualLauncher,
@@ -121,7 +121,7 @@ describe.skipIf(!databaseAvailable)("mail drafts in a worker run", () => {
       }
       expect(JSON.stringify(third?.messages)).not.toContain("paused: awaiting approval");
       expect(JSON.stringify(third?.messages)).not.toContain(
-        "Rakazo already ran what they approved",
+        "Tangow already ran what they approved",
       );
       expect((await run.prisma.run.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
         "completed",

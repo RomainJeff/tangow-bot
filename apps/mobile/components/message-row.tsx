@@ -1,4 +1,4 @@
-import { sizes } from "@rakazo/ui-tokens";
+import { sizes } from "@tangow/ui-tokens";
 import type { ReactNode } from "react";
 import type { ViewProps } from "react-native";
 import { StyleSheet, Text, View } from "react-native";

@@ -6,9 +6,9 @@ import type {
   ConnectorTool,
   MemoryStore,
   SemanticMemoryProvider,
-} from "@rakazo/adapter-kit";
-import { createWorkerAgentRuntime, memoryChannelPair } from "@rakazo/adapters/runtime-worker";
-import { HARNESSES, runGuest } from "@rakazo/agent-run-worker";
+} from "@tangow/adapter-kit";
+import { createWorkerAgentRuntime, memoryChannelPair } from "@tangow/adapters/runtime-worker";
+import { HARNESSES, runGuest } from "@tangow/agent-run-worker";
 import { describe, expect, it, onTestFinished } from "vitest";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
@@ -81,7 +81,7 @@ describe("prompt bytes at the provider boundary", () => {
     };
     // A VM's absolute mount paths remain the same across attempts. The local volume fixture
     // otherwise embeds a different host directory in Pi's cwd and skill catalog each time.
-    const root = await mkdtemp(path.join(tmpdir(), "rakazo-prefix-guest-"));
+    const root = await mkdtemp(path.join(tmpdir(), "tangow-prefix-guest-"));
     onTestFinished(() => rm(root, { recursive: true, force: true }));
     await mkdir(path.join(root, "workspace/bots/bot"), { recursive: true });
     let launches = 0;
@@ -330,7 +330,7 @@ describe("prompt bytes at the provider boundary", () => {
       expect(text(request)).not.toContain("&lt;fake-secret&gt;");
     }
     expect(first!.tools?.map((tool) => tool.function.name)).toEqual(
-      expect.arrayContaining(["mcp__rakazo__a_lookup", "mcp__rakazo__z_lookup"]),
+      expect.arrayContaining(["mcp__tangow__a_lookup", "mcp__tangow__z_lookup"]),
     );
     for (const stale of ["DURABLE_FIRST", "RECALL_FIRST", "WORK_FIRST"]) {
       expect(text(second!)).not.toContain(stale);

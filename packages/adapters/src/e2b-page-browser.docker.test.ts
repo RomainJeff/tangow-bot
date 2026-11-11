@@ -4,7 +4,7 @@ import {
   managedDesktopOperationCommand,
   shellQuote,
   stopAllDesktopBrowsersCommand,
-} from "@rakazo/core/node/desktop-runtime";
+} from "@tangow/core/node/desktop-runtime";
 import { describe, expect, it } from "vitest";
 import { dockerE2BMachine } from "./e2b-machine.test-support.js";
 import { E2BSandboxProvider } from "./e2b-sandbox.js";
@@ -19,16 +19,16 @@ const context = {
   signal: new AbortController().signal,
 };
 const computer = { id: "machine", providerRef: "machine", kind: "e2b" as const, botId: "home" };
-const image = process.env.RAKAZO_COMPUTER_IMAGE ?? "rakazo/computer:local";
+const image = process.env.TANGOW_COMPUTER_IMAGE ?? "tangow/computer:local";
 const environment = {
   homeDir: "/home/user",
-  workspaceDir: "/home/user/rakazo-home",
-  browserProfilesDir: "/home/user/rakazo-home/.browser-profiles",
+  workspaceDir: "/home/user/tangow-home",
+  browserProfilesDir: "/home/user/tangow-home/.browser-profiles",
   displayStart: 20,
   portStart: 6100,
 };
 const key = createHash("sha256").update("bot").digest("hex").slice(0, 32);
-const registry = `/tmp/rakazo/desktop-assignments/${key}`;
+const registry = `/tmp/tangow/desktop-assignments/${key}`;
 
 async function ready(f: Awaited<ReturnType<typeof dockerE2BMachine>>, command: string) {
   const result = await f.exec(
@@ -44,10 +44,10 @@ describe.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
       const f = await dockerE2BMachine(image);
       try {
         const localHelper = await readFile(
-          new URL("../../../infra/sandboxes/computer/rakazo-page-browser", import.meta.url),
+          new URL("../../../infra/sandboxes/computer/tangow-page-browser", import.meta.url),
         );
         expect(
-          (await f.exec("sha256sum /usr/local/bin/rakazo-page-browser")).stdout.split(" ")[0],
+          (await f.exec("sha256sum /usr/local/bin/tangow-page-browser")).stdout.split(" ")[0],
         ).toBe(createHash("sha256").update(localHelper).digest("hex"));
         const html =
           "<title>Browser form</title><h1>Browser agreement</h1><label>Name<input id=\"name\"></label><button onclick=\"document.title='Saved '+document.querySelector('#name').value;document.querySelector('h1').textContent=document.title\">Save</button>";
@@ -134,7 +134,7 @@ describe.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
             1000,
           );
           const denied = await f.exec(
-            `printf 'RAKAZO_DESKTOP_OPERATION\n' | bash -c ${shellQuote(operation)}`,
+            `printf 'TANGOW_DESKTOP_OPERATION\n' | bash -c ${shellQuote(operation)}`,
           );
           expect(denied.exitCode).toBe(75);
         }
@@ -188,7 +188,7 @@ describe.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
             f,
             lockWait
               ? `pgrep -f '^flock -w .* 8$' >/dev/null`
-              : "pgrep -f '^python3 /usr/local/bin/rakazo-page-browser snapshot' >/dev/null",
+              : "pgrep -f '^python3 /usr/local/bin/tangow-page-browser snapshot' >/dev/null",
           );
           const pid = f.pid;
           if (!lockWait) {
@@ -202,7 +202,7 @@ describe.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
             `! ps -eo pgid=,stat= | awk '$1 == ${pid} && $2 !~ /^Z/ { found=1 } END { exit !found }'`,
           );
           expect(
-            (await f.exec("pgrep -f '^python3 /usr/local/bin/rakazo-page-browser' || true")).stdout,
+            (await f.exec("pgrep -f '^python3 /usr/local/bin/tangow-page-browser' || true")).stdout,
           ).toBe("");
         }
       } finally {

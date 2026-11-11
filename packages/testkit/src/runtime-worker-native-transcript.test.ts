@@ -1,10 +1,10 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { ConnectorProvider } from "@rakazo/adapter-kit";
-import type { GuestHarness } from "@rakazo/agent-run-worker";
-import { HARNESSES } from "@rakazo/agent-run-worker";
-import { cancelRunsInTransaction } from "@rakazo/db";
+import type { ConnectorProvider } from "@tangow/adapter-kit";
+import type { GuestHarness } from "@tangow/agent-run-worker";
+import { HARNESSES } from "@tangow/agent-run-worker";
+import { cancelRunsInTransaction } from "@tangow/db";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import type { ModelEmulatorStep } from "./model-emulator.js";
 import { afterPrivateText, startWorkerRun } from "./worker-run-fixture.js";
@@ -12,7 +12,7 @@ import { afterPrivateText, startWorkerRun } from "./worker-run-fixture.js";
 type WorkerRun = Awaited<ReturnType<typeof startWorkerRun>>;
 
 beforeEach(async () => {
-  const home = await mkdtemp(path.join(tmpdir(), "rakazo-native-transcript-home-"));
+  const home = await mkdtemp(path.join(tmpdir(), "tangow-native-transcript-home-"));
   vi.stubEnv("HOME", home);
   onTestFinished(() => rm(home, { recursive: true, force: true }));
 });
@@ -29,7 +29,7 @@ async function fixture(
 
 /** A file outside every guest, so it shows how often a command ran. */
 async function probe() {
-  const dir = await mkdtemp(path.join(tmpdir(), "rakazo-native-probe-"));
+  const dir = await mkdtemp(path.join(tmpdir(), "tangow-native-probe-"));
   onTestFinished(() => rm(dir, { recursive: true, force: true }));
   const file = path.join(dir, "probe.txt");
   return {
@@ -110,7 +110,7 @@ it("logs native and controller calls along the session in the order the harness 
       response: {
         type: "tool",
         id: "note",
-        name: "mcp__rakazo__scratchpad_add",
+        name: "mcp__tangow__scratchpad_add",
         arguments: { title: "between" },
       },
     },

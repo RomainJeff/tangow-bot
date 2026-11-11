@@ -6,12 +6,12 @@ import type {
   DecisionProvider,
   DecisionRequest,
   DecisionResponse,
-} from "@rakazo/adapter-kit";
-import type { AskDraftEdits, MessageBlock } from "@rakazo/contracts";
-import { askDraftState } from "@rakazo/contracts";
-import type { ActionApprovalRule, DraftRecord } from "@rakazo/core";
-import { DRAFT_CARDS, draftWithState, editDraftRequest, valueAt, withValueAt } from "@rakazo/core";
-import { approvalEffectKey, toolEffectIdempotencyKey } from "@rakazo/core/node/approval-effect-key";
+} from "@tangow/adapter-kit";
+import type { AskDraftEdits, MessageBlock } from "@tangow/contracts";
+import { askDraftState } from "@tangow/contracts";
+import type { ActionApprovalRule, DraftRecord } from "@tangow/core";
+import { DRAFT_CARDS, draftWithState, editDraftRequest, valueAt, withValueAt } from "@tangow/core";
+import { approvalEffectKey, toolEffectIdempotencyKey } from "@tangow/core/node/approval-effect-key";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { isApprovalPausedResult } from "./approval-effect.js";
 import type * as AutoReviewModule from "./auto-review.js";

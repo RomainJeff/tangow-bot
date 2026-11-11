@@ -1,6 +1,6 @@
-import type { MessageBlock } from "@rakazo/contracts";
-import { SessionEntrySchema } from "@rakazo/contracts";
-import { drawsNothing, projectThreadView } from "@rakazo/core";
+import type { MessageBlock } from "@tangow/contracts";
+import { SessionEntrySchema } from "@tangow/contracts";
+import { drawsNothing, projectThreadView } from "@tangow/core";
 import { describe, expect, it } from "vitest";
 import {
   hasVisibleMessagePresentation,

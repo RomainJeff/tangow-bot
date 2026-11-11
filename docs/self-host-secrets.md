@@ -25,7 +25,7 @@ interpolates it into `DATABASE_URL`. Hex from `openssl rand` is safe; characters
 `@ : / ? # %` are not.
 
 Existing `pgdata` volumes keep the user, password, and database from first init (often the
-former hardcoded `rakazo` / `rakazo`). Keep those values in `.env`, or change them in place
+former hardcoded `tangow` / `tangow`). Keep those values in `.env`, or change them in place
 with `ALTER ROLE` / rename. Recreate the volume only after a backup (or when the data is
 disposable); `docker compose down -v` deletes all Postgres state.
 
@@ -38,7 +38,7 @@ secret into multiple keys):
 - `ENCRYPTION_KEY`
 - `SCREEN_PROXY_SECRET`
 - `SANDBOX_SUPERVISOR_TOKEN`
-- `RAKAZO_UPDATER_TOKEN` (only if the updater profile is enabled; ≥32 chars,
+- `TANGOW_UPDATER_TOKEN` (only if the updater profile is enabled; ≥32 chars,
   also distinct from the four above)
 
 Rotating `ENCRYPTION_KEY` after credentials were stored makes old ciphertext

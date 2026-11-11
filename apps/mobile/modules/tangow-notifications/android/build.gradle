@@ -1,0 +1,14 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.tangow.notifications'
+version = '0.1.0'
+
+android {
+  namespace 'com.tangow.notifications'
+  defaultConfig {
+    versionName '0.1.0'
+  }
+}

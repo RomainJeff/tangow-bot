@@ -26,10 +26,10 @@ struct ShareSession {
 
   /// The keys the app writes with expo-secure-store (lib/api.ts, lib/session.ts, lib/access-store.ts).
   private enum Key {
-    static let session = "rakazo.session_token"
-    static let apiBase = "rakazo.api_base"
-    static let space = "rakazo.space_id"
-    static let access = "rakazo.cf_access"
+    static let session = "tangow.session_token"
+    static let apiBase = "tangow.api_base"
+    static let space = "tangow.space_id"
+    static let access = "tangow.cf_access"
   }
 
   /// The local server the app falls back to when the build sets none (lib/endpoint.ts).
@@ -38,15 +38,15 @@ struct ShareSession {
   static func load() -> ShareSession? {
     guard let token = Keychain.read(Key.session), !token.isEmpty else { return nil }
     let info = containingAppInfo()
-    let defaultBase = info["RakazoApiBase"] as? String ?? localApi
+    let defaultBase = info["TangowApiBase"] as? String ?? localApi
     let stored = Keychain.read(Key.apiBase) ?? ""
     let base = stored.isEmpty ? defaultBase : stored
     var headers = [
       "content-type": "application/json",
-      "origin": "rakazo://",
+      "origin": "tangow://",
       "authorization": "Bearer \(token)",
     ]
-    if let space = Keychain.read(Key.space), !space.isEmpty { headers["x-rakazo-space-id"] = space }
+    if let space = Keychain.read(Key.space), !space.isEmpty { headers["x-tangow-space-id"] = space }
     if let access = access(base: base, defaultBase: defaultBase, info: info) {
       headers["CF-Access-Client-Id"] = access.clientId
       headers["CF-Access-Client-Secret"] = access.clientSecret
@@ -69,8 +69,8 @@ struct ShareSession {
       return (id, secret)
     }
     guard base == defaultBase,
-      let id = info["RakazoAccessClientId"] as? String, !id.isEmpty,
-      let secret = info["RakazoAccessClientSecret"] as? String, !secret.isEmpty
+      let id = info["TangowAccessClientId"] as? String, !id.isEmpty,
+      let secret = info["TangowAccessClientSecret"] as? String, !secret.isEmpty
     else { return nil }
     return (id, secret)
   }
@@ -181,7 +181,7 @@ struct ShareClient {
     var request = URLRequest(url: url, timeoutInterval: 20)
     request.httpMethod = "POST"
     session.headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
-    if let spaceId { request.setValue(spaceId, forHTTPHeaderField: "x-rakazo-space-id") }
+    if let spaceId { request.setValue(spaceId, forHTTPHeaderField: "x-tangow-space-id") }
     request.httpBody = try JSONSerialization.data(withJSONObject: ["json": input])
     let (data, response) = try await URLSession.shared.data(for: request)
     let status = (response as? HTTPURLResponse)?.statusCode ?? 0

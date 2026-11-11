@@ -11,7 +11,7 @@
  *     [--provider opencode-go] [--models 'glm-*-flash,gpt-*-luna'] [--gaps 10s,2m,5m,10m]
  *     [--approval-delays 10s,6m] [--scenarios chain,computer,approval,compaction]
  *     [--worker local [--in-flight 10]] [--computer-label <what the receipt calls the computer template>]
- *     Token and cache measurements against a real model. RAKAZO_MODEL_KEY_FILE names a file
+ *     Token and cache measurements against a real model. TANGOW_MODEL_KEY_FILE names a file
  *     outside any git work tree that holds the provider key. `--worker local` runs the guests in
  *     this process instead of E2B, for scenarios without a computer.
  *   worker-live accept --template <worker> --computer-template <computer> --out <dir>
@@ -30,7 +30,7 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { parseArgs } from "node:util";
 import type { Api } from "@earendil-works/pi-ai";
-import { WORKER_PROFILE, workerTemplate } from "@rakazo/agent-run-worker/template";
+import { WORKER_PROFILE, workerTemplate } from "@tangow/agent-run-worker/template";
 import type { ConnectionOpts } from "e2b";
 import { Sandbox, Template } from "e2b";
 import type { TaskId } from "../worker-live/accept.js";
@@ -313,14 +313,14 @@ function durations(list: string): number[] {
 
 /** The provider key, from a private file kept outside every git work tree. */
 function modelKey(): string {
-  const file = process.env.RAKAZO_MODEL_KEY_FILE;
-  if (!file) throw new Error("RAKAZO_MODEL_KEY_FILE must name the file that holds the model key");
+  const file = process.env.TANGOW_MODEL_KEY_FILE;
+  if (!file) throw new Error("TANGOW_MODEL_KEY_FILE must name the file that holds the model key");
   let tracked = false;
   try {
     execFileSync("git", ["-C", path.dirname(path.resolve(file)), "rev-parse"], { stdio: "ignore" });
     tracked = true;
   } catch {}
-  if (tracked) throw new Error("RAKAZO_MODEL_KEY_FILE must be outside any git work tree");
+  if (tracked) throw new Error("TANGOW_MODEL_KEY_FILE must be outside any git work tree");
   const key = readFileSync(file, "utf8").trim();
   if (key.length < 8) throw new Error("The model key file holds no key");
   SECRETS.push(key, path.resolve(file));
@@ -361,7 +361,7 @@ async function measure() {
   );
   if (!local) await requireIdleDeployment();
   const live = local ? undefined : session();
-  const localRoot = local ? await mkdtemp(path.join(os.tmpdir(), "rakazo-measure-")) : undefined;
+  const localRoot = local ? await mkdtemp(path.join(os.tmpdir(), "tangow-measure-")) : undefined;
   const startedAt = new Date().toISOString();
   const threads: ThreadRecord[] = [];
   let written = Promise.resolve();

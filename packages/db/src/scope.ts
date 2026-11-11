@@ -1,4 +1,4 @@
-import type { Actor } from "@rakazo/contracts";
+import type { Actor } from "@tangow/contracts";
 import type { PrismaClient } from "./client.js";
 
 /** What a scoped lookup throws when the caller may not see the resource; any other message marks a server invariant. */

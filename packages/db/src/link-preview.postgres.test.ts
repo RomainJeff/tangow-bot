@@ -32,7 +32,7 @@ describePostgres("link preview cache (PostgreSQL)", () => {
       data: {
         id: userId,
         name: "Link Preview",
-        email: `${userId}@rakazo.test`,
+        email: `${userId}@tangow.test`,
         emailVerified: false,
       },
     });

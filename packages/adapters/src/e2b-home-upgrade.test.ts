@@ -2,10 +2,10 @@ import { randomUUID } from "node:crypto";
 import { chmod, mkdir, mkdtemp, readdir, symlink, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { AdapterContext, PortableFile } from "@rakazo/adapter-kit";
-import type { PrismaClient } from "@rakazo/db";
-import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
-import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
+import type { AdapterContext, PortableFile } from "@tangow/adapter-kit";
+import type { PrismaClient } from "@tangow/db";
+import type { PgliteDatabase } from "@tangow/db/pglite.test-support";
+import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { HOME_MOVE_MARKER } from "./docker-home-migration.js";
 import { DockerWorkerProvider } from "./docker-worker.js";
@@ -36,7 +36,7 @@ beforeAll(async () => {
 });
 afterAll(() => database.close());
 beforeEach(async () => {
-  dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-docker-carry-"));
+  dataDir = await mkdtemp(path.join(tmpdir(), "tangow-docker-carry-"));
   docker = new DockerWorkerProvider({
     supervisorUrl: "http://127.0.0.1:9",
     supervisorToken: "unused",
@@ -113,20 +113,20 @@ describe("carrying a Docker computer's volumes to E2B", () => {
     expect(report.outcome === "carried" && report.volumes.flatMap((v) => v.notCopied)).toEqual(
       preview.notCopied,
     );
-    const target = `rakazo-${own.volumeId}`;
+    const target = `tangow-${own.volumeId}`;
     expect(await files.list(target, fixture.context)).toEqual([
       { path: "bin", kind: "dir", mode: 0o755 },
       { path: "bin/run.sh", kind: "file", mode: 0o755 },
     ]);
-    expect(await files.list(`rakazo-${shared.volumeId}`, fixture.context)).toEqual([
+    expect(await files.list(`tangow-${shared.volumeId}`, fixture.context)).toEqual([
       { path: "team.txt", kind: "file", mode: 0o644 },
     ]);
-    expect(await text(files, `rakazo-${shared.volumeId}`, "team.txt")).toBe("team");
+    expect(await text(files, `tangow-${shared.volumeId}`, "team.txt")).toBe("team");
     const rows = await prisma.volume.findMany({
       where: { id: { in: [own.volumeId, shared.volumeId] } },
     });
     for (const row of rows) {
-      expect(row).toMatchObject({ providerKind: "fake-worker", providerRef: `rakazo-${row.id}` });
+      expect(row).toMatchObject({ providerKind: "fake-worker", providerRef: `tangow-${row.id}` });
     }
     expect(await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } })).toMatchObject({
       kind: "e2b",
@@ -152,7 +152,7 @@ describe("carrying a Docker computer's volumes to E2B", () => {
         if (file.path === "b.txt" && interrupt) {
           interrupt = false;
           // What E2BVolumeFiles leaves when its sandbox dies mid-write.
-          await super.write(volumeRef, { ...file, path: `.rakazo-${randomUUID()}` }, context);
+          await super.write(volumeRef, { ...file, path: `.tangow-${randomUUID()}` }, context);
           throw new Error("connection lost");
         }
         writes.push(`${volumeRef}/${file.path}`);
@@ -169,9 +169,9 @@ describe("carrying a Docker computer's volumes to E2B", () => {
     ).toBeNull();
 
     expect((await carry(files, computer.id, fixture.context)).outcome).toBe("carried");
-    const sharedRef = `rakazo-${shared.volumeId}`;
+    const sharedRef = `tangow-${shared.volumeId}`;
     expect(writes.sort()).toEqual(
-      [`rakazo-${own.volumeId}/notes.md`, `${sharedRef}/a.txt`, `${sharedRef}/b.txt`].sort(),
+      [`tangow-${own.volumeId}/notes.md`, `${sharedRef}/a.txt`, `${sharedRef}/b.txt`].sort(),
     );
     expect(await text(files, sharedRef, "b.txt")).toBe("b");
     expect((await files.list(sharedRef, fixture.context)).map((entry) => entry.path)).toEqual([
@@ -208,7 +208,7 @@ describe("carrying a Docker computer's volumes to E2B", () => {
       expect((await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } })).kind).toBe(
         "docker",
       );
-      expect(await text(files, `rakazo-${own.volumeId}`, "notes.md")).toBe("notes");
+      expect(await text(files, `tangow-${own.volumeId}`, "notes.md")).toBe("notes");
     },
   );
 
@@ -217,7 +217,7 @@ describe("carrying a Docker computer's volumes to E2B", () => {
     await put(own.providerRef, "notes.md", "notes");
     const files = new MemoryVolumeFiles();
     await files.write(
-      `rakazo-${own.volumeId}`,
+      `tangow-${own.volumeId}`,
       { path: "stranger.txt", content: new TextEncoder().encode("?") },
       fixture.context,
     );
@@ -250,7 +250,7 @@ describe("carrying a Docker computer's volumes to E2B", () => {
       refusal: { code: "home_move_incomplete" },
       volumes: [],
     });
-    expect(await files.list(`rakazo-${own.volumeId}`, fixture.context)).toEqual([]);
+    expect(await files.list(`tangow-${own.volumeId}`, fixture.context)).toEqual([]);
     expect((await prisma.computer.findUniqueOrThrow({ where: { id: computer.id } })).kind).toBe(
       "docker",
     );

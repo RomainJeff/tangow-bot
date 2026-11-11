@@ -1,11 +1,11 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type MaterialKey, materials, type TypographyKey, typography } from "@rakazo/ui-tokens";
+import { type MaterialKey, materials, type TypographyKey, typography } from "@tangow/ui-tokens";
 import { describe, expect, it } from "vitest";
 import { MAPPED_RADIUS_KEYS, MAPPED_SIZE_KEYS } from "./lib/utils.js";
 
-/** `rowName` -> `row-name` (mirrors the generator's `kebabCase` in `@rakazo/ui-tokens`). */
+/** `rowName` -> `row-name` (mirrors the generator's `kebabCase` in `@tangow/ui-tokens`). */
 function kebabCase(key: string): string {
   return key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
 }
@@ -100,7 +100,7 @@ describe("ui-web theme CSS matches the ui-tokens source", () => {
           expect(selector, block).not.toMatch(/-eyes\s*$/);
         }
       }
-      expect(block).toContain(".rakazo-bot-avatar-eyes-working");
+      expect(block).toContain(".tangow-bot-avatar-eyes-working");
     });
   });
 });

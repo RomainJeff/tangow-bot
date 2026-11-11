@@ -6,13 +6,13 @@ import type {
   ThreadEntry,
   ThreadEntryOf,
   ThreadItem,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import {
   CARD_STATE_TYPES,
   isLinkPreviewCard,
   isRunWork,
   ThreadEntrySchema,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import { isRunTerminalEvent, progressMessageId, reduceLiveMessageBlocks } from "../events.js";
 import { computeItemGroups, continuesImageStack, groupableItem } from "../message-grouping.js";
 import type { ItemReactions } from "../message-reactions.js";

@@ -8,7 +8,7 @@ import {
   tag,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
-import type { Routine } from "@rakazo/contracts";
+import type { Routine } from "@tangow/contracts";
 import {
   applyTriggerEdit,
   CRON_FREQS,
@@ -28,8 +28,8 @@ import {
   triggerEditFor,
   triggerEditRef,
   withoutTrigger,
-} from "@rakazo/core";
-import { radii } from "@rakazo/ui-tokens";
+} from "@tangow/core";
+import { radii } from "@tangow/ui-tokens";
 import * as Clipboard from "expo-clipboard";
 import { useEffect, useState } from "react";
 import {

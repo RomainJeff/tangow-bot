@@ -371,7 +371,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Leave group": "退出群组",
   "Lead bot": "主导机器人",
   People: "人员",
-  "Enter your Rakazo server address.": "输入你的 Rakazo 服务器地址。",
+  "Enter your Tangow server address.": "输入你的 Tangow 服务器地址。",
   "Show less": "收起",
   Members: "成员",
   Max: "最高",
@@ -441,8 +441,8 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Photo library": "相册",
   Pin: "置顶",
   "Please try again.": "请重试。",
-  "Point this app at your self-hosted Rakazo origin, the same HTTPS URL you open in a browser.":
-    "将此应用指向你自托管的 Rakazo 源站，地址与你在浏览器中打开的 HTTPS URL 相同。",
+  "Point this app at your self-hosted Tangow origin, the same HTTPS URL you open in a browser.":
+    "将此应用指向你自托管的 Tangow 源站，地址与你在浏览器中打开的 HTTPS URL 相同。",
   Private: "私有",
   "Profile photo": "个人头像",
   Providers: "提供商",
@@ -507,10 +507,10 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Show more": "显示更多",
   "Show {label}": "显示 {label}",
   "Sign in": "登录",
-  "Sign in to Rakazo": "登录 Rakazo",
+  "Sign in to Tangow": "登录 Tangow",
   "Sign out": "退出登录",
   "Sign up": "注册",
-  "Sign up for Rakazo": "注册 Rakazo",
+  "Sign up for Tangow": "注册 Tangow",
   "Sign-in": "登录",
   "Sign-up": "注册",
   "Sign-in did not return a session": "登录未返回会话",
@@ -544,7 +544,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "That image is too detailed to store, try a simpler one":
     "该图片过于精细，无法保存，请换一张更简单的",
   "That doesn’t look like a URL": "这看起来不像 URL",
-  "That URL did not look like a Rakazo server": "该地址看起来不是 Rakazo 服务器",
+  "That URL did not look like a Tangow server": "该地址看起来不是 Tangow 服务器",
   "That URL is missing a host": "该地址缺少主机名",
   "The server changed while starting the request": "请求开始时服务器已更改",
   "This permanently deletes your account, bots, conversations, memories, files, and saved connections. This cannot be undone.":
@@ -647,8 +647,8 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Open in full window": "在全窗口中打开",
   "OpenAPI JSON": "OpenAPI JSON",
   "Opened its thread.": "已打开其对话。",
-  "Paste the OpenAI-compatible address from your server. Rakazo adds /v1 if needed.":
-    "粘贴你服务器的 OpenAI 兼容地址。如有需要，Rakazo 会自动补上 /v1。",
+  "Paste the OpenAI-compatible address from your server. Tangow adds /v1 if needed.":
+    "粘贴你服务器的 OpenAI 兼容地址。如有需要，Tangow 会自动补上 /v1。",
   Paused: "已暂停",
   "Recording a live demonstration needs desktop or web with the full computer view. You can still ask this bot to run saved skills from chat.":
     "录制现场演示需要桌面端或网页端的完整电脑视图。你仍可在聊天中让这个 Bot 运行已保存的技能。",
@@ -661,8 +661,8 @@ export const ZH_MESSAGES: Record<string, string> = {
   "this model": "此模型",
   "This removes every message and stops current work. The bot, computer, memory, and routines are kept.":
     "这将删除所有消息并停止当前工作。Bot、电脑、记忆和例行任务会保留。",
-  "This subscription sign-in is not available in Rakazo yet. Use a deployment credential or choose another provider.":
-    "Rakazo 暂不支持此订阅登录。请使用部署凭据或选择其他提供商。",
+  "This subscription sign-in is not available in Tangow yet. Use a deployment credential or choose another provider.":
+    "Tangow 暂不支持此订阅登录。请使用部署凭据或选择其他提供商。",
   "Tool sources": "工具源",
   Tools: "工具",
   Uninstall: "卸载",

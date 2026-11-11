@@ -6,7 +6,7 @@ test("settings shell is two-pane and deep-links Providers Models Memory Decision
 }, testInfo) => {
   const stamp = Date.now();
   const userName = `Settings shell ${stamp}`;
-  await signup(page, `settings-shell-${stamp}@rakazo.test`, "password12", userName);
+  await signup(page, `settings-shell-${stamp}@tangow.test`, "password12", userName);
   await completeOnboarding(page);
 
   await page.getByTestId("user-menu-trigger").click();
@@ -115,7 +115,7 @@ test("settings space switcher moves to another space and keeps the section", asy
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `settings-switch-${stamp}@rakazo.test`, "password12", `Switch ${stamp}`);
+  await signup(page, `settings-switch-${stamp}@tangow.test`, "password12", `Switch ${stamp}`);
   await completeOnboarding(page);
   await rpc(page, "spaces/create", { name: "Family" });
   await page.reload();

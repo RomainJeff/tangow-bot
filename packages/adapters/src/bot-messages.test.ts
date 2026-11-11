@@ -1,12 +1,12 @@
-import type { BotMessageIntent } from "@rakazo/contracts";
-import type { PrismaClient } from "@rakazo/db";
-import { appendSessionEntryInTransaction } from "@rakazo/db";
+import type { BotMessageIntent } from "@tangow/contracts";
+import type { PrismaClient } from "@tangow/db";
+import { appendSessionEntryInTransaction } from "@tangow/db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { messageBot, resolveRunHop, returnBotMessageOutcome } from "./bot-messages.js";
 import type { ExecutorDeps } from "./executor.js";
 
 vi.mock("../../db/src/sessions.js", async () =>
-  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+  (await import("@tangow/db/sessions.test-support")).stubbedDbSessions(),
 );
 
 beforeEach(() => {

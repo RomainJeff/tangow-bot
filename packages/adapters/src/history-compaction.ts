@@ -6,14 +6,14 @@ import type {
   AgentRuntimeEvent,
   MemoryStore,
   SessionLog,
-} from "@rakazo/adapter-kit";
-import { SessionAppendError } from "@rakazo/adapter-kit";
-import type { AgentHistoryTurn, SessionEntry, SessionId } from "@rakazo/contracts";
-import { EntrySeq } from "@rakazo/contracts";
-import { escapePromptData, projectInferenceTurns } from "@rakazo/core";
-import type { Prisma, PrismaClient } from "@rakazo/db";
-import { historyGeneration } from "@rakazo/db";
-import { getLogger, redactSensitiveText } from "@rakazo/logging";
+} from "@tangow/adapter-kit";
+import { SessionAppendError } from "@tangow/adapter-kit";
+import type { AgentHistoryTurn, SessionEntry, SessionId } from "@tangow/contracts";
+import { EntrySeq } from "@tangow/contracts";
+import { escapePromptData, projectInferenceTurns } from "@tangow/core";
+import type { Prisma, PrismaClient } from "@tangow/db";
+import { historyGeneration } from "@tangow/db";
+import { getLogger, redactSensitiveText } from "@tangow/logging";
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
 import { loadAgentMemoryContext } from "./memory-context.js";

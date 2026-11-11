@@ -6,7 +6,7 @@ import {
   type GroupMember,
   type GroupPerson,
   type SpaceGroup,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import { usableBotIds } from "./bot-sharing.js";
 import { cancelRunsInTransaction } from "./cancel-runs.js";
 import { Prisma, type PrismaClient } from "./client.js";

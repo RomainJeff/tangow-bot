@@ -1,5 +1,5 @@
-import type { ScreenLink } from "@rakazo/core";
-import { isScreenDocumentUrl, screenNavigationAllowed } from "@rakazo/core";
+import type { ScreenLink } from "@tangow/core";
+import { isScreenDocumentUrl, screenNavigationAllowed } from "@tangow/core";
 import type { AppStateStatus } from "react-native";
 import type { WebViewMessageEvent } from "react-native-webview";
 

@@ -1,4 +1,4 @@
-import { buildSkillMd } from "@rakazo/core";
+import { buildSkillMd } from "@tangow/core";
 import { toolResult } from "../file-task.js";
 import type { ModelEmulatorRequest } from "../model-emulator.js";
 import { call, finish, liveRun, toolNames } from "./run.js";

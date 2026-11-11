@@ -1,6 +1,6 @@
-import type { JobPublisher } from "@rakazo/adapter-kit";
-import { routineJobKey, routineWakeupJob } from "@rakazo/adapter-kit";
-import type { RoutinePreview } from "@rakazo/core";
+import type { JobPublisher } from "@tangow/adapter-kit";
+import { routineJobKey, routineWakeupJob } from "@tangow/adapter-kit";
+import type { RoutinePreview } from "@tangow/core";
 import {
   botMessageHopExhausted,
   cronFromPreset,
@@ -21,8 +21,8 @@ import {
   routineScheduleLabel,
   sameWallClockIn,
   shortestCronGapMs,
-} from "@rakazo/core";
-import type { Prisma, PrismaClient, ThreadEvents } from "@rakazo/db";
+} from "@tangow/core";
+import type { Prisma, PrismaClient, ThreadEvents } from "@tangow/db";
 
 export { isOneShotRoutineCron, ONCE_ROUTINE_CRON };
 

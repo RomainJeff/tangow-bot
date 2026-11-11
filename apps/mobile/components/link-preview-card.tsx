@@ -1,6 +1,6 @@
-import type { LinkPreviewCard as LinkPreviewCardBlock } from "@rakazo/contracts";
-import { previewSiteInitial, previewSiteLabel } from "@rakazo/core";
-import { radii, sizes } from "@rakazo/ui-tokens";
+import type { LinkPreviewCard as LinkPreviewCardBlock } from "@tangow/contracts";
+import { previewSiteInitial, previewSiteLabel } from "@tangow/core";
+import { radii, sizes } from "@tangow/ui-tokens";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ViewProps } from "react-native";
 import {

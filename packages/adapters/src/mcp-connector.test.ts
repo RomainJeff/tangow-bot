@@ -1,4 +1,4 @@
-import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
+import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { allowlistDrift, McpConnector } from "./mcp-connector.js";
 import { type McpOAuthBroker, StoredMcpOAuthProvider } from "./mcp-oauth.js";
@@ -718,7 +718,7 @@ describe("MCP servers on a shared bot", () => {
     const database = await openPgliteDatabase();
     const { prisma } = database;
     for (const id of ["owner", "member"]) {
-      await prisma.user.create({ data: { id, name: id, email: `${id}@rakazo.test` } });
+      await prisma.user.create({ data: { id, name: id, email: `${id}@tangow.test` } });
     }
     await prisma.organization.create({
       data: { id: "org-mcp", name: "Org", slug: "org-mcp", createdAt: new Date() },

@@ -1,4 +1,4 @@
-import type { PortableFile, SandboxProvider } from "@rakazo/adapter-kit";
+import type { PortableFile, SandboxProvider } from "@tangow/adapter-kit";
 import { describe, expect, it } from "vitest";
 import { E2BSandboxEmulator } from "./e2b-emulator.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";

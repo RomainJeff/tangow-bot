@@ -1,5 +1,5 @@
-import { ChatMarkdown } from "@rakazo/chat-ui/native";
-import type { EntryId, MessageBlock, ThreadEntry, ThreadMessagePage } from "@rakazo/contracts";
+import { ChatMarkdown } from "@tangow/chat-ui/native";
+import type { EntryId, MessageBlock, ThreadEntry, ThreadMessagePage } from "@tangow/contracts";
 import {
   computeMessageGroups,
   mergeEntries,
@@ -7,8 +7,8 @@ import {
   showsTimeMarker,
   stripPeerAddressPrefix,
   threadTimeMarkerLabel,
-} from "@rakazo/core";
-import { sizes } from "@rakazo/ui-tokens";
+} from "@tangow/core";
+import { sizes } from "@tangow/ui-tokens";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";

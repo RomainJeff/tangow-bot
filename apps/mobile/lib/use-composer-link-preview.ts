@@ -1,12 +1,12 @@
-import type { LinkPreviewDraft } from "@rakazo/contracts";
-import { LINK_PREVIEW_COMPOSER_DEADLINE_MS } from "@rakazo/contracts";
+import type { LinkPreviewDraft } from "@tangow/contracts";
+import { LINK_PREVIEW_COMPOSER_DEADLINE_MS } from "@tangow/contracts";
 import {
   type ComposerLinkPreviewController,
   type ComposerLinkPreviewView,
   type ComposerPageHead,
   createComposerLinkPreview,
   inferComposerChange,
-} from "@rakazo/core";
+} from "@tangow/core";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { rpc } from "./api";
 import { readPageHeadOnDevice } from "./page-head";
@@ -36,7 +36,7 @@ export function previewComposerLink(
 
 /**
  * The composer's link preview for the thread screen: the shared state machine of
- * `@rakazo/core`, fed with the draft. The field cannot tell a paste from typing, so a long
+ * `@tangow/core`, fed with the draft. The field cannot tell a paste from typing, so a long
  * insertion in one change counts as one.
  */
 export function useComposerLinkPreview(

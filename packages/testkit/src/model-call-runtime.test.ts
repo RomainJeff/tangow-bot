@@ -1,6 +1,6 @@
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
-import type { AgentRunRequest, AgentRuntimeEvent } from "@rakazo/adapter-kit";
-import { ModelCallRuntime, TraceExporter } from "@rakazo/adapters";
+import type { AgentRunRequest, AgentRuntimeEvent } from "@tangow/adapter-kit";
+import { ModelCallRuntime, TraceExporter } from "@tangow/adapters";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ModelEmulatorStep } from "./model-emulator.js";
 import { startModelEmulator } from "./model-emulator.js";
@@ -79,12 +79,12 @@ describe("the controller's own model call", () => {
       expect() {},
       response: { type: "text", text: "- The launch is Tuesday." },
     };
-    await call(answer, [], new ModelCallRuntime({ exporter, serviceName: "rakazo-worker" }));
+    await call(answer, [], new ModelCallRuntime({ exporter, serviceName: "tangow-worker" }));
     await exporter.flush();
 
     expect(payloads).toHaveLength(1);
     const exported = JSON.stringify(payloads[0]);
-    expect(exported).toContain("rakazo-worker");
+    expect(exported).toContain("tangow-worker");
     expect(exported).toContain("The launch is Tuesday.");
   });
 

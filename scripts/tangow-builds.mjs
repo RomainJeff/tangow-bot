@@ -1,6 +1,6 @@
 export function buildComputers({ provider, values, override, run, dock }) {
   console.log("Building computer image...");
-  const image = provider === "e2b" ? values["computer-image"] : "rakazo/computer:local";
+  const image = provider === "e2b" ? values["computer-image"] : "tangow/computer:local";
   const connection = { ...process.env };
   if (override) {
     const saved = override.services.api.environment;
@@ -32,7 +32,7 @@ export function buildComputers({ provider, values, override, run, dock }) {
   ]);
   if (override) {
     dock("Computer image push", ["push", image]);
-    dock("Local computer image tag", ["tag", image, "rakazo/computer:local"]);
+    dock("Local computer image tag", ["tag", image, "tangow/computer:local"]);
     const digest = dock("Computer image digest", [
       "image",
       "inspect",
@@ -48,10 +48,10 @@ export function buildComputers({ provider, values, override, run, dock }) {
       "pnpm",
       [
         "--filter",
-        "@rakazo/agent-run-worker",
+        "@tangow/agent-run-worker",
         "template:build",
         "--name",
-        connection.WORKER_TEMPLATE || "rakazo-worker-pi-native",
+        connection.WORKER_TEMPLATE || "tangow-worker-pi-native",
       ],
       { env: connection },
     );
@@ -59,7 +59,7 @@ export function buildComputers({ provider, values, override, run, dock }) {
     run(
       "Desktop template build",
       "pnpm",
-      ["--filter", "@rakazo/computer-e2b-template", "template:build", "--image", digest],
+      ["--filter", "@tangow/computer-e2b-template", "template:build", "--image", digest],
       { env: connection },
     );
   }

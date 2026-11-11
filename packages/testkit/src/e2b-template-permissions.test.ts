@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { workerTemplate } from "@rakazo/agent-run-worker/template";
+import { workerTemplate } from "@tangow/agent-run-worker/template";
 import { Template } from "e2b";
 import { expect, it } from "vitest";
 import { computerTemplate } from "../../../infra/sandboxes/computer/e2b/template.js";

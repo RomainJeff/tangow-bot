@@ -1,5 +1,5 @@
-import type { GroupPerson, SpaceMembers } from "@rakazo/contracts";
-import { GROUP_MEMBER_MAX } from "@rakazo/contracts";
+import type { GroupPerson, SpaceMembers } from "@tangow/contracts";
+import { GROUP_MEMBER_MAX } from "@tangow/contracts";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { StyleSheet, Switch, Text, View } from "react-native";

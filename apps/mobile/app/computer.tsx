@@ -1,4 +1,4 @@
-import type { ComputerMode, ComputerReleaseReason } from "@rakazo/contracts";
+import type { ComputerMode, ComputerReleaseReason } from "@tangow/contracts";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import type { ReactNode } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";

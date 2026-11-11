@@ -1,7 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { MessageReaction } from "@rakazo/contracts";
-import { canReactToThreadMessage, MESSAGE_REACTIONS } from "@rakazo/contracts";
-import { ActionSheet } from "@rakazo/ui-web";
+import type { MessageReaction } from "@tangow/contracts";
+import { canReactToThreadMessage, MESSAGE_REACTIONS } from "@tangow/contracts";
+import { ActionSheet } from "@tangow/ui-web";
 import { Copy, Link2Off, Pencil, Reply, Square, Volume2 } from "lucide-react";
 import type { ReactNode } from "react";
 import type { MessageItem } from "../../lib/thread-items";

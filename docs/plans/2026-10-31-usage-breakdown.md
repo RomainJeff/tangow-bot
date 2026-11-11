@@ -42,7 +42,7 @@ Surfaces: web and Electron (settings overlay), iOS and Android (account › Usag
 ### 4. Web
 
 - `UsageSettingsPanel` rewritten with `SegmentedControl`, `SettingRow` (pressable, chevron) and `BotAvatar`. Drill-down is local state in the panel (`focus`), no route.
-- One new primitive in `@rakazo/ui-web`: `ShareBar` (segments + colours, tokens for height and radius), added to the design-system kitchen sink and `docs/design-system/primitives.md`.
+- One new primitive in `@tangow/ui-web`: `ShareBar` (segments + colours, tokens for height and radius), added to the design-system kitchen sink and `docs/design-system/primitives.md`.
 
 ### 5. iOS
 

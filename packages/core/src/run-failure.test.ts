@@ -1,4 +1,4 @@
-import type { RunFailureKind, RunStatus } from "@rakazo/contracts";
+import type { RunFailureKind, RunStatus } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import { classifyRunFailure } from "./run-failure.js";
 

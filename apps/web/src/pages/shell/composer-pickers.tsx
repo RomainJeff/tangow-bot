@@ -1,15 +1,15 @@
 import { t } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
-import type { AgentSkillCatalogEntry } from "@rakazo/contracts";
-import type { ComposerMention, SlashActionId } from "@rakazo/core";
+import type { AgentSkillCatalogEntry } from "@tangow/contracts";
+import type { ComposerMention, SlashActionId } from "@tangow/core";
 import {
   clampMentionHighlightIndex,
   mentionChipKey,
   SLASH_ACTIONS,
   slashSkillOptions as slashSkills,
   truncateSlashDescription,
-} from "@rakazo/core";
-import { BotAvatar } from "@rakazo/ui-web";
+} from "@tangow/core";
+import { BotAvatar } from "@tangow/ui-web";
 import { Box, Clock, Puzzle, Settings, X } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
 import { FALLBACK_BOT_COLOR } from "./layout";

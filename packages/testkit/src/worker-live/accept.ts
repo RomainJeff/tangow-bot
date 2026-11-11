@@ -1,10 +1,10 @@
 import { performance } from "node:perf_hooks";
 import { setTimeout as sleep } from "node:timers/promises";
-import type { ConnectorProvider, WorkerProvider } from "@rakazo/adapter-kit";
-import type { GuestConnector } from "@rakazo/adapters/runtime-worker";
-import { cancelRunsInTransaction } from "@rakazo/db";
-import type { LogEvent } from "@rakazo/logging";
-import { createLogger, getLogger, installLogger } from "@rakazo/logging";
+import type { ConnectorProvider, WorkerProvider } from "@tangow/adapter-kit";
+import type { GuestConnector } from "@tangow/adapters/runtime-worker";
+import { cancelRunsInTransaction } from "@tangow/db";
+import type { LogEvent } from "@tangow/logging";
+import { createLogger, getLogger, installLogger } from "@tangow/logging";
 import { Sandbox } from "e2b";
 import type { Seen } from "../worker-channel-tap.js";
 import { parse, tapConnector } from "../worker-channel-tap.js";
@@ -298,7 +298,7 @@ export async function acceptTasks(options: {
           const reply = await replyOf(run, runId);
           const workers = Sandbox.list({
             ...live.connection,
-            query: { metadata: { p3live: live.tag, rakazo: "worker" } },
+            query: { metadata: { p3live: live.tag, tangow: "worker" } },
           });
           let workersLeft = 0;
           while (workers.hasNext) workersLeft += (await workers.nextItems()).length;

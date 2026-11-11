@@ -1,4 +1,4 @@
-import { decideTextCommit, type FieldSaveState } from "@rakazo/core";
+import { decideTextCommit, type FieldSaveState } from "@tangow/core";
 
 type TextField = {
   state: FieldSaveState<string>;

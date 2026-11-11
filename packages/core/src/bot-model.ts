@@ -5,7 +5,7 @@ import type {
   ModelCategoryAssignment,
   ModelCredential,
   ThinkingLevel,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 
 /** A model a bot can run, keyed `provider::modelId` so one picker value names both. */
 export type ModelOption = { key: string; provider: string; modelId: string; label: string };

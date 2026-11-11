@@ -11,13 +11,13 @@ import type {
   SandboxProvider,
   TransactionalEmailProvider,
   WorkerProvider,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import type {
   ComposioProvider,
   ConnectorRegistry,
   DestinationEmulator,
   RemoteConnectorDependencies,
-} from "@rakazo/adapters";
+} from "@tangow/adapters";
 import {
   applyMessagingOutboundStatus,
   ChatSdkMessagingSurface,
@@ -68,11 +68,11 @@ import {
   SpaceDecisionProviderResolver,
   SpaceMemoryProviderResolver,
   toTeamChatInbound,
-} from "@rakazo/adapters";
-import type { GuestConnector } from "@rakazo/adapters/runtime-worker";
-import { createAuth, isBlockedAuthPath } from "@rakazo/auth";
-import { signupPolicyFromEnv } from "@rakazo/core";
-import type { Pool, PrismaClient } from "@rakazo/db";
+} from "@tangow/adapters";
+import type { GuestConnector } from "@tangow/adapters/runtime-worker";
+import { createAuth, isBlockedAuthPath } from "@tangow/auth";
+import { signupPolicyFromEnv } from "@tangow/core";
+import type { Pool, PrismaClient } from "@tangow/db";
 import {
   createDb,
   createPool,
@@ -81,17 +81,17 @@ import {
   parsePositiveInteger,
   provisionMessagingIdentity,
   requireMembership,
-} from "@rakazo/db";
-import type { Logger } from "@rakazo/logging";
+} from "@tangow/db";
+import type { Logger } from "@tangow/logging";
 import {
   createServiceLogger,
   enrichLogContext,
   getLogger,
   installLogger,
   SERVICE_NAMES,
-} from "@rakazo/logging";
-import { requestLogging } from "@rakazo/logging/hono";
-import { MarkdownMemoryStore } from "@rakazo/memory";
+} from "@tangow/logging";
+import { requestLogging } from "@tangow/logging/hono";
+import { MarkdownMemoryStore } from "@tangow/memory";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { AppEnv } from "./env.js";
@@ -165,7 +165,7 @@ export async function createApp(
     ? { prisma: prismaOverride, pool: undefined }
     : createDb(env.databaseUrl, {
         poolMax: parsePositiveInteger(process.env.DB_POOL_MAX, 4),
-        applicationName: "rakazo-api",
+        applicationName: "tangow-api",
       });
   const { prisma } = created;
   const realtime =
@@ -214,7 +214,7 @@ export async function createApp(
   if (!inMemoryJobs && !created.pool) {
     ownedJobPool = createPool(env.databaseUrl, {
       poolMax: parsePositiveInteger(process.env.DB_POOL_MAX, 4),
-      applicationName: "rakazo-api-jobs",
+      applicationName: "tangow-api-jobs",
     });
   }
   const jobPool = created.pool ?? ownedJobPool;
@@ -323,7 +323,7 @@ export async function createApp(
     email,
     onEmailError: (error) => getLogger().error("transactional email delivery failed", error),
     extraOrigins: [
-      "rakazo://",
+      "tangow://",
       "exp://",
       "exp://*",
       "http://localhost:8081",
@@ -387,7 +387,7 @@ export async function createApp(
   // Its own small pool: a held skill lock must never take a connection the change itself needs.
   const skillLockPool = createPool(env.databaseUrl, {
     poolMax: 2,
-    applicationName: "rakazo-api-skill-lock",
+    applicationName: "tangow-api-skill-lock",
   });
   const skillLock = createPostgresSkillLock(skillLockPool);
   const sessionLog = new PostgresSessionLog(prisma);
@@ -564,7 +564,7 @@ export async function createApp(
   });
   app.use("/rpc/*", async (c, next) => {
     const session = await auth.api.getSession({ headers: sessionHeaders(c.req.raw) });
-    const requestedSpaceId = c.req.header("x-rakazo-space-id");
+    const requestedSpaceId = c.req.header("x-tangow-space-id");
     const actor = session?.user
       ? await requireMembership(prisma, session.user.id, requestedSpaceId).catch(() => null)
       : null;
@@ -584,7 +584,7 @@ export async function createApp(
     const actor = await requireMembership(
       prisma,
       session.user.id,
-      c.req.header("x-rakazo-space-id"),
+      c.req.header("x-tangow-space-id"),
     ).catch(() => null);
     if (actor) enrichLogContext({ "user.id": actor.userId, "space.id": actor.spaceId });
     return actor;
@@ -923,7 +923,7 @@ export async function createApp(
 function isTrustedOrigin(origin: string, env: AppEnv) {
   if (!origin) return true;
   if (origin === env.webOrigin || origin === env.apiUrl || origin === env.authUrl) return true;
-  if (origin.startsWith("rakazo://") || origin.startsWith("exp://")) return true;
+  if (origin.startsWith("tangow://") || origin.startsWith("exp://")) return true;
   try {
     const host = new URL(origin).hostname;
     return isLoopbackHost(host);

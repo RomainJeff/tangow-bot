@@ -1,4 +1,4 @@
-import type { FieldSaveState } from "@rakazo/core";
+import type { FieldSaveState } from "@tangow/core";
 import type { ComponentPropsWithoutRef } from "react";
 import { Button } from "./components/ui/button.js";
 import { cn } from "./lib/utils.js";

@@ -5,8 +5,8 @@ import type {
   RunStatus,
   ThreadMessagePage,
   ThreadSnapshot,
-} from "@rakazo/contracts";
-import type { ProgressLayer } from "@rakazo/core";
+} from "@tangow/contracts";
+import type { ProgressLayer } from "@tangow/core";
 import {
   applyEntryEvent,
   isActive,
@@ -16,7 +16,7 @@ import {
   threadEntriesOf,
   withOlderEntries,
   withRefreshedEntries,
-} from "@rakazo/core";
+} from "@tangow/core";
 
 export type ThreadState = Omit<ThreadSnapshot, "progress"> & { layer: ProgressLayer };
 

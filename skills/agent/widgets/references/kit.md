@@ -1,13 +1,13 @@
 # Widget kit
 
-Read this when a case template does not fit. Rakazo preloads this kit and the
+Read this when a case template does not fit. Tangow preloads this kit and the
 current theme's tokens. Do not recreate them or invent additional kit classes.
 Use semantic elements and the classes below. Inline styles may use the allowed
 tokens for a property the kit does not cover, or SVG sizing such as `width:100%`.
 
 ## Element defaults
 
-- Rakazo supplies a transparent body with 16px padding, reduced to 12px below 480px.
+- Tangow supplies a transparent body with 16px padding, reduced to 12px below 480px.
 - Headings, paragraphs, lists, links, `small`, and `hr` have default typography and spacing.
 - Images and videos are fluid and rounded. Audio has native playback controls.
 - Tables, column headings, and cells have default borders and spacing.

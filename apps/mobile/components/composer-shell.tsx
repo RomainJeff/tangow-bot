@@ -1,4 +1,4 @@
-import { motion, radii, sizes } from "@rakazo/ui-tokens";
+import { motion, radii, sizes } from "@tangow/ui-tokens";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 import type { ViewProps } from "react-native";
@@ -50,7 +50,7 @@ export interface ComposerShellProps extends Omit<ViewProps, "children"> {
    * Dictation mode's own row, under the field: × on the left, the waveform
    * in the middle (this component's own four bars), then this content on
    * the right (the ✓ disc, plus Stop when a reply is running). Only drawn
-   * while `dictating` is true, mirroring `@rakazo/ui-web`'s
+   * while `dictating` is true, mirroring `@tangow/ui-web`'s
    * `dictationCancel`/`dictationConfirm`.
    */
   dictationCancel?: ReactNode;

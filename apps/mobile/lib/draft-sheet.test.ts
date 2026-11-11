@@ -1,4 +1,4 @@
-import type { AskDraft, AskDraftFields, AskDraftRecipient } from "@rakazo/contracts";
+import type { AskDraft, AskDraftFields, AskDraftRecipient } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import { finishLines, sheetChanged } from "./draft-sheet";
 

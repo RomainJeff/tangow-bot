@@ -1,4 +1,4 @@
-import type { ScratchpadItem, ScratchpadItemStatus } from "@rakazo/contracts";
+import type { ScratchpadItem, ScratchpadItemStatus } from "@tangow/contracts";
 import { useState } from "react";
 import { Alert, StyleSheet, TextInput } from "react-native";
 import { rpc } from "../../lib/api";

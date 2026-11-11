@@ -6,7 +6,7 @@ One TypeScript source, `packages/ui-tokens/src/index.ts`, generates
 `tokens.css`; `packages/ui-web/src/styles.css` maps it into Tailwind's
 `@theme inline`; mobile reads the same objects through
 `apps/mobile/lib/appearance`. Run
-`pnpm --filter @rakazo/ui-tokens generate` after any change to the source.
+`pnpm --filter @tangow/ui-tokens generate` after any change to the source.
 
 ## Colour
 

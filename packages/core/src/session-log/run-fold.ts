@@ -5,8 +5,8 @@ import type {
   SessionId,
   ThreadEntry,
   ThreadEntryOf,
-} from "@rakazo/contracts";
-import { CARD_STATE_TYPES, isHelperPauseResult, pausedOutput } from "@rakazo/contracts";
+} from "@tangow/contracts";
+import { CARD_STATE_TYPES, isHelperPauseResult, pausedOutput } from "@tangow/contracts";
 import { appendToolCallSegment } from "../events.js";
 import { originSessionIdOf } from "./child-sessions.js";
 

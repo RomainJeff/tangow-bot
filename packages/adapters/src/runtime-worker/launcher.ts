@@ -3,11 +3,11 @@ import type {
   HarnessDeclaration,
   WorkerIdentity,
   WorkerStartV1,
-} from "@rakazo/adapter-kit";
-import { AgentRuntimeBusyError, AgentRuntimeUnavailableError } from "@rakazo/adapter-kit";
-import type { WorkerLaunch } from "@rakazo/core";
-import { LIVE_WORKER_STATES, workerEnsureDeadline } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+} from "@tangow/adapter-kit";
+import { AgentRuntimeBusyError, AgentRuntimeUnavailableError } from "@tangow/adapter-kit";
+import type { WorkerLaunch } from "@tangow/core";
+import { LIVE_WORKER_STATES, workerEnsureDeadline } from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
 import type { ReleaseOutcome, WorkerLifecycle } from "../worker-lifecycle.js";
 import type { FrameChannel } from "./framing.js";
 

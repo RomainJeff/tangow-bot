@@ -1,5 +1,5 @@
-import type { GroupPerson, Run } from "@rakazo/contracts";
-import type { ThreadView } from "@rakazo/core";
+import type { GroupPerson, Run } from "@tangow/contracts";
+import type { ThreadView } from "@tangow/core";
 import {
   answersPendingQuestion,
   drawsNothing,
@@ -8,8 +8,8 @@ import {
   latestTakeoverItemId,
   projectThreadView,
   waitingAskBlock,
-} from "@rakazo/core";
-import type { GroupAvatarMember } from "@rakazo/ui-web";
+} from "@tangow/core";
+import type { GroupAvatarMember } from "@tangow/ui-web";
 import { useCallback, useMemo, useRef } from "react";
 import type { AskBlock } from "../../components/AskCard";
 import type { ArtifactTarget } from "../../lib/artifact-open";

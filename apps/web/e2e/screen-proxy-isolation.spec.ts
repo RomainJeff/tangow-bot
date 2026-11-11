@@ -4,7 +4,7 @@ import { createServer as createHttpServer, type Server } from "node:http";
 import type { AddressInfo, Server as NetServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { openScreenCapability } from "@rakazo/core/node/screen-capability";
+import { openScreenCapability } from "@tangow/core/node/screen-capability";
 import { createServer, type Plugin, preview, type ViteDevServer } from "vite";
 import { addScreenProxyCapability } from "../../api/src/screen-proxy";
 import { expect, test } from "./test";
@@ -59,7 +59,7 @@ for (const mode of ["development", "preview"] as const) {
     let authorized = true;
     let assetAttempts = 0;
     test.beforeAll(async () => {
-      const root = await mkdtemp(path.join(tmpdir(), "rakazo-screen-test-"));
+      const root = await mkdtemp(path.join(tmpdir(), "tangow-screen-test-"));
       await mkdir(path.join(root, "dist"));
       const upstream = createHttpServer((req, res) => {
         // Even a listener explicitly requesting same-origin access cannot loosen the proxy policy.

@@ -1,4 +1,4 @@
-import type { ModelCatalogEntry, ModelCredential } from "@rakazo/contracts";
+import type { ModelCatalogEntry, ModelCredential } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import {
   connectedModelOptions,

@@ -1,6 +1,6 @@
-import type { MessageBlock, ThreadItem } from "@rakazo/contracts";
-import type { NarrationSegment, SkillSourceBlock } from "@rakazo/core";
-import { isToolActivityBlock, narrationSegments } from "@rakazo/core";
+import type { MessageBlock, ThreadItem } from "@tangow/contracts";
+import type { NarrationSegment, SkillSourceBlock } from "@tangow/core";
+import { isToolActivityBlock, narrationSegments } from "@tangow/core";
 import { t } from "./i18n";
 
 /**

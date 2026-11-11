@@ -1,6 +1,6 @@
-import type { Actor } from "@rakazo/contracts";
-import { LINK_BLOCK_KINDS } from "@rakazo/contracts";
-import type { PrismaClient } from "@rakazo/db";
+import type { Actor } from "@tangow/contracts";
+import { LINK_BLOCK_KINDS } from "@tangow/contracts";
+import type { PrismaClient } from "@tangow/db";
 import { describe, expect, it, vi } from "vitest";
 import { querySpaceSearch } from "./search.js";
 

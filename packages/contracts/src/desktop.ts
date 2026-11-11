@@ -23,7 +23,7 @@ export interface DesktopUpdateState {
   checkedAt: string | null;
 }
 
-export interface RakazoDesktopUpdate {
+export interface TangowDesktopUpdate {
   state: () => Promise<DesktopUpdateState>;
   check: () => Promise<DesktopUpdateState>;
   download: () => Promise<DesktopUpdateState>;
@@ -31,12 +31,12 @@ export interface RakazoDesktopUpdate {
   install: () => Promise<DesktopUpdateState>;
 }
 
-export interface RakazoDesktopOAuthCallback {
+export interface TangowDesktopOAuthCallback {
   code: string;
   state?: string;
 }
 
-export interface RakazoDesktop {
+export interface TangowDesktop {
   platform: string;
   window: {
     close: () => Promise<void>;
@@ -44,7 +44,7 @@ export interface RakazoDesktop {
     toggleMaximize: () => Promise<void>;
     state: () => Promise<{ minimized: boolean; maximized: boolean; fullScreen: boolean }>;
   };
-  update: RakazoDesktopUpdate;
+  update: TangowDesktopUpdate;
   /**
    * Link previews for sites that refuse the server: this computer reads the start of the page
    * (no cookies, public http(s) hosts only, 512 KiB at most) and the composer sends it to the
@@ -67,11 +67,11 @@ export interface RakazoDesktop {
      * Authorization codes captured from the system browser or a legacy popup.
      * Returns an unsubscribe function.
      */
-    onCallback: (listener: (callback: RakazoDesktopOAuthCallback) => void) => () => void;
+    onCallback: (listener: (callback: TangowDesktopOAuthCallback) => void) => () => void;
   };
 }
 
-/** The Rakazo server the desktop app was pointed at during first-run setup. */
+/** The Tangow server the desktop app was pointed at during first-run setup. */
 export interface DesktopSetup {
   serverUrl: string;
 }
@@ -104,9 +104,9 @@ export interface DesktopReachability {
 
 /**
  * Bridge exposed only to the first-run setup window. The app window keeps the
- * narrower `rakazoDesktop` bridge so a connected server can never re-point the app.
+ * narrower `tangowDesktop` bridge so a connected server can never re-point the app.
  */
-export interface RakazoSetup {
+export interface TangowSetup {
   /** Used only to reserve space for native window controls in the local setup UI. */
   platform: string;
   state: () => Promise<DesktopSetupState>;

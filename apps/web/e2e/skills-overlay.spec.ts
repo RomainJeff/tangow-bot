@@ -5,7 +5,7 @@ test("skills overlay: user and built-in skills, search, desktop and phone", asyn
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `skills-overlay-${stamp}@rakazo.test`, "password12", "Skills Overlay");
+  await signup(page, `skills-overlay-${stamp}@tangow.test`, "password12", "Skills Overlay");
   await completeOnboarding(page);
   await page.goto("/app");
   await page.waitForURL(/\/app\/[^/]+$/);

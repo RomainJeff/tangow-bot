@@ -1,13 +1,13 @@
-import type { ConnectorCatalogItem } from "@rakazo/adapter-kit";
-import type { AskDraft } from "@rakazo/contracts";
-import type { DraftBinding, DraftPath } from "@rakazo/core";
+import type { ConnectorCatalogItem } from "@tangow/adapter-kit";
+import type { AskDraft } from "@tangow/contracts";
+import type { DraftBinding, DraftPath } from "@tangow/core";
 import {
   askDraftFields,
   draftMessage,
   FEATURED_CONNECTOR_LABELS,
   matchFeaturedConnectorId,
   valueAt,
-} from "@rakazo/core";
+} from "@tangow/core";
 import { boundDirectApprovalDetails, catalogApprovalDetails } from "./approval-effect.js";
 
 export function draftRequest(

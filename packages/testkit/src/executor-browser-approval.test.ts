@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import type { AdapterContext, ComputerRef, SandboxProvider } from "@rakazo/adapter-kit";
-import { E2BSandboxEmulator } from "@rakazo/adapters";
-import { HARNESSES } from "@rakazo/agent-run-worker";
+import type { AdapterContext, ComputerRef, SandboxProvider } from "@tangow/adapter-kit";
+import { E2BSandboxEmulator } from "@tangow/adapters";
+import { HARNESSES } from "@tangow/agent-run-worker";
 import { afterEach, expect, it, vi } from "vitest";
 import { dockerE2BMachine } from "../../adapters/src/e2b-machine.test-support.js";
 import { E2BSandboxProvider } from "../../adapters/src/e2b-sandbox.js";
@@ -20,12 +20,12 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
   "retains the original Chrome document and refs through native worker approval retirement",
   async () => {
     const machine = await dockerE2BMachine(
-      process.env.COMPUTER_TEST_IMAGE ?? "rakazo/computer:local",
+      process.env.COMPUTER_TEST_IMAGE ?? "tangow/computer:local",
     );
     cleanups.push(() => machine.close());
-    const helper = await machine.exec("sha256sum /usr/local/bin/rakazo-page-browser");
+    const helper = await machine.exec("sha256sum /usr/local/bin/tangow-page-browser");
     const bytes = await readFile(
-      new URL("../../../infra/sandboxes/computer/rakazo-page-browser", import.meta.url),
+      new URL("../../../infra/sandboxes/computer/tangow-page-browser", import.meta.url),
     );
     expect(helper.stdout.split(" ")[0]).toBe(createHash("sha256").update(bytes).digest("hex"));
     const html = `<title>Pending approval</title><label>Note<input></label><button onclick="document.title='Approved '+(++window.effects);fetch('/submit',{method:'POST'})">Submit</button><script>window.effects=0</script>`;
@@ -129,7 +129,7 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
     expect(effects).toEqual([]);
     expect(releases).toEqual([]);
     expect((await machine.exec("test ! -e /tmp/approval-submissions")).exitCode).toBe(0);
-    const pid = await machine.exec("cat /tmp/rakazo/browser-pid-*");
+    const pid = await machine.exec("cat /tmp/tangow/browser-pid-*");
     expect(pid.exitCode).toBe(0);
     expect(run.provider.launches).toHaveLength(1);
     const card = await latestCard(run.prisma, id);
@@ -147,7 +147,7 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
     const act = page.pageBrowser.bind(page);
     let resumedPid = "";
     vi.spyOn(page, "pageBrowser").mockImplementation(async (...args) => {
-      resumedPid = (await machine.exec("cat /tmp/rakazo/browser-pid-*")).stdout;
+      resumedPid = (await machine.exec("cat /tmp/tangow/browser-pid-*")).stdout;
       return act(...args);
     });
     run.restart();
@@ -167,7 +167,7 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1")(
     expect(
       (
         await machine.exec(
-          "test -z \"$(find /tmp/rakazo/desktop-assignments -name '*.slot' -print)\"; ! curl -fsS http://127.0.0.1:9241/json/version >/dev/null 2>&1",
+          "test -z \"$(find /tmp/tangow/desktop-assignments -name '*.slot' -print)\"; ! curl -fsS http://127.0.0.1:9241/json/version >/dev/null 2>&1",
         )
       ).exitCode,
     ).toBe(0);

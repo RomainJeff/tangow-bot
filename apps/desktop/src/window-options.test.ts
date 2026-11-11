@@ -72,7 +72,7 @@ describe("development icon", () => {
 
 describe("window background", () => {
   it("matches the shared dark background token so startup chrome does not flash", async () => {
-    const { darkTokens } = await import("@rakazo/ui-tokens");
+    const { darkTokens } = await import("@tangow/ui-tokens");
     const { WINDOW_BACKGROUND } = await import("./window-options");
     expect(WINDOW_BACKGROUND).toBe(darkTokens.background);
     for (const platform of ["darwin", "win32", "linux"] as const) {

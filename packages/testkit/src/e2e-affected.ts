@@ -151,7 +151,7 @@ const PROBE_SUFFIXES = [
 /**
  * Builds the reverse import graph over `files` (every repo file). Resolves
  * relative imports with extension probing, `.js` written for `.ts`, root paths
- * in HTML against the web app, and `@rakazo/*` through each package's exports.
+ * in HTML against the web app, and `@tangow/*` through each package's exports.
  */
 export function buildImporters(
   files: ReadonlySet<string>,

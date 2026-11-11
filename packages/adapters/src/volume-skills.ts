@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { lstat, mkdir, readdir, readFile, realpath, symlink } from "node:fs/promises";
 import path from "node:path";
-import type { SkillCollision, WorkerSkill } from "@rakazo/adapter-kit";
-import { parseSkillMd } from "@rakazo/core";
+import type { SkillCollision, WorkerSkill } from "@tangow/adapter-kit";
+import { parseSkillMd } from "@tangow/core";
 import { hasCode, skillDirName } from "./skill-store.js";
 
 export type SkillRoot = { source: WorkerSkill["source"]; path: string };

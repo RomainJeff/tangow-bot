@@ -1,4 +1,4 @@
-import { botAccentOn } from "@rakazo/ui-tokens";
+import { botAccentOn } from "@tangow/ui-tokens";
 import type { ComponentPropsWithoutRef, CSSProperties } from "react";
 import { cn } from "./lib/utils.js";
 

@@ -1,8 +1,8 @@
 # Design system — Quiet
 
 The living reference for the Quiet skin: seven token families in
-`@rakazo/ui-tokens`, the material layer reserved for navigation and controls,
-and the named primitives in `@rakazo/ui-web` that spend them. The design
+`@tangow/ui-tokens`, the material layer reserved for navigation and controls,
+and the named primitives in `@tangow/ui-web` that spend them. The design
 contract that produced it is `docs/plans/2026-09-16-quiet-redesign.md`; this
 file is what stays true afterwards.
 
@@ -11,7 +11,7 @@ navigation and controls, and opaque content. The light has no tint, so it
 works with any bot colour.
 
 **A screen never defines a colour, a size, a radius, a shadow or a duration by
-hand. It composes tokens and primitives from `@rakazo/ui-web`.** A hex, a
+hand. It composes tokens and primitives from `@tangow/ui-web`.** A hex, a
 `text-[…]`, a `rounded-[…]`, a `shadow-[…]`, a `w-[…]` or a `duration-[…]` in a
 screen is a bug: the value belongs in `packages/ui-tokens/src/index.ts`, and the
 arrangement belongs in a primitive.
@@ -83,7 +83,7 @@ Bot widgets use the shared [widget kit](../packages/core/src/widget/kit.ts) and 
 - Touch targets are ≥ 44 pt on iPhone, and stacked actions 48 pt; 32 pt in
   flow is reserved for quick replies.
 - Copy is English in the code, through lingui (`t` / `Trans`), then
-  `pnpm --filter @rakazo/web intl:extract`.
+  `pnpm --filter @tangow/web intl:extract`.
 
 ## Kitchen sink
 

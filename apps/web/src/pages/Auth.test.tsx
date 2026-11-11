@@ -13,7 +13,7 @@ vi.mock("@lingui/react/macro", () => {
   const t = (parts: TemplateStringsArray) => parts.join("");
   return { useLingui: () => ({ t }), Trans: ({ children }: { children: ReactNode }) => children };
 });
-vi.mock("@rakazo/ui-web", () => ({
+vi.mock("@tangow/ui-web", () => ({
   Button: ({
     variant: _variant,
     size: _size,
@@ -69,7 +69,7 @@ it("waits for capabilities before sending a reset link", async () => {
   await act(async () => {
     respond(
       new Response(
-        JSON.stringify({ passwordReset: true, resetUrl: "https://rakazo.test/reset-password" }),
+        JSON.stringify({ passwordReset: true, resetUrl: "https://tangow.test/reset-password" }),
       ),
     );
   });
@@ -77,7 +77,7 @@ it("waits for capabilities before sending a reset link", async () => {
 
   await act(async () => button.click());
   expect(auth.requestPasswordReset.mock.calls).toEqual([
-    [{ email: "person@example.test", redirectTo: "https://rakazo.test/reset-password" }],
+    [{ email: "person@example.test", redirectTo: "https://tangow.test/reset-password" }],
   ]);
   expect(container.querySelector("h1")?.textContent).toBe("Check your email");
 });

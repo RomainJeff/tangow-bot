@@ -6,8 +6,8 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { WorkerSpec } from "@rakazo/adapter-kit";
-import { DockerWorkerProvider } from "@rakazo/adapters";
+import type { WorkerSpec } from "@tangow/adapter-kit";
+import { DockerWorkerProvider } from "@tangow/adapters";
 import { afterAll, beforeAll } from "vitest";
 
 /** Opt-in: needs Docker and the worker image (apps/agent-run-worker/Dockerfile), no network or keys. */
@@ -67,14 +67,14 @@ export function useDockerSupervisor() {
   let child: ChildProcess | undefined;
   beforeAll(async () => {
     if (!dockerWorkersEnabled) return;
-    state.dir = await mkdtemp(path.join(tmpdir(), "rakazo-docker-workers-"));
+    state.dir = await mkdtemp(path.join(tmpdir(), "tangow-docker-workers-"));
     state.dataDir = path.join(state.dir, "data");
     await mkdir(state.dataDir, { recursive: true });
     state.port = await freePort();
     state.url = `http://127.0.0.1:${state.port}`;
     child = spawn(process.execPath, ["--import", "tsx", SUPERVISOR], {
       cwd: path.dirname(path.dirname(SUPERVISOR)),
-      stdio: ["ignore", "ignore", process.env.RAKAZO_WORKER_DEBUG ? "inherit" : "ignore"],
+      stdio: ["ignore", "ignore", process.env.TANGOW_WORKER_DEBUG ? "inherit" : "ignore"],
       env: {
         ...process.env,
         DATA_DIR: state.dataDir,

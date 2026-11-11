@@ -1,6 +1,6 @@
-import { runContinueJob } from "@rakazo/adapter-kit";
-import type { SessionId } from "@rakazo/contracts";
-import { botMessageHopExhausted, nextBotMessageHop, renderGroupMembersContext } from "@rakazo/core";
+import { runContinueJob } from "@tangow/adapter-kit";
+import type { SessionId } from "@tangow/contracts";
+import { botMessageHopExhausted, nextBotMessageHop, renderGroupMembersContext } from "@tangow/core";
 import {
   appendEventInTransaction,
   appendSessionEntryInTransaction,
@@ -11,8 +11,8 @@ import {
   type PrismaClient,
   touchGroupUpdatedAt,
   usableBotIds,
-} from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 import { resolveRunHop } from "./bot-messages.js";
 import type { ExecutorDeps } from "./executor.js";
 

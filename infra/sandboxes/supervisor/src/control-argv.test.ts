@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
-import { browserProfilePathForScreen } from "@rakazo/core/node/desktop-runtime";
+import { browserProfilePathForScreen } from "@tangow/core/node/desktop-runtime";
 import { describe, expect, it } from "vitest";
 import { containerActionStep } from "./supervisor-logic.js";
 
@@ -47,7 +47,7 @@ describe.each([undefined, profile])(
       { kind: "open" as const, path: "https://example.com" },
       { kind: "launch" as const, application: "chromium", uri: "https://example.com" },
       { kind: "launch" as const, application: "chromium" },
-      { kind: "launch" as const, application: "rakazo-terminal" },
+      { kind: "launch" as const, application: "tangow-terminal" },
     ])("accepts generated $kind argv and identifies a long-lived process", (action) => {
       const step = containerActionStep(action, display, browserProfile);
       if (!("argv" in step)) throw new Error("expected command");
@@ -55,7 +55,7 @@ describe.each([undefined, profile])(
         browserProfile &&
         (action.kind === "open" || (action.kind === "launch" && action.application === "chromium"))
       ) {
-        expect(step.argv[2]).toBe(`RAKAZO_BROWSER_PROFILE=${browserProfile}`);
+        expect(step.argv[2]).toBe(`TANGOW_BROWSER_PROFILE=${browserProfile}`);
       }
       expect(check(step.argv)).toEqual({ allowed: true, longLived: true });
     });
@@ -70,45 +70,45 @@ describe.each([undefined, profile])(
 
 describe("controller argv restrictions", () => {
   it.each([
-    ["env", `DISPLAY=${display}`, `RAKAZO_BROWSER_PROFILE=${profile}`],
-    ["env", `DISPLAY=${display}`, "RAKAZO_BROWSER_PROFILE=", "rakazo-browser"],
-    ["env", `DISPLAY=${display}`, `RAKAZO_BROWSER_PROFILE=${profile}a`, "rakazo-browser"],
+    ["env", `DISPLAY=${display}`, `TANGOW_BROWSER_PROFILE=${profile}`],
+    ["env", `DISPLAY=${display}`, "TANGOW_BROWSER_PROFILE=", "tangow-browser"],
+    ["env", `DISPLAY=${display}`, `TANGOW_BROWSER_PROFILE=${profile}a`, "tangow-browser"],
     [
       "env",
       `DISPLAY=${display}`,
-      `RAKAZO_BROWSER_PROFILE=${profile.toUpperCase()}`,
-      "rakazo-browser",
+      `TANGOW_BROWSER_PROFILE=${profile.toUpperCase()}`,
+      "tangow-browser",
     ],
-    ["env", `DISPLAY=${display}`, `RAKAZO_BROWSER_PROFILE=${profile}`, "rakazo-terminal"],
+    ["env", `DISPLAY=${display}`, `TANGOW_BROWSER_PROFILE=${profile}`, "tangow-terminal"],
     [
       "env",
       `DISPLAY=${display}`,
-      `RAKAZO_BROWSER_PROFILE=${profile}`,
+      `TANGOW_BROWSER_PROFILE=${profile}`,
       "/usr/bin/xdg-open",
       "https://example.com",
     ],
-    ["env", `DISPLAY=${display}`, `RAKAZO_BROWSER_PROFILE=${profile}`, "xdg-open"],
+    ["env", `DISPLAY=${display}`, `TANGOW_BROWSER_PROFILE=${profile}`, "xdg-open"],
     [
       "env",
       `DISPLAY=${display}`,
-      `RAKAZO_BROWSER_PROFILE=${profile}`,
-      "rakazo-browser",
+      `TANGOW_BROWSER_PROFILE=${profile}`,
+      "tangow-browser",
       "one",
       "two",
     ],
-    ["env", "DISPLAY=:8", `RAKAZO_BROWSER_PROFILE=${profile}`, "rakazo-browser"],
+    ["env", "DISPLAY=:8", `TANGOW_BROWSER_PROFILE=${profile}`, "tangow-browser"],
     ["env", "DISPLAY=:8", "xdg-open", "https://example.com"],
     ["env", `DISPLAY=${display}`, "LD_PRELOAD=/tmp/unsafe", "xdg-open", "https://example.com"],
-    ["env", `DISPLAY=${display}`, "RAKAZO_BROWSER_PROFILE=/tmp/unsafe", "rakazo-browser"],
-    ["env", `DISPLAY=${display}`, `RAKAZO_BROWSER_PROFILE=${profile}/../other`, "rakazo-browser"],
-    ["env", `DISPLAY=${display}`, `RAKAZO_BROWSER_PROFILE=${profile}`, "sh", "-c", "true"],
-    ["env", `DISPLAY=${display}`, `RAKAZO_BROWSER_PROFILE=${profile}`, "xdotool", "key", "Return"],
+    ["env", `DISPLAY=${display}`, "TANGOW_BROWSER_PROFILE=/tmp/unsafe", "tangow-browser"],
+    ["env", `DISPLAY=${display}`, `TANGOW_BROWSER_PROFILE=${profile}/../other`, "tangow-browser"],
+    ["env", `DISPLAY=${display}`, `TANGOW_BROWSER_PROFILE=${profile}`, "sh", "-c", "true"],
+    ["env", `DISPLAY=${display}`, `TANGOW_BROWSER_PROFILE=${profile}`, "xdotool", "key", "Return"],
     [
       "env",
       `DISPLAY=${display}`,
-      `RAKAZO_BROWSER_PROFILE=${profile}`,
-      `RAKAZO_BROWSER_PROFILE=${profile}`,
-      "rakazo-browser",
+      `TANGOW_BROWSER_PROFILE=${profile}`,
+      `TANGOW_BROWSER_PROFILE=${profile}`,
+      "tangow-browser",
     ],
   ])("rejects malformed or unauthorized argv %j", (...argv) => {
     expect(check(argv).allowed).toBe(false);

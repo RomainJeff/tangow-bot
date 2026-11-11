@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { EncryptedSecretStore } from "@rakazo/adapters";
+import { EncryptedSecretStore } from "@tangow/adapters";
 import { latestCard } from "../index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "../model-emulator.js";
 import { prepares } from "../model-emulator.js";

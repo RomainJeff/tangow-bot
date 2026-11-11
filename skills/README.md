@@ -50,7 +50,7 @@ space, after the space's team home has moved.
 Worker native file tools and `bash` operate on `/workspace/bots/<botId>` and
 `/workspace/shared`. Apps, browser, computer-local services and commands that only exist on the
 computer go through the managed `computer-use` helper when the bot can start it, and through the
-Rakazo computer and browser tools otherwise. Harnesses expose Rakazo tools under their own naming.
+Tangow computer and browser tools otherwise. Harnesses expose Tangow tools under their own naming.
 
 OpenCode is installed on the computer image for terminal use. It loads computer
 skills, while the worker loads agent skills.

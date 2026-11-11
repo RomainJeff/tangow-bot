@@ -1,7 +1,7 @@
-import type { SessionEntryDraft } from "@rakazo/adapter-kit";
-import { SessionId } from "@rakazo/contracts";
-import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
-import { applyMigration, migrationNames, openPgliteDatabase } from "@rakazo/db/pglite.test-support";
+import type { SessionEntryDraft } from "@tangow/adapter-kit";
+import { SessionId } from "@tangow/contracts";
+import type { PgliteDatabase } from "@tangow/db/pglite.test-support";
+import { applyMigration, migrationNames, openPgliteDatabase } from "@tangow/db/pglite.test-support";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PostgresSessionLog } from "./session-log/postgres.js";
 
@@ -28,7 +28,7 @@ afterAll(() => database.close());
 /** Writes the rows an existing deployment holds, with SQL the previous schema accepts. */
 async function seedExistingDeployment() {
   const { prisma } = database;
-  await prisma.user.create({ data: { id: USER, name: "M", email: "migration@rakazo.test" } });
+  await prisma.user.create({ data: { id: USER, name: "M", email: "migration@tangow.test" } });
   await prisma.organization.create({
     data: { id: "org_migration", name: "M", slug: "org-migration", createdAt: new Date() },
   });

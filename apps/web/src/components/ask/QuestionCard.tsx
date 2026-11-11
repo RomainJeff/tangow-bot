@@ -1,10 +1,10 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import { useAskCard } from "@rakazo/chat-ui/ask-card";
-import { ChatMarkdown } from "@rakazo/chat-ui/web";
-import { ASK_ANSWER_MAX_LENGTH } from "@rakazo/contracts";
-import type { AskCardBlock, AskForm, FormOption, OptionId, Presenter } from "@rakazo/core";
-import { motion } from "@rakazo/ui-tokens";
-import { Button, cn, FramedBlock, OptionField, OptionTile, StackLine } from "@rakazo/ui-web";
+import { useAskCard } from "@tangow/chat-ui/ask-card";
+import { ChatMarkdown } from "@tangow/chat-ui/web";
+import { ASK_ANSWER_MAX_LENGTH } from "@tangow/contracts";
+import type { AskCardBlock, AskForm, FormOption, OptionId, Presenter } from "@tangow/core";
+import { motion } from "@tangow/ui-tokens";
+import { Button, cn, FramedBlock, OptionField, OptionTile, StackLine } from "@tangow/ui-web";
 import { Pencil } from "lucide-react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";

@@ -1,8 +1,8 @@
 import { useLingui } from "@lingui/react/macro";
-import type { StackCardModel, StackImage } from "@rakazo/core";
-import { IMAGE_STACK, STACK_ROOM, STACK_STEP, stackCards } from "@rakazo/core";
-import { motion, springEasing } from "@rakazo/ui-tokens";
-import { cn } from "@rakazo/ui-web";
+import type { StackCardModel, StackImage } from "@tangow/core";
+import { IMAGE_STACK, STACK_ROOM, STACK_STEP, stackCards } from "@tangow/core";
+import { motion, springEasing } from "@tangow/ui-tokens";
+import { cn } from "@tangow/ui-web";
 import { Layers, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ArtifactTarget } from "../../lib/artifact-open";

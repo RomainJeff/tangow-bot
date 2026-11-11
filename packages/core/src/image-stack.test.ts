@@ -1,4 +1,4 @@
-import type { EntryId } from "@rakazo/contracts";
+import type { EntryId } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import { stackCards } from "./image-stack.js";
 import type { StackImage } from "./session-log/project-thread-view.js";

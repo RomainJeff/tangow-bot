@@ -1,4 +1,4 @@
-import type { Routine } from "@rakazo/contracts";
+import type { Routine } from "@tangow/contracts";
 
 /**
  * A routine that is on and whose latest finished run failed. It is a state, not a "seen" marker:

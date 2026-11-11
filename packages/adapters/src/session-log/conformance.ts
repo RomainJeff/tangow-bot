@@ -4,10 +4,10 @@ import type {
   SessionAppendRefusal,
   SessionEntryDraft,
   SessionLog,
-} from "@rakazo/adapter-kit";
-import type { SessionEntry } from "@rakazo/contracts";
-import { EntryId, EntrySeq, SessionId } from "@rakazo/contracts";
-import { redactSecrets } from "@rakazo/core";
+} from "@tangow/adapter-kit";
+import type { SessionEntry } from "@tangow/contracts";
+import { EntryId, EntrySeq, SessionId } from "@tangow/contracts";
+import { redactSecrets } from "@tangow/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 export interface SessionLogHarness<Tx> {

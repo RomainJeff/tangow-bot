@@ -16,7 +16,7 @@ const text = (reply: string): ModelEmulatorStep => ({
 });
 const tool = (id: string, name: string, args: Record<string, unknown>): ModelEmulatorStep => ({
   expect() {},
-  response: { type: "tool", id, name: `mcp__rakazo__${name}`, arguments: args, usage },
+  response: { type: "tool", id, name: `mcp__tangow__${name}`, arguments: args, usage },
 });
 
 /** A turn's answer, sent to the person, then the turn's end. */
@@ -61,7 +61,7 @@ describe("token and cache measurements", () => {
   });
 
   it("records every relayed request of each scenario through a catalog model's own protocol", async () => {
-    const root = await mkdtemp(path.join(tmpdir(), "rakazo-measure-"));
+    const root = await mkdtemp(path.join(tmpdir(), "tangow-measure-"));
     onTestFinished(() => rm(root, { recursive: true, force: true }));
     const models = resolveModels("opencode-go", ["glm-*-flash"]);
     const workers = stableLocalWorkers(path.join(root, "workers"));

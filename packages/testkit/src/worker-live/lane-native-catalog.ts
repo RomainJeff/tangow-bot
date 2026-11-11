@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import type { ConnectorProvider } from "@rakazo/adapter-kit";
-import { EncryptedSecretStore, McpConnector } from "@rakazo/adapters";
+import type { ConnectorProvider } from "@tangow/adapter-kit";
+import { EncryptedSecretStore, McpConnector } from "@tangow/adapters";
 import { latestCard } from "../index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "../model-emulator.js";
 import { prepares } from "../model-emulator.js";

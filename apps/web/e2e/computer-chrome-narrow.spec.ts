@@ -6,7 +6,7 @@ test.use({ viewport: { width: 390, height: 844 } });
 test("the bot screen's top bar fits a phone and offers Teach a task in the menu", async ({
   page,
 }, testInfo) => {
-  await signup(page, `chrome-narrow-${Date.now()}@rakazo.test`, "password12", "Chrome Narrow");
+  await signup(page, `chrome-narrow-${Date.now()}@tangow.test`, "password12", "Chrome Narrow");
   await completeOnboarding(page);
 
   await page.getByTestId("open-computer-panel").click();

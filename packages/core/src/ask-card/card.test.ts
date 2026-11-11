@@ -1,4 +1,4 @@
-import type { MessageBlock } from "@rakazo/contracts";
+import type { MessageBlock } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import type { AskCardOptions, Clock, SendResult } from "./card.js";
 import { createAskCard, resolveAskCardView } from "./card.js";

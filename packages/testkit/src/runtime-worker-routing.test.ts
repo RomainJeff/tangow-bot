@@ -1,5 +1,5 @@
-import { runContinueJob } from "@rakazo/adapter-kit";
-import { createJobReconciler } from "@rakazo/adapters";
+import { runContinueJob } from "@tangow/adapter-kit";
+import { createJobReconciler } from "@tangow/adapters";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
 import { startWorkerRun } from "./worker-run-fixture.js";
@@ -321,7 +321,7 @@ describe("where a product run executes", () => {
         where: { kind: "bot_private" },
         select: { botId: true, providerRef: true },
       }),
-    ).toEqual([{ botId: run.bot.id, providerRef: expect.stringMatching(/^rakazo-/) }]);
+    ).toEqual([{ botId: run.bot.id, providerRef: expect.stringMatching(/^tangow-/) }]);
     expect(await attemptsOf(run, runId)).toEqual([{ workerState: "released" }]);
   });
 
@@ -620,8 +620,8 @@ describe("where a product run executes", () => {
       },
       ...offeredShellTools([]),
     ]);
-    vi.stubEnv("RAKAZO_AUTO_REVIEW_PROVIDER", run.model.model.provider);
-    vi.stubEnv("RAKAZO_AUTO_REVIEW_MODEL", run.model.model.id);
+    vi.stubEnv("TANGOW_AUTO_REVIEW_PROVIDER", run.model.model.provider);
+    vi.stubEnv("TANGOW_AUTO_REVIEW_MODEL", run.model.model.id);
     await run.prisma.actionAutoReviewPreference.create({
       data: { spaceId: run.spaceId, userId: run.userId, enabled: true },
     });

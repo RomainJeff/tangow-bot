@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Api, AssistantMessage, Message, Model, ToolCall, Usage } from "@earendil-works/pi-ai";
-import type { AgentRunRequest, HarnessTranscriptEntry } from "@rakazo/adapter-kit";
+import type { AgentRunRequest, HarnessTranscriptEntry } from "@tangow/adapter-kit";
 import * as z from "zod";
 import { stripFakeToolCalls } from "../../agent-text-policy.js";
 
@@ -45,7 +45,7 @@ function noUsage(): Usage {
  * foreign: it rewrites stored tool-call ids into the current provider's format (the thread may
  * have switched model since) and never pairs them with reasoning items we did not keep.
  */
-const REPLAYED_HISTORY_MODEL = "rakazo-replayed-history";
+const REPLAYED_HISTORY_MODEL = "tangow-replayed-history";
 const NO_TOOL_OUTPUT = "(no output recorded)";
 
 /**

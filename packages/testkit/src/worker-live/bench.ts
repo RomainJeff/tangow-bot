@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
-import { nativeToolsForHarness } from "@rakazo/adapters/runtime-worker";
+import { nativeToolsForHarness } from "@tangow/adapters/runtime-worker";
 import { LocalWorkerProvider } from "../local-worker-provider.js";
 import { nativeCalls, quantiles, queryLog, settled } from "../worker-channel-tap.js";
 import { directProxyOverheads } from "./measurements.js";
@@ -36,7 +36,7 @@ function series(values: number[]) {
 export async function benchLive(live: Live, trials: number, databaseUrl?: string) {
   const toolsPerRun = 5;
   const arms = ["local_memory", "dedicated_computer", "team_computer"] as const;
-  const localRoot = await mkdtemp(path.join(tmpdir(), "rakazo-live-bench-"));
+  const localRoot = await mkdtemp(path.join(tmpdir(), "tangow-live-bench-"));
   // The live bundle carries the managed skills beside it; from source the provider's default applies.
   const beside = new URL("../guest/managed-skills/agent", import.meta.url);
   const managedSkills = existsSync(beside) ? fileURLToPath(beside) : undefined;

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { SessionEntryDraft } from "@rakazo/adapter-kit";
-import type { SessionEntry } from "@rakazo/contracts";
-import { SessionId } from "@rakazo/contracts";
+import type { SessionEntryDraft } from "@tangow/adapter-kit";
+import type { SessionEntry } from "@tangow/contracts";
+import { SessionId } from "@tangow/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { cancelRunsInTransaction, logCancelledRunsInTransaction } from "./cancel-runs.js";
 import { createDb, type PrismaClient } from "./client.js";
@@ -31,7 +31,7 @@ describePostgres("appendSessionEntryInTransaction under contention (PostgreSQL)"
       await db.prisma.$disconnect();
       await db.pool.end();
     };
-    await prisma.user.create({ data: { id, name: "Sessions", email: `${id}@rakazo.test` } });
+    await prisma.user.create({ data: { id, name: "Sessions", email: `${id}@tangow.test` } });
     await prisma.organization.create({
       data: { id, name: "Sessions", slug: id, createdAt: new Date() },
     });

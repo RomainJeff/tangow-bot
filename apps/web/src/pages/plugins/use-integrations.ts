@@ -5,8 +5,8 @@ import type {
   ConnectionCatalogItem,
   IntegrationCatalogResult,
   IntegrationCatalogSurface,
-} from "@rakazo/contracts";
-import { abortableDelay } from "@rakazo/core";
+} from "@tangow/contracts";
+import { abortableDelay } from "@tangow/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { optionalCatalogFeedProbe } from "../../lib/optional-catalog-feed";
 import { rpc } from "../../lib/rpc";
@@ -201,7 +201,7 @@ export function useIntegrations({ activeBotId }: { activeBotId?: string }) {
         displayName: nextAccountLabel(item.name, existing.length),
       });
       if (started.authorizationUrl)
-        window.open(started.authorizationUrl, "rakazo-plugin-connect", "noopener,noreferrer");
+        window.open(started.authorizationUrl, "tangow-plugin-connect", "noopener,noreferrer");
       if (item.noAuth && !started.authorizationUrl) {
         if (controller.signal.aborted) return;
         setItemConnected(item, true);

@@ -16,14 +16,14 @@ import type {
   SandboxProvider,
   ScreenRequest,
   ScreenSession,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import {
   boundedSandboxCommandTimeoutMs,
   underVolumeMounts,
   type VolumeHome,
   WORKSPACE_ROOT,
-} from "@rakazo/core";
-import { stopAllDesktopBrowsersCommand } from "@rakazo/core/node/desktop-runtime";
+} from "@tangow/core";
+import { stopAllDesktopBrowsersCommand } from "@tangow/core/node/desktop-runtime";
 import type { CommandHandle, CommandResult, ConnectionOpts } from "e2b";
 import { CommandExitError, ConnectionConfig, Sandbox, Template, TimeoutError } from "e2b";
 import { ComputerScreenUnavailableError } from "./computer-screens.js";
@@ -43,7 +43,7 @@ import {
 import type { DesktopExecutionOptions } from "./linux-desktop.js";
 import { LinuxDesktop, PREPARE_LINUX_DESKTOP } from "./linux-desktop.js";
 
-const E2B_WORKSPACE = "/home/user/rakazo-home";
+const E2B_WORKSPACE = "/home/user/tangow-home";
 const E2B_DESKTOP_ENV = {
   homeDir: "/home/user",
   workspaceDir: E2B_WORKSPACE,
@@ -57,7 +57,7 @@ const E2B_DESKTOP_ENV = {
  * the bot's private volume first, and a new machine restores it.
  */
 const E2B_LOCAL_PROFILES = "/home/user/.browser-profiles";
-const PROFILE_ARCHIVE = ".rakazo/browser-profiles.tgz";
+const PROFILE_ARCHIVE = ".tangow/browser-profiles.tgz";
 
 function saveBrowserProfilesCommand(): string {
   const excludes = [...skippedBrowserProfileDirectories, ...skippedBrowserProfileFiles]
@@ -152,7 +152,7 @@ export function e2bCreateOptions(botId: string, apiKey: string, volumeHome?: Vol
     timeoutMs: sandboxIdleMs(),
     metadata: {
       botId,
-      rakazo: "computer",
+      tangow: "computer",
       ...(volumeHome ? { home: "volumes", mounts: mountSet(volumeHome) } : {}),
     },
     lifecycle: { onTimeout: "pause" as const, autoResume: false },
@@ -367,7 +367,7 @@ export class E2BSandboxProvider implements SandboxProvider {
   }
 
   private async stopBrowsers(computer: ComputerRef, context: AdapterContext) {
-    const profiles = "RAKAZO_INTERNAL_PROFILES";
+    const profiles = "TANGOW_INTERNAL_PROFILES";
     const stop = stopAllDesktopBrowsersCommand({
       ...E2B_DESKTOP_ENV,
       browserProfilesDir: profiles,
@@ -831,7 +831,7 @@ function e2bCwd(computer: ComputerRef, cwd: string | undefined): string {
     !cwd ||
     cwd === "." ||
     cwd === "/" ||
-    cwd === "/home/rakazo" ||
+    cwd === "/home/tangow" ||
     cwd === "/home/user" ||
     cwd === E2B_WORKSPACE
   ) {
@@ -839,8 +839,8 @@ function e2bCwd(computer: ComputerRef, cwd: string | undefined): string {
   }
   const relative = cwd.startsWith(`${E2B_WORKSPACE}/`)
     ? cwd.slice(E2B_WORKSPACE.length + 1)
-    : cwd.startsWith("/home/rakazo/")
-      ? cwd.slice("/home/rakazo/".length)
+    : cwd.startsWith("/home/tangow/")
+      ? cwd.slice("/home/tangow/".length)
       : cwd;
   return workspacePath(E2B_WORKSPACE, relative);
 }

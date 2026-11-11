@@ -1,6 +1,6 @@
 import { plural } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { UsageCell, UsagePeriod } from "@rakazo/contracts";
+import type { UsageCell, UsagePeriod } from "@tangow/contracts";
 import {
   formatTokenCount,
   pivotUsage,
@@ -11,8 +11,8 @@ import {
   type UsageRow,
   usageAverage,
   usageDimensions,
-} from "@rakazo/core";
-import { BotAvatar, SegmentedControl, SettingRow, ShareBar, shareBarInk } from "@rakazo/ui-web";
+} from "@tangow/core";
+import { BotAvatar, SegmentedControl, SettingRow, ShareBar, shareBarInk } from "@tangow/ui-web";
 import { ChevronLeft } from "lucide-react";
 import { type RefObject, useEffect, useState } from "react";
 import { rpc } from "../lib/rpc";

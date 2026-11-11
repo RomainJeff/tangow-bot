@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
-import { ATTACHMENT_MAX_BYTES, ATTACHMENT_MAX_COUNT } from "@rakazo/contracts";
-import { attachmentsForThread, inferAttachmentMimeType } from "@rakazo/core";
+import { ATTACHMENT_MAX_BYTES, ATTACHMENT_MAX_COUNT } from "@tangow/contracts";
+import { attachmentsForThread, inferAttachmentMimeType } from "@tangow/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { copyableMessageText } from "../../lib/message-text";
 import { revokePendingAttachmentPreviews } from "../../lib/pending-attachments";

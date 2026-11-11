@@ -9,7 +9,7 @@ import type {
   MemoryStore,
   SandboxProvider,
   SessionLog,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import {
   computerControlExpireJobKey,
   messagingDeliverJob,
@@ -17,7 +17,7 @@ import {
   routineWakeupJob,
   runContinueJob,
   runJobKey,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import type {
   ComposioProvider,
   ComputerExecutionLease,
@@ -29,7 +29,7 @@ import type {
   RemoteConnectorDependencies,
   SkillOwnerLock,
   WorkerLifecycle,
-} from "@rakazo/adapters";
+} from "@tangow/adapters";
 import {
   acquireComputerExecutionLease,
   applyTeachingDesktopInput,
@@ -86,8 +86,8 @@ import {
   updateRoutine,
   validateConnectedModelChoice,
   verifyMcpInstall,
-} from "@rakazo/adapters";
-import type { Auth } from "@rakazo/auth";
+} from "@tangow/adapters";
+import type { Auth } from "@tangow/auth";
 import type {
   Actor,
   Bot,
@@ -99,7 +99,7 @@ import type {
   MemoryScope,
   SpaceInvitation,
   SpaceNavigation,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import {
   appContract,
   IntegrationProviderIdSchema,
@@ -107,7 +107,7 @@ import {
   OPENAI_COMPATIBLE_PROVIDER_ID,
   SessionId,
   ThinkingLevelSchema,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import {
   ACTIVE_RUN_STATUSES,
   AttachmentValidationError,
@@ -119,8 +119,8 @@ import {
   MODEL_PROVIDER_NOT_CONNECTED_MESSAGE,
   nextCronDateAcrossStrict,
   UNKNOWN_MODEL_MESSAGE,
-} from "@rakazo/core";
-import type { PrismaClient, SpaceInvitationRow, ThreadEvents } from "@rakazo/db";
+} from "@tangow/core";
+import type { PrismaClient, SpaceInvitationRow, ThreadEvents } from "@tangow/db";
 import {
   acceptSpaceInvitation,
   appendComputerControlInTransaction,
@@ -188,8 +188,8 @@ import {
   touchGroupUpdatedAt,
   usableBotIds,
   usageBreakdown,
-} from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 import { deleteAgentSecret, listAgentSecrets, putAgentSecret } from "./agent-secrets.js";
 import { createAgentSkillsService } from "./agent-skills.js";
 import {

@@ -1,5 +1,5 @@
-import type { DecisionProvider } from "@rakazo/adapter-kit";
-import type { PrismaClient } from "@rakazo/db";
+import type { DecisionProvider } from "@tangow/adapter-kit";
+import type { PrismaClient } from "@tangow/db";
 import { toStringRecord } from "./memory-provider-factory.js";
 import {
   createOpenRouterDecisionProvider,

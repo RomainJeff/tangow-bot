@@ -1,5 +1,5 @@
-import type { LinkMentionResolver } from "@rakazo/core";
-import { linkMentionLabel, previewSiteLabel } from "@rakazo/core";
+import type { LinkMentionResolver } from "@tangow/core";
+import { linkMentionLabel, previewSiteLabel } from "@tangow/core";
 import type { ReactNode } from "react";
 
 /** The neutral link glyph (lucide `link`) on its tile, for a site without a usable icon. */

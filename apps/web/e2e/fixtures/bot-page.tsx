@@ -8,8 +8,8 @@ import type {
   Routine,
   RunActivityRow,
   SessionEntry,
-} from "@rakazo/contracts";
-import { SaveStoreProvider } from "@rakazo/ui-web";
+} from "@tangow/contracts";
+import { SaveStoreProvider } from "@tangow/ui-web";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { setDebugMode } from "../../src/lib/debug-mode";

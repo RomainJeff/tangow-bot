@@ -1,6 +1,6 @@
 ---
 name: product-film
-description: Make an Apple-style product film of a Rakazo/tangow feature, skin or release - one 3D studio, an anonymised phone, the app's iOS screens playing live on its glass, hard cuts on the music's beats, benefit lines and an end card - rendered to MP4 with the HyperFrames CLI. Use when someone asks for a product video, a launch or reveal trailer, a feature film, "une vidéo façon pub Apple" or "un trailer". Not for explaining code, plans or architecture (technical-video-explainer, pr-motion-explainer).
+description: Make an Apple-style product film of a Tangow feature, skin or release - one 3D studio, an anonymised phone, the app's iOS screens playing live on its glass, hard cuts on the music's beats, benefit lines and an end card - rendered to MP4 with the HyperFrames CLI. Use when someone asks for a product video, a launch or reveal trailer, a feature film, "une vidéo façon pub Apple" or "un trailer". Not for explaining code, plans or architecture (technical-video-explainer, pr-motion-explainer).
 ---
 
 # Product film
@@ -28,11 +28,11 @@ The example film (14.5 s) must snapshot cleanly before you change anything. The 
 the HTML-in-canvas support the screens need.
 
 To show the product's real avatar, bundle it from `packages/core` (run from the repository root) and load it before
-`film.js` in `index.html` with `<script src="assets/rakazo-avatar.js"></script>`:
+`film.js` in `index.html` with `<script src="assets/tangow-avatar.js"></script>`:
 
 ```bash
 npx --yes esbuild@0.25.0 .agents/skills/product-film/template/avatar/avatar-entry.ts --bundle --format=iife \
-  --global-name=RakazoAvatar --outfile=.tmp/product-films/<slug>/assets/rakazo-avatar.js
+  --global-name=TangowAvatar --outfile=.tmp/product-films/<slug>/assets/tangow-avatar.js
 ```
 
 ## 2. Brief, script, words
@@ -47,7 +47,7 @@ npx --yes esbuild@0.25.0 .agents/skills/product-film/template/avatar/avatar-entr
 ## 3. Screens
 
 Build the product's screens with [template/assets/screen-kit.js](template/assets/screen-kit.js) on the app's tokens
-(`screen-kit.css`, the "gris atténué" skin; refresh it from `@rakazo/ui-tokens` when the skin changes). Use the app's
+(`screen-kit.css`, the "gris atténué" skin; refresh it from `@tangow/ui-tokens` when the skin changes). Use the app's
 real strings. Everything the timeline animates carries a `data-part`; items that appear later start collapsed
 (`height: 0; overflow: hidden; opacity: 0`) and open to `measure(el)`.
 

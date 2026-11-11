@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { createSaveStore, saveKey } from "@rakazo/core";
+import { createSaveStore, saveKey } from "@tangow/core";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

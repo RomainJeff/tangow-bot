@@ -1,11 +1,11 @@
-import type { ComputerMode, ThinkingLevel } from "@rakazo/contracts";
+import type { ComputerMode, ThinkingLevel } from "@tangow/contracts";
 import {
   botModelKey,
   connectedModelOptions,
   defaultModelLabel,
   parseModelOptionKey,
   thinkingChoices,
-} from "@rakazo/core";
+} from "@tangow/core";
 import type { BotPageContext, BotPatch, FieldSave } from "./bot-page";
 import {
   setBotComputer,

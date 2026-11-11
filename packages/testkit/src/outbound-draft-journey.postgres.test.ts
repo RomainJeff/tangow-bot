@@ -1,6 +1,6 @@
-import type { AskDraftEdits, ThreadEntry } from "@rakazo/contracts";
-import { askDraftState } from "@rakazo/contracts";
-import { projectThreadItems, projectThreadView } from "@rakazo/core";
+import type { AskDraftEdits, ThreadEntry } from "@tangow/contracts";
+import { askDraftState } from "@tangow/contracts";
+import { projectThreadItems, projectThreadView } from "@tangow/core";
 import { describe, expect, it } from "vitest";
 import { acmeApp } from "./draft-app.test-support.js";
 import { latestCard } from "./index.js";
@@ -11,7 +11,7 @@ import { DONE, journey, reply, rpc, WAITING } from "./pi-journey.test-support.js
 
 /** The tools a worker offers the model, by their own names: the controller's carry an MCP prefix. */
 const offeredTools = (request: ModelEmulatorRequest) =>
-  request.tools?.map((tool) => tool.function.name.replace(/^mcp__rakazo__/, ""));
+  request.tools?.map((tool) => tool.function.name.replace(/^mcp__tangow__/, ""));
 
 const databaseAvailable = process.env.VERIFY_DATABASE === "1" && Boolean(process.env.DATABASE_URL);
 

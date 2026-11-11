@@ -1,7 +1,7 @@
 import { plural } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { SpaceInvitation, SpaceMembers } from "@rakazo/contracts";
-import { Button, Input, SettingRow, UserAvatar } from "@rakazo/ui-web";
+import type { SpaceInvitation, SpaceMembers } from "@tangow/contracts";
+import { Button, Input, SettingRow, UserAvatar } from "@tangow/ui-web";
 import type { FormEvent } from "react";
 import { useCallback, useEffect, useId, useState } from "react";
 import { ApprovalRulesSettings } from "../components/ApprovalRulesSettings";

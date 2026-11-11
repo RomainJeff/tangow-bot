@@ -1,7 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
-import type { Routine } from "@rakazo/contracts";
-import { emptyRoutineDraft, type RoutineDraft, validateRoutineDraft } from "@rakazo/core";
-import { Button, Input, Label, SettingRow, Switch, Textarea } from "@rakazo/ui-web";
+import type { Routine } from "@tangow/contracts";
+import { emptyRoutineDraft, type RoutineDraft, validateRoutineDraft } from "@tangow/core";
+import { Button, Input, Label, SettingRow, Switch, Textarea } from "@tangow/ui-web";
 import { useId, useState } from "react";
 import { localTimezone } from "../../lib/local-timezone";
 import type { RoutineSeed } from "../shell/layout";

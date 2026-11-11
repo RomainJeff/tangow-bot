@@ -6,7 +6,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: @lingui/cli\n"
 "Language: es\n"
-"Project-Id-Version: rakazo-web\n"
+"Project-Id-Version: tangow-web\n"
 "Report-Msgid-Bugs-To: \n"
 "PO-Revision-Date: \n"
 "Last-Translator: \n"
@@ -956,8 +956,8 @@ msgid "Choose a new password"
 msgstr "Elige una contraseña nueva"
 
 #: src/pages/ModelSettingsOverlay.tsx:35
-msgid "Choose which connected model Rakazo uses."
-msgstr "Elige qué modelo conectado usa Rakazo."
+msgid "Choose which connected model Tangow uses."
+msgstr "Elige qué modelo conectado usa Tangow."
 
 #: src/pages/bot-page/page-kit.tsx:150
 #: src/pages/shell/dialogs.tsx:319
@@ -1783,8 +1783,8 @@ msgid "Create space"
 msgstr "Crear space"
 
 #: src/pages/Auth.tsx:39
-msgid "Create your Rakazo"
-msgstr "Crea tu Rakazo"
+msgid "Create your Tangow"
+msgstr "Crea tu Tangow"
 
 #: src/components/AskCard.tsx:48
 msgid "Created"
@@ -3417,8 +3417,8 @@ msgid "Paste a replacement key"
 msgstr "Pega una clave de reemplazo"
 
 #: src/pages/model-settings/model-detail.tsx:93
-msgid "Paste the OpenAI-compatible address from your server. Rakazo adds /v1 if needed."
-msgstr "Pega la dirección compatible con OpenAI de tu servidor. Rakazo agrega /v1 si es necesario."
+msgid "Paste the OpenAI-compatible address from your server. Tangow adds /v1 if needed."
+msgstr "Pega la dirección compatible con OpenAI de tu servidor. Tangow agrega /v1 si es necesario."
 
 #: src/pages/ProvidersSettings.tsx:225
 msgid "Paste your API key"
@@ -3817,8 +3817,8 @@ msgid "Retry screen"
 msgstr "Reintentar pantalla"
 
 #: src/pages/McpOAuthCallback.tsx:62
-msgid "Return to Rakazo"
-msgstr "Volver a Rakazo"
+msgid "Return to Tangow"
+msgstr "Volver a Tangow"
 
 #. placeholder {0}: doc.revision
 #: src/pages/KnowledgeSection.tsx:145
@@ -4143,8 +4143,8 @@ msgid "Sign in"
 msgstr "Iniciar sesión"
 
 #: src/pages/Auth.tsx:37
-msgid "Sign in to Rakazo"
-msgstr "Inicia sesión en Rakazo"
+msgid "Sign in to Tangow"
+msgstr "Inicia sesión en Tangow"
 
 #: src/pages/Auth.tsx:226
 #: src/pages/Welcome.tsx:32
@@ -4440,8 +4440,8 @@ msgid "This server is already connected. Disconnect it first to authorize again.
 msgstr "Este servidor ya está conectado. Desconéctalo primero para autorizarlo de nuevo."
 
 #: src/pages/model-settings/model-detail.tsx:341
-msgid "This subscription sign-in is not available in Rakazo yet. Use a deployment credential or choose another provider."
-msgstr "Este inicio de sesión por suscripción aún no está disponible en Rakazo. Usa una credencial de despliegue o elige otro proveedor."
+msgid "This subscription sign-in is not available in Tangow yet. Use a deployment credential or choose another provider."
+msgstr "Este inicio de sesión por suscripción aún no está disponible en Tangow. Usa una credencial de despliegue o elige otro proveedor."
 
 #: src/components/AgentSteps.tsx:57
 msgid "Thought for {duration} · {stepCount, plural, one {# step} other {# steps}}"

@@ -1,6 +1,6 @@
-import type { AgentSkillCatalogEntry, BotSharing } from "@rakazo/contracts";
-import type { ShareableApp } from "@rakazo/core";
-import { connectorKey, declareApp, shareWithPerson, shareWithSpace } from "@rakazo/core";
+import type { AgentSkillCatalogEntry, BotSharing } from "@tangow/contracts";
+import type { ShareableApp } from "@tangow/core";
+import { connectorKey, declareApp, shareWithPerson, shareWithSpace } from "@tangow/core";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text } from "react-native";
@@ -20,7 +20,7 @@ import { nativeTextStyle } from "../lib/typography";
  * Who besides its owner uses the bot: everyone in the Space, or the people switched on. Each change
  * saves itself; nobody on means only the owner. Once shared, the bot uses only the skills switched
  * on for it, and a member's run only the apps and MCP servers switched on, with the member's own
- * accounts and credentials. Mirrors web's share sheet; the rules are `@rakazo/core`'s.
+ * accounts and credentials. Mirrors web's share sheet; the rules are `@tangow/core`'s.
  */
 export default function BotShareScreen() {
   const { botId = "" } = useLocalSearchParams<{ botId: string }>();

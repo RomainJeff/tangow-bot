@@ -4,7 +4,7 @@ import { blocksOf, threadEntries } from "./thread-log";
 
 test("a bot asks before creating a bot, and Cancel creates nothing", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `spawn-approval-${stamp}@rakazo.test`, "password12", "Spawn Approval");
+  await signup(page, `spawn-approval-${stamp}@tangow.test`, "password12", "Spawn Approval");
   await completeOnboarding(page);
   const botId = activeBotId(page);
 
@@ -45,7 +45,7 @@ test("Edit changes the name before Create bot, and the bot is created with it", 
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `spawn-edit-${stamp}@rakazo.test`, "password12", "Spawn Edit");
+  await signup(page, `spawn-edit-${stamp}@tangow.test`, "password12", "Spawn Edit");
   await completeOnboarding(page);
   const botId = activeBotId(page);
 

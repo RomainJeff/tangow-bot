@@ -1,4 +1,4 @@
-import type { SessionLog } from "@rakazo/adapter-kit";
+import type { SessionLog } from "@tangow/adapter-kit";
 import type {
   Actor,
   BotActivityInput,
@@ -7,11 +7,11 @@ import type {
   RunRecap,
   RunsCursor,
   SessionEntries,
-} from "@rakazo/contracts";
-import { RUNS_PAGE_DEFAULT } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, projectThreadItems, routineRoles, runRecap } from "@rakazo/core";
-import type { Prisma, PrismaClient } from "@rakazo/db";
-import { IsolationError } from "@rakazo/db";
+} from "@tangow/contracts";
+import { RUNS_PAGE_DEFAULT } from "@tangow/contracts";
+import { ACTIVE_RUN_STATUSES, projectThreadItems, routineRoles, runRecap } from "@tangow/core";
+import type { Prisma, PrismaClient } from "@tangow/db";
+import { IsolationError } from "@tangow/db";
 import { mapRun, RUN_INCLUDE, TERMINAL_STATUSES, visibleRuns } from "./runs.js";
 
 type Entry = { createdAt: Date; id: string; item: BotActivityItem };

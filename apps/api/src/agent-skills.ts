@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import type { SkillOwnerLock, UserSkillFile } from "@rakazo/adapters";
+import type { SkillOwnerLock, UserSkillFile } from "@tangow/adapters";
 import {
   bundleFormat,
   isExists,
@@ -10,13 +10,13 @@ import {
   userSkillsRoot,
   writeUserSkill,
   writeUserSkillBundle,
-} from "@rakazo/adapters";
+} from "@tangow/adapters";
 import type {
   Actor,
   AgentSkill,
   AgentSkillCatalogEntry,
   SkillAvailability,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import {
   asSkillAvailability,
   buildSkillMd,
@@ -25,9 +25,9 @@ import {
   mergeManagedSkills,
   parseSkillMd,
   userSkillKey,
-} from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
-import { IsolationError } from "@rakazo/db";
+} from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
+import { IsolationError } from "@tangow/db";
 
 function toAgentSkill(file: UserSkillFile): AgentSkill {
   return {

@@ -9,7 +9,7 @@ import type {
   MemoryStore,
   SandboxProvider,
   WorkerProvider,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import {
   createBackgroundJobHandlers,
   createInMemorySkillLock,
@@ -23,19 +23,19 @@ import {
   ModelCallRuntime,
   PostgresSessionLog,
   provisionComputer,
-} from "@rakazo/adapters";
+} from "@tangow/adapters";
 import type {
   GuestConnector,
   RunWorkers,
   WorkerClock,
   WorkerTrace,
-} from "@rakazo/adapters/runtime-worker";
-import { createRunWorkers } from "@rakazo/adapters/runtime-worker";
-import type { GuestHarness } from "@rakazo/agent-run-worker";
-import type { SessionEntry } from "@rakazo/contracts";
-import type { PrismaClient } from "@rakazo/db";
-import { createThreadEvents } from "@rakazo/db";
-import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
+} from "@tangow/adapters/runtime-worker";
+import { createRunWorkers } from "@tangow/adapters/runtime-worker";
+import type { GuestHarness } from "@tangow/agent-run-worker";
+import type { SessionEntry } from "@tangow/contracts";
+import type { PrismaClient } from "@tangow/db";
+import { createThreadEvents } from "@tangow/db";
+import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
 import type { LocalWorkerFaults } from "./local-worker-provider.js";
 import { LocalWorkerProvider } from "./local-worker-provider.js";
 import type { ModelEmulatorStep } from "./model-emulator.js";
@@ -45,13 +45,13 @@ import { openBenchPostgres } from "./worker-live/database.js";
 
 const MODEL_KEY = "worker-fixture-model-key";
 
-/** Lets a step call a controller tool by its Rakazo name, which Pi native offers over MCP. */
+/** Lets a step call a controller tool by its Tangow name, which Pi native offers over MCP. */
 /** The call after the model ended on text the person never sees: it is told how to reach them. */
 export const afterPrivateText: ModelEmulatorStep = {
   expect(request) {
     assert.match(
       JSON.stringify(request.messages.at(-1)),
-      /Nothing you wrote reached the user: only mcp__rakazo__message_user does/,
+      /Nothing you wrote reached the user: only mcp__tangow__message_user does/,
     );
   },
   response: { type: "text", text: "" },
@@ -65,9 +65,9 @@ export function offeredToolNames(step: ModelEmulatorStep): ModelEmulatorStep {
       if (reply.type !== "tool") return reply;
       const offered = new Set(request.tools?.map((tool) => tool.function.name));
       const name = (called: string) =>
-        offered.has(called) || !offered.has(`mcp__rakazo__${called}`)
+        offered.has(called) || !offered.has(`mcp__tangow__${called}`)
           ? called
-          : `mcp__rakazo__${called}`;
+          : `mcp__tangow__${called}`;
       return {
         ...reply,
         name: name(reply.name),
@@ -162,7 +162,7 @@ export async function startWorkerRun<
     ? await openBenchPostgres(options.databaseUrl)
     : await openPgliteDatabase();
   const prisma = options.prisma?.(database.prisma) ?? database.prisma;
-  const dir = await mkdtemp(path.join(tmpdir(), "rakazo-worker-run-"));
+  const dir = await mkdtemp(path.join(tmpdir(), "tangow-worker-run-"));
   const dataDir = options.dataDir ?? path.join(dir, "data");
   const homesRoot = options.dataDir ?? path.join(dir, "homes");
   const catalog =
@@ -191,7 +191,7 @@ export async function startWorkerRun<
       (current.provider as unknown as LocalWorkerProvider).volumePath(volumeRef),
     );
 
-  await prisma.user.create({ data: { id: USER, name: "Worker", email: "worker@rakazo.test" } });
+  await prisma.user.create({ data: { id: USER, name: "Worker", email: "worker@tangow.test" } });
   await prisma.organization.create({
     data: { id: "org-worker", name: "Worker", slug: "org-worker", createdAt: new Date() },
   });

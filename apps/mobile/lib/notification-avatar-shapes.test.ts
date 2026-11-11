@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { SHAPES } from "@rakazo/core";
+import { SHAPES } from "@tangow/core";
 import { describe, expect, it } from "vitest";
 import {
   NOTIFICATION_AVATAR_SWIFT_PATH,
@@ -27,7 +27,7 @@ describe("notification avatar shapes", () => {
     );
     expect(
       committed,
-      "Run `pnpm --filter @rakazo/mobile generate:notification-avatars` after changing a bloub shape.",
+      "Run `pnpm --filter @tangow/mobile generate:notification-avatars` after changing a bloub shape.",
     ).toBe(notificationAvatarSwift());
   });
 });

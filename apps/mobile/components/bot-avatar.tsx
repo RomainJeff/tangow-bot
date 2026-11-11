@@ -1,5 +1,5 @@
-import type { AvatarStyle } from "@rakazo/contracts";
-import type { BotFrame, ExpressionId, Look } from "@rakazo/core";
+import type { AvatarStyle } from "@tangow/contracts";
+import type { BotFrame, ExpressionId, Look } from "@tangow/core";
 import {
   avatarIdentitySeed,
   avatarInk,
@@ -11,7 +11,7 @@ import {
   nextWorkingGlance,
   RAYON,
   SHAPES,
-} from "@rakazo/core";
+} from "@tangow/core";
 import { memo, useEffect, useId, useRef, useState } from "react";
 import { View } from "react-native";
 import { useReducedMotion } from "react-native-reanimated";
@@ -170,7 +170,7 @@ export interface OrganicAvatarDrive {
 }
 
 /**
- * The organic avatar, drawn by the bloub engine (`@rakazo/core/bloub`) like web and
+ * The organic avatar, drawn by the bloub engine (`@tangow/core/bloub`) like web and
  * desktop: a morphing ink body with the eyes punched out and idle blinks. While a
  * run is active the bot glances around and changes mood at random intervals.
  *

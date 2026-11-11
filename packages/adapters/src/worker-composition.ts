@@ -1,7 +1,7 @@
-import type { AgentRuntime, WorkerProvider } from "@rakazo/adapter-kit";
-import { resolveSupervisorToken } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+import type { AgentRuntime, WorkerProvider } from "@tangow/adapter-kit";
+import { resolveSupervisorToken } from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 import { DockerWorkerProvider } from "./docker-worker.js";
 import { E2BWorkerProvider } from "./e2b-worker.js";
 import { ModelCallRuntime } from "./model-call-runtime.js";
@@ -17,7 +17,7 @@ export type WorkerProviderConfig =
   | { kind: "docker"; supervisorUrl: string; supervisorToken: string; dataDir: string };
 
 /** The template `apps/agent-run-worker/template` builds for the default harness. */
-const DEFAULT_WORKER_TEMPLATE = "rakazo-worker-pi-native";
+const DEFAULT_WORKER_TEMPLATE = "tangow-worker-pi-native";
 const RECONCILE_BATCH = 10;
 
 /**

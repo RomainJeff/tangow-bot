@@ -1,5 +1,5 @@
-import type { ScreenLink, ScreenLinkView } from "@rakazo/core";
-import { createScreenLink } from "@rakazo/core";
+import type { ScreenLink, ScreenLinkView } from "@tangow/core";
+import { createScreenLink } from "@tangow/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
 import { screenWebViewProps, trackScreenVisibility } from "./screen-link";

@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { Pool, PrismaClient } from "@rakazo/db";
+import type { Pool, PrismaClient } from "@tangow/db";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createInMemorySkillLock, createPostgresSkillLock } from "./skill-lock.js";
 import { skillCreateFromTool } from "./skill-tools.js";
@@ -273,7 +273,7 @@ describe("skill owner lock", () => {
   it("lets more owners write at once than the app's pool has connections", {
     timeout: 120_000,
   }, async () => {
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-skill-lock-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-skill-lock-"));
     dirs.push(dataDir);
     const deps = {
       prisma: pooledPrisma(4, 10_000) as unknown as PrismaClient,

@@ -8,8 +8,8 @@ import type {
   ConnectorProvider,
   ConnectorTool,
   ManagedConnectorProvider,
-} from "@rakazo/adapter-kit";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/adapter-kit";
+import { getLogger } from "@tangow/logging";
 import type { ComposioToolSchema, ToolkitDirectoryEntry } from "./composio-catalog-cache.js";
 import {
   composioToolkitDirectory,
@@ -47,7 +47,7 @@ export function composioEntityId(scope: ConnectionScope): string {
 }
 
 /** The toolkit directory is product-wide, so it deliberately stays outside any space. */
-const CATALOG_ENTITY_ID = "__rakazo_catalog__";
+const CATALOG_ENTITY_ID = "__tangow_catalog__";
 
 export interface ComposioProvider extends ManagedConnectorProvider {
   warmDirectory(): Promise<void>;

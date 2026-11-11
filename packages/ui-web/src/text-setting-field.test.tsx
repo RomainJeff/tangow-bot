@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { createSaveStore, type SaveKey, type SaveStore, saveKey } from "@rakazo/core";
+import { createSaveStore, type SaveKey, type SaveStore, saveKey } from "@tangow/core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";

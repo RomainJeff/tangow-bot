@@ -1,6 +1,6 @@
 # Tangow
 
-Tangow runs **directly on the server**, from a Rakazo source checkout. It updates the application
+The `./tangow` operator CLI runs **directly on the server**, from a Tangow source checkout. It updates the application
 and the computer builds for the configured provider. Run `./tangow` or `pnpm tangow`; it operates the source Compose stack. Coding agents can use the project [Tangow skill](../.agents/skills/tangow/SKILL.md)
 for lifecycle operations and recovery.
 
@@ -16,7 +16,7 @@ It reads the ignored `.env.e2b.compose.json` used by the deployment:
 - With that override, it preserves E2B settings, installs frozen build dependencies, builds and
   pushes the desktop image, then rebuilds the worker and desktop templates on every update. The desktop template
   uses the pushed image's immutable digest.
-- Without it, it builds the Docker computer, supervisor and `rakazo/worker` images alongside the application.
+- Without it, it builds the Docker computer, supervisor and `tangow/worker` images alongside the application.
   The worker comes from `apps/agent-run-worker/Dockerfile` through Compose `worker-image`; its
   revision label must match the application revision before services can start.
   Empty/`none` providers, E2B without a key, and production Docker without a supervisor token
@@ -25,7 +25,7 @@ It reads the ignored `.env.e2b.compose.json` used by the deployment:
 It then starts the services and checks the actual API revision and provider, application images,
 web readiness and, on Docker, the supervisor image. It never resets local commits or deletes data.
 
-Every real run uses the same worker agent loop: Docker starts one `rakazo/worker` container per
+Every real run uses the same worker agent loop: Docker starts one `tangow/worker` container per
 attempt through the supervisor, and E2B starts a worker VM. There is no in-process Pi runtime.
 `AGENT_RUNTIME=pi` is obsolete; Tangow removes that legacy entry from `.env` during update.
 `AGENT_RUNTIME=scripted` is reserved for tests and Tangow refuses it for a real deployment.
@@ -35,8 +35,8 @@ checks its exit code and app image. It runs the session-log backfill and Docker-
 The final startup checks `migrate` again. A database/configuration or storage error blocks startup;
 individual busy/conflicting homes are deferred instead of failing the deployment.
 
-Docker moves idle homes by rename under `DATA_DIR/volumes/rakazo-<volumeId>`. A temporary
-`.rakazo-move-pending` in a home guards partial moves. Tangow reports remaining computer ids,
+Docker moves idle homes by rename under `DATA_DIR/volumes/tangow-<volumeId>`. A temporary
+`.tangow-move-pending` in a home guards partial moves. Tangow reports remaining computer ids,
 bots, states and reasons after startup, including homes with that marker. Busy computers move
 on their next suspend; conflicts need inspection. Do not delete the marker. Legacy user skills
 are copied once into each space's shared volume by the existing migration.
@@ -108,7 +108,7 @@ Optional defaults belong in **`.env.tangow.json`**, which is ignored by Git:
 ```json
 {
   "sudo": true,
-  "computerImage": "registry.example.com/rakazo-computer:local"
+  "computerImage": "registry.example.com/tangow-computer:local"
 }
 ```
 
@@ -117,14 +117,14 @@ runs as the checkout owner. That owner must be able to replace `.env` and write 
 Keep this config readable by that owner. Credentials stay in the existing private E2B override.
 
 `computerImage` selects a pushable registry image that the E2B builder can pull. When omitted,
-Tangow infers the repository from `rakazo/computer:local`'s existing registry digest and uses its
+Tangow infers the repository from `tangow/computer:local`'s existing registry digest and uses its
 `:local` tag. If no digest exists, it asks you to configure an image before changing Git or services.
 `--sudo` and `--computer-image` can also supply these settings for one invocation.
 
 To select a different source deployment on the same server:
 
 ```bash
-./tangow --path /srv/rakazo status
+./tangow --path /srv/tangow status
 ```
 
 ## Other commands
@@ -211,7 +211,7 @@ Running processes, browser profiles and other files outside bot/shared volumes d
 Bots may need to sign in again.
 
 Every E2B bot-private volume, including archived bots and bots without an active computer, and
-every space-shared volume is copied once into `data/volumes/rakazo-<volumeId>`. Copies preserve
+every space-shared volume is copied once into `data/volumes/tangow-<volumeId>`. Copies preserve
 files, executable and permission bits, and empty directories, and are verified by file hashes
 and a complete inventory before database references switch. Bot, space and volume IDs stay the
 same. An existing Docker directory is reused only when it matches exactly; differing copies

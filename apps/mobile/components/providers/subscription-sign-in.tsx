@@ -1,4 +1,4 @@
-import type { ModelOAuthBegin } from "@rakazo/contracts";
+import type { ModelOAuthBegin } from "@tangow/contracts";
 import { Linking, Pressable, Text, TextInput, View } from "react-native";
 import { useI18n } from "../../lib/i18n";
 import { native, useThemedStyles } from "../../lib/native";

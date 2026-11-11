@@ -32,9 +32,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
 
   // The share extension cannot read the JS bundle, so it gets the build-time server here.
   const shareDefaults = {
-    ...(apiUrl ? { RakazoApiBase: new URL(apiUrl).origin } : {}),
+    ...(apiUrl ? { TangowApiBase: new URL(apiUrl).origin } : {}),
     ...(accessId && accessSecret
-      ? { RakazoAccessClientId: accessId.trim(), RakazoAccessClientSecret: accessSecret.trim() }
+      ? { TangowAccessClientId: accessId.trim(), TangowAccessClientSecret: accessSecret.trim() }
       : {}),
   };
   return {

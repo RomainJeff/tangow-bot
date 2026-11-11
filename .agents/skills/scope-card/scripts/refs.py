@@ -3,7 +3,7 @@
 
 Usage: refs.py sync
 
-Reads ~/.config/rakazo/scope-card.json (refsDir, referenceRepos). Clones are shallow, filter
+Reads ~/.config/tangow/scope-card.json (refsDir, referenceRepos). Clones are shallow, filter
 large blobs, skip Git LFS, and leave binaries out when "sparse" is set. A clone is refreshed
 when its last fetch is older than 7 days, never when "frozen" is set. Nothing is installed,
 built or run inside a clone. Untracked files a user adds to a clone are kept.
@@ -14,7 +14,7 @@ import subprocess
 import sys
 import time
 
-CONFIG = os.path.expanduser("~/.config/rakazo/scope-card.json")
+CONFIG = os.path.expanduser("~/.config/tangow/scope-card.json")
 DEFAULTS = [
     {"name": "openclaw", "url": "https://github.com/openclaw/openclaw", "sparse": True},
     {"name": "hermes-agent", "url": "https://github.com/NousResearch/hermes-agent"},

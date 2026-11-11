@@ -5,22 +5,22 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { crc32, deflateSync } from "node:zlib";
 import { serve } from "@hono/node-server";
-import type { SessionEntryDraft } from "@rakazo/adapter-kit";
+import type { SessionEntryDraft } from "@tangow/adapter-kit";
 import {
   ComposioEmulator,
   EmailEmulator,
   LocalArtifactStore,
   PipedreamConnector,
   ThirdPartyConnectorEmulator,
-} from "@rakazo/adapters";
-import type { EntryId, MessageBlock, SessionEntry, SessionId } from "@rakazo/contracts";
-import { messageBlockForArtifact } from "@rakazo/core";
+} from "@tangow/adapters";
+import type { EntryId, MessageBlock, SessionEntry, SessionId } from "@tangow/contracts";
+import { messageBlockForArtifact } from "@tangow/core";
 import {
   appendSessionEntryInTransaction,
   createBotMessageInTransaction,
   createThreadMessage,
   type PrismaClient,
-} from "@rakazo/db";
+} from "@tangow/db";
 import { sessionCookieHeader } from "../index.js";
 import { runProcess } from "./process.js";
 
@@ -48,7 +48,7 @@ async function main() {
   await mkdir(REPORT_DIR, { recursive: true });
   await mkdir(DATA_DIR, { recursive: true });
 
-  execFileSync("pnpm", ["--filter", "@rakazo/db", "exec", "prisma", "migrate", "deploy"], {
+  execFileSync("pnpm", ["--filter", "@tangow/db", "exec", "prisma", "migrate", "deploy"], {
     cwd: path.join(ROOT, "packages", "db"),
     env: process.env,
     stdio: "inherit",
@@ -105,25 +105,25 @@ async function main() {
           "--output",
           path.join(REPORT_DIR, `${flow}.html`),
           "-e",
-          `RAKAZO_SCREENSHOT_EMAIL=${EMAIL}`,
+          `TANGOW_SCREENSHOT_EMAIL=${EMAIL}`,
           "-e",
-          `RAKAZO_SCREENSHOT_PASSWORD=${PASSWORD}`,
+          `TANGOW_SCREENSHOT_PASSWORD=${PASSWORD}`,
           "-e",
-          `RAKAZO_SCREENSHOT_BOT_ID=${fixture.botId}`,
+          `TANGOW_SCREENSHOT_BOT_ID=${fixture.botId}`,
           "-e",
-          `RAKAZO_SCREENSHOT_GROUP_ID=${fixture.groupId}`,
+          `TANGOW_SCREENSHOT_GROUP_ID=${fixture.groupId}`,
           "-e",
-          `RAKAZO_SCREENSHOT_MEMBER_GROUP_ID=${fixture.memberGroupId}`,
+          `TANGOW_SCREENSHOT_MEMBER_GROUP_ID=${fixture.memberGroupId}`,
           "-e",
-          `RAKAZO_SCREENSHOT_ROUTINE_ID=${fixture.routineId}`,
+          `TANGOW_SCREENSHOT_ROUTINE_ID=${fixture.routineId}`,
           "-e",
-          `RAKAZO_SCREENSHOT_SHARED_BOT_ID=${fixture.sharedBotId}`,
+          `TANGOW_SCREENSHOT_SHARED_BOT_ID=${fixture.sharedBotId}`,
           "-e",
-          `RAKAZO_SCREENSHOT_SHARE_BOT_ID=${fixture.shareBotId}`,
+          `TANGOW_SCREENSHOT_SHARE_BOT_ID=${fixture.shareBotId}`,
           "-e",
-          `RAKAZO_NOTIFICATION_VIDEO=${path.join(REPORT_DIR, "notification-demo")}`,
+          `TANGOW_NOTIFICATION_VIDEO=${path.join(REPORT_DIR, "notification-demo")}`,
           "-e",
-          `RAKAZO_EXPAND_NOTIFICATIONS_URL=${EXPAND_NOTIFICATIONS_URL}`,
+          `TANGOW_EXPAND_NOTIFICATIONS_URL=${EXPAND_NOTIFICATIONS_URL}`,
           path.join(FLOW_DIR, `${flow}.yaml`),
         ],
         process.env,
@@ -681,7 +681,7 @@ async function rpc<T>(
       "content-type": "application/json",
       cookie,
       origin: WEB_ORIGIN,
-      ...(spaceId ? { "x-rakazo-space-id": spaceId } : {}),
+      ...(spaceId ? { "x-tangow-space-id": spaceId } : {}),
     },
     body: JSON.stringify({ json: body }),
   });

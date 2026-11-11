@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
-import type { ArtifactStore, BackgroundJobPayloads } from "@rakazo/adapter-kit";
-import { LinkMentionBlock, LinkPreviewBlock, type LinkPreviewCard } from "@rakazo/contracts";
+import type { ArtifactStore, BackgroundJobPayloads } from "@tangow/adapter-kit";
+import { LinkMentionBlock, LinkPreviewBlock, type LinkPreviewCard } from "@tangow/contracts";
 import {
   isLinkOnlyMessage,
   type LinkCandidate,
   linkMentionCandidates,
   messageHostsLinkPreview,
   routineShownText,
-} from "@rakazo/core";
+} from "@tangow/core";
 import {
   appendLinkBlocks,
   blocksOf,
@@ -15,8 +15,8 @@ import {
   type PrismaClient,
   runMessages,
   type ThreadEvents,
-} from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 import { type IconReads, mentionOf } from "./read-link-preview.js";
 import {
   type LinkPreviewServiceDeps,

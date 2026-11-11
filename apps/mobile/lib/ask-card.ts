@@ -1,6 +1,6 @@
-import type { MessageBlock } from "@rakazo/contracts";
-import type { AnswerValue, AskCardBlock, AskForm, AskSettledView, FormOption } from "@rakazo/core";
-import { askFormOf } from "@rakazo/core";
+import type { MessageBlock } from "@tangow/contracts";
+import type { AnswerValue, AskCardBlock, AskForm, AskSettledView, FormOption } from "@tangow/core";
+import { askFormOf } from "@tangow/core";
 
 type Translate = (message: string, values?: Record<string, string | number>) => string;
 

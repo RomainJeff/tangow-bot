@@ -1,4 +1,4 @@
-import type { ComputerListItem, ComputerUpdateAllResult } from "@rakazo/contracts";
+import type { ComputerListItem, ComputerUpdateAllResult } from "@tangow/contracts";
 import { useState, useSyncExternalStore } from "react";
 import { ScrollView, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";

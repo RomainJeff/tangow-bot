@@ -1,5 +1,5 @@
 import { useLingui } from "@lingui/react/macro";
-import type { Me, ThinkingLevel } from "@rakazo/contracts";
+import type { Me, ThinkingLevel } from "@tangow/contracts";
 import {
   DEFAULT_MODEL_CONTEXT_WINDOW,
   DEFAULT_MODEL_MAX_TOKENS,
@@ -11,8 +11,8 @@ import {
   parseModelContextWindow,
   parseModelMaxImagesPerPrompt,
   parseModelMaxTokens,
-} from "@rakazo/contracts";
-import { createModelProbe, initialModelProbeState } from "@rakazo/core";
+} from "@tangow/contracts";
+import { createModelProbe, initialModelProbeState } from "@tangow/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ModelCatalogEntry, ModelCredential } from "../../lib/model-auth";
 import { rpc } from "../../lib/rpc";

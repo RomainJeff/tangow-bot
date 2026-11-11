@@ -1,4 +1,4 @@
-import type { RunFailureKind, RunStatus } from "@rakazo/contracts";
+import type { RunFailureKind, RunStatus } from "@tangow/contracts";
 
 export const MISSING_MODEL_MESSAGE = "Connect a model in Settings before running bots.";
 export const STORED_MODEL_UNAVAILABLE_MESSAGE =

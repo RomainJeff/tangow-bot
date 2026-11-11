@@ -10,7 +10,7 @@ describe("GroupAvatar", () => {
 
   it("renders single BotAvatar when 1 member", () => {
     const html = renderToString(<GroupAvatar members={[{ name: "Harry", color: "#8B5CF6" }]} />);
-    expect(html).toContain("rakazo-organic-avatar");
+    expect(html).toContain("tangow-organic-avatar");
   });
 
   it("pairs a lone bot with the user's initials when provided", () => {

@@ -1,5 +1,5 @@
-import type { ProductEvent } from "@rakazo/contracts";
-import { botWordsOf, notificationBody, textOfBotWords } from "@rakazo/core";
+import type { ProductEvent } from "@tangow/contracts";
+import { botWordsOf, notificationBody, textOfBotWords } from "@tangow/core";
 import { i18n } from "./i18n";
 
 export type BrowserNotificationPermission = "default" | "denied" | "granted";

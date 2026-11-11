@@ -1,13 +1,13 @@
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
-import type { MessageBlock } from "@rakazo/contracts";
-import { stepCallTitle } from "@rakazo/core";
+import type { MessageBlock } from "@tangow/contracts";
+import { stepCallTitle } from "@tangow/core";
 import {
   Dialog,
   DialogContent,
   DialogTitle,
   formatShortDuration,
   ReasoningDisclosure,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import { useState } from "react";
 import type { SessionViewTarget } from "../lib/thread-items";
 

@@ -1,7 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
-import type { MessageReaction } from "@rakazo/contracts";
-import { canReactToThreadMessage, MESSAGE_REACTIONS } from "@rakazo/contracts";
-import { HoverPill, Popover, PopoverContent, PopoverTrigger } from "@rakazo/ui-web";
+import type { MessageReaction } from "@tangow/contracts";
+import { canReactToThreadMessage, MESSAGE_REACTIONS } from "@tangow/contracts";
+import { HoverPill, Popover, PopoverContent, PopoverTrigger } from "@tangow/ui-web";
 import { Copy, Link2Off, Pencil, Reply, Smile, Square, Volume2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";

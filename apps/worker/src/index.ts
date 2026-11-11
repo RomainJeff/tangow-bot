@@ -3,9 +3,9 @@ import {
   type JobPublisher,
   type JobWorkerHost,
   LINK_PREVIEW_JOB_CONCURRENCY,
-} from "@rakazo/adapter-kit";
-import { ComposioConnector, IntegrationProviderSettings } from "@rakazo/adapters";
-import { loadRootEnv } from "@rakazo/core/node/load-root-env";
+} from "@tangow/adapter-kit";
+import { ComposioConnector, IntegrationProviderSettings } from "@tangow/adapters";
+import { loadRootEnv } from "@tangow/core/node/load-root-env";
 
 loadRootEnv();
 
@@ -54,18 +54,18 @@ import {
   resolveWorkerProvider,
   SpaceDecisionProviderResolver,
   SpaceMemoryProviderResolver,
-} from "@rakazo/adapters";
-import { parseSkillLearningMode, resolveEncryptionKey, resolveSupervisorToken } from "@rakazo/core";
+} from "@tangow/adapters";
+import { parseSkillLearningMode, resolveEncryptionKey, resolveSupervisorToken } from "@tangow/core";
 import {
   createDb,
   createPool,
   createThreadEvents,
   isTooManyDatabaseConnections,
   parsePositiveInteger,
-} from "@rakazo/db";
-import { SERVICE_NAMES } from "@rakazo/logging";
-import { createRootLogger } from "@rakazo/logging/axiom";
-import { MarkdownMemoryStore } from "@rakazo/memory";
+} from "@tangow/db";
+import { SERVICE_NAMES } from "@tangow/logging";
+import { createRootLogger } from "@tangow/logging/axiom";
+import { MarkdownMemoryStore } from "@tangow/memory";
 
 const logger = createRootLogger(SERVICE_NAMES.worker);
 
@@ -79,7 +79,7 @@ async function main() {
   // larger max just competes for Postgres max_connections (53300).
   const { prisma, pool } = createDb(databaseUrl, {
     poolMax: parsePositiveInteger(process.env.DB_POOL_MAX, 8),
-    applicationName: "rakazo-worker",
+    applicationName: "tangow-worker",
   });
   const realtime = new PostgresRealtimeFanout({
     connectionString: process.env.REALTIME_DATABASE_URL ?? databaseUrl,
@@ -189,7 +189,7 @@ async function main() {
   // Its own small pool: a held skill lock must never take a connection the change itself needs.
   const skillLockPool = createPool(databaseUrl, {
     poolMax: 2,
-    applicationName: "rakazo-worker-skill-lock",
+    applicationName: "tangow-worker-skill-lock",
   });
   const skillLock = createPostgresSkillLock(skillLockPool);
   const skillLearning = parseSkillLearningMode(process.env.SKILL_LEARNING);

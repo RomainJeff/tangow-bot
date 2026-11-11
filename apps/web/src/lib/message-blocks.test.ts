@@ -1,6 +1,6 @@
-import type { MessageBlock } from "@rakazo/contracts";
-import { MessageBlocks } from "@rakazo/contracts";
-import { botColors } from "@rakazo/ui-tokens";
+import type { MessageBlock } from "@tangow/contracts";
+import { MessageBlocks } from "@tangow/contracts";
+import { botColors } from "@tangow/ui-tokens";
 import { describe, expect, it } from "vitest";
 import { hasRenderableBlock, isHiddenActivityBlock } from "./message-blocks";
 

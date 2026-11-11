@@ -10,10 +10,10 @@ import type {
   SandboxProvider,
   VolumeFiles,
   WorkerProvider,
-} from "@rakazo/adapter-kit";
-import { isPortablePath } from "@rakazo/adapter-kit";
-import { ACTIVE_RUN_STATUSES, workerEnsureDeadline } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+} from "@tangow/adapter-kit";
+import { isPortablePath } from "@tangow/adapter-kit";
+import { ACTIVE_RUN_STATUSES, workerEnsureDeadline } from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
 import { toComputerRef } from "./computer-support.js";
 import { checkpointComputerWorkspace } from "./computer-workspace.js";
 import { homeMovePending } from "./docker-home-migration.js";
@@ -296,7 +296,7 @@ export async function carryDockerVolumesToE2B(
       if (report.providerKind !== docker) continue;
       await keepReserved();
       const { providerRef } = await target.ensureVolume(
-        { name: `rakazo-${report.volumeId}`, ensureDeadline: workerEnsureDeadline(new Date()) },
+        { name: `tangow-${report.volumeId}`, ensureDeadline: workerEnsureDeadline(new Date()) },
         context,
       );
       const volume: TargetVolume = {

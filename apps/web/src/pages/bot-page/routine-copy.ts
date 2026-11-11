@@ -1,12 +1,12 @@
 import { plural } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
-import type { Routine, RunFailureKind } from "@rakazo/contracts";
+import type { Routine, RunFailureKind } from "@tangow/contracts";
 import {
   type RoutineDraft,
   type RoutineDraftError,
   routineCadence,
   type TriggerRef,
-} from "@rakazo/core";
+} from "@tangow/core";
 import { describeSchedule } from "../RoutineSchedule";
 
 const MINUTE = 60_000;

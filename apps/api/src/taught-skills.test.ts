@@ -1,10 +1,10 @@
-import type * as db from "@rakazo/db";
+import type * as db from "@tangow/db";
 import { expect, it, vi } from "vitest";
 import type { TaughtSkillsDeps } from "./taught-skills.js";
 import { createTaughtSkillsService } from "./taught-skills.js";
 
 const logged = vi.hoisted(() => [] as unknown[]);
-vi.mock("@rakazo/db", async (original) => ({
+vi.mock("@tangow/db", async (original) => ({
   ...(await original<typeof db>()),
   appendCardStateInTransaction: vi.fn(async (_tx, draft) => {
     logged.push(draft);
@@ -76,7 +76,7 @@ it("logs each revision of a taught skill's draft card against the card", async (
   const actor = {
     userId: "user-1",
     spaceId: "space-1",
-    email: "user@rakazo.test",
+    email: "user@tangow.test",
     isDeploymentOwner: true,
   };
 

@@ -1,4 +1,4 @@
-import type { SpaceBot } from "@rakazo/contracts";
+import type { SpaceBot } from "@tangow/contracts";
 import type { MobileBot } from "./api";
 import type { ComputerStatus } from "./computer";
 import { t } from "./i18n";

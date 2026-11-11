@@ -1,5 +1,5 @@
-import type { AdapterContext, ConnectorEvent, ConnectorTool } from "@rakazo/adapter-kit";
-import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
+import type { AdapterContext, ConnectorEvent, ConnectorTool } from "@tangow/adapter-kit";
+import { createLogger, createTestSink, installLogger } from "@tangow/logging";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   approvalReplayResourceError,
@@ -357,7 +357,7 @@ describe("native Composio tools", () => {
     const context = contextWith();
     composioSdkState.rawTools.mockResolvedValue([{ ...rawTool(), version: "version-A" }]);
     const [before] = await connector.discoverTools(context);
-    const marker = "__rakazoCatalogTool";
+    const marker = "__tangowCatalogTool";
     const request = boundDirectApprovalRequest(
       approvalRoute(before!),
       { owner: "example" },
@@ -397,7 +397,7 @@ describe("native Composio tools", () => {
       { name: "Personal", ref: "ca-personal" },
     ];
     const [before] = await connector.discoverTools(contextWith(accounts));
-    const marker = "__rakazoCatalogTool";
+    const marker = "__tangowCatalogTool";
     const request = boundDirectApprovalRequest(
       approvalRoute(before!),
       { owner: "example", composio_account: "Work" },
@@ -610,7 +610,7 @@ describe("composio tool mapping", () => {
     } as never;
     const connector = new CompositeConnector(destination, [failing]);
     const sink = createTestSink();
-    installLogger(createLogger({ service: "rakazo-api", sinks: [sink] }));
+    installLogger(createLogger({ service: "tangow-api", sinks: [sink] }));
 
     try {
       await expect(connector.discoverTools({ userId: "u" } as AdapterContext)).resolves.toEqual([
@@ -624,7 +624,7 @@ describe("composio tool mapping", () => {
       expect(logged).toContain("[redacted]");
       expect(logged).not.toContain("ak_secretvaluehere");
     } finally {
-      installLogger(createLogger({ service: "rakazo-api", level: "off", sinks: [] }));
+      installLogger(createLogger({ service: "tangow-api", level: "off", sinks: [] }));
     }
   });
 
@@ -703,7 +703,7 @@ describe("composio tool mapping", () => {
     expect(
       composioSdkState.created
         .map(({ userId }) => userId)
-        .filter((userId) => userId !== "__rakazo_catalog__"),
+        .filter((userId) => userId !== "__tangow_catalog__"),
     ).toEqual(["workspace-a__user-1", "workspace-b__user-1"]);
   });
 
@@ -881,7 +881,7 @@ describe("composio tool mapping", () => {
     ).toEqual({ connectIds: ["row-gh"], revokeIds: [] });
   });
 
-  it("only fetches live Composio slugs when a Rakazo row is still pending or errored", () => {
+  it("only fetches live Composio slugs when a Tangow row is still pending or errored", () => {
     expect(needsLivePluginSync([{ status: "connected" }, { status: "revoked" }])).toBe(false);
     expect(needsLivePluginSync([{ status: "pending" }])).toBe(true);
     expect(needsLivePluginSync([{ status: "error" }])).toBe(true);
@@ -896,7 +896,7 @@ describe("composio tool mapping", () => {
     ).toEqual([{ provider: "github", displayName: "GitHub" }]);
   });
 
-  it("plans DB sync when Composio is connected but Rakazo is still pending", () => {
+  it("plans DB sync when Composio is connected but Tangow is still pending", () => {
     expect(
       planLiveConnectionSync(
         [

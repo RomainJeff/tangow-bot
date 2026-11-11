@@ -1,9 +1,9 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { type ScheduleToolDeps, updateRoutine } from "@rakazo/adapters";
-import type { Routine } from "@rakazo/contracts";
-import type { PrismaClient } from "@rakazo/db";
+import { type ScheduleToolDeps, updateRoutine } from "@tangow/adapters";
+import type { Routine } from "@tangow/contracts";
+import type { PrismaClient } from "@tangow/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sessionCookieHeader } from "./index.js";
 
@@ -19,7 +19,7 @@ describe.skipIf(!hasDb)("routine triggers", () => {
   let app: App;
   let prisma: PrismaClient;
   let stop: () => Promise<void>;
-  const dataDir = mkdtempSync(path.join(tmpdir(), "rakazo-routine-triggers-"));
+  const dataDir = mkdtempSync(path.join(tmpdir(), "tangow-routine-triggers-"));
 
   beforeAll(async () => {
     const { createApp } = await import("../../../apps/api/src/app.ts");
@@ -39,7 +39,7 @@ describe.skipIf(!hasDb)("routine triggers", () => {
   });
 
   it("keeps a trigger when two edits each remove a different one", async () => {
-    const cookie = await signup(app, `routine-triggers-${Date.now()}@rakazo.test`);
+    const cookie = await signup(app, `routine-triggers-${Date.now()}@tangow.test`);
     const bot = await rpc<{ id: string }>(app, cookie, "bots/create", {
       name: "Hooks",
       title: "Hooks",

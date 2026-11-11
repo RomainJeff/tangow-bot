@@ -1,8 +1,8 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { FrameSummary } from "@rakazo/adapters/runtime-worker";
-import { bundleGuest } from "@rakazo/agent-run-worker/bundle";
+import type { FrameSummary } from "@tangow/adapters/runtime-worker";
+import { bundleGuest } from "@tangow/agent-run-worker/bundle";
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { latestCard } from "./index.js";
 import type { ModelEmulatorRequest, ModelEmulatorStep } from "./model-emulator.js";
@@ -54,7 +54,7 @@ async function attempts(run: WorkerRun, runId: string) {
 let bundled: Promise<string> | undefined;
 /** The guest bundle, in a directory with no node_modules above it. */
 function guestBundle() {
-  bundled ??= mkdtemp(path.join(tmpdir(), "rakazo-guest-bundle-")).then((dir) =>
+  bundled ??= mkdtemp(path.join(tmpdir(), "tangow-guest-bundle-")).then((dir) =>
     bundleGuest(path.join(dir, "agent-run-worker.mjs")),
   );
   return bundled;
@@ -95,7 +95,7 @@ describe("a run whose bot runs in a guest", () => {
               const system = String(
                 request.messages.find((message) => message.role === "system")?.content,
               );
-              expect(system).toContain("After all work and any mcp__rakazo__message_user calls");
+              expect(system).toContain("After all work and any mcp__tangow__message_user calls");
               expect(system).not.toContain("After all work and any message_user calls");
             },
             response: {

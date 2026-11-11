@@ -1,6 +1,6 @@
-import type { AgentModelOAuthCredential, AgentRuntime } from "@rakazo/adapter-kit";
-import type { ActionApprovalRule, AutoReviewJudgeDecision } from "@rakazo/core";
-import { escapePromptData, redactSecrets } from "@rakazo/core";
+import type { AgentModelOAuthCredential, AgentRuntime } from "@tangow/adapter-kit";
+import type { ActionApprovalRule, AutoReviewJudgeDecision } from "@tangow/core";
+import { escapePromptData, redactSecrets } from "@tangow/core";
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
 import { LOCAL_PROVIDER_ID } from "./pi-local-provider.js";
@@ -30,7 +30,7 @@ function envFlag(env: NodeJS.ProcessEnv, name: string): boolean {
 }
 
 function localModelIds(env: NodeJS.ProcessEnv): string[] {
-  return (env.RAKAZO_LOCAL_MODELS ?? "")
+  return (env.TANGOW_LOCAL_MODELS ?? "")
     .split(",")
     .map((id) => id.trim())
     .filter((id) => id.length > 0);
@@ -38,11 +38,11 @@ function localModelIds(env: NodeJS.ProcessEnv): string[] {
 
 /** Deployment default for the user toggle when no preference row exists. */
 export function deploymentAutoReviewDefault(env: NodeJS.ProcessEnv = process.env): boolean {
-  return envFlag(env, "RAKAZO_AUTO_REVIEW");
+  return envFlag(env, "TANGOW_AUTO_REVIEW");
 }
 
 export function autoReviewTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
-  const raw = env.RAKAZO_AUTO_REVIEW_TIMEOUT_MS?.trim();
+  const raw = env.TANGOW_AUTO_REVIEW_TIMEOUT_MS?.trim();
   if (!raw) return DEFAULT_TIMEOUT_MS;
   const value = Number(raw);
   if (!Number.isFinite(value) || value < 200 || value > 30_000) return DEFAULT_TIMEOUT_MS;
@@ -56,8 +56,8 @@ export function autoReviewTimeoutMs(env: NodeJS.ProcessEnv = process.env): numbe
 export function resolveAutoReviewChecker(
   env: NodeJS.ProcessEnv = process.env,
 ): AutoReviewChecker | null {
-  const overrideProvider = env.RAKAZO_AUTO_REVIEW_PROVIDER?.trim();
-  const overrideModel = env.RAKAZO_AUTO_REVIEW_MODEL?.trim();
+  const overrideProvider = env.TANGOW_AUTO_REVIEW_PROVIDER?.trim();
+  const overrideModel = env.TANGOW_AUTO_REVIEW_MODEL?.trim();
   if (overrideProvider && overrideModel) {
     return { provider: overrideProvider, model: overrideModel };
   }

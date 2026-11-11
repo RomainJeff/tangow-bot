@@ -1,5 +1,5 @@
 import { useLingui } from "@lingui/react/macro";
-import { AvatarStyleProvider } from "@rakazo/ui-web";
+import { AvatarStyleProvider } from "@tangow/ui-web";
 import { useCallback, useLayoutEffect, useRef } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ComputerUpdateProgress } from "../components/ComputerUpdateProgress";

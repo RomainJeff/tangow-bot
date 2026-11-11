@@ -1,4 +1,4 @@
-import type { AdapterContext, DecisionResponse } from "@rakazo/adapter-kit";
+import type { AdapterContext, DecisionResponse } from "@tangow/adapter-kit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FakeDecisionProvider } from "./fake-decision.js";
 import { classifyToolEffect } from "./tool-approval-classification.js";

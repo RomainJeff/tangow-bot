@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
-import { SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH, SPAWN_BOT_PROMPT_MAX_LENGTH } from "@rakazo/contracts";
-import { BOT_SKILL_DESCRIPTION_MAX_LENGTH } from "@rakazo/core";
+import { SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH, SPAWN_BOT_PROMPT_MAX_LENGTH } from "@tangow/contracts";
+import { BOT_SKILL_DESCRIPTION_MAX_LENGTH } from "@tangow/core";
 import { describe, expect, it } from "vitest";
 import { builtinAgentTools, helperCallOf, helperModel } from "./builtin-tools.js";
 import { parseConnectorToolArgs } from "./lazy-tool-catalog.js";

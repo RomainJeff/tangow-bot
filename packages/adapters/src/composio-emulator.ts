@@ -3,7 +3,7 @@ import type {
   ConnectorCall,
   ConnectorEvent,
   ConnectorTool,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import {
   type ComposioCatalogItem,
   type ComposioProvider,
@@ -12,7 +12,7 @@ import {
   filterCatalog,
 } from "./composio-connector.js";
 import {
-  DEFAULT_RAKAZO_EMULATED_RELEASES,
+  DEFAULT_TANGOW_EMULATED_RELEASES,
   type EmulatedGithubRelease,
   RELEASE_WATCH_GITHUB_TOOL_NAMES,
 } from "./release-watch.js";
@@ -188,11 +188,11 @@ function seedMailbox(): Mailbox {
       {
         messageId: "18c5f5d1a2b3c4d5",
         threadId: "18c5f5d1a2b3c4d5",
-        subject: "Welcome to Rakazo",
-        sender: "hello@rakazo.test",
+        subject: "Welcome to Tangow",
+        sender: "hello@tangow.test",
         to: "me@example.test",
         snippet: "Your inbox is ready for agent workflows.",
-        messageText: "Your inbox is ready for agent workflows.\n\n— Rakazo",
+        messageText: "Your inbox is ready for agent workflows.\n\n— Tangow",
         labelIds: ["INBOX", "UNREAD"],
         internalDate: String(base),
       },
@@ -291,7 +291,7 @@ function githubReleaseTools(): ConnectorTool[] {
         type: "object",
         properties: {
           owner: { type: "string", description: "Repository owner, e.g. elie222" },
-          repo: { type: "string", description: "Repository name, e.g. rakazo" },
+          repo: { type: "string", description: "Repository name, e.g. tangow" },
         },
         required: ["owner", "repo"],
       },
@@ -333,7 +333,7 @@ function findAccountIndex(refs: readonly string[], connectionRef: string): numbe
 export class ComposioEmulator implements ComposioProvider {
   private readonly connectedByEntity = new Map<string, string[]>();
   private readonly mailboxesByEntity = new Map<string, Mailbox>();
-  private githubReleases: EmulatedGithubRelease[] = [...DEFAULT_RAKAZO_EMULATED_RELEASES];
+  private githubReleases: EmulatedGithubRelease[] = [...DEFAULT_TANGOW_EMULATED_RELEASES];
   private nextAccountSeq = 0;
   readonly executions: Array<{
     userId: string;
@@ -482,7 +482,7 @@ export class ComposioEmulator implements ComposioProvider {
 
   private executeGithub(tool: string, args: Record<string, unknown>): Record<string, unknown> {
     const owner = String(args.owner ?? args.owner_name ?? "elie222");
-    const repo = String(args.repo ?? args.repository ?? "rakazo");
+    const repo = String(args.repo ?? args.repository ?? "tangow");
     const matched = this.githubReleases.filter(
       (release) =>
         release.owner.toLowerCase() === owner.toLowerCase() &&

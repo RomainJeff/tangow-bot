@@ -1,4 +1,4 @@
-import type { WorkerState } from "@rakazo/contracts";
+import type { WorkerState } from "@tangow/contracts";
 
 /**
  * What the controller recorded while stopping an attempt's guest, in the order it can happen.

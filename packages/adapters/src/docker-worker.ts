@@ -8,9 +8,9 @@ import type {
   WorkerCapabilities,
   WorkerProvider,
   WorkerSpec,
-} from "@rakazo/adapter-kit";
-import { workerHarness } from "@rakazo/adapter-kit";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/adapter-kit";
+import { workerHarness } from "@tangow/adapter-kit";
+import { getLogger } from "@tangow/logging";
 import type { FrameChannel } from "./runtime-worker/framing.js";
 import { streamChannel } from "./runtime-worker/framing.js";
 import type { GuestConnector } from "./runtime-worker/launcher.js";
@@ -22,7 +22,7 @@ import { WORKER_LIMITS } from "./runtime-worker/limits.js";
  */
 export const DOCKER_CREATE_MARGIN_MS = 60_000;
 
-const VOLUME_NAME = /^rakazo-[A-Za-z0-9_-]{1,64}$/;
+const VOLUME_NAME = /^tangow-[A-Za-z0-9_-]{1,64}$/;
 /** What undici reports when the supervisor closed a pooled keep-alive connection under a request. */
 const RESET_CODES = new Set(["ECONNRESET", "EPIPE", "UND_ERR_SOCKET"]);
 
@@ -181,9 +181,9 @@ export class DockerWorkerProvider implements WorkerProvider, GuestConnector {
           agent: false,
           headers: {
             authorization: `Bearer ${this.config.supervisorToken}`,
-            "x-rakazo-worker-capability": capability,
+            "x-tangow-worker-capability": capability,
             connection: "Upgrade",
-            upgrade: "rakazo-guest",
+            upgrade: "tangow-guest",
           },
         },
       );

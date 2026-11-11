@@ -1,7 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
-import type { AskDraft, AskDraftEdits } from "@rakazo/contracts";
-import { ASK_DRAFT_TEXT_MAX_LENGTH } from "@rakazo/contracts";
-import type { DraftCard as DraftCardBlock, DraftLocal, RecipientRole } from "@rakazo/core";
+import type { AskDraft, AskDraftEdits } from "@tangow/contracts";
+import { ASK_DRAFT_TEXT_MAX_LENGTH } from "@tangow/contracts";
+import type { DraftCard as DraftCardBlock, DraftLocal, RecipientRole } from "@tangow/core";
 import {
   addressesOf,
   changeLine,
@@ -12,8 +12,8 @@ import {
   foldedRoles,
   heldBack,
   RECIPIENT_ROLES,
-} from "@rakazo/core";
-import { Button, FramedBlock, Textarea, UserAvatar } from "@rakazo/ui-web";
+} from "@tangow/core";
+import { Button, FramedBlock, Textarea, UserAvatar } from "@tangow/ui-web";
 import { Copy, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useId, useRef, useState } from "react";

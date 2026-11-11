@@ -1,4 +1,4 @@
-import type { ComputerListItem } from "@rakazo/contracts";
+import type { ComputerListItem } from "@tangow/contracts";
 import type { Href } from "expo-router";
 import { useRouter } from "expo-router";
 import { Fragment, useCallback, useEffect, useState } from "react";

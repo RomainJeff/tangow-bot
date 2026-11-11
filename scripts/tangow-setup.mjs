@@ -142,7 +142,7 @@ export async function configureSetup({ root, values, provider, run, dock, git, w
       WEB_ORIGIN: chosen.origin,
       BETTER_AUTH_URL: chosen.origin,
       API_URL: chosen.loopback ? "http://127.0.0.1:3100" : chosen.origin,
-      RAKAZO_HOST: chosen.hostname,
+      TANGOW_HOST: chosen.hostname,
     });
     if (!chosen.loopback) {
       console.log(
@@ -199,8 +199,8 @@ export async function configureSetup({ root, values, provider, run, dock, git, w
     if ((await prompt(answers, "Build and start this deployment? (yes/no)", "yes")) !== "yes")
       throw new Error("Setup cancelled. No configuration was written.");
     for (const name of missing) next[name] = randomBytes(32).toString("hex");
-    next.POSTGRES_USER ||= "rakazo";
-    next.POSTGRES_DB ||= "rakazo";
+    next.POSTGRES_USER ||= "tangow";
+    next.POSTGRES_DB ||= "tangow";
     next.SANDBOX_PROVIDER = provider;
     if (!saved.DATABASE_URL || saved.DATABASE_URL.includes("REPLACE_WITH_POSTGRES_PASSWORD"))
       next.DATABASE_URL = `postgres://${next.POSTGRES_USER}:${next.POSTGRES_PASSWORD}@127.0.0.1:5433/${next.POSTGRES_DB}`;

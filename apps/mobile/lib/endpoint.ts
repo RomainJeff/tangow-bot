@@ -1,4 +1,4 @@
-import { readBoundedJsonResponse } from "@rakazo/core";
+import { readBoundedJsonResponse } from "@tangow/core";
 import { type AccessCredentials, accessHeaders, isAccessLoginUrl } from "./access";
 import { t } from "./i18n";
 
@@ -75,7 +75,7 @@ export async function probeApiBase(
         method: "POST",
         headers: {
           "content-type": "application/json",
-          origin: "rakazo://",
+          origin: "tangow://",
           ...accessHeaders(access),
         },
         body: JSON.stringify({ json: {} }),
@@ -97,7 +97,7 @@ export async function probeApiBase(
     }
     if (!res.ok) {
       cancelResponseBody(res);
-      return { ok: false, error: t("That URL did not look like a Rakazo server") };
+      return { ok: false, error: t("That URL did not look like a Tangow server") };
     }
     let body: HealthResponse;
     try {
@@ -111,7 +111,7 @@ export async function probeApiBase(
       body = {};
     }
     if (body.error || body.json?.ok !== true) {
-      return { ok: false, error: t("That URL did not look like a Rakazo server") };
+      return { ok: false, error: t("That URL did not look like a Tangow server") };
     }
     return parsed;
   } catch {

@@ -1,12 +1,12 @@
-import type { HarnessDeclaration } from "@rakazo/adapter-kit";
-import { PI_NATIVE_HARNESS } from "@rakazo/adapter-kit";
+import type { HarnessDeclaration } from "@tangow/adapter-kit";
+import { PI_NATIVE_HARNESS } from "@tangow/adapter-kit";
 import {
   capabilityWorker,
   createWorkerAgentRuntime,
   encodeMessage,
   readGuestFrame,
-} from "@rakazo/adapters/runtime-worker";
-import { HARNESSES } from "@rakazo/agent-run-worker";
+} from "@tangow/adapters/runtime-worker";
+import { HARNESSES } from "@tangow/agent-run-worker";
 import { expect, it, onTestFinished } from "vitest";
 import {
   consume,

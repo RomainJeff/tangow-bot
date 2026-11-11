@@ -3,8 +3,8 @@ import type {
   DecisionProvider,
   DecisionRequest,
   DecisionResponse,
-} from "@rakazo/adapter-kit";
-import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
+} from "@tangow/adapter-kit";
+import { createLogger, createTestSink, installLogger } from "@tangow/logging";
 import { afterEach, describe, expect, it } from "vitest";
 import { decideWithin } from "./decision.js";
 import { FakeDecisionProvider } from "./fake-decision.js";
@@ -108,7 +108,7 @@ async function assertDecisionConformance(provider: DecisionProvider): Promise<vo
 
 describe("decision conformance", () => {
   afterEach(() => {
-    installLogger(createLogger({ service: "rakazo", level: "off", sinks: [] }));
+    installLogger(createLogger({ service: "tangow", level: "off", sinks: [] }));
   });
 
   it("the OpenRouter adapter honours the contract", async () => {
@@ -259,7 +259,7 @@ describe("decision conformance", () => {
 
   it("logs counters and ids, never state or option text", async () => {
     const sink = createTestSink();
-    installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+    installLogger(createLogger({ service: "tangow-worker", sinks: [sink] }));
     const marker = "zq-improbable-marker";
     const provider = new FakeDecisionProvider({
       script: [choiceAnswer("e1", { e1: 0.9, none: 0.1 })],

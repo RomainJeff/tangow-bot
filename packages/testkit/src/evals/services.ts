@@ -3,8 +3,8 @@ import type {
   ConnectorCall,
   ConnectorEvent,
   ConnectorTool,
-} from "@rakazo/adapter-kit";
-import { ComposioEmulator } from "@rakazo/adapters";
+} from "@tangow/adapter-kit";
+import { ComposioEmulator } from "@tangow/adapters";
 import { CUSTOMER_SUPPORT_PROVIDERS, CUSTOMER_SUPPORT_TOOLS } from "./service-contract.js";
 
 export const INBOX = [

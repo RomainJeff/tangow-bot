@@ -1,5 +1,5 @@
-import { TraceExporter } from "@rakazo/adapters";
-import type { WorkerTrace } from "@rakazo/adapters/runtime-worker";
+import { TraceExporter } from "@tangow/adapters";
+import type { WorkerTrace } from "@tangow/adapters/runtime-worker";
 import { describe, expect, it, onTestFinished } from "vitest";
 import { startWorkerRun } from "./worker-run-fixture.js";
 
@@ -59,7 +59,7 @@ describe("a traced worker run", () => {
   it("exports the run, each relayed model request and each tool call, with secrets masked", async () => {
     const payloads: unknown[] = [];
     const exporter = new TraceExporter({ send: async (payload) => void payloads.push(payload) });
-    expect(await runShowingKey({ exporter, serviceName: "rakazo-worker" })).toBe("completed");
+    expect(await runShowingKey({ exporter, serviceName: "tangow-worker" })).toBe("completed");
     await exporter.flush();
 
     expect(payloads).toHaveLength(1);
@@ -69,7 +69,7 @@ describe("a traced worker run", () => {
     const attributes = (span: ExportedSpan) =>
       Object.fromEntries(span.attributes.map(({ key, value }) => [key, value.stringValue]));
     const [root, ...children] = spans;
-    expect(root?.name).toBe("rakazo.run");
+    expect(root?.name).toBe("tangow.run");
     const named = new Map(children.map((span) => [span.name, span]));
     expect([...named.keys()].sort()).toEqual([
       "generation 1",

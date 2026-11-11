@@ -2,7 +2,7 @@ import {
   createBashToolDefinition,
   createLocalBashOperations,
 } from "@earendil-works/pi-coding-agent";
-import { WORKER_LIMITS } from "@rakazo/adapters/runtime-worker/wire";
+import { WORKER_LIMITS } from "@tangow/adapters/runtime-worker/wire";
 import { captureToolOutput } from "../tool-output.js";
 
 /** Pi owns shell execution and status; the authorized mount owns retained output. */

@@ -1,4 +1,4 @@
-import { ThreadItemSchema } from "@rakazo/contracts";
+import { ThreadItemSchema } from "@tangow/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("expo-localization", () => ({ getLocales: () => [{ languageTag: "en-US" }] }));

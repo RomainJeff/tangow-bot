@@ -6,13 +6,13 @@ import type {
   ThreadEntryOf,
   ThreadItem,
   UiEntry,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import {
   ASK_DISMISSED_ANSWER,
   appConnectAnswerId,
   CHOICE_DISMISSED_ANSWER_ID,
   isUiEntry,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import { classifyRunFailure } from "../run-failure.js";
 import { childSessionsOf, originSessionIdOf } from "./child-sessions.js";
 import { foldRuns, toolAnswers } from "./run-fold.js";

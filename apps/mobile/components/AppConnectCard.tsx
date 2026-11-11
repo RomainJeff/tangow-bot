@@ -1,6 +1,6 @@
-import type { MessageBlock } from "@rakazo/contracts";
-import { abortableDelay } from "@rakazo/core";
-import { radii } from "@rakazo/ui-tokens";
+import type { MessageBlock } from "@tangow/contracts";
+import { abortableDelay } from "@tangow/core";
+import { radii } from "@tangow/ui-tokens";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Linking, Pressable, Text, View, type ViewProps } from "react-native";
 import { rpc } from "../lib/api";

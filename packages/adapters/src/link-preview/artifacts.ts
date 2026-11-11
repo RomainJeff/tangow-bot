@@ -1,11 +1,11 @@
-import type { ArtifactStore } from "@rakazo/adapter-kit";
+import type { ArtifactStore } from "@tangow/adapter-kit";
 import {
   deleteLinkPreviewArtifactRows,
   findOrphanPreviewArtifacts,
   type PrismaClient,
   purgeLinkPreviewState,
-} from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 import { previewStoreContext, removePreviewBytes } from "./service.js";
 
 /**

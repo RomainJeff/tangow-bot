@@ -9,7 +9,7 @@ import {
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import type { AgentSteeringMessage } from "@rakazo/adapter-kit";
+import type { AgentSteeringMessage } from "@tangow/adapter-kit";
 import { PiRuntimeCredentialStore } from "./pi-credentials.js";
 
 export type WireProtocol = "openai-completions" | "anthropic-messages";
@@ -313,7 +313,7 @@ function anthropicEvents(blocks: WireBlock[], usage: WireUsage | undefined): str
 }
 
 export async function proofModelRuntime(fixture: WireFixture, apiKey: string) {
-  const provider = `rakazo-proof-${fixture.protocol}`;
+  const provider = `tangow-proof-${fixture.protocol}`;
   const modelRuntime = await ModelRuntime.create({
     credentials: new PiRuntimeCredentialStore(provider, { type: "api_key", key: apiKey }),
     modelsPath: null,

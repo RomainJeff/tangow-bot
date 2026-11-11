@@ -1,5 +1,5 @@
-import type { Bot, ComputerMode, Routine, RunActivityRow } from "@rakazo/contracts";
-import { createAnswerOrder, type RoutinePayload } from "@rakazo/core";
+import type { Bot, ComputerMode, Routine, RunActivityRow } from "@tangow/contracts";
+import { createAnswerOrder, type RoutinePayload } from "@tangow/core";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { useMemo, useRef } from "react";
 import { localTimezone } from "../../lib/local-timezone";

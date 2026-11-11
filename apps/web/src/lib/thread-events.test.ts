@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
-import type { ComputerStatus, ProductEvent, ThreadEntry, ThreadSnapshot } from "@rakazo/contracts";
-import { ThreadEntrySchema } from "@rakazo/contracts";
-import { projectThreadView, threadEntriesOf } from "@rakazo/core";
+import type { ComputerStatus, ProductEvent, ThreadEntry, ThreadSnapshot } from "@tangow/contracts";
+import { ThreadEntrySchema } from "@tangow/contracts";
+import { projectThreadView, threadEntriesOf } from "@tangow/core";
 import { describe, expect, it } from "vitest";
 import type { ThreadState } from "./thread-events.js";
 import {

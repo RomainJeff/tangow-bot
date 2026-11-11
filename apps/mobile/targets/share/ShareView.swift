@@ -134,7 +134,7 @@ struct ShareView: View {
     case .loading:
       ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
     case .signedOut:
-      Notice(text: Text("Sign in to Rakazo"))
+      Notice(text: Text("Sign in to Tangow"))
     case .failed(let message):
       Notice(text: Text(message))
     case .ready:

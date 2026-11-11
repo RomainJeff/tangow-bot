@@ -1,14 +1,14 @@
-import type { SessionLog } from "@rakazo/adapter-kit";
+import type { SessionLog } from "@tangow/adapter-kit";
 import type {
   EntryId,
   ProductEvent,
   SessionEntry,
   ThreadEntry,
   ThreadMessagePage,
-} from "@rakazo/contracts";
-import { SessionId, toThreadEntry } from "@rakazo/contracts";
-import { appendedEntries, visibleEntries } from "@rakazo/core";
-import { hiddenPeerRunIds, type Prisma, type PrismaClient } from "@rakazo/db";
+} from "@tangow/contracts";
+import { SessionId, toThreadEntry } from "@tangow/contracts";
+import { appendedEntries, visibleEntries } from "@tangow/core";
+import { hiddenPeerRunIds, type Prisma, type PrismaClient } from "@tangow/db";
 
 type ThreadDb = PrismaClient | Prisma.TransactionClient;
 type PageLog = Pick<SessionLog<Prisma.TransactionClient>, "readPage" | "readAround">;

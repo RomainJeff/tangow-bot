@@ -1,4 +1,4 @@
-import type { ProcessEvent } from "@rakazo/adapter-kit";
+import type { ProcessEvent } from "@tangow/adapter-kit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DockerSandboxProvider,
@@ -61,7 +61,7 @@ describe("Docker sandbox", () => {
 
     expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
       argv: ["sleep", "10"],
-      cwd: "/home/rakazo",
+      cwd: "/home/tangow",
       timeoutMs: 75,
     });
     expect(events).toEqual([
@@ -70,8 +70,8 @@ describe("Docker sandbox", () => {
       { type: "exit", code: 124 },
     ]);
     expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({
-      "x-rakazo-bot-id": "bot",
-      "x-rakazo-screen-id": "bot",
+      "x-tangow-bot-id": "bot",
+      "x-tangow-screen-id": "bot",
     });
     expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({
       "x-request-id": expect.any(String),
@@ -91,7 +91,7 @@ describe("Docker sandbox", () => {
     await provider.releaseScreen(computer, { ...context, memberId: "dana" });
 
     expect(
-      fetchMock.mock.calls.map(([, init]) => new Headers(init?.headers).get("x-rakazo-screen-id")),
+      fetchMock.mock.calls.map(([, init]) => new Headers(init?.headers).get("x-tangow-screen-id")),
     ).toEqual(["bot", "bot:dana"]);
   });
 
@@ -197,10 +197,10 @@ describe("Docker sandbox", () => {
         method: "DELETE",
         headers: expect.objectContaining({
           authorization: "Bearer test-token",
-          "x-rakazo-bot-id": "home-bot",
-          "x-rakazo-screen-id": "bot",
-          "x-rakazo-screen-lease-id": "run-1:1",
-          "x-rakazo-space-id": "workspace",
+          "x-tangow-bot-id": "home-bot",
+          "x-tangow-screen-id": "bot",
+          "x-tangow-screen-lease-id": "run-1:1",
+          "x-tangow-space-id": "workspace",
         }),
       }),
     );
@@ -221,8 +221,8 @@ describe("Docker sandbox", () => {
 
     await expect(provider.releaseScreen(computer, context, "keep")).resolves.toBe("kept");
     expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({
-      "x-rakazo-preserve-screen": "1",
-      "x-rakazo-screen-lease-id": "run-1:1",
+      "x-tangow-preserve-screen": "1",
+      "x-tangow-screen-lease-id": "run-1:1",
     });
 
     fetchMock.mockImplementationOnce(async () => Response.json({ ok: true }));
@@ -248,7 +248,7 @@ describe("Docker sandbox", () => {
       provider.releaseScreen(computer, { ...context, signal: aborted.signal }, "keep"),
     ).resolves.toBe("kept");
     expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({
-      "x-rakazo-preserve-screen": "1",
+      "x-tangow-preserve-screen": "1",
     });
   });
 
@@ -291,7 +291,7 @@ describe("Docker sandbox", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     for (const [, init] of fetchMock.mock.calls) {
-      expect(init?.headers).not.toHaveProperty("x-rakazo-preserve-screen");
+      expect(init?.headers).not.toHaveProperty("x-tangow-preserve-screen");
     }
   });
 
@@ -470,7 +470,7 @@ describe("Docker sandbox", () => {
       "http://supervisor.test/computers/computer-1/screen",
       expect.objectContaining({
         method: "DELETE",
-        headers: expect.objectContaining({ "x-rakazo-cancel-run-work": "1" }),
+        headers: expect.objectContaining({ "x-tangow-cancel-run-work": "1" }),
       }),
     );
   });
@@ -497,8 +497,8 @@ describe("Docker page browser", () => {
         signal: context.signal,
         body: JSON.stringify({ command: "snapshot" }),
         headers: expect.objectContaining({
-          "x-rakazo-bot-id": "team-home",
-          "x-rakazo-screen-lease-id": "run-1:1",
+          "x-tangow-bot-id": "team-home",
+          "x-tangow-screen-lease-id": "run-1:1",
         }),
       }),
     );

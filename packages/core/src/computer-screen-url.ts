@@ -1,4 +1,4 @@
-import type { ComputerStatus } from "@rakazo/contracts";
+import type { ComputerStatus } from "@tangow/contracts";
 
 export const SCREEN_PROXY_TTL_MS = 60 * 60_000;
 export const SCREEN_URL_RENEW_MS = SCREEN_PROXY_TTL_MS - 10 * 60_000;

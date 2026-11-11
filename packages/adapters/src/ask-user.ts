@@ -1,5 +1,5 @@
-import type { AgentRuntimeEvent } from "@rakazo/adapter-kit";
-import type { AskQuestion } from "@rakazo/contracts";
+import type { AgentRuntimeEvent } from "@tangow/adapter-kit";
+import type { AskQuestion } from "@tangow/contracts";
 
 // C0 and C1 controls (whitespace aside, collapsed below), bidi marks and overrides, and zero-width
 // characters. U+200D stays: it joins emoji.

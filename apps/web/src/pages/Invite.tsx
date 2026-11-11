@@ -1,5 +1,5 @@
 import { Trans } from "@lingui/react/macro";
-import { Button } from "@rakazo/ui-web";
+import { Button } from "@tangow/ui-web";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { LoadingState } from "../components/ai/primitives";

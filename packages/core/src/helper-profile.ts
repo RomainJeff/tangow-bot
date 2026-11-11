@@ -17,7 +17,7 @@ export interface HelperProfile {
 
 /**
  * A bot's browser outlives its runs, so whoever uses it decides what stays open: tabs left for
- * the next one, or none. Chrome's debug port is 9221 + the display number, as in rakazo-browser.
+ * the next one, or none. Chrome's debug port is 9221 + the display number, as in tangow-browser.
  */
 export function browserTabsInstruction(execTool: string): string[] {
   // biome-ignore lint/suspicious/noTemplateCurlyInString: shell parameter expansion

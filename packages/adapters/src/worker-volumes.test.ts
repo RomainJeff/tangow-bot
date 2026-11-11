@@ -1,17 +1,17 @@
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { Actor, ComputerMode } from "@rakazo/contracts";
-import type { PrismaClient } from "@rakazo/db";
+import type { Actor, ComputerMode } from "@tangow/contracts";
+import type { PrismaClient } from "@tangow/db";
 import {
   claimEmptySpaceDeletionForMember,
   createRepos,
   createThreadEvents,
   deleteEmptySpaceForMember,
   deleteOwnerVolumes,
-} from "@rakazo/db";
-import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
-import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
+} from "@tangow/db";
+import type { PgliteDatabase } from "@tangow/db/pglite.test-support";
+import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { destroyBot } from "./child-bots.js";
 import { provisionComputer } from "./computer-lifecycle.js";
@@ -59,10 +59,10 @@ describe("volume provisioning and home adoption", () => {
       await workers.provisionVolume(volume.id, fixture.context),
     ];
 
-    expect(refs).toEqual([`rakazo-${volume.id}`, `rakazo-${volume.id}`]);
-    expect(fake.calls).toEqual([{ op: "ensureVolume", name: `rakazo-${volume.id}` }]);
+    expect(refs).toEqual([`tangow-${volume.id}`, `tangow-${volume.id}`]);
+    expect(fake.calls).toEqual([{ op: "ensureVolume", name: `tangow-${volume.id}` }]);
     expect((await prisma.volume.findUniqueOrThrow({ where: { id: volume.id } })).providerRef).toBe(
-      `rakazo-${volume.id}`,
+      `tangow-${volume.id}`,
     );
   });
 
@@ -217,14 +217,14 @@ describe("volume provisioning and home adoption", () => {
     const bobVolume = await prisma.volume.findFirstOrThrow({ where: { botId: bob.id } });
     expect(await volumes()).toEqual([
       { botId: ada.id, providerRef: adaVolume.providerRef },
-      { botId: bob.id, providerRef: `rakazo-${bobVolume.id}` },
+      { botId: bob.id, providerRef: `tangow-${bobVolume.id}` },
     ]);
     const shared = await prisma.volume.findFirstOrThrow({
       where: { kind: "space_shared", spaceId: spaceA },
     });
     expect(fake.calls).toEqual([
-      { op: "ensureVolume", name: `rakazo-${shared.id}` },
-      { op: "ensureVolume", name: `rakazo-${bobVolume.id}` },
+      { op: "ensureVolume", name: `tangow-${shared.id}` },
+      { op: "ensureVolume", name: `tangow-${bobVolume.id}` },
     ]);
   });
 });
@@ -249,7 +249,7 @@ describe("the home of a computer created with a bot", () => {
     await prisma.spaceMember.create({
       data: { id: owner.unique("sm"), spaceId, organizationId, userId, createdAt },
     });
-    return { userId, spaceId, email: "w@rakazo.test", isDeploymentOwner: false };
+    return { userId, spaceId, email: "w@tangow.test", isDeploymentOwner: false };
   }
 
   async function createBot(actor: Actor, sandbox: string, computerMode: ComputerMode = "team") {
@@ -286,7 +286,7 @@ describe("the home of a computer created with a bot", () => {
         select: { kind: true, providerRef: true },
         orderBy: { kind: "asc" },
       });
-      const provisioned = { providerRef: expect.stringMatching(/^rakazo-/) };
+      const provisioned = { providerRef: expect.stringMatching(/^tangow-/) };
       expect(volumes).toEqual([
         { kind: "bot_private", ...provisioned },
         { kind: "bot_private", ...provisioned },
@@ -507,24 +507,24 @@ describe("deleting the owner of a volume", () => {
   it("deletes only this provider's recorded volumes, once, and clears a record already gone", async () => {
     const spaceId = await fixture.seedSpace();
     const kept = await provisioned("space_shared", spaceId, null);
-    fake.volumes.add("rakazo-of-another-deployment");
-    fake.volumes.add("rakazo-deleted");
-    fake.volumes.add("rakazo-of-another-kind");
+    fake.volumes.add("tangow-of-another-deployment");
+    fake.volumes.add("tangow-deleted");
+    fake.volumes.add("tangow-of-another-kind");
     await prisma.volumeDeletion.createMany({
       data: [
         {
           providerKind: "fake-worker",
-          providerRef: "rakazo-deleted",
+          providerRef: "tangow-deleted",
           volumeId: "a",
           notBefore: new Date(0),
         },
         {
           providerKind: "fake-worker",
-          providerRef: "rakazo-gone",
+          providerRef: "tangow-gone",
           volumeId: "b",
           notBefore: new Date(0),
         },
-        { providerKind: "e2b", providerRef: "rakazo-of-another-kind", volumeId: "c" },
+        { providerKind: "e2b", providerRef: "tangow-of-another-kind", volumeId: "c" },
       ],
     });
 
@@ -533,10 +533,10 @@ describe("deleting the owner of a volume", () => {
 
     expect([...fake.volumes].sort()).toEqual([
       kept.providerRef,
-      "rakazo-of-another-deployment",
-      "rakazo-of-another-kind",
+      "tangow-of-another-deployment",
+      "tangow-of-another-kind",
     ]);
-    expect(await recorded()).toEqual(["rakazo-of-another-kind"]);
+    expect(await recorded()).toEqual(["tangow-of-another-kind"]);
   });
 
   it("records a volume whose row was deleted while the provider created it, and sweeps it", async () => {
@@ -552,7 +552,7 @@ describe("deleting the owner of a volume", () => {
     await expect(workers.provisionVolume(volume.id, fixture.context)).rejects.toThrow(
       new VolumeRefusedError({ code: "volume_not_found", volumeId: volume.id }),
     );
-    expect(await recorded()).toEqual([`rakazo-${volume.id}`]);
+    expect(await recorded()).toEqual([`tangow-${volume.id}`]);
 
     expect(await workers.sweepVolumes(fixture.context)).toEqual({ deleted: 0, failed: 0 });
     await prisma.volumeDeletion.updateMany({ data: { notBefore: new Date(0) } });
@@ -629,16 +629,16 @@ describe("deleting the owner of a volume", () => {
     await prisma.volumeDeletion.updateMany({ data: { notBefore: deadline } });
     const restarted = createWorkerLifecycle({ prisma, provider: fake });
     expect(await restarted.sweepVolumes(fixture.context)).toEqual({ deleted: 1, failed: 0 });
-    expect(await recorded()).toEqual([`rakazo-${volume.id}`]);
-    fake.volumes.add(`rakazo-${volume.id}`);
+    expect(await recorded()).toEqual([`tangow-${volume.id}`]);
+    fake.volumes.add(`tangow-${volume.id}`);
     await restarted.sweepVolumes(fixture.context);
     expect([...fake.volumes]).toEqual([]);
-    expect(await recorded()).toEqual([`rakazo-${volume.id}`]);
+    expect(await recorded()).toEqual([`tangow-${volume.id}`]);
 
     await prisma.volumeDeletion.updateMany({
       data: { notBefore: new Date(Date.now() - 61 * 60_000) },
     });
-    fake.volumes.add(`rakazo-${volume.id}`);
+    fake.volumes.add(`tangow-${volume.id}`);
     await restarted.sweepVolumes(fixture.context);
     expect([...fake.volumes]).toEqual([]);
     expect(await recorded()).toEqual([]);
@@ -693,7 +693,7 @@ describe("starting a computer whose home is on volumes", () => {
       connect: vi.fn(async () => machines.existing!.sandbox),
       pause: vi.fn(),
     } as unknown as E2BSandboxSdk;
-    const home = new LocalAgentHomeStore(await mkdtemp(path.join(tmpdir(), "rakazo-homes-")));
+    const home = new LocalAgentHomeStore(await mkdtemp(path.join(tmpdir(), "tangow-homes-")));
     await provisionComputer(
       {
         prisma,
@@ -723,7 +723,7 @@ describe("starting a computer whose home is on volumes", () => {
       [`/workspace/bots/${bot.id}`, `/workspace/bots/${attached.id}`, "/workspace/shared"].sort(),
     );
     expect(vi.mocked(sdk.create).mock.calls[0]![0].volumeMounts).toMatchObject({
-      [`/workspace/bots/${attached.id}`]: `rakazo-${attachedVolume.id}`,
+      [`/workspace/bots/${attached.id}`]: `tangow-${attachedVolume.id}`,
     });
   });
 

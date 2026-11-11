@@ -1,4 +1,4 @@
-import type { MemoryDocument } from "@rakazo/contracts";
+import type { MemoryDocument } from "@tangow/contracts";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, TextInput, View } from "react-native";

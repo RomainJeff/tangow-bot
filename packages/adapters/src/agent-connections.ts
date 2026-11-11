@@ -1,17 +1,17 @@
 import { randomUUID } from "node:crypto";
-import type { JobPublisher } from "@rakazo/adapter-kit";
-import { messagingDeliverJob, runContinueJob } from "@rakazo/adapter-kit";
-import type { SessionId } from "@rakazo/contracts";
+import type { JobPublisher } from "@tangow/adapter-kit";
+import { messagingDeliverJob, runContinueJob } from "@tangow/adapter-kit";
+import type { SessionId } from "@tangow/contracts";
 import {
   botMessageHopExhausted,
   buildBotMessageWakePrompt,
   clampBotMessage,
   nextBotMessageHop,
   sanitizeMessagingLabel,
-} from "@rakazo/core";
-import type { PrismaClient, ThreadEvents } from "@rakazo/db";
-import { markThreadsUnread, threadEntryByNonce, threadEventSeq } from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/core";
+import type { PrismaClient, ThreadEvents } from "@tangow/db";
+import { markThreadsUnread, threadEntryByNonce, threadEventSeq } from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 import { appendBotMessageInTransaction, resolveRunHop } from "./bot-messages.js";
 
 export interface AgentConnectionDeps {

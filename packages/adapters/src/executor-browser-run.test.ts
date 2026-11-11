@@ -6,8 +6,8 @@ import type {
   DecisionRequest,
   DecisionResponse,
   ToolCallTrace,
-} from "@rakazo/adapter-kit";
-import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
+} from "@tangow/adapter-kit";
+import { createLogger, createTestSink, installLogger } from "@tangow/logging";
 import { describe, expect, it, vi } from "vitest";
 import { BROWSER_ACT_LOCKED_MESSAGE } from "./browser-run.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
@@ -236,7 +236,7 @@ describe("browser_run executor wiring", () => {
     }
 
     const sink = createTestSink();
-    installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+    installLogger(createLogger({ service: "tangow-worker", sinks: [sink] }));
     try {
       const provider = new FakeDecisionProvider({ script: [clickSearch] });
       const generations: string[] = [];
@@ -271,7 +271,7 @@ describe("browser_run executor wiring", () => {
         steps: 1,
       });
     } finally {
-      installLogger(createLogger({ service: "rakazo", level: "off", sinks: [] }));
+      installLogger(createLogger({ service: "tangow", level: "off", sinks: [] }));
     }
   });
 

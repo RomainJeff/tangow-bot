@@ -1,4 +1,4 @@
-import { radii, sizes } from "@rakazo/ui-tokens";
+import { radii, sizes } from "@tangow/ui-tokens";
 import { Image, Pressable, Text, View } from "react-native";
 import { t } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";

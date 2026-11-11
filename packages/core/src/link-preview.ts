@@ -1,9 +1,9 @@
-import type { LinkMentionBlock, MessageBlock } from "@rakazo/contracts";
+import type { LinkMentionBlock, MessageBlock } from "@tangow/contracts";
 import {
   isAuthenticationDestination,
   isPreviewableUrl,
   LINK_PREVIEW_TITLE_MAX_LENGTH,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import { extractLinkOccurrences, wwwLinkHref } from "./search.js";
 
 /**

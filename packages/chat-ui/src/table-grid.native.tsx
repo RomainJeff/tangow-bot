@@ -1,4 +1,4 @@
-import type { ColorTokens } from "@rakazo/ui-tokens";
+import type { ColorTokens } from "@tangow/ui-tokens";
 import type { ReactNode } from "react";
 import { createContext, useContext, useEffect, useRef } from "react";
 import {

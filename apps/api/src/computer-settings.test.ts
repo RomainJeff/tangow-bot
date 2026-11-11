@@ -1,13 +1,13 @@
 import { RPCHandler } from "@orpc/server/fetch";
-import { acquireComputerExecutionLease, releaseComputerExecutionLease } from "@rakazo/adapters";
-import type { Actor } from "@rakazo/contracts";
+import { acquireComputerExecutionLease, releaseComputerExecutionLease } from "@tangow/adapters";
+import type { Actor } from "@tangow/contracts";
 import {
   ComputerListItemSchema,
   ComputerUpdateAllResultSchema,
   ComputerUpdateSchema,
-} from "@rakazo/contracts";
-import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
-import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
+} from "@tangow/contracts";
+import type { PgliteDatabase } from "@tangow/db/pglite.test-support";
+import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { FakeSandboxProvider } from "../../../packages/adapters/src/fake-sandbox.js";
 import { InMemoryJobQueue } from "../../../packages/adapters/src/wakeup.js";
@@ -109,7 +109,7 @@ it("lists each owned active computer once and queues only idle computers in the 
   const actor = {
     spaceId,
     userId: fixture.userId,
-    email: "test@rakazo.test",
+    email: "test@tangow.test",
     isDeploymentOwner: true,
   } satisfies Actor;
   async function call(path: string, input: unknown = null) {

@@ -1,6 +1,6 @@
-[begin] (Rakazo)
-  [exec] (Browser) {rakazo-browser}
-  [exec] (Files) {rakazo-files}
+[begin] (Tangow)
+  [exec] (Browser) {tangow-browser}
+  [exec] (Files) {tangow-files}
   [exec] (Office) {libreoffice}
-  [exec] (Terminal) {rakazo-terminal}
+  [exec] (Terminal) {tangow-terminal}
 [end]

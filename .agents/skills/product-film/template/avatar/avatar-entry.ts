@@ -1,4 +1,4 @@
-// Browser bundle of the real Rakazo avatar engine (packages/core) for product films: global RakazoAvatar.
+// Browser bundle of the real Tangow avatar engine (packages/core) for product films: global TangowAvatar.
 // Seek-safe: `frameAt(t)` rebuilds the engine and replays every scripted event up to t,
 // so any frame can be rendered in any order with the same result.
 import { avatarIdentitySeed } from "../../../../../packages/core/src/avatar-identity";
@@ -74,7 +74,7 @@ export function createAvatar(opts: { color: string; identity?: string; shapeSeed
 const NS = "http://www.w3.org/2000/svg";
 const HALF_VIEWBOX = RAYON * 1.12;
 
-/** Renders a frame into an <svg>, mirroring `BloubAvatar` in `@rakazo/ui-web/bot-avatar.tsx`. */
+/** Renders a frame into an <svg>, mirroring `BloubAvatar` in `@tangow/ui-web/bot-avatar.tsx`. */
 export function drawAvatar(svg: SVGSVGElement, frame: BotFrame, color: string, uid: string) {
   const { paper, outline } = avatarInk(color);
   const VB = HALF_VIEWBOX;

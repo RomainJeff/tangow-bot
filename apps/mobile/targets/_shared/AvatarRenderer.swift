@@ -56,7 +56,7 @@ enum AvatarRenderer {
     }
   }
 
-  /// Same 32-bit string hash as `avatarIdentitySeed` in @rakazo/core.
+  /// Same 32-bit string hash as `avatarIdentitySeed` in @tangow/core.
   private static func identitySeed(_ identity: String) -> Int {
     var hash: Int32 = 0
     for unit in identity.utf16 {

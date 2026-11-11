@@ -1,4 +1,4 @@
-import { decideTextCommit } from "@rakazo/core";
+import { decideTextCommit } from "@tangow/core";
 import type { ComponentPropsWithoutRef, KeyboardEvent, ReactNode } from "react";
 import { useId, useState } from "react";
 import { Button } from "./components/ui/button.js";

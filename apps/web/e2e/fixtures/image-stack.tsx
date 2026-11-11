@@ -1,7 +1,7 @@
 import { i18n } from "@lingui/core";
 import { I18nProvider } from "@lingui/react";
-import { SessionEntrySchema } from "@rakazo/contracts";
-import { projectThreadView } from "@rakazo/core";
+import { SessionEntrySchema } from "@tangow/contracts";
+import { projectThreadView } from "@tangow/core";
 import { createRef, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Transcript } from "../../src/pages/shell/transcript";

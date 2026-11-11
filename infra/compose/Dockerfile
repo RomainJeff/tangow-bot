@@ -31,11 +31,11 @@ COPY packages/ui-web/package.json packages/ui-web/
 COPY infra/sandboxes/supervisor/package.json infra/sandboxes/supervisor/
 COPY infra/updater/package.json infra/updater/
 # Only what this image ever runs. Across docker-compose.yml and .prod.yml
-# the app image is started as @rakazo/api, @rakazo/worker, @rakazo/web
-# and @rakazo/sandbox-supervisor, plus scripts/backfill-session-log.ts and @rakazo/db's
+# the app image is started as @tangow/api, @tangow/worker, @tangow/web
+# and @tangow/sandbox-supervisor, plus scripts/backfill-session-log.ts and @tangow/db's
 # prisma CLI it runs to migrate, and scripts/migrate-docker-homes.ts;
 # the desktop, mobile, www and testkit projects only add electron, expo, react-native
-# and the astro toolchain to an image that never builds them. `rakazo` is the
+# and the astro toolchain to an image that never builds them. `tangow` is the
 # workspace root: `start` is `tsx src/index.ts`, and tsx, turbo and cross-env are root
 # devDependencies resolved through /app/node_modules/.bin.
 # The skip-download vars cover any postinstall that survives a future filter change.
@@ -47,22 +47,22 @@ COPY infra/updater/package.json infra/updater/
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store,sharing=locked \
     ELECTRON_SKIP_BINARY_DOWNLOAD=1 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
     pnpm install --frozen-lockfile --store-dir=/pnpm-store \
-      --filter "@rakazo/api..." \
-      --filter "@rakazo/worker..." \
-      --filter "@rakazo/web..." \
-      --filter "@rakazo/sandbox-supervisor..." \
-      --filter "@rakazo/db..." \
-      --filter "rakazo"
+      --filter "@tangow/api..." \
+      --filter "@tangow/worker..." \
+      --filter "@tangow/web..." \
+      --filter "@tangow/sandbox-supervisor..." \
+      --filter "@tangow/db..." \
+      --filter "tangow"
 # Normalize modes: a restrictive host umask (e.g. 077 on hardened hosts) would otherwise
 # leave the copied tree unreadable to USER node at runtime.
 COPY --chmod=755 . .
 # After the sources: the prisma schema arrives with them.
-RUN pnpm --filter @rakazo/db generate
-RUN RAKAZO_ALLOW_DEV_SECRETS=1 pnpm --filter @rakazo/web build
+RUN pnpm --filter @tangow/db generate
+RUN TANGOW_ALLOW_DEV_SECRETS=1 pnpm --filter @tangow/web build
 RUN install -d -m 750 -o node -g node /data /app/apps/web/node_modules/.vite-temp
 ARG GIT_SHA
 ENV NODE_ENV=production
 ENV GIT_SHA=$GIT_SHA
 EXPOSE 3100 5173 7091
 USER node
-CMD ["pnpm", "--filter", "@rakazo/api", "start"]
+CMD ["pnpm", "--filter", "@tangow/api", "start"]

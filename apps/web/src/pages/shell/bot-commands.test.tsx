@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import type { Bot, Routine } from "@rakazo/contracts";
-import type { RoutinePayload } from "@rakazo/core";
+import type { Bot, Routine } from "@tangow/contracts";
+import type { RoutinePayload } from "@tangow/core";
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";

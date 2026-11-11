@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
-import type { AnswerValue, AskSettledView } from "@rakazo/core";
-import { cn, UserBubble } from "@rakazo/ui-web";
+import type { AnswerValue, AskSettledView } from "@tangow/core";
+import { cn, UserBubble } from "@tangow/ui-web";
 import { Check, CircleStop, Clock } from "lucide-react";
 
 /**

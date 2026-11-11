@@ -6,9 +6,9 @@
  *
  *   DATABASE_URL=postgres://... pnpm exec tsx packages/adapters/src/session-log/read-tail.perf.ts
  */
-import { SessionId } from "@rakazo/contracts";
-import type { PrismaClient } from "@rakazo/db";
-import { createDb } from "@rakazo/db";
+import { SessionId } from "@tangow/contracts";
+import type { PrismaClient } from "@tangow/db";
+import { createDb } from "@tangow/db";
 import { PostgresSessionLog } from "./postgres.js";
 
 const ENTRIES = 200_000;
@@ -103,7 +103,7 @@ async function chainLength(db: PrismaClient, sessionId: SessionId): Promise<numb
 
 await prisma.user.upsert({
   where: { id: "perf-user" },
-  create: { id: "perf-user", name: "Perf", email: "perf@rakazo.test" },
+  create: { id: "perf-user", name: "Perf", email: "perf@tangow.test" },
   update: {},
 });
 await prisma.organization.upsert({

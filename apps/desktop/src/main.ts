@@ -5,7 +5,7 @@ import type {
   DesktopAccessCredentials,
   DesktopReachability,
   DesktopSetup,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 import { app, BrowserWindow, ipcMain, Menu, net, type Session, session, shell } from "electron";
 import {
   accessStorageAvailable,
@@ -31,8 +31,8 @@ import {
 import { installSessionPermissions } from "./session-permissions.js";
 import {
   accessHeaders,
-  isRakazoHealth,
   isRedirectCancelled,
+  isTangowHealth,
   normalizeServerUrl,
   parseSetupInput,
   probeFailureMessage,
@@ -53,7 +53,7 @@ import {
   warmWindowTtlMs,
 } from "./window-options.js";
 
-const PERFORMANCE_USER_DATA = process.env.RAKAZO_PERFORMANCE_USER_DATA;
+const PERFORMANCE_USER_DATA = process.env.TANGOW_PERFORMANCE_USER_DATA;
 const PROBE_TIMEOUT_MS = 8_000;
 let mainWindow: BrowserWindow | null = null;
 const appWindowTargets = new WeakMap<BrowserWindow, string>();
@@ -74,12 +74,12 @@ let warmWindowTimer: NodeJS.Timeout | undefined;
 // destroying the last window fires "window-all-closed" -> app.quit(); a probe
 // that runs before the first real window exists must not count as "all closed".
 let liveProbeWindows = 0;
-const WARM_WINDOW_TTL_MS = warmWindowTtlMs(process.env.RAKAZO_WARM_WINDOW_TTL_MS);
+const WARM_WINDOW_TTL_MS = warmWindowTtlMs(process.env.TANGOW_WARM_WINDOW_TTL_MS);
 
 const updaterEnvironment = {
   packaged: app.isPackaged,
   version: app.getVersion(),
-  disabled: process.env.RAKAZO_DISABLE_AUTO_UPDATE === "1",
+  disabled: process.env.TANGOW_DISABLE_AUTO_UPDATE === "1",
 };
 const desktopUpdater = new DesktopUpdateController(
   updaterEnvironment,
@@ -293,7 +293,7 @@ function createWindow(url: string, partition: string | null) {
     if (
       process.platform === "darwin" &&
       !quitting &&
-      process.env.RAKAZO_DISABLE_WARM_WINDOW !== "1"
+      process.env.TANGOW_DISABLE_WARM_WINDOW !== "1"
     ) {
       event.preventDefault();
       win.hide();
@@ -344,7 +344,7 @@ function accessHeadersFor(targetUrl: string): Record<string, string> | null {
 function applyAccessHeaders(targetSession: Session, targetUrl: string) {
   const headers = accessHeadersFor(targetUrl);
   // Only one onBeforeSendHeaders listener may exist per session, and this is
-  // the only one Rakazo installs, so clearing it here is safe.
+  // the only one Tangow installs, so clearing it here is safe.
   if (headers === null) {
     targetSession.webRequest.onBeforeSendHeaders(null);
     return;
@@ -467,7 +467,7 @@ function loadAppUrl(win: BrowserWindow, url: string): Promise<void> {
  * not a usable app. After session resolves, wait for a bootstrapped shell
  * (`data-ready` / shell-ready mark) or an auth/welcome/onboarding surface so a
  * bare Suspense fallback or pre-bootstrap ShellPage cannot pass. Plain e2e
- * fixtures omit the Rakazo app-state marker.
+ * fixtures omit the Tangow app-state marker.
  */
 async function waitForMountedAppDocument(contents: Electron.WebContents) {
   const deadline = Date.now() + 8_000;
@@ -475,7 +475,7 @@ async function waitForMountedAppDocument(contents: Electron.WebContents) {
     if (contents.isCrashed()) throw new Error("Renderer stopped after load.");
     const ready = (await contents.executeJavaScript(`(() => {
       const appState =
-        document.querySelector("[data-rakazo-app-state]")?.getAttribute("data-rakazo-app-state") ??
+        document.querySelector("[data-tangow-app-state]")?.getAttribute("data-tangow-app-state") ??
         null;
       if (appState === "session-pending") return false;
 
@@ -485,7 +485,7 @@ async function waitForMountedAppDocument(contents: Electron.WebContents) {
           performance.getEntriesByName("rk:renderer:shell-ready").length > 0,
       );
       const authOrWelcomeSurface = Boolean(
-        document.querySelector('[data-rakazo-surface="welcome"]') ||
+        document.querySelector('[data-tangow-surface="welcome"]') ||
           document.querySelector(
             'form input[type="email"], form input[name="email"], form input#email',
           ) ||
@@ -502,7 +502,7 @@ async function waitForMountedAppDocument(contents: Electron.WebContents) {
         performance.getEntriesByName("rk:renderer:session-committed").length > 0;
       if (sessionReady && surfaceReady) return true;
 
-      // Desktop e2e fixtures mount a plain page without Rakazo app-state markers.
+      // Desktop e2e fixtures mount a plain page without Tangow app-state markers.
       if (appState === null) {
         const bodyText = (document.body?.innerText || "").trim();
         if (bodyText.includes("Opening your Space")) return false;
@@ -524,7 +524,7 @@ async function installBundledRenderer(
   targetSession: Session,
   partition: string | null,
 ) {
-  if (!app.isPackaged || process.env.RAKAZO_DISABLE_BUNDLED_RENDERER === "1") return;
+  if (!app.isPackaged || process.env.TANGOW_DISABLE_BUNDLED_RENDERER === "1") return;
   if (!servesBundledRenderer(targetUrl)) return;
   const webUrl = new URL(targetUrl);
   const installationKey = `${partition ?? "default"}:${webUrl.protocol}`;
@@ -643,7 +643,7 @@ function restoreAppWindowAfterSetup() {
 function installApplicationMenu() {
   const changeServer: Electron.MenuItemConstructorOptions = {
     id: "change-server",
-    label: "Change Rakazo Server…",
+    label: "Change Tangow Server…",
     accelerator: "CmdOrCtrl+Shift+K",
     click: () => showSetupWindow(),
   };
@@ -678,7 +678,7 @@ function installApplicationMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-/** Setup IPC must only answer the setup window, never a connected Rakazo server. */
+/** Setup IPC must only answer the setup window, never a connected Tangow server. */
 function fromSetupWindow(event: Electron.IpcMainInvokeEvent) {
   return (
     setupWindow !== null && !setupWindow.isDestroyed() && event.sender === setupWindow.webContents
@@ -713,12 +713,12 @@ async function probeServer(
       };
     }
     const health = await readProbeJson(response);
-    if (!isRakazoHealth(health)) {
+    if (!isTangowHealth(health)) {
       return {
         ok: false,
         status: response.status,
         url,
-        error: "That address did not respond like a Rakazo server.",
+        error: "That address did not respond like a Tangow server.",
       };
     }
     return {
@@ -903,11 +903,11 @@ app.whenReady().then(async () => {
   currentSetup = await readSetup(userDataDir);
   currentAccess = await readAccess(userDataDir);
   const target = resolveStartupTarget({
-    envUrl: process.env.RAKAZO_WEB_URL,
+    envUrl: process.env.TANGOW_WEB_URL,
     saved: currentSetup,
-    forceSetup: process.env.RAKAZO_FORCE_SETUP === "1",
+    forceSetup: process.env.TANGOW_FORCE_SETUP === "1",
   });
-  if (process.env.RAKAZO_PERFORMANCE_CLEAR_CACHE === "1") {
+  if (process.env.TANGOW_PERFORMANCE_CLEAR_CACHE === "1") {
     const cacheSessions = new Set<Session>([session.defaultSession]);
     if (target.kind === "app") {
       cacheSessions.add((await resolveSessionForTarget(target.url)).value);
@@ -980,7 +980,7 @@ app.whenReady().then(async () => {
   });
   // Link previews for sites that refuse the server: this computer reads the start of the page,
   // in a partition of its own (in memory, no cookies in or out), and the renderer sends it on.
-  const pageHeadSession = session.fromPartition("rakazo-link-preview");
+  const pageHeadSession = session.fromPartition("tangow-link-preview");
   const pageHead = createPageHeadReader(
     createPageFetch(
       (url) =>

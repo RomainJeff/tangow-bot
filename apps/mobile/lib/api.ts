@@ -14,8 +14,8 @@ import type {
   ThreadEntry,
   ThreadItem,
   ThreadMessagePage,
-} from "@rakazo/contracts";
-import type { ProgressLayer, ThreadRow } from "@rakazo/core";
+} from "@tangow/contracts";
+import type { ProgressLayer, ThreadRow } from "@tangow/core";
 import {
   applyEntryEvent,
   isRunTerminalEvent,
@@ -25,7 +25,7 @@ import {
   signupRequiresEmailVerification,
   withOlderEntries,
   withRefreshedEntries,
-} from "@rakazo/core";
+} from "@tangow/core";
 import * as SecureStore from "expo-secure-store";
 import type { AccessCredentials } from "./access";
 import { currentAccessHeaders, loadAccess, saveAccess } from "./access-store";
@@ -43,9 +43,9 @@ import {
   tokenFromAuthResponse,
 } from "./session";
 
-const ENDPOINT_KEY = "rakazo.api_base";
-const SPACE_KEY = "rakazo.space_id";
-const SPACE_ROLLBACK_KEY = "rakazo.space_rollback";
+const ENDPOINT_KEY = "tangow.api_base";
+const SPACE_KEY = "tangow.space_id";
+const SPACE_ROLLBACK_KEY = "tangow.space_rollback";
 const RPC_TIMEOUT_MS = 8_000;
 export const MAX_MOBILE_AUTH_RESPONSE_BYTES = 256 * 1024;
 export const MAX_MOBILE_RPC_RESPONSE_BYTES = 16 * 1024 * 1024;
@@ -377,7 +377,7 @@ export async function authHeaders(
   return {
     ...currentAccessHeaders(currentApiBase(), defaultApiBase()),
     ...(token ? { authorization: `Bearer ${token}` } : {}),
-    ...(spaceId ? { "x-rakazo-space-id": spaceId } : {}),
+    ...(spaceId ? { "x-tangow-space-id": spaceId } : {}),
   };
 }
 
@@ -405,7 +405,7 @@ async function authenticateWithEmail(
       method: "POST",
       headers: {
         "content-type": "application/json",
-        origin: "rakazo://",
+        origin: "tangow://",
         ...currentAccessHeaders(currentApiBase(), defaultApiBase()),
       },
       body: JSON.stringify(input),
@@ -444,7 +444,7 @@ export type PasswordResetCapabilities = { passwordReset: boolean; resetUrl: stri
 export async function passwordResetCapabilities(): Promise<PasswordResetCapabilities> {
   const { response, body } = await fetchMobileJson<PasswordResetCapabilities>(
     `${currentApiBase()}/api/auth/capabilities`,
-    { headers: { origin: "rakazo://" } },
+    { headers: { origin: "tangow://" } },
     { passwordReset: false, resetUrl: null },
   );
   if (!response.ok) throw new Error("Could not load password recovery settings");
@@ -456,7 +456,7 @@ export async function requestPasswordReset(email: string, redirectTo: string): P
     `${currentApiBase()}/api/auth/request-password-reset`,
     {
       method: "POST",
-      headers: { "content-type": "application/json", origin: "rakazo://" },
+      headers: { "content-type": "application/json", origin: "tangow://" },
       body: JSON.stringify({ email, redirectTo }),
     },
     {},
@@ -471,7 +471,7 @@ export async function changePassword(currentPassword: string, newPassword: strin
       method: "POST",
       headers: {
         "content-type": "application/json",
-        origin: "rakazo://",
+        origin: "tangow://",
         ...(await authHeaders()),
       },
       body: JSON.stringify({ currentPassword, newPassword, revokeOtherSessions: true }),
@@ -484,7 +484,7 @@ export async function changePassword(currentPassword: string, newPassword: strin
 /** The photo lives on the session user, not on `me`, so it needs its own read. */
 export async function fetchProfileImage(): Promise<string | null> {
   const response = await fetch(`${currentApiBase()}/api/auth/get-session`, {
-    headers: { origin: "rakazo://", ...(await authHeaders()) },
+    headers: { origin: "tangow://", ...(await authHeaders()) },
   });
   if (!response.ok) throw new Error(t("Could not load your profile photo"));
   const body = (await response.json()) as { user?: { image?: string | null } } | null;
@@ -494,7 +494,7 @@ export async function fetchProfileImage(): Promise<string | null> {
 export async function updateProfileImage(image: string | null): Promise<void> {
   const response = await fetch(`${currentApiBase()}/api/auth/update-user`, {
     method: "POST",
-    headers: { "content-type": "application/json", origin: "rakazo://", ...(await authHeaders()) },
+    headers: { "content-type": "application/json", origin: "tangow://", ...(await authHeaders()) },
     body: JSON.stringify({ image }),
   });
   const body = await response.json().catch(() => ({}));
@@ -540,7 +540,7 @@ export async function signOut() {
     await withAbort(
       fetch(`${currentApiBase()}/api/auth/sign-out`, {
         method: "POST",
-        headers: { "content-type": "application/json", origin: "rakazo://", ...headers },
+        headers: { "content-type": "application/json", origin: "tangow://", ...headers },
         signal: controller.signal,
       }),
       controller.signal,
@@ -580,7 +580,7 @@ export async function deleteAccount(password: string) {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        origin: "rakazo://",
+        origin: "tangow://",
         ...(await authHeaders()),
       },
       body: JSON.stringify({ password }),
@@ -616,13 +616,13 @@ export async function rpc<T>(
   // a 401 arriving after the user switched Spaces — including A → B → A —
   // belongs to a stale request and must not touch the current selection.
   const requestHeaders = options.requestContext?.headers ?? (await authHeaders());
-  const requestSpaceId = requestHeaders["x-rakazo-space-id"];
+  const requestSpaceId = requestHeaders["x-tangow-space-id"];
   try {
     const res = await fetch(`${options.requestContext?.apiBase ?? currentApiBase()}/rpc/${proc}`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        origin: "rakazo://",
+        origin: "tangow://",
         ...requestHeaders,
       },
       body: JSON.stringify({ json: body }),
@@ -1023,7 +1023,7 @@ export async function subscribeThread(
     headers: {
       "content-type": "application/json",
       accept: "text/event-stream",
-      origin: "rakazo://",
+      origin: "tangow://",
       ...(await authHeaders()),
     },
     body: JSON.stringify({ json: { ...target, cursor } }),

@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { ComputerRef, PortableFile } from "@rakazo/adapter-kit";
-import { shellQuote } from "@rakazo/core/node/desktop-runtime";
+import type { ComputerRef, PortableFile } from "@tangow/adapter-kit";
+import { shellQuote } from "@tangow/core/node/desktop-runtime";
 import { parse } from "shell-quote";
 import { expect, it, onTestFinished, vi } from "vitest";
 import { fakeE2BMachine } from "./e2b-machine.test-support.js";
@@ -51,7 +51,7 @@ it.each([
     home: "snapshot",
     homeKey: "team-space",
     writableRoots: undefined,
-    root: "/home/user/rakazo-home/.browser-profiles",
+    root: "/home/user/tangow-home/.browser-profiles",
   },
 ])(
   "keeps stable isolated profiles for $home / $homeKey",
@@ -136,10 +136,10 @@ it.each(["export", "import", "archive"])(
           "-eu",
           "-c",
           `flock() { :; }; export -f flock;\n${command}`
-            .replaceAll("/home/user/rakazo-home", root)
+            .replaceAll("/home/user/tangow-home", root)
             .replaceAll("/home/user/.browser-profiles", local)
             .replaceAll("/workspace", root)
-            .replaceAll("/tmp/rakazo", `${root}/runtime`),
+            .replaceAll("/tmp/tangow", `${root}/runtime`),
         ],
         { encoding: "utf8" },
       );
@@ -194,7 +194,7 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1").each([
 ])(
   "runs and quiesces the generated $mode E2B desktop as UID/GID 1000 with a protected workspace",
   async ({ target, home }) => {
-    const name = `rakazo-e2b-profiles-${randomUUID()}`;
+    const name = `tangow-e2b-profiles-${randomUUID()}`;
     const docker = (...args: string[]) =>
       execFileSync("docker", args, { encoding: "utf8", timeout: 120_000 });
     try {
@@ -209,14 +209,14 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1").each([
         "0:0",
         "--entrypoint",
         "bash",
-        process.env.RAKAZO_COMPUTER_IMAGE ?? "rakazo/computer:local",
+        process.env.TANGOW_COMPUTER_IMAGE ?? "tangow/computer:local",
         "-eu",
         "-c",
         [
           "mkdir -p /home/user /workspace/bots/bot_a /workspace/bots/bot_b /workspace/shared",
           "chown 1000:1000 /home/user /workspace/bots/bot_a /workspace/bots/bot_b /workspace/shared",
           "chown 0:0 /workspace /workspace/bots; chmod 755 /workspace /workspace/bots",
-          `ln -s ${shellQuote(target)} /home/user/rakazo-home`,
+          `ln -s ${shellQuote(target)} /home/user/tangow-home`,
           "exec sleep infinity",
         ].join("\n"),
       );
@@ -278,7 +278,7 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1").each([
             name,
             "mkdir",
             "-p",
-            "/home/user/rakazo-home/.browser-profiles",
+            "/home/user/tangow-home/.browser-profiles",
           ],
           { encoding: "utf8" },
         );
@@ -302,7 +302,7 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1").each([
             .filter((line) => line.includes("--user-data-dir=") && !line.includes("--type="))
             .map((line) => line.trim().split(/\s+/)[0]);
         const tracking = () =>
-          docker("exec", name, "bash", "-c", "cat /tmp/rakazo/browser-pid-* | sort");
+          docker("exec", name, "bash", "-c", "cat /tmp/tangow/browser-pid-* | sort");
         const identity = () => docker("exec", name, "stat", "-Lc", "%d:%i", ...profiles);
         const pids = mainPids();
         const tracked = tracking();
@@ -324,7 +324,7 @@ it.skipIf(process.env.VERIFY_DOCKER_TEAM_SCREENS !== "1").each([
           "exec",
           name,
           "find",
-          "/tmp/rakazo",
+          "/tmp/tangow",
           "-maxdepth",
           "1",
           "-name",

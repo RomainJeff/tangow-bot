@@ -1,6 +1,6 @@
 # Specialized helpers plan
 
-Issue #386. A bot delegates a task to a helper chosen by a versioned profile, and a background helper keeps working after the bot's turn ends and wakes the bot with a short report. The person using Rakazo sees only the bot's replies. Helpers are invisible on web, desktop and mobile, and the cards `run_subagent` draws today go away. The rule the program enforces is that the controller owns the trust boundary (profiles, tool selection, exclusive locks, helper state, the report and the wake), and the harness only runs the loop. Scope is the mechanism plus example profiles, then one real managed profile, `computer-use`, measured on a browser task (H6). The other real profiles (`general`, `coding`, `video`), the real routing skills, the `delegate-to-opencode` migration and the removal of computer and browser tools from the main bot come next. PRs in order are H1 (remove helper cards), H2 (managed profiles on sync `run_subagent`), H3 (exclusive lock), H4 (background lifecycle and wake), H5 (helper status, message, stop and `ask_parent`, examples and CHANGELOG) and H6 (a managed `computer-use` profile and a browser benchmark with and without it).
+Issue #386. A bot delegates a task to a helper chosen by a versioned profile, and a background helper keeps working after the bot's turn ends and wakes the bot with a short report. The person using Tangow sees only the bot's replies. Helpers are invisible on web, desktop and mobile, and the cards `run_subagent` draws today go away. The rule the program enforces is that the controller owns the trust boundary (profiles, tool selection, exclusive locks, helper state, the report and the wake), and the harness only runs the loop. Scope is the mechanism plus example profiles, then one real managed profile, `computer-use`, measured on a browser task (H6). The other real profiles (`general`, `coding`, `video`), the real routing skills, the `delegate-to-opencode` migration and the removal of computer and browser tools from the main bot come next. PRs in order are H1 (remove helper cards), H2 (managed profiles on sync `run_subagent`), H3 (exclusive lock), H4 (background lifecycle and wake), H5 (helper status, message, stop and `ask_parent`, examples and CHANGELOG) and H6 (a managed `computer-use` profile and a browser benchmark with and without it).
 
 ## How to read this
 
@@ -18,7 +18,7 @@ These come from issue #386 and its two decision comments. They are settled and e
 - Tools. A profiled helper gets every native harness tool by default, plus an `allow` list, minus a `block` list. The main bot goes through the same selection with `MAIN_BOT_BLOCKED_TOOLS`, empty in this program. The next phase puts `computer_*` and `browser_*` there, so computer and browser tools leave the main bot (H2).
 - Visibility. Helpers are invisible in the conversation on every surface. No helper cards. Traces stay in debug mode and in Langfuse.
 - Questions. A background helper that is blocked or unsure asks its parent with `ask_parent` instead of assuming, and waits paused until the parent answers with `helper_message`. The parent decides what to do, including asking the user in its own voice. The parent never approves an action on the user's behalf.
-- Planning. Rakazo adds no todo list. Each harness plans with what it already knows (scratchpad, todo tools). `helper_status` only reports which helpers are running.
+- Planning. Tangow adds no todo list. Each harness plans with what it already knows (scratchpad, todo tools). `helper_status` only reports which helpers are running.
 - Depth. Delegation depth is 1. A helper never gets `run_subagent` or the `helper_*` tools (`isHelperTool`).
 - Sources. Profiles are managed only for now, as a typed TypeScript registry `HELPER_PROFILES` in `packages/core`. Bot and shared sources come later, in files.
 - Debug. Helper cards leave the conversation, but debug mode still shows each helper's detail inside a run.
@@ -79,8 +79,8 @@ These come from issue #386 and its two decision comments. They are settled and e
 Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at the PR head. Web and desktop lanes drive through the **run** skill plus the browser tools. Worker lanes drive through Bash. Mobile lanes drive through `pnpm test:mobile-screenshots` and its Maestro flows.
 
 - [ ] `git fetch origin <head-branch> && git checkout <head SHA>`.
-- [ ] Run `pnpm install --frozen-lockfile` and `pnpm --filter @rakazo/db exec prisma generate`. Start `pnpm dev` with the local worker provider and the testkit model emulator. Wait for the web app to answer on its dev port.
-- [ ] Deliver input only by typing in the composer through the browser tools, or through `pnpm test:worker-live` for worker lanes. Read-only diagnostics are the debug-mode run details, the API logs and `pnpm --filter @rakazo/db exec prisma studio`.
+- [ ] Run `pnpm install --frozen-lockfile` and `pnpm --filter @tangow/db exec prisma generate`. Start `pnpm dev` with the local worker provider and the testkit model emulator. Wait for the web app to answer on its dev port.
+- [ ] Deliver input only by typing in the composer through the browser tools, or through `pnpm test:worker-live` for worker lanes. Read-only diagnostics are the debug-mode run details, the API logs and `pnpm --filter @tangow/db exec prisma studio`.
 - [ ] Save every screenshot to `/tmp/swarm-<pr-id>/worker-<n>/<slug>.png` and return the paths with the report.
 
 ## Remove helper cards from the conversation (H1)
@@ -118,8 +118,8 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 - [ ] `packages/core/src/session-log/project-ui.test.ts` and `project-thread-view.test.ts` drop the card cases and gain one case asserting that a thread with a `run_subagent` call and its `subagent` answer projects to the exact list of message items, with no item of kind `subagent`. Run `pnpm exec vitest run packages/core/src/session-log`.
 - [ ] The same projection case asserts that the `run_subagent` call in the `steps` block carries the helper's literal `sessionId`.
 - [ ] `project-inference.test.ts` keeps its helper replay cases unchanged and still passes. Run `pnpm exec vitest run packages/core/src/session-log/project-inference.test.ts`.
-- [ ] `apps/web/src/lib/thread-events.test.ts` is rewritten without the `scout` row. Run `pnpm --filter @rakazo/web test`.
-- [ ] Run `pnpm --filter @rakazo/mobile test` and `pnpm --filter @rakazo/contracts test`.
+- [ ] `apps/web/src/lib/thread-events.test.ts` is rewritten without the `scout` row. Run `pnpm --filter @tangow/web test`.
+- [ ] Run `pnpm --filter @tangow/mobile test` and `pnpm --filter @tangow/contracts test`.
 
 **Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `sonnet` at the PR head, per the boot recipe.
 
@@ -184,7 +184,7 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 
 **Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
-- [ ] `helper-profile.test.ts` gains literal `selectTools` results for a catalog of native and Rakazo tools, with no lists, with exact and prefix `allow` patterns, and with a `block` that removes a native tool. Run `pnpm exec vitest run packages/core/src/helper-profile.test.ts`.
+- [ ] `helper-profile.test.ts` gains literal `selectTools` results for a catalog of native and Tangow tools, with no lists, with exact and prefix `allow` patterns, and with a `block` that removes a native tool. Run `pnpm exec vitest run packages/core/src/helper-profile.test.ts`.
 - [ ] `packages/testkit/src/runtime-worker-subagent.test.ts` passes a fixture profile list on the request, extends its `subagent.start` `toEqual` with a profiled call, and asserts the exact tools, instructions and model. Run `pnpm exec vitest run packages/testkit/src/runtime-worker-subagent.test.ts`.
 - [ ] The same file gains a case with a block list on the main bot, passed on the request like the profiles. It asserts that the parent lacks the blocked tool and gets `unknown_tool` calling it, keeps its native tools, and that a profile allowing that tool grants it to its helper.
 
@@ -193,7 +193,7 @@ Each live lane runs in its own isolated worktree (`isolation: "worktree"`) at th
 - [ ] Lane 1. Regression lane against trunk. Run a sync `run_subagent` without `helper` through `pnpm test:worker-live` at trunk and head with an empty registry. Save `h2-trunk-vs-head.png`. Pass when results, prompts and tool lists match.
 - [ ] Lane 2. Add one profile to `HELPER_PROFILES` on the lane branch and send a message. Save `h2-loaded.png`. Pass when the parent prompt in debug run details lists it in `<available_helpers>` once.
 - [ ] Lane 3. A profile with no `allow` and no `block`. Save `h2-natives.png`. Pass when the helper's model request lists exactly the native harness tools.
-- [ ] Lane 4. A profile allowing two Rakazo tools and blocking `bash`. Save `h2-allow-block.png`. Pass when the helper's model request lists the native tools without `bash`, plus those two.
+- [ ] Lane 4. A profile allowing two Tangow tools and blocking `bash`. Save `h2-allow-block.png`. Pass when the helper's model request lists the native tools without `bash`, plus those two.
 - [ ] Lane 5. The profiled helper tries a tool outside its selected set. Save `h2-refused.png`. Pass when it gets `unknown_tool`.
 - [ ] Lane 6. A profile with `model` set, then the same call with `model_provider` and `model_id`. Save `h2-model.png`. Pass when the first goes to the profile's model and the second to the call's model.
 - [ ] Lane 7. Put `computer_*` in `MAIN_BOT_BLOCKED_TOOLS` on the lane branch with a profile allowing it. Save `h2-main-block.png`. Pass when the parent's model request keeps `bash` and lacks `computer_observe`, and the helper's request has both.
@@ -503,7 +503,7 @@ Rerun from a worktree at the spike commit with node 24 on `PATH`.
 
 ```
 pnpm install --frozen-lockfile --prefer-offline
-pnpm --filter @rakazo/db exec prisma generate
+pnpm --filter @tangow/db exec prisma generate
 npx vitest run packages/testkit/src/spike-helpers-wakeup.test.ts | grep OBS
 ```
 
@@ -524,7 +524,7 @@ npx vitest run packages/testkit/src/spike-helpers-wakeup.test.ts | grep OBS
 - Reading profiles from the controller's DB skills index. It is stale by one run and stores no shared bodies.
 - A separate `helper_report` trigger and a `wakeForHelperReports` function. The existing `follow_up` trigger and `createSteeringContinuation` already cover the wake, under the lock every finalize takes.
 - Deriving the main bot's hidden tools from profiles, either every tool of an exclusive profile or the tools mapped to its resource. The first takes base tools such as `bash` away from the main bot, and both hide tools by inference. An explicit `MAIN_BOT_BLOCKED_TOOLS` list and per-profile `allow` and `block` lists say the same thing in plain sight.
-- A Rakazo todo list built from helper state. The operator left planning to each harness's own tools.
+- A Tangow todo list built from helper state. The operator left planning to each harness's own tools.
 - The parent approving a helper's action itself. Approvals record a human's consent under the bot's policy, and the parent would need that same approval for the action. Letting it say yes would turn delegation into a way around approvals.
 - `ask_parent` for sync helpers. The parent waits on the sync helper's result, so a question would deadlock both.
 - Reusing the whole `ask_user` pause and resume path for `ask_parent`. It posts an ask card, notifies the user and resumes with a `user.message` that claims the user answered. `ask_parent` reuses only the run status change and the attempt parking.

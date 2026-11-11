@@ -1,5 +1,5 @@
-import { BOT_NAME_MAX_LENGTH, BOT_TITLE_MAX_LENGTH } from "@rakazo/contracts";
-import { radii, shadowsForAppearance } from "@rakazo/ui-tokens";
+import { BOT_NAME_MAX_LENGTH, BOT_TITLE_MAX_LENGTH } from "@tangow/contracts";
+import { radii, shadowsForAppearance } from "@tangow/ui-tokens";
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, type TextStyle, View } from "react-native";
 import { mobileTokens, resolveMobileAppearance } from "../../lib/appearance";

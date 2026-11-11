@@ -1,8 +1,8 @@
 import { plural } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
-import { ChatMarkdown, truncateMarkdownForRender } from "@rakazo/chat-ui/web";
-import type { RunActivityRow, RunStatus } from "@rakazo/contracts";
-import type { ActivityItem, RecapBody, RecapRead } from "@rakazo/core";
+import { ChatMarkdown, truncateMarkdownForRender } from "@tangow/chat-ui/web";
+import type { RunActivityRow, RunStatus } from "@tangow/contracts";
+import type { ActivityItem, RecapBody, RecapRead } from "@tangow/core";
 import {
   dayMarkers,
   foldActivity,
@@ -10,8 +10,8 @@ import {
   reduceActivity,
   runTitle,
   threadTimeMarkerLabel,
-} from "@rakazo/core";
-import { Button, ClippedPreview, Shimmer, Skeleton } from "@rakazo/ui-web";
+} from "@tangow/core";
+import { Button, ClippedPreview, Shimmer, Skeleton } from "@tangow/ui-web";
 import {
   CalendarPlus,
   ChevronRight,

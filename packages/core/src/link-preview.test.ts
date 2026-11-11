@@ -1,4 +1,4 @@
-import type { MessageBlock } from "@rakazo/contracts";
+import type { MessageBlock } from "@tangow/contracts";
 import { describe, expect, it } from "vitest";
 import { blocksToAgentHistoryText } from "./attachments.js";
 import {

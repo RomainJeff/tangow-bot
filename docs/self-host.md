@@ -1,12 +1,12 @@
-# Self-hosting Rakazo
+# Self-hosting Tangow
 
 The signed-in product is a long-running API, a Graphile Worker, Postgres, and a computer provider (Docker supervisor or E2B). It is not a static site. The marketing site in `apps/www` can be hosted separately.
 
 ## Local (source checkout)
 
-Same as the README quick start: `.env` from `.env.example`, Postgres via Compose, `pnpm sandbox:build`, `pnpm dev`, then [http://127.0.0.1:5173](http://127.0.0.1:5173) (or `http://localhost:5173` — both loopback hosts are trusted). Electron: `pnpm --filter @rakazo/desktop dev` while that stack is up, then enter that address in setup.
+Same as the README quick start: `.env` from `.env.example`, Postgres via Compose, `pnpm sandbox:build`, `pnpm dev`, then [http://127.0.0.1:5173](http://127.0.0.1:5173) (or `http://localhost:5173` — both loopback hosts are trusted). Electron: `pnpm --filter @tangow/desktop dev` while that stack is up, then enter that address in setup.
 
-For source development in WSL, keep the checkout and `data` directory in the Linux filesystem (for example, `~/rakazo`), and run `pnpm dev` as your normal user. The host-run supervisor matches bot container UID/GID to that user. If Docker Desktop container IPs are unreachable, set `SANDBOX_CONTROL_VIA_LOOPBACK=true` in `.env`; this publishes the token-protected control service on a random loopback port. Leave this unset for the Compose-hosted supervisor.
+For source development in WSL, keep the checkout and `data` directory in the Linux filesystem (for example, `~/tangow`), and run `pnpm dev` as your normal user. The host-run supervisor matches bot container UID/GID to that user. If Docker Desktop container IPs are unreachable, set `SANDBOX_CONTROL_VIA_LOOPBACK=true` in `.env`; this publishes the token-protected control service on a random loopback port. Leave this unset for the Compose-hosted supervisor.
 
 Compose bot homes mount only their own subdirectory of the application volume using Docker volume semantics. Docker's internal volume paths are never used as host bind mounts.
 
@@ -24,7 +24,7 @@ configuration, builds the current revision, starts the stack and verifies readin
 
 On Windows, if an older clone with `core.autocrlf=true` leaves the computer pane hung on boot (`bash\r` in sandbox logs): from a clean worktree, set `git config core.autocrlf false`, run `git add --renormalize . && git checkout -- .`, then rebuild with `pnpm sandbox:build`.
 
-Compose runs Postgres, the sandbox supervisor (Docker socket), API, worker, and a Vite preview of the web app. Bot computers are sibling containers (`rakazo/computer:local`) on separate per-bot networks; only the supervisor and screen proxy join each one. The API process does not get an unrestricted Docker socket; the supervisor owns the lifecycle.
+Compose runs Postgres, the sandbox supervisor (Docker socket), API, worker, and a Vite preview of the web app. Bot computers are sibling containers (`tangow/computer:local`) on separate per-bot networks; only the supervisor and screen proxy join each one. The API process does not get an unrestricted Docker socket; the supervisor owns the lifecycle.
 
 Postgres stays on the Compose network only (not published on the host). Credentials come from `.env` (`POSTGRES_PASSWORD` is required). Prefer a URI-safe value
 (`openssl rand -hex 16`); characters such as `@ : / ? # %` break the interpolated `DATABASE_URL`
@@ -73,32 +73,32 @@ Docker computer topology:
 
 | Variable | Default | Accepts |
 | --- | --- | --- |
-| `RAKAZO_COMPUTER_MEMORY` | `8g` | `2g`, `1536m`, a byte count. Minimum `6m`, Docker's own floor. Also caps swap, so the ceiling holds. |
-| `RAKAZO_COMPUTER_CPUS` | `4` | Whole or fractional cores, e.g. `1.5` |
-| `RAKAZO_COMPUTER_PIDS_LIMIT` | `2048` | A positive integer |
+| `TANGOW_COMPUTER_MEMORY` | `8g` | `2g`, `1536m`, a byte count. Minimum `6m`, Docker's own floor. Also caps swap, so the ceiling holds. |
+| `TANGOW_COMPUTER_CPUS` | `4` | Whole or fractional cores, e.g. `1.5` |
+| `TANGOW_COMPUTER_PIDS_LIMIT` | `2048` | A positive integer |
 
 These are ceilings, not reservations: an idle computer does not hold 8 GB. On a small host running
-several computers at once, lower them (for example `RAKAZO_COMPUTER_MEMORY=2g`,
-`RAKAZO_COMPUTER_CPUS=2`). Set any of them to `0`, `none` or `unlimited` to remove that ceiling. A malformed value fails the
+several computers at once, lower them (for example `TANGOW_COMPUTER_MEMORY=2g`,
+`TANGOW_COMPUTER_CPUS=2`). Set any of them to `0`, `none` or `unlimited` to remove that ceiling. A malformed value fails the
 supervisor at startup naming the variable, rather than surfacing later as a failed bot.
 
 ### Verification and password recovery email
 
 Password changes for signed-in users require no email configuration. Forgotten-password recovery
-appears on sign-in only when a transactional email provider is available. Rakazo uses a
+appears on sign-in only when a transactional email provider is available. Tangow uses a
 provider-neutral contract and ships an SMTP adapter, so Amazon SES, Resend, and self-hosted SMTP
 servers use the same configuration:
 
 ```env
 SMTP_URL=smtps://smtp-user:replace-with-password@smtp.example.com:465
-EMAIL_FROM=Rakazo <no-reply@example.com>
+EMAIL_FROM=Tangow <no-reply@example.com>
 ```
 
 For Resend, use `smtp.resend.com`, username `resend`, and an API key as the password. For Amazon
 SES, use the regional SMTP endpoint and SES SMTP credentials; these are different from ordinary AWS
 access keys. Verify the sender/domain with the provider before testing delivery. Keep credentials in
 `.env`, never in tracked files. `smtps://` uses implicit TLS; `smtp://` is also supported but requires
-STARTTLS. Rakazo rejects configuration that disables TLS or certificate verification.
+STARTTLS. Tangow rejects configuration that disables TLS or certificate verification.
 
 Local source development can use the offline email emulator instead. It captures email without
 contacting a provider:
@@ -119,8 +119,8 @@ or `off` (default `info`). Production defaults to `LOG_FORMAT=json`; development
 unless you set `json` or `pretty`.
 
 Axiom is optional. Set both `AXIOM_TOKEN` and `AXIOM_DATASET` for ingest to one shared dataset.
-Services set `service.name` (`rakazo-api`, `rakazo-worker`, `rakazo-sandbox-supervisor`,
-`rakazo-updater`). A partial Axiom config logs a one-time warning and stays off. `AXIOM_EDGE` is a
+Services set `service.name` (`tangow-api`, `tangow-worker`, `tangow-sandbox-supervisor`,
+`tangow-updater`). A partial Axiom config logs a one-time warning and stays off. `AXIOM_EDGE` is a
 regional hostname; `AXIOM_EDGE_URL` must be https and wins when both are set.
 
 Compose passes these into the API, worker, supervisor, and updater. Computer containers and updater
@@ -137,7 +137,7 @@ and its response, including thinking and tool calls when provided. Image bytes a
 of the worker's own tools (shell, files) is timed by when the worker reports it. A `browser_run` call
 nests one generation per decision step under its tool span,
 carrying the redacted request, the answers (or why none was usable), the gate, model, tokens and
-cost. Rakazo's own model calls (history compaction, learned facts, the team-chat judge and
+cost. Tangow's own model calls (history compaction, learned facts, the team-chat judge and
 auto-review) are exported too, one trace per call.
 `LANGFUSE_BASE_URL` defaults to `https://cloud.langfuse.com` and points a self-hosted instance
 or any other OTLP/HTTP backend at the same traces; it must be https unless it is loopback.
@@ -167,15 +167,15 @@ To use an operator-controlled OpenAI-compatible server such as Ollama, LM Studio
 MLX, list its model IDs and an endpoint that both the API and worker processes can reach:
 
 ```env
-RAKAZO_LOCAL_MODELS=qwen3:4b,llama3.1:8b,qwen3-vl
-RAKAZO_LOCAL_MODELS_URL=http://127.0.0.1:11434/v1
-RAKAZO_LOCAL_CONTEXT_WINDOW=32768
-RAKAZO_LOCAL_MAX_TOKENS=4096
+TANGOW_LOCAL_MODELS=qwen3:4b,llama3.1:8b,qwen3-vl
+TANGOW_LOCAL_MODELS_URL=http://127.0.0.1:11434/v1
+TANGOW_LOCAL_CONTEXT_WINDOW=32768
+TANGOW_LOCAL_MAX_TOKENS=4096
 # Optional: model ids on this endpoint that accept images (screenshot computer tools).
-RAKAZO_LOCAL_VISION_MODELS=qwen3-vl
+TANGOW_LOCAL_VISION_MODELS=qwen3-vl
 ```
 
-The loopback default is suitable when running Rakazo from a source checkout. From containers,
+The loopback default is suitable when running Tangow from a source checkout. From containers,
 prefer a stable LAN RFC1918 address (not Compose service DNS alone). On Docker Desktop,
 `host.docker.internal` also works.
 On Docker Desktop, a bot computer shell can often reach services bound to host `127.0.0.1`
@@ -183,17 +183,17 @@ through that same hostname. Do not run sensitive unauthenticated services on loo
 bots run, or firewall / block that path. Linux does not get `host.docker.internal` the same
 way by default.
 Only configure an endpoint you control: prompts, attachments, and tool results sent to that model
-leave Rakazo through this URL. Leave `RAKAZO_LOCAL_MODELS` blank to disable the provider.
+leave Tangow through this URL. Leave `TANGOW_LOCAL_MODELS` blank to disable the provider.
 
 Each user can also connect their own OpenAI-compatible endpoint from **Connect a model** /
 **Settings → Models** on web and mobile. Choose **OpenAI-compatible**, enter the server base URL
 (for example `http://127.0.0.1:8000/v1`), the exact model id, and an optional API key.
-Public hosts and ordinary hostnames need `RAKAZO_OPENAI_COMPAT_ALLOW_PUBLIC=1` and HTTPS.
+Public hosts and ordinary hostnames need `TANGOW_OPENAI_COMPAT_ALLOW_PUBLIC=1` and HTTPS.
 Literal private IP, loopback, and `host.docker.internal` targets do not. If that endpoint's model
 accepts images, enable **Supports images** under **Advanced** when connecting so attachments and
 screenshot computer tools stay available. Existing connections default to disabled. For centrally
 managed endpoints, the deployment-wide fallback remains
-`RAKAZO_OPENAI_COMPATIBLE_VISION_MODELS=gpt4o-vision,llava`.
+`TANGOW_OPENAI_COMPATIBLE_VISION_MODELS=gpt4o-vision,llava`.
 
 For servers that accept standard `reasoning_effort`, enable **Supports thinking** under
 **Advanced** when connecting. The setting is saved on the connection (no env var or restart).
@@ -201,7 +201,7 @@ Existing connections default to disabled. Reconnect former Qwen-list or deployme
 via **Settings → Models** and turn it on; the old environment list is no longer read.
 
 Enabled connections default to medium thinking. Web and desktop expose **Thinking** in a bot's
-advanced settings; mobile inherits the same backend policy. Rakazo sends standard
+advanced settings; mobile inherits the same backend policy. Tangow sends standard
 `reasoning_effort` (`minimal`, `low`, `medium`, `high`, or `none` when off); the server owns
 model-specific translation. Leave **Supports thinking** off when the server lacks standard effort
 support. Existing token limits still apply; effort is not a separate reasoning-token budget.
@@ -244,7 +244,7 @@ Live evaluations of this behaviour are described in [agent verification](agent-v
 
 ### Agent feedback
 
-Bots can report problems with Rakazo itself, such as a tool that blocked them, something that
+Bots can report problems with Tangow itself, such as a tool that blocked them, something that
 malfunctioned or a task that took far too many steps, as issues in a GitHub repository you choose.
 The `report_issue` tool is offered only once this is set up. A bot calls it on its own judgment; it does
 not pause the run or ask anyone for help.
@@ -268,7 +268,7 @@ not pause the run or ask anyone for help.
    it, and it is masked like the deployment's other keys.
 
 An issue has two parts. The bot's report: the problem, what it expected, the impact, and the tool
-and a short reproduction when it gives them. What Rakazo observed: run, thread and bot ids, the
+and a short reproduction when it gives them. What Tangow observed: run, thread and bot ids, the
 model, the runtime, the deployed version (`GIT_SHA`) when known, the time, and counters read while
 the run is still going. The counters are not final totals. Model calls include compaction calls,
 so they do not count agent steps, and the tool-call audit can miss calls. Issues contain no
@@ -293,7 +293,7 @@ The Electron desktop app is a client of the same API, with the same Docker or E2
   supervisor private, as the included Compose files do. On Docker Desktop (macOS, Windows) a worker
   can reach the host's localhost through `host.docker.internal`; see
   [homes on volumes](./self-host-sandbox-providers.md#homes-on-volumes).
-- **E2B** runs bot computers away from the Rakazo host and is a good choice for public or multi-user
+- **E2B** runs bot computers away from the Tangow host and is a good choice for public or multi-user
   production deployments. Each bot run works in its own E2B worker VM, and bot homes live on E2B
   volumes. Set it up with [E2B workers](./self-host-e2b-workers.md).
 - **Fake** is only an emulator for verification.
@@ -340,18 +340,18 @@ container logs, default no-new-privileges, and the kernel NAT path instead of Do
 2. Clone the repository on the VM and create a root `.env` with production-only values. At minimum set
    `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, `ENCRYPTION_KEY`, `SCREEN_PROXY_SECRET`,
    `OPENROUTER_API_KEY`, the API key for your selected sandbox provider,
-   `RAKAZO_HOST`, and the three public origins. Set `RAKAZO_DEPLOY_DIR` when the checkout is not at
-   the supported Linux default, `/srv/rakazo`. Use URL-safe random values for database credentials.
-   If you enable the `updater` profile, also set a dedicated `RAKAZO_UPDATER_TOKEN` (at least 32
+   `TANGOW_HOST`, and the three public origins. Set `TANGOW_DEPLOY_DIR` when the checkout is not at
+   the supported Linux default, `/srv/tangow`. Use URL-safe random values for database credentials.
+   If you enable the `updater` profile, also set a dedicated `TANGOW_UPDATER_TOKEN` (at least 32
    characters) that differs from `BETTER_AUTH_SECRET`, `SANDBOX_SUPERVISOR_TOKEN`, and
    `SCREEN_PROXY_SECRET`.
 3. Keep registration allowlisted while the service is private:
 
 ```env
 NODE_ENV=production
-RAKAZO_HOST=app.example.com
+TANGOW_HOST=app.example.com
 # Optional operator-owned override, for example the Cloudflare allowlist file:
-# CADDYFILE_PATH=/etc/rakazo/Caddyfile.prod
+# CADDYFILE_PATH=/etc/tangow/Caddyfile.prod
 BETTER_AUTH_URL=https://app.example.com
 WEB_ORIGIN=https://app.example.com
 API_URL=https://app.example.com
@@ -361,12 +361,12 @@ SIGNUP_ALLOWLIST=owner@example.com,reviewer@example.com
 SANDBOX_PROVIDER=e2b
 WAKEUP_DRIVER=graphile
 DATA_DIR=/data
-# Absolute path of this checkout as the Docker daemon sees it. /srv/rakazo is the Linux default;
+# Absolute path of this checkout as the Docker daemon sees it. /srv/tangow is the Linux default;
 # set this explicitly for every other layout. See "The deploy directory must be one path" below.
-RAKAZO_DEPLOY_DIR=/srv/rakazo
-RAKAZO_IMAGE_TAG=local
+TANGOW_DEPLOY_DIR=/srv/tangow
+TANGOW_IMAGE_TAG=local
 # Optional: required only with `--profile updater`.
-# RAKAZO_UPDATER_TOKEN=replace-with-32-plus-character-updater-token
+# TANGOW_UPDATER_TOKEN=replace-with-32-plus-character-updater-token
 ```
 
 4. Build the images from your checkout and start the stack, then verify its public health endpoint:
@@ -379,7 +379,7 @@ docker compose --env-file .env -f infra/compose/docker-compose.prod.yml \
 curl --fail https://app.example.com/health
 ```
 
-**Build, do not pull, for a first deployment.** `RAKAZO_IMAGE_TAG` ships as `local`, a tag no
+**Build, do not pull, for a first deployment.** `TANGOW_IMAGE_TAG` ships as `local`, a tag no
 registry serves, so the commands above build `api`, `worker`, and `web` from the checkout you just
 cloned. The opt-in command under [Updater sidecar](#updater-sidecar) builds `updater` when needed.
 
@@ -389,7 +389,7 @@ you switch to a release tag you should leave `GIT_SHA` unset — a value in `.en
 the image already knows.
 
 Once a release has been published you can switch this host to prebuilt images by setting
-`RAKAZO_IMAGE_TAG` to that release tag and running `pull` followed by `up -d --wait --pull never`.
+`TANGOW_IMAGE_TAG` to that release tag and running `pull` followed by `up -d --wait --pull never`.
 See [Published images and tags](#published-images-and-tags) for the tag contract.
 
 The root `.env` is excluded from both Git and the Docker build context. The database, application data,
@@ -401,8 +401,8 @@ when taking upstream security updates; changing only the visible major tag does 
 content while a digest is present.
 
 For the single-VM production layout, install `infra/compose/backup-prod.sh` as
-`/usr/local/sbin/rakazo-backup` and enable the supplied `rakazo-backup.timer`. It creates a verified
-Postgres custom-format dump plus an application-data archive under `/var/backups/rakazo`, with mode
+`/usr/local/sbin/tangow-backup` and enable the supplied `tangow-backup.timer`. It creates a verified
+Postgres custom-format dump plus an application-data archive under `/var/backups/tangow`, with mode
 `0600` and seven-day rotation. These local snapshots help with operator mistakes but are not a
 substitute for an encrypted off-host backup or provider snapshot.
 
@@ -420,7 +420,7 @@ instead.
 3. Give the token to the app, as described under **Desktop** or **Mobile** below.
 
 A service token is a single shared identity: per-user, per-group, and device-posture Access policies
-no longer distinguish who is connecting, and only the Rakazo sign-in tells your users apart. Scope
+no longer distinguish who is connecting, and only the Tangow sign-in tells your users apart. Scope
 the policy to that one token, set the shortest workable token duration, and rotate it deliberately.
 
 ### Desktop
@@ -463,8 +463,8 @@ a server the user types in still needs its own token.
 The computer view renders the remote screen in a `WebView`, which cannot attach the service token to
 the page's subresources or its WebSocket. That view does not work against an Access-protected server
 on mobile.
-The scheduled backup uses `/srv/rakazo` by default. For another deployment directory, set
-`RAKAZO_DEPLOY_DIR=/absolute/path/to/checkout` in a root-owned `/etc/rakazo/backup.env`
+The scheduled backup uses `/srv/tangow` by default. For another deployment directory, set
+`TANGOW_DEPLOY_DIR=/absolute/path/to/checkout` in a root-owned `/etc/tangow/backup.env`
 (mode `0600`). The service reads this optional file on each run; the script uses the selected
 checkout's `.env` and production Compose file. If the stack was started with a custom `-p`,
 set the same `COMPOSE_PROJECT_NAME` in that file. For a manual run, export these variables instead.
@@ -473,11 +473,11 @@ then run `systemctl daemon-reload`.
 
 ## Restore
 
-For backups created by `scripts/backup.sh`, use an empty `rakazo` database in the development
+For backups created by `scripts/backup.sh`, use an empty `tangow` database in the development
 Compose stack, with application services stopped. The SQL import runs in one transaction and
 stops on the first error, including conflicts with existing tables. Files are restored and
 application services started only after the import succeeds. This script does not consume the
-production snapshot's custom-format `rakazo.dump` or `appdata.tgz`.
+production snapshot's custom-format `tangow.dump` or `appdata.tgz`.
 
 ```bash
 ./scripts/restore.sh backups/<stamp>
@@ -509,10 +509,10 @@ GIT_SHA=$(git rev-parse HEAD) docker compose --env-file .env -f infra/compose/do
 are running. Compose stops the old API and worker, then the one-shot `migrate` service applies the
 migrations (`scripts/backfill-session-log.ts`) before the new ones start, so a migration failure
 keeps them stopped. A failed CLI recreate does not auto-roll back; recover with the previous
-`RAKAZO_IMAGE_TAG` (or rebuild `local`) and `up -d --wait --pull never --no-deps api worker web`.
+`TANGOW_IMAGE_TAG` (or rebuild `local`) and `up -d --wait --pull never --no-deps api worker web`.
 
 The updater sidecar has its own image and tag so an update never recreates the process performing
-it. Move it deliberately by setting `RAKAZO_UPDATER_IMAGE_TAG` to the full `sha-<commit>` tag, then
+it. Move it deliberately by setting `TANGOW_UPDATER_IMAGE_TAG` to the full `sha-<commit>` tag, then
 running `docker compose … pull updater && docker compose … up -d --wait --pull never updater`.
 Sidecar `/apply` and `/rollback` recover a failed recreate by redeploying the previously cached
 image when possible; if that also fails, they report a possible mixed-version runtime. Both stop a
@@ -595,7 +595,7 @@ psql "$DATABASE_URL" -c "DELETE FROM messages WHERE \"threadId\" = '<thread-id>'
 Once the move has succeeded, a release older than it cannot read the database: the updater refuses
 to roll back to one, and after a failed update it leaves the services stopped rather than start one.
 Going back means restoring the backup taken before the upgrade into an empty database, then starting
-the previous tag. On the single-VM layout, with `RAKAZO_IMAGE_TAG` in `.env` set back to that tag:
+the previous tag. On the single-VM layout, with `TANGOW_IMAGE_TAG` in `.env` set back to that tag:
 
 ```bash
 compose="docker compose --env-file .env -f infra/compose/docker-compose.prod.yml"
@@ -603,7 +603,7 @@ $compose stop api worker web
 $compose exec -T postgres sh -c 'dropdb -U "$POSTGRES_USER" --force "$POSTGRES_DB" &&
   createdb -U "$POSTGRES_USER" "$POSTGRES_DB"'
 $compose exec -T postgres sh -c 'pg_restore --no-owner -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
-  < /var/backups/rakazo/<stamp>/rakazo.dump
+  < /var/backups/tangow/<stamp>/tangow.dump
 $compose up -d --wait --pull never --no-deps api worker web
 ```
 
@@ -665,11 +665,11 @@ this repository that is:
 | `ghcr.io/elie222/rakazo/computer` | Linux desktop used as each bot computer |
 | `ghcr.io/elie222/rakazo/updater` | the updater sidecar, plus the Docker CLI |
 
-Production Compose (`docker-compose.prod.yml`) can pull the app tags once `RAKAZO_IMAGE_TAG` is set
+Production Compose (`docker-compose.prod.yml`) can pull the app tags once `TANGOW_IMAGE_TAG` is set
 to a published value. The supervisor runs from the app image on the internal network only (not a
 separate published supervisor image, and no host port).
 
-If you deploy from your own fork, set `RAKAZO_IMAGE` and `RAKAZO_UPDATER_IMAGE` to your namespace —
+If you deploy from your own fork, set `TANGOW_IMAGE` and `TANGOW_UPDATER_IMAGE` to your namespace —
 your CI cannot publish into someone else's.
 
 | Tag | Published on | Moves? |
@@ -698,7 +698,7 @@ not `latest` or a moving minor tag. A registry tag is not an OCI digest and GHCR
 replace it, so the trust boundary remains this repository's publishing credentials. The workflow
 reduces that boundary by using SHA-pinned actions, read-only pull-request jobs, digest-pinned base
 images, SBOM/provenance output, and a GitHub build attestation. Operators who require registry-level
-content addressing can pin `RAKAZO_IMAGE` outside the automatic updater to a verified digest.
+content addressing can pin `TANGOW_IMAGE` outside the automatic updater to a verified digest.
 
 Rollback never contacts the registry: it redeploys the previous tag from the local Docker cache,
 so a later tag move cannot change rollback content. Do not prune the previous application image
@@ -714,7 +714,7 @@ and refuses the official path until a stable `vX.Y.Z` exists.
 
 Compose production deployments offer an opt-in `updater` profile on a private `control` network.
 Normal deployments do not start it or require its credential. To enable it, set a dedicated
-`RAKAZO_UPDATER_TOKEN` and explicitly start the profile:
+`TANGOW_UPDATER_TOKEN` and explicitly start the profile:
 
 ```bash
 docker compose --env-file .env -f infra/compose/docker-compose.prod.yml \
@@ -722,7 +722,7 @@ docker compose --env-file .env -f infra/compose/docker-compose.prod.yml \
 ```
 
 It exposes `/health`, `/state`, `/plan`, `/apply`, and `/rollback` at `http://updater:7092` with
-`RAKAZO_UPDATER_TOKEN`. Operator CLI upgrades above do not need it; the sidecar is for automated
+`TANGOW_UPDATER_TOKEN`. Operator CLI upgrades above do not need it; the sidecar is for automated
 apply/rollback over that private HTTP API.
 
 The API cannot update itself — its image has no `.git`, and nothing inside the container would
@@ -730,10 +730,10 @@ restart it — so the work happens in a separate `updater` container that outliv
 
 - *Official repository:* resolves the newest stable release and its source commit with
   `git ls-remote --tags`, pins the corresponding full `sha-<commit>` image tag in `.env`, keeps the
-  outgoing tag in `RAKAZO_IMAGE_TAG_PREVIOUS`, explicitly pulls the new image, then runs
+  outgoing tag in `TANGOW_IMAGE_TAG_PREVIOUS`, explicitly pulls the new image, then runs
   `up -d --wait --pull never`. No build runs on the server.
 - *Fork (Advanced):* a fork has no published images, so the sidecar fast-forwards the checkout in
-  `RAKAZO_DEPLOY_DIR` and runs `up -d --build`. This builds on the server and takes minutes rather
+  `TANGOW_DEPLOY_DIR` and runs `up -d --build`. This builds on the server and takes minutes rather
   than seconds. Point it only at a fork you control and have reviewed — the sidecar runs that
   Compose file through a root-equivalent Docker socket.
 
@@ -750,38 +750,38 @@ untracked source tree fails closed before anything runs (the application Dockerf
 
 ### The deploy directory must be one path
 
-`RAKAZO_DEPLOY_DIR` is bind-mounted into the updater at the same path it is read from
-(`${RAKAZO_DEPLOY_DIR}:${RAKAZO_DEPLOY_DIR}`), and that is load-bearing rather than tidy. Production
-Compose defaults both sides to `/srv/rakazo`; set the variable for any other layout. When the
-updater runs `docker compose -p <project> --file $RAKAZO_DEPLOY_DIR/infra/compose/docker-compose.prod.yml up -d`,
+`TANGOW_DEPLOY_DIR` is bind-mounted into the updater at the same path it is read from
+(`${TANGOW_DEPLOY_DIR}:${TANGOW_DEPLOY_DIR}`), and that is load-bearing rather than tidy. Production
+Compose defaults both sides to `/srv/tangow`; set the variable for any other layout. When the
+updater runs `docker compose -p <project> --file $TANGOW_DEPLOY_DIR/infra/compose/docker-compose.prod.yml up -d`,
 the Compose CLI *inside* the container expands this file's relative bind mounts — `../../.env`,
 `./Caddyfile.prod` — against that path and hands the results to the daemon. The daemon has to be
 able to resolve the same strings, or it silently creates empty directories where your `.env` and
 Caddyfile should be. Compose makes the effective `-p` value available for interpolation but does
 not automatically put it in a container's environment, so the production file explicitly assigns
 `COMPOSE_PROJECT_NAME` to the updater. A standalone sidecar can instead set
-`RAKAZO_COMPOSE_PROJECT_NAME`; the final fallback is `rakazo-prod`. Without that propagation, a
+`TANGOW_COMPOSE_PROJECT_NAME`; the final fallback is `tangow-prod`. Without that propagation, a
 stack started with `-p something-else` would be left alone while a second project with a new empty
 Postgres volume came up beside it.
 
 ### Deployments that layer a Compose overlay
 
-`RAKAZO_COMPOSE_FILE` takes a list, separated the way Compose's own `COMPOSE_FILE` is
+`TANGOW_COMPOSE_FILE` takes a list, separated the way Compose's own `COMPOSE_FILE` is
 (`:` by default, or whatever `COMPOSE_PATH_SEPARATOR` says). Each entry becomes its own `--file`,
 in the order given, so the updater reconciles the same stack the operator runs by hand:
 
 ```
-RAKAZO_COMPOSE_FILE=infra/compose/docker-compose.prod.yml:ops/compose/overlay.yml
+TANGOW_COMPOSE_FILE=infra/compose/docker-compose.prod.yml:ops/compose/overlay.yml
 ```
 
-Every entry is validated separately and must stay inside `RAKAZO_DEPLOY_DIR`.
+Every entry is validated separately and must stay inside `TANGOW_DEPLOY_DIR`.
 
 If the overlay adds a service built from the application image, name it in
-`RAKAZO_UPDATE_SERVICES` (comma separated) so it is pulled, recreated and rolled back with the
+`TANGOW_UPDATE_SERVICES` (comma separated) so it is pulled, recreated and rolled back with the
 rest. Otherwise an update leaves that service running the previous code:
 
 ```
-RAKAZO_UPDATE_SERVICES=supervisor
+TANGOW_UPDATE_SERVICES=supervisor
 ```
 
 These names are appended to the built-in `api`, `worker`, `web`, never substituted for them, so no
@@ -791,15 +791,15 @@ The value therefore has to be the path **the daemon** sees, which is not always 
 sees:
 
 - **Linux.** The daemon shares the host filesystem, so the checkout path is the answer:
-  `/srv/rakazo` is the default and supported production layout. Set `RAKAZO_DEPLOY_DIR` explicitly
+  `/srv/tangow` is the default and supported production layout. Set `TANGOW_DEPLOY_DIR` explicitly
   when the checkout is elsewhere.
 - **Docker Desktop (Windows/macOS).** The daemon runs in a VM that mounts your drive somewhere else.
-  On Windows, `C:` appears at `/run/desktop/mnt/host/c`, so a checkout at `C:\Users\you\rakazo` is
-  `RAKAZO_DEPLOY_DIR=/run/desktop/mnt/host/c/Users/you/rakazo`. Host Git may use `core.autocrlf=true`; the updater ignores CR-only diffs so that does not block `/apply`. Verify the mount before deploying:
+  On Windows, `C:` appears at `/run/desktop/mnt/host/c`, so a checkout at `C:\Users\you\tangow` is
+  `TANGOW_DEPLOY_DIR=/run/desktop/mnt/host/c/Users/you/tangow`. Host Git may use `core.autocrlf=true`; the updater ignores CR-only diffs so that does not block `/apply`. Verify the mount before deploying:
 
 ```bash
 docker compose --env-file .env -f infra/compose/docker-compose.prod.yml \
-  --profile updater run --rm updater git -C "$RAKAZO_DEPLOY_DIR" log --oneline -1
+  --profile updater run --rm updater git -C "$TANGOW_DEPLOY_DIR" log --oneline -1
 ```
 
   That must print your checkout's HEAD. The two tempting wrong answers both fail: a native Windows
@@ -816,13 +816,13 @@ as that allows:
 - Only on the dedicated `control` network shared with the API. Caddy is not attached, so the
   reverse proxy has no route to the updater.
 - Every route except `/health` requires the shared bearer token, compared in constant time.
-- The process environment carries only updater settings (`RAKAZO_UPDATER_TOKEN`, deploy path,
+- The process environment carries only updater settings (`TANGOW_UPDATER_TOKEN`, deploy path,
   image name, project name). Application secrets stay in the bind-mounted `.env` that Compose
   reads for interpolation; they are not loaded into this container.
 - The Docker CLI lives only in the updater image. The api, worker, and web containers keep
   `cap_drop: ALL` and no socket.
 
-Enabling the `updater` profile requires `RAKAZO_UPDATER_TOKEN` to be a dedicated random value (at
+Enabling the `updater` profile requires `TANGOW_UPDATER_TOKEN` to be a dedicated random value (at
 least 32 characters in production). It must differ from `BETTER_AUTH_SECRET`,
 `SANDBOX_SUPERVISOR_TOKEN`, and `SCREEN_PROXY_SECRET`. Leave the profile disabled if you would
 rather not grant the capability.

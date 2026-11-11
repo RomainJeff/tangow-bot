@@ -7,9 +7,9 @@ import type {
   ArtifactStore,
   JobPublisher,
   SandboxProvider,
-} from "@rakazo/adapter-kit";
-import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
-import type { createRepos, PrismaClient, ThreadEvents } from "@rakazo/db";
+} from "@tangow/adapter-kit";
+import { ACTIVE_RUN_STATUSES } from "@tangow/core";
+import type { createRepos, PrismaClient, ThreadEvents } from "@tangow/db";
 import { describe, expect, it, vi } from "vitest";
 import { resolveRunHop } from "./bot-messages.js";
 import {
@@ -22,7 +22,7 @@ import {
 import { botSkillsRoot } from "./skill-store.js";
 
 vi.mock("../../db/src/sessions.js", async () =>
-  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+  (await import("@tangow/db/sessions.test-support")).stubbedDbSessions(),
 );
 
 const context = {
@@ -112,7 +112,7 @@ describe("spawned bot creation", () => {
       title: "",
       threadId: "thread-3",
     });
-    const db = await import("@rakazo/db");
+    const db = await import("@tangow/db");
     const createReposSpy = vi
       .spyOn(db, "createRepos")
       .mockReturnValue({ createBot } as unknown as ReturnType<typeof createRepos>);
@@ -160,7 +160,7 @@ describe("spawned bot creation", () => {
       title: "",
       threadId: "thread-2",
     });
-    const createReposSpy = vi.spyOn(await import("@rakazo/db"), "createRepos").mockReturnValue({
+    const createReposSpy = vi.spyOn(await import("@tangow/db"), "createRepos").mockReturnValue({
       createBot,
     } as unknown as ReturnType<typeof createRepos>);
 
@@ -552,7 +552,7 @@ describe("destroyBot", () => {
   });
 
   it("removes the bot's copy of its owner's skills", async () => {
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-destroy-bot-skills-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-destroy-bot-skills-"));
     const bot = { id: "bot-1", spaceId: "workspace-1", name: "Researcher", archivedAt: null };
     const copy = botSkillsRoot(dataDir, bot);
     await mkdir(path.join(copy, "release-steps", "scripts"), { recursive: true });
@@ -631,7 +631,7 @@ describe("destroyBot", () => {
           home: {} as AgentHomeStore,
           jobs: { cancel: vi.fn() } as unknown as JobPublisher,
           events: {} as ThreadEvents,
-          dataDir: "/tmp/rakazo-destroy-bot-test",
+          dataDir: "/tmp/tangow-destroy-bot-test",
         },
         {
           id: "bot-1",

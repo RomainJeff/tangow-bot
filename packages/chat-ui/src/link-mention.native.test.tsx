@@ -1,10 +1,10 @@
-import { linkMentionsOf } from "@rakazo/core";
-import { lightTokens } from "@rakazo/ui-tokens";
 import type {
   ASTNode,
   MarkdownStyleMap,
   RenderRules,
 } from "@ronradtke/react-native-markdown-display";
+import { linkMentionsOf } from "@tangow/core";
+import { lightTokens } from "@tangow/ui-tokens";
 import type { ReactElement, ReactNode } from "react";
 import { createElement, isValidElement } from "react";
 import { describe, expect, it, vi } from "vitest";

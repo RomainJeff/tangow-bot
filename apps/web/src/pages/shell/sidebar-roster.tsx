@@ -1,7 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { Bot, BotSection, Group, Me, Space, ThreadSnapshot } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
-import { BotAvatar, Button, GroupAvatar } from "@rakazo/ui-web";
+import type { Bot, BotSection, Group, Me, Space, ThreadSnapshot } from "@tangow/contracts";
+import { ACTIVE_RUN_STATUSES } from "@tangow/core";
+import { BotAvatar, Button, GroupAvatar } from "@tangow/ui-web";
 import { ChevronDown, Lock, MoreHorizontal } from "lucide-react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { userInitials } from "../../lib/user-initials";

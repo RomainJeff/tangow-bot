@@ -1,12 +1,12 @@
 import { ORPCError } from "@orpc/server";
-import type { SecretStore } from "@rakazo/adapter-kit";
+import type { SecretStore } from "@tangow/adapter-kit";
 import {
   decisionProviderRequiresDeploymentOwner,
   prepareDecisionProviderConnection,
   toStringRecord,
-} from "@rakazo/adapters";
-import type { Actor } from "@rakazo/contracts";
-import { findSpaceDecisionConfig, Prisma, type PrismaClient } from "@rakazo/db";
+} from "@tangow/adapters";
+import type { Actor } from "@tangow/contracts";
+import { findSpaceDecisionConfig, Prisma, type PrismaClient } from "@tangow/db";
 import { requireSpaceOwner } from "./memory-provider-config.js";
 import { withSerializableRetry } from "./serializable-retry.js";
 

@@ -1,10 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { AdapterContext, SandboxProvider } from "@rakazo/adapter-kit";
-import { hasActiveComputerControl } from "@rakazo/adapters";
-import type { ComputerStatus } from "@rakazo/contracts";
-import { SandboxKind } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, DEFAULT_COMPUTER_SCREEN } from "@rakazo/core";
-import type { PrismaClient } from "@rakazo/db";
+import type { AdapterContext, SandboxProvider } from "@tangow/adapter-kit";
+import { hasActiveComputerControl } from "@tangow/adapters";
+import type { ComputerStatus } from "@tangow/contracts";
+import { SandboxKind } from "@tangow/contracts";
+import { ACTIVE_RUN_STATUSES, DEFAULT_COMPUTER_SCREEN } from "@tangow/core";
+import type { PrismaClient } from "@tangow/db";
 
 const releases = new WeakMap<
   SandboxProvider,

@@ -1,5 +1,5 @@
-import { logDraftOutcomes, settleCancelledRunCards } from "@rakazo/adapters";
-import { humanizeToolName } from "@rakazo/core";
+import { logDraftOutcomes, settleCancelledRunCards } from "@tangow/adapters";
+import { humanizeToolName } from "@tangow/core";
 import { describe, expect, it } from "vitest";
 import { acmeApp } from "./draft-app.test-support.js";
 import { latestCard } from "./index.js";

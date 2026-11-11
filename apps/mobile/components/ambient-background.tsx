@@ -1,4 +1,4 @@
-import { ambient } from "@rakazo/ui-tokens";
+import { ambient } from "@tangow/ui-tokens";
 import { StyleSheet, View } from "react-native";
 import { useMobileTokens, useResolvedAppearance } from "../lib/native";
 import { hexWithAlpha } from "../lib/stop-contour-math";

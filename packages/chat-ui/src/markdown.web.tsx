@@ -1,5 +1,5 @@
-import type { LinkMentionResolver } from "@rakazo/core";
-import { wwwLinkHref } from "@rakazo/core";
+import type { LinkMentionResolver } from "@tangow/core";
+import { wwwLinkHref } from "@tangow/core";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { createContext, Fragment, memo, useCallback, useContext, useRef, useState } from "react";
 import type { Components, ExtraProps } from "react-markdown";

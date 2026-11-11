@@ -4,7 +4,7 @@ import { expect, test } from "./test";
 
 /** Opens the scripted three-question card. */
 async function openStack(page: Page, name: string) {
-  await signup(page, `${name}-${Date.now()}@rakazo.test`, "password12", "Ask Stack");
+  await signup(page, `${name}-${Date.now()}@tangow.test`, "password12", "Ask Stack");
   await completeOnboarding(page);
   const botId = activeBotId(page);
   await page.getByPlaceholder(/Message/).fill("ask me three questions");

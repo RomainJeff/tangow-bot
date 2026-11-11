@@ -1,4 +1,4 @@
-import { motion, radii, sizes } from "@rakazo/ui-tokens";
+import { motion, radii, sizes } from "@tangow/ui-tokens";
 import { useIsFocused } from "expo-router";
 import type { ComponentProps } from "react";
 import { useEffect } from "react";

@@ -1,5 +1,5 @@
-import type { AskDraft, MessageBlock } from "@rakazo/contracts";
-import type { RoutineCard } from "@rakazo/core";
+import type { AskDraft, MessageBlock } from "@tangow/contracts";
+import type { RoutineCard } from "@tangow/core";
 import {
   askDraftDetail,
   CARD_VALUE_MAX_LENGTH,
@@ -10,7 +10,7 @@ import {
   redactSecrets,
   routineCardBlock,
   spawnBotApprovalBlock,
-} from "@rakazo/core";
+} from "@tangow/core";
 
 const MAX_APPROVAL_SUMMARY_LENGTH = 500;
 const MAX_APPROVAL_DETAIL_LENGTH = 4_000;

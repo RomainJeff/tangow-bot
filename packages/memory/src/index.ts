@@ -9,8 +9,8 @@ import type {
   MemorySnapshot,
   MemoryStore,
   PortableFile,
-} from "@rakazo/adapter-kit";
-import { Prisma, type PrismaClient, withTransactionRetry } from "@rakazo/db";
+} from "@tangow/adapter-kit";
+import { Prisma, type PrismaClient, withTransactionRetry } from "@tangow/db";
 
 export class MarkdownMemoryStore implements MemoryStore {
   constructor(private readonly prisma: PrismaClient) {}

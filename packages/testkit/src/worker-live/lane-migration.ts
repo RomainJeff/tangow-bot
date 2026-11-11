@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { VolumeFiles, WorkerProvider } from "@rakazo/adapter-kit";
+import type { VolumeFiles, WorkerProvider } from "@tangow/adapter-kit";
 import {
   createWorkerLifecycle,
   InMemoryJobQueue,
@@ -9,9 +9,9 @@ import {
   moveHomeToVolumes,
   provisionComputer,
   replaceComputer,
-} from "@rakazo/adapters";
-import type { GuestConnector } from "@rakazo/adapters/runtime-worker";
-import { volumeMountPath } from "@rakazo/core";
+} from "@tangow/adapters";
+import type { GuestConnector } from "@tangow/adapters/runtime-worker";
+import { volumeMountPath } from "@tangow/core";
 import { Sandbox } from "e2b";
 import { toolResult } from "../file-task.js";
 import { startWorkerRun } from "../worker-run-fixture.js";
@@ -44,7 +44,7 @@ export const laneH: Lane = {
       computerScope: "none",
       provider: () => live.workerProvider(),
     });
-    const dir = await mkdtemp(path.join(tmpdir(), "rakazo-live-home-"));
+    const dir = await mkdtemp(path.join(tmpdir(), "tangow-live-home-"));
     const files = live.volumeFiles();
     try {
       const { prisma } = run;
@@ -284,7 +284,7 @@ export const laneH: Lane = {
               : secondComputer.outcome,
           answersFor241: {
             volumePathFormat:
-              "An E2B volume is addressed by its name. The lifecycle names it rakazo-<volume row id>, the provider records that name as the volume's provider ref, and a sandbox mounts it whole at the P1 path (/workspace/bots/<botId> or /workspace/shared). The volume content API is not served by this self-hosted deployment, so the move reaches volumes through a sandbox that mounts them.",
+              "An E2B volume is addressed by its name. The lifecycle names it tangow-<volume row id>, the provider records that name as the volume's provider ref, and a sandbox mounts it whole at the P1 path (/workspace/bots/<botId> or /workspace/shared). The volume content API is not served by this self-hosted deployment, so the move reaches volumes through a sandbox that mounts them.",
             writeOverwrite: `A second write of a path replaces it: it read back "${overwritten.content}" with mode ${overwritten.mode?.toString(8)}, as the last write set. The move never writes a path it did not plan, so it only rewrites its own interrupted copies.`,
             freshVolumeEmpty: "A new volume lists no entry.",
             guestUid: `The sandbox user is uid/gid ${guestOwner.replace("\n", "/")} in this template, not 1000, and the moved files belong to ${migratedOwner}. The mount ${ownershipEnforced === "no" ? "does not enforce" : "enforces"} ownership against it: that user ${ownershipEnforced === "no" ? "read and appended to" : "could not open"} a root-owned 0600 file.`,
@@ -312,7 +312,7 @@ export const laneHProductRecreate: Lane = {
       computerScope: "none",
       provider: () => live.workerProvider(),
     });
-    const dir = await mkdtemp(path.join(tmpdir(), "rakazo-live-recreate-"));
+    const dir = await mkdtemp(path.join(tmpdir(), "tangow-live-recreate-"));
     const files = live.volumeFiles();
     try {
       const { prisma } = run;
@@ -459,7 +459,7 @@ export const laneHomeMoveFence: Lane = {
         });
       },
     });
-    const dir = await mkdtemp(path.join(tmpdir(), "rakazo-live-fence-"));
+    const dir = await mkdtemp(path.join(tmpdir(), "tangow-live-fence-"));
     const volumeFiles = live.volumeFiles();
     try {
       const { prisma } = run;

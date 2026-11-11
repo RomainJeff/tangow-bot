@@ -12,8 +12,8 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { PgliteDatabase } from "@rakazo/db/pglite.test-support";
-import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
+import type { PgliteDatabase } from "@tangow/db/pglite.test-support";
+import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from "vitest";
 import type { VolumeImportSource } from "./docker-volume-import.js";
 import { inspectLocalVolume, MAX_IMPORT_FILE_BYTES } from "./docker-volume-import.js";
@@ -37,7 +37,7 @@ beforeEach(async () => {
   await database.prisma.$executeRawUnsafe('TRUNCATE TABLE "user" CASCADE');
   fixture = workerFixture(database.prisma);
   await fixture.seedOwner();
-  root = await mkdtemp(path.join(tmpdir(), "rakazo-e2b-docker-"));
+  root = await mkdtemp(path.join(tmpdir(), "tangow-e2b-docker-"));
   workers = new FakeWorkerProvider();
   operationId = randomUUID();
   destroyed = [];
@@ -51,7 +51,7 @@ afterEach(() => rm(root, { recursive: true, force: true }));
 const prisma = () => database.prisma;
 const dataDir = () => path.join(root, "data");
 const journal = () => path.join(dataDir(), "docker-provider-migration", operationId, "state.json");
-const target = (id: string) => path.join(dataDir(), "volumes", `rakazo-${id}`);
+const target = (id: string) => path.join(dataDir(), "volumes", `tangow-${id}`);
 const migrate = (
   destroyComputer = async (ref: string) => {
     destroyed.push(ref);
@@ -110,7 +110,7 @@ it("preserves private, archived and shared volume identities, contents, empty di
       spaceId: volume.spaceId,
       botId: volume.botId,
       providerKind: "docker-worker",
-      providerRef: `rakazo-${volume.id}`,
+      providerRef: `tangow-${volume.id}`,
     });
     expect(await readFile(path.join(target(volume.id), "note.txt"), "utf8")).toBe(
       volume.providerRef,
@@ -301,7 +301,7 @@ it("converts never-provisioned volume rows without inventing files or retaining 
 it("migrates a Space whose members each have their own team computer", async () => {
   const { spaceId } = await seed();
   const member = fixture.unique("user");
-  await prisma().user.create({ data: { id: member, name: "M", email: `${member}@rakazo.test` } });
+  await prisma().user.create({ data: { id: member, name: "M", email: `${member}@tangow.test` } });
   const theirs = await fixture.seedComputer(spaceId, { userId: member, homeStorage: "volumes" });
   await expect(migrate()).resolves.toMatchObject({ outcome: "migrated", computers: 2 });
   expect((await prisma().computer.findUniqueOrThrow({ where: { id: theirs.id } })).kind).toBe(

@@ -1,6 +1,6 @@
-import type { Actor, BotSharing } from "@rakazo/contracts";
-import { BotSharingSchema } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
+import type { Actor, BotSharing } from "@tangow/contracts";
+import { BotSharingSchema } from "@tangow/contracts";
+import { ACTIVE_RUN_STATUSES } from "@tangow/core";
 import { cancelRunsInTransaction } from "./cancel-runs.js";
 import type { Prisma, PrismaClient } from "./client.js";
 import { expireComputerExecutionLeases } from "./computers.js";

@@ -1,4 +1,4 @@
-import type { MessageBlock } from "@rakazo/contracts";
+import type { MessageBlock } from "@tangow/contracts";
 
 export type SkillSourceBlock = Extract<MessageBlock, { kind: "skill_source" }>;
 

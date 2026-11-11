@@ -1,7 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
-import type { ComputerMode } from "@rakazo/contracts";
-import { botModelKey, saveKey } from "@rakazo/core";
-import { SaveMeta, SegmentedControl, SettingRow, Switch, useFieldSave } from "@rakazo/ui-web";
+import type { ComputerMode } from "@tangow/contracts";
+import { botModelKey, saveKey } from "@tangow/core";
+import { SaveMeta, SegmentedControl, SettingRow, Switch, useFieldSave } from "@tangow/ui-web";
 import type { BotDetail } from "../shell/layout";
 import { modelSummary, useModelCatalog, useVoices } from "./model-options";
 import { type BotPageContext, SettingsGroup, useBotField, useSaveLabels } from "./page-kit";

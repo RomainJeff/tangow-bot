@@ -1,5 +1,5 @@
-import type { ArtifactStore } from "@rakazo/adapter-kit";
-import type { PrismaClient } from "@rakazo/db";
+import type { ArtifactStore } from "@tangow/adapter-kit";
+import type { PrismaClient } from "@tangow/db";
 
 /**
  * An in-memory stand-in for the slice of Prisma the link preview cache and read budget, and the

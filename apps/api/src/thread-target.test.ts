@@ -1,14 +1,14 @@
-import type { SandboxProvider } from "@rakazo/adapter-kit";
-import type { Actor, SessionEntry } from "@rakazo/contracts";
-import { SessionEntrySchema, SessionId } from "@rakazo/contracts";
-import type { PrismaClient, ThreadEvents } from "@rakazo/db";
+import type { SandboxProvider } from "@tangow/adapter-kit";
+import type { Actor, SessionEntry } from "@tangow/contracts";
+import { SessionEntrySchema, SessionId } from "@tangow/contracts";
+import type { PrismaClient, ThreadEvents } from "@tangow/db";
 import {
   appendCardStateInTransaction,
   appendSessionEntryInTransaction,
   conversationRunFilter,
   IsolationError,
   threadOfSession,
-} from "@rakazo/db";
+} from "@tangow/db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   cancelSupersededQueuedRuns,
@@ -22,7 +22,7 @@ import {
 } from "./thread-target.js";
 
 vi.mock("../../../packages/db/src/sessions.js", async () =>
-  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+  (await import("@tangow/db/sessions.test-support")).stubbedDbSessions(),
 );
 
 beforeEach(() => {
@@ -1220,7 +1220,7 @@ describe("readSessionEntries", () => {
   const actor = {
     userId: "user-1",
     spaceId: "space-1",
-    email: "user@rakazo.test",
+    email: "user@tangow.test",
     isDeploymentOwner: false,
   } satisfies Actor;
   const at = (second: number) => new Date(Date.UTC(2026, 9, 11, 9, 0, second)).toISOString();
@@ -2576,14 +2576,14 @@ describe("stopThreadRuns", () => {
     expect(execute).toHaveBeenCalledWith(
       expect.objectContaining({ providerRef: "computer-team" }),
       expect.objectContaining({
-        argv: expect.arrayContaining(["rakazo-cancel-run-work", "computer-db-team", "run-a"]),
+        argv: expect.arrayContaining(["tangow-cancel-run-work", "computer-db-team", "run-a"]),
       }),
       expect.objectContaining({ cancelRunWork: true, runId: "run-a", botId: "bot-a" }),
     );
     expect(execute).toHaveBeenCalledWith(
       expect.objectContaining({ providerRef: "computer-team" }),
       expect.objectContaining({
-        argv: expect.arrayContaining(["rakazo-cancel-run-work", "computer-db-team", "run-b"]),
+        argv: expect.arrayContaining(["tangow-cancel-run-work", "computer-db-team", "run-b"]),
       }),
       expect.objectContaining({ cancelRunWork: true, runId: "run-b", botId: "bot-b" }),
     );
@@ -2724,14 +2724,14 @@ describe("stopThreadRuns", () => {
     expect(execute).toHaveBeenCalledWith(
       expect.objectContaining({ providerRef: "computer-a" }),
       expect.objectContaining({
-        argv: expect.arrayContaining(["rakazo-cancel-run-work", "computer-db-a", "run-a"]),
+        argv: expect.arrayContaining(["tangow-cancel-run-work", "computer-db-a", "run-a"]),
       }),
       expect.objectContaining({ cancelRunWork: true, runId: "run-a", botId: "bot-a" }),
     );
     expect(execute).not.toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        argv: expect.arrayContaining(["rakazo-cancel-run-work", "computer-db-a", "run-b"]),
+        argv: expect.arrayContaining(["tangow-cancel-run-work", "computer-db-a", "run-b"]),
       }),
       expect.anything(),
     );

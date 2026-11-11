@@ -1,4 +1,4 @@
-import { routineFailing } from "@rakazo/core";
+import { routineFailing } from "@tangow/core";
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import { Keyboard, ScrollView, StyleSheet, View } from "react-native";

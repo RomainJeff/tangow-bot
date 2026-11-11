@@ -1,5 +1,5 @@
-import type { ThreadItem } from "@rakazo/contracts";
-import { sessionOriginOf } from "@rakazo/core";
+import type { ThreadItem } from "@tangow/contracts";
+import { sessionOriginOf } from "@tangow/core";
 
 export function isViewedRunLine(item: ThreadItem, viewedRunId: string | undefined): boolean {
   return item.kind === "routine" && item.runId === viewedRunId;

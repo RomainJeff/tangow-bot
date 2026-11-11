@@ -9,8 +9,8 @@ import type {
   PageBrowserResult,
   ScreenRequest,
   ScreenSession,
-} from "@rakazo/adapter-kit";
-import type { DesktopEnvironment, DesktopProfileCommands } from "@rakazo/core/node/desktop-runtime";
+} from "@tangow/adapter-kit";
+import type { DesktopEnvironment, DesktopProfileCommands } from "@tangow/core/node/desktop-runtime";
 import {
   BROWSER_APPLICATIONS,
   browserLauncherPath,
@@ -24,7 +24,7 @@ import {
   screenPorts,
   shellQuote,
   stopAllDesktopBrowsersCommand,
-} from "@rakazo/core/node/desktop-runtime";
+} from "@tangow/core/node/desktop-runtime";
 import { z } from "zod";
 import { ComputerScreenUnavailableError, screenSessionKey } from "./computer-screens.js";
 import {
@@ -114,7 +114,7 @@ export class LinuxDesktop {
       ),
       context,
     );
-    const match = output.match(/RAKAZO_DESKTOP=(\d+):([a-zA-Z0-9_-]+)/);
+    const match = output.match(/TANGOW_DESKTOP=(\d+):([a-zA-Z0-9_-]+)/);
     if (!match) throw new ComputerScreenUnavailableError();
     const index = Number(match[1]);
     const ports = screenPorts(index, env);
@@ -211,7 +211,7 @@ export class LinuxDesktop {
           key,
           context.screenLeaseId,
           env,
-          ["/usr/local/bin/rakazo-page-browser", request.command, JSON.stringify(request)],
+          ["/usr/local/bin/tangow-page-browser", request.command, JSON.stringify(request)],
           timeoutMs,
         ),
         boundedContext,
@@ -345,7 +345,7 @@ function browserActionCommand(
         ? (action.uri ?? "about:blank")
         : undefined;
   if (browser !== undefined) {
-    return `nohup ${browserLauncherPath(layout.displayNumber)} ${shellQuote(browser)} </dev/null >/tmp/rakazo/browser-open-${layout.displayNumber}.log 2>&1 &`;
+    return `nohup ${browserLauncherPath(layout.displayNumber)} ${shellQuote(browser)} </dev/null >/tmp/tangow/browser-open-${layout.displayNumber}.log 2>&1 &`;
   }
   const workspace = env.workspaceDir;
   return `cd ${shellQuote(workspace)}\n${extraDisplayActionCommand(layout, action.kind === "open" ? { ...action, path: workspacePath(workspace, action.path) } : action)}`;

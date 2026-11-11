@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
-import type { AgentModelOAuthCredential, AgentRuntime } from "@rakazo/adapter-kit";
+import type { AgentModelOAuthCredential, AgentRuntime } from "@tangow/adapter-kit";
 import {
   type EncryptedSecretStore,
   formatCurrentTimeInstruction,
   resolveModelAuth,
   serializeModelSecret,
   toOAuthCredential,
-} from "@rakazo/adapters";
-import { findDefaultModelCredential, findModelCredential, type PrismaClient } from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/adapters";
+import { findDefaultModelCredential, findModelCredential, type PrismaClient } from "@tangow/db";
+import { getLogger } from "@tangow/logging";
 
 const MAX_RULES_CHARS = 4_000;
 const MAX_MESSAGES = 20;

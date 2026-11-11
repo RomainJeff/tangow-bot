@@ -1,5 +1,5 @@
-import type { ThreadMessage } from "@rakazo/contracts";
-import { isApprovalAskBlock, spokenDecision } from "@rakazo/core";
+import type { ThreadMessage } from "@tangow/contracts";
+import { isApprovalAskBlock, spokenDecision } from "@tangow/core";
 
 export type AskBlock = Extract<ThreadMessage["blocks"][number], { kind: "ask" }>;
 

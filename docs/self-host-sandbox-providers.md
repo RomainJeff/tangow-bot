@@ -47,7 +47,7 @@ A run that uses files works in a worker container that mounts them at `/workspac
 and `/workspace/shared`. The computer mounts the same volumes at the same paths, so a file a
 worker writes is the file the computer shows. The computer's workspace starts at `/workspace` on a
 Team Computer and at `/workspace/bots/<botId>` on a Private Computer; `~/workspace` links there.
-`/home/rakazo` keeps the dotfiles and the browser profiles in `DATA_DIR/homes/`.
+`/home/tangow` keeps the dotfiles and the browser profiles in `DATA_DIR/homes/`.
 
 The API, the worker, the `migrate` service and the supervisor must see the same `DATA_DIR`
 storage: the Compose files mount the same `/data` (the `../../data` bind, or the `appdata`
@@ -77,7 +77,7 @@ its own E2B worker VM. Build the worker and computer templates and move existing
 Daytona and Box were removed: the API and worker refuse to start with
 `SANDBOX_PROVIDER=daytona` or `box`. Before upgrading, let those computers go idle so their
 workspace is saved; work since the last save is lost. After switching to `docker` or `e2b`, each
-computer is recreated on the new provider at its next boot. Rakazo no longer stops the old
+computer is recreated on the new provider at its next boot. Tangow no longer stops the old
 Daytona sandboxes or Box machines, so delete them in the vendor's console.
 
 Remote paths still need a working API/worker; they do not replace Postgres or

@@ -1,5 +1,5 @@
-import type { MessageBlock } from "@rakazo/contracts";
-import { isApprovalAskBlock, settleRoutineAsk } from "@rakazo/core";
+import type { MessageBlock } from "@tangow/contracts";
+import { isApprovalAskBlock, settleRoutineAsk } from "@tangow/core";
 import { describe, expect, it } from "vitest";
 
 type AskBlock = Extract<MessageBlock, { kind: "ask" }>;

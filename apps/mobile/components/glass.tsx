@@ -1,4 +1,4 @@
-import { materials } from "@rakazo/ui-tokens";
+import { materials } from "@tangow/ui-tokens";
 import { BlurView } from "expo-blur";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { useEffect, useState } from "react";

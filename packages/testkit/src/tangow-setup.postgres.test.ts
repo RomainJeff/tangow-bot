@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { createDb } from "@rakazo/db";
+import { createDb } from "@tangow/db";
 import { describe, expect, it } from "vitest";
 
 const databaseUrl = process.env.DATABASE_URL;

@@ -57,7 +57,7 @@ describe("computer lifecycle command guard", () => {
     expect(isProtectedComputerLifecycleCommand(command)).toBe(false);
   });
 
-  it.each(["pwd", "git clone https://github.com/acme/site /home/rakazo/site"])(
+  it.each(["pwd", "git clone https://github.com/acme/site /home/tangow/site"])(
     "allows ordinary repository commands: %s",
     (command) => {
       expect(isProtectedComputerLifecycleCommand(command)).toBe(false);

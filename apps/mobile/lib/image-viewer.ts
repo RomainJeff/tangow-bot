@@ -1,4 +1,4 @@
-import type { StackImage } from "@rakazo/core";
+import type { StackImage } from "@tangow/core";
 import { useSyncExternalStore } from "react";
 import { Platform } from "react-native";
 import type { MobileArtifactTarget } from "./artifact-open";

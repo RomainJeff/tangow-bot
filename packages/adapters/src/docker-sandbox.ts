@@ -15,9 +15,9 @@ import type {
   SandboxProvider,
   ScreenRequest,
   ScreenSession,
-} from "@rakazo/adapter-kit";
-import { boundedSandboxCommandTimeoutMs, resolveSupervisorToken } from "@rakazo/core";
-import { outgoingCorrelationHeaders } from "@rakazo/logging";
+} from "@tangow/adapter-kit";
+import { boundedSandboxCommandTimeoutMs, resolveSupervisorToken } from "@tangow/core";
+import { outgoingCorrelationHeaders } from "@tangow/logging";
 import { z } from "zod";
 import { screenSessionKey } from "./computer-screens.js";
 import {
@@ -127,13 +127,13 @@ export class DockerSandboxProvider implements SandboxProvider {
   private headers(context: AdapterContext, botId?: string) {
     return {
       authorization: `Bearer ${this.supervisorToken}`,
-      "x-rakazo-space-id": context.spaceId,
+      "x-tangow-space-id": context.spaceId,
       ...outgoingCorrelationHeaders(),
-      ...(botId ? { "x-rakazo-bot-id": botId } : {}),
+      ...(botId ? { "x-tangow-bot-id": botId } : {}),
       // The supervisor picks the screen and its browser profile by this key.
-      ...(context.botId ? { "x-rakazo-screen-id": screenSessionKey(context) } : {}),
-      ...(context.screenLeaseId ? { "x-rakazo-screen-lease-id": context.screenLeaseId } : {}),
-      ...(context.cancelRunWork ? { "x-rakazo-cancel-run-work": "1" } : {}),
+      ...(context.botId ? { "x-tangow-screen-id": screenSessionKey(context) } : {}),
+      ...(context.screenLeaseId ? { "x-tangow-screen-lease-id": context.screenLeaseId } : {}),
+      ...(context.cancelRunWork ? { "x-tangow-cancel-run-work": "1" } : {}),
     };
   }
 
@@ -149,7 +149,7 @@ export class DockerSandboxProvider implements SandboxProvider {
   }
 
   /**
-   * A home on volumes keeps `/home/rakazo` on its home directory for dotfiles and browser profiles,
+   * A home on volumes keeps `/home/tangow` on its home directory for dotfiles and browser profiles,
    * and mounts its volumes at the paths workers use. The supervisor replaces a computer created
    * with another set of mounts; nothing it held is lost, since the home directory and the volumes
    * both outlive it.
@@ -210,7 +210,7 @@ export class DockerSandboxProvider implements SandboxProvider {
       let code: number | undefined;
       for await (const event of this.execute(
         computer,
-        { argv: ["bash", "-c", linkWorkspaceCommand(volumeHome.root, "/home/rakazo/workspace")] },
+        { argv: ["bash", "-c", linkWorkspaceCommand(volumeHome.root, "/home/tangow/workspace")] },
         context,
       )) {
         if (event.type === "stderr") stderr += event.data;
@@ -486,7 +486,7 @@ export class DockerSandboxProvider implements SandboxProvider {
           method: "DELETE",
           headers: {
             ...this.headers(context, computer.botId),
-            ...(keep ? { "x-rakazo-preserve-screen": "1" } : {}),
+            ...(keep ? { "x-tangow-preserve-screen": "1" } : {}),
           },
           signal: deadline.signal,
         }),
@@ -576,9 +576,9 @@ function dockerCwd(cwd: string | undefined) {
   if (cwd === "/workspace" || cwd?.startsWith("/workspace/")) {
     return path.posix.join("/workspace", normalizeWorkspacePath(cwd.slice("/workspace".length)));
   }
-  if (!cwd || cwd === "." || cwd === "/" || cwd === "/home/rakazo") return "/home/rakazo";
-  const relative = cwd.startsWith("/home/rakazo/")
-    ? cwd.slice("/home/rakazo/".length)
+  if (!cwd || cwd === "." || cwd === "/" || cwd === "/home/tangow") return "/home/tangow";
+  const relative = cwd.startsWith("/home/tangow/")
+    ? cwd.slice("/home/tangow/".length)
     : normalizeWorkspacePath(cwd);
-  return path.posix.join("/home/rakazo", relative);
+  return path.posix.join("/home/tangow", relative);
 }

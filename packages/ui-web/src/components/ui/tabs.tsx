@@ -1,5 +1,5 @@
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs";
-import { cn } from "@rakazo/ui-web/lib/utils";
+import { cn } from "@tangow/ui-web/lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
 import { createContext, useContext } from "react";
 import { segmentedItemClass, segmentedTrackClass } from "../../segmented-control.js";

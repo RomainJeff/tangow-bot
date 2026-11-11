@@ -174,7 +174,7 @@ class. Ported from beautifului.dev
 
 `followPointer` lets the organic avatar look toward a fine pointer (a mouse)
 anywhere on the page: the pointer's position against the avatar's own box
-(`pointerLook` in `@rakazo/core`, zero at the centre, ±1 at the edges, held
+(`pointerLook` in `@tangow/core`, zero at the centre, ±1 at the edges, held
 beyond) is mapped onto the range the working glances already use (yaw ±26°,
 pitch -8° to 18°) and eased by the engine's `LOOK_MORPH`. It returns to rest
 when the pointer leaves the window. A working bot keeps its own glances and no
@@ -237,7 +237,7 @@ through `Intl.DateTimeFormat`, hour and minute in the device locale), and
 permanent chrome. The root is always mounted as an `aria-live="polite"` region
 so each change is announced.
 
-Props: `state` (a `FieldSaveState` from `@rakazo/core`), `labels` (`saving`,
+Props: `state` (a `FieldSaveState` from `@tangow/core`), `labels` (`saving`,
 `saved`, `failed`, `retry`, already translated), `onRetry?`, `locale?`.
 
 ## TextSettingField

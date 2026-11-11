@@ -1,5 +1,5 @@
 import { useLingui } from "@lingui/react/macro";
-import type { AvatarStyle, ComputerListItem, SpaceMemoryConfig } from "@rakazo/contracts";
+import type { AvatarStyle, ComputerListItem, SpaceMemoryConfig } from "@tangow/contracts";
 import {
   Button,
   Dialog,
@@ -12,7 +12,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
   UserAvatar,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import {
   Brain,
   ChevronsUpDown,

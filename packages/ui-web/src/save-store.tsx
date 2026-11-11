@@ -5,7 +5,7 @@ import {
   fieldValue,
   type SaveKey,
   type SaveStore,
-} from "@rakazo/core";
+} from "@tangow/core";
 import {
   createContext,
   type ReactNode,

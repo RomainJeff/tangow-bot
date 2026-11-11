@@ -1,5 +1,5 @@
-import type { EntryId, SessionEntry } from "@rakazo/contracts";
-import { SessionEntrySchema } from "@rakazo/contracts";
+import type { EntryId, SessionEntry } from "@tangow/contracts";
+import { SessionEntrySchema } from "@tangow/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadPeerHistory } from "./peer-history";
 

@@ -3,9 +3,9 @@ import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { ModelConnectInputSchema } from "@rakazo/contracts";
-import { DEFAULT_SKILL_LEARNING } from "@rakazo/core";
-import { loadRootEnv } from "@rakazo/core/node/load-root-env";
+import { ModelConnectInputSchema } from "@tangow/contracts";
+import { DEFAULT_SKILL_LEARNING } from "@tangow/core";
+import { loadRootEnv } from "@tangow/core/node/load-root-env";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { EVAL_CASES } from "../evals/cases.js";
 import { MODEL_ROUTE_CASES } from "../evals/model-route.js";
@@ -37,7 +37,7 @@ async function main() {
     if (!values.live || !values.connection)
       throw new Error("Model routing eval requires --live --connection <Decision Model JSON>");
     const { classifyModelRoute, createDecisionProvider, prepareDecisionProviderConnection } =
-      await import("@rakazo/adapters");
+      await import("@tangow/adapters");
     const { parseDecisionConnection } = await import(
       "../evals/approval-classification/model-run.js"
     );
@@ -147,7 +147,7 @@ async function main() {
   report.provider = connection.provider;
   save();
   // This CLI owns a disposable database. Never migrate or evaluate against an inherited database.
-  const dataDir = mkdtempSync(path.join(tmpdir(), "rakazo-evals-"));
+  const dataDir = mkdtempSync(path.join(tmpdir(), "tangow-evals-"));
   let postgres: StartedPostgreSqlContainer | undefined;
   try {
     postgres = await new PostgreSqlContainer("postgres:16-alpine").start();
@@ -181,11 +181,11 @@ async function main() {
       SENDBLUE_API_KEY_ID: "",
       MODEL_API_KEY: "",
     });
-    execFileSync("pnpm", ["--filter", "@rakazo/db", "generate"], {
+    execFileSync("pnpm", ["--filter", "@tangow/db", "generate"], {
       stdio: "pipe",
       timeout: 120_000,
     });
-    execFileSync("pnpm", ["--filter", "@rakazo/db", "exec", "prisma", "migrate", "deploy"], {
+    execFileSync("pnpm", ["--filter", "@tangow/db", "exec", "prisma", "migrate", "deploy"], {
       stdio: "pipe",
       timeout: 120_000,
     });

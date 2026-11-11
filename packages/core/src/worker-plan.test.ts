@@ -11,7 +11,7 @@ const privateA: VolumeRow = {
   botId: "bot_a",
   userId: null,
   providerKind: "e2b",
-  providerRef: "rakazo-volume-vol_private_a",
+  providerRef: "tangow-volume-vol_private_a",
 };
 const sharedA: VolumeRow = {
   id: "vol_shared_a",
@@ -20,7 +20,7 @@ const sharedA: VolumeRow = {
   botId: null,
   userId: "user_a",
   providerKind: "e2b",
-  providerRef: "rakazo-volume-vol_shared_a",
+  providerRef: "tangow-volume-vol_shared_a",
 };
 
 describe("authorizeMounts", () => {
@@ -40,14 +40,14 @@ describe("authorizeMounts", () => {
       mounts: [
         {
           volumeId: "vol_private_a",
-          volumeRef: "rakazo-volume-vol_private_a",
+          volumeRef: "tangow-volume-vol_private_a",
           path: "/workspace/bots/bot_a",
           scope: "private",
           access: "rw",
         },
         {
           volumeId: "vol_shared_a",
-          volumeRef: "rakazo-volume-vol_shared_a",
+          volumeRef: "tangow-volume-vol_shared_a",
           path: "/workspace/shared",
           scope: "shared",
           access: "rw",

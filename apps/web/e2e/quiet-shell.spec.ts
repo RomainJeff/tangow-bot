@@ -4,7 +4,7 @@ import { expect, test } from "./test";
 /** Documents the two-pane shell: sidebar, thread header, empty thread, light and dark. */
 test("the shell is a sidebar and a centred thread", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `quiet-shell-${stamp}@rakazo.test`, "password12", "Quiet Shell");
+  await signup(page, `quiet-shell-${stamp}@tangow.test`, "password12", "Quiet Shell");
   await completeOnboarding(page);
   await page.waitForURL(/\/app\/[^/]+$/);
 
@@ -89,7 +89,7 @@ test("the shell is a sidebar and a centred thread", async ({ page }, testInfo) =
 /** Reduce Transparency turns every material into its opaque slot; the ambient light stays. */
 test("Reduce Transparency makes the glass opaque", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "light" });
-  await signup(page, `quiet-opaque-${Date.now()}@rakazo.test`, "password12", "Quiet Opaque");
+  await signup(page, `quiet-opaque-${Date.now()}@tangow.test`, "password12", "Quiet Opaque");
   await completeOnboarding(page);
   await page.waitForURL(/\/app\/[^/]+$/);
 
@@ -115,7 +115,7 @@ test("Reduce Transparency makes the glass opaque", async ({ page }) => {
  * stop being tabbable; above `lg` it reflows beside the panel and stays live. */
 test("an open panel makes the conversation column inert below lg, not above", async ({ page }) => {
   const stamp = Date.now();
-  await signup(page, `quiet-panel-inert-${stamp}@rakazo.test`, "password12", "Quiet Panel Inert");
+  await signup(page, `quiet-panel-inert-${stamp}@tangow.test`, "password12", "Quiet Panel Inert");
   await completeOnboarding(page);
   await page.waitForURL(/\/app\/[^/]+$/);
 
@@ -140,7 +140,7 @@ test("header icons toggle the screen and the bot page; the page widens for long 
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `panel-header-${stamp}@rakazo.test`, "password12", "Panel Header");
+  await signup(page, `panel-header-${stamp}@tangow.test`, "password12", "Panel Header");
   await completeOnboarding(page);
   await page.waitForURL(/\/app\/[^/]+$/);
   await page.setViewportSize({ width: 1440, height: 900 });

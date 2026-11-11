@@ -1,10 +1,10 @@
-import type { MessageBlock } from "@rakazo/contracts";
+import type { MessageBlock } from "@tangow/contracts";
 import {
   BOT_NAME_MAX_LENGTH,
   BOT_TITLE_MAX_LENGTH,
   SPAWN_BOT_INSTRUCTIONS_MAX_LENGTH,
   SPAWN_BOT_PROMPT_MAX_LENGTH,
-} from "@rakazo/contracts";
+} from "@tangow/contracts";
 
 /**
  * A bot creating a bot is approved from a card, so what the card shows, what is stored and

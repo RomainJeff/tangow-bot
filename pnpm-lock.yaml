@@ -47,10 +47,10 @@ importers:
       '@earendil-works/pi-coding-agent':
         specifier: 1.4.0
         version: 1.4.0(@aws-sdk/credential-provider-node@3.972.82)(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(zod@4.6.2))(@smithy/signature-v4@5.7.3)(ws@8.21.3)(zod@4.6.2)
-      '@rakazo/adapter-kit':
+      '@tangow/adapter-kit':
         specifier: workspace:*
         version: link:../../packages/adapter-kit
-      '@rakazo/adapters':
+      '@tangow/adapters':
         specifier: workspace:*
         version: link:../../packages/adapters
       zod:
@@ -81,28 +81,28 @@ importers:
       '@orpc/server':
         specifier: 1.15.0
         version: 1.15.0(@opentelemetry/api@1.9.1)(crossws@0.3.5)(ws@8.21.3)
-      '@rakazo/adapter-kit':
+      '@tangow/adapter-kit':
         specifier: workspace:*
         version: link:../../packages/adapter-kit
-      '@rakazo/adapters':
+      '@tangow/adapters':
         specifier: workspace:*
         version: link:../../packages/adapters
-      '@rakazo/auth':
+      '@tangow/auth':
         specifier: workspace:*
         version: link:../../packages/auth
-      '@rakazo/contracts':
+      '@tangow/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@rakazo/core':
+      '@tangow/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@rakazo/db':
+      '@tangow/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@rakazo/logging':
+      '@tangow/logging':
         specifier: workspace:*
         version: link:../../packages/logging
-      '@rakazo/memory':
+      '@tangow/memory':
         specifier: workspace:*
         version: link:../../packages/memory
       hono:
@@ -127,7 +127,7 @@ importers:
 
   apps/desktop:
     dependencies:
-      '@rakazo/contracts':
+      '@tangow/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
       electron-updater:
@@ -137,7 +137,7 @@ importers:
       '@playwright/test':
         specifier: 1.63.0
         version: 1.63.0
-      '@rakazo/ui-tokens':
+      '@tangow/ui-tokens':
         specifier: workspace:*
         version: link:../../packages/ui-tokens
       electron:
@@ -161,16 +161,16 @@ importers:
       '@expo/ui':
         specifier: 57.0.26
         version: 57.0.26(@babel/core@7.29.7)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(expo@57.0.32)(react-dom@19.2.3(react@19.2.3))(react-native-worklets@0.10.1(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
-      '@rakazo/chat-ui':
+      '@tangow/chat-ui':
         specifier: workspace:*
         version: link:../../packages/chat-ui
-      '@rakazo/contracts':
+      '@tangow/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@rakazo/core':
+      '@tangow/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@rakazo/ui-tokens':
+      '@tangow/ui-tokens':
         specifier: workspace:*
         version: link:../../packages/ui-tokens
       '@react-native-vector-icons/ionicons':
@@ -330,19 +330,19 @@ importers:
       '@orpc/contract':
         specifier: 1.15.0
         version: 1.15.0(@opentelemetry/api@1.9.1)
-      '@rakazo/chat-ui':
+      '@tangow/chat-ui':
         specifier: workspace:*
         version: link:../../packages/chat-ui
-      '@rakazo/contracts':
+      '@tangow/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@rakazo/core':
+      '@tangow/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@rakazo/ui-tokens':
+      '@tangow/ui-tokens':
         specifier: workspace:*
         version: link:../../packages/ui-tokens
-      '@rakazo/ui-web':
+      '@tangow/ui-web':
         specifier: workspace:*
         version: link:../../packages/ui-web
       better-auth:
@@ -421,22 +421,22 @@ importers:
 
   apps/worker:
     dependencies:
-      '@rakazo/adapter-kit':
+      '@tangow/adapter-kit':
         specifier: workspace:*
         version: link:../../packages/adapter-kit
-      '@rakazo/adapters':
+      '@tangow/adapters':
         specifier: workspace:*
         version: link:../../packages/adapters
-      '@rakazo/core':
+      '@tangow/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@rakazo/db':
+      '@tangow/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@rakazo/logging':
+      '@tangow/logging':
         specifier: workspace:*
         version: link:../../packages/logging
-      '@rakazo/memory':
+      '@tangow/memory':
         specifier: workspace:*
         version: link:../../packages/memory
     devDependencies:
@@ -455,10 +455,10 @@ importers:
       '@astrojs/sitemap':
         specifier: 3.7.4
         version: 3.7.4
-      '@rakazo/core':
+      '@tangow/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@rakazo/ui-web':
+      '@tangow/ui-web':
         specifier: workspace:*
         version: link:../../packages/ui-web
       '@vercel/functions':
@@ -520,10 +520,10 @@ importers:
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.7)
-      '@rakazo/core':
+      '@tangow/core':
         specifier: workspace:*
         version: link:../../../packages/core
-      '@rakazo/logging':
+      '@tangow/logging':
         specifier: workspace:*
         version: link:../../../packages/logging
       dockerode:
@@ -554,13 +554,13 @@ importers:
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.7)
-      '@rakazo/contracts':
+      '@tangow/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@rakazo/core':
+      '@tangow/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@rakazo/logging':
+      '@tangow/logging':
         specifier: workspace:*
         version: link:../../packages/logging
       hono:
@@ -582,10 +582,10 @@ importers:
 
   packages/adapter-kit:
     dependencies:
-      '@rakazo/contracts':
+      '@tangow/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@rakazo/core':
+      '@tangow/core':
         specifier: workspace:*
         version: link:../core
       zod:
@@ -634,19 +634,19 @@ importers:
       '@mozilla/readability':
         specifier: 0.6.0
         version: 0.6.0
-      '@rakazo/adapter-kit':
+      '@tangow/adapter-kit':
         specifier: workspace:*
         version: link:../adapter-kit
-      '@rakazo/contracts':
+      '@tangow/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@rakazo/core':
+      '@tangow/core':
         specifier: workspace:*
         version: link:../core
-      '@rakazo/db':
+      '@tangow/db':
         specifier: workspace:*
         version: link:../db
-      '@rakazo/logging':
+      '@tangow/logging':
         specifier: workspace:*
         version: link:../logging
       chat:
@@ -734,13 +734,13 @@ importers:
 
   packages/auth:
     dependencies:
-      '@rakazo/adapter-kit':
+      '@tangow/adapter-kit':
         specifier: workspace:*
         version: link:../adapter-kit
-      '@rakazo/core':
+      '@tangow/core':
         specifier: workspace:*
         version: link:../core
-      '@rakazo/db':
+      '@tangow/db':
         specifier: workspace:*
         version: link:../db
       better-auth:
@@ -756,10 +756,10 @@ importers:
 
   packages/chat-ui:
     dependencies:
-      '@rakazo/core':
+      '@tangow/core':
         specifier: workspace:*
         version: link:../core
-      '@rakazo/ui-tokens':
+      '@tangow/ui-tokens':
         specifier: workspace:*
         version: link:../ui-tokens
       '@ronradtke/react-native-markdown-display':
@@ -812,10 +812,10 @@ importers:
 
   packages/core:
     dependencies:
-      '@rakazo/contracts':
+      '@tangow/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@rakazo/ui-tokens':
+      '@tangow/ui-tokens':
         specifier: workspace:*
         version: link:../ui-tokens
       croner:
@@ -843,16 +843,16 @@ importers:
       '@prisma/client':
         specifier: 7.10.0
         version: 7.10.0(prisma@7.10.0(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(magicast@0.5.4)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@7.0.2))(typescript@7.0.2)
-      '@rakazo/adapter-kit':
+      '@tangow/adapter-kit':
         specifier: workspace:*
         version: link:../adapter-kit
-      '@rakazo/contracts':
+      '@tangow/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@rakazo/core':
+      '@tangow/core':
         specifier: workspace:*
         version: link:../core
-      '@rakazo/logging':
+      '@tangow/logging':
         specifier: workspace:*
         version: link:../logging
       dotenv:
@@ -902,10 +902,10 @@ importers:
 
   packages/memory:
     dependencies:
-      '@rakazo/adapter-kit':
+      '@tangow/adapter-kit':
         specifier: workspace:*
         version: link:../adapter-kit
-      '@rakazo/db':
+      '@tangow/db':
         specifier: workspace:*
         version: link:../db
     devDependencies:
@@ -924,25 +924,25 @@ importers:
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.7)
-      '@rakazo/adapter-kit':
+      '@tangow/adapter-kit':
         specifier: workspace:*
         version: link:../adapter-kit
-      '@rakazo/adapters':
+      '@tangow/adapters':
         specifier: workspace:*
         version: link:../adapters
-      '@rakazo/agent-run-worker':
+      '@tangow/agent-run-worker':
         specifier: workspace:*
         version: link:../../apps/agent-run-worker
-      '@rakazo/contracts':
+      '@tangow/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@rakazo/core':
+      '@tangow/core':
         specifier: workspace:*
         version: link:../core
-      '@rakazo/db':
+      '@tangow/db':
         specifier: workspace:*
         version: link:../db
-      '@rakazo/logging':
+      '@tangow/logging':
         specifier: workspace:*
         version: link:../logging
       '@testcontainers/postgresql':
@@ -985,10 +985,10 @@ importers:
       '@base-ui/react':
         specifier: 1.8.0
         version: 1.8.0(@types/react@19.2.18)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@rakazo/core':
+      '@tangow/core':
         specifier: workspace:*
         version: link:../core
-      '@rakazo/ui-tokens':
+      '@tangow/ui-tokens':
         specifier: workspace:*
         version: link:../ui-tokens
       class-variance-authority:

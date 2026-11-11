@@ -206,7 +206,7 @@ async function main() {
     "inspect",
     "--format",
     revisionFormat,
-    "rakazo/app:local",
+    "tangow/app:local",
   ]);
   if (builtRevision !== sha)
     throw new Error("Build the application image from this checkout before E2B setup.");
@@ -222,7 +222,7 @@ async function main() {
       "The built image is newer than the running services. Run Tangow update first to prepare revision and migrations, then retry E2B setup.",
     );
   if (olderRuntime) {
-    const image = run("docker", ["image", "inspect", "--format", "{{.Id}}", "rakazo/app:local"]);
+    const image = run("docker", ["image", "inspect", "--format", "{{.Id}}", "tangow/app:local"]);
     verifyExited(
       (_label, args) => ({ stdout: run("docker", [...oldCompose, ...args]) }),
       (_label, args) => ({ stdout: run("docker", args) }),
@@ -248,7 +248,7 @@ async function main() {
       connection[name] = env[name];
     }
   const buildEnv = { ...process.env, ...connection };
-  const workerTemplate = env.WORKER_TEMPLATE || "rakazo-worker-pi-native";
+  const workerTemplate = env.WORKER_TEMPLATE || "tangow-worker-pi-native";
   const upgrade = new HomeUpgrade({
     root,
     compose: oldCompose,
@@ -268,7 +268,7 @@ async function main() {
     "pnpm",
     [
       "--filter",
-      "@rakazo/computer-e2b-template",
+      "@tangow/computer-e2b-template",
       "exec",
       "node",
       "--input-type=module",
@@ -292,7 +292,7 @@ async function main() {
           service,
           "pnpm",
           "--filter",
-          "@rakazo/adapters",
+          "@tangow/adapters",
           "exec",
           "node",
           "--input-type=module",
@@ -306,7 +306,7 @@ async function main() {
     console.log("Building lightweight Pi worker template...");
     run(
       "pnpm",
-      ["--filter", "@rakazo/agent-run-worker", "template:build", "--name", workerTemplate],
+      ["--filter", "@tangow/agent-run-worker", "template:build", "--name", workerTemplate],
       buildEnv,
     );
     console.log("Building and pushing desktop computer image...");
@@ -324,7 +324,7 @@ async function main() {
     console.log("Building desktop E2B template...");
     run(
       "pnpm",
-      ["--filter", "@rakazo/computer-e2b-template", "template:build", "--image", digest],
+      ["--filter", "@tangow/computer-e2b-template", "template:build", "--image", digest],
       buildEnv,
     );
   }

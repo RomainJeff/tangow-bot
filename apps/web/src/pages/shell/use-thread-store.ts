@@ -1,6 +1,6 @@
-import type { ComputerStatus, Routine, TaughtSkill, ThreadSnapshot } from "@rakazo/contracts";
-import type { HeldScreenUrl } from "@rakazo/core";
-import { threadEntriesOf } from "@rakazo/core";
+import type { ComputerStatus, Routine, TaughtSkill, ThreadSnapshot } from "@tangow/contracts";
+import type { HeldScreenUrl } from "@tangow/core";
+import { threadEntriesOf } from "@tangow/core";
 import { useRef, useState } from "react";
 import { markOnce } from "../../lib/performance";
 import type { ThreadState } from "../../lib/thread-events";

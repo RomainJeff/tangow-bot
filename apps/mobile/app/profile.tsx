@@ -1,4 +1,4 @@
-import type { AvatarStyle } from "@rakazo/contracts";
+import type { AvatarStyle } from "@tangow/contracts";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";

@@ -5,12 +5,12 @@ import type {
   ToolInfo,
 } from "@earendil-works/pi-coding-agent";
 import { createToolSearchExtension } from "@earendil-works/pi-coding-agent";
-import { RAKAZO_TOOL_PREFIX } from "@rakazo/adapter-kit";
+import { TANGOW_TOOL_PREFIX } from "@tangow/adapter-kit";
 import { expect, it } from "vitest";
 import { exactToolSearchExtension } from "./exact-tool-search.js";
 
-const send = `${RAKAZO_TOOL_PREFIX}GMAIL_SEND_EMAIL`;
-const fetch = `${RAKAZO_TOOL_PREFIX}GMAIL_FETCH_EMAILS`;
+const send = `${TANGOW_TOOL_PREFIX}GMAIL_SEND_EMAIL`;
+const fetch = `${TANGOW_TOOL_PREFIX}GMAIL_FETCH_EMAILS`;
 
 function candidate(name: string, description: string, exposure: ToolInfo["exposure"]): ToolInfo {
   return {
@@ -25,7 +25,7 @@ function candidate(name: string, description: string, exposure: ToolInfo["exposu
 const tools = [
   candidate(send, "Send an email.\nFurther details.", "deferred"),
   candidate(fetch, "Fetch emails from the inbox.", "codemode"),
-  candidate(`${RAKAZO_TOOL_PREFIX}GMAIL_REPLY_TO_THREAD`, "Send an email reply.", "deferred"),
+  candidate(`${TANGOW_TOOL_PREFIX}GMAIL_REPLY_TO_THREAD`, "Send an email reply.", "deferred"),
   candidate("direct_tool", "Send an email directly.", "direct"),
   candidate("model_tool", "Fetch emails for the model.", "model-only"),
 ];

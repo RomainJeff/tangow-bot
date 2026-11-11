@@ -1,7 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
-import type { Bot, Group, ThreadSnapshot } from "@rakazo/contracts";
-import { isWorkingStatus } from "@rakazo/core";
-import { BotAvatar, Button, StackedAvatars } from "@rakazo/ui-web";
+import type { Bot, Group, ThreadSnapshot } from "@tangow/contracts";
+import { isWorkingStatus } from "@tangow/core";
+import { BotAvatar, Button, StackedAvatars } from "@tangow/ui-web";
 import { ChevronLeft, Monitor, PanelLeftOpen, Phone, Settings } from "lucide-react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";

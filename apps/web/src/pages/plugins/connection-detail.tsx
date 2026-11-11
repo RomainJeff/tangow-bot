@@ -1,7 +1,7 @@
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
-import type { ConnectionCatalogItem } from "@rakazo/contracts";
-import { humanizeToolName } from "@rakazo/core";
-import { Button, Card, CardContent, CardHeader, CardTitle, Input } from "@rakazo/ui-web";
+import type { ConnectionCatalogItem } from "@tangow/contracts";
+import { humanizeToolName } from "@tangow/core";
+import { Button, Card, CardContent, CardHeader, CardTitle, Input } from "@tangow/ui-web";
 import { ChevronDown, ChevronLeft, ChevronUp } from "lucide-react";
 import type { Integrations } from "./use-integrations";
 import { activeAccounts, itemKey } from "./use-integrations";

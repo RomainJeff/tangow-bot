@@ -7,8 +7,8 @@ import type {
   Routine,
   Space,
   ThreadSnapshot,
-} from "@rakazo/contracts";
-import { reorderBotTo } from "@rakazo/core";
+} from "@tangow/contracts";
+import { reorderBotTo } from "@tangow/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import { takeInitialBootstrap } from "../../lib/bootstrap";

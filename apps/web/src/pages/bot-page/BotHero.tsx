@@ -1,12 +1,12 @@
 import { useLingui } from "@lingui/react/macro";
-import type { Bot } from "@rakazo/contracts";
+import type { Bot } from "@tangow/contracts";
 import {
   BOT_NAME_MAX_LENGTH,
   BOT_TITLE_MAX_LENGTH,
   SELECTABLE_BOT_COLORS,
-} from "@rakazo/contracts";
-import type { FieldSaveState } from "@rakazo/core";
-import { SHAPES } from "@rakazo/core";
+} from "@tangow/contracts";
+import type { FieldSaveState } from "@tangow/core";
+import { SHAPES } from "@tangow/core";
 import {
   BotAvatar,
   type FieldSave,
@@ -16,7 +16,7 @@ import {
   SaveMeta,
   TextSettingField,
   useAvatarStyle,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import { Pencil } from "lucide-react";
 import { type BotPageContext, useBotField, useSaveLabels } from "./page-kit";
 

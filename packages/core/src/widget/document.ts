@@ -1,4 +1,4 @@
-import { renderTokensCss } from "@rakazo/ui-tokens/render-css";
+import { renderTokensCss } from "@tangow/ui-tokens/render-css";
 import { WIDGET_KIT_CSS } from "./kit.js";
 
 const WIDGET_CSP =
@@ -18,13 +18,13 @@ window.addEventListener("message", (event) => {
   if (typeof message === "string") {
     try { message = JSON.parse(message); } catch { return; }
   }
-  if (message && (message.rakazoWidgetTheme === "light" || message.rakazoWidgetTheme === "dark")) {
-    document.documentElement.dataset.theme = message.rakazoWidgetTheme;
+  if (message && (message.tangowWidgetTheme === "light" || message.tangowWidgetTheme === "dark")) {
+    document.documentElement.dataset.theme = message.tangowWidgetTheme;
   }
 });
 document.addEventListener("DOMContentLoaded", () => {
   const sendHeight = () => {
-    const message = JSON.stringify({ rakazoWidgetHeight: Math.ceil(document.body.getBoundingClientRect().height) });
+    const message = JSON.stringify({ tangowWidgetHeight: Math.ceil(document.body.getBoundingClientRect().height) });
     if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(message);
     else parent.postMessage(message, "*");
   };
@@ -38,8 +38,8 @@ export function parseWidgetHeightMessage(message: unknown): number | null {
   if (typeof message !== "string") return null;
   try {
     const value: unknown = JSON.parse(message);
-    if (value && typeof value === "object" && "rakazoWidgetHeight" in value) {
-      const height = value.rakazoWidgetHeight;
+    if (value && typeof value === "object" && "tangowWidgetHeight" in value) {
+      const height = value.tangowWidgetHeight;
       if (typeof height === "number" && Number.isFinite(height) && height > 0) return height;
     }
   } catch {

@@ -1,4 +1,4 @@
-import { botMessageRelaysToUser } from "@rakazo/core";
+import { botMessageRelaysToUser } from "@tangow/core";
 import { loadBotMessageContexts } from "./bot-message-context.js";
 import type { Prisma, PrismaClient } from "./client.js";
 

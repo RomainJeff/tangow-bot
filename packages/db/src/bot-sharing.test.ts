@@ -24,7 +24,7 @@ describe("sharing a bot", () => {
   const actor = (userId: string) => ({
     userId,
     spaceId: space,
-    email: `${userId}@rakazo.test`,
+    email: `${userId}@tangow.test`,
     isDeploymentOwner: false,
   });
   /** A run going in a person's thread with the bot. */
@@ -44,7 +44,7 @@ describe("sharing a bot", () => {
     database = await openPgliteDatabase();
     prisma = database.prisma;
     for (const id of ["owner", "dana", "sam"]) {
-      await prisma.user.create({ data: { id, name: id, email: `${id}@rakazo.test` } });
+      await prisma.user.create({ data: { id, name: id, email: `${id}@tangow.test` } });
       await bootstrapUserSpace(prisma, { id }, env);
     }
     const ownerHome = (await prisma.spaceMember.findFirstOrThrow({ where: { userId: "owner" } }))
@@ -60,7 +60,7 @@ describe("sharing a bot", () => {
       const [invitation] = await createSpaceInvitations(prisma, {
         spaceId: space,
         userId: "owner",
-        emails: [`${userId}@rakazo.test`],
+        emails: [`${userId}@tangow.test`],
       });
       await acceptSpaceInvitation(prisma, { token: invitation!.id, userId });
     }

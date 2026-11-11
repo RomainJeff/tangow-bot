@@ -1,5 +1,5 @@
-import type { AskDraft, AskDraftEdits, AskDraftFields, AskDraftRecipient } from "@rakazo/contracts";
-import type { RecipientRole } from "@rakazo/core";
+import type { AskDraft, AskDraftEdits, AskDraftFields, AskDraftRecipient } from "@tangow/contracts";
+import type { RecipientRole } from "@tangow/core";
 import {
   addressesOf,
   draftChanges,
@@ -8,7 +8,7 @@ import {
   sameRecipients,
   takeAddresses,
   withRole,
-} from "@rakazo/core";
+} from "@tangow/core";
 
 /** What each recipient row's field holds that has not joined the row yet. */
 export type TypedLines = Partial<Record<RecipientRole, string>>;

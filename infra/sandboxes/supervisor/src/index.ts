@@ -12,11 +12,11 @@ import {
   readBoundedJsonResponse,
   resolveSupervisorToken,
   SANDBOX_SKILL_MOUNTS,
-} from "@rakazo/core";
-import { loadRootEnv } from "@rakazo/core/node/load-root-env";
-import { getLogger, SERVICE_NAMES } from "@rakazo/logging";
-import { createRootLogger } from "@rakazo/logging/axiom";
-import { requestLogging } from "@rakazo/logging/hono";
+} from "@tangow/core";
+import { loadRootEnv } from "@tangow/core/node/load-root-env";
+import { getLogger, SERVICE_NAMES } from "@tangow/logging";
+import { createRootLogger } from "@tangow/logging/axiom";
+import { requestLogging } from "@tangow/logging/hono";
 import Docker from "dockerode";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
@@ -100,7 +100,7 @@ loadRootEnv();
 const dockerSocketPath = resolveDockerSocketPath();
 const docker = dockerSocketPath ? new Docker({ socketPath: dockerSocketPath }) : new Docker();
 const computerContext =
-  process.env.RAKAZO_COMPUTER_CONTEXT ??
+  process.env.TANGOW_COMPUTER_CONTEXT ??
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../computer");
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const dataDir = path.resolve(repositoryRoot, process.env.DATA_DIR ?? "./data");
@@ -214,7 +214,7 @@ app.post("/computers", async (c) => {
     })
     .parse(await c.req.json());
   try {
-    assertRequestIdentity(c.req.header("x-rakazo-bot-id"), c.req.header("x-rakazo-space-id"), {
+    assertRequestIdentity(c.req.header("x-tangow-bot-id"), c.req.header("x-tangow-space-id"), {
       botId: body.botId,
       spaceId: body.spaceId,
     });
@@ -352,8 +352,8 @@ app.get("/computers/:id", async (c) => {
   try {
     const { info } = await managedContainer(
       id,
-      c.req.header("x-rakazo-bot-id"),
-      c.req.header("x-rakazo-space-id"),
+      c.req.header("x-tangow-bot-id"),
+      c.req.header("x-tangow-space-id"),
     );
     return c.json({
       id,
@@ -379,10 +379,10 @@ app.post("/computers/:id/exec", async (c) => {
   try {
     const { container, info } = await managedContainer(
       id,
-      c.req.header("x-rakazo-bot-id"),
-      c.req.header("x-rakazo-space-id"),
+      c.req.header("x-tangow-bot-id"),
+      c.req.header("x-tangow-space-id"),
     );
-    const screenId = c.req.header("x-rakazo-screen-id") || c.req.header("x-rakazo-bot-id") || id;
+    const screenId = c.req.header("x-tangow-screen-id") || c.req.header("x-tangow-bot-id") || id;
     const screenIndex = computerScreens.get(id)?.get(screenId)?.index ?? 0;
     const layout = screenPorts(screenIndex);
     const result = await runContainerCommand(
@@ -392,9 +392,9 @@ app.post("/computers/:id/exec", async (c) => {
         workingDir: commandWorkingDir(body.cwd, computerWorkspace(info.Config.Labels)),
         env: [
           `DISPLAY=${layout.display}`,
-          "HOME=/home/rakazo",
-          "PATH=/home/rakazo/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-          "NPM_CONFIG_PREFIX=/home/rakazo/.local",
+          "HOME=/home/tangow",
+          "PATH=/home/tangow/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "NPM_CONFIG_PREFIX=/home/tangow/.local",
           "PIP_USER=1",
           ...Object.entries(body.env ?? {}).map(([k, v]) => `${k}=${v}`),
         ],
@@ -448,20 +448,20 @@ app.post("/computers/:id/browser", async (c) => {
   try {
     const { container, layout } = await managedScreen(
       c.req.param("id"),
-      c.req.header("x-rakazo-bot-id"),
-      c.req.header("x-rakazo-space-id"),
-      c.req.header("x-rakazo-screen-id"),
-      c.req.header("x-rakazo-screen-lease-id"),
+      c.req.header("x-tangow-bot-id"),
+      c.req.header("x-tangow-space-id"),
+      c.req.header("x-tangow-screen-id"),
+      c.req.header("x-tangow-screen-lease-id"),
     );
     const result = await runContainerCommand(
       container,
-      ["/usr/local/bin/rakazo-page-browser", body.command, JSON.stringify(body)],
+      ["/usr/local/bin/tangow-page-browser", body.command, JSON.stringify(body)],
       {
         env: [
           `DISPLAY=${layout.display}`,
-          `RAKAZO_CDP_PORT=${layout.debugPort}`,
-          "HOME=/home/rakazo",
-          "RAKAZO_BROWSER_WATCH_STDIN=1",
+          `TANGOW_CDP_PORT=${layout.debugPort}`,
+          "HOME=/home/tangow",
+          "TANGOW_BROWSER_WATCH_STDIN=1",
         ],
         timeoutMs: 25_000,
         signal,
@@ -486,10 +486,10 @@ app.post("/computers/:id/observe", async (c) => {
   try {
     const { container, info, layout, browserProfile } = await managedScreen(
       c.req.param("id"),
-      c.req.header("x-rakazo-bot-id"),
-      c.req.header("x-rakazo-space-id"),
-      c.req.header("x-rakazo-screen-id"),
-      c.req.header("x-rakazo-screen-lease-id"),
+      c.req.header("x-tangow-bot-id"),
+      c.req.header("x-tangow-space-id"),
+      c.req.header("x-tangow-screen-id"),
+      c.req.header("x-tangow-screen-lease-id"),
     );
     const control = computerControlEndpoint(info);
     const observation = await preferComputerControl(
@@ -527,10 +527,10 @@ app.post("/computers/:id/actions", async (c) => {
   try {
     const { container, info, layout, browserProfile } = await managedScreen(
       c.req.param("id"),
-      c.req.header("x-rakazo-bot-id"),
-      c.req.header("x-rakazo-space-id"),
-      c.req.header("x-rakazo-screen-id"),
-      c.req.header("x-rakazo-screen-lease-id"),
+      c.req.header("x-tangow-bot-id"),
+      c.req.header("x-tangow-space-id"),
+      c.req.header("x-tangow-screen-id"),
+      c.req.header("x-tangow-screen-lease-id"),
     );
     const control = computerControlEndpoint(info);
     const workspace = computerWorkspace(info.Config.Labels);
@@ -579,8 +579,8 @@ app.get("/computers/:id/files", async (c) => {
   try {
     const { container, info } = await managedContainer(
       c.req.param("id"),
-      c.req.header("x-rakazo-bot-id"),
-      c.req.header("x-rakazo-space-id"),
+      c.req.header("x-tangow-bot-id"),
+      c.req.header("x-tangow-space-id"),
     );
     const relative = normalizeWorkspaceRelative(c.req.query("path") ?? "");
     const target = workspaceTarget(relative, computerWorkspace(info.Config.Labels));
@@ -648,8 +648,8 @@ app.post("/computers/:id/files", async (c) => {
   try {
     const { container, info } = await managedContainer(
       c.req.param("id"),
-      c.req.header("x-rakazo-bot-id"),
-      c.req.header("x-rakazo-space-id"),
+      c.req.header("x-tangow-bot-id"),
+      c.req.header("x-tangow-space-id"),
     );
     const target = workspaceTarget(
       normalizeWorkspaceRelative(body.path),
@@ -673,10 +673,10 @@ app.get("/computers/:id/screen", async (c) => {
   try {
     const { container, info, layout, viewToken } = await managedScreen(
       id,
-      c.req.header("x-rakazo-bot-id"),
-      c.req.header("x-rakazo-space-id"),
-      c.req.header("x-rakazo-screen-id"),
-      c.req.header("x-rakazo-screen-lease-id"),
+      c.req.header("x-tangow-bot-id"),
+      c.req.header("x-tangow-space-id"),
+      c.req.header("x-tangow-screen-id"),
+      c.req.header("x-tangow-screen-lease-id"),
     );
     const screenUrl = await publishedScreenUrl(container, info, layout.viewPort);
     return c.redirect(screenUrlWithToken(screenUrl, viewToken));
@@ -701,10 +701,10 @@ app.post("/computers/:id/screen-mode", async (c) => {
     .parse(await c.req.json());
   try {
     const id = c.req.param("id");
-    const botId = c.req.header("x-rakazo-bot-id");
-    const spaceId = c.req.header("x-rakazo-space-id");
-    const screenId = c.req.header("x-rakazo-screen-id");
-    const screenLeaseId = c.req.header("x-rakazo-screen-lease-id");
+    const botId = c.req.header("x-tangow-bot-id");
+    const spaceId = c.req.header("x-tangow-space-id");
+    const screenId = c.req.header("x-tangow-screen-id");
+    const screenLeaseId = c.req.header("x-tangow-screen-lease-id");
     const { container, info } = await managedContainer(id, botId, spaceId);
     const { layout, viewToken } = await withComputerScreenLock(id, async () => {
       const screen = await ensureManagedScreen(id, container, info, botId, screenId, screenLeaseId);
@@ -748,10 +748,10 @@ app.post("/computers/:id/input", async (c) => {
   try {
     const { container, layout } = await managedScreen(
       id,
-      c.req.header("x-rakazo-bot-id"),
-      c.req.header("x-rakazo-space-id"),
-      c.req.header("x-rakazo-screen-id"),
-      c.req.header("x-rakazo-screen-lease-id"),
+      c.req.header("x-tangow-bot-id"),
+      c.req.header("x-tangow-space-id"),
+      c.req.header("x-tangow-screen-id"),
+      c.req.header("x-tangow-screen-lease-id"),
     );
     const result = await runContainerCommand(container, [
       "env",
@@ -773,15 +773,15 @@ app.delete("/computers/:id/screen", async (c) => {
     const id = c.req.param("id");
     const { container } = await managedContainer(
       id,
-      c.req.header("x-rakazo-bot-id"),
-      c.req.header("x-rakazo-space-id"),
+      c.req.header("x-tangow-bot-id"),
+      c.req.header("x-tangow-space-id"),
     );
-    const screenId = c.req.header("x-rakazo-screen-id") || c.req.header("x-rakazo-bot-id") || id;
-    const cancelRunWork = c.req.header("x-rakazo-cancel-run-work") === "1";
-    const screenLeaseId = c.req.header("x-rakazo-screen-lease-id");
+    const screenId = c.req.header("x-tangow-screen-id") || c.req.header("x-tangow-bot-id") || id;
+    const cancelRunWork = c.req.header("x-tangow-cancel-run-work") === "1";
+    const screenLeaseId = c.req.header("x-tangow-screen-lease-id");
     // Only a leased release can be kept: a bot's deletion or archive has none and must close it.
     const preserve =
-      c.req.header("x-rakazo-preserve-screen") === "1" && !cancelRunWork && Boolean(screenLeaseId);
+      c.req.header("x-tangow-preserve-screen") === "1" && !cancelRunWork && Boolean(screenLeaseId);
     let kept = false;
     let refused = false;
     await withComputerScreenLock(id, async () => {
@@ -833,8 +833,8 @@ app.post("/computers/:id/stop", async (c) => {
   try {
     const { container } = await managedContainer(
       id,
-      c.req.header("x-rakazo-bot-id"),
-      c.req.header("x-rakazo-space-id"),
+      c.req.header("x-tangow-bot-id"),
+      c.req.header("x-tangow-space-id"),
     );
     await withComputerScreenLock(id, async () => {
       const info = await container.inspect();
@@ -871,11 +871,11 @@ app.post("/computers/:id/stop", async (c) => {
 
 app.delete("/computers/:id", async (c) => {
   const id = c.req.param("id");
-  const botId = c.req.header("x-rakazo-bot-id");
+  const botId = c.req.header("x-tangow-bot-id");
   try {
     if (!botId) throw new Error("missing computer identity");
     return await withBotLifecycleLock(botId, async () => {
-      const { container } = await managedContainer(id, botId, c.req.header("x-rakazo-space-id"));
+      const { container } = await managedContainer(id, botId, c.req.header("x-tangow-space-id"));
       await withComputerScreenLock(id, async () => {
         await container.remove({ force: true }).catch(() => undefined);
         clearComputerScreenRegistry(computerScreens, id);
@@ -901,7 +901,7 @@ app.use("/workers", limitSupervisorRequestBody);
 const attemptWorkers = (attemptId: string) =>
   docker.listContainers({
     all: true,
-    filters: { label: ["rakazo.worker=true", `rakazo.attempt=${attemptId}`] },
+    filters: { label: ["tangow.worker=true", `tangow.attempt=${attemptId}`] },
   });
 
 let workersNetwork: Promise<unknown> | undefined;
@@ -912,7 +912,7 @@ function ensureWorkersNetwork() {
       Name: WORKER_NETWORK,
       Driver: "bridge",
       CheckDuplicate: true,
-      Labels: { "rakazo.managed": "true" },
+      Labels: { "tangow.managed": "true" },
       Options: { "com.docker.network.bridge.enable_icc": "false" },
     })
     .catch((error) => {
@@ -1001,12 +1001,12 @@ export async function upgradeWorkerGuest(
   }
   const match = /^\/workers\/([A-Za-z0-9]{1,64})\/guest$/.exec(request.url ?? "");
   if (!match) return refuse("404 Not Found");
-  const capability = request.headers["x-rakazo-worker-capability"];
+  const capability = request.headers["x-tangow-worker-capability"];
   if (typeof capability !== "string" || capability.length === 0) return refuse("400 Bad Request");
   try {
     const container = docker.getContainer(match[1]!);
     const info = await container.inspect();
-    if (info.Config.Labels?.["rakazo.worker"] !== "true") return refuse("404 Not Found");
+    if (info.Config.Labels?.["tangow.worker"] !== "true") return refuse("404 Not Found");
     const exec = await container.exec({
       Cmd: ["node", WORKER_GUEST_ENTRY],
       AttachStdin: true,
@@ -1015,19 +1015,19 @@ export async function upgradeWorkerGuest(
       Tty: false,
       User: info.Config.User || COMPUTER_USER,
       WorkingDir: "/workspace",
-      Env: [`RAKAZO_WORKER_CAPABILITY=${capability}`],
+      Env: [`TANGOW_WORKER_CAPABILITY=${capability}`],
     });
     const stream = await exec.start({ hijack: true, stdin: true });
     // The client left while the exec was starting: closing stdin ends the guest.
     if (socket.destroyed) return stream.end();
     socket.write(
-      "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: rakazo-guest\r\n\r\n",
+      "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: tangow-guest\r\n\r\n",
     );
     if (head.length > 0) stream.write(head);
     relayWorkerGuest({
       socket,
       stream,
-      attemptId: info.Config.Labels?.["rakazo.attempt"],
+      attemptId: info.Config.Labels?.["tangow.attempt"],
       exitCode: () => guestExitCode(exec),
     });
   } catch {
@@ -1095,7 +1095,7 @@ async function startSupervisor() {
   // Repo skills are published to DATA_DIR so computers see them via the /managed-skills bind.
   await syncManagedSkills(repositoryRoot, dataDir, logger);
   // Resolve the ceilings before binding the port. They are otherwise parsed inside
-  // containerCreateOptions, so a malformed RAKAZO_COMPUTER_* value would let the supervisor start
+  // containerCreateOptions, so a malformed TANGOW_COMPUTER_* value would let the supervisor start
   // and pass its healthcheck, then fail the first POST /computers with a 500 that reads like a
   // Docker problem. Failing here names the variable while the deployment is still coming up.
   computerResourceLimits();
@@ -1155,12 +1155,12 @@ async function ensureComputerImage() {
             "start.sh",
             "control.py",
             "xcapture.c",
-            "rakazo-browser",
-            "rakazo-page-browser",
-            "rakazo-terminal",
+            "tangow-browser",
+            "tangow-page-browser",
+            "tangow-terminal",
             "terminalrc",
             "zshrc",
-            "rakazo-browser.desktop",
+            "tangow-browser.desktop",
             "embed.html",
             "clipboard-bridge.js",
             "mobile-keyboard.js",
@@ -1189,21 +1189,21 @@ async function findBotContainer(botId: string, spaceId: string) {
     filters: {
       // Space IDs were preserved when workspaces became Spaces. Search by the
       // stable bot label, then validate either generation of the Space label.
-      label: [`rakazo.botId=${botId}`],
+      label: [`tangow.botId=${botId}`],
     },
   });
   for (const item of listed) {
     const container = docker.getContainer(item.Id);
     const info = await container.inspect();
-    if (isRakazoContainer(info, botId, spaceId)) return container;
+    if (isTangowContainer(info, botId, spaceId)) return container;
   }
   return undefined;
 }
 
 /** Count managed computers for a space, including legacy workspaceId / unlabeled-managed. */
 export async function countSpaceContainers(spaceId: string): Promise<number> {
-  // Do not filter by rakazo.managed=true: legacy computers are still managed via
-  // COMPUTER_IMAGE + rakazo.workspaceId (same rule as isRakazoContainer).
+  // Do not filter by tangow.managed=true: legacy computers are still managed via
+  // COMPUTER_IMAGE + tangow.workspaceId (same rule as isTangowContainer).
   const listed = await docker.listContainers({ all: true });
   let count = 0;
   for (const item of listed) {
@@ -1218,19 +1218,19 @@ async function isManagedSpaceContainer(
 ): Promise<boolean> {
   const labels = item.Labels;
   if (labels) {
-    const listedSpaceId = labels["rakazo.spaceId"] ?? labels["rakazo.workspaceId"];
+    const listedSpaceId = labels["tangow.spaceId"] ?? labels["tangow.workspaceId"];
     // Labeled for another space (or no space identity) cannot count toward this cap.
     if (listedSpaceId !== spaceId) return false;
-    if (labels["rakazo.managed"] === "true" || item.Image === COMPUTER_IMAGE) return true;
+    if (labels["tangow.managed"] === "true" || item.Image === COMPUTER_IMAGE) return true;
     // Space matches but Image may be an ID after the tag moved — confirm via inspect.
   }
-  // Missing list Labels: inspect with the same managed rule as isRakazoContainer.
+  // Missing list Labels: inspect with the same managed rule as isTangowContainer.
   try {
     const info = await docker.getContainer(item.Id).inspect();
     const infoLabels = info.Config?.Labels ?? {};
     const managed =
-      infoLabels["rakazo.managed"] === "true" || info.Config?.Image === COMPUTER_IMAGE;
-    const infoSpaceId = infoLabels["rakazo.spaceId"] ?? infoLabels["rakazo.workspaceId"];
+      infoLabels["tangow.managed"] === "true" || info.Config?.Image === COMPUTER_IMAGE;
+    const infoSpaceId = infoLabels["tangow.spaceId"] ?? infoLabels["tangow.workspaceId"];
     return managed && infoSpaceId === spaceId;
   } catch {
     // Container might have been removed concurrently
@@ -1244,7 +1244,7 @@ async function managedContainer(id: string, botId?: string, spaceId?: string) {
   if (!botId || !spaceId) throw new ComputerIdentityError("missing computer identity");
   const container = docker.getContainer(id);
   const info = await container.inspect();
-  if (!isRakazoContainer(info, botId, spaceId))
+  if (!isTangowContainer(info, botId, spaceId))
     throw new ComputerIdentityError("computer identity mismatch");
   return { container, info };
 }
@@ -1311,9 +1311,9 @@ async function ensureManagedScreen(
   };
 }
 
-function isRakazoContainer(info: Docker.ContainerInspectInfo, botId: string, spaceId: string) {
+function isTangowContainer(info: Docker.ContainerInspectInfo, botId: string, spaceId: string) {
   const labels = info.Config.Labels ?? {};
-  const managed = labels["rakazo.managed"] === "true" || info.Config.Image === COMPUTER_IMAGE;
+  const managed = labels["tangow.managed"] === "true" || info.Config.Image === COMPUTER_IMAGE;
   return managed && hasComputerIdentity(labels, botId, spaceId);
 }
 
@@ -1334,8 +1334,8 @@ function hostHomePath(serviceHomePath: string, info: Docker.ContainerInspectInfo
 
 function computerControlEndpoint(info: Docker.ContainerInspectInfo) {
   const token = info.Config.Env?.find((value) =>
-    value.startsWith("RAKAZO_COMPUTER_CONTROL_TOKEN="),
-  )?.slice("RAKAZO_COMPUTER_CONTROL_TOKEN=".length);
+    value.startsWith("TANGOW_COMPUTER_CONTROL_TOKEN="),
+  )?.slice("TANGOW_COMPUTER_CONTROL_TOKEN=".length);
   const publishedHostPort = controlViaLoopback
     ? publishedLoopbackControlHostPort(info.NetworkSettings?.Ports)
     : undefined;
@@ -1484,7 +1484,7 @@ async function setInteractiveScreen(
     interactiveScreenCommand(interactive, controlToken, layout),
   ]);
   if (result.code !== 0) throw new Error(result.stderr || "control screen failed to start");
-  return interactive || !controlToken || result.stdout.includes("RAKAZO_CONTROL_RELEASED\n");
+  return interactive || !controlToken || result.stdout.includes("TANGOW_CONTROL_RELEASED\n");
 }
 
 // Each bot's computer gets its own Docker network so containers cannot reach
@@ -1557,7 +1557,7 @@ async function removeBotNetwork(botId: string) {
               .inspect()
               .catch(() => undefined)
           )?.Config.Labels ?? {};
-        const owner = labels["rakazo.botId"];
+        const owner = labels["tangow.botId"];
         owners.push(owner);
         if (owner === botId) {
           await network.disconnect({ Container: containerId, Force: true }).catch(() => undefined);
@@ -1614,7 +1614,7 @@ async function runContainerCommand(
   options.signal?.throwIfAborted();
   const timeoutMs = options.timeoutMs;
   const completionMarker = timeoutMs
-    ? `/tmp/rakazo-command-${randomUUID()}.completed-124`
+    ? `/tmp/tangow-command-${randomUUID()}.completed-124`
     : undefined;
   const command =
     completionMarker && timeoutMs !== undefined
@@ -1625,8 +1625,8 @@ async function runContainerCommand(
     AttachStdout: true,
     AttachStderr: true,
     ...(options.signal ? { AttachStdin: true } : {}),
-    WorkingDir: options.workingDir ?? "/home/rakazo",
-    Env: options.env ?? ["DISPLAY=:1", "HOME=/home/rakazo"],
+    WorkingDir: options.workingDir ?? "/home/tangow",
+    Env: options.env ?? ["DISPLAY=:1", "HOME=/home/tangow"],
   });
   options.signal?.throwIfAborted();
   const stream = await exec.start({ hijack: true, stdin: Boolean(options.signal) });
@@ -1735,8 +1735,8 @@ async function writeContainerFile(
     AttachStdin: true,
     AttachStdout: true,
     AttachStderr: true,
-    WorkingDir: "/home/rakazo",
-    Env: ["HOME=/home/rakazo"],
+    WorkingDir: "/home/tangow",
+    Env: ["HOME=/home/tangow"],
   });
   const stream = await exec.start({ hijack: true, stdin: true });
   const chunks: Buffer[] = [];

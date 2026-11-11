@@ -1,5 +1,5 @@
-import type { RunActivityRow, SearchHit, SpaceBot, SpaceGroup } from "@rakazo/contracts";
-import { botColors, sizes } from "@rakazo/ui-tokens";
+import type { RunActivityRow, SearchHit, SpaceBot, SpaceGroup } from "@tangow/contracts";
+import { botColors, sizes } from "@tangow/ui-tokens";
 import { useRouter } from "expo-router";
 import type { ReactNode } from "react";
 import { useMemo } from "react";

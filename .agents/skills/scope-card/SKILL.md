@@ -1,18 +1,18 @@
 ---
 name: scope-card
-description: "Use for \"scope this card\", \"scope the next card\", \"/scope-card\", or before building anything from a Notion kanban card assigned to you. Scopes one card at a time with a process proportional to its type (bug / feature / feature UX): current Rakazo code, reference agent products, the messaging and agent-client primitives bench, optional Langfuse traces, and for feature UX a Mobbin benchmark plus three mocked-up proposals. Writes a readable, idempotent Scoping section into the card. Not for building (hand the scoped card to your build workflow)."
+description: "Use for \"scope this card\", \"scope the next card\", \"/scope-card\", or before building anything from a Notion kanban card assigned to you. Scopes one card at a time with a process proportional to its type (bug / feature / feature UX): current Tangow code, reference agent products, the messaging and agent-client primitives bench, optional Langfuse traces, and for feature UX a Mobbin benchmark plus three mocked-up proposals. Writes a readable, idempotent Scoping section into the card. Not for building (hand the scoped card to your build workflow)."
 disable-model-invocation: true
 ---
 
 # Scope card
 
-Cards arrive short: a title and a few bullets. Before building, the team needs to know what Rakazo already does, what the best products do, and, for UX, concrete options to choose from. This skill produces that, one card at a time, at the right cost: a bug never pays for a design benchmark. The section it writes into the card is the first draft of the spec and design.
+Cards arrive short: a title and a few bullets. Before building, the team needs to know what Tangow already does, what the best products do, and, for UX, concrete options to choose from. This skill produces that, one card at a time, at the right cost: a bug never pays for a design benchmark. The section it writes into the card is the first draft of the spec and design.
 
 Work in the language of the card. These instructions are in English; the card section is written in the card's language.
 
 ## Setup (once per person)
 
-1. Copy `references/config.example.json` to `~/.config/rakazo/scope-card.json` and fill it in. It holds what differs per person or must stay out of this public repository: the kanban data source, which Notion connector to use, the GitHub repos to check for duplicates, the scout worktree, extra reference repos and local sources, folders or links holding past decisions, the Langfuse env file. Never commit it.
+1. Copy `references/config.example.json` to `~/.config/tangow/scope-card.json` and fill it in. It holds what differs per person or must stay out of this public repository: the kanban data source, which Notion connector to use, the GitHub repos to check for duplicates, the scout worktree, extra reference repos and local sources, folders or links holding past decisions, the Langfuse env file. Never commit it.
 2. Add the kanban properties if they are missing: `Type` (select: `bug`, `feature`, `feature UX`) and `Scoped` (date).
 3. Create the scout worktree and the reference clones:
    ```bash
@@ -126,7 +126,7 @@ Duplicate, already shipped or in progress → write a minimal `## Scoping` secti
 
 **Size, never in days or weeks.** Agents do the building, so duration means nothing. Write an option's size with what actually costs: number of PRs, surfaces and packages touched, security review or not, and above all **what the user will have to do themselves** (decide, validate a mockup, test on an iPhone, judge an effect over several days). Example: "2 PR · serveur + web, desktop et iOS · revue sécurité · à tester par toi sur iPhone". In the metadata line: small (1 PR, server or one surface, automated tests are enough, nothing to validate), medium (several PRs or surfaces, one validation), large (new capability, several surfaces with a security review or a migration, several validations).
 
-**Generic solutions, never tailored to one instance.** Rakazo runs on installations other than the one of the person scoping. Every option must work for any installation and bot setup: a single bot or an orchestrator with sub-bots, routines written by the user or by the bot, any reverse proxy, with or without Langfuse. The scoper's own bots, routines, traces and server prove that a problem exists; they never become the spec. No bot or routine name from one instance in a solution or criterion, and no criterion that depends on an optional service: product criteria are tests or offline eval cases. What only concerns the scoper's instance goes into a "Hors produit, sur ton instance" checkbox in À trancher.
+**Generic solutions, never tailored to one instance.** Tangow runs on installations other than the one of the person scoping. Every option must work for any installation and bot setup: a single bot or an orchestrator with sub-bots, routines written by the user or by the bot, any reverse proxy, with or without Langfuse. The scoper's own bots, routines, traces and server prove that a problem exists; they never become the spec. No bot or routine name from one instance in a solution or criterion, and no criterion that depends on an optional service: product criteria are tests or offline eval cases. What only concerns the scoper's instance goes into a "Hors produit, sur ton instance" checkbox in À trancher.
 
 **Tools sparingly.** A tool weighs on every model turn and on harness maintenance; a skill costs nothing until it is loaded. For every option that changes bot behaviour, prefer in this order: a short instruction, a skill loaded on demand, an option on an existing core tool (sending messages, routines, memory, computer), and only last a new tool, justified by a core primitive or an important UX. Say in the cell which one the option uses.
 
@@ -138,7 +138,7 @@ Duplicate, already shipped or in progress → write a minimal `## Scoping` secti
 - No Mobbin, Muse, Dots or mockup.
 
 **feature**
-- Target behaviour, reused primitives (`@rakazo/ui-web`, `apps/web/src/components/ai/`), any visible copy quoted and justified as `AGENTS.md` requires.
+- Target behaviour, reused primitives (`@tangow/ui-web`, `apps/web/src/components/ai/`), any visible copy quoted and justified as `AGENTS.md` requires.
 - UI touched → **one** Claude Design board: the recommendation, light theme, main surface (see Mockups). When the recommendation does not change the UI (behaviour, prompt, server), no mockup: any UI becomes an open question.
 
 **feature UX**: the feature branch, plus:

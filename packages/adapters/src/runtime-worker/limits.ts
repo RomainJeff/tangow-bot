@@ -1,5 +1,5 @@
-import type { AgentRunModel } from "@rakazo/adapter-kit";
-import { DEFAULT_MODEL_MAX_TOKENS, MAX_MODEL_CONTEXT_WINDOW } from "@rakazo/contracts";
+import type { AgentRunModel } from "@tangow/adapter-kit";
+import { DEFAULT_MODEL_MAX_TOKENS, MAX_MODEL_CONTEXT_WINDOW } from "@tangow/contracts";
 import { MAX_PARALLEL_SUBAGENTS, TOOL_RESULT_TEXT_LIMIT } from "../pi-runtime-limits.js";
 
 const KiB = 1024;

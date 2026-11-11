@@ -1,8 +1,8 @@
-import type { AgentRunRequest, ConnectorProvider } from "@rakazo/adapter-kit";
-import { AgentRuntimeUnavailableError } from "@rakazo/adapter-kit";
-import { PostgresSessionLog, ScriptedAgentRuntime } from "@rakazo/adapters";
-import { HARNESSES } from "@rakazo/agent-run-worker";
-import { createRepos } from "@rakazo/db";
+import type { AgentRunRequest, ConnectorProvider } from "@tangow/adapter-kit";
+import { AgentRuntimeUnavailableError } from "@tangow/adapter-kit";
+import { PostgresSessionLog, ScriptedAgentRuntime } from "@tangow/adapters";
+import { HARNESSES } from "@tangow/agent-run-worker";
+import { createRepos } from "@tangow/db";
 import { afterEach, expect, it, vi } from "vitest";
 import { stopThreadRuns, threadSnapshot } from "../../../apps/api/src/thread-target.js";
 import { toolResult } from "./file-task.js";
@@ -111,7 +111,7 @@ async function fixture(
     const [bot] = await createRepos(run.prisma).listBots({
       userId: run.userId,
       spaceId: run.spaceId,
-      email: "worker@rakazo.test",
+      email: "worker@tangow.test",
       isDeploymentOwner: false,
     });
     return bot?.status;
@@ -175,8 +175,8 @@ it("answers at once, keeps the helper running past the turn, and wakes the bot w
   expect(await botStatus()).toBe("idle");
   expect(userTurns(childRequest)).toEqual([[{ type: "text", text: BRIEF }]]);
   const childTools = childRequest.tools?.map((tool) => tool.function.name) ?? [];
-  expect(childTools).not.toContain("mcp__rakazo__run_subagent");
-  expect(childTools).not.toContain("mcp__rakazo__message_user");
+  expect(childTools).not.toContain("mcp__tangow__run_subagent");
+  expect(childTools).not.toContain("mcp__tangow__message_user");
 
   const launchEntries = await run.runEntries(parentId);
   await run.prisma.sessionEntry.deleteMany({
@@ -758,7 +758,7 @@ it("runs the helper on its call's whole instructions, and on the default brief w
   const instructions = JSON.stringify(
     request.messages.filter((message) => message.role !== "user"),
   );
-  expect(instructions).toContain('You are a Rakazo subagent named \\"Scout\\".');
+  expect(instructions).toContain('You are a Tangow subagent named \\"Scout\\".');
   expect(instructions).toContain("Sign as Scout.");
 });
 
@@ -984,7 +984,7 @@ it("keeps a background helper from waiting on the user, and refuses an approval 
   const notes = approvedNotes();
   let refusal = "";
   const askTools = ["ask_user", "request_takeover", "request_secret"].map(
-    (name) => `mcp__rakazo__${name}`,
+    (name) => `mcp__tangow__${name}`,
   );
   const offered = (request: ModelEmulatorRequest) =>
     askTools.filter((name) => request.tools?.some((tool) => tool.function.name === name));
@@ -1020,7 +1020,7 @@ it("keeps a background helper from waiting on the user, and refuses an approval 
   await run.continueRun(child.id);
 
   expect(toolsOf).toEqual({
-    parent: ["mcp__rakazo__ask_user", "mcp__rakazo__request_secret"],
+    parent: ["mcp__tangow__ask_user", "mcp__tangow__request_secret"],
     helper: [],
   });
   expect(refusal).toBe(
@@ -1433,7 +1433,7 @@ it("neither lists, messages nor stops another person's helper of the same bot", 
   helperId = helper.id;
   // Another person in a group woke the same bot, and this helper is theirs.
   await run.prisma.user.create({
-    data: { id: "other", name: "Other", email: "other@rakazo.test" },
+    data: { id: "other", name: "Other", email: "other@tangow.test" },
   });
   await run.prisma.run.update({
     where: { id: helper.id },
@@ -1565,7 +1565,7 @@ it("parks a helper on its question, wakes the bot once, and resumes it with the 
   await run.continueRun(woken!.id);
   run.model.assertComplete();
 
-  expect(toolNames(seen.helper!)).toContain("mcp__rakazo__ask_parent");
+  expect(toolNames(seen.helper!)).toContain("mcp__tangow__ask_parent");
   expect(whilePaused.map(({ trigger, status }) => [trigger, status])).toEqual([
     ["user", "completed"],
     ["helper", "waiting_input"],
@@ -1643,10 +1643,10 @@ it("offers ask_parent to no sync helper: its parent waits on its result", async 
   run.model.assertComplete();
 
   const asks = (names: string[]) =>
-    ["mcp__rakazo__search_runs", "mcp__rakazo__ask_parent"].filter((name) => names.includes(name));
+    ["mcp__tangow__search_runs", "mcp__tangow__ask_parent"].filter((name) => names.includes(name));
   expect([asks(seen.parent!), asks(seen.helper!)]).toEqual([
-    ["mcp__rakazo__search_runs"],
-    ["mcp__rakazo__search_runs"],
+    ["mcp__tangow__search_runs"],
+    ["mcp__tangow__search_runs"],
   ]);
 });
 
@@ -1654,7 +1654,7 @@ it("keeps the helper tools from a helper", async () => {
   let refused = "";
   const helperTools: Record<string, string[]> = {};
   const offered = (request: ModelEmulatorRequest) =>
-    toolNames(request).filter((name) => name.startsWith("mcp__rakazo__helper_"));
+    toolNames(request).filter((name) => name.startsWith("mcp__tangow__helper_"));
   const { run, childOf } = await fixture([
     {
       expect(request) {
@@ -1667,7 +1667,7 @@ it("keeps the helper tools from a helper", async () => {
       expect(request) {
         helperTools.helper = offered(request);
       },
-      response: { type: "tool", id: "status", name: "mcp__rakazo__helper_status", arguments: {} },
+      response: { type: "tool", id: "status", name: "mcp__tangow__helper_status", arguments: {} },
     },
     {
       expect(request) {
@@ -1682,13 +1682,13 @@ it("keeps the helper tools from a helper", async () => {
 
   expect(helperTools).toEqual({
     parent: [
-      "mcp__rakazo__helper_status",
-      "mcp__rakazo__helper_message",
-      "mcp__rakazo__helper_stop",
+      "mcp__tangow__helper_status",
+      "mcp__tangow__helper_message",
+      "mcp__tangow__helper_stop",
     ],
     helper: [],
   });
-  expect(refused).toBe("Tool mcp__rakazo__helper_status not found");
+  expect(refused).toBe("Tool mcp__tangow__helper_status not found");
 });
 
 it("shows the person no wait and blocks no card of the bot while a helper waits on it", async () => {

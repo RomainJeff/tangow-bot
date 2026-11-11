@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   accessHeaders,
-  isRakazoHealth,
+  isTangowHealth,
   normalizeServerUrl,
   PROBE_RESPONSE_LIMIT_BYTES,
   parseAccessInput,
@@ -22,13 +22,13 @@ describe("server address normalization", () => {
     expect(normalizeServerUrl("127.0.0.1:5173")).toBe("http://127.0.0.1:5173");
     expect(normalizeServerUrl("localhost:5173")).toBe("http://localhost:5173");
     expect(normalizeServerUrl("192.168.1.20:3100")).toBe("http://192.168.1.20:3100");
-    expect(normalizeServerUrl("rakazo.example.com")).toBe("https://rakazo.example.com");
+    expect(normalizeServerUrl("tangow.example.com")).toBe("https://tangow.example.com");
   });
 
   it("keeps an explicit secure scheme and port but stores only the origin", () => {
-    expect(normalizeServerUrl("https://rakazo.example.com")).toBe("https://rakazo.example.com");
-    expect(normalizeServerUrl("https://rakazo.example.com:8443/team")).toBe(
-      "https://rakazo.example.com:8443",
+    expect(normalizeServerUrl("https://tangow.example.com")).toBe("https://tangow.example.com");
+    expect(normalizeServerUrl("https://tangow.example.com:8443/team")).toBe(
+      "https://tangow.example.com:8443",
     );
   });
 
@@ -41,7 +41,7 @@ describe("server address normalization", () => {
   });
 
   it("rejects cleartext public servers but permits private-network development", () => {
-    expect(normalizeServerUrl("http://rakazo.example.com")).toBeNull();
+    expect(normalizeServerUrl("http://tangow.example.com")).toBeNull();
     expect(normalizeServerUrl("http://10.0.0.8:3100")).toBe("http://10.0.0.8:3100");
     expect(normalizeServerUrl("http://[fd00::1]:3100")).toBe("http://[fd00::1]:3100");
   });
@@ -50,25 +50,25 @@ describe("server address normalization", () => {
     expect(normalizeServerUrl("http://169.254.169.254")).toBeNull();
     expect(normalizeServerUrl("http://169.254.1.1:80")).toBeNull();
     expect(normalizeServerUrl("http://[fe80::1]:3100")).toBeNull();
-    // HTTPS to link-local still normalizes; the health probe must match Rakazo.
+    // HTTPS to link-local still normalizes; the health probe must match Tangow.
     expect(normalizeServerUrl("https://169.254.169.254")).toBe("https://169.254.169.254");
   });
 
   it.each(["", "   ", "not a url", "ftp://example.com", "file:///etc/passwd", "http://"])(
-    "rejects an address that cannot reach a Rakazo server (%s)",
+    "rejects an address that cannot reach a Tangow server (%s)",
     (value) => {
       expect(normalizeServerUrl(value)).toBeNull();
     },
   );
 
   it("rejects embedded credentials rather than writing them to disk", () => {
-    expect(normalizeServerUrl("https://user:secret@rakazo.example.com")).toBeNull();
+    expect(normalizeServerUrl("https://user:secret@tangow.example.com")).toBeNull();
   });
 });
 
 describe("saved setup", () => {
   it("round-trips through the on-disk format", () => {
-    const setup = { serverUrl: "https://rakazo.example.com" };
+    const setup = { serverUrl: "https://tangow.example.com" };
     expect(parseStoredSetup(serializeSetup(setup))).toEqual(setup);
   });
 
@@ -100,7 +100,7 @@ describe("saved setup", () => {
 });
 
 describe("startup target", () => {
-  const saved = { serverUrl: "https://rakazo.example.com" };
+  const saved = { serverUrl: "https://tangow.example.com" };
 
   it("runs setup on a first launch", () => {
     expect(resolveStartupTarget({})).toEqual({ kind: "setup" });
@@ -109,12 +109,12 @@ describe("startup target", () => {
   it("opens the saved instance on later launches", () => {
     expect(resolveStartupTarget({ saved })).toEqual({
       kind: "app",
-      url: "https://rakazo.example.com",
+      url: "https://tangow.example.com",
       source: "saved",
     });
   });
 
-  it("lets RAKAZO_WEB_URL point the shell anywhere without touching saved setup", () => {
+  it("lets TANGOW_WEB_URL point the shell anywhere without touching saved setup", () => {
     expect(resolveStartupTarget({ envUrl: "http://127.0.0.1:4321", saved })).toEqual({
       kind: "app",
       url: "http://127.0.0.1:4321",
@@ -122,7 +122,7 @@ describe("startup target", () => {
     });
   });
 
-  it("ignores an empty RAKAZO_WEB_URL", () => {
+  it("ignores an empty TANGOW_WEB_URL", () => {
     expect(resolveStartupTarget({ envUrl: "   ", saved }).kind).toBe("app");
     expect(resolveStartupTarget({ envUrl: "   ", saved })).toMatchObject({ source: "saved" });
   });
@@ -141,7 +141,7 @@ describe("startup target", () => {
 describe("bundled renderer eligibility", () => {
   it("stands in for http(s) origins only", () => {
     expect(servesBundledRenderer("http://127.0.0.1:5173")).toBe(true);
-    expect(servesBundledRenderer("https://rakazo.example.com")).toBe(true);
+    expect(servesBundledRenderer("https://tangow.example.com")).toBe(true);
     expect(servesBundledRenderer("data:text/html,<p>fixture</p>")).toBe(false);
     expect(servesBundledRenderer("nonsense")).toBe(false);
   });
@@ -164,11 +164,11 @@ describe("remote-content isolation", () => {
   });
 });
 
-describe("Rakazo health response", () => {
+describe("Tangow health response", () => {
   it("requires the public RPC health contract", () => {
-    expect(isRakazoHealth({ json: { ok: true, version: "0.1.0" } })).toBe(true);
-    expect(isRakazoHealth({ json: { ok: true } })).toBe(false);
-    expect(isRakazoHealth({ ok: true, version: "0.1.0" })).toBe(false);
+    expect(isTangowHealth({ json: { ok: true, version: "0.1.0" } })).toBe(true);
+    expect(isTangowHealth({ json: { ok: true } })).toBe(false);
+    expect(isTangowHealth({ ok: true, version: "0.1.0" })).toBe(false);
   });
 });
 
@@ -221,7 +221,7 @@ describe("probe failures", () => {
     ["", "Could not reach that address."],
     [
       "Redirect was cancelled",
-      "That address redirects elsewhere. Enter the final Rakazo server address, or add a Cloudflare Access service token if the server sits behind Access.",
+      "That address redirects elsewhere. Enter the final Tangow server address, or add a Cloudflare Access service token if the server sits behind Access.",
     ],
   ])("explains %s", (message, expected) => {
     expect(probeFailureMessage(new Error(message))).toBe(expected);
@@ -232,7 +232,7 @@ describe("cloudflare access credentials", () => {
   const stored = {
     clientId: "abc.access",
     clientSecret: "s3cret",
-    origin: "https://rakazo.example.com",
+    origin: "https://tangow.example.com",
   };
 
   it("accepts a complete token and trims it", () => {

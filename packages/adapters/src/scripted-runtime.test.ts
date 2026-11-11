@@ -1,4 +1,4 @@
-import type { AgentRuntimeEvent } from "@rakazo/adapter-kit";
+import type { AgentRuntimeEvent } from "@tangow/adapter-kit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { inferScript, ScriptedAgentRuntime } from "./scripted-runtime.js";
 

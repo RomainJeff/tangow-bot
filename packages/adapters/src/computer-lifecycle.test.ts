@@ -7,11 +7,11 @@ import type {
   ComputerRef,
   JobPublisher,
   SandboxProvider,
-} from "@rakazo/adapter-kit";
-import { buildSkillMd } from "@rakazo/core";
-import type { PrismaClient, ThreadEvents } from "@rakazo/db";
-import { clearThread } from "@rakazo/db";
-import { openPgliteDatabase } from "@rakazo/db/pglite.test-support";
+} from "@tangow/adapter-kit";
+import { buildSkillMd } from "@tangow/core";
+import type { PrismaClient, ThreadEvents } from "@tangow/db";
+import { clearThread } from "@tangow/db";
+import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
 import { describe, expect, it, vi } from "vitest";
 import {
   acquireComputerExecutionLease,
@@ -31,7 +31,7 @@ import { botSkillsRoot, skillDirName, userSkillsRoot, writeUserSkill } from "./s
 import { workerFixture } from "./worker-fixture.test-support.js";
 
 vi.mock("../../db/src/sessions.js", async () =>
-  (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
+  (await import("@tangow/db/sessions.test-support")).stubbedDbSessions(),
 );
 
 const context = {
@@ -45,7 +45,7 @@ const context = {
 
 describe("computer provisioning", () => {
   it("stops a provider when archive invalidates its boot claim", async () => {
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-provision-race-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-provision-race-"));
     const stop = vi.fn().mockResolvedValue(undefined);
     const releaseScreen = vi.fn().mockResolvedValue(undefined);
     const updateMany = vi
@@ -257,7 +257,7 @@ describe("computer provisioning", () => {
   });
 
   it("reclaims a stale suspending computer after the wait times out", async () => {
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-stale-suspend-reclaim-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-stale-suspend-reclaim-"));
     const observed = new Date("2024-01-01T00:00:00.000Z");
     const row = {
       id: "computer-1",
@@ -477,7 +477,7 @@ describe("computer provisioning", () => {
   });
 
   it("does not adopt a concurrent reclaim stamp after claiming", async () => {
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-claim-stamp-race-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-claim-stamp-race-"));
     const row = {
       id: "computer-1",
       homeKey: "bot-1",
@@ -536,7 +536,7 @@ describe("computer provisioning", () => {
   });
 
   it("advances the claim stamp past the observed updatedAt when the clock does not move", async () => {
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-claim-stamp-skew-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-claim-stamp-skew-"));
     const observed = new Date("2024-01-01T00:00:00.000Z");
     const row = {
       id: "computer-1",
@@ -619,7 +619,7 @@ describe("computer provisioning", () => {
   });
 
   it("does not reclaim a fresh booting claim without waiting", async () => {
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-fresh-boot-claim-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-fresh-boot-claim-"));
     const nowMs = Date.parse("2024-06-01T12:00:00.000Z");
     const row = {
       id: "computer-1",
@@ -676,7 +676,7 @@ describe("computer provisioning", () => {
   });
 
   it("does not reclaim a stale booting claim while another run still holds a live worker lease", async () => {
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-stale-boot-live-run-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-stale-boot-live-run-"));
     const row = {
       id: "computer-1",
       homeKey: "bot-1",
@@ -739,7 +739,7 @@ describe("computer provisioning", () => {
   });
 
   it("activates a boot even if another Team bot takes a lease mid-provision", async () => {
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-team-lease-mid-boot-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-team-lease-mid-boot-"));
     const row = {
       id: "computer-1",
       homeKey: "bot-1",
@@ -815,7 +815,7 @@ describe("computer provisioning", () => {
   ])(
     "preserves the original computer when reconnect $stage fails (rollbackFails=$rollbackFails)",
     async ({ stage, rollbackFails }) => {
-      const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-reconnect-rollback-"));
+      const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-reconnect-rollback-"));
       const failure = new Error(`${stage} failed`);
       const rollbackError = new Error("replacement deletion failed");
       const original = {
@@ -902,7 +902,7 @@ describe("computer provisioning", () => {
   );
 
   it("does not stop a pre-existing computer when reconnect setup fails", async () => {
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-reconnect-unowned-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-reconnect-unowned-"));
     const failure = new Error("prepare failed");
     const original = {
       id: "computer-1",
@@ -970,7 +970,7 @@ describe("computer provisioning", () => {
   ])(
     "restores saved files before reconnecting to $kind/$providerRef (fresh=$fresh)",
     async (next) => {
-      const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-provision-reconnect-update-"));
+      const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-provision-reconnect-update-"));
       const home = new LocalAgentHomeStore(dataDir);
       const sandbox = new FakeSandboxProvider();
       const ref = {
@@ -1053,7 +1053,7 @@ describe("computer provisioning", () => {
     { fresh: true, cleanup: "destroy" as const },
     { fresh: false, cleanup: "stop" as const },
   ])("rolls back $cleanup when shared preparation fails", async ({ fresh, cleanup }) => {
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-prepare-rollback-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-prepare-rollback-"));
     const ref = {
       id: "provider-1",
       botId: "bot-1",
@@ -1114,7 +1114,7 @@ describe("computer provisioning", () => {
   });
 
   it("releases the screen when activation fails on a resumed Team computer", async () => {
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-team-activation-rollback-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-team-activation-rollback-"));
     const ref = {
       id: "provider-1",
       botId: "team-home",
@@ -1179,7 +1179,7 @@ describe("computer provisioning", () => {
   });
 
   it("retains a fresh provider reference when rollback also fails", async () => {
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-prepare-rollback-failure-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-prepare-rollback-failure-"));
     const prepareError = new Error("provider preparation failed");
     const rollbackError = new Error("provider deletion failed");
     const ref = {
@@ -1251,7 +1251,7 @@ describe("computer provisioning", () => {
   it.each([false, true])(
     "preserves a running computer's files on ordinary reconnect (prepare fails=%s)",
     async (prepareFails) => {
-      const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-provision-reconnect-"));
+      const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-provision-reconnect-"));
       const ref = {
         id: "provider-1",
         botId: "bot-1",
@@ -1841,7 +1841,7 @@ describe("a shared bot's dedicated computer", () => {
 
   it("mounts the skills its owner turned on for it, whoever runs it", async () => {
     const database = await openPgliteDatabase();
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-shared-skills-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-shared-skills-"));
     try {
       const { prisma } = database;
       const fixture = workerFixture(prisma);
@@ -1891,8 +1891,8 @@ describe("a shared bot's dedicated computer", () => {
 
 describe("computer replacement", () => {
   it("replaces a wedged computer and restores the durable home", async () => {
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-replace-"));
-    const homeRoot = await mkdtemp(path.join(tmpdir(), "rakazo-replace-home-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-replace-"));
+    const homeRoot = await mkdtemp(path.join(tmpdir(), "tangow-replace-home-"));
     const home = new LocalAgentHomeStore(homeRoot);
     const sandbox = new FakeSandboxProvider();
     const first = await sandbox.provision({ botId: "bot-1", homePath: dataDir }, context);
@@ -2701,7 +2701,7 @@ describe("computer replacement", () => {
   });
 
   it("claims a stopped computer before teardown so concurrent replacements serialize", async () => {
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-replace-stopped-claim-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-replace-stopped-claim-"));
     const updateMany = vi
       .fn()
       .mockResolvedValueOnce({ count: 1 })
@@ -2798,8 +2798,8 @@ describe("computer replacement", () => {
   });
 
   it("continues recover when checkpoint fails with an ordinary provider error", async () => {
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-recover-checkpoint-"));
-    const homeRoot = await mkdtemp(path.join(tmpdir(), "rakazo-recover-checkpoint-home-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-recover-checkpoint-"));
+    const homeRoot = await mkdtemp(path.join(tmpdir(), "tangow-recover-checkpoint-home-"));
     const home = new LocalAgentHomeStore(homeRoot);
     const sandbox = new FakeSandboxProvider();
     const first = await sandbox.provision({ botId: "bot-1", homePath: dataDir }, context);
@@ -2858,8 +2858,8 @@ describe("computer replacement", () => {
   });
 
   it("aborts update when checkpoint fails with an ordinary provider error", async () => {
-    const dataDir = await mkdtemp(path.join(tmpdir(), "rakazo-update-checkpoint-"));
-    const homeRoot = await mkdtemp(path.join(tmpdir(), "rakazo-update-checkpoint-home-"));
+    const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-update-checkpoint-"));
+    const homeRoot = await mkdtemp(path.join(tmpdir(), "tangow-update-checkpoint-home-"));
     const home = new LocalAgentHomeStore(homeRoot);
     const sandbox = new FakeSandboxProvider();
     const first = await sandbox.provision({ botId: "bot-1", homePath: dataDir }, context);

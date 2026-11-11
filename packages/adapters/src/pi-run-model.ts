@@ -10,7 +10,7 @@ import {
   type TranscriptContext,
 } from "@earendil-works/pi-ai";
 import { builtinModels } from "@earendil-works/pi-ai/providers/all";
-import type { AgentRunRequest } from "@rakazo/adapter-kit";
+import type { AgentRunRequest } from "@tangow/adapter-kit";
 import { DEFAULT_OPENROUTER_MODEL_ID } from "./deployment-model.js";
 import { piProviderId } from "./model-catalog.js";
 import { PiRuntimeCredentialStore, toOAuthCredential } from "./pi-credentials.js";
@@ -223,7 +223,7 @@ export function reliableStreamOptions(
       sessionId,
       headers: {
         "x-opencode-session": sessionId,
-        "x-opencode-client": "rakazo",
+        "x-opencode-client": "tangow",
         ...next.headers,
       },
     };

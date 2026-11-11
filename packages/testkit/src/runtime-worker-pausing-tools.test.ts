@@ -1,6 +1,6 @@
-import { createRunSecretWriter, EncryptedSecretStore } from "@rakazo/adapters";
-import type { GuestHarness } from "@rakazo/agent-run-worker";
-import { createThreadEvents } from "@rakazo/db";
+import { createRunSecretWriter, EncryptedSecretStore } from "@tangow/adapters";
+import type { GuestHarness } from "@tangow/agent-run-worker";
+import { createThreadEvents } from "@tangow/db";
 import { afterEach, describe, expect, it } from "vitest";
 import { startWorkerRun } from "./worker-run-fixture.js";
 

@@ -1,8 +1,8 @@
 const OAUTH_POPUP_NAMES = new Set([
-  "rakazo-app-connect",
-  "rakazo-mcp-oauth",
-  "rakazo-model-oauth",
-  "rakazo-plugin-connect",
+  "tangow-app-connect",
+  "tangow-mcp-oauth",
+  "tangow-model-oauth",
+  "tangow-plugin-connect",
 ]);
 
 export function shouldOpenInAppPopup(

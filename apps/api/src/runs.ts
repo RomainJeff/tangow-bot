@@ -1,12 +1,12 @@
-import type { Actor, Routine, RunActivityRow, SessionEntry } from "@rakazo/contracts";
-import { ACTIVE_RUN_STATUSES, classifyRunFailure, isTerminal } from "@rakazo/core";
+import type { Actor, Routine, RunActivityRow, SessionEntry } from "@tangow/contracts";
+import { ACTIVE_RUN_STATUSES, classifyRunFailure, isTerminal } from "@tangow/core";
 import {
   groupMembershipFilter,
   Prisma,
   type PrismaClient,
   sessionEntryFromRow,
   sharedWithFilter,
-} from "@rakazo/db";
+} from "@tangow/db";
 
 const RECENT_LIMIT = 20;
 export const TERMINAL_STATUSES = ["completed", "failed", "cancelled"] as const;

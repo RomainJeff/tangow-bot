@@ -1,10 +1,10 @@
 import { t } from "@lingui/core/macro";
 import { Trans } from "@lingui/react/macro";
-import { ChatMarkdown, LinkifiedText } from "@rakazo/chat-ui/web";
-import type { LinkPreviewCard as LinkPreviewCardBlock, MessageBlock } from "@rakazo/contracts";
-import type { LinkMentionResolver } from "@rakazo/core";
-import { previewSiteLabel, sanitizePreviewTitle } from "@rakazo/core";
-import { Button, cn, LinkPreviewCard, Surface } from "@rakazo/ui-web";
+import { ChatMarkdown, LinkifiedText } from "@tangow/chat-ui/web";
+import type { LinkPreviewCard as LinkPreviewCardBlock, MessageBlock } from "@tangow/contracts";
+import type { LinkMentionResolver } from "@tangow/core";
+import { previewSiteLabel, sanitizePreviewTitle } from "@tangow/core";
+import { Button, cn, LinkPreviewCard, Surface } from "@tangow/ui-web";
 import { ArrowRight, Check, Monitor } from "lucide-react";
 import type { ReactNode } from "react";
 import { useState } from "react";

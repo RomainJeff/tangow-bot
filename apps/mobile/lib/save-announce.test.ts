@@ -1,4 +1,4 @@
-import { createSaveStore, saveKey } from "@rakazo/core";
+import { createSaveStore, saveKey } from "@tangow/core";
 import { describe, expect, it } from "vitest";
 import { claimSaveAnnouncement } from "./save-announce";
 

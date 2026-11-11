@@ -1,8 +1,8 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { AdapterContext, JobPublisher, SandboxProvider } from "@rakazo/adapter-kit";
-import type { PrismaClient, ThreadEvents } from "@rakazo/db";
+import type { AdapterContext, JobPublisher, SandboxProvider } from "@tangow/adapter-kit";
+import type { PrismaClient, ThreadEvents } from "@tangow/db";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ComputerBusyError, provisionComputer, replaceComputer } from "./computer-lifecycle.js";
 import { FakeSandboxProvider } from "./fake-sandbox.js";
@@ -22,7 +22,7 @@ afterEach(async () => {
 });
 
 async function fixture() {
-  const root = await mkdtemp(path.join(tmpdir(), "rakazo-recovery-"));
+  const root = await mkdtemp(path.join(tmpdir(), "tangow-recovery-"));
   roots.push(root);
   const sandbox: SandboxProvider = new FakeSandboxProvider();
   const home = new LocalAgentHomeStore(path.join(root, "homes"));

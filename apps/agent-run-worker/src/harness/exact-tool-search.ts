@@ -5,7 +5,7 @@ import type {
   ToolInfo,
 } from "@earendil-works/pi-coding-agent";
 import { createToolSearchExtension } from "@earendil-works/pi-coding-agent";
-import { RAKAZO_TOOL_PREFIX } from "@rakazo/adapter-kit";
+import { TANGOW_TOOL_PREFIX } from "@tangow/adapter-kit";
 
 export function exactToolSearchExtension(
   resolveName: (term: string) => string = (term) => term,
@@ -34,8 +34,8 @@ export function exactToolSearchExtension(
                 active.includes(candidate.name)
               ) {
                 searchable.set(candidate.name, candidate);
-                if (candidate.name.startsWith(RAKAZO_TOOL_PREFIX)) {
-                  searchable.set(candidate.name.slice(RAKAZO_TOOL_PREFIX.length), candidate);
+                if (candidate.name.startsWith(TANGOW_TOOL_PREFIX)) {
+                  searchable.set(candidate.name.slice(TANGOW_TOOL_PREFIX.length), candidate);
                 }
               }
             }

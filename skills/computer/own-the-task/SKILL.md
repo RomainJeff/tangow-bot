@@ -1,9 +1,9 @@
 ---
 name: own-the-task
-description: Take a task brief from Rakazo end to end on your own: build it, check the done criteria, and write the REPORT.md the bot reads.
+description: Take a task brief from Tangow end to end on your own: build it, check the done criteria, and write the REPORT.md the bot reads.
 ---
 
-Follow this when a prompt says "Rakazo job" and points you here. The person who wrote the brief is not a developer and cannot answer questions while you work: decide on your own, never stop to ask.
+Follow this when a prompt says "Tangow job" and points you here. The person who wrote the brief is not a developer and cannot answer questions while you work: decide on your own, never stop to ask.
 
 **Match effort to the task.** A static page or a copy change is minutes of work, not an audit. Do what the brief needs, check it once, report. Time and tokens spent on checks the brief does not ask for are waste.
 

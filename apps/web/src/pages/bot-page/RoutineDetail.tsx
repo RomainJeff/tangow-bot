@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
-import type { Routine } from "@rakazo/contracts";
-import { draftFromRoutine, saveKey, triggerSave } from "@rakazo/core";
+import type { Routine } from "@tangow/contracts";
+import { draftFromRoutine, saveKey, triggerSave } from "@tangow/core";
 import {
   Button,
   type FieldSave,
@@ -9,7 +9,7 @@ import {
   Switch,
   TextSettingField,
   useFieldSave,
-} from "@rakazo/ui-web";
+} from "@tangow/ui-web";
 import { useState } from "react";
 import { DeleteItemDialog } from "../shell/dialogs";
 import { BotActivity } from "./BotActivity";

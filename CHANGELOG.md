@@ -1,6 +1,6 @@
 # Changelog
 
-Notable product changes in Rakazo, newest first. See GitHub Releases for tagged builds.
+Notable product changes in Tangow, newest first. See GitHub Releases for tagged builds.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
+- Tangow now uses its own name everywhere on web, desktop, iPhone, Android and self-hosted servers: app copy, the `tangow://` mobile links, `TANGOW_*` server settings and the default `tangow` database and Compose project.
 - On web and desktop, a space's owner now invites people by email, several at once, and each invite link works only for the account with that email; pending invites are listed by email, each with its own link to copy or revoke, instead of anonymous links copied once.
 - A group's avatar in the sidebar on web and desktop and in the chat list on iPhone and Android now shows the other people in it beside its bots, with their photo or initials.
 
@@ -75,7 +76,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
-- **Bots can report problems with Rakazo itself as GitHub issues.** When the server operator connects a feedback repository, a bot that gets blocked, hits a malfunction or needs far too many steps can call `report_issue` to file an issue with its report and the run's model, ids and counters, and carries on with its task. See [Agent feedback](docs/self-host.md#agent-feedback).
+- **Bots can report problems with Tangow itself as GitHub issues.** When the server operator connects a feedback repository, a bot that gets blocked, hits a malfunction or needs far too many steps can call `report_issue` to file an issue with its report and the run's model, ids and counters, and carries on with its task. See [Agent feedback](docs/self-host.md#agent-feedback).
 - **Images now show in the iPhone conversation, and consecutive ones from the same sender gather in a stack.** Each image appears in a fixed frame instead of a file name, with the earlier ones peeking behind it, a count from four images up, and a long press that opens the actions of the newest one.
 - **Tap an image on iPhone to see it full screen, swipe through the whole stack and share it.** The image opens out of the stack on its newest picture with the older ones after it, a strip of thumbnails at the bottom jumps to any image, and dragging down closes it back into the stack.
 - **Images in web and desktop conversations now gather in stacks and open in a viewer you can step through.** Consecutive images from the same sender sit in one fixed frame with the earlier ones peeking behind it and a count from four images up, and opening one lets you move through the stack with the arrow keys, the previous and next buttons, or a strip of thumbnails under the image.
@@ -133,7 +134,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
-- **Messages a bot proposes to send can now be reviewed as editable drafts on web, desktop and iPhone.** When a connected app or MCP tool requires approval, Rakazo uses AI to prefill the recipients, subject and message, including tools with unfamiliar field names; chat drafts prefer destination names found in recent tool results, with participant names or a localized "Group chat" label for group conversations. Edit the draft before Send or discard it; actions that cannot be represented keep the standard approval card.
+- **Messages a bot proposes to send can now be reviewed as editable drafts on web, desktop and iPhone.** When a connected app or MCP tool requires approval, Tangow uses AI to prefill the recipients, subject and message, including tools with unfamiliar field names; chat drafts prefer destination names found in recent tool results, with participant names or a localized "Group chat" label for group conversations. Edit the draft before Send or discard it; actions that cannot be represented keep the standard approval card.
 
 #### Changed
 
@@ -188,7 +189,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
-- **Tangow guides your first source deployment from configuration to verified startup.** Run `./tangow setup` to generate private secrets, deploy the current checkout, and open Rakazo for account and model setup. Retries preserve saved credentials, and E2B can continue through the existing provider setup ([getting started](README.md#getting-started)).
+- **Tangow guides your first source deployment from configuration to verified startup.** Run `./tangow setup` to generate private secrets, deploy the current checkout, and open Tangow for account and model setup. Retries preserve saved credentials, and E2B can continue through the existing provider setup ([getting started](README.md#getting-started)).
 
 #### Changed
 
@@ -204,7 +205,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Added
 
 - **Self-hosted deployments can move E2B bot and shared files to Docker.** Tangow copies and verifies volumes, keeps their bot and space associations, and resumes interrupted migrations while retaining E2B source volumes and private backups ([migration guide](docs/tangow.md#switch-e2b-to-docker)).
-- **Tangow manages an existing source deployment from the server command line.** Update Rakazo and automatically rebuild matching Docker worker images or E2B templates, verify startup migrations and report deferred computer homes, inspect services and logs, clean unused Docker builds, or migrate Docker computer homes to E2B with the existing backup and recovery flow ([usage](docs/tangow.md)).
+- **Tangow manages an existing source deployment from the server command line.** Update Tangow and automatically rebuild matching Docker worker images or E2B templates, verify startup migrations and report deferred computer homes, inspect services and logs, clean unused Docker builds, or migrate Docker computer homes to E2B with the existing backup and recovery flow ([usage](docs/tangow.md)).
 - **Docker installs now run each bot run in its own short-lived, isolated container, with the same agent as E2B.** Bot and space files live on volumes the bot's computer shares, and existing homes move onto them automatically when you upgrade; a computer still running at upgrade time can't do file work until it next goes to sleep ([self-hosting guide](docs/self-host.md#choosing-a-computer-provider)).
 
 #### Changed
@@ -222,7 +223,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - On web, desktop and iPhone, each message a bot sends during a run keeps its own bubble when the final answer arrives, instead of being merged into it.
 - Idle E2B computers now pause after the configured inactivity delay instead of staying awake or waking again when the inactivity check runs, across web, desktop and iPhone.
 - Bots running in isolated workers can follow browser and connected-app instructions with the correct tools, while retaining the reason a connector failed.
-- While a bot works on web, desktop and iPhone, activity messages describe the tool being used even when it has a Rakazo MCP prefix, instead of showing raw tool names and arguments or a generic status.
+- While a bot works on web, desktop and iPhone, activity messages describe the tool being used even when it has a Tangow MCP prefix, instead of showing raw tool names and arguments or a generic status.
 
 - Opening a bot computer screen or taking control on web, desktop and iPhone no longer fails after the dock starts.
 - Computer updates and recovery on web, desktop and iPhone now show an explicit successful result until you select Done, instead of closing the progress view without confirmation.
@@ -243,7 +244,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
-- **On E2B, each bot run now works in its own temporary isolated VM with the native Pi harness, its files on persistent volumes shared with its computer.** This replaces runs inside the Rakazo server and home snapshots on E2B deployments, for conversations on web, desktop and iPhone. A computer created before this release moves its home onto volumes once with a script ([setup and move](docs/self-host-e2b-workers.md)).
+- **On E2B, each bot run now works in its own temporary isolated VM with the native Pi harness, its files on persistent volumes shared with its computer.** This replaces runs inside the Tangow server and home snapshots on E2B deployments, for conversations on web, desktop and iPhone. A computer created before this release moves its home onto volumes once with a script ([setup and move](docs/self-host-e2b-workers.md)).
 
 #### Changed
 
@@ -259,7 +260,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Changed
 
 - A bot's Needs you card now has an Open button that opens its screen in one click, on web and desktop instead of going through the computer panel and its hover preview, and on iPhone as a Computer card instead of a plain message.
-- Rakazo takes a softer grey look on web, desktop and iPhone: a faint ambient light behind glass navigation and composer, cards on the bot's paper that settle into the conversation once answered, and solid fallbacks when Reduce Transparency is on.
+- Tangow takes a softer grey look on web, desktop and iPhone: a faint ambient light behind glass navigation and composer, cards on the bot's paper that settle into the conversation once answered, and solid fallbacks when Reduce Transparency is on.
 
 #### Fixed
 
@@ -273,7 +274,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Reverted
 
-- Skill marketplaces can no longer be added or used from the Skills screen on web, desktop and mobile; your own skills and Rakazo's built-in skills are unchanged.
+- Skill marketplaces can no longer be added or used from the Skills screen on web, desktop and mobile; your own skills and Tangow's built-in skills are unchanged.
 
 ### 2026-10-19
 
@@ -472,7 +473,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Added
 
 - **Bots can save and later edit complete skills with scripts and reference files.** A bot drafts the skill folder in its workspace and saves it in one step, then edits a saved skill the same way, on every surface; new skills stay visible to that bot only until you share them.
-- **Links you share now show a preview card.** When you send a link, or a bot shares one with you, the page's title, site and picture (or the site's icon) appear under the message on web, desktop and iOS, and you can remove a preview before or after sending. Your Rakazo server reads the page, or the phone or desktop app that shares the link does when a site blocks servers; nobody's device fetches anything when reading a conversation.
+- **Links you share now show a preview card.** When you send a link, or a bot shares one with you, the page's title, site and picture (or the site's icon) appear under the message on web, desktop and iOS, and you can remove a preview before or after sending. Your Tangow server reads the page, or the phone or desktop app that shares the link does when a site blocks servers; nobody's device fetches anything when reading a conversation.
 
 #### Changed
 
@@ -606,7 +607,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
-- **iPhone notifications now show the bot's own avatar.** When a bot finishes, fails or needs you, the notification carries its shape and colour with the Rakazo icon as a small badge, the way messaging apps show a contact, instead of the bare app icon. It follows the organic avatar style; with the robot style the notification keeps the app icon.
+- **iPhone notifications now show the bot's own avatar.** When a bot finishes, fails or needs you, the notification carries its shape and colour with the Tangow icon as a small badge, the way messaging apps show a contact, instead of the bare app icon. It follows the organic avatar style; with the robot style the notification keeps the app icon.
 
 ### 2026-09-23
 
@@ -618,7 +619,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
-- On iPhone and iPad, the Rakazo icon now shows a badge with the number of unread conversations when a bot finishes or needs you, and the badge drops as you read them; it never appeared before, so a message waiting in a closed app gave no sign on the home screen.
+- On iPhone and iPad, the Tangow icon now shows a badge with the number of unread conversations when a bot finishes or needs you, and the badge drops as you read them; it never appeared before, so a message waiting in a closed app gave no sign on the home screen.
 
 ### 2026-09-20
 
@@ -694,7 +695,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Changed
 
 - The conversation column is wider on large screens (800 px instead of 668), so replies and the message box use more of a desktop window.
-- Rakazo's pages, text and borders move to the Quiet palette (warm off-white page, ink text, hairline borders) in light and dark mode, on web, desktop and mobile.
+- Tangow's pages, text and borders move to the Quiet palette (warm off-white page, ink text, hairline borders) in light and dark mode, on web, desktop and mobile.
 - On web and desktop the app is two panes: a narrower bots sidebar and the conversation in a centred column, with the thread header reduced to the name and one button.
 - The bot's computer and routines now open over the conversation from the "Computer & routines" button in the thread header and close with Escape or the X, instead of holding a third column open beside the thread.
 - Bots now wear their organic avatar by default on web, desktop and mobile; a working bot shows its glow instead of a spinning ring, and the robot look stays available in Settings › Appearance.

@@ -2,8 +2,8 @@ import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
-import type { AdapterContext, SandboxProvider, WorkerProvider } from "@rakazo/adapter-kit";
-import type { E2BSandboxSdk, E2BWorkerSdk } from "@rakazo/adapters";
+import type { AdapterContext, SandboxProvider, WorkerProvider } from "@tangow/adapter-kit";
+import type { E2BSandboxSdk, E2BWorkerSdk } from "@tangow/adapters";
 import {
   E2BSandboxProvider,
   E2BVolumeFiles,
@@ -11,14 +11,14 @@ import {
   e2bComputerSdk,
   e2bVolumeSandbox,
   e2bWorkerSdk,
-} from "@rakazo/adapters";
-import type { GuestConnector } from "@rakazo/adapters/runtime-worker";
+} from "@tangow/adapters";
+import type { GuestConnector } from "@tangow/adapters/runtime-worker";
 import type { ConnectionOpts } from "e2b";
 import { Sandbox, Volume } from "e2b";
 
 export const MIN_MEM_AVAILABLE_MIB = 1536;
 /** Where the product's E2B computer links its workspace: the volumes' root. */
-export const COMPUTER_WORKSPACE = "/home/user/rakazo-home";
+export const COMPUTER_WORKSPACE = "/home/user/tangow-home";
 const VM_TIMEOUT_MS = 15 * 60 * 1000;
 export const POLL_INTERVAL_S = 0.05;
 const POLL_ROUNDS = 1200;
@@ -143,7 +143,7 @@ export function liveSession(config: LiveConfig) {
       guest?: { path: string; script: string; args?: string },
     ) => {
       guest ??= config.guestBundle
-        ? { path: "/tmp/rakazo-n13-guest.mjs", script: readFileSync(config.guestBundle, "utf8") }
+        ? { path: "/tmp/tangow-n13-guest.mjs", script: readFileSync(config.guestBundle, "utf8") }
         : undefined;
       return new E2BWorkerProvider(
         {
@@ -173,11 +173,11 @@ export function liveSession(config: LiveConfig) {
                     path.join(path.dirname(config.guestBundle), "managed-skills.tar"),
                   );
                   await vm.files.write(
-                    "/tmp/rakazo-managed-skills.tar",
+                    "/tmp/tangow-managed-skills.tar",
                     new Uint8Array(archive).buffer,
                   );
                   await vm.commands.run(
-                    "mkdir -p /managed-skills && tar -xf /tmp/rakazo-managed-skills.tar -C /managed-skills && chmod -R a-w /managed-skills",
+                    "mkdir -p /managed-skills && tar -xf /tmp/tangow-managed-skills.tar -C /managed-skills && chmod -R a-w /managed-skills",
                     { user: "root" },
                   );
                 }
@@ -225,7 +225,7 @@ export function liveSession(config: LiveConfig) {
       const ids: string[] = [];
       const pages = Sandbox.list({
         ...connection,
-        query: { metadata: { p3live: tag, rakazo: "volume-files" } },
+        query: { metadata: { p3live: tag, tangow: "volume-files" } },
       });
       while (pages.hasNext) ids.push(...(await pages.nextItems()).map((info) => info.sandboxId));
       for (const id of ids) await Sandbox.kill(id, connection);

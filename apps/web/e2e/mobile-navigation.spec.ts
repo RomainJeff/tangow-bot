@@ -5,7 +5,7 @@ import { expect, test } from "./test";
 test("the phone bot list is a page that a chat opens from and returns to", async ({
   page,
 }, testInfo) => {
-  await signup(page, `mobile-nav-${Date.now()}@rakazo.test`, "password12", "Phone Nav");
+  await signup(page, `mobile-nav-${Date.now()}@tangow.test`, "password12", "Phone Nav");
   await completeOnboarding(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForURL(/\/app\/[^/]+$/);

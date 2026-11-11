@@ -1,7 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
-import type { AgentSkillCatalogEntry } from "@rakazo/contracts";
-import type { ComposerMention } from "@rakazo/core";
-import { Button } from "@rakazo/ui-web";
+import type { AgentSkillCatalogEntry } from "@tangow/contracts";
+import type { ComposerMention } from "@tangow/core";
+import { Button } from "@tangow/ui-web";
 import { Check, Mic, X } from "lucide-react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";

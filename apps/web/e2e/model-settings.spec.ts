@@ -10,14 +10,14 @@ import {
 } from "./helpers";
 import { expect, test } from "./test";
 
-const LOCAL_MODEL_ID = "rakazo-e2e-local";
+const LOCAL_MODEL_ID = "tangow-e2e-local";
 
 test("custom connections persist reasoning support and bot thinking", async ({
   page,
 }, testInfo) => {
   const stamp = Date.now();
   const userName = `Reasoning ${stamp}`;
-  await signup(page, `reasoning-model-${stamp}@rakazo.test`, "password12", userName);
+  await signup(page, `reasoning-model-${stamp}@tangow.test`, "password12", userName);
   await completeOnboarding(page);
   await openUserSettings(page, "providers");
   await page.getByPlaceholder("Search providers").fill("openai-compatible");
@@ -133,7 +133,7 @@ test("connects to and lists an OpenAI-compatible endpoint", async ({ page }, tes
     const baseUrl = `http://127.0.0.1:${address.port}/v1`;
     const stamp = Date.now();
     const userName = `Local model ${stamp}`;
-    await signup(page, `local-model-${stamp}@rakazo.test`, "password12", userName);
+    await signup(page, `local-model-${stamp}@tangow.test`, "password12", userName);
     await completeOnboarding(page);
 
     await openUserSettings(page, "providers");
@@ -187,7 +187,7 @@ test("connects to and lists an OpenAI-compatible endpoint", async ({ page }, tes
 test("model settings connect, replace, and cancel provider authentication", async ({ page }) => {
   const stamp = Date.now();
   const userName = `Models ${stamp}`;
-  await signup(page, `models-${stamp}@rakazo.test`, "password12", userName);
+  await signup(page, `models-${stamp}@tangow.test`, "password12", userName);
   await completeOnboarding(page);
 
   await openUserSettings(page, "providers");
@@ -263,7 +263,7 @@ test("Auto category models persist and a fixed default disables Auto", async ({
   page,
 }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `auto-model-${stamp}@rakazo.test`, "password12", "Model routing");
+  await signup(page, `auto-model-${stamp}@tangow.test`, "password12", "Model routing");
   await completeOnboarding(page);
   await rpc(page, "models/connect", {
     provider: "scripted",

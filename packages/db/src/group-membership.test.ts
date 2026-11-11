@@ -20,7 +20,7 @@ describe("people in a group", () => {
   const actor = (userId: string) => ({
     userId,
     spaceId: space,
-    email: `${userId}@rakazo.test`,
+    email: `${userId}@tangow.test`,
     isDeploymentOwner: false,
   });
 
@@ -28,7 +28,7 @@ describe("people in a group", () => {
     database = await openPgliteDatabase();
     prisma = database.prisma;
     for (const id of ["creator", "person", "outsider"]) {
-      await prisma.user.create({ data: { id, name: id, email: `${id}@rakazo.test` } });
+      await prisma.user.create({ data: { id, name: id, email: `${id}@tangow.test` } });
     }
     const home = (await bootstrapUserSpace(prisma, { id: "creator" }, env)).spaceId;
     for (const id of ["person", "outsider"]) await bootstrapUserSpace(prisma, { id }, env);
@@ -39,7 +39,7 @@ describe("people in a group", () => {
       const [invitation] = await createSpaceInvitations(prisma, {
         spaceId: space,
         userId: "creator",
-        emails: [`${id}@rakazo.test`],
+        emails: [`${id}@tangow.test`],
       });
       await acceptSpaceInvitation(prisma, { token: invitation!.id, userId: id });
     }

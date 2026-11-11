@@ -1,4 +1,4 @@
-import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
+import { ACTIVE_RUN_STATUSES } from "@tangow/core";
 import { Prisma } from "./client.js";
 import { appendRunFinishedInTransaction } from "./sessions.js";
 

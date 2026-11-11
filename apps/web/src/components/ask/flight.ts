@@ -1,5 +1,5 @@
-import type { CommitSource } from "@rakazo/core";
-import { motion, springAt, springEasing } from "@rakazo/ui-tokens";
+import type { CommitSource } from "@tangow/core";
+import { motion, springAt, springEasing } from "@tangow/ui-tokens";
 import { flushSync } from "react-dom";
 import { transcriptEnd } from "../../lib/transcript-scroll";
 

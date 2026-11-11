@@ -1,6 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
-import { isApprovalAskBlock, isSecretAskBlock, narrateTool, speechFromBlocks } from "@rakazo/core";
-import { BotAvatar, Button, useElapsed } from "@rakazo/ui-web";
+import { isApprovalAskBlock, isSecretAskBlock, narrateTool, speechFromBlocks } from "@tangow/core";
+import { BotAvatar, Button, useElapsed } from "@tangow/ui-web";
 import { Mic, MicOff, PhoneOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { approvalActionLabel } from "../lib/approval-labels";

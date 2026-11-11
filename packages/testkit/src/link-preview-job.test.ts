@@ -4,10 +4,10 @@ import {
   type LinkPreviewJobDeps,
   type LinkPreviewReadResult,
   runLinkPreviewJob,
-} from "@rakazo/adapters";
-import type { MessageBlock } from "@rakazo/contracts";
-import { appendLinkBlocks, removeLinkPreviewBlock } from "@rakazo/db";
-import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
+} from "@tangow/adapters";
+import type { MessageBlock } from "@tangow/contracts";
+import { appendLinkBlocks, removeLinkPreviewBlock } from "@tangow/db";
+import { createLogger, createTestSink, installLogger } from "@tangow/logging";
 import { PNG } from "pngjs";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { openThreadDb, type ThreadDb } from "./thread-db.js";
@@ -69,7 +69,7 @@ const said = (id: string, blocks: MessageBlock[], threadId = "thread-1") =>
 const card = async (messageId: string) => (await db.previewOf(messageId)).card;
 const previewArtifacts = () => db.prisma.artifact.findMany({ where: { isLinkPreview: true } });
 
-afterEach(() => installLogger(createLogger({ service: "rakazo-worker", level: "off", sinks: [] })));
+afterEach(() => installLogger(createLogger({ service: "tangow-worker", level: "off", sinks: [] })));
 
 describe("link.preview job for a message a person sent", () => {
   it("logs the card against the message and tells the thread once", async () => {
@@ -212,7 +212,7 @@ describe("link.preview job for a message a person sent", () => {
     it("logs nothing at all for a secret link (no read, no cache, no log)", async () => {
       const { deps } = await setup();
       const sink = createTestSink();
-      installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+      installLogger(createLogger({ service: "tangow-worker", sinks: [sink] }));
       await said("m1", [text("https://example.test/p?magic=SECRET")]);
 
       await runLinkPreviewJob(deps, { messageId: "m1" });
@@ -394,7 +394,7 @@ describe("link.preview job for a message a person sent", () => {
         },
       });
       const sink = createTestSink();
-      installLogger(createLogger({ service: "rakazo-worker", sinks: [sink] }));
+      installLogger(createLogger({ service: "tangow-worker", sinks: [sink] }));
       await said("m1", [text(PAGE)]);
 
       await expect(runLinkPreviewJob(deps, { messageId: "m1" })).resolves.toBeUndefined();

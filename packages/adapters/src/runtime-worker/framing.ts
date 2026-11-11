@@ -6,7 +6,7 @@ import {
   parseGuestMessage,
   type RefusalReason,
   type WireParse,
-} from "@rakazo/adapter-kit";
+} from "@tangow/adapter-kit";
 import { WORKER_LIMITS } from "./limits.js";
 
 /** One connection: ordered whole frames, no retransmission of its own. A reconnect is a new channel. */

@@ -1,5 +1,5 @@
-import type { AskDraft, AskDraftEdits } from "@rakazo/contracts";
-import { askDraftState } from "@rakazo/contracts";
+import type { AskDraft, AskDraftEdits } from "@tangow/contracts";
+import { askDraftState } from "@tangow/contracts";
 import { sameRecipients } from "./outbound-draft.js";
 
 /** How long a discarded draft can still be brought back before the bot hears of it. */

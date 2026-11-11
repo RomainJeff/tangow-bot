@@ -7,7 +7,7 @@ import { answerOf, threadEntries } from "./thread-log";
 // run, never the old "Answer the pending ask first." block.
 test("resolves a pending ask from the main composer", async ({ page }, testInfo) => {
   const stamp = Date.now();
-  await signup(page, `ask-composer-${stamp}@rakazo.test`, "password12", "Ask Composer");
+  await signup(page, `ask-composer-${stamp}@tangow.test`, "password12", "Ask Composer");
   await completeOnboarding(page);
 
   const botId = activeBotId(page);

@@ -46,7 +46,7 @@ export type GraphqlOperation = z.infer<typeof GraphqlOperationSchema>;
 export type GraphqlConfig = z.infer<typeof GraphqlConfigSchema>;
 export type RemoteGraphqlDependencies = RemoteTransportDependencies;
 
-const INTROSPECTION_QUERY = `query RakazoIntrospection {
+const INTROSPECTION_QUERY = `query TangowIntrospection {
   __schema {
     queryType { name }
     mutationType { name }
@@ -367,7 +367,7 @@ async function introspectGraphqlEndpoint(
     const response = await safeFetch(url, {
       method: "POST",
       headers,
-      body: JSON.stringify({ query: INTROSPECTION_QUERY, operationName: "RakazoIntrospection" }),
+      body: JSON.stringify({ query: INTROSPECTION_QUERY, operationName: "TangowIntrospection" }),
       signal: combineSignals(signal, AbortSignal.timeout(15_000)),
     });
     if (!response.ok) throw new Error(`GraphQL introspection returned HTTP ${response.status}`);

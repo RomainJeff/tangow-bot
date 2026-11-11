@@ -1,5 +1,5 @@
-import type { RealtimeFanout } from "@rakazo/adapter-kit";
-import type { AskAnswers, AskDraftEdits, FactualRunRecap, SessionId } from "@rakazo/contracts";
+import type { RealtimeFanout } from "@tangow/adapter-kit";
+import type { AskAnswers, AskDraftEdits, FactualRunRecap, SessionId } from "@tangow/contracts";
 import {
   ASK_ANSWER_MAX_LENGTH,
   type AskQuestion,
@@ -7,8 +7,8 @@ import {
   type MessageBlock,
   type ProductEvent,
   RUN_WORK_TYPES,
-} from "@rakazo/contracts";
-import type { DraftRecord } from "@rakazo/core";
+} from "@tangow/contracts";
+import type { DraftRecord } from "@tangow/core";
 import {
   ACTIVE_RUN_STATUSES,
   askDraftDetail,
@@ -33,9 +33,9 @@ import {
   validateSpawnBotArgs,
   valueAt,
   withValueAt,
-} from "@rakazo/core";
-import { approvalEffectKey } from "@rakazo/core/node/approval-effect-key";
-import { getLogger } from "@rakazo/logging";
+} from "@tangow/core";
+import { approvalEffectKey } from "@tangow/core/node/approval-effect-key";
+import { getLogger } from "@tangow/logging";
 import { activeBotNames } from "./bot-names.js";
 import type { BrowserApprovalCheckpoint } from "./browser-approval-checkpoint.js";
 import { cancelRunsInTransaction } from "./cancel-runs.js";

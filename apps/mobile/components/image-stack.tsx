@@ -1,6 +1,6 @@
-import type { StackCardModel, StackImage } from "@rakazo/core";
-import { IMAGE_STACK, STACK_ROOM, stackCards, stackStepX } from "@rakazo/core";
-import { motion, radii, sizes } from "@rakazo/ui-tokens";
+import type { StackCardModel, StackImage } from "@tangow/core";
+import { IMAGE_STACK, STACK_ROOM, stackCards, stackStepX } from "@tangow/core";
+import { motion, radii, sizes } from "@tangow/ui-tokens";
 import { Link } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ViewProps } from "react-native";

@@ -1,7 +1,7 @@
 import { lstat, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import type { AdapterContext, PortableFile, VolumeFiles } from "@rakazo/adapter-kit";
-import { parseSkillMd } from "@rakazo/core";
+import type { AdapterContext, PortableFile, VolumeFiles } from "@tangow/adapter-kit";
+import { parseSkillMd } from "@tangow/core";
 import { hasCode, skillDirName } from "./skill-store.js";
 
 type MigrationEvent = {

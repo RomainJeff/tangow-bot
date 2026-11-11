@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import type { ThreadItem } from "@rakazo/contracts";
-import { ThreadItemSchema } from "@rakazo/contracts";
+import type { ThreadItem } from "@tangow/contracts";
+import { ThreadItemSchema } from "@tangow/contracts";
 import type { ReactNode } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";

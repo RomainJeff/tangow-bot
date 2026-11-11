@@ -1,5 +1,5 @@
-import type { SessionEntryDraft } from "@rakazo/adapter-kit";
-import type { EntryId, SessionEntry, SessionId } from "@rakazo/contracts";
+import type { SessionEntryDraft } from "@tangow/adapter-kit";
+import type { EntryId, SessionEntry, SessionId } from "@tangow/contracts";
 import { vi } from "vitest";
 
 export function recordingSessionLog() {

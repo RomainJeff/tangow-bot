@@ -1,12 +1,12 @@
-import type { JobPublisher, SandboxProvider } from "@rakazo/adapter-kit";
-import { computerSleepJob } from "@rakazo/adapter-kit";
-import type { BrowserApprovalCheckpoint, PrismaClient, ThreadEvents } from "@rakazo/db";
+import type { JobPublisher, SandboxProvider } from "@tangow/adapter-kit";
+import { computerSleepJob } from "@tangow/adapter-kit";
+import type { BrowserApprovalCheckpoint, PrismaClient, ThreadEvents } from "@tangow/db";
 import {
   BROWSER_APPROVAL_CHECKPOINT_PREFIX,
   browserApprovalCheckpointOf,
   cancelRunsInTransaction,
   Prisma,
-} from "@rakazo/db";
+} from "@tangow/db";
 import { hasActiveComputerControl } from "./computer-control.js";
 import { releaseBotScreen } from "./computer-lifecycle.js";
 
