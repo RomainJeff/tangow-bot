@@ -40,17 +40,14 @@ function applyThreadEvent(
   commitComputer: (next: ComputerStatus | null) => void,
   snapshotRef: RefObject<ThreadState | null>,
   computerRef: RefObject<ComputerStatus | null>,
-  /** A group carries several bots' computer events: only those of its open computer's bot apply. */
-  groupComputerBotId?: string | null,
+  /** A group carries several bots' computer events: only those of the computer it shows apply. */
+  group = false,
 ) {
   if (isThreadStateEvent(event)) {
     const next = reduceThreadState(snapshotRef.current, event);
     commitSnapshot(next);
   }
-  if (
-    isComputerStatusEvent(event) &&
-    (groupComputerBotId === undefined || event.botId === groupComputerBotId)
-  ) {
+  if (isComputerStatusEvent(event) && (!group || event.botId === computerRef.current?.botId)) {
     const next = reduceComputerStatus(computerRef.current, event);
     commitComputer(next);
   }
@@ -328,14 +325,7 @@ export function useThreadSync({
       currentSnapshot: () => snapshotRef.current,
       subscribe: (cursor) => rpc.threads.subscribe({ groupId, cursor }, { signal: abort.signal }),
       applyEvent: (event) =>
-        applyThreadEvent(
-          event,
-          commitSnapshot,
-          commitComputer,
-          snapshotRef,
-          computerRef,
-          computerBotId.current ?? null,
-        ),
+        applyThreadEvent(event, commitSnapshot, commitComputer, snapshotRef, computerRef, true),
       onEvent: (event, initial) => {
         const eventBot = botsRef.current.find((bot) => bot.id === event.botId);
         notifyBrowserForEvent(

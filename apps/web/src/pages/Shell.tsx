@@ -57,8 +57,12 @@ export function ShellPage() {
     panelOpen: panels.panelOpen,
   });
   const thread = useThreadView(store.snapshot, roster);
-  // The computer the window opens: the bot's own, or in a group the bot whose run waits for you.
-  const computerBot = inGroup ? bots.find((bot) => bot.id === thread.takeoverRun?.botId) : active;
+  // The computer the window opens: the bot's own, or in a group the bot whose run waits for you,
+  // which stays while you hold its screen so a run stopped meanwhile still lets you hand it back.
+  const heldBotId =
+    store.computer?.controlHolder === "user" ? store.computer.controlBotId : undefined;
+  const groupComputerBotId = thread.takeoverRun?.botId ?? heldBotId;
+  const computerBot = inGroup ? bots.find((bot) => bot.id === groupComputerBotId) : active;
   const computerRunStatus = inGroup ? thread.takeoverRun?.status : store.snapshot?.run?.status;
   const screen = useComputerScreen({ panel, botId: computerBot?.id, store });
   const [agentSkills, refreshAgentSkills] = useAgentSkillCatalog(roster.activeBotId);
