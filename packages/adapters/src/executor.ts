@@ -4839,6 +4839,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             const routed = await messageHelper(deps.prisma, {
               threadId: run.threadId,
               botId: run.botId,
+              userId: run.userId,
               helperId,
               text,
             });
@@ -8205,13 +8206,15 @@ function isErrorResult(result: unknown): boolean {
   return Boolean(result) && typeof result === "object" && "error" in (result as object);
 }
 
-type HelperScope = { threadId: string; botId: string };
+/** A run's helpers run as its person: in a group, another person's helpers are never its own. */
+type HelperScope = { threadId: string; botId: string; userId: string };
 
 async function helperStatus(prisma: PrismaClient, scope: HelperScope) {
   const runs = await prisma.run.findMany({
     where: {
       threadId: scope.threadId,
       botId: scope.botId,
+      userId: scope.userId,
       trigger: "helper",
       status: { in: [...ACTIVE_RUN_STATUSES] },
     },
@@ -8279,6 +8282,7 @@ async function stopHelpers(
       where: {
         threadId: scope.threadId,
         botId: scope.botId,
+        userId: scope.userId,
         trigger: "helper",
         status: { in: [...ACTIVE_RUN_STATUSES] },
         ...(helperId === "all" ? {} : { id: helperId }),

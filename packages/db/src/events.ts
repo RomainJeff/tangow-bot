@@ -1815,7 +1815,7 @@ export async function pauseRunForParent(
  */
 export async function messageHelper(
   prisma: PrismaClient,
-  input: { threadId: string; botId: string; helperId: string; text: string },
+  input: { threadId: string; botId: string; userId: string; helperId: string; text: string },
 ): Promise<"answered" | "steered" | "ended" | "unknown"> {
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     await tx.$queryRaw`SELECT id FROM threads WHERE id = ${input.threadId} FOR UPDATE`;
@@ -1824,6 +1824,8 @@ export async function messageHelper(
         id: input.helperId,
         threadId: input.threadId,
         botId: input.botId,
+        // A helper runs as its parent's person; another person's is not this run's to message.
+        userId: input.userId,
         trigger: "helper",
       },
       select: { status: true, sessionId: true, userId: true },

@@ -2,11 +2,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { bootstrapUserSpace } from "./bootstrap-user.js";
 import { setBotSharing } from "./bot-sharing.js";
 import type { PrismaClient } from "./client.js";
-import { claimSteering, finalizeRun } from "./events.js";
+import { claimSteering, finalizeRun, messageHelper } from "./events.js";
 import { createGroupRepos, GroupCreatorCannotLeaveError } from "./groups.js";
+import { createThreadMessageInTransaction } from "./messages.js";
 import { openPgliteDatabase, type PgliteDatabase } from "./pglite.test-support.js";
 import { createRepos } from "./repos.js";
-import { createThreadMessageInTransaction } from "./messages.js";
 import { IsolationError } from "./scope.js";
 import {
   acceptSpaceInvitation,
@@ -245,7 +245,30 @@ describe("a group's people, bots and lead", () => {
     expect(continuation.userId).toBe("creator");
     expect(await claim()).toEqual([]);
 
-    await prisma.steeringMessage.updateMany({ where: { userId: "creator" }, data: { runId: null } });
+    await prisma.steeringMessage.updateMany({
+      where: { userId: "creator" },
+      data: { runId: null },
+    });
     expect(await claim()).toEqual([]);
+  });
+
+  it("lets a run message only its own person's helpers", async () => {
+    const group = await newGroup(["ana"]);
+    const anaRun = await holdRun("ana", group.threadId);
+    const anaHelper = await holdRun("ana", group.threadId, {
+      trigger: "helper",
+      parentRunId: anaRun.id,
+    });
+    const tell = (userId: string) =>
+      messageHelper(prisma, {
+        threadId: group.threadId,
+        botId: sharedBot,
+        userId,
+        helperId: anaHelper.id,
+        text: "Faster",
+      });
+
+    expect(await tell("creator")).toBe("unknown");
+    expect(await tell("ana")).toBe("steered");
   });
 });
