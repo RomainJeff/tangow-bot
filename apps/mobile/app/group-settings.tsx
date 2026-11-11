@@ -133,8 +133,23 @@ export default function GroupSettingsScreen() {
     fontSize: 16,
   };
 
+  // Nothing to change until it is known whose group this is.
+  if (!group) {
+    return (
+      <>
+        <Stack.Screen options={{ title: t("Group settings") }} />
+        <ScrollView
+          style={{ flex: 1, backgroundColor: tokens.background }}
+          contentContainerStyle={{ padding: 24 }}
+        >
+          {error ? <Text style={{ color: tokens.destructive }}>{error}</Text> : null}
+        </ScrollView>
+      </>
+    );
+  }
+
   // Only its creator changes a group; everyone else sees who is in it and may leave.
-  if (group && !group.canManage) {
+  if (!group.canManage) {
     return (
       <>
         <Stack.Screen options={{ title: t("Group settings") }} />
