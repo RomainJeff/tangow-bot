@@ -1962,13 +1962,13 @@ describeWithDatabase("API authorization and resource isolation", () => {
     ).threadId;
     await rpc(app, sam.cookie, "threads/get", { botId: bot.id }, space);
     /** Dana's run holding the bot's computer: running for a worker, or paused for her. */
-    const danaRun = async (status: "running" | "waiting_takeover") => {
+    const danaRun = async (status: "running" | "waiting_takeover", threadId = danaThread) => {
       const task = await handles.prisma.task.create({
         data: {
           spaceId: space,
           userId: dana.userId,
           botId: bot.id,
-          threadId: danaThread,
+          threadId,
           prompt: "Sign in",
           status: "running",
         },
@@ -1978,7 +1978,7 @@ describeWithDatabase("API authorization and resource isolation", () => {
           spaceId: space,
           userId: dana.userId,
           botId: bot.id,
-          threadId: danaThread,
+          threadId,
           taskId: task.id,
           status,
           trigger: "user",
@@ -2102,6 +2102,52 @@ describeWithDatabase("API authorization and resource isolation", () => {
         status: 404,
       });
     }
+  });
+
+  it("lets a member take over their own run's screen in a group, and nobody else's", async () => {
+    const fixture = await sharedBotComputer("group-takeover");
+    const { owner, space, dana, sam, bot, computerId, call } = fixture;
+    const group = await rpc<{ threadId: string }>(
+      app,
+      owner,
+      "groups/create",
+      { name: "Crew", botIds: [bot.id], userIds: [dana.userId] },
+      space,
+    );
+    const run = await fixture.danaRun("waiting_takeover", group.threadId);
+    await handles.prisma.computer.update({
+      where: { id: computerId },
+      data: { controlRunId: run.id },
+    });
+
+    await expect(call(sam.cookie, "computer/takeover")).resolves.toMatchObject({ status: 403 });
+    await expect(call(dana.cookie, "computer/takeover")).resolves.toMatchObject({ status: 200 });
+  });
+
+  it("lets only a run's person answer its cards in a group", async () => {
+    const { owner, space, dana, bot } = await sharedBotSpace("group-answer");
+    const group = await rpc<{ id: string }>(
+      app,
+      owner,
+      "groups/create",
+      { name: "Crew", botIds: [bot.id], userIds: [dana.userId] },
+      space,
+    );
+    const sent = await rpc<{ runId: string }>(
+      app,
+      owner,
+      "threads/send",
+      { groupId: group.id, text: "Plan the week" },
+      space,
+    );
+    const answer = { groupId: group.id, runId: sent.runId, messageId: sent.runId, answer: "yes" };
+
+    await expect(raw(app, dana.cookie, "threads/answer", answer, space)).resolves.toMatchObject({
+      status: 403,
+    });
+    await expect(raw(app, owner, "threads/answer", answer, space)).resolves.toMatchObject({
+      status: 409,
+    });
   });
 
   it("keeps the owner's screen when a member's run asks for a takeover while the owner holds it", async () => {

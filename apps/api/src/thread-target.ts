@@ -336,14 +336,16 @@ async function findConversationRunIds(
   return new Set(rows.map((row) => row.id));
 }
 
+/** A new message supersedes its sender's own queued runs, never another person's in a group. */
 export async function cancelSupersededQueuedRuns(
   tx: Prisma.TransactionClient,
-  input: { threadId: string; botIds: string[]; keepRunIds: string[] },
+  input: { threadId: string; botIds: string[]; userId: string; keepRunIds: string[] },
 ) {
   const superseded = await tx.run.findMany({
     where: {
       threadId: input.threadId,
       botId: { in: input.botIds },
+      userId: input.userId,
       status: "queued",
       OR: [{ trigger: "user", sourceMessage: { type: "user.message" } }, { trigger: "reaction" }],
       id: { notIn: input.keepRunIds },
@@ -934,6 +936,7 @@ export async function sendThreadMessage(
         await cancelSupersededQueuedRuns(tx, {
           threadId: target.threadId,
           botIds: [target.botId],
+          userId: actor.userId,
           keepRunIds: [run.id],
         });
         return {
@@ -980,10 +983,13 @@ export async function sendThreadMessage(
         );
       if (!eventBotId) throw new IsolationError("Group send did not resolve a target");
       await tx.$queryRaw`SELECT id FROM threads WHERE id = ${target.threadId} FOR UPDATE`;
+      // Only the sender's own runs take this message: another person's run on the same bot keeps
+      // its course, its asks and cards stay theirs, and the sender gets a run of their own.
       const activeRuns = await tx.run.findMany({
         where: {
           threadId: target.threadId,
           botId: { in: targetBotIds },
+          userId: actor.userId,
           parentRunId: null,
           status: { in: [...ACTIVE_RUN_STATUSES] },
         },
@@ -1110,6 +1116,7 @@ export async function sendThreadMessage(
         await cancelSupersededQueuedRuns(tx, {
           threadId: target.threadId,
           botIds: createdRuns.map((run) => run.botId),
+          userId: actor.userId,
           keepRunIds: createdRuns.map((run) => run.id),
         });
       }

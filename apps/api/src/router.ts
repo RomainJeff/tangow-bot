@@ -1933,6 +1933,7 @@ export function createRouter(deps: RouterDeps) {
             where: {
               threadId: target.threadId,
               botId,
+              userId: context.actor.userId,
               status: { in: [...ACTIVE_RUN_STATUSES] },
               ...conversationRunFilter,
             },
@@ -1993,6 +1994,13 @@ export function createRouter(deps: RouterDeps) {
       }),
       answer: authed.threads.answer.handler(async ({ context, input }) => {
         const target = await resolveThreadTarget(deps.prisma, context.actor, input);
+        // In a group, a run's cards are its person's: nobody else answers them.
+        if (target.kind === "group") {
+          const own = await deps.prisma.run.count({
+            where: { id: input.runId, threadId: target.threadId, userId: context.actor.userId },
+          });
+          if (own === 0) throw new ORPCError("FORBIDDEN");
+        }
         const answered = await deps.events
           .answerRunInput({
             spaceId: context.actor.spaceId,
@@ -5525,7 +5533,8 @@ async function memberComputerRun(
       id: lease.runId,
       botId: bot.id,
       userId: memberId,
-      threadId: bot.thread.id,
+      // Their own thread with the bot, or a group they are in.
+      OR: [{ threadId: bot.thread.id }, { thread: { group: groupMembershipFilter(memberId) } }],
       status: { in: [...ACTIVE_RUN_STATUSES] },
     },
     select: { id: true, status: true },

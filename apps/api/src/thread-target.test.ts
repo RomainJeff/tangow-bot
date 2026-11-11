@@ -105,6 +105,7 @@ describe("queued run supersession", () => {
     await cancelSupersededQueuedRuns(tx as never, {
       threadId: "thread-1",
       botIds: ["bot-1"],
+      userId: "user-1",
       keepRunIds: ["run-new"],
     });
     expect(tx.run.findMany).toHaveBeenCalledWith(
@@ -2349,13 +2350,32 @@ describe("a group send runs as its sender", () => {
     memberBotIds: ["bot-a", "bot-b"],
   } satisfies ThreadTarget;
 
-  /** A group whose lead is Beta, where the sender can use only `usable`. */
-  function harness(usable: string[]) {
+  type ActiveRun = { id: string; taskId: string; botId: string; userId: string; status: string };
+  type RunWhere = {
+    id?: { in?: string[]; notIn?: string[] };
+    botId?: { in: string[] };
+    userId?: string;
+    status?: string | { in: string[] };
+  };
+
+  /** A group whose lead is Beta, where the sender can use only `usable`, and `runs` are active. */
+  function harness(usable: string[], runs: ActiveRun[] = []) {
+    const matches = (run: ActiveRun, where: RunWhere) =>
+      (!where.id?.in || where.id.in.includes(run.id)) &&
+      !where.id?.notIn?.includes(run.id) &&
+      (!where.botId || where.botId.in.includes(run.botId)) &&
+      (!where.userId || where.userId === run.userId) &&
+      (!where.status ||
+        (typeof where.status === "string"
+          ? where.status === run.status
+          : where.status.in.includes(run.status)));
     const tx = {
       thread: { findUniqueOrThrow: vi.fn().mockResolvedValue(THREAD) },
       sessionEntry: { findFirst: vi.fn().mockResolvedValue(null) },
       run: {
-        findMany: vi.fn().mockResolvedValue([]),
+        findMany: vi.fn(async ({ where }: { where: RunWhere }) =>
+          runs.filter((run) => matches(run, where)),
+        ),
         findUnique: vi.fn().mockResolvedValue({ status: "queued", startedAt: null }),
         create: vi.fn(async ({ data }: { data: { botId: string } }) => ({
           id: `run-${data.botId}`,
@@ -2413,6 +2433,30 @@ describe("a group send runs as its sender", () => {
     expect(tx.run.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ botId: "bot-b", userId: "ana" }),
     });
+  });
+
+  it("leaves another person's runs, asks and queue alone, giving the sender runs of their own", async () => {
+    const { tx, send } = harness(
+      ["bot-a", "bot-b"],
+      [
+        {
+          id: "alice-ask",
+          taskId: "t-1",
+          botId: "bot-b",
+          userId: "alice",
+          status: "waiting_input",
+        },
+        { id: "alice-queued", taskId: "t-2", botId: "bot-a", userId: "alice", status: "queued" },
+      ],
+    );
+
+    await expect(send("@everyone what do you think?")).resolves.toMatchObject({
+      runIds: ["run-bot-a", "run-bot-b"],
+    });
+    expect(tx.run.create).toHaveBeenCalledTimes(2);
+    expect(tx.steeringMessage.create).not.toHaveBeenCalled();
+    expect(tx.run.updateMany).not.toHaveBeenCalled();
+    expect(tx.sessionEntry.findFirst).not.toHaveBeenCalled();
   });
 
   it("stores a message naming no bot the sender can use, and wakes none", async () => {
