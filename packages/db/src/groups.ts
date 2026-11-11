@@ -168,7 +168,10 @@ async function assertSpacePeople(prisma: PrismaClient, actor: Actor, userIds: st
   return others;
 }
 
-/** Takes people out of a group, stopping the runs they started in its thread. */
+/**
+ * Takes people out of a group, stopping the runs they started in its thread and turning off their
+ * routines that post in it.
+ */
 async function removeGroupPeople(
   tx: Prisma.TransactionClient,
   group: { groupId: string; threadId: string },
@@ -177,6 +180,10 @@ async function removeGroupPeople(
   if (userIds.length === 0) return [];
   await tx.chatGroupPerson.deleteMany({
     where: { groupId: group.groupId, userId: { in: userIds } },
+  });
+  await tx.routine.updateMany({
+    where: { threadId: group.threadId, userId: { in: userIds } },
+    data: { active: false, nextRunAt: null },
   });
   const runs = await tx.run.findMany({
     where: {

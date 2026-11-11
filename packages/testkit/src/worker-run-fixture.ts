@@ -384,6 +384,9 @@ export async function startWorkerRun<
     continueRun(runId: string) {
       return current.executor.continueRun(runId, "worker-fixture");
     },
+    wakeRoutine(routineId: string, scheduledFor: Date) {
+      return current.executor.wakeRoutine(routineId, scheduledFor.toISOString());
+    },
     /** Starts the bot's computer the way a person opening it does, outside any run. */
     startComputer() {
       if (!computer) throw new Error("The bot has no computer");
