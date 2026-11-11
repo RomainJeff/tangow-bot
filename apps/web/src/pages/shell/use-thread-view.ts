@@ -163,7 +163,9 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
     workingRuns.length > 0
       ? Math.min(...workingRuns.map((run) => new Date(run.startedAt ?? run.createdAt).getTime()))
       : undefined;
-  const people = activeSnapshot?.people ?? activeGroup?.people;
+  // The snapshot names everyone who ever wrote, the live group whoever joined since it was taken.
+  const snapshotPeople = activeSnapshot?.people;
+  const groupPeople = activeGroup?.people;
   // A message naming no author is the creator's, the group's first person.
   const creatorId = activeGroup?.people[0]?.userId;
   const viewerId = bootstrapMe?.userId;
@@ -173,14 +175,15 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
       const authorId = message.authorId ?? creatorId;
       if (!authorId || !viewerId || authorId === viewerId) return undefined;
       return (
-        people?.find((person) => person.userId === authorId) ?? {
+        snapshotPeople?.find((person) => person.userId === authorId) ??
+        groupPeople?.find((person) => person.userId === authorId) ?? {
           userId: authorId,
           name: "",
           image: null,
         }
       );
     },
-    [inGroup, creatorId, viewerId, people],
+    [inGroup, creatorId, viewerId, snapshotPeople, groupPeople],
   );
   const resolveTranscriptMemberName = useCallback(
     (botId: string | undefined) => memberName(transcriptMembers, botId),
