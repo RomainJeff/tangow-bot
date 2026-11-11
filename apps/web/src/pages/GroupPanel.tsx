@@ -5,7 +5,15 @@ import {
   GROUP_MEMBER_MAX,
   GROUP_MEMBER_MIN,
 } from "@rakazo/contracts";
-import { BotAvatar, Button, Input, Textarea, UserAvatar } from "@rakazo/ui-web";
+import {
+  BotAvatar,
+  Button,
+  Input,
+  NativeSelect,
+  NativeSelectOption,
+  Textarea,
+  UserAvatar,
+} from "@rakazo/ui-web";
 import { Check, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useId, useMemo, useState } from "react";
@@ -306,7 +314,7 @@ export function GroupSettings({
   group: Group;
   bots: Bot[];
   userId: string;
-  onSave: (input: Partial<GroupInput>) => Promise<void>;
+  onSave: (input: Partial<GroupInput> & { leadBotId?: string | null }) => Promise<void>;
   onRemove: () => Promise<void>;
   onLeave: () => Promise<void>;
 }) {
@@ -322,6 +330,10 @@ export function GroupSettings({
   // The creator is always in the group: only the others are picked.
   const currentPeople = group.people.map((person) => person.userId).filter((id) => id !== userId);
   const [selectedPeople, setSelectedPeople] = useState(currentPeople);
+  const leadId = useId();
+  const [lead, setLead] = useState(group.leadBotId);
+  // The lead leaves with its bot; the first bot answers then.
+  const currentLead = lead && selected.includes(lead) ? lead : null;
   const [pending, setPending] = useState<"save" | "remove" | "leave" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const spacePeople = useSpacePeople(group.canManage ? group.spaceId : undefined, userId);
@@ -371,6 +383,7 @@ export function GroupSettings({
       description: description.trim() !== currentDescription ? description.trim() : undefined,
       botIds: sameMembers(selected, currentBotIds) ? undefined : selected,
       userIds: sameMembers(selectedPeople, currentPeople) ? undefined : selectedPeople,
+      leadBotId: currentLead !== group.leadBotId ? currentLead : undefined,
     });
   }
 
@@ -456,6 +469,23 @@ export function GroupSettings({
         onChange={setSelected}
         maxHeight="max-h-[240px]"
       />
+      {selected.length > 1 ? (
+        <label htmlFor={leadId} className="mt-5 block text-sm text-muted-foreground">
+          <Trans>Lead bot</Trans>
+          <NativeSelect
+            id={leadId}
+            value={currentLead ?? selected[0]}
+            onChange={(event) => setLead(event.target.value)}
+            className="mt-2 w-full"
+          >
+            {selected.map((botId) => (
+              <NativeSelectOption key={botId} value={botId}>
+                {selectable.find((bot) => bot.id === botId)?.name ?? ""}
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </label>
+      ) : null}
       <Button
         className="mt-5 w-full"
         disabled={pending !== null || !validSelection(name, selected)}

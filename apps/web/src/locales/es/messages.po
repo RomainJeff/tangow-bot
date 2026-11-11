@@ -869,7 +869,7 @@ msgstr "Cancelar edición"
 msgid "Cancel new bot"
 msgstr "Cancelar nuevo bot"
 
-#: src/pages/GroupPanel.tsx:238
+#: src/pages/GroupPanel.tsx:246
 msgid "Cancel new group"
 msgstr "Cancelar nuevo grupo"
 
@@ -1362,7 +1362,7 @@ msgstr "No se pudo continuar"
 msgid "Could not create bot"
 msgstr "No se pudo crear el bot"
 
-#: src/pages/GroupPanel.tsx:223
+#: src/pages/GroupPanel.tsx:231
 msgid "Could not create group"
 msgstr "No se pudo crear el grupo"
 
@@ -1439,7 +1439,7 @@ msgstr "No se pudo importar el skill"
 msgid "Could not install connector"
 msgstr "No se pudo instalar el conector"
 
-#: src/pages/GroupPanel.tsx:361
+#: src/pages/GroupPanel.tsx:373
 msgid "Could not leave group"
 msgstr "No se pudo salir del grupo"
 
@@ -1546,7 +1546,7 @@ msgstr "No se pudo quitar"
 msgid "Could not remove connector"
 msgstr "No se pudo quitar el conector"
 
-#: src/pages/GroupPanel.tsx:360
+#: src/pages/GroupPanel.tsx:372
 msgid "Could not remove group"
 msgstr "No se pudo quitar el grupo"
 
@@ -1586,7 +1586,7 @@ msgstr "No se pudo guardar"
 msgid "Could not save Auto Review"
 msgstr "No se pudo guardar Auto Review"
 
-#: src/pages/GroupPanel.tsx:358
+#: src/pages/GroupPanel.tsx:370
 msgid "Could not save group"
 msgstr "No se pudo guardar el grupo"
 
@@ -1746,7 +1746,7 @@ msgstr "Crear bot"
 msgid "Create bot?"
 msgstr "¿Crear bot?"
 
-#: src/pages/GroupPanel.tsx:289
+#: src/pages/GroupPanel.tsx:297
 msgid "Create group"
 msgstr "Crear grupo"
 
@@ -1781,7 +1781,7 @@ msgid "Created"
 msgstr "Creado"
 
 #: src/components/AskCard.tsx:65
-#: src/pages/GroupPanel.tsx:289
+#: src/pages/GroupPanel.tsx:297
 #: src/pages/shell/bot-panel.tsx:155
 #: src/pages/shell/dialogs.tsx:91
 #: src/pages/shell/dialogs.tsx:202
@@ -1896,7 +1896,7 @@ msgstr "Eliminar {0}"
 msgid "Delete {0}?"
 msgstr "¿Eliminar {0}?"
 
-#: src/pages/GroupPanel.tsx:472
+#: src/pages/GroupPanel.tsx:502
 msgid "Delete group"
 msgstr "Eliminar grupo"
 
@@ -1921,7 +1921,7 @@ msgstr ""
 msgid "Deleted bot"
 msgstr ""
 
-#: src/pages/GroupPanel.tsx:472
+#: src/pages/GroupPanel.tsx:502
 #: src/pages/shell/dialogs.tsx:409
 #: src/pages/shell/dialogs.tsx:470
 msgid "Deleting…"
@@ -1945,8 +1945,8 @@ msgstr "Describe qué hace este bot"
 
 #: src/pages/bot-page/SettingDetails.tsx:53
 #: src/pages/bot-page/SettingsTab.tsx:27
-#: src/pages/GroupPanel.tsx:261
-#: src/pages/GroupPanel.tsx:436
+#: src/pages/GroupPanel.tsx:269
+#: src/pages/GroupPanel.tsx:449
 #: src/pages/shell/bot-panel.tsx:131
 msgid "Description"
 msgstr "Descripción"
@@ -2352,8 +2352,8 @@ msgstr "Global"
 msgid "Group"
 msgstr "Grupo"
 
-#: src/pages/GroupPanel.tsx:382
-#: src/pages/GroupPanel.tsx:418
+#: src/pages/GroupPanel.tsx:395
+#: src/pages/GroupPanel.tsx:431
 msgid "Group settings"
 msgstr "Configuración del grupo"
 
@@ -2597,16 +2597,20 @@ msgstr "La última ejecución falló"
 msgid "Later"
 msgstr ""
 
+#: src/pages/GroupPanel.tsx:474
+msgid "Lead bot"
+msgstr "Bot principal"
+
 #: src/pages/MessagingSettingsOverlay.tsx:250
 msgid "Leave"
 msgstr "Salir"
 
 #: src/pages/BotContextMenu.tsx:188
-#: src/pages/GroupPanel.tsx:408
+#: src/pages/GroupPanel.tsx:421
 msgid "Leave group"
 msgstr "Salir del grupo"
 
-#: src/pages/GroupPanel.tsx:408
+#: src/pages/GroupPanel.tsx:421
 msgid "Leaving…"
 msgstr "Saliendo…"
 
@@ -2763,11 +2767,11 @@ msgstr "Medio"
 msgid "Members"
 msgstr ""
 
-#: src/pages/GroupPanel.tsx:449
+#: src/pages/GroupPanel.tsx:462
 msgid "Members ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgstr "Miembros ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 
-#: src/pages/GroupPanel.tsx:274
+#: src/pages/GroupPanel.tsx:282
 msgid "Members (pick {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgstr "Miembros (elige {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 
@@ -2944,8 +2948,8 @@ msgstr ""
 #: src/pages/bot-page/BotHero.tsx:49
 #: src/pages/bot-page/RoutineCreateForm.tsx:74
 #: src/pages/bot-page/RoutineDetail.tsx:111
-#: src/pages/GroupPanel.tsx:251
-#: src/pages/GroupPanel.tsx:427
+#: src/pages/GroupPanel.tsx:259
+#: src/pages/GroupPanel.tsx:440
 #: src/pages/shell/bot-panel.tsx:109
 #: src/pages/shell/dialogs.tsx:72
 #: src/pages/shell/dialogs.tsx:187
@@ -2958,7 +2962,7 @@ msgstr "Nombre"
 msgid "Name this bot"
 msgstr "Nombra este bot"
 
-#: src/pages/GroupPanel.tsx:256
+#: src/pages/GroupPanel.tsx:264
 msgid "Name this group"
 msgstr "Nombra este grupo"
 
@@ -2982,7 +2986,7 @@ msgstr ""
 msgid "New bot"
 msgstr "Nuevo bot"
 
-#: src/pages/GroupPanel.tsx:233
+#: src/pages/GroupPanel.tsx:241
 msgid "New group"
 msgstr "Nuevo grupo"
 
@@ -3393,7 +3397,7 @@ msgstr "Pega tu clave de API"
 msgid "Paused"
 msgstr "En pausa"
 
-#: src/pages/GroupPanel.tsx:130
+#: src/pages/GroupPanel.tsx:138
 msgid "People"
 msgstr "Personas"
 
@@ -3869,7 +3873,7 @@ msgstr ""
 #: src/components/AskCard.tsx:405
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:255
-#: src/pages/GroupPanel.tsx:464
+#: src/pages/GroupPanel.tsx:494
 #: src/pages/KnowledgeSection.tsx:235
 #: src/pages/KnowledgeSection.tsx:706
 #: src/pages/model-settings/model-detail.tsx:329
@@ -3908,7 +3912,7 @@ msgstr ""
 #: src/components/AskCard.tsx:405
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/bot-page/page-kit.tsx:49
-#: src/pages/GroupPanel.tsx:464
+#: src/pages/GroupPanel.tsx:494
 #: src/pages/model-settings/model-detail.tsx:327
 #: src/pages/shell/dialogs.tsx:266
 msgid "Saving…"
@@ -4673,8 +4677,8 @@ msgstr "¿Qué debe hacer esta rutina cada vez que se ejecute?"
 msgid "What this bot is for"
 msgstr "Para qué es este bot"
 
-#: src/pages/GroupPanel.tsx:267
-#: src/pages/GroupPanel.tsx:442
+#: src/pages/GroupPanel.tsx:275
+#: src/pages/GroupPanel.tsx:455
 msgid "What this group is for"
 msgstr "Para qué es este grupo"
 

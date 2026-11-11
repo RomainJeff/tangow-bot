@@ -3,6 +3,7 @@ import type { ThreadView } from "@rakazo/core";
 import {
   answersPendingQuestion,
   drawsNothing,
+  groupLeadBotId,
   isActive,
   latestTakeoverItemId,
   projectThreadView,
@@ -135,8 +136,13 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
     },
     [bots, transcriptMembers],
   );
-  // A send without a mention goes to the bot, or to a group's first member.
-  const sendsTo = inGroup ? transcriptMembers?.[0]?.botId : active?.id;
+  // A send without a mention goes to the bot, or to a group's lead.
+  const sendsTo = inGroup
+    ? groupLeadBotId(
+        (transcriptMembers ?? []).map((member) => ({ id: member.botId })),
+        activeGroup?.leadBotId,
+      )
+    : active?.id;
   const answerName =
     sendsTo && answersPendingQuestion(view, sendsTo, currentRuns)
       ? resolveTranscriptBot(sendsTo)?.name
