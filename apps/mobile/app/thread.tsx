@@ -38,6 +38,7 @@ import {
   drawsNothing,
   editedWaitingDraft,
   failureSinceLabel,
+  groupLeadBotId,
   imagesOf,
   isApprovalAskBlock,
   isAsideOnlyMessage,
@@ -724,8 +725,13 @@ function Thread() {
   const stoppable = inGroup
     ? threadRuns.some((run) => isActiveStatus(run.status))
     : isActiveStatus(currentBotStatus);
-  // A send without a mention goes to the bot, or to a group's first member.
-  const sendsTo = inGroup ? snap?.members?.[0]?.botId : botId;
+  // A send without a mention goes to the bot, or to a group's lead.
+  const sendsTo = inGroup
+    ? groupLeadBotId(
+        (snap?.members ?? []).map((member) => ({ id: member.botId })),
+        currentGroup?.leadBotId,
+      )
+    : botId;
   const answerName =
     sendsTo && ownWaiting && answersPendingQuestion(view, sendsTo, threadRuns)
       ? (mentionBots.find((bot) => bot.id === sendsTo)?.name ??
