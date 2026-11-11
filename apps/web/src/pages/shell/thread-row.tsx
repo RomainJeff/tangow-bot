@@ -49,8 +49,8 @@ export type RowContext = {
   /** Who wrote a message, when it is someone else's in a group. */
   personOf?: (message: MessageItem) => GroupPerson | undefined;
   waiting: WaitingCard | null;
-  /** The card another person's run waits on, and their name: shown, answered by them alone. */
-  waitingOn?: { itemId: string; name: string } | null;
+  /** The cards other people's runs wait on, by item, and their names: shown, answered by them alone. */
+  waitingOn?: ReadonlyMap<string, string>;
   /** The item whose computer card is live and opens the bot's screen. */
   takeoverItemId?: string | null;
   onOpenComputer?: () => void;
@@ -241,7 +241,7 @@ function MessageRowView({
               )
           : undefined
       }
-      waitingOn={context.waitingOn?.itemId === item.id ? context.waitingOn.name : undefined}
+      waitingOn={context.waitingOn?.get(item.id)}
       onOpenComputer={context.takeoverItemId === item.id ? context.onOpenComputer : undefined}
       onOpenBot={context.onOpenBot}
       speakerName={
@@ -455,7 +455,7 @@ function EffectCard({ item, context }: { item: ItemOf<"effect">; context: RowCon
     <AskCard
       block={item.card}
       canAnswer={Boolean(answer)}
-      waitingOn={context.waitingOn?.itemId === item.id ? context.waitingOn.name : undefined}
+      waitingOn={context.waitingOn?.get(item.id)}
       viewerUserId={context.viewerUserId}
       onAnswer={answer ?? noAnswer}
       onReconnect={context.onOpenIntegrations}

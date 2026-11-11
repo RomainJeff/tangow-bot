@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyPicks } from "./group-picks";
+import { applyPicks } from "./group-picks.js";
 
 describe("applyPicks", () => {
   it("does not add back someone who left while the settings were open", () => {

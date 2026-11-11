@@ -4,6 +4,7 @@ import type {
   ComputerMode,
   EntryId,
   Group,
+  GroupPerson,
   Me,
   ModelCatalogEntry,
   ModelCredential,
@@ -777,6 +778,9 @@ export type MobileGroup = Pick<
   | "unread"
   | "updatedAt"
   | "members"
+  | "people"
+  | "canManage"
+  | "leadBotId"
 > &
   Partial<Pick<Group, "spaceId">>;
 
@@ -789,6 +793,8 @@ export type MobileSpaceNavigation = SpaceNavigation;
 export type MobileRun = {
   id: string;
   botId?: string;
+  /** The person it acts for: in a group, only they answer its cards. */
+  userId?: string;
   status: string;
   error?: string | null;
   startedAt?: string | null;
@@ -824,6 +830,8 @@ export type MobileSnapshot = {
   run: MobileRun | null;
   activeRuns?: MobileRun[];
   members?: MobileGroup["members"];
+  /** A group's people, and those who wrote in it before leaving, for each message's author. */
+  people?: GroupPerson[];
   computer?: {
     state: string;
     controlHolder: string;

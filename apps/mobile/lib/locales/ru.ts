@@ -373,6 +373,9 @@ export const RU_MESSAGES: Record<string, string> = {
     "Нажмите и удерживайте, чтобы закрепить или переместить в раздел",
   "Long press to pin, move, or silence notifications":
     "Длительное нажатие, чтобы закрепить, переместить или отключить уведомления",
+  "Leave group": "Покинуть группу",
+  "Lead bot": "Ведущий бот",
+  People: "Люди",
   "Enter your Rakazo server address.": "Введите адрес вашего сервера Rakazo.",
   "Show less": "Свернуть",
   Members: "Участники",
