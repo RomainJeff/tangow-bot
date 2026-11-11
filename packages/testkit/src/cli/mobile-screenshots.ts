@@ -113,6 +113,8 @@ async function main() {
           "-e",
           `RAKAZO_SCREENSHOT_GROUP_ID=${fixture.groupId}`,
           "-e",
+          `RAKAZO_SCREENSHOT_MEMBER_GROUP_ID=${fixture.memberGroupId}`,
+          "-e",
           `RAKAZO_SCREENSHOT_ROUTINE_ID=${fixture.routineId}`,
           "-e",
           `RAKAZO_SCREENSHOT_SHARED_BOT_ID=${fixture.sharedBotId}`,
@@ -256,6 +258,16 @@ async function seedFixture(app: App, prisma: PrismaClient) {
     ask: { text: "Which checklist should I use?", answer: "The launch checklist." },
     reply: "The fixture workspace is ready.",
   });
+  const sharing = await seedSharedBots(app, cookie, prisma, writer.id);
+  const { teammate, teammateId, ...shared } = sharing;
+  // The teammate joins the group and asks Writer, shared with her, before the user's own exchange.
+  await rpc(app, cookie, "groups/update", { groupId: group.id, userIds: [teammateId] });
+  await seedExchange(prisma, groupThread, {
+    botId: writer.id,
+    authorId: teammateId,
+    question: "I'll take the press quote.",
+    reply: "Here's a tighter quote for the release.",
+  });
   await seedExchange(prisma, groupThread, {
     botId: writer.id,
     question: "Coordinate the fixture launch plan.",
@@ -263,9 +275,23 @@ async function seedFixture(app: App, prisma: PrismaClient) {
     widget: true,
   });
   await seedImageStacks(app, cookie, prisma, botThread, researcher.id);
-  const sharing = await seedSharedBots(app, cookie, prisma, writer.id);
+  // A group the teammate created with the user: its settings are hers to change.
+  const { userId } = await rpc<{ userId: string }>(app, cookie, "me");
+  const memberGroup = await rpc<{ id: string }>(
+    app,
+    teammate,
+    "groups/create",
+    { name: "Release crew", botIds: [shared.sharedBotId], userIds: [userId] },
+    sharing.spaceId,
+  );
 
-  return { botId: researcher.id, groupId: group.id, routineId: routine.id, ...sharing };
+  return {
+    botId: researcher.id,
+    groupId: group.id,
+    memberGroupId: memberGroup.id,
+    routineId: routine.id,
+    ...shared,
+  };
 }
 
 /**
@@ -358,7 +384,7 @@ async function seedSharedBots(app: App, cookie: string, prisma: PrismaClient, wr
       content: "- Drafts go to the launch channel before noon.",
     },
   });
-  return { sharedBotId: releaseNotes.id, shareBotId: writerId };
+  return { sharedBotId: releaseNotes.id, shareBotId: writerId, teammate, teammateId, spaceId };
 }
 
 type FixtureThread = {
@@ -374,6 +400,8 @@ async function seedExchange(
   thread: FixtureThread,
   exchange: {
     botId: string;
+    /** Another person of a group who asks, the run then answering them. */
+    authorId?: string;
     question: string;
     ask?: { text: string; answer: string };
     reply: string;
@@ -389,11 +417,13 @@ async function seedExchange(
     role: "user",
     feedBotId: exchange.botId,
     blocks: [{ kind: "text", text: exchange.question }],
+    authorId: exchange.authorId,
   });
+  const userId = exchange.authorId ?? thread.userId;
   const task = await prisma.task.create({
     data: {
       spaceId: thread.spaceId,
-      userId: thread.userId,
+      userId,
       botId: exchange.botId,
       threadId: thread.id,
       prompt: exchange.question,
@@ -403,7 +433,7 @@ async function seedExchange(
   const run = await prisma.run.create({
     data: {
       spaceId: thread.spaceId,
-      userId: thread.userId,
+      userId,
       botId: exchange.botId,
       threadId: thread.id,
       taskId: task.id,
