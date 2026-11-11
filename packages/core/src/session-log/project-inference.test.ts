@@ -167,6 +167,20 @@ describe("projectInferenceTurns", () => {
     expect(rendered).toContain("active tool result");
   });
 
+  it("replays the tool parts of the reading run only, not of another run still working", () => {
+    const chain = linkEntries("concurrent", [
+      { type: "user.message", payload: { source: "app", blocks: text("Read my inbox") } },
+      ...readFile("theirs", "/inbox", "their inbox", "call_theirs"),
+      { type: "user.message", payload: { source: "app", blocks: text("Read the plan") } },
+      ...readFile("mine", "/plan", "the plan", "call_mine"),
+    ]);
+    const rendered = JSON.stringify(
+      turnsOf(chain, { ...ada, runHistory: { activeRunId: "mine" } }),
+    );
+    expect(rendered).toContain("the plan");
+    expect(rendered).not.toContain("their inbox");
+  });
+
   it("replays a linear chain with tool parts and a reply quote, without reasoning, approvals or the cancelled run", async () => {
     expect(turnsOf(await fixtureChain("linear"), ada)).toEqual([
       { role: "user", content: "Email Lyon's weather to the team." },

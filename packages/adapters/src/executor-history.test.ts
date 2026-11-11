@@ -791,11 +791,13 @@ describe("the history a run reads from its session log", () => {
   });
 
   it("replays a subagent as the tool result of the call that launched it", async () => {
+    // The run's own steps, as it reads them when it resumes.
+    const own = { botId: BOT, runId: RUN };
     const tail = chain(0, [
       said("Check the build"),
-      started,
+      { ...started, ...own },
       {
-        ...ownRun,
+        ...own,
         type: "tool.call",
         payload: {
           callId: "call-1",
@@ -804,7 +806,7 @@ describe("the history a run reads from its session log", () => {
         },
       },
       {
-        ...ownRun,
+        ...own,
         type: "subagent",
         payload: {
           callId: "call-1",
@@ -817,7 +819,7 @@ describe("the history a run reads from its session log", () => {
           usage: { inputTokens: 10, outputTokens: 2 },
         },
       },
-      replied("The helper says CI is green."),
+      replied("The helper says CI is green.", own),
     ]);
 
     expect(await fixture({ tail }).history()).toEqual([
@@ -858,10 +860,11 @@ describe("the history a run reads from its session log", () => {
     const logged = failing.log.drafts.filter(
       (draft) => draft.type === "tool.call" || draft.type === "tool.result",
     );
+    const own = { botId: BOT, runId: RUN };
     const tail = chain(0, [
       said("What is here?"),
-      started,
-      ...logged.map((draft) => ({ ...draft, ...ownRun })),
+      { ...started, ...own },
+      ...logged.map((draft) => ({ ...draft, ...own })),
     ]);
 
     expect(logged.map(({ type, payload }) => ({ type, payload }))).toEqual([
