@@ -339,7 +339,8 @@ export function useThreadSync({
         if (event.type === "run.started" || isRunTerminalEvent(event)) {
           void refreshBots().catch(() => undefined);
         }
-        if (isRunTerminalEvent(event)) {
+        // A started run is read back for whose it is, which its event does not say.
+        if (event.type === "run.started" || isRunTerminalEvent(event)) {
           void refreshGroupThread(groupId).catch(() => undefined);
         }
       },

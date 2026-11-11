@@ -83,10 +83,22 @@ test("a group's creator adds a person, who writes in it and leaves", async ({
   await expect(guestTranscript.getByText("Works for me.", { exact: true })).toBeVisible();
   // A shared history: nobody edits it alone.
   await expect(guest.getByTestId("message-edit")).toHaveCount(0);
+  // Helper asks Grace, whose run it is: only she answers.
+  await guestComposer.fill("@Helper pick from these cities with tappable choices");
+  await guestComposer.press("Enter");
+  await expect(guest.getByRole("button", { name: "Berlin", exact: true })).toBeVisible({
+    timeout: 60_000,
+  });
 
   await page.reload();
   await expect(transcript.getByText("Works for me.", { exact: true })).toBeVisible();
   await expect(transcript.getByText("Grace Guest", { exact: true })).toBeVisible();
+  await expect(transcript.getByText("Which city should I use?", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Berlin", exact: true })).toHaveCount(0);
+  // Ada can still reply to what Grace wrote.
+  const graceRow = transcript.locator("[data-message-id]").filter({ hasText: "Works for me." });
+  await graceRow.hover();
+  await expect(graceRow.getByRole("button", { name: "Reply", exact: true })).toBeVisible();
   await captureScreenshot(page, testInfo, "group-people-thread");
   await page.setViewportSize({ width: 390, height: 844 });
   await captureScreenshot(page, testInfo, "group-people-thread-phone");

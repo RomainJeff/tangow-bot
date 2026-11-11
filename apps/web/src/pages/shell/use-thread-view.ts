@@ -64,16 +64,29 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
   const showSteps = useDebugMode();
   const activeEntries = activeSnapshot?.entries;
   const activeLayer = activeSnapshot?.layer;
-  const view = useMemo(
+  const currentRuns = useMemo(() => activeThreadRuns(activeSnapshot), [activeSnapshot]);
+  const viewerId = bootstrapMe?.userId;
+  // Another person's run in a group waits on them alone: its cards show here, but answer nothing.
+  const othersRunIds = useMemo(
     () =>
-      projectThreadView(activeEntries ?? [], {
-        rendersNothing: (item) =>
-          drawsNothing(item, (blocks) => hasRenderableBlock(blocks, showSteps)),
-        progress: activeLayer,
-        imageStacks: true,
-      }),
-    [activeEntries, activeLayer, showSteps],
+      new Set(
+        currentRuns
+          .filter((run) => run.userId && viewerId && run.userId !== viewerId)
+          .map((run) => run.id),
+      ),
+    [currentRuns, viewerId],
   );
+  const view = useMemo(() => {
+    const projected = projectThreadView(activeEntries ?? [], {
+      rendersNothing: (item) =>
+        drawsNothing(item, (blocks) => hasRenderableBlock(blocks, showSteps)),
+      progress: activeLayer,
+      imageStacks: true,
+    });
+    return projected.waiting && othersRunIds.has(projected.waiting.runId)
+      ? { ...projected, waiting: null }
+      : projected;
+  }, [activeEntries, activeLayer, showSteps, othersRunIds]);
   const viewRef = useRef(view);
   viewRef.current = view;
   // A message that joins a stack of images draws no row: it stands at its host's.
@@ -86,14 +99,13 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
     }
     return indexes;
   }, [view.rows, view.rowOf]);
-  const currentRuns = useMemo(() => activeThreadRuns(activeSnapshot), [activeSnapshot]);
   const takeoverItemId = useMemo(
     () =>
       latestTakeoverItemId(
         view.rows.map((row) => row.item),
-        currentRuns,
+        currentRuns.filter((run) => !othersRunIds.has(run.id)),
       ),
-    [view.rows, currentRuns],
+    [view.rows, currentRuns, othersRunIds],
   );
   const workingRuns = currentRuns.filter((run) => isWorking(run, view));
   const transcriptRunning = workingRuns.length > 0;
@@ -168,7 +180,6 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
   const groupPeople = activeGroup?.people;
   // A message naming no author is the creator's, the group's first person.
   const creatorId = activeGroup?.people[0]?.userId;
-  const viewerId = bootstrapMe?.userId;
   const personOf = useCallback(
     (message: MessageItem): GroupPerson | undefined => {
       if (!inGroup || message.role !== "user") return undefined;
