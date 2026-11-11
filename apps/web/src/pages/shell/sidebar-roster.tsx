@@ -4,6 +4,7 @@ import { ACTIVE_RUN_STATUSES } from "@tangow/core";
 import { BotAvatar, Button, GroupAvatar } from "@tangow/ui-web";
 import { ChevronDown, Lock, MoreHorizontal } from "lucide-react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
+import { userInitials } from "../../lib/user-initials";
 import { runStatusLabel } from "../ActivityList";
 import type { ContextMenuPosition } from "../BotContextMenu";
 import type { SidebarGroup } from "./layout";
@@ -252,6 +253,12 @@ export function SidebarRoster({
                             ? (activeSnapshot.members ?? item.chat.members)
                             : item.chat.members
                         }
+                        people={item.chat.people
+                          .filter((person) => person.userId !== bootstrapMe?.userId)
+                          .map((person) => ({
+                            initials: userInitials(person.name),
+                            image: person.image,
+                          }))}
                         size={28}
                         userInitials={initials}
                         userImage={userImage}

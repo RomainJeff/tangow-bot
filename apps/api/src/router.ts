@@ -5337,6 +5337,7 @@ async function spaceNavigationDto(
           pinned: group.pinned,
           sectionId: group.sectionId,
           members: group.members,
+          people: group.people,
           preview: group.preview,
           unread: group.unread,
           updatedAt: group.updatedAt,

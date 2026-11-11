@@ -33,6 +33,35 @@ describe("GroupAvatar", () => {
     expect(html).not.toContain(">RJ<");
   });
 
+  it("shows the group's other people beside its bot instead of the user", () => {
+    const html = renderToString(
+      <GroupAvatar
+        members={[{ name: "Harry", color: "#8B5CF6" }]}
+        people={[{ initials: "AL" }]}
+        userInitials="RJ"
+      />,
+    );
+    expect((html.match(/data-working=/g) || []).length).toBe(1);
+    expect(html).toContain(">AL<");
+    expect(html).not.toContain(">RJ<");
+  });
+
+  it("keeps a person visible when bots and people overflow", () => {
+    const html = renderToString(
+      <GroupAvatar
+        members={[
+          { name: "Sherlock", color: "#8B5CF6" },
+          { name: "Elon", color: "#06B6D4" },
+          { name: "Penny", color: "#EC4899" },
+        ]}
+        people={[{ initials: "AL" }, { initials: "BO" }]}
+      />,
+    );
+    expect((html.match(/data-working=/g) || []).length).toBe(1);
+    expect(html).toContain(">AL<");
+    expect(html).toContain("+3");
+  });
+
   it("renders 2 overlapping bot avatars for 2 members", () => {
     const html = renderToString(
       <GroupAvatar

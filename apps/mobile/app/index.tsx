@@ -334,6 +334,7 @@ export default function Home() {
           ) : item.type === "group" ? (
             <GroupRow
               group={item.group}
+              userId={me?.userId}
               userInitials={initials}
               userImage={userImage}
               onPress={() => {

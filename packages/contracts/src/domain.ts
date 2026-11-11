@@ -235,6 +235,7 @@ export const SpaceGroupSchema = GroupSchema.pick({
   pinned: true,
   sectionId: true,
   members: true,
+  people: true,
   preview: true,
   unread: true,
   updatedAt: true,

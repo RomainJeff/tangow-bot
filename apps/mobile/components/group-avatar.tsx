@@ -12,25 +12,45 @@ export interface GroupAvatarMember {
   status?: string;
 }
 
+export interface GroupAvatarPerson {
+  initials: string;
+  image?: string | null;
+}
+
+type Tile = { bot: GroupAvatarMember } | { person: GroupAvatarPerson };
+
 export const GroupAvatar = memo(function GroupAvatar({
   members,
+  people = [],
   size = 54,
   userInitials,
   userImage,
   still,
 }: {
   members: GroupAvatarMember[];
+  /** The group's other people, shown beside its bots. */
+  people?: GroupAvatarPerson[];
   size?: number;
   /** See `BotAvatar`'s `still`. */
   still?: boolean;
-  /** When set, a one-bot group pairs the bot with the user's initials. */
+  /** When set, a one-bot group without other people pairs the bot with the user's initials. */
   userInitials?: string;
   /** Profile photo shown instead of the initials tile, initials on failure. */
   userImage?: string | null;
 }) {
   const styles = useThemedStyles(createGroupAvatarStyles);
-  const firstMember = members[0];
-  if (!firstMember) {
+  const bots: Tile[] = members.map((bot) => ({ bot }));
+  const others: Tile[] = people.map((person) => ({ person }));
+  const me: Tile[] =
+    members.length === 1 && others.length === 0 && (userInitials || userImage)
+      ? [{ person: { initials: userInitials ?? "", image: userImage } }]
+      : [];
+  // The first bot and the first person lead, so both kinds stay visible when the rest overflow.
+  const tiles = [bots[0], others[0], ...me, ...bots.slice(1), ...others.slice(1)].filter(
+    (tile) => tile !== undefined,
+  );
+  const firstTile = tiles[0];
+  if (!firstTile) {
     return (
       <View
         style={[
@@ -47,21 +67,23 @@ export const GroupAvatar = memo(function GroupAvatar({
     );
   }
 
-  if (members.length === 1 && !userInitials && !userImage) {
-    return (
+  const renderTile = (tile: Tile, tileSize: number) =>
+    "bot" in tile ? (
       <BotAvatar
-        color={firstMember.color}
-        identity={firstMember.botId ?? firstMember.name}
-        shapeSeed={firstMember.shapeSeed}
-        size={size}
-        status={firstMember.status}
+        color={tile.bot.color}
+        identity={tile.bot.botId ?? tile.bot.name}
+        shapeSeed={tile.bot.shapeSeed}
+        size={tileSize}
+        status={tile.bot.status}
         still={still}
       />
+    ) : (
+      <UserAvatar initials={tile.person.initials} image={tile.person.image} size={tileSize} />
     );
-  }
 
-  const withUser = members.length === 1;
-  const pair = withUser || members.length === 2;
+  if (tiles.length === 1) return renderTile(firstTile, size);
+
+  const pair = tiles.length === 2;
   const miniSize = Math.round(size * (pair ? 0.65 : 0.54));
   const positions: ViewStyle[] = pair
     ? [
@@ -73,38 +95,23 @@ export const GroupAvatar = memo(function GroupAvatar({
         { bottom: 0, left: 0 },
         { right: 0, bottom: 0 },
       ];
-  const visibleMembers = members.slice(0, pair || members.length === 3 ? members.length : 2);
+  const visibleTiles = tiles.slice(0, tiles.length <= 3 ? tiles.length : 2);
 
   return (
     <View style={{ width: size, height: size, position: "relative" }}>
-      {visibleMembers.map((member, index) => (
+      {visibleTiles.map((tile, index) => (
         <View
-          key={member.botId ?? index}
+          key={"bot" in tile ? (tile.bot.botId ?? index) : `person-${index}`}
           style={{
             position: "absolute",
             ...positions[index],
             zIndex: index + 1,
           }}
         >
-          <BotAvatar
-            color={member.color}
-            identity={member.botId ?? member.name}
-            shapeSeed={member.shapeSeed}
-            size={miniSize}
-            status={member.status}
-            still={still}
-          />
+          {renderTile(tile, miniSize)}
         </View>
       ))}
-      {withUser ? (
-        <UserAvatar
-          initials={userInitials ?? ""}
-          image={userImage}
-          size={miniSize}
-          style={{ position: "absolute", right: 0, bottom: 0, zIndex: 2 }}
-        />
-      ) : null}
-      {members.length > 3 ? (
+      {tiles.length > 3 ? (
         <View
           style={{
             position: "absolute",
@@ -120,7 +127,7 @@ export const GroupAvatar = memo(function GroupAvatar({
           }}
         >
           <Text style={{ color: native.label, fontSize: 10, fontWeight: "600" }}>
-            +{members.length - 2}
+            +{tiles.length - 2}
           </Text>
         </View>
       ) : null}
