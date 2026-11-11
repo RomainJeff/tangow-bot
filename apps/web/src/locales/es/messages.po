@@ -297,13 +297,13 @@ msgstr "Confirmaciones de acción"
 #. placeholder {0}: group.spaceName
 #. placeholder {0}: sectionMenu.section.name
 #: src/pages/bot-page/BotPage.tsx:347
-#: src/pages/BotContextMenu.tsx:93
-#: src/pages/shell/shell-overlays.tsx:376
+#: src/pages/BotContextMenu.tsx:101
+#: src/pages/shell/shell-overlays.tsx:406
 #: src/pages/shell/sidebar-roster.tsx:149
 msgid "Actions for {0}"
 msgstr "Acciones para {0}"
 
-#: src/pages/shell/shell-overlays.tsx:250
+#: src/pages/shell/shell-overlays.tsx:280
 msgid "Actions for space"
 msgstr ""
 
@@ -602,7 +602,7 @@ msgid "Apps this bot can use"
 msgstr ""
 
 #: src/pages/bot-page/BotPage.tsx:380
-#: src/pages/BotContextMenu.tsx:161
+#: src/pages/BotContextMenu.tsx:176
 msgid "Archive"
 msgstr "Archivar"
 
@@ -759,7 +759,7 @@ msgid "Booting live desktop…"
 msgstr "Iniciando escritorio en vivo…"
 
 #. placeholder {0}: active?.name
-#: src/pages/shell/side-panel.tsx:291
+#: src/pages/shell/side-panel.tsx:295
 msgid "Booting up {0}’s computer"
 msgstr "Iniciando la computadora de {0}"
 
@@ -783,7 +783,7 @@ msgstr "Bot"
 msgid "Bot"
 msgstr "Bot"
 
-#: src/pages/shell/side-panel.tsx:421
+#: src/pages/shell/side-panel.tsx:425
 msgid "Bot screen"
 msgstr "Pantalla del bot"
 
@@ -792,7 +792,7 @@ msgid "Bot screen preview"
 msgstr "Vista previa de la pantalla del bot"
 
 #: src/pages/shell/composer-pickers.tsx:300
-#: src/pages/shell/shell-overlays.tsx:170
+#: src/pages/shell/shell-overlays.tsx:172
 #: src/pages/shell/thread-header.tsx:174
 #: src/pages/shell/thread-header.tsx:175
 msgid "Bot settings"
@@ -969,8 +969,8 @@ msgid "Clear {0}’s conversation?"
 msgstr "¿Borrar la conversación de {0}?"
 
 #: src/pages/bot-page/BotPage.tsx:376
-#: src/pages/BotContextMenu.tsx:157
-#: src/pages/BotContextMenu.tsx:176
+#: src/pages/BotContextMenu.tsx:170
+#: src/pages/BotContextMenu.tsx:201
 msgid "Clear conversation"
 msgstr "Borrar conversación"
 
@@ -1005,7 +1005,7 @@ msgstr ""
 msgid "Close"
 msgstr "Cerrar"
 
-#: src/pages/shell/side-panel.tsx:398
+#: src/pages/shell/side-panel.tsx:402
 msgid "Close computer"
 msgstr "Cerrar computadora"
 
@@ -1104,7 +1104,7 @@ msgstr "Computadora"
 msgid "Computer failed to boot"
 msgstr "La computadora no pudo iniciarse"
 
-#: src/pages/shell/side-panel.tsx:448
+#: src/pages/shell/side-panel.tsx:452
 msgid "Computer is asleep"
 msgstr "La computadora está en reposo"
 
@@ -1439,6 +1439,10 @@ msgstr "No se pudo importar el skill"
 msgid "Could not install connector"
 msgstr "No se pudo instalar el conector"
 
+#: src/pages/GroupPanel.tsx:361
+msgid "Could not leave group"
+msgstr "No se pudo salir del grupo"
+
 #: src/pages/bot-page/KnowledgeTab.tsx:180
 #: src/pages/bot-page/page-kit.tsx:80
 #: src/pages/KnowledgeSection.tsx:90
@@ -1542,7 +1546,7 @@ msgstr "No se pudo quitar"
 msgid "Could not remove connector"
 msgstr "No se pudo quitar el conector"
 
-#: src/pages/GroupPanel.tsx:355
+#: src/pages/GroupPanel.tsx:360
 msgid "Could not remove group"
 msgstr "No se pudo quitar el grupo"
 
@@ -1582,7 +1586,7 @@ msgstr "No se pudo guardar"
 msgid "Could not save Auto Review"
 msgstr "No se pudo guardar Auto Review"
 
-#: src/pages/GroupPanel.tsx:354
+#: src/pages/GroupPanel.tsx:358
 msgid "Could not save group"
 msgstr "No se pudo guardar el grupo"
 
@@ -1868,7 +1872,7 @@ msgid "Default scope"
 msgstr "Alcance predeterminado"
 
 #: src/pages/bot-page/BotPage.tsx:386
-#: src/pages/BotContextMenu.tsx:165
+#: src/pages/BotContextMenu.tsx:182
 #: src/pages/KnowledgeSection.tsx:687
 #: src/pages/McpServersOverlay.tsx:591
 #: src/pages/shell/dialogs.tsx:409
@@ -1892,7 +1896,7 @@ msgstr "Eliminar {0}"
 msgid "Delete {0}?"
 msgstr "¿Eliminar {0}?"
 
-#: src/pages/GroupPanel.tsx:458
+#: src/pages/GroupPanel.tsx:472
 msgid "Delete group"
 msgstr "Eliminar grupo"
 
@@ -1904,7 +1908,7 @@ msgstr "Eliminar también las memorias"
 msgid "Delete routine"
 msgstr "Eliminar rutina"
 
-#: src/pages/shell/shell-overlays.tsx:264
+#: src/pages/shell/shell-overlays.tsx:294
 msgid "Delete space"
 msgstr ""
 
@@ -1917,7 +1921,7 @@ msgstr ""
 msgid "Deleted bot"
 msgstr ""
 
-#: src/pages/GroupPanel.tsx:458
+#: src/pages/GroupPanel.tsx:472
 #: src/pages/shell/dialogs.tsx:409
 #: src/pages/shell/dialogs.tsx:470
 msgid "Deleting…"
@@ -1942,7 +1946,7 @@ msgstr "Describe qué hace este bot"
 #: src/pages/bot-page/SettingDetails.tsx:53
 #: src/pages/bot-page/SettingsTab.tsx:27
 #: src/pages/GroupPanel.tsx:261
-#: src/pages/GroupPanel.tsx:422
+#: src/pages/GroupPanel.tsx:436
 #: src/pages/shell/bot-panel.tsx:131
 msgid "Description"
 msgstr "Descripción"
@@ -2060,7 +2064,7 @@ msgid "Draft skill"
 msgstr "Habilidad en borrador"
 
 #: src/pages/bot-page/BotPage.tsx:367
-#: src/pages/BotContextMenu.tsx:152
+#: src/pages/BotContextMenu.tsx:163
 msgid "Duplicate"
 msgstr "Duplicar"
 
@@ -2085,7 +2089,7 @@ msgstr "Editar y reenviar"
 msgid "Edit message"
 msgstr ""
 
-#: src/pages/shell/shell-overlays.tsx:170
+#: src/pages/shell/shell-overlays.tsx:172
 msgid "Edit Profile"
 msgstr "Editar perfil"
 
@@ -2348,8 +2352,8 @@ msgstr "Global"
 msgid "Group"
 msgstr "Grupo"
 
-#: src/pages/GroupPanel.tsx:376
-#: src/pages/GroupPanel.tsx:404
+#: src/pages/GroupPanel.tsx:382
+#: src/pages/GroupPanel.tsx:418
 msgid "Group settings"
 msgstr "Configuración del grupo"
 
@@ -2439,7 +2443,7 @@ msgstr "Cómo debe comportarse este bot"
 msgid "How to check"
 msgstr "Cómo comprobar"
 
-#: src/pages/shell/side-panel.tsx:497
+#: src/pages/shell/side-panel.tsx:501
 msgid "I’m done"
 msgstr "Listo"
 
@@ -2597,6 +2601,15 @@ msgstr ""
 msgid "Leave"
 msgstr "Salir"
 
+#: src/pages/BotContextMenu.tsx:188
+#: src/pages/GroupPanel.tsx:408
+msgid "Leave group"
+msgstr "Salir del grupo"
+
+#: src/pages/GroupPanel.tsx:408
+msgid "Leaving…"
+msgstr "Saliendo…"
+
 #: src/pages/DecisionModelSettingsPanel.tsx:91
 msgid "Let bots complete multi-step web page tasks faster."
 msgstr ""
@@ -2706,13 +2719,13 @@ msgstr ""
 msgid "Manual setup required"
 msgstr ""
 
-#: src/pages/BotContextMenu.tsx:137
-#: src/pages/BotContextMenu.tsx:172
+#: src/pages/BotContextMenu.tsx:145
+#: src/pages/BotContextMenu.tsx:196
 msgid "Mark as Read"
 msgstr "Marcar como leído"
 
-#: src/pages/BotContextMenu.tsx:137
-#: src/pages/BotContextMenu.tsx:172
+#: src/pages/BotContextMenu.tsx:145
+#: src/pages/BotContextMenu.tsx:196
 msgid "Mark as Unread"
 msgstr "Marcar como no leído"
 
@@ -2750,7 +2763,7 @@ msgstr "Medio"
 msgid "Members"
 msgstr ""
 
-#: src/pages/GroupPanel.tsx:435
+#: src/pages/GroupPanel.tsx:449
 msgid "Members ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 msgstr "Miembros ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 
@@ -2917,7 +2930,7 @@ msgstr "Más acciones de computadora"
 msgid "Move them to your shared memory."
 msgstr "Muévelas a tu memoria compartida."
 
-#: src/pages/BotContextMenu.tsx:107
+#: src/pages/BotContextMenu.tsx:115
 msgid "Move to"
 msgstr "Mover a"
 
@@ -2932,7 +2945,7 @@ msgstr ""
 #: src/pages/bot-page/RoutineCreateForm.tsx:74
 #: src/pages/bot-page/RoutineDetail.tsx:111
 #: src/pages/GroupPanel.tsx:251
-#: src/pages/GroupPanel.tsx:413
+#: src/pages/GroupPanel.tsx:427
 #: src/pages/shell/bot-panel.tsx:109
 #: src/pages/shell/dialogs.tsx:72
 #: src/pages/shell/dialogs.tsx:187
@@ -2957,7 +2970,7 @@ msgstr "Nombra esta rutina"
 msgid "Needs takeover"
 msgstr "Necesita toma de control"
 
-#: src/pages/shell/side-panel.tsx:340
+#: src/pages/shell/side-panel.tsx:344
 msgid "Needs you"
 msgstr "Te necesita"
 
@@ -2988,7 +3001,7 @@ msgstr "Nueva contraseña"
 msgid "New routine"
 msgstr "Nueva rutina"
 
-#: src/pages/BotContextMenu.tsx:125
+#: src/pages/BotContextMenu.tsx:133
 #: src/pages/shell/dialogs.tsx:180
 msgid "New section"
 msgstr "Nueva sección"
@@ -3229,7 +3242,7 @@ msgstr "el día 1 a las {0}"
 msgid "One-time"
 msgstr "Una sola vez"
 
-#: src/pages/shell/shell-overlays.tsx:302
+#: src/pages/shell/shell-overlays.tsx:332
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
 msgstr ""
 
@@ -3392,7 +3405,7 @@ msgstr ""
 msgid "Personal credential"
 msgstr "Credencial personal"
 
-#: src/pages/BotContextMenu.tsx:102
+#: src/pages/BotContextMenu.tsx:110
 msgid "Pin"
 msgstr "Fijar"
 
@@ -3573,7 +3586,7 @@ msgstr "Actualizar vista"
 msgid "Refreshing…"
 msgstr "Actualizando…"
 
-#: src/pages/shell/side-panel.tsx:487
+#: src/pages/shell/side-panel.tsx:491
 msgid "Release"
 msgstr "Liberar"
 
@@ -3652,9 +3665,9 @@ msgstr "Eliminado, pero falló la actualización de la lista"
 msgid "Removing…"
 msgstr "Quitando…"
 
-#: src/pages/BotContextMenu.tsx:130
+#: src/pages/BotContextMenu.tsx:138
 #: src/pages/shell/dialogs.tsx:246
-#: src/pages/shell/shell-overlays.tsx:391
+#: src/pages/shell/shell-overlays.tsx:421
 msgid "Rename section"
 msgstr ""
 
@@ -3856,7 +3869,7 @@ msgstr ""
 #: src/components/AskCard.tsx:405
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/ExternalConversationSettings.tsx:255
-#: src/pages/GroupPanel.tsx:450
+#: src/pages/GroupPanel.tsx:464
 #: src/pages/KnowledgeSection.tsx:235
 #: src/pages/KnowledgeSection.tsx:706
 #: src/pages/model-settings/model-detail.tsx:329
@@ -3895,7 +3908,7 @@ msgstr ""
 #: src/components/AskCard.tsx:405
 #: src/components/teach/SkillDraftCard.tsx:142
 #: src/pages/bot-page/page-kit.tsx:49
-#: src/pages/GroupPanel.tsx:450
+#: src/pages/GroupPanel.tsx:464
 #: src/pages/model-settings/model-detail.tsx:327
 #: src/pages/shell/dialogs.tsx:266
 msgid "Saving…"
@@ -4030,7 +4043,7 @@ msgid "Shape {0}"
 msgstr "Forma {0}"
 
 #: src/pages/bot-page/BotPage.tsx:363
-#: src/pages/BotContextMenu.tsx:147
+#: src/pages/BotContextMenu.tsx:157
 msgid "Share"
 msgstr ""
 
@@ -4132,7 +4145,7 @@ msgstr ""
 
 #: src/components/ask/QuestionCard.tsx:194
 #: src/components/integrations/IntegrationSetup.tsx:359
-#: src/pages/shell/side-panel.tsx:494
+#: src/pages/shell/side-panel.tsx:498
 msgid "Skip"
 msgstr "Omitir"
 
@@ -4214,8 +4227,8 @@ msgid "Steps"
 msgstr "Pasos"
 
 #: src/pages/shell/composer.tsx:302
-#: src/pages/shell/side-panel.tsx:356
-#: src/pages/shell/side-panel.tsx:361
+#: src/pages/shell/side-panel.tsx:360
+#: src/pages/shell/side-panel.tsx:365
 msgid "Stop"
 msgstr "Detener"
 
@@ -4280,7 +4293,7 @@ msgstr "Cambiando…"
 msgid "System"
 msgstr "Sistema"
 
-#: src/pages/shell/side-panel.tsx:472
+#: src/pages/shell/side-panel.tsx:476
 msgid "Take control"
 msgstr ""
 
@@ -4455,7 +4468,7 @@ msgstr "Intentarlo de nuevo"
 msgid "Type your answer"
 msgstr "Escribe tu respuesta"
 
-#: src/pages/BotContextMenu.tsx:119
+#: src/pages/BotContextMenu.tsx:127
 msgid "Unassigned"
 msgstr "Sin asignar"
 
@@ -4475,7 +4488,7 @@ msgstr ""
 msgid "Unlink"
 msgstr "Desvincular"
 
-#: src/pages/BotContextMenu.tsx:102
+#: src/pages/BotContextMenu.tsx:110
 msgid "Unpin"
 msgstr "Desfijar"
 
@@ -4661,7 +4674,7 @@ msgid "What this bot is for"
 msgstr "Para qué es este bot"
 
 #: src/pages/GroupPanel.tsx:267
-#: src/pages/GroupPanel.tsx:428
+#: src/pages/GroupPanel.tsx:442
 msgid "What this group is for"
 msgstr "Para qué es este grupo"
 
@@ -4722,7 +4735,7 @@ msgid "You can close this window."
 msgstr "Puedes cerrar esta ventana."
 
 #: src/pages/ComputerSettingsPanel.tsx:121
-#: src/pages/shell/side-panel.tsx:344
+#: src/pages/shell/side-panel.tsx:348
 msgid "You have control"
 msgstr "Tienes el control"
 

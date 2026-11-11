@@ -113,7 +113,7 @@ export function SidePanel({
     [onBotPage, botPage.tab],
   );
   const closePanel = useCallback(() => setPanel(null), [setPanel]);
-  /** The group is gone for this person: open their next thread. */
+  /** The group is gone for this person, deleted or left: open their next thread. */
   async function closeGroup(groupId: string) {
     const remainingGroups = groups.filter((group) => group.id !== groupId);
     setGroups(remainingGroups);
@@ -213,6 +213,10 @@ export function SidePanel({
                     }}
                     onRemove={async () => {
                       await rpc.groups.remove({ groupId: activeGroup.id });
+                      await closeGroup(activeGroup.id);
+                    }}
+                    onLeave={async () => {
+                      await rpc.groups.leave({ groupId: activeGroup.id });
                       await closeGroup(activeGroup.id);
                     }}
                   />

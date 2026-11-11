@@ -292,19 +292,23 @@ export function CreateGroupForm({
   );
 }
 
-/** The group's settings for its creator. Everyone else sees who is in it, read-only. */
+/**
+ * The group's settings for its creator. Everyone else sees who is in it, read-only, and can leave.
+ */
 export function GroupSettings({
   group,
   bots,
   userId,
   onSave,
   onRemove,
+  onLeave,
 }: {
   group: Group;
   bots: Bot[];
   userId: string;
   onSave: (input: Partial<GroupInput>) => Promise<void>;
   onRemove: () => Promise<void>;
+  onLeave: () => Promise<void>;
 }) {
   const { t } = useLingui();
   const nameId = useId();
@@ -318,7 +322,7 @@ export function GroupSettings({
   // The creator is always in the group: only the others are picked.
   const currentPeople = group.people.map((person) => person.userId).filter((id) => id !== userId);
   const [selectedPeople, setSelectedPeople] = useState(currentPeople);
-  const [pending, setPending] = useState<"save" | "remove" | null>(null);
+  const [pending, setPending] = useState<"save" | "remove" | "leave" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const spacePeople = useSpacePeople(group.canManage ? group.spaceId : undefined, userId);
   // Someone the Space no longer lists stays pickable, so the creator can still take them out.
@@ -340,7 +344,7 @@ export function GroupSettings({
     [bots, group.members],
   );
 
-  async function mutate(kind: "save" | "remove", action: () => Promise<void>) {
+  async function mutate(kind: "save" | "remove" | "leave", action: () => Promise<void>) {
     if (pending) return;
     setPending(kind);
     setError(null);
@@ -352,7 +356,9 @@ export function GroupSettings({
           ? cause.message
           : kind === "save"
             ? t`Could not save group`
-            : t`Could not remove group`,
+            : kind === "remove"
+              ? t`Could not remove group`
+              : t`Could not leave group`,
       );
     } finally {
       setPending(null);
@@ -393,6 +399,14 @@ export function GroupSettings({
             />
           ))}
         </div>
+        <Button
+          variant="destructive"
+          className="mt-5 w-full"
+          disabled={pending !== null}
+          onClick={() => void mutate("leave", onLeave)}
+        >
+          {pending === "leave" ? <Trans>Leaving…</Trans> : <Trans>Leave group</Trans>}
+        </Button>
       </div>
     );
   }

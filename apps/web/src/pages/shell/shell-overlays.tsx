@@ -101,6 +101,8 @@ export function ShellOverlays({
   const contextGroup =
     botMenu?.kind === "group" ? groups.find((group) => group.id === botMenu.id) : undefined;
   const contextChat = contextBot ?? contextGroup;
+  // Only a group's creator manages it; everyone else can leave it.
+  const manages = contextGroup?.canManage ?? true;
 
   return (
     <>
@@ -168,16 +170,20 @@ export function ShellOverlays({
               setBotMenu(null);
             }}
             editLabel={contextBot ? t`Bot settings` : t`Edit Profile`}
-            onEdit={() => {
-              setBotMenu(null);
-              if (contextBot) {
-                navigate(`/app/${contextBot.id}`);
-                showBotPage(botPageFor("menu", contextBot));
-                return;
-              }
-              navigate(`/app/g/${contextGroup!.id}`);
-              setPanel("group-settings");
-            }}
+            onEdit={
+              manages
+                ? () => {
+                    setBotMenu(null);
+                    if (contextBot) {
+                      navigate(`/app/${contextBot.id}`);
+                      showBotPage(botPageFor("menu", contextBot));
+                      return;
+                    }
+                    navigate(`/app/g/${contextGroup!.id}`);
+                    setPanel("group-settings");
+                  }
+                : undefined
+            }
             onShare={
               contextBot
                 ? () => {
@@ -186,35 +192,59 @@ export function ShellOverlays({
                   }
                 : undefined
             }
-            onDuplicate={() => {
-              setBotMenu(null);
-              if (contextBot) {
-                runBotAction(contextBot.id, "duplicate");
-                return;
-              }
-              void rpc.groups.duplicate({ groupId: contextGroup!.id }).then(async (chat) => {
-                await refreshBots();
-                navigate(`/app/g/${chat.id}`);
-              });
-            }}
+            onDuplicate={
+              manages
+                ? () => {
+                    setBotMenu(null);
+                    if (contextBot) {
+                      runBotAction(contextBot.id, "duplicate");
+                      return;
+                    }
+                    void rpc.groups.duplicate({ groupId: contextGroup!.id }).then(async (chat) => {
+                      await refreshBots();
+                      navigate(`/app/g/${chat.id}`);
+                    });
+                  }
+                : undefined
+            }
             onClear={() => {
               setBotMenu(null);
               if (contextBot) runBotAction(contextBot.id, "clear");
               else setClearTarget({ kind: "group", chat: contextGroup! });
             }}
-            onArchive={() => {
-              setBotMenu(null);
-              if (contextBot) {
-                runBotAction(contextBot.id, "archive");
-                return;
-              }
-              void rpc.groups.archive({ groupId: contextGroup!.id }).then(() => refreshBots(true));
-            }}
-            onDelete={() => {
-              setBotMenu(null);
-              if (contextBot) runBotAction(contextBot.id, "delete");
-              else setDeleteGroupTarget(contextGroup!);
-            }}
+            onArchive={
+              manages
+                ? () => {
+                    setBotMenu(null);
+                    if (contextBot) {
+                      runBotAction(contextBot.id, "archive");
+                      return;
+                    }
+                    void rpc.groups
+                      .archive({ groupId: contextGroup!.id })
+                      .then(() => refreshBots(true));
+                  }
+                : undefined
+            }
+            onDelete={
+              manages
+                ? () => {
+                    setBotMenu(null);
+                    if (contextBot) runBotAction(contextBot.id, "delete");
+                    else setDeleteGroupTarget(contextGroup!);
+                  }
+                : undefined
+            }
+            onLeave={
+              manages
+                ? undefined
+                : () => {
+                    setBotMenu(null);
+                    void rpc.groups
+                      .leave({ groupId: contextGroup!.id })
+                      .then(() => refreshBots(true));
+                  }
+            }
           />
         ) : null}
 

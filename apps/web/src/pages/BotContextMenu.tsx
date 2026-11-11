@@ -19,6 +19,7 @@ import {
   Eraser,
   Folder,
   FolderPlus,
+  LogOut,
   Pencil,
   Pin,
   Trash2,
@@ -47,6 +48,7 @@ export function BotContextMenu({
   onClear,
   onArchive,
   onDelete,
+  onLeave,
 }: {
   bot: ChatMenuTarget;
   /** False on a bot shared with you: only your own thread with it is yours to act on. */
@@ -60,15 +62,21 @@ export function BotContextMenu({
   onRenameSection?: (sectionId: string) => void;
   onToggleUnread: () => void;
   editLabel: string;
-  onEdit: () => void;
+  /** The actions below are absent on a group someone else created, where only leaving is yours. */
+  onEdit?: () => void;
   /** Bots only. */
   onShare?: () => void;
-  onDuplicate: () => void;
-  onClear: () => void;
-  onArchive: () => void;
-  onDelete: () => void;
+  onDuplicate?: () => void;
+  /** Absent where the history is not only yours: a group of several people. */
+  onClear?: () => void;
+  onArchive?: () => void;
+  onDelete?: () => void;
+  /** A group someone else created. */
+  onLeave?: () => void;
 }) {
   const { t } = useLingui();
+  const manages = Boolean(onEdit || onShare || onDuplicate);
+  const ends = Boolean(onClear || onArchive || onDelete || onLeave);
 
   return (
     <DropdownMenu
@@ -136,34 +144,50 @@ export function BotContextMenu({
               {bot.unread ? <BellDot /> : <Bell />}
               {bot.unread ? t`Mark as Read` : t`Mark as Unread`}
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onEdit}>
-              <Pencil />
-              {editLabel}
-            </DropdownMenuItem>
+            {manages ? <DropdownMenuSeparator /> : null}
+            {onEdit ? (
+              <DropdownMenuItem onClick={onEdit}>
+                <Pencil />
+                {editLabel}
+              </DropdownMenuItem>
+            ) : null}
             {onShare ? (
               <DropdownMenuItem onClick={onShare}>
                 <UserPlus />
                 {t`Share`}
               </DropdownMenuItem>
             ) : null}
-            <DropdownMenuItem onClick={onDuplicate}>
-              <Copy />
-              {t`Duplicate`}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onClear}>
-              <Eraser />
-              {t`Clear conversation`}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onArchive}>
-              <Archive />
-              {t`Archive`}
-            </DropdownMenuItem>
-            <DropdownMenuItem variant="destructive" onClick={onDelete}>
-              <Trash2 />
-              {t`Delete`}
-            </DropdownMenuItem>
+            {onDuplicate ? (
+              <DropdownMenuItem onClick={onDuplicate}>
+                <Copy />
+                {t`Duplicate`}
+              </DropdownMenuItem>
+            ) : null}
+            {ends ? <DropdownMenuSeparator /> : null}
+            {onClear ? (
+              <DropdownMenuItem onClick={onClear}>
+                <Eraser />
+                {t`Clear conversation`}
+              </DropdownMenuItem>
+            ) : null}
+            {onArchive ? (
+              <DropdownMenuItem onClick={onArchive}>
+                <Archive />
+                {t`Archive`}
+              </DropdownMenuItem>
+            ) : null}
+            {onDelete ? (
+              <DropdownMenuItem variant="destructive" onClick={onDelete}>
+                <Trash2 />
+                {t`Delete`}
+              </DropdownMenuItem>
+            ) : null}
+            {onLeave ? (
+              <DropdownMenuItem variant="destructive" onClick={onLeave}>
+                <LogOut />
+                {t`Leave group`}
+              </DropdownMenuItem>
+            ) : null}
           </>
         ) : (
           <>
@@ -171,10 +195,12 @@ export function BotContextMenu({
               {bot.unread ? <BellDot /> : <Bell />}
               {bot.unread ? t`Mark as Read` : t`Mark as Unread`}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={onClear}>
-              <Eraser />
-              {t`Clear conversation`}
-            </DropdownMenuItem>
+            {onClear ? (
+              <DropdownMenuItem onClick={onClear}>
+                <Eraser />
+                {t`Clear conversation`}
+              </DropdownMenuItem>
+            ) : null}
           </>
         )}
       </DropdownMenuContent>
