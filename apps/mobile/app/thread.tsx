@@ -2053,13 +2053,14 @@ function Thread() {
 
   // One props object per message whose handlers reach the latest render, so
   // `MessageBubble` can skip re-rendering while the thread scrolls or the
-  // composer changes. Rebuilt with the language: its labels are translated.
+  // composer changes. Rebuilt with the language, its labels being translated, and with who reads a
+  // group and who is in it, which decide its actions.
   const latestActions = useRef({ messageActions, showMessageActions });
   latestActions.current = { messageActions, showMessageActions };
   const actionPropsCache = useMemo(
     () =>
       new WeakMap<MobileMessage, { messageId: EntryId | undefined; props: MessageActionProps }>(),
-    [locale],
+    [locale, viewerUserId, creatorId, sharedHistory],
   );
   function messageActionProps(
     message: MobileMessage,
