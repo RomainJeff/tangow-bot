@@ -150,8 +150,10 @@ export const GroupSchema = z.object({
   sectionId: Id.nullable(),
   archivedAt: z.string().nullable(),
   members: z.array(GroupMemberSchema),
-  /** Everyone in the group, its creator first. */
+  /** Everyone in the group, its creator first while they are in the Space. */
   people: z.array(GroupPersonSchema),
+  /** Who made the group: a message in it naming no author is theirs. */
+  creatorId: Id,
   /** Whether the actor created the group: only they change its people, bots, name and lead. */
   canManage: z.boolean(),
   /** The bot that answers a message naming no bot; null is the first bot. */

@@ -113,6 +113,7 @@ function mapGroup(group: GroupRecord, preview: string, userId: string, usable: S
         name: person.user.name,
         image: person.user.image,
       })),
+    creatorId: group.userId,
     canManage: group.userId === userId,
     leadBotId: group.leadBotId,
     threadId: group.thread.id,
@@ -836,7 +837,7 @@ export async function markThreadsUnread(
 
 /**
  * Whom a group thread's messages name: its people, in the order they joined, then anyone who
- * wrote in it and has left since.
+ * wrote in it and has left since, its creator among them.
  */
 export async function groupThreadPeople(
   prisma: Pick<PrismaClient, "chatGroupPerson" | "user" | "$queryRaw">,
@@ -854,6 +855,8 @@ export async function groupThreadPeople(
       WHERE e."sessionId" = ${group.sessionId}
         AND e.type = 'user.message'
         AND e.payload->>'authorId' IS NOT NULL
+      UNION
+      SELECT g."userId" FROM chat_groups g WHERE g.id = ${group.groupId}
     `,
   ]);
   const current = new Set(people.map((person) => person.user.id));

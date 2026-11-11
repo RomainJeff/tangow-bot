@@ -782,7 +782,7 @@ export type MobileGroup = Pick<
   | "canManage"
   | "leadBotId"
 > &
-  Partial<Pick<Group, "spaceId">>;
+  Partial<Pick<Group, "spaceId" | "creatorId">>;
 
 /** A group as an older server sends it, from before groups held people. */
 type ServerGroup = Omit<MobileGroup, "people" | "canManage" | "leadBotId" | "members"> &
@@ -798,6 +798,8 @@ export async function listGroups(): Promise<MobileGroup[]> {
     people: group.people ?? [],
     canManage: group.canManage ?? true,
     leadBotId: group.leadBotId ?? null,
+    // A server from before it said who made a group lists them first.
+    creatorId: group.creatorId ?? group.people?.[0]?.userId,
   }));
 }
 

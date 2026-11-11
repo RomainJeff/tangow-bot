@@ -178,8 +178,8 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
   // The snapshot names everyone who ever wrote, the live group whoever joined since it was taken.
   const snapshotPeople = activeSnapshot?.people;
   const groupPeople = activeGroup?.people;
-  // A message naming no author is the creator's, the group's first person.
-  const creatorId = activeGroup?.people[0]?.userId;
+  // A message naming no author is the creator's.
+  const creatorId = activeGroup?.creatorId;
   const personOf = useCallback(
     (message: MessageItem): GroupPerson | undefined => {
       if (!inGroup || message.role !== "user") return undefined;

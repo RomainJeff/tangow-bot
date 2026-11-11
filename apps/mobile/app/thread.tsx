@@ -573,8 +573,8 @@ function Thread() {
   }, []);
   const showSteps = useDebugMode();
   const currentGroup = groupId ? mentionGroups.find((group) => group.id === groupId) : undefined;
-  // A message carrying no author is the creator's, who comes first among the group's people.
-  const creatorId = currentGroup?.people[0]?.userId;
+  // A message carrying no author is the creator's.
+  const creatorId = currentGroup?.creatorId;
   // Several people share a group's history: nobody rewinds it under the others.
   const sharedHistory = (currentGroup?.people.length ?? 0) > 1;
   const threadRuns = useMemo(
