@@ -151,6 +151,7 @@ function AnswerInput({
 export function AskCard({
   block,
   canAnswer,
+  waitingOn,
   viewerUserId,
   onAnswer,
   messageId,
@@ -159,6 +160,8 @@ export function AskCard({
 }: {
   block: AskBlock;
   canAnswer: boolean;
+  /** The person who answers it instead, when it waits on someone else's run in a group. */
+  waitingOn?: string;
   /** Only the run's owner may edit a Create bot card. */
   viewerUserId?: string;
   onAnswer: (text: string, edits?: CardEdits) => Promise<void>;
@@ -209,6 +212,7 @@ export function AskCard({
         key={messageId}
         block={{ ...block, draft: block.draft }}
         canAnswer={canAnswer}
+        waitingOn={waitingOn}
         viewerUserId={viewerUserId}
         onAnswer={onAnswer}
         onReconnect={onReconnect}
@@ -226,6 +230,7 @@ export function AskCard({
         form={form}
         messageId={messageId}
         canAnswer={canAnswer}
+        waitingOn={waitingOn}
         onAnswer={onAnswer}
       />
     );
@@ -256,6 +261,8 @@ export function AskCard({
           approvalActions?.find((action) => action.id === block.answer)?.outcome,
         )
       )
+    ) : waitingOn !== undefined ? (
+      t`Waiting for ${waitingOn}`
     ) : !canAnswer ? (
       t`No longer active`
     ) : undefined;

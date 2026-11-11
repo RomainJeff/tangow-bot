@@ -189,6 +189,7 @@ export function ShellMain({
               loadingOlder={transcriptWindow.loadingOlder}
               viewerUserId={userId}
               personOf={thread.personOf}
+              waitingOn={thread.waitingOn}
               takeoverItemId={thread.takeoverItemId}
               onOpenComputer={onOpenComputer}
               running={thread.transcriptRunning}

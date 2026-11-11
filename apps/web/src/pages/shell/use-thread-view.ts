@@ -67,26 +67,30 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
   const currentRuns = useMemo(() => activeThreadRuns(activeSnapshot), [activeSnapshot]);
   const viewerId = bootstrapMe?.userId;
   // Another person's run in a group waits on them alone: its cards show here, but answer nothing.
-  const othersRunIds = useMemo(
+  const othersRuns = useMemo(
     () =>
-      new Set(
-        currentRuns
-          .filter((run) => run.userId && viewerId && run.userId !== viewerId)
-          .map((run) => run.id),
+      new Map(
+        currentRuns.flatMap((run) =>
+          run.userId && viewerId && run.userId !== viewerId ? [[run.id, run.userId] as const] : [],
+        ),
       ),
     [currentRuns, viewerId],
   );
-  const view = useMemo(() => {
-    const projected = projectThreadView(activeEntries ?? [], {
-      rendersNothing: (item) =>
-        drawsNothing(item, (blocks) => hasRenderableBlock(blocks, showSteps)),
-      progress: activeLayer,
-      imageStacks: true,
-    });
-    return projected.waiting && othersRunIds.has(projected.waiting.runId)
-      ? { ...projected, waiting: null }
-      : projected;
-  }, [activeEntries, activeLayer, showSteps, othersRunIds]);
+  const projected = useMemo(
+    () =>
+      projectThreadView(activeEntries ?? [], {
+        rendersNothing: (item) =>
+          drawsNothing(item, (blocks) => hasRenderableBlock(blocks, showSteps)),
+        progress: activeLayer,
+        imageStacks: true,
+      }),
+    [activeEntries, activeLayer, showSteps],
+  );
+  const othersWaiting = projected.waiting && othersRuns.get(projected.waiting.runId);
+  const view = useMemo(
+    () => (othersWaiting ? { ...projected, waiting: null } : projected),
+    [projected, othersWaiting],
+  );
   const viewRef = useRef(view);
   viewRef.current = view;
   // A message that joins a stack of images draws no row: it stands at its host's.
@@ -103,9 +107,9 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
     () =>
       latestTakeoverItemId(
         view.rows.map((row) => row.item),
-        currentRuns.filter((run) => !othersRunIds.has(run.id)),
+        currentRuns.filter((run) => !othersRuns.has(run.id)),
       ),
-    [view.rows, currentRuns, othersRunIds],
+    [view.rows, currentRuns, othersRuns],
   );
   const workingRuns = currentRuns.filter((run) => isWorking(run, view));
   const transcriptRunning = workingRuns.length > 0;
@@ -196,6 +200,19 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
     },
     [inGroup, creatorId, viewerId, snapshotPeople, groupPeople],
   );
+  const findPerson = (userId: string) =>
+    snapshotPeople?.find((person) => person.userId === userId) ??
+    groupPeople?.find((person) => person.userId === userId);
+  // The card another person's run waits on, and who answers it.
+  const waitingItemId = othersWaiting ? projected.waiting?.itemId : undefined;
+  const waitingName = othersWaiting ? (findPerson(othersWaiting)?.name ?? "") : undefined;
+  const waitingOn = useMemo(
+    () =>
+      waitingItemId !== undefined && waitingName !== undefined
+        ? { itemId: waitingItemId, name: waitingName }
+        : null,
+    [waitingItemId, waitingName],
+  );
   const resolveTranscriptMemberName = useCallback(
     (botId: string | undefined) => memberName(transcriptMembers, botId),
     [transcriptMembers],
@@ -215,6 +232,7 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
     resolveTranscriptBot,
     resolveTranscriptMemberName,
     personOf,
+    waitingOn,
     answerName,
     workingBots,
     workingStartedAt,

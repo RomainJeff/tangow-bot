@@ -64,6 +64,7 @@ export const Transcript = memo(function Transcript({
   loadingOlder,
   viewerUserId,
   personOf,
+  waitingOn,
   takeoverItemId,
   onOpenComputer,
   running,
@@ -102,6 +103,7 @@ export const Transcript = memo(function Transcript({
   loadingOlder: boolean;
   viewerUserId?: string;
   personOf?: RowContext["personOf"];
+  waitingOn?: RowContext["waitingOn"];
   /** The live "Needs you" computer card, which opens the bot's screen in one click. */
   takeoverItemId?: string | null;
   onOpenComputer?: () => void;
@@ -185,6 +187,7 @@ export const Transcript = memo(function Transcript({
       onOpenComputer,
       viewerUserId,
       personOf,
+      waitingOn,
       waiting,
       onAnswer,
       memberName,
@@ -208,6 +211,7 @@ export const Transcript = memo(function Transcript({
     inGroup,
     viewerUserId,
     personOf,
+    waitingOn,
     waiting,
     takeoverItemId,
     onOpenComputer,

@@ -122,6 +122,7 @@ export const MessageView = memo(function MessageView({
   showAuthor,
   showAvatar,
   onAnswer,
+  waitingOn,
   onOpenComputer,
   onOpenBot,
   speakerName,
@@ -159,6 +160,8 @@ export const MessageView = memo(function MessageView({
    * (`isLastOfGroup`). Always false in a mono thread. */
   showAvatar: boolean;
   onAnswer?: (text: string, edits?: CardEdits) => Promise<void>;
+  /** Who answers its card instead, when it waits on another person in a group. */
+  waitingOn?: string;
   /** Set only on the live "Needs you" card: opens the bot's screen. */
   onOpenComputer?: () => void;
   onOpenBot: (botId: string) => void;
@@ -517,6 +520,7 @@ export const MessageView = memo(function MessageView({
             key={i}
             block={block}
             canAnswer={Boolean(onAnswer)}
+            waitingOn={waitingOn}
             viewerUserId={viewerUserId}
             onAnswer={onAnswer ?? noAnswer}
             messageId={message.id}

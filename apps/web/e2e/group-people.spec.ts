@@ -95,6 +95,7 @@ test("a group's creator adds a person, who writes in it and leaves", async ({
   await expect(transcript.getByText("Grace Guest", { exact: true })).toBeVisible();
   await expect(transcript.getByText("Which city should I use?", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Berlin", exact: true })).toHaveCount(0);
+  await expect(transcript.getByText("Waiting for Grace Guest", { exact: true })).toBeVisible();
   // Ada can still reply to what Grace wrote.
   const graceRow = transcript.locator("[data-message-id]").filter({ hasText: "Works for me." });
   await graceRow.hover();
