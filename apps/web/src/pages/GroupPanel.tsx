@@ -5,6 +5,7 @@ import {
   GROUP_MEMBER_MAX,
   GROUP_MEMBER_MIN,
 } from "@rakazo/contracts";
+import { groupLeadBotId } from "@rakazo/core";
 import {
   BotAvatar,
   Button,
@@ -474,16 +475,20 @@ export function GroupSettings({
         onChange={setSelected}
         maxHeight="max-h-[240px]"
       />
-      {selected.length > 1 ? (
+      {nextBotIds.length > 1 ? (
         <label htmlFor={leadId} className="mt-5 block text-sm text-muted-foreground">
           <Trans>Lead bot</Trans>
           <NativeSelect
             id={leadId}
-            value={currentLead ?? selected[0]}
+            // With none chosen, the group's first bot leads, as the server picks it.
+            value={groupLeadBotId(
+              nextBotIds.map((id) => ({ id })),
+              currentLead,
+            )}
             onChange={(event) => setLead(event.target.value)}
             className="mt-2 w-full"
           >
-            {selected.map((botId) => (
+            {nextBotIds.map((botId) => (
               <NativeSelectOption key={botId} value={botId}>
                 {selectable.find((bot) => bot.id === botId)?.name ?? ""}
               </NativeSelectOption>
