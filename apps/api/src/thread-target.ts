@@ -463,7 +463,7 @@ export async function readSessionEntries(
     threadOfSession(deps.prisma, sessionId, actor.spaceId),
     deps.prisma.run.findFirst({
       where: { sessionId, session: { kind: { not: "thread" } } },
-      select: { id: true },
+      select: { id: true, userId: true },
     }),
   ]);
   const thread = threadId
@@ -479,7 +479,11 @@ export async function readSessionEntries(
   });
   // A shared bot has a thread per person: reaching the bot is not reaching this one.
   if (target.threadId !== threadId) throw new IsolationError();
-  if (!run) throw new IsolationError();
+  // In a group, a run's trace is its person's alone, as with runs.entries: it ran with their
+  // accounts.
+  if (!run || (target.kind === "group" && run.userId !== actor.userId)) {
+    throw new IsolationError();
+  }
   return readCappedRun(deps.sessionLog, run.id);
 }
 
@@ -724,6 +728,7 @@ function pickLatestTerminalRun<T extends { id: string; createdAt: Date; complete
 function mapRun(run: {
   id: string;
   botId: string;
+  userId: string;
   threadId: string;
   taskId: string;
   status: string;
@@ -739,6 +744,7 @@ function mapRun(run: {
   return {
     id: run.id,
     botId: run.botId,
+    userId: run.userId,
     threadId: run.threadId,
     taskId: run.taskId,
     status: run.status as never,

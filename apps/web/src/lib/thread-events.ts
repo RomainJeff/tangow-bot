@@ -37,6 +37,7 @@ function runFromStartedEvent(event: ProductEvent, previous: Run | undefined): Ru
   return {
     id: event.runId ?? previous?.id ?? event.id,
     botId: event.botId,
+    userId: previous?.userId,
     threadId: event.threadId,
     taskId: previous?.taskId ?? event.runId ?? event.id,
     status: "running",
@@ -138,6 +139,24 @@ export function clearActiveThreadRuns(thread: ThreadState): ThreadState {
   };
 }
 
+/** Whose each run is, from a refresh older than the live state, for runs only seen starting. */
+function withRunPeople(prev: ThreadState, snap: ThreadSnapshot): ThreadState {
+  const people = new Map(
+    [snap.run, ...(snap.activeRuns ?? [])].flatMap((run) =>
+      run?.userId ? [[run.id, run.userId] as const] : [],
+    ),
+  );
+  const unknown = (run: Run | null | undefined) =>
+    Boolean(run && !run.userId && people.has(run.id));
+  if (!unknown(prev.run) && !prev.activeRuns?.some(unknown)) return prev;
+  const owned = (run: Run) => (unknown(run) ? { ...run, userId: people.get(run.id) } : run);
+  return {
+    ...prev,
+    run: prev.run && owned(prev.run),
+    activeRuns: prev.activeRuns?.map(owned),
+  };
+}
+
 /**
  * Apply a threads.get refresh without clobbering newer event-sourced takeover state.
  *
@@ -178,7 +197,7 @@ export function reconcileRefreshedThread(
       !prev.run ||
       !isActive(prev.run.status as RunStatus);
     return {
-      snapshot: prev,
+      snapshot: withRunPeople(prev, snap),
       computer: preserveLocalComputer ? prevComputer : (snap.computer ?? null),
     };
   }

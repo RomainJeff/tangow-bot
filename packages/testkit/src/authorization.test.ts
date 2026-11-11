@@ -1418,6 +1418,24 @@ describeWithDatabase("API authorization and resource isolation", () => {
     await expect(read(sam.cookie, danaRun.sessionId)).resolves.toMatchObject({ status: 404 });
   });
 
+  it("reads a run's session in a group only for the person it ran as", async () => {
+    const { owner, space, dana, bot } = await sharedBotSpace("group-sessions");
+    await rpc(app, owner, "bots/share", { botId: bot.id, visibility: "space", userIds: [] }, space);
+    const group = await rpc<{ id: string; threadId: string }>(
+      app,
+      owner,
+      "groups/create",
+      { name: "Crew", botIds: [bot.id], userIds: [dana.userId] },
+      space,
+    );
+    const danaRun = await finishedRun(space, bot.id, dana.userId, group.threadId);
+    const read = (cookie: string) =>
+      raw(app, cookie, "sessions/entries", { sessionId: danaRun.sessionId }, space);
+
+    await expect(read(dana.cookie)).resolves.toMatchObject({ status: 200 });
+    await expect(read(owner)).resolves.toMatchObject({ status: 404 });
+  });
+
   it("keeps a member's scratchpad on a shared bot out of the owner's", async () => {
     const { owner, space, dana, bot } = await sharedBotSpace("bot-share-scratchpad");
     await rpc(app, owner, "bots/share", { botId: bot.id, visibility: "space", userIds: [] }, space);

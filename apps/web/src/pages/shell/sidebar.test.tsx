@@ -106,6 +106,7 @@ function renderSidebar(overrides: Partial<ComponentProps<typeof BotsSidebar>> = 
     onOpenArchivedBot: vi.fn(),
     onRestoreBot: vi.fn(),
     setDeleteGroupTarget: vi.fn(),
+    setLeaveGroupTarget: vi.fn(),
     setCustomizeOpen: vi.fn(),
     menuOpen: false,
     setMenuOpen: vi.fn(),

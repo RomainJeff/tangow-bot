@@ -94,10 +94,24 @@ describe("sharing a bot", () => {
     });
   });
 
-  it("hides the thread of someone unshared and stops their runs", async () => {
+  it("hides the thread of someone unshared and stops their runs, in groups too", async () => {
     await setBotSharing(prisma, actor("owner"), { botId, visibility: "people", userIds: ["dana"] });
     const target = await sharedBotThread(prisma, actor("dana"), botId);
     const run = await startRun("dana", target!.thread.id);
+    const group = await prisma.chatGroup.create({
+      data: {
+        spaceId: space,
+        userId: "owner",
+        name: "Crew",
+        members: { create: { botId } },
+        people: { create: [{ userId: "owner" }, { userId: "dana" }] },
+      },
+    });
+    const groupThread = await prisma.thread.create({
+      data: { spaceId: space, userId: "owner", groupId: group.id },
+    });
+    const groupRun = await startRun("dana", groupThread.id);
+    const ownerRun = await startRun("owner", groupThread.id);
 
     await setBotSharing(prisma, actor("owner"), {
       botId,
@@ -108,9 +122,13 @@ describe("sharing a bot", () => {
     expect(await listed("dana")).toBeUndefined();
     expect(await sharedBotThread(prisma, actor("dana"), botId)).toBeNull();
     expect(await prisma.thread.findUnique({ where: { id: target!.thread.id } })).not.toBeNull();
-    expect((await prisma.run.findUniqueOrThrow({ where: { id: run.id } })).status).toBe(
+    const status = async (runId: string) =>
+      (await prisma.run.findUniqueOrThrow({ where: { id: runId } })).status;
+    expect([await status(run.id), await status(groupRun.id), await status(ownerRun.id)]).toEqual([
       "cancelled",
-    );
+      "cancelled",
+      "running",
+    ]);
     expect(await prisma.botShare.findMany({ where: { botId } })).toEqual([]);
   });
 

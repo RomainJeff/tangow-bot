@@ -129,8 +129,14 @@ function conversationEntries(
   const recapped = new Set(
     entries.flatMap((entry) => (entry.type === "run.recap" ? [entry.runId] : [])),
   );
+  const { activeRunId } = options.runHistory;
+  // Only the reading run keeps its tool parts: in a group, another person's run of the bot can
+  // still be working, and its tools ran with that person's accounts.
+  const compacted = (runId: string) =>
+    finished.has(runId) ||
+    (activeRunId !== undefined && runId !== activeRunId && !routines.has(runId));
   return entries.flatMap((entry): SessionEntry[] => {
-    if (!entry.runId || !finished.has(entry.runId)) return [entry];
+    if (!entry.runId || !compacted(entry.runId)) return [entry];
     switch (entry.type) {
       case "assistant.text":
         return entry.payload.toPerson !== false || needsThePerson(entry.payload.blocks)

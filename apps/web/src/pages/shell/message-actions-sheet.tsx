@@ -45,7 +45,8 @@ export function MessageActionsSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onReply: (message: MessageItem) => void;
-  onEdit: (message: MessageItem) => void;
+  /** Absent where the history is not only yours to rewrite: a group of several people. */
+  onEdit?: (message: MessageItem) => void;
   onReact: (message: MessageItem, reaction: MessageReaction) => Promise<void>;
   voiceReady: boolean;
   speaking: boolean;
@@ -100,7 +101,7 @@ export function MessageActionsSheet({
               },
             ]
           : []),
-        ...(canEditAndResendMessage(message)
+        ...(onEdit && canEditAndResendMessage(message)
           ? [
               {
                 key: "edit",

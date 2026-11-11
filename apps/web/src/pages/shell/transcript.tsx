@@ -63,6 +63,8 @@ export const Transcript = memo(function Transcript({
   olderCursor,
   loadingOlder,
   viewerUserId,
+  personOf,
+  waitingOn,
   takeoverItemId,
   onOpenComputer,
   running,
@@ -100,6 +102,8 @@ export const Transcript = memo(function Transcript({
   olderCursor: string | null;
   loadingOlder: boolean;
   viewerUserId?: string;
+  personOf?: RowContext["personOf"];
+  waitingOn?: RowContext["waitingOn"];
   /** The live "Needs you" computer card, which opens the bot's screen in one click. */
   takeoverItemId?: string | null;
   onOpenComputer?: () => void;
@@ -111,7 +115,8 @@ export const Transcript = memo(function Transcript({
   onOpenBot: (botId: string, messageId?: string) => void;
   onAnswer: (target: CardAnswerTarget, text: string, edits?: CardEdits) => Promise<void>;
   onReply: (message: MessageItem) => void;
-  onEdit: (message: MessageItem) => void;
+  /** Absent in a group of several people, whose history no one rewrites alone. */
+  onEdit?: (message: MessageItem) => void;
   rewindFromItemId: string | null;
   onReact: (message: MessageItem, reaction: MessageReaction) => Promise<void>;
   onJumpToMessage: (messageId: string) => void;
@@ -167,6 +172,8 @@ export const Transcript = memo(function Transcript({
       ),
     [rows],
   );
+  // Your own message sits at the end; a bot's, or someone else's in a group, at the start.
+  const isMine = (message: MessageItem) => message.role === "user" && !personOf?.(message);
   const rewindFromIndex =
     rewindFromItemId === null
       ? -1
@@ -179,6 +186,8 @@ export const Transcript = memo(function Transcript({
       takeoverItemId,
       onOpenComputer,
       viewerUserId,
+      personOf,
+      waitingOn,
       waiting,
       onAnswer,
       memberName,
@@ -201,6 +210,8 @@ export const Transcript = memo(function Transcript({
     artifactTarget,
     inGroup,
     viewerUserId,
+    personOf,
+    waitingOn,
     waiting,
     takeoverItemId,
     onOpenComputer,
@@ -269,6 +280,7 @@ export const Transcript = memo(function Transcript({
           const chrome = rowChrome(item, showSteps);
           const message = rowTarget(row);
           const acts = message !== null && chrome === "row";
+          const mine = message !== null && isMine(message);
           const rewound = rewindFromIndex >= 0 && index >= rewindFromIndex;
           const previous = rows[index - 1];
           const prevChrome = previous ? rowChrome(previous.item, showSteps) : undefined;
@@ -307,9 +319,7 @@ export const Transcript = memo(function Transcript({
               >
                 <div
                   className={
-                    acts
-                      ? `relative flex ${message.role === "user" ? "justify-end" : "justify-start"}`
-                      : undefined
+                    acts ? `relative flex ${mine ? "justify-end" : "justify-start"}` : undefined
                   }
                 >
                   <div
@@ -322,15 +332,11 @@ export const Transcript = memo(function Transcript({
                           // bubble with `items-end` and caps it at 78% (`UserBubble`); the old
                           // `w-fit` collapsed to the left once the bubble reached that 78% cap,
                           // because fit-content resolves a percentage-capped child to full width.
-                          `relative min-w-0 w-full ${
-                            message.role === "user" ? "flex flex-col items-end" : ""
-                          }`
+                          `relative min-w-0 w-full ${mine ? "flex flex-col items-end" : ""}`
                         : undefined
                     }
                   >
-                    {acts &&
-                    message.role !== "user" &&
-                    !message.blocks.some((block) => block.kind === "widget") ? (
+                    {acts && !mine && !message.blocks.some((block) => block.kind === "widget") ? (
                       <MessageHoverActions
                         message={message}
                         previewMessageId={row.previewMessageId}
@@ -361,10 +367,7 @@ export const Transcript = memo(function Transcript({
                 {acts && row.reactions.length > 0 ? (
                   <div
                     data-testid="message-reactions"
-                    className={cn(
-                      "mt-1 flex flex-wrap gap-1",
-                      message.role === "user" && "justify-end",
-                    )}
+                    className={cn("mt-1 flex flex-wrap gap-1", mine && "justify-end")}
                   >
                     {row.reactions.map(([emoji, count]) => (
                       <span
@@ -377,7 +380,7 @@ export const Transcript = memo(function Transcript({
                     ))}
                   </div>
                 ) : null}
-                {acts && message.role === "user" ? (
+                {acts && mine ? (
                   <UserMessageActions
                     message={message}
                     previewMessageId={row.previewMessageId}
@@ -407,7 +410,7 @@ export const Transcript = memo(function Transcript({
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         onReply={onReply}
-        onEdit={onEdit}
+        onEdit={sheetMessage && isMine(sheetMessage) ? onEdit : undefined}
         onReact={onReact}
         voiceReady={voiceReady}
         speaking={sheetMessage !== null && speakingMessageId === sheetMessage.id}
