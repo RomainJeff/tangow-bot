@@ -110,6 +110,9 @@ describe("spaceInboxItems", () => {
       unread: false,
       updatedAt: "2026-01-01T00:00:00.000Z",
       members: [],
+      people: [],
+      canManage: true,
+      leadBotId: null,
     };
     const items = spaceInboxItems([space({ isDefault: true, bots: [bot], groups: [group] })]);
     expect(items.map((item) => item.type)).toEqual(["bot", "group"]);

@@ -6,7 +6,10 @@ import {
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, TextInput } from "react-native";
-import { BotMemberPicker } from "../components/bot-member-picker";
+import { BotAvatar } from "../components/bot-avatar";
+import { BotMemberPicker, PersonPicker, useSpacePeople } from "../components/bot-member-picker";
+import { NativeMenu } from "../components/native-menu";
+import { NativeSymbol } from "../components/native-symbol";
 import { type MobileBot, type MobileGroup, rpc } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
@@ -18,9 +21,12 @@ export default function GroupSettingsScreen() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   const [group, setGroup] = useState<MobileGroup | null>(null);
   const [bots, setBots] = useState<MobileBot[]>([]);
+  const people = useSpacePeople();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
+  const [userIds, setUserIds] = useState<string[]>([]);
+  const [leadBotId, setLeadBotId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -38,25 +44,41 @@ export default function GroupSettingsScreen() {
         setName(nextGroup.name);
         setDescription(nextGroup.description ?? "");
         setSelected(nextGroup.members.map((member) => member.botId));
+        // Its creator comes first and is always in it.
+        setUserIds(nextGroup.people.slice(1).map((person) => person.userId));
+        setLeadBotId(nextGroup.leadBotId);
         setBots(nextBots.filter((bot) => !bot.archivedAt));
       })
       .catch((err) => setError(err instanceof Error ? err.message : t("Could not load group")));
   }, [groupId]);
+
+  // A lead that left the group gives way to its first bot, as the server does.
+  const lead = leadBotId && selected.includes(leadBotId) ? leadBotId : selected[0];
+  const leadBot = bots.find((bot) => bot.id === lead);
 
   async function save() {
     if (!groupId || !group || pending) return;
     setPending(true);
     setError(null);
     try {
-      const input: { groupId: string; name?: string; description?: string; botIds?: string[] } = {
-        groupId,
-      };
+      const input: {
+        groupId: string;
+        name?: string;
+        description?: string;
+        botIds?: string[];
+        userIds?: string[];
+        leadBotId?: string;
+      } = { groupId };
       if (name.trim() !== group.name) input.name = name.trim();
       if (description.trim() !== (group.description ?? "")) input.description = description.trim();
       const memberIds = group.members.map((member) => member.botId).join(",");
       if (selected.join(",") !== memberIds) input.botIds = selected;
-      if (input.name || input.description !== undefined || input.botIds)
-        await rpc("groups/update", input);
+      const peopleIds = group.people.slice(1).map((person) => person.userId);
+      if ([...userIds].sort().join(",") !== [...peopleIds].sort().join(","))
+        input.userIds = userIds;
+      if (leadBotId && leadBotId !== group.leadBotId && selected.includes(leadBotId))
+        input.leadBotId = leadBotId;
+      if (Object.keys(input).length > 1) await rpc("groups/update", input);
       router.back();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("Could not save group"));
@@ -85,10 +107,21 @@ export default function GroupSettingsScreen() {
     ]);
   }
 
+  const label = { color: tokens.mutedForeground, fontSize: 14, marginTop: 20 };
+  const field = {
+    marginTop: 8,
+    backgroundColor: tokens.muted,
+    borderRadius: 11,
+    padding: 14,
+    color: tokens.foreground,
+    fontSize: 16,
+  };
+
   return (
     <>
       <Stack.Screen options={{ title: t("Group settings") }} />
       <ScrollView
+        testID="group-settings"
         style={{ flex: 1, backgroundColor: tokens.background }}
         contentContainerStyle={{ padding: 24 }}
       >
@@ -98,18 +131,9 @@ export default function GroupSettingsScreen() {
           onChangeText={setName}
           placeholder={t("Group name")}
           placeholderTextColor={tokens.mutedForeground}
-          style={{
-            marginTop: 8,
-            backgroundColor: tokens.muted,
-            borderRadius: 11,
-            padding: 14,
-            color: tokens.foreground,
-            fontSize: 16,
-          }}
+          style={field}
         />
-        <Text style={{ color: tokens.mutedForeground, fontSize: 14, marginTop: 20 }}>
-          {t("Description")}
-        </Text>
+        <Text style={label}>{t("Description")}</Text>
         <TextInput
           value={description}
           maxLength={GROUP_DESCRIPTION_MAX_LENGTH}
@@ -117,26 +141,63 @@ export default function GroupSettingsScreen() {
           placeholder={t("What this group is for")}
           placeholderTextColor={tokens.mutedForeground}
           multiline
-          style={{
-            marginTop: 8,
-            backgroundColor: tokens.muted,
-            borderRadius: 11,
-            padding: 14,
-            color: tokens.foreground,
-            fontSize: 16,
-            minHeight: 96,
-            textAlignVertical: "top",
-          }}
+          style={{ ...field, minHeight: 96, textAlignVertical: "top" }}
         />
-        <Text style={{ color: tokens.mutedForeground, fontSize: 14, marginTop: 20 }}>
-          {t("Members")}
-        </Text>
+        {people.length > 0 ? (
+          <>
+            <Text style={label}>{t("People")}</Text>
+            <PersonPicker
+              people={people}
+              selected={userIds}
+              onChange={setUserIds}
+              disabled={pending}
+            />
+          </>
+        ) : null}
+        <Text style={label}>{t("Bots")}</Text>
         <BotMemberPicker
           bots={bots}
           selected={selected}
           onChange={setSelected}
           disabled={pending}
         />
+        {selected.length > 1 && lead ? (
+          <>
+            <Text style={label}>{t("Lead bot")}</Text>
+            <NativeMenu
+              compact
+              title={t("Lead bot")}
+              accessibilityLabel={t("Lead bot")}
+              accessibilityValue={leadBot?.name}
+              disabled={pending}
+              options={selected.flatMap((id) => {
+                const bot = bots.find((candidate) => candidate.id === id);
+                return bot ? [{ value: bot.id, label: bot.name }] : [];
+              })}
+              selected={lead}
+              onSelect={setLeadBotId}
+              style={{ ...field, flexDirection: "row", alignItems: "center", gap: 10 }}
+            >
+              {leadBot ? (
+                <BotAvatar
+                  color={leadBot.color}
+                  identity={leadBot.id}
+                  shapeSeed={leadBot.shapeSeed}
+                  size={22}
+                />
+              ) : null}
+              <Text style={{ flex: 1, color: tokens.foreground, fontSize: 16 }}>
+                {leadBot?.name}
+              </Text>
+              <NativeSymbol
+                ios="chevron.up.chevron.down"
+                android="chevron-expand"
+                size={15}
+                color={tokens.mutedForeground}
+              />
+            </NativeMenu>
+          </>
+        ) : null}
         {error ? <Text style={{ color: tokens.destructive, marginTop: 12 }}>{error}</Text> : null}
         <Pressable
           onPress={() => void save()}
