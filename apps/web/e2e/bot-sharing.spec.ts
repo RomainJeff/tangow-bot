@@ -1,5 +1,12 @@
 import type { BotSharing } from "@rakazo/contracts";
-import { captureScreenshot, completeOnboarding, createNamedBot, rpc, signup } from "./helpers";
+import {
+  captureScreenshot,
+  completeOnboarding,
+  createNamedBot,
+  inviteToSpace,
+  rpc,
+  signup,
+} from "./helpers";
 import { expect, test } from "./test";
 
 test("a bot shared with one person gives them their own thread until it is unshared", async ({
@@ -12,7 +19,8 @@ test("a bot shared with one person gives them their own thread until it is unsha
   await completeOnboarding(page);
   const { spaceId } = await rpc<{ spaceId: string }>(page, "me", undefined);
   await rpc(page, "spaces/rename", { spaceId, name: "Studio" });
-  const { url: inviteUrl } = await rpc<{ url: string }>(page, "spaces/createInvite", { spaceId });
+  const guestEmail = `share-guest-${stamp}@rakazo.test`;
+  const inviteUrl = await inviteToSpace(page, spaceId, guestEmail);
   const botId = await createNamedBot(page, "Release notes");
   await rpc(page, "agentSkills/create", {
     name: "Changelog",
@@ -36,7 +44,7 @@ test("a bot shared with one person gives them their own thread until it is unsha
 
   const guestContext = await browser.newContext({ baseURL });
   const guest = await guestContext.newPage();
-  await signup(guest, `share-guest-${stamp}@rakazo.test`, "password12", "Grace Guest");
+  await signup(guest, guestEmail, "password12", "Grace Guest");
   await completeOnboarding(guest);
   await guest.goto(inviteUrl);
   await guest.getByRole("button", { name: "Join", exact: true }).click();

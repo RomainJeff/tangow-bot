@@ -84,7 +84,7 @@ describeWithDatabase("API authorization and resource isolation", () => {
       ["spaces/rename", { spaceId: "missing-space", name: "Nope" }],
       ["spaces/remove", { spaceId: "missing-space" }],
       ["spaces/members", { spaceId: "missing-space" }],
-      ["spaces/createInvite", { spaceId: "missing-space" }],
+      ["spaces/createInvite", { spaceId: "missing-space", emails: ["nobody@rakazo.test"] }],
       ["spaces/revokeInvite", { spaceId: "missing-space", invitationId: "missing-invite" }],
       ["spaces/removeMember", { spaceId: "missing-space", userId: "missing-user" }],
       ["spaces/invitation", { token: "missing-token" }],
@@ -1009,16 +1009,26 @@ describeWithDatabase("API authorization and resource isolation", () => {
   it("lists a Space joined by invite link in the guest's switcher, owner-only management", async () => {
     const owner = await signup(app, `space-invite-owner-${stamp}@rakazo.test`, "Ada");
     const shared = await rpc<Space>(app, owner, "spaces/create", { name: "Family" });
-    const guest = await signup(app, `space-invite-guest-${stamp}@rakazo.test`, "Grace");
+    const guestEmail = `space-invite-guest-${stamp}@rakazo.test`;
+    const guest = await signup(app, guestEmail, "Grace");
     const guestActor = await rpc<Actor>(app, guest, "me");
+    const intruder = await signup(app, `space-invite-intruder-${stamp}@rakazo.test`, "Sam");
 
-    const { url } = await rpc<{ url: string }>(app, owner, "spaces/createInvite", {
-      spaceId: shared.id,
+    const { invitations } = await rpc<{ invitations: Array<{ url: string }> }>(
+      app,
+      owner,
+      "spaces/createInvite",
+      { spaceId: shared.id, emails: [guestEmail] },
+    );
+    const token = new URL(invitations[0]!.url).pathname.replace("/invite/", "");
+    await expect(raw(app, intruder, "spaces/acceptInvite", { token })).resolves.toMatchObject({
+      status: 403,
     });
-    const token = new URL(url).pathname.replace("/invite/", "");
     await expect(rpc(app, guest, "spaces/invitation", { token })).resolves.toEqual({
       spaceName: "Family",
       inviterName: "Ada",
+      email: guestEmail,
+      forYou: true,
     });
     await expect(rpc(app, guest, "spaces/acceptInvite", { token })).resolves.toEqual({
       spaceId: shared.id,
@@ -1030,12 +1040,17 @@ describeWithDatabase("API authorization and resource isolation", () => {
       [shared.id, false, false],
     ]);
     await expect(
-      raw(app, guest, "spaces/createInvite", { spaceId: shared.id }, shared.id),
+      raw(
+        app,
+        guest,
+        "spaces/createInvite",
+        { spaceId: shared.id, emails: ["someone@rakazo.test"] },
+        shared.id,
+      ),
     ).resolves.toMatchObject({ status: 403 });
     await expect(raw(app, guest, "spaces/acceptInvite", { token })).resolves.toMatchObject({
       status: 404,
     });
-    const intruder = await signup(app, `space-invite-intruder-${stamp}@rakazo.test`, "Sam");
     await expect(
       raw(app, intruder, "spaces/members", { spaceId: shared.id }),
     ).resolves.toMatchObject({ status: 404 });
@@ -1076,11 +1091,15 @@ describeWithDatabase("API authorization and resource isolation", () => {
     const owner = await signup(app, `${prefix}-owner-${stamp}@rakazo.test`, "Ada");
     const space = (await rpc<Space>(app, owner, "spaces/create", { name: "Studio" })).id;
     const join = async (name: string) => {
-      const cookie = await signup(app, `${prefix}-${name}-${stamp}@rakazo.test`, name);
-      const { url } = await rpc<{ url: string }>(app, owner, "spaces/createInvite", {
-        spaceId: space,
-      });
-      await rpc(app, cookie, "spaces/acceptInvite", { token: new URL(url).pathname.slice(8) });
+      const email = `${prefix}-${name}-${stamp}@rakazo.test`;
+      const cookie = await signup(app, email, name);
+      const { invitations } = await rpc<{ invitations: Array<{ id: string }> }>(
+        app,
+        owner,
+        "spaces/createInvite",
+        { spaceId: space, emails: [email] },
+      );
+      await rpc(app, cookie, "spaces/acceptInvite", { token: invitations[0]!.id });
       return { cookie, userId: (await rpc<Actor>(app, cookie, "me", {}, space)).userId };
     };
     const dana = await join("Dana");

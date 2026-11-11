@@ -1321,12 +1321,16 @@ describeJourneys("required product journeys", () => {
   it("5c: a member's schedule on a shared bot wakes in their own thread until unshared", async () => {
     const owner = await signup(app, `schedule-share-owner-${stamp}@rakazo.test`, "Owner");
     const ownerMe = await rpc<Me>(app, owner, "me");
-    const member = await signup(app, `schedule-share-member-${stamp}@rakazo.test`, "Member");
+    const memberEmail = `schedule-share-member-${stamp}@rakazo.test`;
+    const member = await signup(app, memberEmail, "Member");
     const memberId = (await rpc<Me>(app, member, "me")).userId;
-    const { url } = await rpc<{ url: string }>(app, owner, "spaces/createInvite", {
-      spaceId: ownerMe.spaceId,
-    });
-    await rpc(app, member, "spaces/acceptInvite", { token: new URL(url).pathname.slice(8) });
+    const { invitations } = await rpc<{ invitations: Array<{ id: string }> }>(
+      app,
+      owner,
+      "spaces/createInvite",
+      { spaceId: ownerMe.spaceId, emails: [memberEmail] },
+    );
+    await rpc(app, member, "spaces/acceptInvite", { token: invitations[0]!.id });
     const bot = await rpc<Bot>(app, owner, "bots/create", {
       name: "Shared scheduler",
       title: "",
@@ -1753,10 +1757,13 @@ describeJourneys("required product journeys", () => {
     // Their memory in a Space they joined: their own there, and of a bot shared with them.
     const host = await signup(app, `account-delete-host-${stamp}@rakazo.test`, "Host");
     const hostMe = await rpc<Me>(app, host, "me");
-    const { url } = await rpc<{ url: string }>(app, host, "spaces/createInvite", {
-      spaceId: hostMe.spaceId,
-    });
-    await rpc(app, cookie, "spaces/acceptInvite", { token: new URL(url).pathname.slice(8) });
+    const { invitations } = await rpc<{ invitations: Array<{ id: string }> }>(
+      app,
+      host,
+      "spaces/createInvite",
+      { spaceId: hostMe.spaceId, emails: [email] },
+    );
+    await rpc(app, cookie, "spaces/acceptInvite", { token: invitations[0]!.id });
     const shared = await rpc<Bot>(app, host, "bots/create", {
       name: "Shared",
       title: "",

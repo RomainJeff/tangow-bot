@@ -14,7 +14,7 @@ import {
   acceptSpaceInvitation,
   claimEmptySpaceDeletionForMember,
   createSpaceForMember,
-  createSpaceInvitation,
+  createSpaceInvitations,
   deleteEmptySpaceForMember,
   removeSpaceMember,
 } from "./spaces.js";
@@ -58,8 +58,12 @@ describe("people sharing a Space", () => {
         name: "Family",
       })
     ).id;
-    const { token } = await createSpaceInvitation(prisma, { spaceId: shared, userId: "owner" });
-    await acceptSpaceInvitation(prisma, { token, userId: "member" });
+    const [invitation] = await createSpaceInvitations(prisma, {
+      spaceId: shared,
+      userId: "owner",
+      emails: ["member@rakazo.test"],
+    });
+    await acceptSpaceInvitation(prisma, { token: invitation!.id, userId: "member" });
   }, 60_000);
 
   afterAll(async () => {

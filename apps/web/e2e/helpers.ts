@@ -24,6 +24,16 @@ export async function rpc<T>(page: Page, procedure: string, body: unknown): Prom
   return parsed.json as T;
 }
 
+/** The link of a Space invite for `email`, made by the signed-in owner on `page`. */
+export async function inviteToSpace(page: Page, spaceId: string, email: string): Promise<string> {
+  const { invitations } = await rpc<{ invitations: Array<{ url: string }> }>(
+    page,
+    "spaces/createInvite",
+    { spaceId, emails: [email] },
+  );
+  return invitations[0]!.url;
+}
+
 export async function completeOnboarding(page: Page, testInfo?: TestInfo) {
   await page.waitForURL(/\/(onboarding|app)/, { timeout: 20_000 });
   // Optional Server integrations step (needsSetup). Skip when shown, then the

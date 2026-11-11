@@ -1,7 +1,8 @@
 import { plural } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { SpaceMembers } from "@rakazo/contracts";
+import type { SpaceInvitation, SpaceMembers } from "@rakazo/contracts";
 import { Button, Input, SettingRow, UserAvatar } from "@rakazo/ui-web";
+import type { FormEvent } from "react";
 import { useCallback, useEffect, useId, useState } from "react";
 import { ApprovalRulesSettings } from "../components/ApprovalRulesSettings";
 import { rpc } from "../lib/rpc";
@@ -144,7 +145,8 @@ function SpaceMembersSection({ spaceId, isOwner }: { spaceId: string; isOwner: b
   const { t } = useLingui();
   const [view, setView] = useState<SpaceMembers | null>(null);
   const [pending, setPending] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [emails, setEmails] = useState("");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -168,12 +170,30 @@ function SpaceMembersSection({ spaceId, isOwner }: { spaceId: string; isOwner: b
     }
   }
 
-  const copyInvite = () =>
-    act(async () => {
-      const { url } = await rpc.spaces.createInvite({ spaceId });
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-    }, t`Couldn't create an invite link`);
+  function invite(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void act(async () => {
+      await rpc.spaces.createInvite({
+        spaceId,
+        emails: emails
+          .split(",")
+          .map((email) => email.trim())
+          .filter(Boolean),
+      });
+      setEmails("");
+    }, t`Couldn't invite them`);
+  }
+
+  async function copyLink(invitation: SpaceInvitation) {
+    setError(null);
+    try {
+      // Undefined outside a secure context, such as a self-hosted install over plain HTTP.
+      await navigator.clipboard.writeText(invitation.url);
+      setCopiedId(invitation.id);
+    } catch {
+      setError(t`Couldn't copy the link`);
+    }
+  }
 
   if (!view) {
     return error ? (
@@ -230,11 +250,15 @@ function SpaceMembersSection({ spaceId, isOwner }: { spaceId: string; isOwner: b
           <SettingRow
             key={invitation.id}
             data-testid="space-invite-row"
-            label={plural(days, {
-              one: "Invite link · expires in # day",
-              other: "Invite link · expires in # days",
+            label={<span className="break-all">{invitation.email}</span>}
+            subline={plural(days, {
+              one: "Expires in # day",
+              other: "Expires in # days",
             })}
           >
+            <Button variant="ghost" size="sm" onClick={() => void copyLink(invitation)}>
+              {copiedId === invitation.id ? <Trans>Copied</Trans> : <Trans>Copy link</Trans>}
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -255,16 +279,22 @@ function SpaceMembersSection({ spaceId, isOwner }: { spaceId: string; isOwner: b
         );
       })}
       {isOwner ? (
-        <div className="px-3.5 pt-1 pb-3.5">
-          <Button
-            variant="secondary"
-            className="rounded-full"
+        <form className="flex gap-2 px-3.5 pt-1 pb-3.5" onSubmit={invite}>
+          <Input
+            type="email"
+            multiple
+            required
+            value={emails}
             disabled={pending}
-            onClick={() => void copyInvite()}
-          >
-            {copied ? <Trans>Link copied</Trans> : <Trans>Copy invite link</Trans>}
+            onChange={(event) => setEmails(event.target.value)}
+            placeholder="ana@example.com, ben@example.com"
+            aria-label={t`Emails to invite`}
+            className="min-w-0 flex-1"
+          />
+          <Button type="submit" variant="secondary" className="rounded-full" disabled={pending}>
+            <Trans>Invite</Trans>
           </Button>
-        </div>
+        </form>
       ) : null}
       {error ? (
         <p role="alert" className="px-3.5 pb-3 text-meta text-destructive">

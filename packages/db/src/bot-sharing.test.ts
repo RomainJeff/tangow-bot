@@ -8,7 +8,7 @@ import { IsolationError } from "./scope.js";
 import {
   acceptSpaceInvitation,
   createSpaceForMember,
-  createSpaceInvitation,
+  createSpaceInvitations,
   removeSpaceMember,
 } from "./spaces.js";
 
@@ -57,8 +57,12 @@ describe("sharing a bot", () => {
       })
     ).id;
     for (const userId of ["dana", "sam"]) {
-      const { token } = await createSpaceInvitation(prisma, { spaceId: space, userId: "owner" });
-      await acceptSpaceInvitation(prisma, { token, userId });
+      const [invitation] = await createSpaceInvitations(prisma, {
+        spaceId: space,
+        userId: "owner",
+        emails: [`${userId}@rakazo.test`],
+      });
+      await acceptSpaceInvitation(prisma, { token: invitation!.id, userId });
     }
   }, 60_000);
 

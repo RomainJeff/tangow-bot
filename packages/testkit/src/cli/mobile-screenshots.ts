@@ -302,11 +302,15 @@ async function seedFixture(app: App, prisma: PrismaClient) {
  */
 async function seedSharedBots(app: App, cookie: string, prisma: PrismaClient, writerId: string) {
   const { spaceId, userId } = await rpc<{ spaceId: string; userId: string }>(app, cookie, "me");
-  const { url } = await rpc<{ url: string }>(app, cookie, "spaces/createInvite", { spaceId });
-  const teammate = await signup(app, "mobile-screenshots-teammate@example.test", "Grace Hopper");
-  await rpc(app, teammate, "spaces/acceptInvite", {
-    token: new URL(url).pathname.split("/").pop(),
-  });
+  const teammateEmail = "mobile-screenshots-teammate@example.test";
+  const { invitations } = await rpc<{ invitations: Array<{ id: string }> }>(
+    app,
+    cookie,
+    "spaces/createInvite",
+    { spaceId, emails: [teammateEmail] },
+  );
+  const teammate = await signup(app, teammateEmail, "Grace Hopper");
+  await rpc(app, teammate, "spaces/acceptInvite", { token: invitations[0]!.id });
   const releaseNotes = await rpc<{ id: string }>(
     app,
     teammate,

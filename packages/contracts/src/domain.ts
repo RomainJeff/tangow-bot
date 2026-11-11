@@ -337,12 +337,21 @@ export const SpaceNavigationSchema = z.object({
 });
 export type SpaceNavigation = z.infer<typeof SpaceNavigationSchema>;
 
+/** A pending invite; only the account with `email` can use `url`. */
+export const SpaceInvitationSchema = z.object({
+  id: Id,
+  email: z.string(),
+  url: z.string(),
+  expiresAt: z.string(),
+});
+export type SpaceInvitation = z.infer<typeof SpaceInvitationSchema>;
+
 export const SpaceMembersSchema = z.object({
   members: z.array(
     z.object({ userId: Id, name: z.string(), image: z.string().nullable(), isOwner: z.boolean() }),
   ),
-  /** Live invite links; empty unless the caller owns the space. */
-  invitations: z.array(z.object({ id: Id, expiresAt: z.string() })),
+  /** Live invites; empty unless the caller owns the space. */
+  invitations: z.array(SpaceInvitationSchema),
 });
 export type SpaceMembers = z.infer<typeof SpaceMembersSchema>;
 

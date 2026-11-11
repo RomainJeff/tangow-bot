@@ -3,6 +3,7 @@ import {
   captureScreenshot,
   completeOnboarding,
   createNamedBot,
+  inviteToSpace,
   openBotTab,
   rpc,
   signup,
@@ -18,13 +19,14 @@ test("a member's run saves for a shared bot's team, and its owner reads and edit
   await signup(page, `team-memory-owner-${stamp}@rakazo.test`, "password12", "Ada Owner");
   await completeOnboarding(page);
   const { spaceId } = await rpc<{ spaceId: string }>(page, "me", undefined);
-  const { url: inviteUrl } = await rpc<{ url: string }>(page, "spaces/createInvite", { spaceId });
+  const guestEmail = `team-memory-guest-${stamp}@rakazo.test`;
+  const inviteUrl = await inviteToSpace(page, spaceId, guestEmail);
   const botId = await createNamedBot(page, "Release notes");
   await rpc(page, "bots/share", { botId, visibility: "space", userIds: [] });
 
   const guestContext = await browser.newContext({ baseURL });
   const guest = await guestContext.newPage();
-  await signup(guest, `team-memory-guest-${stamp}@rakazo.test`, "password12", "Grace Guest");
+  await signup(guest, guestEmail, "password12", "Grace Guest");
   await completeOnboarding(guest);
   await guest.goto(inviteUrl);
   await guest.getByRole("button", { name: "Join", exact: true }).click();

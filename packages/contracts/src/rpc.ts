@@ -62,6 +62,7 @@ import {
   SkillAvailabilitySchema,
   SkillPlaybookSchema,
   SpaceDecisionConfigSchema,
+  SpaceInvitationSchema,
   SpaceMembersSchema,
   SpaceMemoryConfigSchema,
   SpaceNavigationSchema,
@@ -203,10 +204,10 @@ export const appContract = {
       .input(z.object({ spaceId: Id }))
       .output(z.object({ ok: z.literal(true), activeSpaceId: Id })),
     members: oc.input(z.object({ spaceId: Id })).output(SpaceMembersSchema),
-    /** Owner only. The URL carries the token and is returned this once. */
+    /** Owner only. Skips people already in the space; inviting an email again extends its invite. */
     createInvite: oc
-      .input(z.object({ spaceId: Id }))
-      .output(z.object({ url: z.string(), expiresAt: z.string() })),
+      .input(z.object({ spaceId: Id, emails: z.array(z.email()).min(1).max(20) }))
+      .output(z.object({ invitations: z.array(SpaceInvitationSchema) })),
     revokeInvite: oc
       .input(z.object({ spaceId: Id, invitationId: Id }))
       .output(z.object({ ok: z.literal(true) })),
@@ -214,9 +215,17 @@ export const appContract = {
       .input(z.object({ spaceId: Id, userId: Id }))
       .output(z.object({ ok: z.literal(true) })),
     /** Null once the link has expired, been used or been revoked. */
-    invitation: oc
-      .input(z.object({ token: SpaceInviteTokenSchema }))
-      .output(z.object({ spaceName: z.string(), inviterName: z.string() }).nullable()),
+    invitation: oc.input(z.object({ token: SpaceInviteTokenSchema })).output(
+      z
+        .object({
+          spaceName: z.string(),
+          inviterName: z.string(),
+          email: z.string(),
+          /** False when the caller's account has another email: they can't accept. */
+          forYou: z.boolean(),
+        })
+        .nullable(),
+    ),
     acceptInvite: oc
       .input(z.object({ token: SpaceInviteTokenSchema }))
       .output(z.object({ spaceId: Id })),

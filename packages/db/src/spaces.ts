@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { ACTIVE_RUN_STATUSES } from "@rakazo/core";
 import { cancelRunsInTransaction } from "./cancel-runs.js";
 import { Prisma, type PrismaClient } from "./client.js";
@@ -492,8 +492,32 @@ export class SpaceInvitationUnavailableError extends Error {
   }
 }
 
-function hashInvitationToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
+export class SpaceInvitationForAnotherEmailError extends Error {
+  constructor() {
+    super("This invite is for another email");
+    this.name = "SpaceInvitationForAnotherEmailError";
+  }
+}
+
+export interface SpaceInvitationRow {
+  /** Also the link token: the invite only works for the account with `email`. */
+  id: string;
+  email: string;
+  expiresAt: Date;
+}
+
+const invitationRow = { id: true, email: true, expiresAt: true } as const;
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+async function userEmail(
+  db: Pick<PrismaClient, "user">,
+  userId: string,
+): Promise<string | undefined> {
+  const user = await db.user.findUnique({ where: { id: userId }, select: { email: true } });
+  return user ? normalizeEmail(user.email) : undefined;
 }
 
 async function requireSpaceOwner(
@@ -509,29 +533,49 @@ async function requireSpaceOwner(
   return { organizationId: membership.organizationId };
 }
 
-/** Mint a single-use link token; only its hash is stored, so the token is returned exactly once. */
-export async function createSpaceInvitation(
+/**
+ * Invite each email that is not already in the Space. Inviting an email again keeps its link
+ * and restarts its expiry, so a link already sent keeps working.
+ */
+export async function createSpaceInvitations(
   prisma: PrismaClient,
-  input: { spaceId: string; userId: string },
-): Promise<{ id: string; token: string; expiresAt: Date }> {
+  input: { spaceId: string; userId: string; emails: string[] },
+): Promise<SpaceInvitationRow[]> {
   await requireSpaceOwner(prisma, input);
   const now = new Date();
-  const token = randomBytes(32).toString("base64url");
-  const invitation = {
-    id: randomUUID(),
-    spaceId: input.spaceId,
-    createdByUserId: input.userId,
-    tokenHash: hashInvitationToken(token),
-    expiresAt: new Date(now.getTime() + SPACE_INVITATION_TTL_MS),
-    createdAt: now,
-  };
-  await prisma.$transaction([
+  const expiresAt = new Date(now.getTime() + SPACE_INVITATION_TTL_MS);
+  const requested = [...new Set(input.emails.map(normalizeEmail))];
+  const members = await prisma.spaceMember.findMany({
+    where: {
+      spaceId: input.spaceId,
+      member: { user: { email: { in: requested, mode: "insensitive" } } },
+    },
+    select: { member: { select: { user: { select: { email: true } } } } },
+  });
+  const joined = new Set(members.map((row) => normalizeEmail(row.member.user.email)));
+  const [, ...invitations] = await prisma.$transaction([
     prisma.spaceInvitation.deleteMany({
       where: { spaceId: input.spaceId, expiresAt: { lte: now } },
     }),
-    prisma.spaceInvitation.create({ data: invitation }),
+    ...requested
+      .filter((email) => !joined.has(email))
+      .map((email) =>
+        prisma.spaceInvitation.upsert({
+          where: { spaceId_email: { spaceId: input.spaceId, email } },
+          create: {
+            id: randomUUID(),
+            spaceId: input.spaceId,
+            createdByUserId: input.userId,
+            email,
+            expiresAt,
+            createdAt: now,
+          },
+          update: { expiresAt },
+          select: invitationRow,
+        }),
+      ),
   ]);
-  return { id: invitation.id, token, expiresAt: invitation.expiresAt };
+  return invitations;
 }
 
 export async function revokeSpaceInvitation(
@@ -547,11 +591,12 @@ export async function revokeSpaceInvitation(
 /** What the accept screen shows before the person commits; null once the link is spent. */
 export async function previewSpaceInvitation(
   prisma: PrismaClient,
-  token: string,
-): Promise<{ spaceName: string; inviterName: string } | null> {
+  input: { token: string; userId: string },
+): Promise<{ spaceName: string; inviterName: string; email: string; forYou: boolean } | null> {
   const invitation = await prisma.spaceInvitation.findUnique({
-    where: { tokenHash: hashInvitationToken(token) },
+    where: { id: input.token },
     select: {
+      email: true,
       expiresAt: true,
       space: { select: { name: true } },
       createdByUser: { select: { name: true } },
@@ -561,27 +606,35 @@ export async function previewSpaceInvitation(
   return {
     spaceName: invitation.space.name,
     inviterName: invitation.createdByUser.name,
+    email: invitation.email,
+    forYou: (await userEmail(prisma, input.userId)) === invitation.email,
   };
 }
 
-/** Consume a live link and join its Space. A person already in the Space keeps the link unspent. */
+/**
+ * Consume a live link and join its Space, only as the account with the invited email.
+ * A person already in the Space keeps the link unspent.
+ */
 export async function acceptSpaceInvitation(
   prisma: PrismaClient,
   input: { token: string; userId: string },
 ): Promise<{ spaceId: string }> {
-  const tokenHash = hashInvitationToken(input.token);
   return withTransactionRetry(() =>
     prisma.$transaction(
       async (tx) => {
         const now = new Date();
         const invitation = await tx.spaceInvitation.findUnique({
-          where: { tokenHash },
+          where: { id: input.token },
           select: {
             spaceId: true,
+            email: true,
             space: { select: { organizationId: true } },
           },
         });
         if (!invitation) throw new SpaceInvitationUnavailableError();
+        if ((await userEmail(tx, input.userId)) !== invitation.email) {
+          throw new SpaceInvitationForAnotherEmailError();
+        }
         const { spaceId } = invitation;
         const { organizationId } = invitation.space;
         const existing = await tx.spaceMember.findUnique({
@@ -590,7 +643,7 @@ export async function acceptSpaceInvitation(
         });
         if (existing) return { spaceId };
         const consumed = await tx.spaceInvitation.deleteMany({
-          where: { tokenHash, expiresAt: { gt: now } },
+          where: { id: input.token, expiresAt: { gt: now } },
         });
         if (consumed.count !== 1) throw new SpaceInvitationUnavailableError();
         await tx.member.upsert({
@@ -652,8 +705,8 @@ export interface SpaceMembersView {
     image: string | null;
     isOwner: boolean;
   }>;
-  /** Live links, listed only for the owner. */
-  invitations: Array<{ id: string; expiresAt: Date }>;
+  /** Live invites, listed only for the owner. */
+  invitations: SpaceInvitationRow[];
 }
 
 export async function listSpaceMembers(
@@ -675,8 +728,9 @@ export async function listSpaceMembers(
     caller.role === "owner"
       ? await prisma.spaceInvitation.findMany({
           where: { spaceId: input.spaceId, expiresAt: { gt: new Date() } },
-          select: { id: true, expiresAt: true },
-          orderBy: { createdAt: "asc" },
+          select: invitationRow,
+          // Invites sent together share createdAt.
+          orderBy: [{ createdAt: "asc" }, { email: "asc" }],
         })
       : [];
   return {

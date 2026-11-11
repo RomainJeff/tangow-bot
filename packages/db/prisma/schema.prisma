@@ -228,17 +228,19 @@ model SpaceMember {
   @@map("space_members")
 }
 
-/// A single-use invite link to a Space. Only the token's hash is stored; accepting or revoking deletes the row.
+/// A single-use invite to a Space for one email. The id is the link token; accepting or revoking deletes the row.
 model SpaceInvitation {
   id              String   @id
   spaceId         String
   space           Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
   createdByUserId String
   createdByUser   User     @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
-  tokenHash       String   @unique
+  /// Lowercased; only the account with this email can accept.
+  email           String
   expiresAt       DateTime
   createdAt       DateTime @default(now())
 
+  @@unique([spaceId, email])
   @@index([spaceId, expiresAt])
   @@map("space_invitations")
 }
