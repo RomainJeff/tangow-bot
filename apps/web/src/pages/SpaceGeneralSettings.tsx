@@ -184,12 +184,15 @@ function SpaceMembersSection({ spaceId, isOwner }: { spaceId: string; isOwner: b
     }, t`Couldn't invite them`);
   }
 
-  function copyLink(invitation: SpaceInvitation) {
+  async function copyLink(invitation: SpaceInvitation) {
     setError(null);
-    navigator.clipboard.writeText(invitation.url).then(
-      () => setCopiedId(invitation.id),
-      () => setError(t`Couldn't copy the link`),
-    );
+    try {
+      // Undefined outside a secure context, such as a self-hosted install over plain HTTP.
+      await navigator.clipboard.writeText(invitation.url);
+      setCopiedId(invitation.id);
+    } catch {
+      setError(t`Couldn't copy the link`);
+    }
   }
 
   if (!view) {
@@ -253,7 +256,7 @@ function SpaceMembersSection({ spaceId, isOwner }: { spaceId: string; isOwner: b
               other: "Expires in # days",
             })}
           >
-            <Button variant="ghost" size="sm" onClick={() => copyLink(invitation)}>
+            <Button variant="ghost" size="sm" onClick={() => void copyLink(invitation)}>
               {copiedId === invitation.id ? <Trans>Copied</Trans> : <Trans>Copy link</Trans>}
             </Button>
             <Button
