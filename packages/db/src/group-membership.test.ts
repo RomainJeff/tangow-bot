@@ -6,7 +6,7 @@ import { createThreadMessage } from "./messages.js";
 import { openPgliteDatabase, type PgliteDatabase } from "./pglite.test-support.js";
 import { createRepos } from "./repos.js";
 import { IsolationError } from "./scope.js";
-import { acceptSpaceInvitation, createSpaceForMember, createSpaceInvitation } from "./spaces.js";
+import { acceptSpaceInvitation, createSpaceForMember, createSpaceInvitations } from "./spaces.js";
 
 const env = { signupsEnabled: "true", signupAllowlist: undefined };
 
@@ -36,8 +36,12 @@ describe("people in a group", () => {
       await createSpaceForMember(prisma, { currentSpaceId: home, userId: "creator", name: "Team" })
     ).id;
     for (const id of ["person", "outsider"]) {
-      const { token } = await createSpaceInvitation(prisma, { spaceId: space, userId: "creator" });
-      await acceptSpaceInvitation(prisma, { token, userId: id });
+      const [invitation] = await createSpaceInvitations(prisma, {
+        spaceId: space,
+        userId: "creator",
+        emails: [`${id}@rakazo.test`],
+      });
+      await acceptSpaceInvitation(prisma, { token: invitation!.id, userId: id });
     }
     const bot = await createRepos(prisma).createBot(actor("creator"), {
       name: "Helper",

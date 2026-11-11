@@ -2,7 +2,7 @@ import {
   acceptSpaceInvitation,
   bootstrapUserSpace,
   createRepos,
-  createSpaceInvitation,
+  createSpaceInvitations,
   setBotSharing,
   sharedBotThread,
 } from "@rakazo/db";
@@ -26,8 +26,12 @@ it("counts unread threads of live bots, a member's with a shared bot until it is
   }
   const spaceId = (await bootstrapUserSpace(prisma, { id: "owner" }, env)).spaceId;
   await bootstrapUserSpace(prisma, { id: "member" }, env);
-  const { token } = await createSpaceInvitation(prisma, { spaceId, userId: "owner" });
-  await acceptSpaceInvitation(prisma, { token, userId: "member" });
+  const [invitation] = await createSpaceInvitations(prisma, {
+    spaceId,
+    userId: "owner",
+    emails: ["member@rakazo.test"],
+  });
+  await acceptSpaceInvitation(prisma, { token: invitation!.id, userId: "member" });
   const actor = (userId: string) => ({
     userId,
     spaceId,

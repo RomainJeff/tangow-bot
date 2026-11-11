@@ -97,6 +97,7 @@ import type {
   ComputerUpdateAllResult,
   Me,
   MemoryScope,
+  SpaceInvitation,
   SpaceNavigation,
 } from "@rakazo/contracts";
 import {
@@ -119,7 +120,7 @@ import {
   nextCronDateAcrossStrict,
   UNKNOWN_MODEL_MESSAGE,
 } from "@rakazo/core";
-import type { PrismaClient, ThreadEvents } from "@rakazo/db";
+import type { PrismaClient, SpaceInvitationRow, ThreadEvents } from "@rakazo/db";
 import {
   acceptSpaceInvitation,
   appendComputerControlInTransaction,
@@ -135,7 +136,7 @@ import {
   createGroupRepos,
   createRepos,
   createSpaceForMember,
-  createSpaceInvitation,
+  createSpaceInvitations,
   createThreadMessageInTransaction,
   deleteEmptySpaceForMember,
   deleteUnreferencedCredentialSecret,
@@ -172,6 +173,7 @@ import {
   SharedGroupHistoryError,
   SPACE_DELETION_CLAIM_TIMEOUT_MS,
   SpaceDeletionInProgressError,
+  SpaceInvitationForAnotherEmailError,
   SpaceInvitationUnavailableError,
   SpaceLimitError,
   SpaceNotEmptyError,
@@ -556,7 +558,19 @@ function mapSpaceMembershipError(error: unknown): never {
   if (error instanceof SpaceInvitationUnavailableError) {
     throw new ORPCError("NOT_FOUND", { message: error.message });
   }
+  if (error instanceof SpaceInvitationForAnotherEmailError) {
+    throw new ORPCError("FORBIDDEN", { message: error.message });
+  }
   throw error;
+}
+
+function spaceInvitationDto(deps: RouterDeps, invitation: SpaceInvitationRow): SpaceInvitation {
+  return {
+    id: invitation.id,
+    email: invitation.email,
+    url: new URL(`/invite/${invitation.id}`, deps.env.webOrigin).href,
+    expiresAt: invitation.expiresAt.toISOString(),
+  };
 }
 
 function mapBotSharingError(error: unknown): never {
@@ -911,20 +925,17 @@ export function createRouter(deps: RouterDeps) {
         }).catch(mapSpaceMembershipError);
         return {
           members: view.members,
-          invitations: view.invitations.map((invitation) => ({
-            id: invitation.id,
-            expiresAt: invitation.expiresAt.toISOString(),
-          })),
+          invitations: view.invitations.map((invitation) => spaceInvitationDto(deps, invitation)),
         };
       }),
       createInvite: authed.spaces.createInvite.handler(async ({ context, input }) => {
-        const invitation = await createSpaceInvitation(deps.prisma, {
+        const invitations = await createSpaceInvitations(deps.prisma, {
           spaceId: input.spaceId,
           userId: context.actor.userId,
+          emails: input.emails,
         }).catch(mapSpaceMembershipError);
         return {
-          url: new URL(`/invite/${invitation.token}`, deps.env.webOrigin).href,
-          expiresAt: invitation.expiresAt.toISOString(),
+          invitations: invitations.map((invitation) => spaceInvitationDto(deps, invitation)),
         };
       }),
       revokeInvite: authed.spaces.revokeInvite.handler(async ({ context, input }) => {
@@ -944,8 +955,8 @@ export function createRouter(deps: RouterDeps) {
         await endCancelledRunControl(deps, input.spaceId);
         return { ok: true as const };
       }),
-      invitation: authed.spaces.invitation.handler(({ input }) =>
-        previewSpaceInvitation(deps.prisma, input.token),
+      invitation: authed.spaces.invitation.handler(({ context, input }) =>
+        previewSpaceInvitation(deps.prisma, { token: input.token, userId: context.actor.userId }),
       ),
       acceptInvite: authed.spaces.acceptInvite.handler(({ context, input }) =>
         acceptSpaceInvitation(deps.prisma, {

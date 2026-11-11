@@ -2,6 +2,7 @@ import {
   captureScreenshot,
   completeOnboarding,
   createNamedBot,
+  inviteToSpace,
   openNewGroup,
   rpc,
   signup,
@@ -17,7 +18,8 @@ test("a group's creator adds a person, who writes in it and leaves", async ({
   await signup(page, `group-people-owner-${stamp}@rakazo.test`, "password12", "Ada Owner");
   await completeOnboarding(page);
   const { spaceId } = await rpc<{ spaceId: string }>(page, "me", undefined);
-  const { url: inviteUrl } = await rpc<{ url: string }>(page, "spaces/createInvite", { spaceId });
+  const guestEmail = `group-people-guest-${stamp}@rakazo.test`;
+  const inviteUrl = await inviteToSpace(page, spaceId, guestEmail);
   // Scout stays Ada's alone; Helper is shared with the Space.
   await createNamedBot(page, "Scout");
   const helperId = await createNamedBot(page, "Helper");
@@ -25,7 +27,7 @@ test("a group's creator adds a person, who writes in it and leaves", async ({
 
   const guestContext = await browser.newContext({ baseURL });
   const guest = await guestContext.newPage();
-  await signup(guest, `group-people-guest-${stamp}@rakazo.test`, "password12", "Grace Guest");
+  await signup(guest, guestEmail, "password12", "Grace Guest");
   await completeOnboarding(guest);
   await guest.goto(inviteUrl);
   await guest.getByRole("button", { name: "Join", exact: true }).click();

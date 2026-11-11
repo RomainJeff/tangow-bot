@@ -2,6 +2,7 @@ import {
   captureScreenshot,
   completeOnboarding,
   createNamedBot,
+  inviteToSpace,
   realSandboxTimeout,
   rpc,
   signup,
@@ -17,13 +18,14 @@ test("a member takes over their own screen when their run on a shared bot asks",
   await signup(page, `takeover-owner-${stamp}@rakazo.test`, "password12", "Ada Owner");
   await completeOnboarding(page);
   const { spaceId } = await rpc<{ spaceId: string }>(page, "me", undefined);
-  const { url: inviteUrl } = await rpc<{ url: string }>(page, "spaces/createInvite", { spaceId });
+  const guestEmail = `takeover-guest-${stamp}@rakazo.test`;
+  const inviteUrl = await inviteToSpace(page, spaceId, guestEmail);
   const botId = await createNamedBot(page, "Release notes");
   await rpc(page, "bots/share", { botId, visibility: "space", userIds: [] });
 
   const guestContext = await browser.newContext({ baseURL });
   const guest = await guestContext.newPage();
-  await signup(guest, `takeover-guest-${stamp}@rakazo.test`, "password12", "Grace Guest");
+  await signup(guest, guestEmail, "password12", "Grace Guest");
   await completeOnboarding(guest);
   await guest.goto(inviteUrl);
   await guest.getByRole("button", { name: "Join", exact: true }).click();
@@ -66,13 +68,14 @@ test("in a group, the person whose run asks takes over its bot's screen", async 
   await signup(page, `group-takeover-owner-${stamp}@rakazo.test`, "password12", "Ada Owner");
   await completeOnboarding(page);
   const { spaceId } = await rpc<{ spaceId: string }>(page, "me", undefined);
-  const { url: inviteUrl } = await rpc<{ url: string }>(page, "spaces/createInvite", { spaceId });
+  const guestEmail = `group-takeover-guest-${stamp}@rakazo.test`;
+  const inviteUrl = await inviteToSpace(page, spaceId, guestEmail);
   const botId = await createNamedBot(page, "Releaser");
   await rpc(page, "bots/share", { botId, visibility: "space", userIds: [] });
 
   const guestContext = await browser.newContext({ baseURL });
   const guest = await guestContext.newPage();
-  await signup(guest, `group-takeover-guest-${stamp}@rakazo.test`, "password12", "Grace Guest");
+  await signup(guest, guestEmail, "password12", "Grace Guest");
   await completeOnboarding(guest);
   await guest.goto(inviteUrl);
   await guest.getByRole("button", { name: "Join", exact: true }).click();
