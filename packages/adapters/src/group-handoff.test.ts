@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@rakazo/db";
 import { appendSessionEntryInTransaction } from "@rakazo/db";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { handoffToGroupBot } from "./group-handoff.js";
+import { handoffToGroupBot, loadGroupContext } from "./group-handoff.js";
 
 vi.mock("../../db/src/sessions.js", async () =>
   (await import("@rakazo/db/sessions.test-support")).stubbedDbSessions(),
@@ -218,5 +218,44 @@ describe("group handoff ownership", () => {
     ).resolves.toMatchObject({ ok: true, botId: "bot-b", runId: "run-b" });
     expect(handoffs()).toEqual([]);
     expect(runCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe("group context", () => {
+  it("names the group's people, its creator owning unattributed messages, and whom the run answers", async () => {
+    const prisma = {
+      chatGroup: {
+        findUnique: vi.fn(async () => ({
+          name: "Trip",
+          description: "",
+          userId: "ana",
+          members: [{ bot: { id: "bot-a", name: "Planner", title: "", description: "" } }],
+          people: [{ userId: "ana" }, { userId: "bo" }],
+        })),
+      },
+      chatGroupPerson: {
+        findMany: vi.fn(async () => [
+          { user: { id: "ana", name: "Ana", image: null } },
+          { user: { id: "bo", name: "Bo", image: null } },
+        ]),
+      },
+      $queryRaw: vi.fn(async () => []),
+    } as unknown as PrismaClient;
+
+    const group = await loadGroupContext(
+      prisma,
+      { groupId: "group-1", sessionId: "session-1" },
+      { id: "bot-a", name: "Planner" },
+      "bo",
+    );
+
+    expect(group?.speakers).toEqual({
+      names: new Map([
+        ["ana", "Ana"],
+        ["bo", "Bo"],
+      ]),
+      ownerId: "ana",
+    });
+    expect(group?.context).toContain("You are answering Bo, who woke you.");
   });
 });

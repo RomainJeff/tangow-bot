@@ -4,6 +4,7 @@ import { botMessageHopExhausted, nextBotMessageHop, renderGroupMembersContext } 
 import {
   appendEventInTransaction,
   appendSessionEntryInTransaction,
+  groupThreadPeople,
   IsolationError,
   lockGroupForPerson,
   markThreadsUnread,
@@ -192,19 +193,29 @@ export async function handoffToGroupBot(
 }
 
 /**
- * The group's rendered roster context, plus the id → name map it was built from.
+ * The group's rendered roster context, plus the names it was built from.
  *
- * History rendering needs the same names to attribute a member's turn and to read
- * a handoff, and this is the only read that already has them: returning the map
- * keeps that to one query instead of one lookup per message.
+ * History rendering needs the same names to attribute a member's turn, a person's message and
+ * a handoff, and this is the only read that already has them: returning the maps keeps that to
+ * one read instead of one lookup per message. People are named only once the group has more
+ * than one, so a group of one reads as it always has.
  */
 export async function loadGroupContext(
   prisma: PrismaClient,
-  groupId: string,
+  thread: { groupId: string; sessionId: string },
   self: { id: string; name: string },
-): Promise<{ context: string; memberNames: Map<string, string> } | undefined> {
+  /** The person the run answers. */
+  userId: string,
+): Promise<
+  | {
+      context: string;
+      memberNames: Map<string, string>;
+      speakers?: { names: Map<string, string>; ownerId: string };
+    }
+  | undefined
+> {
   const group = await prisma.chatGroup.findUnique({
-    where: { id: groupId },
+    where: { id: thread.groupId },
     include: {
       members: {
         where: { bot: { archivedAt: null } },
@@ -213,12 +224,28 @@ export async function loadGroupContext(
         },
         orderBy: [{ createdAt: "asc" }, { botId: "asc" }],
       },
+      people: { select: { userId: true } },
     },
   });
   if (!group) return undefined;
   const members = group.members.map((member) => member.bot);
+  // Its people and anyone who wrote in it before leaving, each by name.
+  const people = group.people.length > 1 ? await groupThreadPeople(prisma, thread) : [];
+  const names = new Map(people.map((person) => [person.userId, person.name]));
+  const current = new Set(group.people.map((person) => person.userId));
+  const speakers = people.length > 1 ? { names, ownerId: group.userId } : undefined;
   return {
-    context: renderGroupMembersContext(group.name, members, self, group.description),
+    context: renderGroupMembersContext(
+      group.name,
+      members,
+      self,
+      group.description,
+      speakers && {
+        names: people.filter((person) => current.has(person.userId)).map((person) => person.name),
+        answering: names.get(userId) ?? "",
+      },
+    ),
     memberNames: new Map(members.map((bot) => [bot.id, bot.name])),
+    speakers,
   };
 }

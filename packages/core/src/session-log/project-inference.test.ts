@@ -223,6 +223,30 @@ describe("projectInferenceTurns", () => {
     ]);
   });
 
+  it("names who wrote each person's message in a group of several people", () => {
+    const chain = linkEntries("speakers", [
+      { type: "user.message", payload: { blocks: text("Plan Lyon."), source: "app" } },
+      {
+        type: "user.message",
+        payload: { blocks: text("Add a museum."), source: "app", authorId: "user_bo" },
+      },
+      { type: "user.message", payload: { blocks: text("Every morning."), source: "routine" } },
+    ]);
+    const speakers = {
+      names: new Map([
+        ["user_ana", "Ana"],
+        ["user_bo", "Bo <3"],
+      ]),
+      ownerId: "user_ana",
+    };
+    expect(turnsOf(chain, { ...ada, speakers }).map((turn) => turn.content)).toEqual([
+      "[from Ana]\n\nPlan Lyon.",
+      "[from Bo &lt;3]\n\nAdd a museum.",
+      "Every morning.",
+    ]);
+    expect(turnsOf(chain, ada)[1]?.content).toBe("Add a museum.");
+  });
+
   it("replays the tool calls a cancelled run finished and drops its words", () => {
     const run = { botId: "bot_ada", runId: "run_1" };
     const chain = linkEntries("cancel", [

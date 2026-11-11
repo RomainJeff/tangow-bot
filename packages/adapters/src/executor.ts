@@ -1999,7 +1999,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
         // Loaded before history so a member's turn can be attributed to its author; the
         // rendered half feeds the group prompt further down.
         const group = thread.groupId
-          ? await loadGroupContext(deps.prisma, thread.groupId, { id: bot.id, name: bot.name })
+          ? await loadGroupContext(
+              deps.prisma,
+              { groupId: thread.groupId, sessionId: thread.sessionId },
+              { id: bot.id, name: bot.name },
+              run.userId,
+            )
           : undefined;
         const projectStartedAt = performance.now();
         const [first] = historyEntries;
@@ -2015,6 +2020,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             selfBotId: bot.id,
             ...(archiveHistory ? { runHistory: { activeRunId: run.id } } : {}),
             botNames: group?.memberNames,
+            speakers: group?.speakers,
             resolveReplyTarget: (entryId) => outside.get(entryId),
           });
           const uncompacted = compaction ? turns.slice(1) : turns;

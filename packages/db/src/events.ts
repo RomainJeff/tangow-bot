@@ -1065,6 +1065,8 @@ export async function answerRunInputInTransaction(
           blocks: [{ kind: "text", text }],
           replyTo: { entryId: askId },
           source: "card",
+          // In a group, whom the bot reads as answering.
+          authorId: input.answeredByUserId,
         },
       });
     // Edits only apply to an approval card (a Create bot card or a mail draft), answered "allow"

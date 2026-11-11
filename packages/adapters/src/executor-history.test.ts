@@ -239,6 +239,7 @@ function fixture(
         members: (options.groupMembers ?? []).map((member) => ({
           bot: { ...member, title: "", description: "" },
         })),
+        people: [],
       })),
     },
     task: {
