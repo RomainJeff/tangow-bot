@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Invite people of your space into a group with bots.** On web, desktop, iPhone and Android, the group's creator adds people and bots, and picks the lead bot that answers a message naming no bot; each bot then answers with the account of the person who asked it, a private bot answers only its owner, and everyone sees each other's messages under their name. Only the person a bot is working for answers its questions and approvals, and everyone but the creator sees who is in the group and can leave it.
 
+#### Changed
+
+- On web and desktop, a space's owner now invites people by email, several at once, and each invite link works only for the account with that email; pending invites are listed by email, each with its own link to copy or revoke, instead of anonymous links copied once.
+
 #### Fixed
 
 - When a bot in a group needs you on its computer, Open on its card now opens that computer on web and desktop so you can take control and hand it back from the group, and on iPhone and Android a shared bot's computer offers only the takeover, as in your own thread with it; everyone else in the group sees the card as waiting for you by name instead of "Needs you".
