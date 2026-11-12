@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-11-12
+
+#### Added
+
+- **Run bot computers and workers on Kubernetes.** A self-hosted server sets `SUPERVISOR_BACKEND=kubernetes`, and the supervisor starts each computer and each bot run as a pod in a dedicated namespace instead of a Docker container, with Docker and E2B still available. The namespace, storage, permissions and network it needs are in [Kubernetes computers](docs/self-host-kubernetes.md).
+
 ### 2026-11-11
 
 #### Added
