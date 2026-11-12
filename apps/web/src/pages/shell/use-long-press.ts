@@ -15,8 +15,8 @@ export type MenuOpener = (target: HTMLElement, point: ContextMenuPosition) => bo
  */
 export function useLongPress() {
   const press = useRef<{ pointerId: number; x: number; y: number; timer: number } | null>(null);
-  // Set once a hold opened a menu: the click the lifting finger still fires must not act.
-  const opened = useRef(false);
+  // The row whose hold opened a menu: the click the lifting finger still fires there must not act.
+  const opened = useRef<HTMLElement | null>(null);
 
   const cancel = useCallback(() => {
     if (press.current) window.clearTimeout(press.current.timer);
@@ -28,7 +28,7 @@ export function useLongPress() {
     (open: MenuOpener) => ({
       onPointerDown(event: ReactPointerEvent<HTMLElement>) {
         cancel();
-        opened.current = false;
+        opened.current = null;
         if (event.pointerType !== "touch") return;
         const target = event.currentTarget;
         const point = { x: event.clientX, y: event.clientY };
@@ -37,7 +37,7 @@ export function useLongPress() {
           ...point,
           timer: window.setTimeout(() => {
             press.current = null;
-            opened.current = open(target, point);
+            opened.current = open(target, point) ? target : null;
           }, LONG_PRESS_MS),
         };
       },
@@ -53,7 +53,7 @@ export function useLongPress() {
       onPointerUp: cancel,
       onPointerCancel: cancel,
       onContextMenu(event: ReactMouseEvent<HTMLElement>) {
-        if (opened.current) {
+        if (opened.current === event.currentTarget) {
           event.preventDefault();
           return;
         }
@@ -61,11 +61,11 @@ export function useLongPress() {
         cancel();
         if (!open(event.currentTarget, { x: event.clientX, y: event.clientY })) return;
         event.preventDefault();
-        opened.current = holding;
+        opened.current = holding ? event.currentTarget : null;
       },
       onClickCapture(event: ReactMouseEvent<HTMLElement>) {
-        if (!opened.current) return;
-        opened.current = false;
+        if (opened.current !== event.currentTarget) return;
+        opened.current = null;
         event.preventDefault();
         event.stopPropagation();
       },
