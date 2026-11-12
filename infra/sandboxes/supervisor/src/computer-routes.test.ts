@@ -21,7 +21,15 @@ vi.mock("dockerode", () => ({
   },
 }));
 
-import { supervisorApp } from "./index.js";
+import type {
+  Computer,
+  ComputerRuntime,
+  ComputerSpec,
+  ExecOptions,
+  WorkerAttempt,
+} from "./computer-runtime.js";
+import { ComputerIdentityError, ComputerNotFoundError } from "./computer-runtime.js";
+import { createSupervisor, supervisorApp } from "./index.js";
 
 const dataDir = process.env.DATA_DIR!;
 const token = resolveSupervisorToken(process.env);
@@ -212,7 +220,7 @@ function dockerHarness(): Harness {
   hoisted.daemon = daemon as unknown as Record<string | symbol, unknown>;
   const isWorker = (container: FakeContainer) => container.options.Labels?.["tangow.worker"];
   return {
-    request: (pathname, init) => supervisorApp.request(pathname, init),
+    request: async (pathname, init) => supervisorApp.request(pathname, init),
     computers: () =>
       [...state.containers.values()]
         .filter((container) => !isWorker(container))
@@ -231,7 +239,140 @@ function dockerHarness(): Harness {
   };
 }
 
-const harnesses: Array<[string, () => Harness]> = [["docker backend", dockerHarness]];
+/** The contract the routes rely on, kept in memory: what a new backend must also do. */
+class FakeRuntime implements ComputerRuntime {
+  releaseRef = "release-1";
+  computers = new Map<
+    string,
+    { botId: string; spaceId: string; running: boolean; releaseRef: string }
+  >();
+  attempts = new Map<string, string>();
+  execs: ExecRecord[] = [];
+  run: Run = () => ({ code: 0 });
+  sticky = false;
+
+  async release() {
+    return this.releaseRef;
+  }
+
+  private toComputer(id: string, screenPort?: string): Computer {
+    const computer = this.computers.get(id)!;
+    return {
+      id,
+      running: computer.running,
+      image: "computer",
+      releaseRef: computer.releaseRef,
+      matchesSpec: true,
+      workspace: "/home/tangow",
+      ...(screenPort ? { screen: { host: "127.0.0.1", port: screenPort } } : {}),
+    };
+  }
+
+  getComputer(query: {
+    id: string;
+    owner: { botId: string; spaceId: string };
+    screenPort?: string;
+  }): Promise<Computer>;
+  getComputer(query: { spec: ComputerSpec }): Promise<Computer | undefined>;
+  async getComputer(
+    query:
+      | { id: string; owner: { botId: string; spaceId: string }; screenPort?: string }
+      | { spec: ComputerSpec },
+  ) {
+    if ("spec" in query) {
+      const found = [...this.computers].find(
+        ([, c]) => c.botId === query.spec.botId && c.spaceId === query.spec.spaceId,
+      );
+      return found && this.toComputer(found[0]);
+    }
+    const computer = this.computers.get(query.id);
+    if (!computer) throw new ComputerNotFoundError(`no computer ${query.id}`);
+    if (computer.botId !== query.owner.botId || computer.spaceId !== query.owner.spaceId)
+      throw new ComputerIdentityError("computer identity mismatch");
+    return this.toComputer(query.id, query.screenPort);
+  }
+
+  async ensureComputer(spec: ComputerSpec, existing?: { id: string; replace: boolean }) {
+    if (existing && !existing.replace) {
+      const computer = this.computers.get(existing.id)!;
+      computer.running = true;
+      return { id: existing.id, releaseRef: computer.releaseRef, resumed: true };
+    }
+    if (existing) this.computers.delete(existing.id);
+    const id = `tangow-bot-${randomUUID()}`;
+    this.computers.set(id, {
+      botId: spec.botId,
+      spaceId: spec.spaceId,
+      running: true,
+      releaseRef: this.releaseRef,
+    });
+    return { id, releaseRef: this.releaseRef, resumed: false };
+  }
+
+  async stopComputer(id: string) {
+    this.computers.get(id)!.running = false;
+  }
+
+  async removeComputer(id: string) {
+    this.computers.delete(id);
+  }
+
+  async exec(_id: string, argv: string[], options: ExecOptions) {
+    const record: ExecRecord = { argv, stdin: options.stdin ?? Buffer.alloc(0), aborted: false };
+    this.execs.push(record);
+    const result = this.run(argv);
+    if (result === "hang") {
+      return new Promise<never>((_resolve, reject) =>
+        options.signal?.addEventListener("abort", () => {
+          record.aborted = true;
+          reject(options.signal?.reason);
+        }),
+      );
+    }
+    return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", code: result.code };
+  }
+
+  workers = {
+    ensure: async (attempt: WorkerAttempt) => {
+      const id = this.attempts.get(attempt.attemptId) ?? `tangowworker${attempt.attemptId}`;
+      this.attempts.set(attempt.attemptId, id);
+      return { id };
+    },
+    destroy: async (attemptId: string) => {
+      const destroyed = this.attempts.has(attemptId);
+      if (destroyed && this.sticky) throw new Error("worker still present");
+      this.attempts.delete(attemptId);
+      return { destroyed };
+    },
+    openGuest: async () => undefined,
+  };
+}
+
+function fakeRuntimeHarness(): Harness {
+  const runtime = new FakeRuntime();
+  const { app } = createSupervisor(runtime);
+  return {
+    request: async (pathname, init) => app.request(pathname, init),
+    computers: () =>
+      [...runtime.computers].map(([id, computer]) => ({ id, running: computer.running })),
+    workers: () => [...runtime.attempts.values()],
+    execs: () => runtime.execs,
+    run: (run) => {
+      runtime.run = run;
+    },
+    newRelease: () => {
+      runtime.releaseRef = `release-${randomUUID()}`;
+    },
+    stickyWorkers: () => {
+      runtime.sticky = true;
+    },
+  };
+}
+
+const harnesses: Array<[string, () => Harness]> = [
+  ["docker backend", dockerHarness],
+  ["runtime contract", fakeRuntimeHarness],
+];
 
 const homePath = path.join(dataDir, "homes", "bot-1");
 const volume = path.join(dataDir, "volumes", "tangow-private");
