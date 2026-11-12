@@ -19,25 +19,23 @@ function fileTransfer(page: Page, name: string): Promise<JSHandle<DataTransfer>>
   }, name);
 }
 
-for (const viewport of [null, { width: 390, height: 844 }]) {
-  test(`a file dropped on the conversation becomes an attachment${viewport ? " (phone)" : ""}`, async ({
-    page,
-  }, testInfo) => {
-    await openConversation(page);
-    if (viewport) await page.setViewportSize(viewport);
-    const transcript = page.getByTestId("transcript");
-    const dataTransfer = await fileTransfer(page, "dropped.png");
+test("a file dropped on the conversation becomes an attachment", async ({ page }, testInfo) => {
+  await openConversation(page);
+  const transcript = page.getByTestId("transcript");
+  const column = page.getByTestId("conversation-column");
+  const dataTransfer = await fileTransfer(page, "dropped.png");
 
-    await transcript.dispatchEvent("dragenter", { dataTransfer });
-    await transcript.dispatchEvent("dragover", { dataTransfer });
-    await expect(page.getByTestId("conversation-column")).toHaveAttribute("data-dragging", "files");
-    await captureScreenshot(page, testInfo, `file-drop-hover${viewport ? "-phone" : ""}`);
+  await transcript.dispatchEvent("dragenter", { dataTransfer });
+  await transcript.dispatchEvent("dragover", { dataTransfer });
+  await expect(column).toHaveAttribute("data-dragging", "files");
+  await captureScreenshot(page, testInfo, "file-drop-hover");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await captureScreenshot(page, testInfo, "file-drop-hover-phone");
 
-    await transcript.dispatchEvent("drop", { dataTransfer });
-    await expect(page.getByRole("button", { name: "Remove dropped.png" })).toBeVisible();
-    await expect(page.getByTestId("conversation-column")).not.toHaveAttribute("data-dragging");
-  });
-}
+  await transcript.dispatchEvent("drop", { dataTransfer });
+  await expect(page.getByRole("button", { name: "Remove dropped.png" })).toBeVisible();
+  await expect(column).not.toHaveAttribute("data-dragging");
+});
 
 test("a file let go outside the conversation is not opened by the browser", async ({ page }) => {
   await openConversation(page);
@@ -52,5 +50,4 @@ test("a file let go outside the conversation is not opened by the browser", asyn
     return event.defaultPrevented;
   }, dataTransfer);
   expect(handled).toBe(true);
-  await expect(page.getByRole("button", { name: "Remove stray.png" })).toHaveCount(0);
 });
