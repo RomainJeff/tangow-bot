@@ -553,7 +553,7 @@ export const WORKER_IMAGE = process.env.TANGOW_WORKER_IMAGE ?? "tangow/worker:lo
 export const WORKER_NETWORK = "tangow-workers";
 export const WORKER_GUEST_ENTRY = "/opt/tangow/agent-run-worker.mjs";
 /** The E2B worker profile (`apps/agent-run-worker/template/template.ts`), and #343's pids ceiling. */
-const WORKER_LIMITS = {
+export const WORKER_LIMITS = {
   Memory: 1024 ** 3,
   MemorySwap: 1024 ** 3,
   NanoCpus: 1e9,
