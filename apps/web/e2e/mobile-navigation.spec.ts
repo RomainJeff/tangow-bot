@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { captureScreenshot, completeOnboarding, openBotPage, signup } from "./helpers";
 import { expect, test } from "./test";
 
@@ -109,6 +109,67 @@ test("phone Settings is a list of sections: a row pushes one, Back and close lea
   await expect(settings.getByTestId("settings-list-usage")).toBeVisible();
   await settings.getByRole("button", { name: "Close user settings" }).click();
   await expect(settings).toHaveCount(0);
+});
+
+/** Elements inside `root` that scroll vertically right now. */
+function scrollers(root: Locator) {
+  return root.evaluate(
+    (element) =>
+      [element, ...element.querySelectorAll("*")].filter((node) => {
+        const { overflowY } = getComputedStyle(node);
+        return (
+          (overflowY === "auto" || overflowY === "scroll") && node.scrollHeight > node.clientHeight
+        );
+      }).length,
+  );
+}
+
+test("phone Providers pushes a provider's setup over the list and pops back to it", async ({
+  page,
+}, testInfo) => {
+  await startOnBotList(page, `mobile-providers-${Date.now()}@tangow.test`);
+  await openUserMenuEntry(page, "Settings");
+  const settings = page.getByTestId("user-settings");
+  await settings.getByTestId("settings-list-providers").click();
+
+  // The list shows first, as one page: no provider opens on its own, no box scrolls inside it.
+  const models = settings.getByRole("region", { name: "Models", exact: true });
+  await expect(models).toBeVisible();
+  await expect(settings.getByLabel("API key")).toHaveCount(0);
+  await expect.poll(() => scrollers(settings)).toBe(1);
+  await captureScreenshot(page, testInfo, "mobile-providers-list");
+
+  const scripted = models.getByRole("button", { name: /Scripted/ });
+  await scripted.click();
+  await expect(settings.getByRole("heading", { name: "Scripted", exact: true })).toBeVisible();
+  await expect(models).toBeHidden();
+  const back = settings.getByRole("button", { name: "Providers", exact: true });
+  await expect(back).toBeFocused();
+  const apiKey = settings.getByLabel("API key");
+  await expect(apiKey).toBeInViewport();
+  expect((await apiKey.boundingBox())?.height).toBeGreaterThan(0);
+  expect(await scrollers(settings)).toBeLessThanOrEqual(1);
+  await captureScreenshot(page, testInfo, "mobile-provider-detail");
+
+  // The model list unfolds in the page with a 16 px search field, so iOS does not zoom.
+  await settings.getByRole("combobox", { name: "Model", exact: true }).click();
+  const search = settings.getByRole("combobox", { name: "Search models" });
+  await expect(search).toHaveCSS("font-size", "16px");
+  const option = await settings.getByRole("option").first().boundingBox();
+  expect(option?.height).toBeGreaterThanOrEqual(44);
+  expect(await scrollers(settings)).toBeLessThanOrEqual(1);
+  await captureScreenshot(page, testInfo, "mobile-provider-model-picker");
+  await search.press("Escape");
+
+  await apiKey.fill("fake-scripted-key-one");
+  await settings.getByRole("button", { name: "Connect API key" }).click();
+  await expect(settings.getByText(/Connected and using Scripted runtime/)).toBeVisible();
+
+  await back.click();
+  await expect(settings.getByRole("heading", { name: "Providers", exact: true })).toBeVisible();
+  await expect(scripted).toBeFocused();
+  await settings.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(settings.getByTestId("settings-list-providers")).toBeFocused();
 });
 
 test("phone Customize is a list of its sections, pushed and popped like Settings", async ({

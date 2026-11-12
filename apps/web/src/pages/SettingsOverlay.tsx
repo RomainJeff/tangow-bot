@@ -39,6 +39,7 @@ import { ComputerSettingsPanel } from "./ComputerSettingsPanel";
 import { DecisionModelSettingsPanel } from "./DecisionModelSettingsPanel";
 import { MemorySettingsOverlay } from "./MemorySettingsOverlay";
 import { ModelSettingsOverlay } from "./ModelSettingsOverlay";
+import type { ProviderDetail } from "./ProvidersSettings";
 import { ProvidersSettings } from "./ProvidersSettings";
 import { SpaceGeneralSettings } from "./SpaceGeneralSettings";
 import {
@@ -102,11 +103,19 @@ export function SettingsOverlay({
   const panelRef = useRef<HTMLDivElement>(null);
   const usageRef = useRef<HTMLDivElement>(null);
   const phone = useMediaQuery(PHONE_MEDIA);
-  const [chosen, setSection] = useState<SettingsSection | null>(
+  const [chosen, setChosen] = useState<SettingsSection | null>(
     initialSection ?? (phone ? null : "profile"),
   );
   // A phone shows the list of sections until one is chosen; a window always shows one.
   const section = phone ? chosen : (chosen ?? "profile");
+  // A phone also pushes a chosen provider over the Providers list. The choice is kept at
+  // any width, so a window narrowed to a phone keeps the provider it was showing.
+  const [chosenProvider, setProviderDetail] = useState<ProviderDetail | null>(null);
+  const providerDetail = phone && section === "providers" ? chosenProvider : null;
+  function setSection(next: SettingsSection | null) {
+    setProviderDetail(null);
+    setChosen(next);
+  }
   const [memoryBusy, setMemoryBusy] = useState(false);
   const [decisionModelBusy, setDecisionModelBusy] = useState(false);
   const [voiceBusy, setVoiceBusy] = useState(false);
@@ -133,6 +142,7 @@ export function SettingsOverlay({
   }, [section]);
 
   const back = usePushedFocus(section, panelRef);
+  const providerBack = usePushedFocus(providerDetail?.key ?? null, panelRef);
 
   const navItems: Record<SettingsSection, NavItem> = {
     profile: { label: t`Profile`, icon: UserRound },
@@ -147,7 +157,11 @@ export function SettingsOverlay({
     usage: { label: t`Usage`, icon: Gauge },
   };
 
-  const sectionTitle = section ? navItems[section].label : t`Settings`;
+  const sectionTitle = providerDetail
+    ? providerDetail.title
+    : section
+      ? navItems[section].label
+      : t`Settings`;
 
   const closeLabel =
     section === "models"
@@ -263,7 +277,14 @@ export function SettingsOverlay({
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {phone ? (
               <div className="box-content flex h-capsule shrink-0 items-center justify-between gap-1 px-2.5 pt-2.5">
-                {section ? (
+                {providerDetail ? (
+                  <BackCapsule
+                    ref={providerBack}
+                    label={navItems.providers.label}
+                    disabled={panelBusy}
+                    onClick={() => setProviderDetail(null)}
+                  />
+                ) : section ? (
                   <BackCapsule
                     ref={back}
                     label={t`Settings`}
@@ -314,7 +335,12 @@ export function SettingsOverlay({
                 />
               ) : null}
               {section === "providers" ? (
-                <ProvidersSettings onBusyChange={setProvidersBusy} />
+                <ProvidersSettings
+                  onBusyChange={setProvidersBusy}
+                  stacked={phone}
+                  detailOpen={providerDetail !== null}
+                  onOpenDetail={setProviderDetail}
+                />
               ) : null}
               {section === "space" ? (
                 <SpaceGeneralSettings
