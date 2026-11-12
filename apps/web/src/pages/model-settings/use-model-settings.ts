@@ -305,7 +305,9 @@ export function useModelSettings() {
       );
       setApiKey("");
       await refresh();
+      // A window scrolls the detail itself; a phone scrolls the page around it.
       detailScrollRef.current?.scrollTo({ top: 0 });
+      detailScrollRef.current?.scrollIntoView({ block: "start" });
       setNotice(isOpenAiCompatible ? t`Saved.` : t`Connected and using ${selected.label}.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : t`Could not connect this provider`);
