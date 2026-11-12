@@ -1,4 +1,5 @@
-import { captureScreenshot, completeOnboarding, signup } from "./helpers";
+import type { Page } from "@playwright/test";
+import { captureScreenshot, completeOnboarding, openBotPage, signup } from "./helpers";
 import { expect, test } from "./test";
 
 /** At phone width the bot list is its own page, as in the iPhone app: open a chat, go back. */
@@ -52,4 +53,117 @@ test("the phone bot list is a page that a chat opens from and returns to", async
   await page.waitForTimeout(3_500);
   expect(new URL(page.url()).pathname).toBe("/app");
   await expect(list).toBeVisible();
+});
+
+async function startOnBotList(page: Page, email: string) {
+  await signup(page, email, "password12", "Phone Nav");
+  await completeOnboarding(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForURL(/\/app\/[^/]+$/);
+  await page.getByRole("link", { name: "Back" }).click();
+  await page.waitForURL(/\/app$/);
+}
+
+async function openUserMenuEntry(page: Page, name: "Settings" | "Usage") {
+  await page.getByTestId("user-menu-trigger").click();
+  await page.getByRole("button", { name, exact: true }).click();
+}
+
+test("phone Settings is a list of sections: a row pushes one, Back and close leave", async ({
+  page,
+}, testInfo) => {
+  await startOnBotList(page, `mobile-settings-${Date.now()}@tangow.test`);
+
+  await openUserMenuEntry(page, "Settings");
+  const settings = page.getByTestId("user-settings");
+  await expect(settings.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
+  await expect(settings.getByTestId("settings-nav")).toHaveCount(0);
+  for (const id of ["profile", "providers", "updates", "space", "models", "usage"]) {
+    const row = await settings.getByTestId(`settings-list-${id}`).boundingBox();
+    expect(row?.height, `${id} row`).toBeGreaterThanOrEqual(44);
+  }
+  const close = await settings.getByRole("button", { name: "Close user settings" }).boundingBox();
+  expect(close && close.x + close.width).toBeGreaterThan(340);
+  expect(close?.y).toBeLessThan(60);
+  await captureScreenshot(page, testInfo, "mobile-settings-list");
+
+  await settings.getByTestId("settings-list-models").click();
+  await expect(settings.getByRole("heading", { name: "Models", exact: true })).toBeVisible();
+  await expect(settings.getByTestId("settings-list-profile")).toHaveCount(0);
+  const sectionClose = settings.getByRole("button", { name: "Close model settings" });
+  await expect(sectionClose).toBeVisible();
+  const moved = await sectionClose.boundingBox();
+  expect(moved?.x).toBeCloseTo(close?.x ?? 0, 0);
+  expect(moved?.y).toBeCloseTo(close?.y ?? 0, 0);
+  await expect(settings.getByRole("button", { name: "Settings", exact: true })).toBeFocused();
+  await captureScreenshot(page, testInfo, "mobile-settings-models");
+
+  await settings.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(settings.getByTestId("settings-list-models")).toBeFocused();
+  await settings.getByRole("button", { name: "Close user settings" }).click();
+  await expect(settings).toHaveCount(0);
+
+  await openUserMenuEntry(page, "Usage");
+  await expect(settings.getByRole("heading", { name: "Usage", exact: true })).toBeVisible();
+  await settings.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(settings.getByTestId("settings-list-usage")).toBeVisible();
+  await settings.getByRole("button", { name: "Close user settings" }).click();
+  await expect(settings).toHaveCount(0);
+});
+
+test("phone Customize is a list of its sections, pushed and popped like Settings", async ({
+  page,
+}, testInfo) => {
+  await startOnBotList(page, `mobile-customize-${Date.now()}@tangow.test`);
+
+  await page.getByTestId("open-customize").click();
+  const overlay = page.getByRole("dialog");
+  await expect(overlay.getByRole("heading", { name: "Customize", exact: true })).toBeVisible();
+  await expect(overlay.getByTestId("customize-nav-skills")).toHaveCount(0);
+  await captureScreenshot(page, testInfo, "mobile-customize-list");
+
+  await overlay.getByTestId("customize-list-skills").click();
+  await expect(overlay.getByRole("heading", { name: "Skills", exact: true })).toBeVisible();
+  await overlay.getByRole("button", { name: "Customize", exact: true }).click();
+  await overlay.getByTestId("customize-list-integrations").click();
+  await expect(overlay.getByRole("heading", { name: "Integrations", exact: true })).toBeVisible();
+  await overlay.getByRole("button", { name: "Close integrations" }).click();
+  await expect(overlay).toHaveCount(0);
+});
+
+test("the phone bot panel returns to the chat from its own back button", async ({
+  page,
+}, testInfo) => {
+  await signup(page, `mobile-panel-${Date.now()}@tangow.test`, "password12", "Phone Nav");
+  await completeOnboarding(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForURL(/\/app\/[^/]+$/);
+  const panel = page.getByTestId("side-panel");
+
+  const botPage = await openBotPage(page);
+  await expect(botPage.getByRole("button", { name: "Close panel" })).toBeHidden();
+  await captureScreenshot(page, testInfo, "mobile-bot-panel");
+  await botPage.getByRole("button", { name: "Chat", exact: true }).click();
+  await expect(panel).toHaveAttribute("data-panel", "closed");
+
+  await openBotPage(page);
+  await botPage.getByRole("tab", { name: "Settings", exact: true }).click();
+  await botPage.locator('[data-opens="model"]').click();
+  await expect(botPage.getByRole("button", { name: "Chat", exact: true })).toHaveCount(0);
+  await expect(botPage.getByRole("button", { name: "Close panel" })).toBeHidden();
+  await captureScreenshot(page, testInfo, "mobile-bot-panel-detail");
+  await botPage.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(botPage.getByRole("button", { name: "Chat", exact: true })).toBeVisible();
+});
+
+test("at desktop width the bot panel keeps its close button and hides the Chat back", async ({
+  page,
+}) => {
+  await signup(page, `desktop-panel-${Date.now()}@tangow.test`, "password12", "Desktop Nav");
+  await completeOnboarding(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  const botPage = await openBotPage(page);
+  await expect(botPage.getByRole("button", { name: "Close panel" })).toBeVisible();
+  await expect(botPage.getByRole("button", { name: "Chat", exact: true })).toBeHidden();
 });

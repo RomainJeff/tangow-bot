@@ -239,14 +239,16 @@ export async function saveRoutineField(page: Page, field: Locator, value: string
   await saved;
 }
 
-/** Open the user Settings overlay, optionally switching to a sidebar section. */
+/** Open the user Settings overlay, optionally on a section: from the nav, or from the list on a phone. */
 export async function openUserSettings(page: Page, section?: SettingsSection) {
   await page.getByTestId("user-menu-trigger").click();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   const settings = page.getByTestId("user-settings");
   await expect(settings).toBeVisible();
-  if (section && section !== "profile") {
-    await settings.getByTestId(`settings-nav-${section}`).click();
+  if (section) {
+    const nav = settings.getByTestId(`settings-nav-${section}`);
+    const entry = (await nav.count()) > 0 ? nav : settings.getByTestId(`settings-list-${section}`);
+    await entry.click();
   }
   return settings;
 }
