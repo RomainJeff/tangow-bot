@@ -4,6 +4,7 @@ import { PassThrough, Writable } from "node:stream";
 import type { V1Pod, V1Status } from "@kubernetes/client-node";
 import { ApiException, CoreV1Api, Exec, KubeConfig } from "@kubernetes/client-node";
 import { SANDBOX_SKILL_MOUNTS } from "@tangow/core";
+import { getLogger } from "@tangow/logging";
 import type {
   Computer,
   ComputerOwner,
@@ -11,6 +12,8 @@ import type {
   ComputerSpec,
   ExecOptions,
   ExecResult,
+  WorkerAttempt,
+  WorkerGuest,
 } from "./computer-runtime.js";
 import { ComputerIdentityError, ComputerNotFoundError } from "./computer-runtime.js";
 import { SCREEN_READY_TIMEOUT_MS } from "./computer-session.js";
@@ -25,6 +28,10 @@ import {
   containerNameFor,
   resolveSpaceComputerLimit,
   volumeHomeLabels,
+  WORKER_GUEST_ENTRY,
+  WORKER_IMAGE,
+  WORKER_LIMITS,
+  workerMounts,
 } from "./computer-spec.js";
 import { assertComputerHomeWritable } from "./home-ownership.js";
 import { hasComputerIdentity } from "./supervisor-logic.js";
@@ -36,6 +43,11 @@ const STOP_GRACE_SECONDS = 10;
 const DELETE_TIMEOUT_MS = 30_000;
 const POLL_MS = 500;
 const DNS_LABEL = /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/;
+const WORKER_CONTAINER = "worker";
+/** Attempt ids are cuids (`schema.prisma`), which make a DNS label and pass the guest route as is. */
+const ATTEMPT_ID = /^c[a-z0-9]{24}$/;
+/** How much of a guest's stderr is kept for the log, as the Docker backend does. */
+const GUEST_STDERR_TAIL_CHARS = 2048;
 
 /** `pods/exec` has no cwd or env: one fixed script takes both, and the command, as argv. */
 export const EXEC_ENVELOPE = 'cd "$1" && shift && exec env "$@"';
@@ -43,6 +55,37 @@ export const EXEC_ENVELOPE = 'cd "$1" && shift && exec env "$@"';
 export function execInEnvelope(cwd: string, env: string[], argv: string[]) {
   return ["sh", "-c", EXEC_ENVELOPE, "sh", cwd, ...env, ...argv];
 }
+
+/**
+ * The guest reads its capability from the first line of stdin, never from argv or the exec URL,
+ * then gets the rest of stdin as its channel.
+ */
+export const GUEST_COMMAND = [
+  "sh",
+  "-c",
+  'IFS= read -r TANGOW_WORKER_CAPABILITY && export TANGOW_WORKER_CAPABILITY && exec node "$1"',
+  "sh",
+  WORKER_GUEST_ENTRY,
+];
+
+const HARDENED_POD = {
+  automountServiceAccountToken: false,
+  // Services in the namespace would otherwise inject `<NAME>_PORT` variables into the pod, and one
+  // of them has already broken a real computer by shadowing a variable it reads.
+  enableServiceLinks: false,
+  restartPolicy: "Never",
+  securityContext: {
+    runAsUser: COMPUTER_UID,
+    runAsGroup: COMPUTER_GID,
+    runAsNonRoot: true,
+    seccompProfile: { type: "RuntimeDefault" },
+  },
+} as const;
+
+const HARDENED_CONTAINER = {
+  allowPrivilegeEscalation: false,
+  capabilities: { drop: ["ALL"] },
+};
 
 export interface PodMount {
   mountPath: string;
@@ -76,18 +119,8 @@ export function computerPod(input: {
       annotations: input.annotations,
     },
     spec: {
-      automountServiceAccountToken: false,
-      // Services in the namespace would otherwise inject `<NAME>_PORT` variables into the computer,
-      // and one of them has already broken a real computer by shadowing a variable it reads.
-      enableServiceLinks: false,
-      restartPolicy: "Never",
+      ...HARDENED_POD,
       terminationGracePeriodSeconds: STOP_GRACE_SECONDS,
-      securityContext: {
-        runAsUser: COMPUTER_UID,
-        runAsGroup: COMPUTER_GID,
-        runAsNonRoot: true,
-        seccompProfile: { type: "RuntimeDefault" },
-      },
       containers: [
         {
           name: CONTAINER,
@@ -114,10 +147,7 @@ export function computerPod(input: {
             requests: { memory: "2Gi", cpu: "1" },
             limits: input.limits,
           },
-          securityContext: {
-            allowPrivilegeEscalation: false,
-            capabilities: { drop: ["ALL"] },
-          },
+          securityContext: HARDENED_CONTAINER,
           volumeMounts: [
             ...input.mounts.map((mount) => ({ name: "data", ...mount })),
             { name: "shm", mountPath: "/dev/shm" },
@@ -128,6 +158,56 @@ export function computerPod(input: {
         { name: "data", persistentVolumeClaim: { claimName: input.dataClaim } },
         { name: "shm", emptyDir: { medium: "Memory", sizeLimit: "256Mi" } },
       ],
+    },
+  };
+}
+
+/**
+ * A worker pod: `sleep` until its TTL, with the guest started in it by exec. The pause container
+ * reaps the zombies, its exec's included, since the pod shares one process namespace.
+ */
+export function workerPod(input: {
+  name: string;
+  image: string;
+  attemptId: string;
+  ttlSeconds: number;
+  dataClaim: string;
+  mounts: PodMount[];
+}): V1Pod {
+  return {
+    apiVersion: "v1",
+    kind: "Pod",
+    metadata: {
+      name: input.name,
+      labels: {
+        "tangow.managed": "true",
+        "tangow.worker": "true",
+        "tangow.attempt": input.attemptId,
+      },
+    },
+    spec: {
+      ...HARDENED_POD,
+      shareProcessNamespace: true,
+      containers: [
+        {
+          name: WORKER_CONTAINER,
+          image: input.image,
+          imagePullPolicy: "Never",
+          command: ["sleep", String(input.ttlSeconds)],
+          workingDir: "/workspace",
+          env: [{ name: "HOME", value: "/home/user" }],
+          resources: {
+            requests: { memory: "512Mi", cpu: "250m" },
+            limits: {
+              memory: String(WORKER_LIMITS.Memory),
+              cpu: `${WORKER_LIMITS.NanoCpus / 1e6}m`,
+            },
+          },
+          securityContext: HARDENED_CONTAINER,
+          volumeMounts: input.mounts.map((mount) => ({ name: "data", ...mount })),
+        },
+      ],
+      volumes: [{ name: "data", persistentVolumeClaim: { claimName: input.dataClaim } }],
     },
   };
 }
@@ -171,6 +251,15 @@ function isNotFound(error: unknown) {
   return error instanceof ApiException && error.code === 404;
 }
 
+function isConflict(error: unknown) {
+  return error instanceof ApiException && error.code === 409;
+}
+
+function hasExited(pod: V1Pod) {
+  const phase = pod.status?.phase;
+  return phase === "Succeeded" || phase === "Failed" || Boolean(pod.metadata?.deletionTimestamp);
+}
+
 function apiMessage(error: unknown) {
   if (!(error instanceof ApiException)) return error instanceof Error ? error.message : `${error}`;
   const body = error.body as { message?: string } | string | undefined;
@@ -202,7 +291,8 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * The Kubernetes backend: a `tangow-bot-<id>` pod per computer, deleted on stop and created again
- * on resume, so a computer is running exactly while its pod is. Workers come in a later slice.
+ * on resume, so a computer is running exactly while its pod is. A worker is a `tangowworker<attempt>`
+ * pod, so a second ensure of the same attempt finds the first.
  */
 export function createKubernetesComputerRuntime(options: {
   namespace: string;
@@ -264,7 +354,7 @@ export function createKubernetesComputerRuntime(options: {
     }
     const deadline = Date.now() + DELETE_TIMEOUT_MS;
     while (await readPod(name)) {
-      if (Date.now() >= deadline) throw new Error(`computer pod ${name} is still terminating`);
+      if (Date.now() >= deadline) throw new Error(`pod ${name} is still terminating`);
       await delay(POLL_MS);
     }
   }
@@ -281,27 +371,38 @@ export function createKubernetesComputerRuntime(options: {
     };
   }
 
-  /** Running, then answering on its control port, within the readiness delay. */
-  async function waitUntilReady(name: string) {
+  /**
+   * Running, then for a computer answering on its control port, within the readiness delay. On
+   * failure the pod is deleted, best effort: its deterministic name repairs it on the next call.
+   */
+  async function waitUntilReady(name: string, kind: "computer" | "worker") {
     const deadline = Date.now() + SCREEN_READY_TIMEOUT_MS;
     let reason: string | undefined;
-    for (;;) {
-      const pod = await readPod(name);
-      if (!pod) throw new Error(`computer pod ${name} disappeared while starting`);
-      const phase = pod.status?.phase;
-      reason = podReason(pod) ?? reason;
-      if (phase === "Failed" || phase === "Succeeded") {
-        throw new Error(`computer pod ${name} exited while starting (${reason})`);
+    try {
+      for (;;) {
+        const pod = await readPod(name);
+        if (!pod) throw new Error(`${kind} pod ${name} disappeared while starting`);
+        const phase = pod.status?.phase;
+        reason = podReason(pod) ?? reason;
+        if (phase === "Failed" || phase === "Succeeded") {
+          throw new Error(`${kind} pod ${name} exited while starting (${reason})`);
+        }
+        if (phase === "Running" && kind === "worker") return;
+        const control = controlOf(pod);
+        if (phase === "Running" && control) {
+          if (await probeControl(control)) return;
+          reason = "the control service did not answer";
+        }
+        if (Date.now() >= deadline) {
+          throw new Error(`${kind} pod ${name} did not become ready in time (${reason})`);
+        }
+        await delay(POLL_MS);
       }
-      const control = controlOf(pod);
-      if (phase === "Running" && control) {
-        if (await probeControl(control)) return;
-        reason = "the control service did not answer";
-      }
-      if (Date.now() >= deadline) {
-        throw new Error(`computer pod ${name} did not become ready in time (${reason})`);
-      }
-      await delay(POLL_MS);
+    } catch (error) {
+      await pods
+        .deleteNamespacedPod({ name, namespace, gracePeriodSeconds: 0 })
+        .catch(() => undefined);
+      throw error;
     }
   }
 
@@ -381,14 +482,7 @@ export function createKubernetesComputerRuntime(options: {
       // The namespace quota refuses at admission: its message names what is exceeded.
       throw new Error(`computer pod ${name} was refused: ${apiMessage(error)}`);
     }
-    try {
-      await waitUntilReady(name);
-    } catch (error) {
-      await pods
-        .deleteNamespacedPod({ name, namespace, gracePeriodSeconds: 0 })
-        .catch(() => undefined);
-      throw error;
-    }
+    await waitUntilReady(name, "computer");
     return { id: name, releaseRef: COMPUTER_IMAGE, resumed: false };
   }
 
@@ -452,9 +546,101 @@ export function createKubernetesComputerRuntime(options: {
     };
   }
 
-  const workersNotImplemented = (): never => {
-    throw new Error("workers are not implemented on the Kubernetes backend yet");
-  };
+  function workerName(attemptId: string) {
+    if (!ATTEMPT_ID.test(attemptId)) throw new Error("worker attempt id must be a cuid");
+    return `tangowworker${attemptId}`;
+  }
+
+  async function ensureWorker(attempt: WorkerAttempt) {
+    const name = workerName(attempt.attemptId);
+    const body = workerPod({
+      name,
+      image: WORKER_IMAGE,
+      attemptId: attempt.attemptId,
+      ttlSeconds: attempt.ttlSeconds,
+      dataClaim,
+      mounts: workerMounts(attempt.mounts, dataDir, undefined).map((mount) => ({
+        mountPath: mount.target,
+        subPath:
+          "bind" in mount.source ? path.relative(dataDir, mount.source.bind) : mount.source.subpath,
+        readOnly: mount.readOnly,
+      })),
+    });
+    const create = () =>
+      pods.createNamespacedPod({ namespace, body }).catch((error: unknown) => {
+        if (isConflict(error)) return undefined;
+        throw new Error(`worker pod ${name} was refused: ${apiMessage(error)}`);
+      });
+    // A conflict is the attempt's pod: a live one is the answer, an exited one is replaced.
+    if (!(await create())) {
+      const existing = await readPod(name);
+      if (!existing || hasExited(existing)) {
+        await deletePod(name, 0, () => undefined);
+        if (!(await create())) throw new Error(`worker pod ${name} is being created elsewhere`);
+      }
+    }
+    await waitUntilReady(name, "worker");
+    return { id: name };
+  }
+
+  async function destroyWorker(attemptId: string) {
+    let destroyed = true;
+    // The controller frees the volumes' writer leases on this answer: it waits for the pod to go.
+    await deletePod(workerName(attemptId), 0, () => {
+      destroyed = false;
+    });
+    return { destroyed };
+  }
+
+  async function openGuest(id: string, capability: string): Promise<WorkerGuest | undefined> {
+    const pod = await readPod(id);
+    if (pod?.metadata?.labels?.["tangow.worker"] !== "true") return undefined;
+    const attemptId = pod.metadata.labels["tangow.attempt"];
+    const stdin = new PassThrough();
+    stdin.write(`${capability}\n`);
+    const stdout = new PassThrough();
+    let stderr = "";
+    const stderrTail = new Writable({
+      write(chunk: Buffer, _encoding, done) {
+        stderr = (stderr + chunk.toString("utf8")).slice(-GUEST_STDERR_TAIL_CHARS);
+        done();
+      },
+    });
+    let status: V1Status | undefined;
+    const connection = await podExec.exec(
+      namespace,
+      id,
+      WORKER_CONTAINER,
+      GUEST_COMMAND,
+      stdout,
+      stderrTail,
+      stdin,
+      false,
+      (received) => {
+        status = received;
+      },
+    );
+    connection.addEventListener("close", () => {
+      if (!stdout.writableEnded) stdout.end();
+      if (status?.status === "Success") return;
+      getLogger().info("kubernetes worker guest exited with an error", {
+        attemptId,
+        errorText: status?.message ?? "the exec ended without a status",
+        stderrTail: stderr,
+      });
+    });
+    return {
+      attach: (socket, head) => {
+        if (head.length > 0) stdin.write(head);
+        stdout.pipe(socket);
+        // The end of the socket is the guest's EOF: v5 carries it as stdin's close.
+        socket.pipe(stdin);
+        socket.on("error", () => stdin.end());
+        socket.on("close", () => stdin.end());
+      },
+      close: () => stdin.end(),
+    };
+  }
 
   return {
     release: async () => COMPUTER_IMAGE,
@@ -466,10 +652,6 @@ export function createKubernetesComputerRuntime(options: {
       }),
     removeComputer: (id) => deletePod(id, 0, () => undefined),
     exec,
-    workers: {
-      ensure: async () => workersNotImplemented(),
-      destroy: async () => workersNotImplemented(),
-      openGuest: async () => workersNotImplemented(),
-    },
+    workers: { ensure: ensureWorker, destroy: destroyWorker, openGuest },
   };
 }

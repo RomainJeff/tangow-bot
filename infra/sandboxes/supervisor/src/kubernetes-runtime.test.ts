@@ -1,5 +1,6 @@
 import { chmodSync, mkdirSync, rmSync } from "node:fs";
 import type { Readable } from "node:stream";
+import { duplexPair } from "node:stream";
 import type { V1Pod, V1Status } from "@kubernetes/client-node";
 import { ApiException } from "@kubernetes/client-node";
 import { resolveSupervisorToken } from "@tangow/core";
@@ -18,6 +19,7 @@ import {
   computerPod,
   createKubernetesComputerRuntime,
   execInEnvelope,
+  workerPod,
 } from "./kubernetes-runtime.js";
 
 const dataDir = process.env.DATA_DIR!;
@@ -419,6 +421,149 @@ describe("Kubernetes computers", () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+});
+
+describe("worker pod", () => {
+  it("is hardened, shares its process namespace, and mounts the volumes by subPath", () => {
+    expect(
+      workerPod({
+        name: "tangowworkerc1",
+        image: "tangow/worker@sha256:abc",
+        attemptId: "c1",
+        ttlSeconds: 3600,
+        dataClaim: "data",
+        mounts: [{ mountPath: "/workspace/repo", subPath: "volumes/tangow-v1", readOnly: true }],
+      }),
+    ).toEqual({
+      apiVersion: "v1",
+      kind: "Pod",
+      metadata: {
+        name: "tangowworkerc1",
+        labels: { "tangow.managed": "true", "tangow.worker": "true", "tangow.attempt": "c1" },
+      },
+      spec: {
+        automountServiceAccountToken: false,
+        enableServiceLinks: false,
+        restartPolicy: "Never",
+        shareProcessNamespace: true,
+        securityContext: {
+          runAsUser: 1000,
+          runAsGroup: 1000,
+          runAsNonRoot: true,
+          seccompProfile: { type: "RuntimeDefault" },
+        },
+        containers: [
+          {
+            name: "worker",
+            image: "tangow/worker@sha256:abc",
+            imagePullPolicy: "Never",
+            command: ["sleep", "3600"],
+            workingDir: "/workspace",
+            env: [{ name: "HOME", value: "/home/user" }],
+            resources: {
+              requests: { memory: "512Mi", cpu: "250m" },
+              limits: { memory: "1073741824", cpu: "1000m" },
+            },
+            securityContext: {
+              allowPrivilegeEscalation: false,
+              capabilities: { drop: ["ALL"] },
+            },
+            volumeMounts: [
+              {
+                name: "data",
+                mountPath: "/workspace/repo",
+                subPath: "volumes/tangow-v1",
+                readOnly: true,
+              },
+            ],
+          },
+        ],
+        volumes: [{ name: "data", persistentVolumeClaim: { claimName: "data" } }],
+      },
+    });
+  });
+});
+
+describe("Kubernetes workers", () => {
+  const attemptId = `c${"a1".repeat(12)}`;
+  const name = `tangowworker${attemptId}`;
+  const ensure = (app: ReturnType<typeof kubernetes>["app"], id = attemptId) =>
+    settle(
+      app.request("/workers", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          attemptId: id,
+          ttlSeconds: 600,
+          mounts: [{ volume: "tangow-v1", path: "/workspace/repo", readOnly: false }],
+        }),
+      }),
+    );
+
+  it("keeps one pod per attempt, and destroy answers once none is left", async () => {
+    const { app, pods, state } = kubernetes();
+
+    expect(await (await ensure(app)).json()).toEqual({ id: name });
+    expect(await (await ensure(app)).json()).toEqual({ id: name });
+    expect([...pods.keys()]).toEqual([name]);
+    expect(pods.get(name)!.spec!.containers[0]!.volumeMounts).toEqual([
+      { name: "data", mountPath: "/workspace/repo", subPath: "volumes/tangow-v1", readOnly: false },
+    ]);
+
+    const destroyed = await settle(
+      app.request(`/workers?attempt=${attemptId}`, { method: "DELETE", headers }),
+    );
+    expect(await destroyed.json()).toEqual({ destroyed: true });
+    expect(state.deletes).toEqual([{ name, grace: 0 }]);
+    expect(pods.size).toBe(0);
+  });
+
+  it("replaces a pod that has exited", async () => {
+    const { app, pods, state } = kubernetes();
+    await ensure(app);
+    pods.get(name)!.status = { phase: "Succeeded" };
+
+    expect(await (await ensure(app)).json()).toEqual({ id: name });
+
+    expect(state.deletes).toEqual([{ name, grace: 0 }]);
+    expect(pods.get(name)!.status!.phase).toBe("Running");
+  });
+
+  it("refuses an attempt id that is not a cuid, without creating a pod", async () => {
+    const { app, pods } = kubernetes();
+
+    const response = await ensure(app, "Attempt_1");
+
+    expect(response.status).toBe(500);
+    expect(((await response.json()) as { error: string }).error).toContain("cuid");
+    expect(pods.size).toBe(0);
+  });
+
+  it("hands the guest its capability on stdin, relays the socket, and ends it on EOF", async () => {
+    const { app, runtime, state } = kubernetes();
+    await ensure(app);
+
+    const guest = await runtime.workers.openGuest(name, "rkw1.claims.mac");
+    const [client, server] = duplexPair();
+    const received: Buffer[] = [];
+    client.on("data", (chunk: Buffer) => received.push(chunk));
+    const ended = new Promise((resolve) => client.on("end", resolve));
+    guest!.attach(server, Buffer.from("head;"));
+    client.end("frame");
+    await ended;
+
+    const call = state.execs.at(-1)!;
+    expect(call.command).toEqual([
+      "sh",
+      "-c",
+      'IFS= read -r TANGOW_WORKER_CAPABILITY && export TANGOW_WORKER_CAPABILITY && exec node "$1"',
+      "sh",
+      "/opt/tangow/agent-run-worker.mjs",
+    ]);
+    expect(call.stdin.toString()).toBe("rkw1.claims.mac\nhead;frame");
+    expect(call.stdinEnded).toBe(true);
+    expect(Buffer.concat(received).toString()).toBe("done");
   });
 });
 
