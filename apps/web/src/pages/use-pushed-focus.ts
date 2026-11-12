@@ -1,4 +1,5 @@
-import { type RefObject, useEffect, useRef } from "react";
+import type { RefObject } from "react";
+import { useEffect, useRef } from "react";
 
 /**
  * Focus follows a pushed page: onto its back button when a section opens, back to
