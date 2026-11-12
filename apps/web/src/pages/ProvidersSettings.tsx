@@ -1,15 +1,33 @@
 import { Plural, Trans, useLingui } from "@lingui/react/macro";
 import type { VoiceCatalogEntry, VoiceCredential } from "@tangow/contracts";
 import { Button, Field, FieldLabel, Input } from "@tangow/ui-web";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { localizedProviderHint } from "../lib/localized-provider-hint";
 import { rpc } from "../lib/rpc";
 import { ModelDetail } from "./model-settings/model-detail";
 import { useModelSettings } from "./model-settings/use-model-settings";
 
-/** Model and voice keys belong to the account: the same keys serve every space. */
-export function ProvidersSettings({ onBusyChange }: { onBusyChange?: (busy: boolean) => void }) {
+/** A provider pushed over the list at phone width: `key` names the row that opened it. */
+export type ProviderDetail = { key: string; title: string };
+
+/**
+ * Model and voice keys belong to the account: the same keys serve every space.
+ * When `stacked` (phone width) the list and the chosen provider are separate pages,
+ * and the caller owns which one shows through `detailOpen`.
+ */
+export function ProvidersSettings({
+  onBusyChange,
+  stacked = false,
+  detailOpen = false,
+  onOpenDetail,
+}: {
+  onBusyChange?: (busy: boolean) => void;
+  stacked?: boolean;
+  detailOpen?: boolean;
+  onOpenDetail?: (detail: ProviderDetail) => void;
+}) {
   const { t } = useLingui();
+  const rootRef = useRef<HTMLDivElement>(null);
   const settings = useModelSettings();
   const { providerQuery, setProviderQuery, filteredGroups, credentials, provider, chooseProvider } =
     settings;
@@ -24,6 +42,10 @@ export function ProvidersSettings({ onBusyChange }: { onBusyChange?: (busy: bool
   const [notice, setNotice] = useState<string | null>(null);
 
   const busy = pending !== null;
+
+  useLayoutEffect(() => {
+    if (stacked && rootRef.current) rootRef.current.scrollTop = 0;
+  }, [stacked, detailOpen]);
 
   useEffect(() => {
     return () => onBusyChange?.(false);
@@ -91,15 +113,19 @@ export function ProvidersSettings({ onBusyChange }: { onBusyChange?: (busy: bool
 
   const rowClass = (selected: boolean) =>
     `flex w-full items-center gap-3 border-b border-border px-3.5 py-3 text-start transition-colors last:border-0 disabled:pointer-events-none disabled:opacity-50 ${
-      selected ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/60"
+      selected && !stacked ? "bg-sidebar-accent" : "hover:bg-sidebar-accent/60"
     }`;
 
   return (
     <div
+      ref={rootRef}
       data-testid="providers-settings"
-      className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 py-6 sm:px-8 md:flex-row md:overflow-hidden"
+      className="rk-scroll flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 py-6 sm:px-8 md:flex-row md:overflow-hidden"
     >
-      <div className="flex shrink-0 flex-col md:min-h-0 md:w-[310px]">
+      <div
+        hidden={stacked && detailOpen}
+        className="flex shrink-0 flex-col md:min-h-0 md:w-[310px]"
+      >
         <label className="sr-only" htmlFor="model-provider-search">
           <Trans>Search providers</Trans>
         </label>
@@ -115,7 +141,7 @@ export function ProvidersSettings({ onBusyChange }: { onBusyChange?: (busy: bool
             <div className="mb-2 text-[13.5px] text-muted-foreground">
               <Trans>Models</Trans>
             </div>
-            <div className="rk-scroll max-h-[240px] overflow-y-auto rounded-card bg-group shadow-group md:max-h-64">
+            <div className="rk-scroll rounded-card bg-group shadow-group md:max-h-64 md:overflow-y-auto">
               {filteredGroups.length ? (
                 filteredGroups.map((group) => {
                   const connected = credentials.some((entry) => entry.provider === group.id);
@@ -123,10 +149,12 @@ export function ProvidersSettings({ onBusyChange }: { onBusyChange?: (busy: bool
                     <button
                       key={group.id}
                       type="button"
+                      data-opens={`model:${group.id}`}
                       disabled={busy}
                       onClick={() => {
                         setKind("model");
                         chooseProvider(group.id);
+                        onOpenDetail?.({ key: `model:${group.id}`, title: group.name });
                       }}
                       className={rowClass(kind === "model" && group.id === provider)}
                     >
@@ -167,6 +195,7 @@ export function ProvidersSettings({ onBusyChange }: { onBusyChange?: (busy: bool
                     <button
                       key={entry.id}
                       type="button"
+                      data-opens={`voice:${entry.id}`}
                       disabled={busy}
                       onClick={() => {
                         settings.cancelOAuthAttempt();
@@ -175,6 +204,7 @@ export function ProvidersSettings({ onBusyChange }: { onBusyChange?: (busy: bool
                         setApiKey("");
                         setError(null);
                         setNotice(null);
+                        onOpenDetail?.({ key: `voice:${entry.id}`, title: entry.name });
                       }}
                       className={rowClass(kind === "voice" && entry.id === voiceProvider)}
                     >
@@ -204,10 +234,10 @@ export function ProvidersSettings({ onBusyChange }: { onBusyChange?: (busy: bool
         </div>
       </div>
 
-      {kind === "model" ? (
+      {stacked && !detailOpen ? null : kind === "model" ? (
         <ModelDetail settings={settings} />
       ) : (
-        <div className="rk-scroll min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <div className="rk-scroll min-w-0 md:min-h-0 md:flex-1 md:overflow-y-auto">
           {error ? <p className="mb-4 text-sm text-destructive">{error}</p> : null}
           {notice ? <p className="mb-4 text-sm text-success">{notice}</p> : null}
           {selectedVoice ? (

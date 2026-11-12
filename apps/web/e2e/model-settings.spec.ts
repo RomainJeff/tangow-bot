@@ -184,7 +184,9 @@ test("connects to and lists an OpenAI-compatible endpoint", async ({ page }, tes
   }
 });
 
-test("model settings connect, replace, and cancel provider authentication", async ({ page }) => {
+test("model settings connect, replace, and cancel provider authentication", async ({
+  page,
+}, testInfo) => {
   const stamp = Date.now();
   const userName = `Models ${stamp}`;
   await signup(page, `models-${stamp}@tangow.test`, "password12", userName);
@@ -202,6 +204,7 @@ test("model settings connect, replace, and cancel provider authentication", asyn
   );
   const apiKeyInput = page.getByLabel("API key");
   await expect(apiKeyInput).toHaveAttribute("autocomplete", "new-password");
+  await captureScreenshot(page, testInfo, "desktop-provider-detail");
   await apiKeyInput.fill("fake-scripted-key-one");
   await page.getByRole("button", { name: "Connect API key" }).click();
   await expect(page.getByText(/Connected and using Scripted runtime/)).toBeVisible();
