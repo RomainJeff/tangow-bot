@@ -259,7 +259,7 @@ export function createComputerSession(runtime: ComputerRuntime) {
 
 export type ComputerSession = ReturnType<typeof createComputerSession>;
 
-const SCREEN_READY_TIMEOUT_MS = 45_000;
+export const SCREEN_READY_TIMEOUT_MS = 45_000;
 
 // Docker publishes a container's port mapping (or assigns its internal IP)
 // almost immediately on start, well before the process inside the container
