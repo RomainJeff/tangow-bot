@@ -59,7 +59,7 @@ function DialogContent({
         className={cn(
           "fixed top-1/2 left-1/2 z-50 grid w-full grid-cols-1 max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-block bg-sheet p-4 text-sm text-foreground shadow-sheet duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           variant === "window" &&
-            "flex flex-col gap-0 overflow-hidden p-0 max-sm:inset-0 max-sm:h-full max-sm:max-h-none max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:bg-background max-sm:shadow-none",
+            "flex flex-col gap-0 overflow-hidden p-0 max-md:inset-0 max-md:h-full! max-md:max-h-none! max-md:w-full! max-md:max-w-none! max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none max-md:bg-background max-md:shadow-none",
           className,
         )}
         {...props}

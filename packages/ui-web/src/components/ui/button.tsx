@@ -55,6 +55,12 @@ const buttonVariants = cva(
         call: "rk-press-round size-call-button",
       },
     },
+    compoundVariants: [
+      {
+        size: ["icon", "icon-xs", "icon-sm", "icon-lg", "roundIcon", "roundIconSm"],
+        className: "rk-tap",
+      },
+    ],
     defaultVariants: {
       variant: "default",
       size: "default",
