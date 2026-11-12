@@ -2,7 +2,6 @@ import { useLingui } from "@lingui/react/macro";
 import type { AvatarStyle, ComputerListItem, SpaceMemoryConfig } from "@tangow/contracts";
 import {
   Button,
-  cn,
   Dialog,
   DialogClose,
   DialogContent,
@@ -29,7 +28,8 @@ import {
   Volume2,
   XIcon,
 } from "lucide-react";
-import { type ComponentType, type ReactNode, useEffect, useId, useRef, useState } from "react";
+import type { ComponentType, ReactNode } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { rpc } from "../lib/rpc";
 import { useMediaQuery } from "../lib/use-media-query";
 import { ProfileSettingsPanels, UpdatesSettingsPanel } from "./AccountSettingsOverlay";
@@ -39,7 +39,8 @@ import { ComputerSettingsPanel } from "./ComputerSettingsPanel";
 import { DecisionModelSettingsPanel } from "./DecisionModelSettingsPanel";
 import { MemorySettingsOverlay } from "./MemorySettingsOverlay";
 import { ModelSettingsOverlay } from "./ModelSettingsOverlay";
-import { type ProviderDetail, ProvidersSettings } from "./ProvidersSettings";
+import type { ProviderDetail } from "./ProvidersSettings";
+import { ProvidersSettings } from "./ProvidersSettings";
 import { SpaceGeneralSettings } from "./SpaceGeneralSettings";
 import {
   ACCOUNT_SETTINGS_SECTIONS,
@@ -202,7 +203,7 @@ export function SettingsOverlay({
     <DialogClose
       aria-label={closeLabel}
       disabled={panelBusy}
-      render={<Button variant="ghost" size="icon-sm" />}
+      render={<Button variant="ghost" size="icon-sm" className="ms-auto" />}
     >
       <XIcon />
     </DialogClose>
@@ -275,12 +276,7 @@ export function SettingsOverlay({
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {phone ? (
-              <div
-                className={cn(
-                  "box-content flex h-capsule shrink-0 items-center justify-between gap-1 px-2.5 pt-2.5",
-                  !section && "justify-end",
-                )}
-              >
+              <div className="box-content flex h-capsule shrink-0 items-center justify-between gap-1 px-2.5 pt-2.5">
                 {providerDetail ? (
                   <BackCapsule
                     ref={providerBack}

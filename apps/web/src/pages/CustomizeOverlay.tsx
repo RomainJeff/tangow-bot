@@ -1,7 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import {
   Button,
-  cn,
   Dialog,
   DialogClose,
   DialogContent,
@@ -67,7 +66,7 @@ function CustomizeNav({
 /** At phone width the sections are a list the person picks from. */
 function CustomizeList({ onSelect }: { onSelect: (section: CustomizeSection) => void }) {
   return (
-    <div className="px-8 pt-5">
+    <div className="px-6 pt-5 sm:px-8">
       <SettingsGroup>
         {CUSTOMIZE_ITEMS.map(({ id, label, Icon }) => (
           <SettingRow
@@ -122,6 +121,7 @@ export function CustomizeOverlay({
         <Button
           variant="ghost"
           size="icon-sm"
+          className="ms-auto"
           aria-label={
             section === "integrations"
               ? t`Close integrations`
@@ -152,12 +152,7 @@ export function CustomizeOverlay({
         {section && !phone ? <CustomizeNav section={section} onSelect={selectSection} /> : null}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {phone ? (
-            <div
-              className={cn(
-                "box-content flex h-capsule shrink-0 items-center justify-between gap-1 px-2.5 pt-2.5",
-                !section && "justify-end",
-              )}
-            >
+            <div className="box-content flex h-capsule shrink-0 items-center justify-between gap-1 px-2.5 pt-2.5">
               {section ? (
                 <BackCapsule ref={back} label={t`Customize`} onClick={() => setChosen(null)} />
               ) : null}
