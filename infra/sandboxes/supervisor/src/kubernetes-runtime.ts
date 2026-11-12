@@ -426,9 +426,13 @@ export function createKubernetesComputerRuntime(options: {
       await new Promise<void>((resolve, reject) => {
         socket.addEventListener("close", () => resolve());
         onAbort = () => {
-          stdin?.end();
-          socket.close();
+          // Settle first: closing the socket may report `close` at once.
           reject(signal?.reason ?? new Error("command cancelled"));
+          // The client sends stdin's v5 close frame on `end`; the socket closes after it.
+          if (stdin) {
+            stdin.once("end", () => socket.close());
+            stdin.end();
+          } else socket.close();
         };
         signal?.addEventListener("abort", onAbort, { once: true });
         if (signal?.aborted) onAbort();

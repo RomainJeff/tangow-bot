@@ -34,6 +34,7 @@ interface ExecCall {
   pod: string;
   command: string[];
   stdin: Buffer;
+  stdinEnded: boolean;
 }
 
 /** The few pod calls the backend makes, kept in memory, plus exec and the control probe. */
@@ -113,7 +114,12 @@ function fakeCluster() {
         onStatus,
       ) => {
         if (!pods.has(pod)) throw new Error(`pods "${pod}" not found`);
-        const call: ExecCall = { pod, command: command as string[], stdin: Buffer.alloc(0) };
+        const call: ExecCall = {
+          pod,
+          command: command as string[],
+          stdin: Buffer.alloc(0),
+          stdinEnded: false,
+        };
         state.execs.push(call);
         const socket = new EventTarget() as EventTarget & { close(): void };
         socket.close = () => socket.dispatchEvent(new Event("close"));
@@ -134,7 +140,10 @@ function fakeCluster() {
           (stdin as Readable).on("data", (chunk: Buffer) => {
             call.stdin = Buffer.concat([call.stdin, chunk]);
           });
-          (stdin as Readable).on("end", finish);
+          (stdin as Readable).on("end", () => {
+            call.stdinEnded = true;
+            finish();
+          });
         } else setImmediate(finish);
         return socket;
       },
@@ -377,6 +386,30 @@ describe("Kubernetes computers", () => {
       body: JSON.stringify({ argv: ["false"] }),
     });
     expect(await ran.json()).toMatchObject({ code: 3 });
+  });
+
+  it("closes stdin, rejects with the signal's reason, and drops its listener on abort", async () => {
+    const { provision, runtime, state } = kubernetes();
+    await provision();
+    const controller = new AbortController();
+    const added = vi.spyOn(controller.signal, "addEventListener");
+    const removed = vi.spyOn(controller.signal, "removeEventListener");
+
+    const running = runtime.exec("tangow-bot-bot1", ["sleep", "60"], {
+      cwd: "/home/tangow",
+      env: [],
+      signal: controller.signal,
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    const reason = new Error("cancelled by the caller");
+    controller.abort(reason);
+
+    await expect(running).rejects.toBe(reason);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(state.execs.at(-1)!.stdinEnded).toBe(true);
+    const listener = added.mock.calls.find(([type]) => type === "abort")?.[1];
+    expect(listener).toBeDefined();
+    expect(removed).toHaveBeenCalledWith("abort", listener);
   });
 
   it("refuses to start with a per-space computer cap", () => {
