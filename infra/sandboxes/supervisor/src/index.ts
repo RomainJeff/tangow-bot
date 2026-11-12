@@ -23,9 +23,11 @@ import {
   COMPUTER_IMAGE,
   computerResourceLimits,
   resolveSpaceComputerLimit,
+  resolveSupervisorBackend,
   screenPorts,
 } from "./computer-spec.js";
 import { createDockerComputerRuntime } from "./docker-runtime.js";
+import { createKubernetesComputerRuntime } from "./kubernetes-runtime.js";
 import { syncManagedSkills } from "./managed-skills.js";
 import { registerScreenRoutes } from "./screen-routes.js";
 import {
@@ -446,7 +448,25 @@ function assertBotHomePath(homePath: string, botId: string) {
   }
 }
 
-const supervisor = createSupervisor(createDockerComputerRuntime({ dataDir, computerContext }));
+function requiredSetting(name: string) {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is required with SUPERVISOR_BACKEND=kubernetes`);
+  return value;
+}
+
+/** Docker by default; Kubernetes reaches its cluster from inside it, through its ServiceAccount. */
+function createComputerRuntime(): ComputerRuntime {
+  if (resolveSupervisorBackend(process.env.SUPERVISOR_BACKEND) === "docker") {
+    return createDockerComputerRuntime({ dataDir, computerContext });
+  }
+  return createKubernetesComputerRuntime({
+    namespace: requiredSetting("SUPERVISOR_KUBERNETES_NAMESPACE"),
+    dataClaim: requiredSetting("SUPERVISOR_KUBERNETES_DATA_CLAIM"),
+    dataDir,
+  });
+}
+
+const supervisor = createSupervisor(createComputerRuntime());
 export const supervisorApp = supervisor.app;
 export const upgradeWorkerGuest = supervisor.upgradeWorkerGuest;
 

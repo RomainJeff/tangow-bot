@@ -137,6 +137,13 @@ export function computerResourceLimits() {
   };
 }
 
+/** Where computers run. Read once at startup: an unknown value stops the supervisor. */
+export function resolveSupervisorBackend(value: string | undefined): "docker" | "kubernetes" {
+  if (!value || value === "docker") return "docker";
+  if (value === "kubernetes") return value;
+  throw new Error(`Unsupported SUPERVISOR_BACKEND value: ${value} (use docker or kubernetes)`);
+}
+
 export function resolveScreenNetworkMode(value: string | undefined): ScreenNetworkMode {
   if (!value || value === "published") return "published";
   if (value === "internal" || value === "isolated") return value;
