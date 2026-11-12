@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
+- In a phone browser, Settings and Customize now open on a list of sections, each opening on its own page with a back button, instead of a sliding row of tabs above the title, and the bot page returns to the chat with Chat in place of its close button.
 - In a phone browser, buttons, menus and fields are now sized for a finger: icon buttons take a 44-point tap without stealing their neighbour's, menu rows are taller, settings windows fill the screen up to tablet width, and tapping a field no longer zooms the page.
 
 ### 2026-11-11

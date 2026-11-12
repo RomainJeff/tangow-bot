@@ -16,7 +16,7 @@ export function useShellOverlays(sessionUser: unknown, spaceId: string | undefin
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [mcpOpen, setMcpOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsSection, setSettingsSection] = useState<SettingsSection>("profile");
+  const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
   const [messagingSettingsOpen, setMessagingSettingsOpen] = useState(false);
   const [messagingSurfaceEnabled, setMessagingSurfaceEnabled] = useState(false);
   const [messagingProviders, setMessagingProviders] = useState<string[]>([]);
@@ -129,7 +129,7 @@ export function useShellOverlays(sessionUser: unknown, spaceId: string | undefin
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  function openSettings(section: SettingsSection = "profile") {
+  function openSettings(section: SettingsSection | null = null) {
     setSettingsSection(section);
     setSettingsOpen(true);
   }
