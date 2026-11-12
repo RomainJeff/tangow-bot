@@ -148,7 +148,7 @@ describe("mobile computer keyboard", () => {
     const dockerfile = readFileSync(path.join(root, "Dockerfile"), "utf8");
     const embed = readFileSync(path.join(root, "embed.html"), "utf8");
     const start = readFileSync(path.join(root, "start.sh"), "utf8");
-    const supervisor = readFileSync(path.join(import.meta.dirname, "index.ts"), "utf8");
+    const supervisor = readFileSync(path.join(import.meta.dirname, "docker-runtime.ts"), "utf8");
     expect(dockerfile).toMatch(/mobile-keyboard\.js/);
     expect(embed).toMatch(/attachMobileKeyboard/);
     expect(embed).toMatch(/mobile-keyboard-input/);
