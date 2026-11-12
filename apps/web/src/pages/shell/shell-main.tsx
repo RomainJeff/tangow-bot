@@ -3,11 +3,12 @@ import type { AgentSkillCatalogEntry } from "@tangow/contracts";
 import type { ComposerMention, SkillSourceBlock } from "@tangow/core";
 import { Button } from "@tangow/ui-web";
 import { Plus } from "lucide-react";
-import { lazy, Suspense, useCallback } from "react";
+import { lazy, Suspense, useCallback, useState } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import { dictation } from "../../lib/dictation";
 import { rpc } from "../../lib/rpc";
 import { Composer } from "./composer";
+import { useComposerFileDrop } from "./composer-attachments";
 import { botPageFor, threadJumpLocation } from "./layout";
 import { SessionView } from "./session-view";
 import { skillPageView } from "./skill-link";
@@ -80,6 +81,11 @@ export function ShellMain({
   const { activeSnapshot, view } = thread;
   const { openSettings, setPeerConversation, runView, setRunView } = overlays;
   const { setReplyTarget, setRewindArtifacts } = draft;
+  const [composerDictating, setComposerDictating] = useState(false);
+  const { draggingFiles, dropHandlers } = useComposerFileDrop({
+    disabled: recording || composerDictating || !(active || activeGroup),
+    onAttachmentPick: draft.onAttachmentPick,
+  });
   const openBot = useCallback(
     (id: string, messageId?: string) => navigate(threadJumpLocation({ botId: id, messageId })),
     [navigate],
@@ -136,8 +142,13 @@ export function ShellMain({
         data-testid="conversation-column"
         aria-hidden={callOpen || panelCoversColumn || undefined}
         inert={callOpen || panelCoversColumn}
-        className="flex min-h-0 flex-1 flex-col"
+        data-dragging={draggingFiles ? "files" : undefined}
+        {...dropHandlers}
+        className="relative flex min-h-0 flex-1 flex-col"
       >
+        {draggingFiles ? (
+          <div className="pointer-events-none absolute inset-0 z-40 bg-primary/5 ring-2 ring-ring ring-inset" />
+        ) : null}
         <ThreadHeader
           botsSidebarCollapsed={botsSidebarCollapsed}
           setBotsSidebarCollapsedPref={setBotsSidebarCollapsedPref}
@@ -281,6 +292,7 @@ export function ShellMain({
               mentionTargets={mentionTargets}
               agentSkills={agentSkills}
               recentWriting={thread.recentWriting}
+              onDictatingChange={setComposerDictating}
               onSlashOpen={refreshAgentSkills}
               chatSettings={inGroup || active?.isOwner !== false}
               onSlashAction={(action) => {

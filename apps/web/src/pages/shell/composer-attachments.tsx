@@ -48,7 +48,7 @@ export function useDraftLinkPreview(draft: string, previewLink: PreviewLink | un
   return { linkPreview, linkPreviewView, draftChange };
 }
 
-/** Files dragged onto the composer: the drop highlight and the hand-off to the attachment picker. */
+/** Files dragged onto the conversation: the drop highlight and the hand-off to the attachment picker. */
 export function useComposerFileDrop({
   disabled,
   onAttachmentPick,
@@ -59,7 +59,23 @@ export function useComposerFileDrop({
   const dragDepth = useRef(0);
   const [draggingFiles, setDraggingFiles] = useState(false);
 
-  function onDragEnter(event: DragEvent<HTMLFieldSetElement>) {
+  // A file let go outside the drop zone does nothing, instead of the browser opening it in
+  // place of the app.
+  useEffect(() => {
+    function refuse(event: globalThis.DragEvent) {
+      if (event.defaultPrevented || !isFileDrag(event.dataTransfer)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "none";
+    }
+    window.addEventListener("dragover", refuse);
+    window.addEventListener("drop", refuse);
+    return () => {
+      window.removeEventListener("dragover", refuse);
+      window.removeEventListener("drop", refuse);
+    };
+  }, []);
+
+  function onDragEnter(event: DragEvent<HTMLElement>) {
     const dataTransfer = event.dataTransfer;
     if (!isFileDrag(dataTransfer)) return;
     event.preventDefault();
@@ -72,7 +88,7 @@ export function useComposerFileDrop({
     setDraggingFiles(true);
   }
 
-  function onDragOver(event: DragEvent<HTMLFieldSetElement>) {
+  function onDragOver(event: DragEvent<HTMLElement>) {
     const dataTransfer = event.dataTransfer;
     if (!isFileDrag(dataTransfer)) return;
     event.preventDefault();
@@ -85,7 +101,7 @@ export function useComposerFileDrop({
     setDraggingFiles(true);
   }
 
-  function onDragLeave(event: DragEvent<HTMLFieldSetElement>) {
+  function onDragLeave(event: DragEvent<HTMLElement>) {
     if (!isFileDrag(event.dataTransfer)) return;
     if (disabled) {
       dragDepth.current = 0;
@@ -96,7 +112,7 @@ export function useComposerFileDrop({
     if (dragDepth.current === 0) setDraggingFiles(false);
   }
 
-  function onDrop(event: DragEvent<HTMLFieldSetElement>) {
+  function onDrop(event: DragEvent<HTMLElement>) {
     const dataTransfer = event.dataTransfer;
     if (!isFileDrag(dataTransfer)) return;
     event.preventDefault();
