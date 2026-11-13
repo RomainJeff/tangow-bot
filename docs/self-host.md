@@ -423,6 +423,11 @@ A service token is a single shared identity: per-user, per-group, and device-pos
 no longer distinguish who is connecting, and only the Tangow sign-in tells your users apart. Scope
 the policy to that one token, set the shortest workable token duration, and rotate it deliberately.
 
+Behind a cookie-based auth proxy (Cloudflare Access, oauth2-proxy), exempt `/novnc/session/` from
+it: the screen runs in an isolated frame that cannot send the proxy's cookie, and that path is
+guarded by a signed, expiring screen URL. Exempt only that prefix. The residual risk is that anyone
+holding a copied screen URL can open that screen until the URL expires.
+
 ### Desktop
 
 In the setup screen, paste the client ID and secret into the
