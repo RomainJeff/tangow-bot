@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
+- On web and desktop, a file dragged anywhere onto the conversation now joins the message as an attachment, not only when dropped on the message field, and a file let go elsewhere in the app is ignored instead of the browser opening it in place of Tangow.
 - When the computer service refuses to start a reply's or a routine's computer, the run now fails within seconds with the real reason, instead of after 15 minutes with an unrelated message.
 
 ### 2026-11-13
