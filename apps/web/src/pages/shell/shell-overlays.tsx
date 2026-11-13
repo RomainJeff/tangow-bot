@@ -542,7 +542,7 @@ export function ShellOverlays({
             onVoiceStatusMaybeChanged={voice.refreshVoiceStatus}
             onClose={() => {
               overlays.setSettingsOpen(false);
-              overlays.setSettingsSection("profile");
+              overlays.setSettingsSection(null);
             }}
           />
         ) : null}

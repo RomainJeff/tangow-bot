@@ -211,7 +211,7 @@ export function SidebarFooter({
               aria-label={t`Settings`}
               onClick={() => {
                 setMenuOpen(false);
-                openSettings("profile");
+                openSettings();
               }}
             >
               <Settings className="text-muted-foreground" strokeWidth={1.75} />

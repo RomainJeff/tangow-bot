@@ -3,7 +3,9 @@ import type { Bot, BotSection } from "@tangow/contracts";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -25,6 +27,8 @@ import {
   Trash2,
   UserPlus,
 } from "lucide-react";
+import { useMediaQuery } from "../lib/use-media-query";
+import { PHONE_MEDIA } from "./shell/layout";
 
 export type ContextMenuPosition = { x: number; y: number };
 
@@ -77,6 +81,35 @@ export function BotContextMenu({
   const { t } = useLingui();
   const manages = Boolean(onEdit || onShare || onDuplicate);
   const ends = Boolean(onClear || onArchive || onDelete || onLeave);
+  // A side submenu would open off a phone's screen, so there the targets sit in the menu itself.
+  const phone = useMediaQuery(PHONE_MEDIA);
+  const moveTargets = (
+    <>
+      {sections.map((section) => (
+        <DropdownMenuItem key={section.id} onClick={() => onMoveToSection(section.id)}>
+          <Folder />
+          <span dir="auto">{section.name}</span>
+          {bot.sectionId === section.id ? <Check className="ms-auto" /> : null}
+        </DropdownMenuItem>
+      ))}
+      <DropdownMenuItem onClick={() => onMoveToSection(null)}>
+        <Folder />
+        {t`Unassigned`}
+        {bot.sectionId === null ? <Check className="ms-auto" /> : null}
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem onClick={onCreateSection}>
+        <FolderPlus />
+        {t`New section`}
+      </DropdownMenuItem>
+      {bot.sectionId && onRenameSection ? (
+        <DropdownMenuItem onClick={() => onRenameSection(bot.sectionId!)}>
+          <Pencil />
+          {t`Rename section`}
+        </DropdownMenuItem>
+      ) : null}
+    </>
+  );
 
   return (
     <DropdownMenu
@@ -109,37 +142,26 @@ export function BotContextMenu({
               <Pin />
               {bot.pinned ? t`Unpin` : t`Pin`}
             </DropdownMenuItem>
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <Folder />
-                {t`Move to`}
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="max-h-[min(420px,calc(100vh-16px))] min-w-[180px] overflow-y-auto">
-                {sections.map((section) => (
-                  <DropdownMenuItem key={section.id} onClick={() => onMoveToSection(section.id)}>
-                    <Folder />
-                    <span dir="auto">{section.name}</span>
-                    {bot.sectionId === section.id ? <Check className="ms-auto" /> : null}
-                  </DropdownMenuItem>
-                ))}
-                <DropdownMenuItem onClick={() => onMoveToSection(null)}>
-                  <Folder />
-                  {t`Unassigned`}
-                  {bot.sectionId === null ? <Check className="ms-auto" /> : null}
-                </DropdownMenuItem>
+            {phone ? (
+              <>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={onCreateSection}>
-                  <FolderPlus />
-                  {t`New section`}
-                </DropdownMenuItem>
-                {bot.sectionId && onRenameSection ? (
-                  <DropdownMenuItem onClick={() => onRenameSection(bot.sectionId!)}>
-                    <Pencil />
-                    {t`Rename section`}
-                  </DropdownMenuItem>
-                ) : null}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>{t`Move to`}</DropdownMenuLabel>
+                  {moveTargets}
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+              </>
+            ) : (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <Folder />
+                  {t`Move to`}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="max-h-[min(420px,calc(100vh-16px))] min-w-[180px] overflow-y-auto">
+                  {moveTargets}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            )}
             <DropdownMenuItem onClick={onToggleUnread}>
               {bot.unread ? <BellDot /> : <Bell />}
               {bot.unread ? t`Mark as Read` : t`Mark as Unread`}

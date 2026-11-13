@@ -4,10 +4,13 @@ import { ACTIVE_RUN_STATUSES } from "@tangow/core";
 import { BotAvatar, Button, GroupAvatar } from "@tangow/ui-web";
 import { ChevronDown, Lock, MoreHorizontal } from "lucide-react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
+import { useMediaQuery } from "../../lib/use-media-query";
 import { userInitials } from "../../lib/user-initials";
 import { runStatusLabel } from "../ActivityList";
 import type { ContextMenuPosition } from "../BotContextMenu";
 import type { SidebarGroup } from "./layout";
+import { PHONE_MEDIA } from "./layout";
+import { useLongPress } from "./use-long-press";
 
 export type SidebarRosterProps = {
   sidebarGroups: SidebarGroup[];
@@ -67,6 +70,44 @@ export function SidebarRoster({
   userImage,
 }: SidebarRosterProps) {
   const { t } = useLingui();
+  const phone = useMediaQuery(PHONE_MEDIA);
+  const longPress = useLongPress();
+
+  const openGroupMenu = (
+    group: SidebarGroup,
+    target: HTMLElement,
+    position: ContextMenuPosition,
+  ): boolean => {
+    if (group.sectionId) {
+      // Prefer section rename over delete-space when both apply;
+      // the dedicated space-actions button still opens the space menu.
+      const sections =
+        group.spaceId === bootstrapMe?.spaceId
+          ? botSections
+          : (spaces.find((space) => space.id === group.spaceId)?.botSections ?? []);
+      const section = sections.find((item) => item.id === group.sectionId);
+      if (!section) return false;
+      sectionMenuAnchor.current = target;
+      setSectionMenu({ section, spaceId: group.spaceId, position });
+      return true;
+    }
+    if (!group.canDeleteSpace) return false;
+    spaceMenuAnchor.current = target;
+    setSpaceMenu({ id: group.spaceId, position });
+    return true;
+  };
+
+  const openChatMenu = (
+    item: SidebarGroup["bots"][number],
+    target: HTMLElement,
+    position: ContextMenuPosition,
+  ): boolean => {
+    if (item.chat.spaceId !== bootstrapMe?.spaceId) return false;
+    botMenuAnchor.current = target;
+    setBotMenu({ kind: item.kind, id: item.chat.id, position });
+    return true;
+  };
+
   return (
     <>
       {sidebarGroups.map((group) => {
@@ -80,7 +121,7 @@ export function SidebarRoster({
               <div className="flex items-center pt-2">
                 <button
                   type="button"
-                  className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-row px-2.5 py-1.5 text-label text-muted-foreground hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
+                  className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded-row px-2.5 py-1.5 text-label max-md:touch-callout-none max-md:select-none text-muted-foreground hover:bg-sidebar-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
                   onClick={() => {
                     if (group.emptySpaceId) {
                       openSpaceChat(group.emptySpaceId, "/onboarding");
@@ -88,37 +129,7 @@ export function SidebarRoster({
                     }
                     toggleSidebarSection(group.key);
                   }}
-                  onContextMenu={
-                    group.sectionId
-                      ? (event) => {
-                          event.preventDefault();
-                          // Prefer section rename over delete-space when both apply;
-                          // the dedicated space-actions button still opens the space menu.
-                          const sections =
-                            group.spaceId === bootstrapMe?.spaceId
-                              ? botSections
-                              : (spaces.find((space) => space.id === group.spaceId)?.botSections ??
-                                []);
-                          const section = sections.find((item) => item.id === group.sectionId);
-                          if (!section) return;
-                          sectionMenuAnchor.current = event.currentTarget;
-                          setSectionMenu({
-                            section,
-                            spaceId: group.spaceId,
-                            position: { x: event.clientX, y: event.clientY },
-                          });
-                        }
-                      : group.canDeleteSpace
-                        ? (event) => {
-                            event.preventDefault();
-                            spaceMenuAnchor.current = event.currentTarget;
-                            setSpaceMenu({
-                              id: group.spaceId,
-                              position: { x: event.clientX, y: event.clientY },
-                            });
-                          }
-                        : undefined
-                  }
+                  {...longPress((target, point) => openGroupMenu(group, target, point))}
                   aria-expanded={group.emptySpaceId ? undefined : !collapsed}
                   aria-label={
                     group.emptySpaceId
@@ -174,7 +185,7 @@ export function SidebarRoster({
                   <button
                     key={`${item.kind}:${item.chat.id}`}
                     type="button"
-                    draggable={item.kind === "bot"}
+                    draggable={item.kind === "bot" && !phone}
                     data-roster-bot-id={item.kind === "bot" ? item.chat.id : undefined}
                     aria-keyshortcuts={
                       item.kind === "bot" ? "Alt+ArrowUp Alt+ArrowDown" : undefined
@@ -221,18 +232,9 @@ export function SidebarRoster({
                         item.kind === "bot" ? `/app/${item.chat.id}` : `/app/g/${item.chat.id}`,
                       );
                     }}
-                    onContextMenu={(event) => {
-                      if (item.chat.spaceId !== bootstrapMe?.spaceId) return;
-                      event.preventDefault();
-                      botMenuAnchor.current = event.currentTarget;
-                      setBotMenu({
-                        kind: item.kind,
-                        id: item.chat.id,
-                        position: { x: event.clientX, y: event.clientY },
-                      });
-                    }}
-                    className={`flex w-full items-center gap-2.75 rounded-row px-2.5 py-2.25 text-start ${
-                      item.kind === "bot" ? "cursor-grab active:cursor-grabbing" : ""
+                    {...longPress((target, point) => openChatMenu(item, target, point))}
+                    className={`flex w-full items-center gap-2.75 rounded-row px-2.5 py-2.25 text-start max-md:touch-callout-none max-md:select-none ${
+                      item.kind === "bot" ? "md:cursor-grab md:active:cursor-grabbing" : ""
                     } ${selected ? "bg-sidebar-accent max-md:bg-transparent" : "hover:bg-sidebar-accent"}`}
                     style={{
                       opacity: item.kind === "bot" && draggedBotId === item.chat.id ? 0.55 : 1,

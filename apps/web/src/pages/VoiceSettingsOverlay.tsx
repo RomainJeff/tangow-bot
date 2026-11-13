@@ -147,13 +147,13 @@ export function VoiceSettingsOverlay({
         </div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden px-6 py-6 sm:px-8 md:flex-row">
+      <div className="rk-scroll flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 py-6 sm:px-8 md:flex-row md:overflow-hidden">
         {connectedCatalog.length > 1 ? (
           <div className="flex min-h-0 shrink-0 flex-col md:w-[280px]">
             <div className="mb-3 text-[13.5px] text-muted-foreground">
               <Trans>Providers</Trans>
             </div>
-            <div className="rk-scroll overflow-y-auto rounded-card bg-group shadow-group">
+            <div className="rk-scroll rounded-card bg-group shadow-group md:overflow-y-auto">
               {connectedCatalog.map((entry) => (
                 <button
                   key={entry.id}
@@ -192,7 +192,7 @@ export function VoiceSettingsOverlay({
           </div>
         ) : null}
 
-        <div className="rk-scroll min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <div className="rk-scroll min-w-0 md:min-h-0 md:flex-1 md:overflow-y-auto">
           {loading ? (
             <p className="text-sm text-muted-foreground">
               <Trans>Loading voice providers…</Trans>

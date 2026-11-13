@@ -188,6 +188,11 @@
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+/* iOS's long-press callout, on rows whose own long press opens a menu. */
+@utility touch-callout-none {
+  -webkit-touch-callout: none;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -294,6 +299,44 @@
 
   .rk-press-round:active {
     transform: scale(0.94);
+  }
+
+  /* Phone-width tap area: a 44px extension around a smaller icon button. It
+     never overlaps a sibling, so a button's own box always wins a tap. In a row
+     only the outer ends of the group extend sideways, in a column only the outer
+     ends extend up and down, and a positioned button extends all round. */
+  @media (width < 48rem) {
+    .rk-tap::after {
+      content: "";
+      position: absolute;
+      inset: calc(50% - var(--size-mobile-stack) / 2);
+    }
+
+    .rk-tap:not(.absolute, .fixed, .sticky) {
+      position: relative;
+    }
+
+    .rk-tap:not(.absolute, .fixed, .sticky):not(:first-child)::after {
+      inset-inline-start: 0;
+    }
+
+    .rk-tap:not(.absolute, .fixed, .sticky):not(:last-child)::after {
+      inset-inline-end: 0;
+    }
+
+    :is(.flex-col, .flex-col-reverse) > .rk-tap:not(.absolute, .fixed, .sticky)::after {
+      inset: calc(50% - var(--size-mobile-stack) / 2);
+    }
+
+    :is(.flex-col, .flex-col-reverse)
+      > .rk-tap:not(.absolute, .fixed, .sticky):not(:first-child)::after {
+      inset-block-start: 0;
+    }
+
+    :is(.flex-col, .flex-col-reverse)
+      > .rk-tap:not(.absolute, .fixed, .sticky):not(:last-child)::after {
+      inset-block-end: 0;
+    }
   }
 
   /* An option tile is wide, so it settles less: 0.985. */

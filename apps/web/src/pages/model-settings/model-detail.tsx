@@ -65,7 +65,10 @@ export function ModelDetail({ settings }: { settings: ModelSettings }) {
   } = settings;
 
   return (
-    <div ref={detailScrollRef} className="rk-scroll min-h-0 min-w-0 flex-1 overflow-y-auto">
+    <div
+      ref={detailScrollRef}
+      className="rk-scroll min-w-0 md:min-h-0 md:flex-1 md:overflow-y-auto"
+    >
       {error ? <p className="mb-4 text-sm text-destructive">{error}</p> : null}
       {notice ? <p className="mb-4 text-sm text-success">{notice}</p> : null}
       {selected ? (

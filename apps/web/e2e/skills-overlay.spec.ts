@@ -39,12 +39,14 @@ test("skills overlay: user and built-in skills, search, desktop and phone", asyn
   await expect(overlay.getByRole("button", { name: /Daily standup/ })).toBeVisible();
   await captureScreenshot(page, testInfo, "91-skills-phone");
 
-  // Back to Integrations: still the same dialog, already loaded.
-  await page.getByTestId("customize-nav-integrations").click();
+  // Back to Integrations through the list: still the same dialog, already loaded.
+  await overlay.getByRole("button", { name: "Customize", exact: true }).click();
+  await overlay.getByTestId("customize-list-integrations").click();
   await expect(overlay.getByRole("heading", { name: "Integrations", exact: true })).toBeVisible();
   await expect(overlay).toHaveAttribute("data-e2e-mark", "kept");
   await expect(overlay.getByText("Loading integrations…")).toHaveCount(0);
-  await page.getByTestId("customize-nav-skills").click();
+  await overlay.getByRole("button", { name: "Customize", exact: true }).click();
+  await overlay.getByTestId("customize-list-skills").click();
 
   await overlay.getByLabel("Close skills").click();
   await expect(overlay).toHaveCount(0);

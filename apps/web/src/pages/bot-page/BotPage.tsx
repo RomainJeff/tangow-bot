@@ -16,7 +16,6 @@ import {
 import {
   Archive,
   ArchiveRestore,
-  ChevronLeft,
   Copy,
   Download,
   Eraser,
@@ -26,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { BackCapsule } from "../BackCapsule";
 import type { BotAction, BotCommands } from "../shell/bot-commands";
 import { type BotDetail, type BotPageView, type BotTab, detailOpener } from "../shell/layout";
 import { BotActivity } from "./BotActivity";
@@ -162,26 +162,23 @@ export function BotPage({
     >
       <div className="flex shrink-0 items-center justify-between gap-1 px-2.5 pt-2.5">
         {detail ? (
-          <Button
-            ref={backButton}
-            variant="tertiary"
-            size="capsule"
-            className="gap-1 ps-2"
-            onClick={back}
-          >
-            <ChevronLeft className="size-4 rtl:-scale-x-100" aria-hidden />
-            {tabLabels[view.tab]}
-          </Button>
+          <BackCapsule ref={backButton} label={tabLabels[view.tab]} onClick={back} />
         ) : (
-          <span />
+          <BackCapsule key="chat" label={t`Chat`} className="md:hidden" onClick={onClose} />
         )}
-        <div className="flex items-center gap-0.5">
+        <div className="ms-auto flex items-center gap-0.5">
           <MoreMenu
             bot={bot}
             archived={archived}
             onAction={(action) => commands.botAction(bot.id, action)}
           />
-          <Button variant="ghost" size="icon-sm" aria-label={t`Close panel`} onClick={onClose}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="max-md:hidden"
+            aria-label={t`Close panel`}
+            onClick={onClose}
+          >
             <X size={16} strokeWidth={1.8} />
           </Button>
         </div>

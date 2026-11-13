@@ -39,7 +39,9 @@ test("Providers connect a voice key, space Voice speaks a reply, and opens a cal
   await page.setViewportSize({ width: 390, height: 844 });
   await captureScreenshot(page, testInfo, "providers-voice-connected-phone");
 
-  await settings.getByTestId("settings-nav-voice").click();
+  await settings.getByRole("button", { name: "Providers", exact: true }).click();
+  await settings.getByRole("button", { name: "Settings", exact: true }).click();
+  await settings.getByTestId("settings-list-voice").click();
   const voiceSettings = settings.getByTestId("voice-settings");
   await expect(voiceSettings.getByLabel("Voice", { exact: true })).toBeVisible();
   await expect(voiceSettings.getByLabel("API key", { exact: true })).toHaveCount(0);

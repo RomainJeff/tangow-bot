@@ -202,10 +202,10 @@ test("header icons toggle the screen and the bot page; the page widens for long 
   await settings.click();
   await expect(panel).toHaveAttribute("data-panel", "closed");
 
-  // At phone width the page covers the thread and still closes from its own X.
+  // At phone width the page covers the thread and returns to it from its own back button.
   await page.setViewportSize({ width: 375, height: 720 });
   await settings.click();
   await expect(panel).toHaveAttribute("data-panel", "bot");
-  await expect(botPage.getByRole("button", { name: "Close panel" })).toBeInViewport();
+  await expect(botPage.getByRole("button", { name: "Chat", exact: true })).toBeInViewport();
   await captureScreenshot(page, testInfo, "bot-page-mobile");
 });

@@ -6,11 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### 2026-11-12
+### 2026-11-13
 
 #### Added
 
 - **Run bot computers and workers on Kubernetes.** A self-hosted server sets `SUPERVISOR_BACKEND=kubernetes`, and the supervisor starts each computer and each bot run as a pod in a dedicated namespace instead of a Docker container, with Docker and E2B still available. The namespace, storage, permissions and network it needs are in [Kubernetes computers](docs/self-host-kubernetes.md).
+
+#### Changed
+
+- In a phone browser, a long press on a bot, a group or a section now opens its menu, as a right click does on desktop, with the sections to move a bot to listed in the menu itself, and the bot picker's info buttons are now visible without hovering.
+
+### 2026-11-12
+
+#### Changed
+
+- In a phone browser, Settings and Customize now open on a list of sections, each opening on its own page with a back button, instead of a sliding row of tabs above the title, and the bot page returns to the chat with Chat in place of its close button.
+- In a phone browser, buttons, menus and fields are now sized for a finger: icon buttons take a 44-point tap without stealing their neighbour's, menu rows are taller, settings windows fill the screen up to tablet width, and tapping a field no longer zooms the page.
+- In a phone browser, choosing a provider in Settings now opens its setup on its own page with a Providers back button, where it used to stay out of sight below the list, and the provider, model and voice lists scroll with the page instead of in small boxes.
 
 ### 2026-11-11
 

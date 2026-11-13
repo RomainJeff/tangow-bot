@@ -209,7 +209,8 @@ export function ModelPicker({
         </span>
       </button>
       {open ? (
-        <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10">
+        // At phone width the list unfolds in the page, which stays the only scroller.
+        <div className="mt-2 overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 md:absolute md:inset-x-0 md:top-full md:z-20">
           <input
             ref={searchRef}
             type="text"
@@ -226,13 +227,13 @@ export function ModelPicker({
               setHighlightedIndex(0);
             }}
             onKeyDown={onSearchKeyDown}
-            className="w-full border-b border-border bg-transparent px-3 py-2.5 text-[13.5px] text-foreground outline-none placeholder:text-muted-foreground/80"
+            className="w-full border-b border-border bg-transparent px-3 py-2.5 text-base text-foreground outline-none placeholder:text-muted-foreground/80 md:text-[13.5px]"
           />
           <div
             id={listboxId}
             role="listbox"
             aria-label={t`Model options`}
-            className="rk-scroll max-h-64 overflow-y-auto py-1"
+            className="rk-scroll py-1 md:max-h-64 md:overflow-y-auto"
           >
             {groupRanges.map((group) => (
               <div key={group.name}>
@@ -299,7 +300,7 @@ function ModelOption({
       role="option"
       aria-selected={option.id === value}
       tabIndex={highlighted ? 0 : -1}
-      className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-start text-[13.5px] text-foreground outline-none hover:bg-accent focus-visible:bg-accent ${
+      className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-start text-[13.5px] text-foreground outline-none hover:bg-accent focus-visible:bg-accent max-md:min-h-mobile-stack ${
         highlighted || option.id === value ? "bg-accent" : ""
       }`}
       onClick={() => choose(index)}

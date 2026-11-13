@@ -290,7 +290,7 @@ export function ShellMain({
                   return;
                 }
                 if (action === "settings-general") {
-                  openSettings("profile");
+                  openSettings();
                   return;
                 }
                 if (action === "settings-usage") openSettings("usage");
