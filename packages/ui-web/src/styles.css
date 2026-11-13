@@ -188,6 +188,11 @@
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+/* iOS's long-press callout, on rows whose own long press opens a menu. */
+@utility touch-callout-none {
+  -webkit-touch-callout: none;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

@@ -64,6 +64,56 @@ async function startOnBotList(page: Page, email: string) {
   await page.waitForURL(/\/app$/);
 }
 
+/** A touch hold as iOS Safari reports it: no `contextmenu`, and a click once the finger lifts. */
+async function longPress(page: Page, target: Locator) {
+  const box = await target.boundingBox();
+  if (!box) throw new Error("longPress target has no bounding box");
+  const point = { clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 };
+  const touch = { pointerType: "touch", pointerId: 1, isPrimary: true, bubbles: true, ...point };
+  await target.dispatchEvent("pointerdown", touch);
+  await page.waitForTimeout(600);
+  await target.dispatchEvent("pointerup", touch);
+  await target.dispatchEvent("click", point);
+}
+
+test("on the phone bot list a long press opens a bot's menu, with Move to in the menu itself", async ({
+  page,
+}, testInfo) => {
+  await startOnBotList(page, `mobile-press-${Date.now()}@tangow.test`);
+  const list = page.getByTestId("bots-sidebar");
+  const bot = list.getByRole("button", { name: /^Chief/ });
+  const menu = page.getByRole("menu", { name: "Actions for Chief" });
+
+  // Dragging would fight the scroll and the hold, so the phone reorders from the keyboard only.
+  await expect(bot).toHaveAttribute("draggable", "false");
+  await expect(bot).toHaveCSS("user-select", "none");
+
+  await longPress(page, bot);
+  await expect(menu).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe("/app");
+  await expect(menu.getByRole("menuitem", { name: "Move to" })).toHaveCount(0);
+  await expect(menu.getByRole("menuitem", { name: "Unassigned" })).toBeVisible();
+  await captureScreenshot(page, testInfo, "mobile-bot-menu-long-press");
+
+  await menu.getByRole("menuitem", { name: "New section" }).click();
+  const dialog = page.getByRole("dialog", { name: "New section" });
+  await dialog.getByLabel("Name").fill("Projects");
+  await dialog.getByRole("button", { name: "Create" }).click();
+  const projects = list.locator('[data-sidebar-group^="section:"]');
+  await expect(projects).toContainText("Chief");
+
+  // A section's header opens its own menu the same way, without folding the section.
+  const header = list.getByRole("button", { name: "Collapse Projects" });
+  await longPress(page, header);
+  await expect(page.getByRole("menu", { name: "Actions for Projects" })).toBeVisible();
+  await expect(header).toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("Escape");
+
+  await longPress(page, bot);
+  await menu.getByRole("menuitem", { name: "Unassigned" }).click();
+  await expect(list.locator('[data-sidebar-group="unassigned"]')).toContainText("Chief");
+});
+
 async function openUserMenuEntry(page: Page, name: "Settings" | "Usage") {
   await page.getByTestId("user-menu-trigger").click();
   await page.getByRole("button", { name, exact: true }).click();
