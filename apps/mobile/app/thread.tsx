@@ -2767,11 +2767,10 @@ function Thread() {
               accessibilityRole="alert"
               style={{
                 marginTop: 12,
-                borderRadius: 14,
-                borderWidth: 1,
-                borderColor: tokens.border,
-                backgroundColor: tokens.card,
-                paddingHorizontal: 12,
+                minHeight: 44,
+                borderRadius: 22,
+                backgroundColor: hexWithAlpha(tokens.destructive, 0.08),
+                paddingHorizontal: 16,
                 paddingVertical: 10,
                 flexDirection: "row",
                 alignItems: "center",
@@ -2786,7 +2785,7 @@ function Thread() {
                   else if (snap?.run) setDismissedRunErrorId(snap.run.id);
                 }}
               >
-                <Text style={{ color: tokens.mutedForeground }}>✕</Text>
+                <Text style={{ color: tokens.destructive }}>✕</Text>
               </Pressable>
             </View>
           ) : null}
