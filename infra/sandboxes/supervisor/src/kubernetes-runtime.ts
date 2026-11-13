@@ -28,6 +28,7 @@ import {
   containerNameFor,
   resolveSpaceComputerLimit,
   volumeHomeLabels,
+  volumeHomeMatches,
   WORKER_GUEST_ENTRY,
   WORKER_IMAGE,
   WORKER_LIMITS,
@@ -48,6 +49,10 @@ const WORKER_CONTAINER = "worker";
 const ATTEMPT_ID = /^c[a-z0-9]{24}$/;
 /** How much of a guest's stderr is kept for the log, as the Docker backend does. */
 const GUEST_STDERR_TAIL_CHARS = 2048;
+/** A computer's fixed requests: without them they default to the limits, which the quota refuses. */
+const COMPUTER_REQUESTS = { memory: "2Gi", cpu: "1" };
+const COMPUTER_REQUEST_BYTES = 2 * 1024 ** 3;
+const COMPUTER_REQUEST_NANO_CPUS = 1e9;
 
 /** `pods/exec` has no cwd or env: one fixed script takes both, and the command, as argv. */
 export const EXEC_ENVELOPE = 'cd "$1" && shift && exec env "$@"';
@@ -142,9 +147,7 @@ export function computerPod(input: {
             { name: "TANGOW_COMPUTER_CONTROL_TOKEN", value: input.controlToken },
           ],
           resources: {
-            // Without explicit requests they default to the limits, which the namespace quota
-            // refuses at create.
-            requests: { memory: "2Gi", cpu: "1" },
+            requests: COMPUTER_REQUESTS,
             limits: input.limits,
           },
           securityContext: HARDENED_CONTAINER,
@@ -307,6 +310,22 @@ export function createKubernetesComputerRuntime(options: {
       "SANDBOX_MAX_COMPUTERS_PER_SPACE is not supported with SUPERVISOR_BACKEND=kubernetes: leave it at 0",
     );
   }
+  // A limit below the fixed request would have every computer pod refused at create.
+  const { Memory, NanoCpus } = computerResourceLimits();
+  if (Memory && Memory < COMPUTER_REQUEST_BYTES) {
+    throw new Error(
+      `TANGOW_COMPUTER_MEMORY must be at least ${COMPUTER_REQUESTS.memory} with SUPERVISOR_BACKEND=kubernetes`,
+    );
+  }
+  if (NanoCpus && NanoCpus < COMPUTER_REQUEST_NANO_CPUS) {
+    throw new Error(
+      `TANGOW_COMPUTER_CPUS must be at least ${COMPUTER_REQUESTS.cpu} with SUPERVISOR_BACKEND=kubernetes`,
+    );
+  }
+  const limits = {
+    ...(Memory ? { memory: String(Memory) } : {}),
+    ...(NanoCpus ? { cpu: `${NanoCpus / 1e6}m` } : {}),
+  };
   const { pods, podExec, probeControl } = options.client ?? inClusterClient();
 
   function podName(botId: string) {
@@ -426,9 +445,15 @@ export function createKubernetesComputerRuntime(options: {
           subPath: mount.subPath ?? "",
           readOnly: Boolean(mount.readOnly),
         }));
+      const volumeHome = query.spec.volumeHome
+        ? computerVolumeHome(query.spec.volumeHome, dataDir, undefined)
+        : undefined;
       return {
         ...toComputer(pod),
-        matchesSpec: JSON.stringify(mounted) === JSON.stringify(podMounts(query.spec)),
+        // The digest covers the workspace root, which no mount shows.
+        matchesSpec:
+          JSON.stringify(mounted) === JSON.stringify(podMounts(query.spec)) &&
+          volumeHomeMatches(pod.metadata?.annotations, volumeHome),
       };
     }
     const pod = await readPod(query.id);
@@ -461,7 +486,6 @@ export function createKubernetesComputerRuntime(options: {
       ? computerVolumeHome(spec.volumeHome, dataDir, undefined)
       : undefined;
     if (existing) await deletePod(existing.id, 0, () => undefined);
-    const { Memory, NanoCpus } = computerResourceLimits();
     const body = computerPod({
       name,
       image: COMPUTER_IMAGE,
@@ -469,10 +493,7 @@ export function createKubernetesComputerRuntime(options: {
       controlToken: randomUUID(),
       dataClaim,
       mounts: podMounts(spec),
-      limits: {
-        ...(Memory ? { memory: String(Memory) } : {}),
-        ...(NanoCpus ? { cpu: `${NanoCpus / 1e6}m` } : {}),
-      },
+      limits,
       workingDir: volumeHome?.root ?? "/home/tangow",
       annotations: volumeHomeLabels(volumeHome),
     });
