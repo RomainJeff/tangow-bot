@@ -1,4 +1,7 @@
-import { chmodSync, mkdirSync, rmSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import type { Readable } from "node:stream";
 import { duplexPair } from "node:stream";
 import type { V1Pod, V1Status } from "@kubernetes/client-node";
@@ -70,11 +73,12 @@ function fakeCluster() {
         return structuredClone(pods.get(name)!);
       },
       readNamespacedPod: async ({ name }) => {
+        // A deleted pod terminates until its grace period is over, then it is gone.
+        const deadline = pods.get(name)?.metadata?.deletionTimestamp;
+        if (deadline && Date.now() >= deadline.getTime()) pods.delete(name);
         const pod = pods.get(name);
         if (!pod) throw notFound(name);
-        // A deleted pod is read once more while it terminates, then it is gone.
-        if (pod.metadata!.deletionTimestamp) pods.delete(name);
-        else if (pod.status!.phase === "Pending" && state.boot === "running") {
+        if (pod.status!.phase === "Pending" && state.boot === "running") {
           pod.status = { phase: "Running", podIP: `10.42.0.${state.nextIp++}` };
         } else if (pod.status!.phase === "Pending") {
           pod.status = {
@@ -99,7 +103,10 @@ function fakeCluster() {
         const pod = pods.get(name);
         if (!pod) throw notFound(name);
         state.deletes.push({ name, grace: gracePeriodSeconds });
-        pod.metadata!.deletionTimestamp = new Date();
+        // A second delete may shorten the grace period, never extend it.
+        const deadline = Date.now() + (gracePeriodSeconds ?? 30) * 1000;
+        const current = pod.metadata!.deletionTimestamp?.getTime() ?? Number.POSITIVE_INFINITY;
+        pod.metadata!.deletionTimestamp = new Date(Math.min(deadline, current));
         return structuredClone(pod);
       },
     },
@@ -163,19 +170,19 @@ function kubernetes(cluster = fakeCluster()) {
     client: cluster.client,
   });
   const { app } = createSupervisor(runtime);
-  const provision = () =>
-    settle(
-      app.request("/computers", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          ...owner,
-          userId: "user1",
-          homePath: `${dataDir}/homes/${owner.botId}`,
-        }),
+  const startRequest = (spec: object = {}) =>
+    app.request("/computers", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        ...owner,
+        userId: "user1",
+        homePath: `${dataDir}/homes/${owner.botId}`,
+        ...spec,
       }),
-    );
-  return { ...cluster, runtime, app, provision };
+    });
+  const provision = (spec?: object) => settle(startRequest(spec));
+  return { ...cluster, runtime, app, startRequest, provision };
 }
 
 /** Lets the backend's waits run on fake time. */
@@ -295,17 +302,20 @@ describe("computer pod", () => {
     });
   });
 
-  it("runs commands through one fixed envelope, with every value in argv", () => {
-    expect(execInEnvelope("/home/tangow/a dir", ["A=1"], ["echo", "$HOME"])).toEqual([
-      "sh",
-      "-c",
-      'cd "$1" && shift && exec env "$@"',
-      "sh",
-      "/home/tangow/a dir",
-      "A=1",
-      "echo",
-      "$HOME",
-    ]);
+  it("runs a command in its cwd with its env, expanding none of its values", () => {
+    const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "tangow envelope ")));
+    try {
+      const run = (argv: string[]) => {
+        const [shell, ...args] = execInEnvelope(cwd, ["A=$HOME"], argv);
+        return spawnSync(shell!, args, { encoding: "utf8" }).stdout;
+      };
+
+      expect(run(["pwd"])).toBe(`${cwd}\n`);
+      expect(run(["printenv", "A"])).toBe("$HOME\n");
+      expect(run(["printf", "%s|", "$HOME", "`id`"])).toBe("$HOME|`id`|");
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
   });
 });
 
@@ -330,6 +340,33 @@ describe("Kubernetes computers", () => {
     const second = await runtime.getComputer({ id: "tangow-bot-bot1", owner, screenPort: "6080" });
     expect(second.screen).toEqual({ host: "10.42.0.2", port: "6080" });
     expect(second.control?.url).toBe("http://10.42.0.2:7070/v1/desktop");
+  });
+
+  it("starts again only once a stop has seen its own pod go", async () => {
+    const { provision, startRequest, app, state } = kubernetes();
+    await provision();
+
+    const stopping = app.request("/computers/tangow-bot-bot1/stop", { method: "POST", headers });
+    while (state.deletes.length === 0) await new Promise((resolve) => setImmediate(resolve));
+    const [stopped, started] = await settle(Promise.all([stopping, startRequest()]));
+
+    expect(stopped.status).toBe(200);
+    expect(started.status).toBe(200);
+  });
+
+  it("replaces a computer whose workspace root changed", async () => {
+    const { provision, pods, state } = kubernetes();
+    const mounts = [
+      { volume: "tangow-v1", path: "/workspace/one" },
+      { volume: "tangow-v2", path: "/workspace/two" },
+    ];
+    await provision({ volumeHome: { root: "/workspace/one", mounts } });
+
+    const moved = await provision({ volumeHome: { root: "/workspace/two", mounts } });
+
+    expect(await moved.json()).toMatchObject({ resumed: false });
+    expect(state.deletes).toEqual([{ name: "tangow-bot-bot1", grace: 0 }]);
+    expect(pods.get("tangow-bot-bot1")!.spec!.containers[0]!.workingDir).toBe("/workspace/two");
   });
 
   it("removes a computer without grace and only answers once the pod is gone", async () => {
@@ -412,6 +449,18 @@ describe("Kubernetes computers", () => {
     const listener = added.mock.calls.find(([type]) => type === "abort")?.[1];
     expect(listener).toBeDefined();
     expect(removed).toHaveBeenCalledWith("abort", listener);
+  });
+
+  it.each([
+    ["TANGOW_COMPUTER_MEMORY", "1g"],
+    ["TANGOW_COMPUTER_CPUS", "0.5"],
+  ])("refuses to start when %s is below the computer's request", (name, value) => {
+    vi.stubEnv(name, value);
+    try {
+      expect(() => kubernetes()).toThrow(name);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("refuses to start with a per-space computer cap", () => {

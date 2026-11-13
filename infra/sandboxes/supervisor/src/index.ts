@@ -319,25 +319,29 @@ export function createSupervisor(runtime: ComputerRuntime) {
     const spaceId = c.req.header("x-tangow-space-id");
     try {
       await managedComputer(id, botId, spaceId);
-      await withComputerScreenLock(id, async () => {
-        // A concurrent stop may have finished while this one waited for the lock.
-        if ((await managedComputer(id, botId, spaceId)).running) {
-          const screens = [...(computerScreens.get(id) ?? [])].map(([screenId, slot]) => ({
-            screenId,
-            index: slot.index,
-          }));
-          try {
-            const checkpoint = await runCommand(id, ["bash", "-c", stopScreensCommand(screens)]);
-            if (checkpoint.code !== 0)
-              throw new Error(checkpoint.stderr || "bot browsers failed to stop");
-          } finally {
-            // Failed profiles remain on the durable home for recovery after restart.
-            await runtime.stopComputer(id);
-            clearComputerScreenRegistry(computerScreens, id);
+      // Under the bot's lifecycle lock, no start reuses the pod name while this stop waits for it
+      // to go: the wait cannot time out on the new pod, and no retried stop then kills it.
+      await withBotLifecycleLock(botId!, () =>
+        withComputerScreenLock(id, async () => {
+          // A concurrent stop may have finished while this one waited for the lock.
+          if ((await managedComputer(id, botId, spaceId)).running) {
+            const screens = [...(computerScreens.get(id) ?? [])].map(([screenId, slot]) => ({
+              screenId,
+              index: slot.index,
+            }));
+            try {
+              const checkpoint = await runCommand(id, ["bash", "-c", stopScreensCommand(screens)]);
+              if (checkpoint.code !== 0)
+                throw new Error(checkpoint.stderr || "bot browsers failed to stop");
+            } finally {
+              // Failed profiles remain on the durable home for recovery after restart.
+              await runtime.stopComputer(id);
+              clearComputerScreenRegistry(computerScreens, id);
+            }
           }
-        }
-        clearComputerScreenRegistry(computerScreens, id);
-      });
+          clearComputerScreenRegistry(computerScreens, id);
+        }),
+      );
       return c.json({ ok: true });
     } catch (error) {
       if (error instanceof ComputerIdentityError)

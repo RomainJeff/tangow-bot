@@ -81,8 +81,8 @@ them so the kubelet's image garbage collection keeps them, for example with the
 
 - Requests are fixed: computer `2Gi` and `1` CPU, worker `512Mi` and `250m`.
 - Computer limits come from `TANGOW_COMPUTER_*` (defaults `8g` and `4`). Keep them set: without a
-  limit, a LimitRange default below the request makes the pod invalid. Worker limits are fixed at
-  `1Gi` and `1` CPU.
+  limit, a LimitRange default below the request makes the pod invalid. A limit below the request
+  stops the supervisor at startup. Worker limits are fixed at `1Gi` and `1` CPU.
 - A LimitRange `max` must hold these limits.
 - Pids are limited per node by the kubelet's `podPidsLimit`; the computer needs at least `2048`.
   `TANGOW_COMPUTER_PIDS_LIMIT` is ignored.
@@ -91,13 +91,65 @@ them so the kubelet's image garbage collection keeps them, for example with the
 
 ## Network
 
-- The supervisor reaches the cluster API server and DNS.
+- The supervisor needs no egress except the cluster API server and DNS, and the sandboxes below.
 - Into sandboxes: only the web server to port `6080` and the supervisor to `7070`. Nothing between
   sandboxes.
 - Out of sandboxes: DNS and the Internet, without the cluster and node CIDRs or the cloud metadata
   address.
 - App pods reach their dependencies (database, E2B if used). Host firewalls can block pods from
   reaching ports on the node.
+
+A NetworkPolicy for the sandboxes, to adapt to your labels and address ranges:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tangow-sandboxes
+  namespace: <sandbox-namespace>
+spec:
+  podSelector:
+    matchLabels:
+      tangow.managed: "true"
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: <app-namespace>
+          podSelector:
+            matchLabels:
+              app: <web-server>
+      ports:
+        - port: 6080
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: <app-namespace>
+          podSelector:
+            matchLabels:
+              app: <supervisor>
+      ports:
+        - port: 7070
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - <cluster-cidr>
+              - <node-cidr>
+              - 169.254.169.254/32
+```
 
 ## Sleep
 
