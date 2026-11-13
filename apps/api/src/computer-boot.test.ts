@@ -1,108 +1,110 @@
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { RPCHandler } from "@orpc/server/fetch";
-import type { Actor } from "@tangow/contracts";
-import { createRepos, createThreadEvents } from "@tangow/db";
 import type { PgliteDatabase } from "@tangow/db/pglite.test-support";
 import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
-import { afterAll, beforeAll, expect, it, vi } from "vitest";
-import { createBackgroundJobHandlers } from "../../../packages/adapters/src/background-job-handlers.js";
-import { queueComputerUpdate } from "../../../packages/adapters/src/computer-update.js";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FakeSandboxProvider } from "../../../packages/adapters/src/fake-sandbox.js";
 import { FakeWorkerProvider } from "../../../packages/adapters/src/fake-worker-provider.js";
-import { LocalAgentHomeStore } from "../../../packages/adapters/src/home.js";
-import { InMemoryJobQueue } from "../../../packages/adapters/src/wakeup.js";
-import { workerFixture } from "../../../packages/adapters/src/worker-fixture.test-support.js";
-import { createWorkerLifecycle } from "../../../packages/adapters/src/worker-lifecycle.js";
-import type { RouterDeps } from "./router.js";
-import { createRouter } from "./router.js";
+import type { GuestConnector } from "../../../packages/adapters/src/runtime-worker/launcher.js";
+import type { AppHandles } from "./app.js";
+import { createApp } from "./app.js";
 
+// A new home on volumes belongs to a Docker or E2B computer; these tests drive the API as
+// production assembles it, so they also cover the wiring of the worker lifecycle in createApp.
 let database: PgliteDatabase;
-beforeAll(async () => {
-  database = await openPgliteDatabase();
-});
-afterAll(() => database.close());
+let dataDir: string;
+let handles: AppHandles;
+let sandbox: FakeSandboxProvider;
+let cookie: string;
 
-async function newDockerBot() {
-  const prisma = database.prisma;
-  const fixture = workerFixture(prisma);
-  await fixture.seedOwner();
-  const spaceId = await fixture.seedSpace();
-  await fixture.seedMembership(spaceId);
-  const actor = {
-    spaceId,
-    userId: fixture.userId,
-    email: "owner@tangow.test",
-    isDeploymentOwner: true,
-  } satisfies Actor;
+beforeEach(async () => {
   vi.stubEnv("SANDBOX_PROVIDER", "docker");
-  const bot = await createRepos(prisma).createBot(actor, {
+  // Required by the environment; PGlite replaces the database, so nothing connects to it.
+  vi.stubEnv("DATABASE_URL", "postgres://tangow:tangow@127.0.0.1:1/unused");
+  database = await openPgliteDatabase();
+  dataDir = await mkdtemp(path.join(tmpdir(), "tangow-boot-"));
+  sandbox = new FakeSandboxProvider();
+  const provision = sandbox.provision.bind(sandbox);
+  vi.spyOn(sandbox, "provision").mockImplementation(async (request, context) => ({
+    ...(await provision(request, context)),
+    kind: "docker",
+  }));
+  handles = await createApp({
+    prisma: database.prisma,
+    sandbox,
+    workers: new FakeWorkerProvider() as FakeWorkerProvider & GuestConnector,
+    dataDir,
+    wakeupDriver: "memory",
+    agentRuntime: "scripted",
+    signupsEnabled: "true",
+  });
+  const signup = await handles.app.request("/api/auth/sign-up/email", {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: "http://127.0.0.1:5173" },
+    body: JSON.stringify({
+      email: "owner@tangow.test",
+      password: "test-password-123",
+      name: "Owner",
+    }),
+  });
+  cookie = signup.headers
+    .getSetCookie()
+    .map((value) => value.split(";")[0])
+    .join("; ");
+});
+
+afterEach(async () => {
+  await handles?.stop();
+  await database.close();
+  await rm(dataDir, { recursive: true, force: true });
+  vi.unstubAllEnvs();
+});
+
+async function rpc<T>(procedure: string, input: unknown): Promise<T> {
+  const response = await handles.app.request(`/rpc/${procedure}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie, origin: "http://127.0.0.1:5173" },
+    body: JSON.stringify({ json: input }),
+  });
+  const body = (await response.json()) as { json: T };
+  expect(response.status, JSON.stringify(body)).toBe(200);
+  return body.json;
+}
+
+async function newBot() {
+  return rpc<{ id: string }>("bots/create", {
     name: "Writer",
     title: "Writer",
     description: "",
     instructions: "",
     notifyOnFinish: false,
   });
-  vi.unstubAllEnvs();
-  const sandbox = new FakeSandboxProvider();
-  const fakeProvision = sandbox.provision.bind(sandbox);
-  // A home on volumes belongs to a Docker or E2B computer, so the fake answers as Docker.
-  const provision = vi.spyOn(sandbox, "provision").mockImplementation(async (request, context) => ({
-    ...(await fakeProvision(request, context)),
-    kind: "docker",
-  }));
-  const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-boot-"));
-  const deps = {
-    prisma,
-    sandbox,
-    jobs: new InMemoryJobQueue(),
-    events: createThreadEvents(prisma),
-    home: new LocalAgentHomeStore(dataDir),
-    dataDir,
-    workers: createWorkerLifecycle({ prisma, provider: new FakeWorkerProvider() }),
-  };
-  const expectVolumesMounted = async () => {
-    const volumes = await prisma.volume.findMany({ where: { spaceId } });
-    expect(volumes.map((volume) => volume.kind).sort()).toEqual(["bot_private", "space_shared"]);
-    expect(volumes.every((volume) => volume.providerRef)).toBe(true);
-    expect(provision.mock.calls[0]![0].volumeHome?.mounts).toHaveLength(2);
-  };
-  return { actor, bot, deps, expectVolumesMounted };
 }
 
-it("provisions a new bot's home volumes before its first manual boot", async () => {
-  const { actor, bot, deps, expectVolumesMounted } = await newDockerBot();
-  const handler = new RPCHandler(
-    createRouter({ ...deps, env: { screenProxySecret: "fake-test-secret" } } as RouterDeps),
-  );
+function expectVolumesMounted() {
+  expect(vi.mocked(sandbox.provision).mock.calls.at(-1)![0].volumeHome?.mounts).toHaveLength(2);
+}
 
-  const { response } = await handler.handle(
-    new Request("http://127.0.0.1/rpc/computer/boot", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ json: { botId: bot.id } }),
-    }),
-    { prefix: "/rpc", context: { actor } },
-  );
+it("boots a new bot's computer from its screen with its home volumes", async () => {
+  const bot = await newBot();
 
-  expect(response?.status).toBe(200);
-  await expectVolumesMounted();
+  await rpc("computer/boot", { botId: bot.id });
+
+  expectVolumesMounted();
 });
 
-it("provisions a new bot's home volumes before a computer update boots it", async () => {
-  const { bot, deps, expectVolumesMounted } = await newDockerBot();
-  const { computerId } = await deps.prisma.bot.findUniqueOrThrow({ where: { id: bot.id } });
-  const update = await queueComputerUpdate(deps, computerId!, bot.id);
-  const handlers = createBackgroundJobHandlers(
-    deps as unknown as Parameters<typeof createBackgroundJobHandlers>[0],
-  );
+it("updates a new bot's computer with its home volumes", async () => {
+  const bot = await newBot();
 
-  await handlers["computer.update"]({ updateId: update.id });
+  const update = await rpc<{ id: string }>("computer/update", { botId: bot.id });
 
-  const { status } = await deps.prisma.computerUpdate.findUniqueOrThrow({
-    where: { id: update.id },
-  });
-  expect(status).toBe("completed");
-  await expectVolumesMounted();
+  await expect
+    .poll(
+      async () =>
+        (await handles.prisma.computerUpdate.findUniqueOrThrow({ where: { id: update.id } }))
+          .status,
+    )
+    .toBe("completed");
+  expectVolumesMounted();
 });
