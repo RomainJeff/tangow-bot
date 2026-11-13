@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
-- A reply or routine whose computer cannot start now fails within seconds with the real reason, instead of after 15 minutes with an unrelated message.
+- When the computer service refuses to start a reply's or a routine's computer, the run now fails within seconds with the real reason, instead of after 15 minutes with an unrelated message.
 
 ### 2026-11-13
 
