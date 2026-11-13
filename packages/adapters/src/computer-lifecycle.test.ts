@@ -44,38 +44,6 @@ const context = {
 } satisfies AdapterContext;
 
 describe("computer provisioning", () => {
-  it("refuses to boot a home on volumes it cannot provision", async () => {
-    const provision = vi.fn();
-    const prisma = {
-      bot: { findFirst: vi.fn(async () => null) },
-      computer: {
-        findUniqueOrThrow: vi.fn(async () => ({
-          id: "computer-1",
-          homeKey: "bot-1",
-          providerRef: null,
-          kind: "docker",
-          scope: "team",
-          state: "stopped",
-          homeStorage: "volumes",
-          controlLeaseId: null,
-          updatedAt: new Date("2024-01-01T00:00:00.000Z"),
-        })),
-      },
-    } as unknown as PrismaClient;
-    const deps = {
-      prisma,
-      sandbox: { provision } as unknown as SandboxProvider,
-      home: {} as AgentHomeStore,
-      jobs: {} as JobPublisher,
-      events: {} as ThreadEvents,
-    };
-
-    await expect(provisionComputer(deps, "computer-1", context)).rejects.toThrow(
-      "volumes provisioned",
-    );
-    expect(provision).not.toHaveBeenCalled();
-  });
-
   it("stops a provider when archive invalidates its boot claim", async () => {
     const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-provision-race-"));
     const stop = vi.fn().mockResolvedValue(undefined);

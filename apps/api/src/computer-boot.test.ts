@@ -7,6 +7,8 @@ import { createRepos, createThreadEvents } from "@tangow/db";
 import type { PgliteDatabase } from "@tangow/db/pglite.test-support";
 import { openPgliteDatabase } from "@tangow/db/pglite.test-support";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import { createBackgroundJobHandlers } from "../../../packages/adapters/src/background-job-handlers.js";
+import { queueComputerUpdate } from "../../../packages/adapters/src/computer-update.js";
 import { FakeSandboxProvider } from "../../../packages/adapters/src/fake-sandbox.js";
 import { FakeWorkerProvider } from "../../../packages/adapters/src/fake-worker-provider.js";
 import { LocalAgentHomeStore } from "../../../packages/adapters/src/home.js";
@@ -22,7 +24,7 @@ beforeAll(async () => {
 });
 afterAll(() => database.close());
 
-it("provisions a new bot's home volumes before its first manual boot", async () => {
+async function newDockerBot() {
   const prisma = database.prisma;
   const fixture = workerFixture(prisma);
   await fixture.seedOwner();
@@ -51,17 +53,28 @@ it("provisions a new bot's home volumes before its first manual boot", async () 
     kind: "docker",
   }));
   const dataDir = await mkdtemp(path.join(tmpdir(), "tangow-boot-"));
+  const deps = {
+    prisma,
+    sandbox,
+    jobs: new InMemoryJobQueue(),
+    events: createThreadEvents(prisma),
+    home: new LocalAgentHomeStore(dataDir),
+    dataDir,
+    workers: createWorkerLifecycle({ prisma, provider: new FakeWorkerProvider() }),
+  };
+  const expectVolumesMounted = async () => {
+    const volumes = await prisma.volume.findMany({ where: { spaceId } });
+    expect(volumes.map((volume) => volume.kind).sort()).toEqual(["bot_private", "space_shared"]);
+    expect(volumes.every((volume) => volume.providerRef)).toBe(true);
+    expect(provision.mock.calls[0]![0].volumeHome?.mounts).toHaveLength(2);
+  };
+  return { actor, bot, deps, expectVolumesMounted };
+}
+
+it("provisions a new bot's home volumes before its first manual boot", async () => {
+  const { actor, bot, deps, expectVolumesMounted } = await newDockerBot();
   const handler = new RPCHandler(
-    createRouter({
-      prisma,
-      sandbox,
-      jobs: new InMemoryJobQueue(),
-      events: createThreadEvents(prisma),
-      home: new LocalAgentHomeStore(dataDir),
-      dataDir,
-      workers: createWorkerLifecycle({ prisma, provider: new FakeWorkerProvider() }),
-      env: { screenProxySecret: "fake-test-secret" },
-    } as RouterDeps),
+    createRouter({ ...deps, env: { screenProxySecret: "fake-test-secret" } } as RouterDeps),
   );
 
   const { response } = await handler.handle(
@@ -74,8 +87,22 @@ it("provisions a new bot's home volumes before its first manual boot", async () 
   );
 
   expect(response?.status).toBe(200);
-  const volumes = await prisma.volume.findMany({ where: { spaceId } });
-  expect(volumes.map((volume) => volume.kind).sort()).toEqual(["bot_private", "space_shared"]);
-  expect(volumes.every((volume) => volume.providerRef)).toBe(true);
-  expect(provision.mock.calls[0]![0].volumeHome?.mounts).toHaveLength(2);
+  await expectVolumesMounted();
+});
+
+it("provisions a new bot's home volumes before a computer update boots it", async () => {
+  const { bot, deps, expectVolumesMounted } = await newDockerBot();
+  const { computerId } = await deps.prisma.bot.findUniqueOrThrow({ where: { id: bot.id } });
+  const update = await queueComputerUpdate(deps, computerId!, bot.id);
+  const handlers = createBackgroundJobHandlers(
+    deps as unknown as Parameters<typeof createBackgroundJobHandlers>[0],
+  );
+
+  await handlers["computer.update"]({ updateId: update.id });
+
+  const { status } = await deps.prisma.computerUpdate.findUniqueOrThrow({
+    where: { id: update.id },
+  });
+  expect(status).toBe("completed");
+  await expectVolumesMounted();
 });

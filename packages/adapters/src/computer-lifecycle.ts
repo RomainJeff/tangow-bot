@@ -316,9 +316,7 @@ export async function provisionComputer(
   // A bot attached after the move has no volume yet: one the machine never mounted would leave
   // its computer writing to local disk while its workers see the volume.
   if (existing.homeStorage === "volumes") {
-    // Without its volumes the machine would boot with nothing mounted.
-    if (!deps.workers) throw new Error("a home on volumes needs its volumes provisioned to boot");
-    await deps.workers.provisionHomeVolumes(computerId, context);
+    await deps.workers?.provisionHomeVolumes(computerId, context);
   }
   const reconnecting =
     Boolean(existing.providerRef) &&

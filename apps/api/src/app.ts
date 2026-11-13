@@ -440,6 +440,7 @@ export async function createApp(
   const jobHandlers = createBackgroundJobHandlers({
     executor,
     prisma,
+    workers: workers.lifecycle,
     sessionLog,
     sandbox,
     home,

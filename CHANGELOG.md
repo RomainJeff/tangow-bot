@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
-- On a new Docker self-host, starting a new bot's computer from its screen now works instead of failing with a server error.
+- A new bot's computer can now be started from its screen before its first message on Docker instead of failing with a server error, and on E2B the files it creates there now stay in its workspace.
 
 ### 2026-11-12
 
