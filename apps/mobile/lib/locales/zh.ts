@@ -309,6 +309,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   Edit: "编辑",
   Disconnect: "断开",
   "Disconnecting…": "正在断开…",
+  "Dismiss error": "关闭错误",
   Email: "邮箱",
   Embedded: "内置",
   "{channel} · {id}": "{channel} · {id}",

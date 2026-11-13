@@ -312,6 +312,7 @@ export const RU_MESSAGES: Record<string, string> = {
   Edit: "Изменить",
   Disconnect: "Отключить",
   "Disconnecting…": "Отключение…",
+  "Dismiss error": "Закрыть ошибку",
   Email: "Электронная почта",
   Embedded: "Встроенная",
   "{channel} · {id}": "{channel} · {id}",

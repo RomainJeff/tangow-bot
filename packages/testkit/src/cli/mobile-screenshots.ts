@@ -111,6 +111,8 @@ async function main() {
           "-e",
           `TANGOW_SCREENSHOT_BOT_ID=${fixture.botId}`,
           "-e",
+          `TANGOW_SCREENSHOT_FAILED_BOT_ID=${fixture.failedBotId}`,
+          "-e",
           `TANGOW_SCREENSHOT_GROUP_ID=${fixture.groupId}`,
           "-e",
           `TANGOW_SCREENSHOT_MEMBER_GROUP_ID=${fixture.memberGroupId}`,
@@ -258,6 +260,8 @@ async function seedFixture(app: App, prisma: PrismaClient) {
     ask: { text: "Which checklist should I use?", answer: "The launch checklist." },
     reply: "The fixture workspace is ready.",
   });
+  const supportThread = await prisma.thread.findUniqueOrThrow({ where: { botId: support.id } });
+  await seedFailedRun(prisma, supportThread, support.id);
   const sharing = await seedSharedBots(app, cookie, prisma, writer.id);
   const { teammate, teammateId, ...shared } = sharing;
   // The teammate joins the group and asks Writer, shared with her, before the user's own exchange.
@@ -287,11 +291,50 @@ async function seedFixture(app: App, prisma: PrismaClient) {
 
   return {
     botId: researcher.id,
+    failedBotId: support.id,
     groupId: group.id,
     memberGroupId: memberGroup.id,
     routineId: routine.id,
     ...shared,
   };
+}
+
+/** A message whose run failed with a long error, the newest outcome of the thread. */
+async function seedFailedRun(prisma: PrismaClient, thread: FixtureThread, botId: string) {
+  const question = await createThreadMessage(prisma, {
+    threadId: thread.id,
+    role: "user",
+    feedBotId: botId,
+    blocks: [{ kind: "text", text: "Draft the reply to the refund request." }],
+  });
+  const task = await prisma.task.create({
+    data: {
+      spaceId: thread.spaceId,
+      userId: thread.userId,
+      botId,
+      threadId: thread.id,
+      prompt: "Draft the reply to the refund request.",
+      status: "failed",
+    },
+  });
+  await prisma.run.create({
+    data: {
+      spaceId: thread.spaceId,
+      userId: thread.userId,
+      botId,
+      threadId: thread.id,
+      taskId: task.id,
+      status: "failed",
+      trigger: "user",
+      modelProvider: "scripted",
+      modelId: "scripted",
+      sourceMessageId: question.id,
+      error:
+        "The model provider rejected the request: the conversation exceeds the context window of the selected model, so the reply could not be generated. Shorten the conversation or choose a model with a larger context window and try again.",
+      startedAt: new Date(Date.now() - 2_000),
+      completedAt: new Date(),
+    },
+  });
 }
 
 /**

@@ -541,6 +541,7 @@ function Thread() {
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dismissedRunErrorId, setDismissedRunErrorId] = useState<string | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
   // The sheet a long press opened, closed if the screen moves to another thread.
   const messageSheetOwner = useRef<string | null>(null);
@@ -1848,7 +1849,11 @@ function Thread() {
     () => ({ answerableAskMessageId, viewerUserId }),
     [answerableAskMessageId, viewerUserId],
   );
-  const runError = snap?.run?.status === "failed" ? (snap.run.error ?? null) : null;
+  const runError =
+    snap?.run?.status === "failed" && snap.run.id !== dismissedRunErrorId
+      ? (snap.run.error ?? null)
+      : null;
+  const shownError = error ?? runError;
   const liveRows = useMemo(() => [...rows].reverse(), [rows]);
   const pinnedTarget = pinnedAroundRef.current;
   const showPinnedPage = Boolean(
@@ -2757,6 +2762,34 @@ function Thread() {
               experimental_backgroundImage: `linear-gradient(to bottom, ${hexWithAlpha(ambientFloor[colorScheme], 0)} 0%, ${hexWithAlpha(ambientFloor[colorScheme], 0.95)} 70%)`,
             }}
           />
+          {shownError ? (
+            <View
+              accessibilityRole="alert"
+              style={{
+                marginTop: 12,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: tokens.border,
+                backgroundColor: tokens.card,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Text style={{ color: tokens.destructive, fontSize: 13, flex: 1 }}>{shownError}</Text>
+              <Pressable
+                accessibilityLabel={t("Dismiss error")}
+                onPress={() => {
+                  if (error) setError(null);
+                  else if (snap?.run) setDismissedRunErrorId(snap.run.id);
+                }}
+              >
+                <Text style={{ color: tokens.mutedForeground }}>✕</Text>
+              </Pressable>
+            </View>
+          ) : null}
           {replyTarget ? (
             // 7g: rises in on every appearance — the action sheet's "Reply" and
             // a bubble swipe past the threshold both just set `replyTarget`.
@@ -3341,25 +3374,6 @@ function Thread() {
         ) : null}
       </AnimatedKeyboardAvoidingView>
       {barTransparent ? <ThreadScrollEdge height={headerHeight + 40} /> : null}
-      {error || runError ? (
-        // Just below the transparent bar, over the thread and its edge.
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            top: underBar,
-            left: THREAD_GUTTER,
-            right: THREAD_GUTTER,
-          }}
-        >
-          {error ? (
-            <Text style={{ color: tokens.mutedForeground, marginTop: 12 }}>{error}</Text>
-          ) : null}
-          {runError ? (
-            <Text style={{ color: tokens.destructive, marginTop: 12 }}>{runError}</Text>
-          ) : null}
-        </View>
-      ) : null}
     </TableActionsProvider>
   );
 }
