@@ -46,7 +46,7 @@ SHA-256 of the computer's identity, and carries that hash in its `tangow.bot` la
 itself is kept in the `tangow.botId` and `tangow.spaceId` annotations. To find a bot's pod:
 
 ```sh
-hash=$(printf %s "<identity>" | sha256sum | cut -c1-40)
+hash=$(printf %s "<identity>" | sha256sum | cut -c1-40)   # macOS: shasum -a 256
 kubectl -n <namespace> get pod "tangow-bot-$hash"   # or: get pods -l tangow.bot="$hash"
 ```
 
@@ -101,8 +101,9 @@ them so the kubelet's image garbage collection keeps them, for example with the
 ## Network
 
 - The supervisor needs no egress except the cluster API server and DNS, and the sandboxes below.
-- Into sandboxes: only the web server to port `6080` and the supervisor to `7070`. Nothing between
-  sandboxes.
+- Into sandboxes: only the web server to port `6080` and the supervisor to `6080` and `7070`. The
+  supervisor waits for a computer's screen to be ready on `6080` before handing out its URL. Nothing
+  between sandboxes.
 - Out of sandboxes: DNS and the Internet, without the cluster and node CIDRs or the cloud metadata
   address.
 - App pods reach their dependencies (database, E2B if used). Host firewalls can block pods from
@@ -139,6 +140,7 @@ spec:
             matchLabels:
               app: <supervisor>
       ports:
+        - port: 6080
         - port: 7070
   egress:
     - to:
@@ -156,6 +158,7 @@ spec:
             cidr: 0.0.0.0/0
             except:
               - <cluster-cidr>
+              - <service-cidr>   # some CNIs evaluate policy before DNAT
               - <node-cidr>
               - 169.254.169.254/32
 ```
