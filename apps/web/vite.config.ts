@@ -187,6 +187,16 @@ function attachNovncProxy(server: ViteDevServer | PreviewServer, secret: string,
   });
 }
 
+function isInternalApiPath(url = "") {
+  try {
+    return decodeURIComponent(new URL(url, "http://localhost").pathname).startsWith(
+      "/api/internal/",
+    );
+  } catch {
+    return true;
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const rootEnv = loadEnv(mode, path.resolve(import.meta.dirname, "../.."), "");
   const api = process.env.API_PROXY_TARGET ?? rootEnv.API_PROXY_TARGET ?? "http://127.0.0.1:3100";
@@ -199,6 +209,12 @@ export default defineConfig(({ mode }) => {
         process.env.SANDBOX_SUPERVISOR_TOKEN ?? rootEnv.SANDBOX_SUPERVISOR_TOKEN,
       BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET ?? rootEnv.BETTER_AUTH_SECRET,
     });
+  // Internal endpoints are for this server's own calls to the API; never forward them from clients.
+  const apiProxy = {
+    target: api,
+    changeOrigin: true,
+    bypass: (req: { url?: string }) => (isInternalApiPath(req.url) ? false : undefined),
+  };
   const performanceAssetDelayMs = Number(process.env.TANGOW_PERFORMANCE_ASSET_DELAY_MS ?? 0);
   return {
     plugins: [
@@ -231,7 +247,7 @@ export default defineConfig(({ mode }) => {
       port: webPort,
       strictPort: true,
       proxy: {
-        "/api": { target: api, changeOrigin: true },
+        "/api": apiProxy,
         "/rpc": { target: api, changeOrigin: true },
       },
     },
@@ -240,7 +256,7 @@ export default defineConfig(({ mode }) => {
       port: Number(process.env.WEB_PORT ?? 5173),
       allowedHosts: [previewHost],
       proxy: {
-        "/api": { target: api, changeOrigin: true },
+        "/api": apiProxy,
         "/rpc": { target: api, changeOrigin: true },
       },
     },
