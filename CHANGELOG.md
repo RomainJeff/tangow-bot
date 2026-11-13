@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-11-14
+
+#### Fixed
+
+- On web and desktop, a file dragged anywhere onto the conversation now joins the message as an attachment, not only when dropped on the message field, and a file let go elsewhere in the app is ignored instead of the browser opening it in place of Tangow.
+
 ### 2026-11-13
 
 #### Changed
