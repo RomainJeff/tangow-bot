@@ -425,8 +425,9 @@ the policy to that one token, set the shortest workable token duration, and rota
 
 Behind a cookie-based auth proxy (Cloudflare Access, oauth2-proxy), exempt `/novnc/session/` from
 it: the screen runs in an isolated frame that cannot send the proxy's cookie, and that path is
-guarded by a signed, expiring screen URL. Exempt only that prefix. The residual risk is that anyone
-holding a copied screen URL can open that screen until the URL expires.
+guarded by a signed, expiring screen URL. Exempt only that prefix. With Cloudflare Access, use a
+Bypass policy on an application limited to that path; Access does not log requests there. The
+residual risk is that anyone holding a copied screen URL can open that screen until the URL expires.
 
 ### Desktop
 
@@ -467,7 +468,7 @@ a server the user types in still needs its own token.
 
 The computer view renders the remote screen in a `WebView`, which cannot attach the service token to
 the page's subresources or its WebSocket. That view does not work against an Access-protected server
-on mobile.
+on mobile unless `/novnc/session/` is exempted, as described above.
 The scheduled backup uses `/srv/tangow` by default. For another deployment directory, set
 `TANGOW_DEPLOY_DIR=/absolute/path/to/checkout` in a root-owned `/etc/tangow/backup.env`
 (mode `0600`). The service reads this optional file on each run; the script uses the selected
