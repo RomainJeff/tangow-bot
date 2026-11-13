@@ -20,6 +20,7 @@ import { createSupervisor } from "./index.js";
 import type { KubernetesClient } from "./kubernetes-runtime.js";
 import {
   computerPod,
+  computerPodName,
   createKubernetesComputerRuntime,
   execInEnvelope,
   workerPod,
@@ -27,7 +28,9 @@ import {
 
 const dataDir = process.env.DATA_DIR!;
 const token = resolveSupervisorToken(process.env);
-const owner = { botId: "bot1", spaceId: "space1" };
+/** A team computer's identity: user ids are mixed case, which a pod name cannot be. */
+const owner = { botId: "team-cSpace1-cUserAbC1", spaceId: "cSpace1" };
+const pod = computerPodName(owner.botId);
 const headers = {
   authorization: `Bearer ${token}`,
   "content-type": "application/json",
@@ -67,6 +70,10 @@ function fakeCluster() {
             { message: `pods "${name}" is forbidden: exceeded quota: sandboxes` },
             {},
           );
+        }
+        // The API refuses a name that is not a DNS label.
+        if (!/^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/.test(name)) {
+          throw new ApiException(422, "Unprocessable Entity", { message: "invalid name" }, {});
         }
         if (pods.has(name)) throw new ApiException(409, "Conflict", {}, {});
         pods.set(name, { ...structuredClone(body), status: { phase: "Pending" } });
@@ -218,7 +225,7 @@ describe("computer pod", () => {
       computerPod({
         name: "tangow-bot-bot1",
         image: "tangow/computer@sha256:abc",
-        owner,
+        owner: { botId: "bot1", spaceId: "space1" },
         controlToken: "token-1",
         dataClaim: "data",
         mounts: [
@@ -324,20 +331,20 @@ describe("Kubernetes computers", () => {
     const { provision, app, pods, state, runtime } = kubernetes();
 
     const created = await provision();
-    expect(await created.json()).toMatchObject({ id: "tangow-bot-bot1", resumed: false });
-    const first = await runtime.getComputer({ id: "tangow-bot-bot1", owner, screenPort: "6080" });
+    expect(await created.json()).toMatchObject({ id: pod, resumed: false });
+    const first = await runtime.getComputer({ id: pod, owner, screenPort: "6080" });
     expect(first.screen).toEqual({ host: "10.42.0.1", port: "6080" });
 
     const stopped = await settle(
-      app.request("/computers/tangow-bot-bot1/stop", { method: "POST", headers }),
+      app.request(`/computers/${pod}/stop`, { method: "POST", headers }),
     );
     expect(stopped.status).toBe(200);
-    expect(state.deletes).toEqual([{ name: "tangow-bot-bot1", grace: 10 }]);
-    expect(pods.has("tangow-bot-bot1")).toBe(false);
+    expect(state.deletes).toEqual([{ name: pod, grace: 10 }]);
+    expect(pods.has(pod)).toBe(false);
 
     const resumed = await provision();
-    expect(await resumed.json()).toMatchObject({ id: "tangow-bot-bot1", resumed: false });
-    const second = await runtime.getComputer({ id: "tangow-bot-bot1", owner, screenPort: "6080" });
+    expect(await resumed.json()).toMatchObject({ id: pod, resumed: false });
+    const second = await runtime.getComputer({ id: pod, owner, screenPort: "6080" });
     expect(second.screen).toEqual({ host: "10.42.0.2", port: "6080" });
     expect(second.control?.url).toBe("http://10.42.0.2:7070/v1/desktop");
   });
@@ -346,7 +353,7 @@ describe("Kubernetes computers", () => {
     const { provision, startRequest, app, state } = kubernetes();
     await provision();
 
-    const stopping = app.request("/computers/tangow-bot-bot1/stop", { method: "POST", headers });
+    const stopping = app.request(`/computers/${pod}/stop`, { method: "POST", headers });
     while (state.deletes.length === 0) await new Promise((resolve) => setImmediate(resolve));
     const [stopped, started] = await settle(Promise.all([stopping, startRequest()]));
 
@@ -365,20 +372,30 @@ describe("Kubernetes computers", () => {
     const moved = await provision({ volumeHome: { root: "/workspace/two", mounts } });
 
     expect(await moved.json()).toMatchObject({ resumed: false });
-    expect(state.deletes).toEqual([{ name: "tangow-bot-bot1", grace: 0 }]);
-    expect(pods.get("tangow-bot-bot1")!.spec!.containers[0]!.workingDir).toBe("/workspace/two");
+    expect(state.deletes).toEqual([{ name: pod, grace: 0 }]);
+    expect(pods.get(pod)!.spec!.containers[0]!.workingDir).toBe("/workspace/two");
   });
 
   it("removes a computer without grace and only answers once the pod is gone", async () => {
     const { provision, app, pods, state } = kubernetes();
     await provision();
 
-    const removed = await settle(
-      app.request("/computers/tangow-bot-bot1", { method: "DELETE", headers }),
-    );
+    const removed = await settle(app.request(`/computers/${pod}`, { method: "DELETE", headers }));
 
     expect(removed.status).toBe(200);
-    expect(state.deletes).toEqual([{ name: "tangow-bot-bot1", grace: 0 }]);
+    expect(state.deletes).toEqual([{ name: pod, grace: 0 }]);
+    expect(pods.size).toBe(0);
+  });
+
+  it("gives identities that differ only by case their own pods", () => {
+    expect(computerPodName(owner.botId.toLowerCase())).not.toBe(pod);
+  });
+
+  it("refuses an identity its labels cannot carry, before any pod call", async () => {
+    const { runtime, pods } = kubernetes();
+    const spec = { ...owner, botId: "team/one", userId: "user1", homePath: `${dataDir}/homes/x` };
+
+    await expect(runtime.getComputer({ spec })).rejects.toThrow(/not a label value/);
     expect(pods.size).toBe(0);
   });
 
@@ -402,7 +419,7 @@ describe("Kubernetes computers", () => {
 
     expect(response.status).toBe(500);
     expect(((await response.json()) as { error: string }).error).toContain("ErrImageNeverPull");
-    expect(cluster.state.deletes).toEqual([{ name: "tangow-bot-bot1", grace: 0 }]);
+    expect(cluster.state.deletes).toEqual([{ name: pod, grace: 0 }]);
     expect([...pods.values()].every((pod) => pod.metadata?.deletionTimestamp)).toBe(true);
   });
 
@@ -410,7 +427,7 @@ describe("Kubernetes computers", () => {
     const { provision, app, state } = kubernetes();
     await provision();
 
-    const written = await app.request("/computers/tangow-bot-bot1/files", {
+    const written = await app.request(`/computers/${pod}/files`, {
       method: "POST",
       headers,
       body: JSON.stringify({ path: "notes.txt", content: Buffer.from("hello").toString("base64") }),
@@ -419,7 +436,7 @@ describe("Kubernetes computers", () => {
     expect(state.execs.at(-1)!.stdin.toString()).toBe("hello");
 
     state.exitCode = 3;
-    const ran = await app.request("/computers/tangow-bot-bot1/exec", {
+    const ran = await app.request(`/computers/${pod}/exec`, {
       method: "POST",
       headers,
       body: JSON.stringify({ argv: ["false"] }),
@@ -434,7 +451,7 @@ describe("Kubernetes computers", () => {
     const added = vi.spyOn(controller.signal, "addEventListener");
     const removed = vi.spyOn(controller.signal, "removeEventListener");
 
-    const running = runtime.exec("tangow-bot-bot1", ["sleep", "60"], {
+    const running = runtime.exec(pod, ["sleep", "60"], {
       cwd: "/home/tangow",
       env: [],
       signal: controller.signal,

@@ -41,6 +41,9 @@ Grant only this, in the sandbox namespace. The supervisor never lists, watches o
 collection, and must be the only creator of pods there. It does not collect pods it no longer knows
 by name: remove orphans yourself by label (`tangow.managed=true`, `tangow.worker=true`).
 
+A computer's pod is named from a hash of its bot's identity, which is kept as is in the
+`tangow.botId` and `tangow.spaceId` labels: find a bot's pod with `-l tangow.botId=<id>`.
+
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
