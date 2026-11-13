@@ -41,8 +41,14 @@ Grant only this, in the sandbox namespace. The supervisor never lists, watches o
 collection, and must be the only creator of pods there. It does not collect pods it no longer knows
 by name: remove orphans yourself by label (`tangow.managed=true`, `tangow.worker=true`).
 
-A computer's pod is named from a hash of its bot's identity, which is kept as is in the
-`tangow.botId` and `tangow.spaceId` labels: find a bot's pod with `-l tangow.botId=<id>`.
+A computer's pod is named `tangow-bot-<hash>`, where `<hash>` is the first 40 hex characters of the
+SHA-256 of the computer's identity, and carries that hash in its `tangow.bot` label. The identity
+itself is kept in the `tangow.botId` and `tangow.spaceId` annotations. To find a bot's pod:
+
+```sh
+hash=$(printf %s "<identity>" | sha256sum | cut -c1-40)
+kubectl -n <namespace> get pod "tangow-bot-$hash"   # or: get pods -l tangow.bot="$hash"
+```
 
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1

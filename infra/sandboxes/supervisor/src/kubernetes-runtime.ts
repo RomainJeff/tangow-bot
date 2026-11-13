@@ -42,8 +42,6 @@ const STOP_GRACE_SECONDS = 10;
 /** How long a deleted pod may take to disappear before its name can be used again. */
 const DELETE_TIMEOUT_MS = 30_000;
 const POLL_MS = 500;
-/** A Kubernetes label value: the identities are kept in labels, as given. */
-const LABEL_VALUE = /^(?=.{1,63}$)[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$/;
 const WORKER_CONTAINER = "worker";
 /** Attempt ids are cuids (`schema.prisma`), which make a DNS label and pass the guest route as is. */
 const ATTEMPT_ID = /^c[a-z0-9]{24}$/;
@@ -100,11 +98,16 @@ export interface PodMount {
 }
 
 /**
- * A computer's pod name. Identities are mixed case and pod names are lowercase DNS labels, so the
- * name hashes the identity: folding its case could give two computers one pod.
+ * Identities are mixed case and of any length, while pod names and label values are short, and
+ * names lowercase: both carry this hash instead, since folding the case could give two computers
+ * one pod. The identity itself is kept in annotations.
  */
+function identityHash(botId: string) {
+  return createHash("sha256").update(botId).digest("hex").slice(0, 40);
+}
+
 export function computerPodName(botId: string) {
-  return `tangow-bot-${createHash("sha256").update(botId).digest("hex").slice(0, 40)}`;
+  return `tangow-bot-${identityHash(botId)}`;
 }
 
 /** A computer pod. The UID, the hardening and the requests are fixed; the rest comes from its spec. */
@@ -124,12 +127,12 @@ export function computerPod(input: {
     kind: "Pod",
     metadata: {
       name: input.name,
-      labels: {
-        "tangow.managed": "true",
+      labels: { "tangow.managed": "true", "tangow.bot": identityHash(input.owner.botId) },
+      annotations: {
+        ...input.annotations,
         "tangow.botId": input.owner.botId,
         "tangow.spaceId": input.owner.spaceId,
       },
-      annotations: input.annotations,
     },
     spec: {
       ...HARDENED_POD,
@@ -337,10 +340,7 @@ export function createKubernetesComputerRuntime(options: {
   const { pods, podExec, probeControl } = options.client ?? inClusterClient();
 
   function podName(owner: ComputerOwner) {
-    for (const value of [owner.botId, owner.spaceId]) {
-      if (!LABEL_VALUE.test(value))
-        throw new Error(`computer identity ${value} is not a label value`);
-    }
+    if (!owner.botId || !owner.spaceId) throw new Error("computer identity is empty");
     return computerPodName(owner.botId);
   }
 
@@ -446,7 +446,10 @@ export function createKubernetesComputerRuntime(options: {
   ): Promise<Computer | undefined> {
     if ("spec" in query) {
       const pod = await readPod(podName(query.spec));
-      if (!pod || !hasComputerIdentity(pod.metadata?.labels, query.spec.botId, query.spec.spaceId))
+      if (
+        !pod ||
+        !hasComputerIdentity(pod.metadata?.annotations, query.spec.botId, query.spec.spaceId)
+      )
         return undefined;
       const mounted = (pod.spec?.containers[0]?.volumeMounts ?? [])
         .filter((mount) => mount.name === "data")
@@ -468,10 +471,9 @@ export function createKubernetesComputerRuntime(options: {
     }
     const pod = await readPod(query.id);
     if (!pod) throw new ComputerNotFoundError(`computer ${query.id} not found`);
-    const labels = pod.metadata?.labels;
     if (
-      labels?.["tangow.managed"] !== "true" ||
-      !hasComputerIdentity(labels, query.owner.botId, query.owner.spaceId)
+      pod.metadata?.labels?.["tangow.managed"] !== "true" ||
+      !hasComputerIdentity(pod.metadata.annotations, query.owner.botId, query.owner.spaceId)
     )
       throw new ComputerIdentityError("computer identity mismatch");
     const computer = toComputer(pod);
