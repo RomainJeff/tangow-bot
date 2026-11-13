@@ -20,6 +20,7 @@ import { createSupervisor } from "./index.js";
 import type { KubernetesClient } from "./kubernetes-runtime.js";
 import {
   computerPod,
+  computerPodName,
   createKubernetesComputerRuntime,
   execInEnvelope,
   workerPod,
@@ -27,13 +28,23 @@ import {
 
 const dataDir = process.env.DATA_DIR!;
 const token = resolveSupervisorToken(process.env);
-const owner = { botId: "bot1", spaceId: "space1" };
-const headers = {
+/**
+ * Team computers, shaped like `team-<spaceId>-<userId>`: a UUID space and a mixed-case user id,
+ * 74 characters here, which neither a pod name nor a label value can hold.
+ */
+const spaceId = "3f2b8c1e-9d4a-4e7b-a6c5-0f1e2d3c4b5a";
+const owner = { botId: `team-${spaceId}-Xk9QwErTyUiOpAsDfGhJkLzXcVbNmQ12`, spaceId };
+const shortOwner = { botId: "team-cSpace7-QwErTyU", spaceId: "cSpace7" };
+const headersOf = (who: typeof owner) => ({
   authorization: `Bearer ${token}`,
   "content-type": "application/json",
-  "x-tangow-bot-id": owner.botId,
-  "x-tangow-space-id": owner.spaceId,
-};
+  "x-tangow-bot-id": who.botId,
+  "x-tangow-space-id": who.spaceId,
+});
+const pod = computerPodName(owner.botId);
+const headers = headersOf(owner);
+/** What the API accepts as a label value. */
+const LABEL_VALUE = /^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$/;
 
 interface ExecCall {
   pod: string;
@@ -67,6 +78,16 @@ function fakeCluster() {
             { message: `pods "${name}" is forbidden: exceeded quota: sandboxes` },
             {},
           );
+        }
+        // The API refuses a name that is not a DNS label.
+        if (!/^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/.test(name)) {
+          throw new ApiException(422, "Unprocessable Entity", { message: "invalid name" }, {});
+        }
+        // And a label value longer than 63 characters or with other characters.
+        for (const value of Object.values(body.metadata!.labels ?? {})) {
+          if (value.length > 63 || !LABEL_VALUE.test(value)) {
+            throw new ApiException(422, "Unprocessable Entity", { message: "invalid label" }, {});
+          }
         }
         if (pods.has(name)) throw new ApiException(409, "Conflict", {}, {});
         pods.set(name, { ...structuredClone(body), status: { phase: "Pending" } });
@@ -162,7 +183,7 @@ function fakeCluster() {
   return { client, pods, state };
 }
 
-function kubernetes(cluster = fakeCluster()) {
+function kubernetes(cluster = fakeCluster(), who = owner) {
   const runtime = createKubernetesComputerRuntime({
     namespace: "sandboxes",
     dataClaim: "data",
@@ -173,11 +194,11 @@ function kubernetes(cluster = fakeCluster()) {
   const startRequest = (spec: object = {}) =>
     app.request("/computers", {
       method: "POST",
-      headers,
+      headers: headersOf(who),
       body: JSON.stringify({
-        ...owner,
+        ...who,
         userId: "user1",
-        homePath: `${dataDir}/homes/${owner.botId}`,
+        homePath: `${dataDir}/homes/${who.botId}`,
         ...spec,
       }),
     });
@@ -199,9 +220,11 @@ async function settle<T>(request: T | Promise<T>) {
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["setTimeout", "Date"] });
   rmSync(dataDir, { recursive: true, force: true });
-  mkdirSync(`${dataDir}/homes/${owner.botId}`, { recursive: true });
-  // The home is checked for the computer's user, 1000, which is not the test runner.
-  chmodSync(`${dataDir}/homes/${owner.botId}`, 0o777);
+  for (const who of [owner, shortOwner]) {
+    mkdirSync(`${dataDir}/homes/${who.botId}`, { recursive: true });
+    // The home is checked for the computer's user, 1000, which is not the test runner.
+    chmodSync(`${dataDir}/homes/${who.botId}`, 0o777);
+  }
 });
 
 afterEach(() => {
@@ -216,9 +239,9 @@ describe("computer pod", () => {
   it("is hardened, mounts the data claim by subPath, and declares fixed requests", () => {
     expect(
       computerPod({
-        name: "tangow-bot-bot1",
+        name: computerPodName("bot1"),
         image: "tangow/computer@sha256:abc",
-        owner,
+        owner: { botId: "bot1", spaceId: "space1" },
         controlToken: "token-1",
         dataClaim: "data",
         mounts: [
@@ -234,9 +257,13 @@ describe("computer pod", () => {
       apiVersion: "v1",
       kind: "Pod",
       metadata: {
-        name: "tangow-bot-bot1",
-        labels: { "tangow.managed": "true", "tangow.botId": "bot1", "tangow.spaceId": "space1" },
-        annotations: {},
+        name: computerPodName("bot1"),
+        // The selector label is the name's hash; the identity is kept as is in annotations.
+        labels: {
+          "tangow.managed": "true",
+          "tangow.bot": computerPodName("bot1").slice("tangow-bot-".length),
+        },
+        annotations: { "tangow.botId": "bot1", "tangow.spaceId": "space1" },
       },
       spec: {
         automountServiceAccountToken: false,
@@ -320,33 +347,43 @@ describe("computer pod", () => {
 });
 
 describe("Kubernetes computers", () => {
-  it("creates a named pod, deletes it on stop, and creates it again on the new IP", async () => {
-    const { provision, app, pods, state, runtime } = kubernetes();
+  it.each([
+    ["a long", owner],
+    ["a short", shortOwner],
+  ])(
+    "creates a named pod for %s identity, deletes it on stop, and creates it again on the new IP",
+    async (_, who) => {
+      const { provision, app, pods, state, runtime } = kubernetes(undefined, who);
+      const pod = computerPodName(who.botId);
 
-    const created = await provision();
-    expect(await created.json()).toMatchObject({ id: "tangow-bot-bot1", resumed: false });
-    const first = await runtime.getComputer({ id: "tangow-bot-bot1", owner, screenPort: "6080" });
-    expect(first.screen).toEqual({ host: "10.42.0.1", port: "6080" });
+      const created = await provision();
+      expect(await created.json()).toMatchObject({ id: pod, resumed: false });
+      const first = await runtime.getComputer({ id: pod, owner: who, screenPort: "6080" });
+      expect(first.screen).toEqual({ host: "10.42.0.1", port: "6080" });
+      await expect(
+        runtime.getComputer({ id: pod, owner: { ...who, spaceId: "other-space" } }),
+      ).rejects.toThrow("computer identity mismatch");
 
-    const stopped = await settle(
-      app.request("/computers/tangow-bot-bot1/stop", { method: "POST", headers }),
-    );
-    expect(stopped.status).toBe(200);
-    expect(state.deletes).toEqual([{ name: "tangow-bot-bot1", grace: 10 }]);
-    expect(pods.has("tangow-bot-bot1")).toBe(false);
+      const stopped = await settle(
+        app.request(`/computers/${pod}/stop`, { method: "POST", headers: headersOf(who) }),
+      );
+      expect(stopped.status).toBe(200);
+      expect(state.deletes).toEqual([{ name: pod, grace: 10 }]);
+      expect(pods.has(pod)).toBe(false);
 
-    const resumed = await provision();
-    expect(await resumed.json()).toMatchObject({ id: "tangow-bot-bot1", resumed: false });
-    const second = await runtime.getComputer({ id: "tangow-bot-bot1", owner, screenPort: "6080" });
-    expect(second.screen).toEqual({ host: "10.42.0.2", port: "6080" });
-    expect(second.control?.url).toBe("http://10.42.0.2:7070/v1/desktop");
-  });
+      const resumed = await provision();
+      expect(await resumed.json()).toMatchObject({ id: pod, resumed: false });
+      const second = await runtime.getComputer({ id: pod, owner: who, screenPort: "6080" });
+      expect(second.screen).toEqual({ host: "10.42.0.2", port: "6080" });
+      expect(second.control?.url).toBe("http://10.42.0.2:7070/v1/desktop");
+    },
+  );
 
   it("starts again only once a stop has seen its own pod go", async () => {
     const { provision, startRequest, app, state } = kubernetes();
     await provision();
 
-    const stopping = app.request("/computers/tangow-bot-bot1/stop", { method: "POST", headers });
+    const stopping = app.request(`/computers/${pod}/stop`, { method: "POST", headers });
     while (state.deletes.length === 0) await new Promise((resolve) => setImmediate(resolve));
     const [stopped, started] = await settle(Promise.all([stopping, startRequest()]));
 
@@ -365,20 +402,30 @@ describe("Kubernetes computers", () => {
     const moved = await provision({ volumeHome: { root: "/workspace/two", mounts } });
 
     expect(await moved.json()).toMatchObject({ resumed: false });
-    expect(state.deletes).toEqual([{ name: "tangow-bot-bot1", grace: 0 }]);
-    expect(pods.get("tangow-bot-bot1")!.spec!.containers[0]!.workingDir).toBe("/workspace/two");
+    expect(state.deletes).toEqual([{ name: pod, grace: 0 }]);
+    expect(pods.get(pod)!.spec!.containers[0]!.workingDir).toBe("/workspace/two");
   });
 
   it("removes a computer without grace and only answers once the pod is gone", async () => {
     const { provision, app, pods, state } = kubernetes();
     await provision();
 
-    const removed = await settle(
-      app.request("/computers/tangow-bot-bot1", { method: "DELETE", headers }),
-    );
+    const removed = await settle(app.request(`/computers/${pod}`, { method: "DELETE", headers }));
 
     expect(removed.status).toBe(200);
-    expect(state.deletes).toEqual([{ name: "tangow-bot-bot1", grace: 0 }]);
+    expect(state.deletes).toEqual([{ name: pod, grace: 0 }]);
+    expect(pods.size).toBe(0);
+  });
+
+  it("gives identities that differ only by case their own pods", () => {
+    expect(computerPodName(owner.botId.toLowerCase())).not.toBe(pod);
+  });
+
+  it("refuses an empty identity before any pod call", async () => {
+    const { runtime, pods } = kubernetes();
+    const spec = { ...owner, botId: "", userId: "user1", homePath: `${dataDir}/homes/x` };
+
+    await expect(runtime.getComputer({ spec })).rejects.toThrow("computer identity is empty");
     expect(pods.size).toBe(0);
   });
 
@@ -402,7 +449,7 @@ describe("Kubernetes computers", () => {
 
     expect(response.status).toBe(500);
     expect(((await response.json()) as { error: string }).error).toContain("ErrImageNeverPull");
-    expect(cluster.state.deletes).toEqual([{ name: "tangow-bot-bot1", grace: 0 }]);
+    expect(cluster.state.deletes).toEqual([{ name: pod, grace: 0 }]);
     expect([...pods.values()].every((pod) => pod.metadata?.deletionTimestamp)).toBe(true);
   });
 
@@ -410,7 +457,7 @@ describe("Kubernetes computers", () => {
     const { provision, app, state } = kubernetes();
     await provision();
 
-    const written = await app.request("/computers/tangow-bot-bot1/files", {
+    const written = await app.request(`/computers/${pod}/files`, {
       method: "POST",
       headers,
       body: JSON.stringify({ path: "notes.txt", content: Buffer.from("hello").toString("base64") }),
@@ -419,7 +466,7 @@ describe("Kubernetes computers", () => {
     expect(state.execs.at(-1)!.stdin.toString()).toBe("hello");
 
     state.exitCode = 3;
-    const ran = await app.request("/computers/tangow-bot-bot1/exec", {
+    const ran = await app.request(`/computers/${pod}/exec`, {
       method: "POST",
       headers,
       body: JSON.stringify({ argv: ["false"] }),
@@ -434,7 +481,7 @@ describe("Kubernetes computers", () => {
     const added = vi.spyOn(controller.signal, "addEventListener");
     const removed = vi.spyOn(controller.signal, "removeEventListener");
 
-    const running = runtime.exec("tangow-bot-bot1", ["sleep", "60"], {
+    const running = runtime.exec(pod, ["sleep", "60"], {
       cwd: "/home/tangow",
       env: [],
       signal: controller.signal,
