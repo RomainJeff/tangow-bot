@@ -228,7 +228,8 @@ export async function startWorkerRun<
             scopeKey: "worker-computer",
             homeKey: "worker-computer",
             kind: options.sandbox?.describe().id === "docker" ? "docker" : "e2b",
-            homeStorage: "volumes",
+            // Volumes need workers to provision them, which a scripted runtime runs without.
+            homeStorage: options.runtime ? "snapshot" : "volumes",
           },
         });
   const bot = await prisma.bot.create({

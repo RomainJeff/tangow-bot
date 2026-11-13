@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - In a phone browser, a long press on a bot, a group or a section now opens its menu, as a right click does on desktop, with the sections to move a bot to listed in the menu itself, and the bot picker's info buttons are now visible without hovering.
 
+#### Fixed
+
+- On a new Docker self-host, starting a new bot's computer from its screen now works instead of failing with a server error.
+
 ### 2026-11-12
 
 #### Changed

@@ -369,6 +369,7 @@ export const laneHProductRecreate: Lane = {
         home,
         jobs: new InMemoryJobQueue(),
         events: run.events,
+        workers: lifecycle,
       };
       const asBot = { ...context("h-product"), botId };
       const notes = path.posix.join(COMPUTER_WORKSPACE, "bots", botId, "notes.md");
