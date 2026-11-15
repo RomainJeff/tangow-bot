@@ -3,7 +3,12 @@ import http from "node:http";
 import type { z } from "zod";
 import type { Computer, ComputerRuntime } from "./computer-runtime.js";
 import { ComputerIdentityError } from "./computer-runtime.js";
-import { resolveTeamScreenLimit, screenPorts, screenUrlFor } from "./computer-spec.js";
+import {
+  resolveTeamScreenLimit,
+  screenPorts,
+  screenUrlFor,
+  XDOTOOL_TYPE_ARGV,
+} from "./computer-spec.js";
 import type { computerActionSchema, ScreenAssignment } from "./supervisor-logic.js";
 import {
   browserProfilePathForScreen,
@@ -27,6 +32,7 @@ type CommandOptions = {
   workingDir?: string;
   env?: string[];
   timeoutMs?: number;
+  stdin?: Buffer;
   signal?: AbortSignal;
 };
 
@@ -60,6 +66,7 @@ export function createComputerSession(runtime: ComputerRuntime) {
     const output = await runtime.exec(id, command, {
       cwd: options.workingDir ?? "/home/tangow",
       env: options.env ?? ["DISPLAY=:1", "HOME=/home/tangow"],
+      stdin: options.stdin,
       signal: options.signal,
     });
     const completedWithExit124 =
@@ -186,20 +193,23 @@ export function createComputerSession(runtime: ComputerRuntime) {
     browserProfile?: string,
     workspace?: string,
   ) {
+    // The steps hold typed text: they come on stdin, and xdotool types it from its own stdin.
     const script = [
       "import json, subprocess, sys, time",
-      "for step in json.loads(sys.argv[1]):",
+      "for step in json.load(sys.stdin):",
       "  if 'waitMs' in step: time.sleep(step['waitMs'] / 1000)",
       "  else:",
-      "    result = subprocess.run(step['argv'])",
+      "    argv = step['argv']",
+      `    if argv[2:6] == ${JSON.stringify(XDOTOOL_TYPE_ARGV)}:`,
+      "      result = subprocess.run(argv[:5] + ['--file', '-'], input=argv[6].encode())",
+      "    else: result = subprocess.run(argv)",
       "    if result.returncode: sys.exit(result.returncode)",
     ].join("\n");
-    const result = await runCommand(id, [
-      "python3",
-      "-c",
-      script,
-      JSON.stringify(containerActionSteps(actions, display, browserProfile, workspace)),
-    ]);
+    const result = await runCommand(id, ["python3", "-c", script], {
+      stdin: Buffer.from(
+        JSON.stringify(containerActionSteps(actions, display, browserProfile, workspace)),
+      ),
+    });
     if (result.code !== 0) throw new Error(result.stderr || "computer action failed");
   }
 

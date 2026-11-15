@@ -532,8 +532,12 @@ export function xdotoolCommand(input: SandboxInput): string[] {
     if (input.type === "up") return ["xdotool", "mouseup", btn];
     return ["xdotool", "mousemove", "--", String(input.x), String(input.y), "click", btn];
   }
-  return ["xdotool", "type", "--clearmodifiers", "--", input.text];
+  return [...XDOTOOL_TYPE_ARGV, input.text];
 }
+
+export const XDOTOOL_TYPE_ARGV = ["xdotool", "type", "--clearmodifiers", "--"];
+/** Types its stdin, so the text stays out of every argv and exec URL. */
+export const XDOTOOL_TYPE_STDIN = ["xdotool", "type", "--clearmodifiers", "--file", "-"];
 
 function mapKey(key: string) {
   const lower = key.toLowerCase();

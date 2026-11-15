@@ -389,7 +389,10 @@ export function createDockerComputerRuntime(options: {
         stream.on("data", (data: Buffer) => chunks.push(data));
         stream.on("end", resolve);
         stream.on("error", reject);
-        if (stdin !== undefined) stream.end(stdin);
+        if (stdin !== undefined) {
+          if (signal) stream.write(stdin);
+          else stream.end(stdin);
+        }
         onAbort = () => {
           // The page helper watches stdin EOF and exits even inside a blocked CDP call.
           stream.destroy();
