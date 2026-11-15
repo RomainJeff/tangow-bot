@@ -1,10 +1,10 @@
 {
   "expo": {
     "name": "Tangow",
-    "slug": "tangow",
+    "slug": "rakazo",
     "owner": "tangow",
     "scheme": "tangow",
-    "version": "2026.11.6",
+    "version": "2026.11.7",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",

@@ -12,10 +12,7 @@ test("setup exposes all integration choices and saves only the selected provider
           canConfigure: true,
           needsSetup: true,
           webUrl: "https://example.test/integrations/setup",
-          providers: [
-            { id: "composio", configured: false },
-            { id: "pipedream", configured: false },
-          ],
+          providers: [{ id: "composio", configured: false }],
         },
       },
     }),
@@ -26,16 +23,11 @@ test("setup exposes all integration choices and saves only the selected provider
   });
   await signup(page, `integration-setup-${Date.now()}@tangow.test`, "password12", "Setup Test");
   await expect(page.getByRole("heading", { name: "Server integrations" })).toBeVisible();
-  for (const name of ["Direct MCP", "Composio", "Pipedream", "Executor"]) {
+  for (const name of ["Direct MCP", "Composio", "Executor"]) {
     await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
   }
   await expect(page.getByLabel("API key", { exact: true })).toBeHidden();
   await captureScreenshot(page, testInfo, "integration-setup-options");
-  await page.getByRole("button", { name: "Pipedream", exact: true }).click();
-  await expect(page.getByLabel("Client ID", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Project ID", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Client secret", { exact: true })).toBeVisible();
-  await captureScreenshot(page, testInfo, "integration-setup-pipedream");
   await page.getByRole("button", { name: "Composio", exact: true }).click();
   await page.getByLabel("API key", { exact: true }).fill("fake-composio-key");
   await captureScreenshot(page, testInfo, "integration-setup-composio");
@@ -211,7 +203,7 @@ test("remote members skip server setup and keep direct MCP connections", async (
   await completeOnboarding(page);
   await page.goto("/integrations/setup?mode=mcp");
   await expect(page.getByRole("heading", { name: "Add MCP server" })).toBeVisible();
-  for (const name of ["Composio", "Pipedream", "Executor"]) {
+  for (const name of ["Composio", "Executor"]) {
     await expect(page.getByRole("button", { name, exact: true })).toBeHidden();
   }
   await expect(page.getByRole("textbox", { name: "Search apps", exact: true })).toBeVisible();

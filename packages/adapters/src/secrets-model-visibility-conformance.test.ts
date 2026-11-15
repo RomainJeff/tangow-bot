@@ -1,4 +1,4 @@
-import type { AdapterContext, AgentRunRequest } from "@tangow/adapter-kit";
+import type { AgentRunRequest } from "@tangow/adapter-kit";
 import type { BotSecretDestination } from "@tangow/contracts";
 import type { PrismaClient } from "@tangow/db";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -12,8 +12,6 @@ import { FakeWebProvider } from "./fake-web.js";
 import { McpConnector } from "./mcp-connector.js";
 import type { OAuthMaterial } from "./mcp-oauth.js";
 import { oauthMaterialSecrets } from "./mcp-oauth.js";
-import { PipedreamConnector } from "./pipedream-connector.js";
-import * as remoteMcp from "./remote-mcp.js";
 import { EncryptedSecretStore } from "./secrets.js";
 import { recordingSessionLog } from "./session-log/recording.test-support.js";
 
@@ -229,76 +227,6 @@ describe("secrets model-visibility conformance", () => {
       });
       assertNoLeak(result, [BOT_SECRET, `Bearer ${BOT_SECRET}`]);
       expect(registerRedactions).toHaveBeenCalledWith(expect.arrayContaining([BOT_SECRET]));
-    });
-  });
-
-  describe("Pipedream connector OAuth boundary", () => {
-    it("redacts access token and client secret from echoed tool results", async () => {
-      const accessToken = "pd-access-token-conformance";
-      const clientSecret = "pd-client-secret-conformance";
-      vi.spyOn(remoteMcp, "callRemoteMcpTool").mockResolvedValue({
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({
-              access_token: accessToken,
-              client_secret: clientSecret,
-              ok: true,
-            }),
-          },
-        ],
-        isError: false,
-      });
-      vi.stubGlobal(
-        "fetch",
-        vi.fn(async (input: string | URL | Request) => {
-          const url = String(input);
-          if (url.includes("/v1/oauth/token")) {
-            return Response.json({ access_token: accessToken, expires_in: 3_600 });
-          }
-          throw new Error(`Unexpected fetch ${url}`);
-        }),
-      );
-
-      const connector = new PipedreamConnector({
-        clientId: "pd-client-id",
-        clientSecret,
-        projectId: "pd-project",
-        environment: "development",
-        identitySecret: "pd-identity-secret",
-      });
-      const context = {
-        operationId: "conformance",
-        traceId: "conformance",
-        spaceId: "space-1",
-        userId: "user-1",
-        signal: new AbortController().signal,
-        connectedConnections: [
-          {
-            id: "c1",
-            connectorId: "pipedream",
-            externalId: "gmail",
-            displayName: "Gmail",
-          },
-        ],
-      } as AdapterContext;
-
-      const events = [];
-      for await (const event of connector.execute(
-        {
-          tool: "gmail.list",
-          args: {},
-          executionId: "exec-1",
-          route: { connectorId: "pipedream", resourceId: "gmail", toolName: "gmail.list" },
-        },
-        context,
-      )) {
-        events.push(event);
-      }
-
-      expect(events).toHaveLength(1);
-      expect(events[0]?.type).toBe("result");
-      assertNoLeak(events, [accessToken, clientSecret]);
     });
   });
 

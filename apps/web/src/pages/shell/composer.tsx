@@ -10,12 +10,7 @@ import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { isFilePaste } from "../../lib/pending-attachments";
 import type { MessageItem } from "../../lib/thread-items";
 import type { PreviewLink } from "./composer-attachments";
-import {
-  AttachButton,
-  AttachmentTray,
-  useComposerFileDrop,
-  useDraftLinkPreview,
-} from "./composer-attachments";
+import { AttachButton, AttachmentTray, useDraftLinkPreview } from "./composer-attachments";
 import {
   DictateButton,
   DictationCancel,
@@ -63,6 +58,7 @@ export const Composer = memo(function Composer({
   onSlashAction,
   chatSettings,
   recentWriting,
+  onDictatingChange,
 }: {
   activeName?: string;
   /** The bot whose pending question the next send answers, from the roster. */
@@ -112,6 +108,8 @@ export const Composer = memo(function Composer({
   /** The person's own recent messages here, to dictate in the language they
    * write in (`dictationLangFor`) rather than the browser's own language. */
   recentWriting?: () => readonly string[];
+  /** Files dropped on the conversation are ignored while dictating, as they are while `disabled`. */
+  onDictatingChange?: (dictating: boolean) => void;
 }) {
   const { t } = useLingui();
   const [draft, setDraft] = useState("");
@@ -261,18 +259,17 @@ export const Composer = memo(function Composer({
 
   // Attachments stay unchanged while dictating: a file dropped or pasted in
   // is ignored the same way it already is while `disabled`.
-  const dropDisabled = disabled || isDictating;
-  const { draggingFiles, dropHandlers } = useComposerFileDrop({
-    disabled: dropDisabled,
-    onAttachmentPick,
-  });
+  const attachDisabled = disabled || isDictating;
+  useEffect(() => {
+    onDictatingChange?.(isDictating);
+  }, [isDictating, onDictatingChange]);
 
   function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
     const clipboardData = event.clipboardData;
     // Only intercept real FileList pastes; leave text-only / empty-files native.
     // (The textarea itself is unmounted while dictating, but this keeps the
     // guard true even if that ever changes.)
-    if (dropDisabled || !clipboardData || !isFilePaste(clipboardData)) return;
+    if (attachDisabled || !clipboardData || !isFilePaste(clipboardData)) return;
     event.preventDefault();
     void onAttachmentPick(clipboardData.files);
     const text = clipboardData.getData("text/plain");
@@ -312,11 +309,7 @@ export const Composer = memo(function Composer({
     <fieldset
       data-slot="composer"
       aria-label={t`Message composer`}
-      data-dragging={draggingFiles ? "files" : undefined}
-      {...dropHandlers}
-      className={`relative z-30 m-0 min-w-0 border-0 pt-3 pb-5 ${
-        draggingFiles ? "rounded-card ring-2 ring-inset ring-ring" : ""
-      }`}
+      className="relative z-30 m-0 min-w-0 border-0 pt-3 pb-5"
     >
       <ComposerNotices
         sendError={sendError}
