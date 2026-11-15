@@ -143,24 +143,31 @@ export function guestRuntimeModel(config: AgentRunRequest["model"]): Model<Api> 
   return config.contextWindow ? { ...model, contextWindow: config.contextWindow } : model;
 }
 
+// Anthropic rotates the refresh token on every refresh and accepts each once. A run's
+// calls must share one store so the next call refreshes with the token the last one
+// received, not the stale snapshot the request was built with.
+const oauthStores = new WeakMap<
+  NonNullable<AgentRunRequest["model"]["oauth"]>,
+  PiRuntimeCredentialStore
+>();
+
 export function modelsForRequest(
   request: Pick<AgentRunRequest, "model">,
   provider: string,
 ): Models {
   const oauth = request.model.oauth;
   if (oauth) {
-    const persist = oauth.persist;
-    return registerOpenAiCompatibleCatalog(
-      registerLocalProvider(
-        builtinModels({
-          credentials: new PiRuntimeCredentialStore(
-            provider,
-            toOAuthCredential(oauth.credential),
-            persist ? (next) => persist(next) : undefined,
-          ),
-        }),
-      ),
-    );
+    let credentials = oauthStores.get(oauth);
+    if (!credentials) {
+      const persist = oauth.persist;
+      credentials = new PiRuntimeCredentialStore(
+        provider,
+        toOAuthCredential(oauth.credential),
+        persist ? (next) => persist(next) : undefined,
+      );
+      oauthStores.set(oauth, credentials);
+    }
+    return registerOpenAiCompatibleCatalog(registerLocalProvider(builtinModels({ credentials })));
   }
   if (
     provider === OPENAI_COMPATIBLE_PROVIDER_ID &&
