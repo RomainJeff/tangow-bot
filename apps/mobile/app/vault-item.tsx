@@ -1,6 +1,7 @@
 import type { BotSecretDestination } from "@tangow/contracts";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { type ComponentProps, useState } from "react";
+import type { ComponentProps } from "react";
+import { useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Group, Row } from "../components/bot-page/kit";
 import { SpokenError } from "../components/bot-page/spoken-error";
@@ -121,6 +122,7 @@ export default function VaultItem() {
               label: t("Cancel"),
               variant: "plain",
               hidesSharedBackground: true,
+              disabled: busy,
               onPress: close,
             },
           ],

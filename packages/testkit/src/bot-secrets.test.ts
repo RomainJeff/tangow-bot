@@ -423,6 +423,12 @@ describeIntegration("reusable credential lifecycle", () => {
           args: { name: destination.name, url: `${destination.origin}/v1/items` },
           executionId: `${request.runId}:1`,
         };
+        yield {
+          type: "tool",
+          name: "request_secret",
+          args: { label: "API key", purpose: "api_key", credential: destination },
+          executionId: `${request.runId}:2`,
+        };
         yield { type: "done", text: "Done" };
       });
     // What the bot received from its tools, as written to the conversation's log.
@@ -437,8 +443,21 @@ describeIntegration("reusable credential lifecycle", () => {
       const sharedRun = await runFor(owner.bot.id, sharedThread);
       expect(fetch).not.toHaveBeenCalled();
       const shared = await toolResults(sharedRun);
-      expect(shared).toContain("only available on your own bots");
+      expect(shared.match(/Saved API keys are only available on your own bots\./g)).toHaveLength(3);
       expect(shared).not.toContain(destination.name);
+      expect(
+        await handles.prisma.sessionEntry.count({
+          where: {
+            runId: sharedRun,
+            type: { in: ["assistant.ask", "assistant.choice", "effect.requested"] },
+          },
+        }),
+      ).toBe(0);
+      expect(
+        await handles.prisma.externalEffect.count({
+          where: { runId: sharedRun, kind: "request_secret" },
+        }),
+      ).toBe(0);
 
       const ownThread = await handles.prisma.thread.findUniqueOrThrow({
         where: { botId: memberBot.id },

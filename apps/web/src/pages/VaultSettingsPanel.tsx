@@ -13,7 +13,8 @@ import {
   SettingRow,
 } from "@tangow/ui-web";
 import { Plus } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useId, useState } from "react";
+import type { ReactNode } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { rpc } from "../lib/rpc";
 import { PendingRead, SettingsGroup, useConfirm } from "./bot-page/page-kit";
 
@@ -203,7 +204,7 @@ function VaultItemDialog({
           <LabeledInput
             label={t`Key`}
             type="password"
-            autoComplete="off"
+            autoComplete="new-password"
             value={value}
             onChange={setValue}
             autoFocus={item !== null}
