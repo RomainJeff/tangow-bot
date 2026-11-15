@@ -248,7 +248,7 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       proxy: {
         "/api": apiProxy,
-        "/rpc": { target: api, changeOrigin: true },
+        "/rpc": apiProxy,
       },
     },
     preview: {
@@ -257,7 +257,7 @@ export default defineConfig(({ mode }) => {
       allowedHosts: [previewHost],
       proxy: {
         "/api": apiProxy,
-        "/rpc": { target: api, changeOrigin: true },
+        "/rpc": apiProxy,
       },
     },
   };
