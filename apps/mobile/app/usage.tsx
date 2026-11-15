@@ -175,6 +175,7 @@ export default function Usage() {
                         color={row.bot.color}
                         identity={row.bot.id}
                         shapeSeed={row.bot.shapeSeed}
+                        character={row.bot.avatarCharacter}
                         size={28}
                         still
                       />

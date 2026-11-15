@@ -50,19 +50,23 @@ export default function PeerMessages() {
     botName,
     botColor,
     botShapeSeed,
+    botCharacter,
     peerBotId,
     peerBotName,
     peerColor,
     peerShapeSeed,
+    peerCharacter,
   } = useLocalSearchParams<{
     botId?: string;
     botName?: string;
     botColor?: string;
     botShapeSeed?: string;
+    botCharacter?: string;
     peerBotId?: string;
     peerBotName?: string;
     peerColor?: string;
     peerShapeSeed?: string;
+    peerCharacter?: string;
   }>();
   const [entries, setEntries] = useState<readonly ThreadEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -135,11 +139,13 @@ export default function PeerMessages() {
                     color: botColor ?? tokens.mutedForeground,
                     identity: botId,
                     shapeSeed: ownShapeSeed,
+                    character: botCharacter || null,
                   },
                   {
                     color: peerColor ?? tokens.mutedForeground,
                     identity: peerBotId,
                     shapeSeed: otherShapeSeed,
+                    character: peerCharacter || null,
                   },
                 ]}
                 size={28}
@@ -190,6 +196,7 @@ export default function PeerMessages() {
           const color = (sent ? botColor : peerColor) ?? tokens.mutedForeground;
           const identity = sent ? botId : peerBotId;
           const shapeSeed = sent ? ownShapeSeed : otherShapeSeed;
+          const character = (sent ? botCharacter : peerCharacter) || null;
           return (
             <View
               key={`${peerMessage.messageId}-${index}`}
@@ -213,6 +220,7 @@ export default function PeerMessages() {
                     color={color}
                     identity={identity}
                     shapeSeed={shapeSeed}
+                    character={character}
                     size={sizes.message}
                     // One drawn frame each: a loop per message saturated the JS thread.
                     still

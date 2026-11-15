@@ -42,6 +42,7 @@ export function BotHero({
           color={color.value}
           identity={bot.id}
           shapeSeed={shape.value}
+          character={bot.avatarCharacter}
           size={88}
           status={bot.status}
         />
