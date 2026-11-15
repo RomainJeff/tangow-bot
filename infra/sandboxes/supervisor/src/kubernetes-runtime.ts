@@ -52,11 +52,27 @@ const COMPUTER_REQUESTS = { memory: "2Gi", cpu: "1" };
 const COMPUTER_REQUEST_BYTES = 2 * 1024 ** 3;
 const COMPUTER_REQUEST_NANO_CPUS = 1e9;
 
-/** `pods/exec` has no cwd or env: one fixed script takes both, and the command, as argv. */
-export const EXEC_ENVELOPE = 'cd "$1" && shift && exec env "$@"';
+/**
+ * `pods/exec` has no cwd or env, and puts its command in the URL, which the API server and any proxy
+ * may log. So one fixed script takes the cwd and the command as argv, and the env, secrets included,
+ * from stdin: one entry per line, backslashes and newlines escaped for `printf %b`, then an empty
+ * line. The rest of stdin is the command's.
+ */
+export const EXEC_ENVELOPE = [
+  'cd "$1" && shift || exit',
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: a shell expansion, run by the pod's sh.
+  'while IFS= read -r entry && [ -n "$entry" ]; do entry=$(printf "%bx" "$entry") && export "${entry%x}" || exit; done',
+  'exec "$@"',
+].join("\n");
 
-export function execInEnvelope(cwd: string, env: string[], argv: string[]) {
-  return ["sh", "-c", EXEC_ENVELOPE, "sh", cwd, ...env, ...argv];
+export function execInEnvelope(cwd: string, argv: string[]) {
+  return ["sh", "-c", EXEC_ENVELOPE, "sh", cwd, ...argv];
+}
+
+/** The env as the envelope reads it from stdin. */
+export function envPreamble(env: string[]) {
+  const lines = env.map((entry) => `${entry.replaceAll("\\", "\\\\").replaceAll("\n", "\\n")}\n`);
+  return `${lines.join("")}\n`;
 }
 
 /**
@@ -532,22 +548,31 @@ export function createKubernetesComputerRuntime(options: {
         },
       });
     // v5.channel.k8s.io carries the end of stdin, which the file write and the page helper need.
-    const stdin = options.stdin !== undefined || signal ? new PassThrough() : null;
+    const stdin = new PassThrough();
+    stdin.write(envPreamble(options.env));
     let status: V1Status | undefined;
-    const socket = await podExec.exec(
-      namespace,
-      id,
-      CONTAINER,
-      execInEnvelope(options.cwd, options.env, argv),
-      collect(stdout),
-      collect(stderr),
-      stdin,
-      false,
-      (received) => {
-        status = received;
-      },
-    );
-    if (options.stdin !== undefined) stdin?.end(options.stdin);
+    const socket = await podExec
+      .exec(
+        namespace,
+        id,
+        CONTAINER,
+        execInEnvelope(options.cwd, argv),
+        collect(stdout),
+        collect(stderr),
+        stdin,
+        false,
+        (received) => {
+          status = received;
+        },
+      )
+      .catch((error: unknown) => {
+        // A failed connect rejects with the socket's error, which may hold the exec URL: only the
+        // API server's HTTP status is kept.
+        const http = `${(error as { message?: unknown })?.message}`.match(/response: (\d{3})/);
+        throw new Error(`computer command could not start${http ? ` (HTTP ${http[1]})` : ""}`);
+      });
+    if (options.stdin !== undefined) stdin.end(options.stdin);
+    else if (!signal) stdin.end();
     let onAbort: (() => void) | undefined;
     try {
       await new Promise<void>((resolve, reject) => {
@@ -556,10 +581,8 @@ export function createKubernetesComputerRuntime(options: {
           // Settle first: closing the socket may report `close` at once.
           reject(signal?.reason ?? new Error("command cancelled"));
           // The client sends stdin's v5 close frame on `end`; the socket closes after it.
-          if (stdin) {
-            stdin.once("end", () => socket.close());
-            stdin.end();
-          } else socket.close();
+          stdin.once("end", () => socket.close());
+          stdin.end();
         };
         signal?.addEventListener("abort", onAbort, { once: true });
         if (signal?.aborted) onAbort();
