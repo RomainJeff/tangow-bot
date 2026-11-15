@@ -117,6 +117,8 @@
   --animate-arrive: rk-arrive var(--duration-arrive) var(--motion-ease) backwards;
   /* The send arrow pivoting in with the first character. */
   --animate-pivot: rk-pivot var(--duration-pivot) var(--motion-ease) both;
+  /* A bot's avatar taking a new character: a short squash, then it settles. */
+  --animate-swap: rk-swap var(--duration-pivot) var(--motion-ease);
 
   --text-body: var(--type-body-size);
   --text-body--line-height: var(--type-body-leading);
@@ -254,6 +256,22 @@
   to {
     transform: none;
     opacity: 1;
+  }
+}
+
+/* Clay pressed down and springing back. */
+@keyframes rk-swap {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.06, 0.9);
+  }
+  70% {
+    transform: scale(0.97, 1.03);
+  }
+  100% {
+    transform: scale(1);
   }
 }
 
@@ -619,7 +637,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .animate-arrive,
-  .animate-pivot {
+  .animate-pivot,
+  .animate-swap {
     animation: none;
   }
 
