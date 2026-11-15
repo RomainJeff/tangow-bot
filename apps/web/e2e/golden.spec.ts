@@ -215,20 +215,17 @@ test("takeover, routine, plugins, and export are reachable", async ({ page }, te
   });
   await captureScreenshot(page, testInfo, "11b-connected-plugins-empty");
 
-  const linearRow = page
-    .getByText("Linear", { exact: true })
+  const githubRow = page
+    .getByText("GitHub", { exact: true })
     .locator("xpath=ancestor::*[.//button][1]");
-  const connectPopup = page.waitForEvent("popup");
-  await linearRow.getByRole("button", { name: "Add", exact: true }).click();
-  const popup = await connectPopup;
-  await popup.close();
-  await expect(linearRow.getByRole("button", { name: "Added", exact: true })).toBeVisible();
-  await linearRow.getByRole("button", { name: "Added", exact: true }).click();
-  const linearDetail = page.getByTestId("connection-detail");
-  await expect(linearDetail).toBeVisible();
-  await linearDetail.getByRole("button", { name: "Uninstall", exact: true }).click();
+  await githubRow.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(githubRow.getByRole("button", { name: "Added", exact: true })).toBeVisible();
+  await githubRow.getByRole("button", { name: "Added", exact: true }).click();
+  const githubDetail = page.getByTestId("connection-detail");
+  await expect(githubDetail).toBeVisible();
+  await githubDetail.getByRole("button", { name: "Uninstall", exact: true }).click();
   await expect(page.getByTestId("connection-detail")).toHaveCount(0);
-  await expect(linearRow.getByRole("button", { name: "Add", exact: true })).toBeVisible();
+  await expect(githubRow.getByRole("button", { name: "Add", exact: true })).toBeVisible();
 
   const advanced = page.getByTestId("integrations-advanced");
   await advanced.evaluate((element) => {

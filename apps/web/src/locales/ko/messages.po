@@ -264,7 +264,7 @@ msgstr ""
 msgid "About spaces"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:305
+#: src/components/integrations/IntegrationSetup.tsx:262
 msgid "Access token"
 msgstr ""
 
@@ -379,7 +379,7 @@ msgstr "Executor 추가"
 msgid "Add item"
 msgstr "항목 추가"
 
-#: src/components/integrations/IntegrationSetup.tsx:129
+#: src/components/integrations/IntegrationSetup.tsx:114
 #: src/pages/plugins/advanced-integrations.tsx:188
 msgid "Add MCP server"
 msgstr "MCP 서버 추가"
@@ -397,7 +397,7 @@ msgstr "원격 MCP 서버 추가"
 msgid "Add server"
 msgstr "서버 추가"
 
-#: src/components/integrations/IntegrationSetup.tsx:273
+#: src/components/integrations/IntegrationSetup.tsx:230
 msgid "Add server URL"
 msgstr ""
 
@@ -543,7 +543,7 @@ msgid "API is back, but the update did not finish. Check the host logs."
 msgstr "API가 다시 작동하지만 업데이트가 완료되지 않았습니다. 호스트 로그를 확인하세요."
 
 #: src/components/AskCard.tsx:123
-#: src/components/integrations/IntegrationSetup.tsx:189
+#: src/components/integrations/IntegrationSetup.tsx:150
 #: src/lib/localized-provider-hint.ts:9
 #: src/pages/model-settings/model-detail.tsx:284
 #: src/pages/model-settings/model-detail.tsx:287
@@ -644,7 +644,7 @@ msgstr "결제하기 전에 확인"
 msgid "Ask before sending external email"
 msgstr "외부 이메일을 보내기 전에 확인"
 
-#: src/components/integrations/IntegrationSetup.tsx:223
+#: src/components/integrations/IntegrationSetup.tsx:180
 msgid "Ask the server owner to configure this provider."
 msgstr ""
 
@@ -979,14 +979,6 @@ msgstr "지침을 비울까요?"
 msgid "Clearing…"
 msgstr "비우는 중…"
 
-#: src/components/integrations/IntegrationSetup.tsx:167
-msgid "Client ID"
-msgstr ""
-
-#: src/components/integrations/IntegrationSetup.tsx:189
-msgid "Client secret"
-msgstr ""
-
 #: src/pages/CustomizeOverlay.tsx:130
 #: src/pages/KnowledgeSection.tsx:692
 #: src/pages/KnowledgeSection.tsx:848
@@ -1136,10 +1128,10 @@ msgstr "삭제 확인"
 msgid "Confirm password"
 msgstr "비밀번호 확인"
 
-#: src/components/integrations/IntegrationSetup.tsx:217
-#: src/components/integrations/IntegrationSetup.tsx:262
-#: src/components/integrations/IntegrationSetup.tsx:286
-#: src/components/integrations/IntegrationSetup.tsx:319
+#: src/components/integrations/IntegrationSetup.tsx:174
+#: src/components/integrations/IntegrationSetup.tsx:219
+#: src/components/integrations/IntegrationSetup.tsx:243
+#: src/components/integrations/IntegrationSetup.tsx:276
 #: src/pages/DecisionModelSettingsPanel.tsx:176
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
@@ -1179,8 +1171,8 @@ msgstr "이 AI 서비스를 연결하면 내 기본 모델로 사용할 수 있�
 msgid "Connect Treg"
 msgstr "Treg 연결"
 
-#: src/components/integrations/IntegrationSetup.tsx:159
-#: src/components/integrations/IntegrationSetup.tsx:262
+#: src/components/integrations/IntegrationSetup.tsx:144
+#: src/components/integrations/IntegrationSetup.tsx:219
 #: src/pages/DecisionModelSettingsPanel.tsx:98
 #: src/pages/McpOAuthCallback.tsx:54
 #: src/pages/MemorySettingsOverlay.tsx:191
@@ -1211,8 +1203,8 @@ msgstr "{0}에 연결하고 기본 모델로 설정했습니다."
 msgid "Connected. Its tools are available from your next message."
 msgstr "연결되었습니다. 다음 메시지부터 이 도구를 사용할 수 있습니다."
 
-#: src/components/integrations/IntegrationSetup.tsx:217
-#: src/components/integrations/IntegrationSetup.tsx:356
+#: src/components/integrations/IntegrationSetup.tsx:174
+#: src/components/integrations/IntegrationSetup.tsx:310
 #: src/pages/DecisionModelSettingsPanel.tsx:176
 #: src/pages/McpServersOverlay.tsx:38
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
@@ -1237,7 +1229,7 @@ msgstr ""
 msgid "Context limit"
 msgstr "컨텍스트 한도"
 
-#: src/components/integrations/IntegrationSetup.tsx:356
+#: src/components/integrations/IntegrationSetup.tsx:310
 #: src/pages/Invite.tsx:108
 #: src/pages/Onboarding.tsx:664
 msgid "Continue"
@@ -1324,7 +1316,7 @@ msgstr "OAuth 인증을 완료하지 못했습니다."
 msgid "Could not complete the update. Try again."
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:76
+#: src/components/integrations/IntegrationSetup.tsx:71
 #: src/pages/plugins/use-integrations.ts:231
 msgid "Could not connect"
 msgstr "연결하지 못했습니다."
@@ -1473,7 +1465,7 @@ msgstr ""
 msgid "Could not load decision model settings"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:67
+#: src/components/integrations/IntegrationSetup.tsx:62
 #: src/pages/plugins/use-integrations.ts:105
 #: src/pages/PluginsOverlay.tsx:173
 msgid "Could not load integrations"
@@ -1972,7 +1964,7 @@ msgstr ""
 msgid "Dictating"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:40
+#: src/components/integrations/IntegrationSetup.tsx:38
 msgid "Direct MCP"
 msgstr ""
 
@@ -2056,7 +2048,7 @@ msgstr "{name} 다운로드"
 msgid "Download as markdown"
 msgstr "마크다운으로 다운로드"
 
-#: src/components/integrations/IntegrationSetup.tsx:331
+#: src/components/integrations/IntegrationSetup.tsx:288
 msgid "Download Executor"
 msgstr ""
 
@@ -2342,7 +2334,7 @@ msgstr ""
 msgid "General"
 msgstr "일반"
 
-#: src/components/integrations/IntegrationSetup.tsx:209
+#: src/components/integrations/IntegrationSetup.tsx:166
 msgid "Get credentials"
 msgstr ""
 
@@ -2523,7 +2515,7 @@ msgstr "지침"
 msgid "Integration domain"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:133
+#: src/components/integrations/IntegrationSetup.tsx:118
 msgid "Integration options"
 msgstr ""
 
@@ -3144,7 +3136,7 @@ msgstr "연결된 모델 없음"
 msgid "No providers found."
 msgstr "검색된 AI 서비스가 없습니다."
 
-#: src/components/integrations/IntegrationSetup.tsx:268
+#: src/components/integrations/IntegrationSetup.tsx:225
 msgid "No remote MCP servers found"
 msgstr ""
 
@@ -3480,10 +3472,6 @@ msgstr "프로필"
 
 #: src/pages/AccountProfileSettings.tsx:86
 msgid "Profile photo"
-msgstr ""
-
-#: src/components/integrations/IntegrationSetup.tsx:177
-msgid "Project ID"
 msgstr ""
 
 #: src/pages/MemorySettingsOverlay.tsx:219
@@ -3968,8 +3956,8 @@ msgstr "화면"
 msgid "Search"
 msgstr "검색"
 
-#: src/components/integrations/IntegrationSetup.tsx:245
-#: src/components/integrations/IntegrationSetup.tsx:246
+#: src/components/integrations/IntegrationSetup.tsx:202
+#: src/components/integrations/IntegrationSetup.tsx:203
 #: src/pages/PluginsOverlay.tsx:150
 #: src/pages/PluginsOverlay.tsx:151
 msgid "Search apps"
@@ -3983,7 +3971,7 @@ msgstr "봇 검색 및 대화 전환"
 msgid "Search by domain"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:251
+#: src/components/integrations/IntegrationSetup.tsx:208
 msgid "Search integrations.sh"
 msgstr ""
 
@@ -4034,7 +4022,7 @@ msgstr "보내는 중…"
 msgid "Sent"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:129
+#: src/components/integrations/IntegrationSetup.tsx:114
 #: src/pages/AccountSettingsOverlay.tsx:166
 msgid "Server integrations"
 msgstr ""
@@ -4043,8 +4031,8 @@ msgstr ""
 msgid "Server name"
 msgstr "서버 이름"
 
-#: src/components/integrations/IntegrationSetup.tsx:277
-#: src/components/integrations/IntegrationSetup.tsx:295
+#: src/components/integrations/IntegrationSetup.tsx:234
+#: src/components/integrations/IntegrationSetup.tsx:252
 #: src/pages/McpServersOverlay.tsx:397
 #: src/pages/model-settings/model-detail.tsx:80
 #: src/pages/Onboarding.tsx:411
@@ -4069,7 +4057,7 @@ msgstr "설정: 일반"
 msgid "Settings: Usage"
 msgstr "설정: 사용량"
 
-#: src/components/integrations/IntegrationSetup.tsx:323
+#: src/components/integrations/IntegrationSetup.tsx:280
 #: src/pages/model-settings/model-detail.tsx:93
 msgid "Setup help"
 msgstr "설정 도움말"
@@ -4181,7 +4169,7 @@ msgid "Skills this bot can use"
 msgstr ""
 
 #: src/components/ask/QuestionCard.tsx:198
-#: src/components/integrations/IntegrationSetup.tsx:359
+#: src/components/integrations/IntegrationSetup.tsx:313
 #: src/pages/shell/side-panel.tsx:502
 msgid "Skip"
 msgstr "건너뛰기"

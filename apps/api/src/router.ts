@@ -361,28 +361,6 @@ function shouldRestoreLocalAfterRemoteRevokeFailure(error: unknown): boolean {
   return isRemoteRevokePreDeleteFailure(error) || !isAmbiguousRemoteRevokeFailure(error);
 }
 
-/**
- * Concrete account ids still referenced by active local rows. When any row still
- * only has the provider slug (or no ref), orphan cleanup must not run — a sibling
- * may have created its remote account before persisting the concrete id.
- */
-function concreteKeepAccountIds(
-  refs: Array<string | null | undefined>,
-  provider: string,
-): { keepIds: string[]; canRevokeUnreferenced: boolean } {
-  const keepIds: string[] = [];
-  let canRevokeUnreferenced = true;
-  for (const ref of refs) {
-    const value = ref?.trim();
-    if (!value || value === provider) {
-      canRevokeUnreferenced = false;
-      continue;
-    }
-    keepIds.push(value);
-  }
-  return { keepIds, canRevokeUnreferenced };
-}
-
 async function lockProviderConnectionScope(
   tx: Prisma.TransactionClient,
   owner: Pick<Actor, "spaceId" | "userId">,
@@ -3782,8 +3760,7 @@ export function createRouter(deps: RouterDeps) {
       }),
       begin: authed.connections.begin.handler(async ({ context, input }) => {
         const connector =
-          deps.integrationSettings &&
-          (input.connectorId === "composio" || input.connectorId === "pipedream")
+          deps.integrationSettings && input.connectorId === "composio"
             ? await deps.integrationSettings.resolve(input.connectorId)
             : deps.connectors.managed(input.connectorId);
         if (!connector) {
@@ -3886,56 +3863,6 @@ export function createRouter(deps: RouterDeps) {
                   await connector.revoke(revokeRef, adapterContext).catch(() => undefined);
                 }
               }
-            } else if (state === input.provider) {
-              // Pipedream begin only returns the app slug. Drop remotes that no
-              // remaining local row still references so a lost race cannot leave
-              // an orphan authorization, without wiping sibling accounts.
-              const revokeUnreferenced = (
-                connector as {
-                  revokeUnreferencedAccounts?: (
-                    slug: string,
-                    keepAccountIds: string[],
-                    context: ReturnType<typeof connectionContext>,
-                  ) => Promise<void>;
-                }
-              ).revokeUnreferencedAccounts;
-              if (revokeUnreferenced) {
-                // Hold the provider lock across the keep-id snapshot and remote
-                // cleanup so a concurrent complete cannot persist a providerRef
-                // that this cleanup then deletes as unreferenced.
-                await deps.prisma
-                  .$transaction(
-                    async (tx) => {
-                      await lockProviderConnectionScope(
-                        tx,
-                        context.actor,
-                        input.connectorId,
-                        input.provider,
-                      );
-                      const kept = await tx.connection.findMany({
-                        where: {
-                          spaceId: context.actor.spaceId,
-                          userId: context.actor.userId,
-                          connectorId: input.connectorId,
-                          provider: input.provider,
-                          status: { in: ["connected", "pending", "error"] },
-                        },
-                        select: { providerRef: true },
-                      });
-                      const { keepIds, canRevokeUnreferenced } = concreteKeepAccountIds(
-                        kept.map((entry) => entry.providerRef),
-                        input.provider,
-                      );
-                      // Skip while any sibling still lacks a concrete account id —
-                      // otherwise slug-only pending refs are dropped from keepIds and
-                      // revokeUnreferencedAccounts deletes that sibling's remote auth.
-                      if (!canRevokeUnreferenced) return;
-                      await revokeUnreferenced(input.provider, keepIds, adapterContext);
-                    },
-                    { timeout: 60_000 },
-                  )
-                  .catch(() => undefined);
-              }
             }
             throw new IsolationError();
           }
@@ -3971,10 +3898,8 @@ export function createRouter(deps: RouterDeps) {
         }
         let row = existing;
         if (existing.status !== "connected") {
-          // Hold the provider lock across remote completion, account-id resolution,
-          // providerRef persistence, and any overlapping revokeUnreferenced cleanup
-          // so a concurrent begin-loss cleanup cannot delete the account we are about
-          // to persist.
+          // Hold the provider lock across remote completion, account-id resolution
+          // and providerRef persistence so a concurrent revoke cannot race them.
           row = await deps.prisma.$transaction(
             async (tx) => {
               await lockProviderConnectionScope(
@@ -3994,8 +3919,7 @@ export function createRouter(deps: RouterDeps) {
               if (current.status === "connected") return current;
               if (current.status === "revoked") {
                 // Authorization URLs from a revoke-win begin can still finish
-                // remotely. Cancel leftover Composio request ids / drop Pipedream
-                // remotes no active local row still references before rejecting.
+                // remotely. Cancel leftover Composio request ids before rejecting.
                 const revokedContext = connectionContext(
                   context.actor,
                   "connections.complete",
@@ -4054,35 +3978,6 @@ export function createRouter(deps: RouterDeps) {
                       }
                       if (revokeRef) {
                         await connector.revoke(revokeRef, revokedContext);
-                      }
-                    }
-                  } else {
-                    const revokeUnreferenced = (
-                      connector as {
-                        revokeUnreferencedAccounts?: (
-                          slug: string,
-                          keepAccountIds: string[],
-                          context: typeof revokedContext,
-                        ) => Promise<void>;
-                      }
-                    ).revokeUnreferencedAccounts;
-                    if (revokeUnreferenced) {
-                      const kept = await tx.connection.findMany({
-                        where: {
-                          spaceId: context.actor.spaceId,
-                          userId: context.actor.userId,
-                          connectorId: existing.connectorId,
-                          provider: existing.provider,
-                          status: { in: ["connected", "pending", "error"] },
-                        },
-                        select: { providerRef: true },
-                      });
-                      const { keepIds, canRevokeUnreferenced } = concreteKeepAccountIds(
-                        kept.map((entry) => entry.providerRef),
-                        existing.provider,
-                      );
-                      if (canRevokeUnreferenced) {
-                        await revokeUnreferenced(existing.provider, keepIds, revokedContext);
                       }
                     }
                   }
@@ -4352,7 +4247,7 @@ export function createRouter(deps: RouterDeps) {
 
             // Slug-only remote delete is provider-wide. Run it before commit while
             // still holding the begin/revoke lock so a new authorization cannot be
-            // created and then wiped by Pipedream's slug-scoped DELETE.
+            // created and then wiped by the slug-scoped DELETE.
             if (!accountSpecific) {
               const connector = deps.connectors.managed(row.connectorId);
               if (!connector) {

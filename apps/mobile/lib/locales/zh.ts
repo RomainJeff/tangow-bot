@@ -75,7 +75,6 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Finish MCP authorization in the web app.": "请在网页应用中完成 MCP 授权。",
   "Get credentials": "获取凭据",
   "Open web app": "打开网页应用",
-  "Project ID": "项目 ID",
   "Set up Executor on your server in the web app.": "请在网页应用中为服务器设置 Executor。",
 
   running: "运行中",
