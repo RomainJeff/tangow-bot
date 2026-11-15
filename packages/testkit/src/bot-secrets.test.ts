@@ -281,7 +281,11 @@ describeIntegration("reusable credential lifecycle", () => {
         const count = fetch.mock.calls.length;
         await rpc(seeded.cookie, "vault/remove", { name: destination.name });
         await nextRun([request]);
-        expect(await handles.prisma.botSecret.count({ where: { botId: seeded.bot.id } })).toBe(0);
+        expect(
+          await handles.prisma.botSecret.count({
+            where: { userId: seeded.me.userId, spaceId: seeded.me.spaceId, name: destination.name },
+          }),
+        ).toBe(0);
         expect(fetch).toHaveBeenCalledTimes(count);
         const [messages, events, effects, tasks] = await Promise.all([
           handles.prisma.sessionEntry.findMany({
@@ -330,6 +334,119 @@ describeIntegration("reusable credential lifecycle", () => {
       await handles.executor.continueRun(owner.run.id, "test-worker");
       expect(new Headers(fetch.mock.calls.at(-1)?.[1]?.headers).get("Authorization")).toBe(
         `Bearer ${vaultKey}`,
+      );
+    } finally {
+      runtime.mockRestore();
+    }
+
+    // The limit counts the person's keys in this space, across every bot.
+    await handles.prisma.botSecret.createMany({
+      data: Array.from({ length: 99 }, (_, index) => ({
+        id: `vault-limit-${stamp}-${index}`,
+        userId: owner.me.userId,
+        spaceId: owner.me.spaceId,
+        name: `limit_${index}`,
+        origin: destination.origin,
+        auth: destination.auth,
+        ciphertext: "v2:unused",
+      })),
+    });
+    await expect(
+      rpc(owner.cookie, "vault/put", { ...destination, name: "one_too_many", value: vaultKey }),
+    ).rejects.toThrow("Credential limit reached");
+    await rpc(owner.cookie, "vault/put", { ...destination, value: vaultKey }, otherSpace.id);
+  });
+
+  it("keeps a person's keys from bots other people shared with them", async () => {
+    fetch.mockClear();
+    const owner = await seedRun("vault-share-owner", "Shared bot");
+    const { spaceId } = owner.me;
+    const { invitations } = await rpc<{ invitations: Array<{ id: string }> }>(
+      owner.cookie,
+      "spaces/createInvite",
+      { spaceId, emails: [`vault-share-member-${stamp}@tangow.test`] },
+    );
+    const member = await signup(`vault-share-member-${stamp}@tangow.test`, "Member");
+    await rpc(member, "spaces/acceptInvite", { token: invitations[0]!.id });
+    const memberKey = "fake-member-api-key";
+    await rpc(member, "vault/put", { ...destination, value: memberKey }, spaceId);
+    // Sharing waits for the bot's runs to end.
+    await handles.prisma.run.update({
+      where: { id: owner.run.id },
+      data: { status: "completed", completedAt: new Date() },
+    });
+    await rpc(owner.cookie, "bots/share", {
+      botId: owner.bot.id,
+      visibility: "space",
+      userIds: [],
+    });
+    const memberMe = await rpc<{ userId: string }>(member, "me", {}, spaceId);
+    await rpc(member, "bots/list", {}, spaceId);
+    const memberBot = await rpc<{ id: string }>(
+      member,
+      "bots/create",
+      { name: "Member bot", title: "", description: "", instructions: "", notifyOnFinish: false },
+      spaceId,
+    );
+    const runFor = async (botId: string, thread: { id: string }) => {
+      const task = await handles.prisma.task.create({
+        data: {
+          spaceId,
+          botId,
+          threadId: thread.id,
+          userId: memberMe.userId,
+          prompt: "Use it",
+          status: "queued",
+        },
+      });
+      const run = await handles.prisma.run.create({
+        data: {
+          spaceId,
+          botId,
+          threadId: thread.id,
+          taskId: task.id,
+          userId: memberMe.userId,
+          status: "queued",
+          trigger: "user",
+        },
+      });
+      await handles.executor.continueRun(run.id, "test-worker");
+      return run.id;
+    };
+    const runtime = vi
+      .spyOn(ScriptedAgentRuntime.prototype, "run")
+      .mockImplementation(async function* (request): AsyncIterable<AgentRuntimeEvent> {
+        yield { type: "tool", name: "list_secrets", args: {}, executionId: `${request.runId}:0` };
+        yield {
+          type: "tool",
+          name: "secret_request",
+          args: { name: destination.name, url: `${destination.origin}/v1/items` },
+          executionId: `${request.runId}:1`,
+        };
+        yield { type: "done", text: "Done" };
+      });
+    // What the bot received from its tools, as written to the conversation's log.
+    const toolResults = async (runId: string) =>
+      (await handles.prisma.sessionEntry.findMany({ where: { runId, type: "tool.result" } }))
+        .map((entry) => (entry.payload as { output: string }).output)
+        .join("\n");
+    try {
+      const sharedThread = await handles.prisma.thread.findFirstOrThrow({
+        where: { memberBotId: owner.bot.id, userId: memberMe.userId },
+      });
+      const sharedRun = await runFor(owner.bot.id, sharedThread);
+      expect(fetch).not.toHaveBeenCalled();
+      const shared = await toolResults(sharedRun);
+      expect(shared).toContain("only available on your own bots");
+      expect(shared).not.toContain(destination.name);
+
+      const ownThread = await handles.prisma.thread.findUniqueOrThrow({
+        where: { botId: memberBot.id },
+      });
+      const ownRun = await runFor(memberBot.id, ownThread);
+      expect(await toolResults(ownRun)).toContain(destination.name);
+      expect(new Headers(fetch.mock.calls.at(-1)?.[1]?.headers).get("Authorization")).toBe(
+        `Bearer ${memberKey}`,
       );
     } finally {
       runtime.mockRestore();
@@ -508,7 +625,8 @@ describeIntegration("reusable credential lifecycle", () => {
     });
     const payload = (await response.json()) as { json?: T; error?: { message?: string } };
     if (!response.ok || payload.error) {
-      throw new Error(payload.error?.message ?? `${procedure} failed (${response.status})`);
+      const message = payload.error?.message ?? (payload.json as { message?: string })?.message;
+      throw new Error(`${procedure} failed (${response.status}): ${message}`);
     }
     return payload.json as T;
   }

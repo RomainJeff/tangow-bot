@@ -16,7 +16,7 @@ For example, the bot can request:
 }
 ```
 
-The value is encrypted in Postgres `bot_secrets` using the deployment's `ENCRYPTION_KEY` (AES-256-GCM with record-bound authentication). Only the run's user can submit a reusable credential. It belongs to that user in that space, so every bot of theirs there can use it, still only at its saved origin. It survives later runs and the deletion of the bot that asked for it, and is deleted with its owner or space. Settings > Vault on web, desktop and mobile lists these credentials by name and site, adds one, replaces a value and deletes one; a saved value is never shown again. Names, destinations and authentication configuration are metadata; `list_secrets` returns those fields without values. No hosted credential service or prebuilt connector is required.
+The value is encrypted in Postgres `bot_secrets` using the deployment's `ENCRYPTION_KEY` (AES-256-GCM with record-bound authentication). Only the run's user can submit a reusable credential. It belongs to that user in that space, so every bot they own there can use it, still only at its saved origin. A bot someone else shared with them cannot list, use or save their credentials. It survives later runs and the deletion of the bot that asked for it, and is deleted with its owner or space. Settings > Vault on web, desktop and mobile lists these credentials by name and site, adds one, replaces a value and deletes one; a saved value is never shown again. Names, destinations and authentication configuration are metadata; `list_secrets` returns those fields without values. No hosted credential service or prebuilt connector is required.
 
 The bot uses `secret_request` to ask the backend to decrypt and inject the credential:
 

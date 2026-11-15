@@ -3485,6 +3485,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 name,
               );
           if (skillRefusal) return { error: skillRefusal };
+          // Saved API keys belong to the person in the space and serve only their own bots: a bot
+          // shared with them must not reach their keys.
+          if (
+            run.userId !== bot.userId &&
+            (name === "list_secrets" ||
+              name === "secret_request" ||
+              (name === "request_secret" && args.credential !== undefined))
+          ) {
+            return { error: "Saved API keys are only available on your own bots." };
+          }
           const effectName = replaysApproval
             ? nextApprovedTool
             : proposal
