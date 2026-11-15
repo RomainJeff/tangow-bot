@@ -149,8 +149,8 @@ for installation and attach all fresh DMGs for the requested architectures.
 Do not pick an older file left in `out`.
 
 From the same `out` run, also select the macOS update feed that installed
-desktop apps read through electron-updater: `latest-mac.yml`, the `-mac.zip` it
-names, and that ZIP's `.blockmap` when present. Require the yml's `version` to
+desktop apps read through electron-updater: `latest-mac.yml`, every `-mac.zip` it
+names (one per architecture), and each ZIP's `.blockmap` when present. Require the yml's `version` to
 equal the desktop version and every `files[].url` and `path` it lists to exist
 next to it in `out`. Leave `latest.yml`, `latest-linux.yml` and the Windows and
 Linux artifacts out of the release; those platforms are not tested. A missing
@@ -178,10 +178,10 @@ Publish only after every selected build, submission, and installation succeeds.
 Confirm `HEAD` still equals `release_sha` and the tracked checkout is still clean.
 Stage a copy of each selected artifact under the ignored `artifacts/` directory
 with distinct release filenames. Keep the update feed files under their exact
-electron-builder names: `latest-mac.yml` refers to the ZIP by name and checksum,
+electron-builder names: `latest-mac.yml` refers to each ZIP by name and checksum,
 so a renamed file breaks every installed client's update. Require every file to
 be nonempty. The default release requires the IPA, the DMG, `latest-mac.yml` and
-its ZIP; a desktop release requires all but the IPA. Never publish a partial release.
+every ZIP it lists; a desktop release requires all but the IPA. Never publish a partial release.
 
 Push the recorded commit to the resolved GitHub remote if it is not already
 available there, without force-pushing or merging branches. Create an annotated
@@ -204,7 +204,7 @@ or repeat an iOS submission without establishing what already succeeded.
 Verify the remote tag resolves to `release_sha` and use `gh release view` to check
 the published state and asset names and sizes against the local files. For a
 desktop release, also confirm it is the Latest release and that the published
-`latest-mac.yml` names the desktop version and a ZIP attached to this release. Return
+`latest-mac.yml` names the desktop version and only ZIPs attached to this release. Return
 the release URL, tag, attached artifacts, installed desktop version, and iOS
 submission result as applicable. If any stage fails, report the successful stages
 and the precise stage to resume; do not claim the release is complete.
