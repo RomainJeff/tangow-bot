@@ -10,7 +10,6 @@ import {
   ComposioEmulator,
   EmailEmulator,
   LocalArtifactStore,
-  PipedreamConnector,
   ThirdPartyConnectorEmulator,
 } from "@tangow/adapters";
 import type { EntryId, MessageBlock, SessionEntry, SessionId } from "@tangow/contracts";
@@ -54,16 +53,6 @@ async function main() {
     stdio: "inherit",
   });
   const thirdParties = new ThirdPartyConnectorEmulator();
-  const pipedream = new PipedreamConnector(
-    {
-      clientId: "fake-client-id",
-      clientSecret: "fake-client-secret",
-      projectId: "fake-project-id",
-      environment: "development",
-      identitySecret: process.env.ENCRYPTION_KEY!,
-    },
-    { fetch: thirdParties.fetch, resolveHostname: thirdParties.resolveHostname },
-  );
   const { createApp } = await import("../../../../apps/api/src/app.ts");
   const handles = await createApp({
     databaseUrl: process.env.DATABASE_URL!,
@@ -71,7 +60,6 @@ async function main() {
     apiHost: "0.0.0.0",
     apiUrl: HOST_API_URL,
     composio: new ComposioEmulator(),
-    pipedream,
     email: new EmailEmulator(),
     remoteConnectors: {
       fetch: thirdParties.fetch,
