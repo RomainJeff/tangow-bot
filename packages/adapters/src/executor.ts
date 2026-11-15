@@ -161,6 +161,7 @@ import {
   SHAPES,
   STORED_MODEL_UNAVAILABLE_MESSAGE,
   sandboxCommandTimeoutMs,
+  secretRedactor,
   skillsReferencedInPrompt,
   skillWriteRefusal,
   spawnBotToolArgs,
@@ -319,7 +320,11 @@ import {
 import { observationToolResult, parseComputerActions, screenPath } from "./computer-tools.js";
 import { checkpointRunComputerWorkspace } from "./computer-workspace.js";
 import { connectorError } from "./connector-errors.js";
-import { redactConnectorPayload, sanitizeConnectorError } from "./connector-safety.js";
+import {
+  redactConnectorPayload,
+  redactTranscript,
+  sanitizeConnectorError,
+} from "./connector-safety.js";
 import { formatCurrentTimeInstruction } from "./current-time.js";
 import type { DecisionProviderResolver } from "./decision-provider-factory.js";
 import { resolveDeploymentModel } from "./deployment-model.js";
@@ -2763,10 +2768,12 @@ export function createRunExecutor(deps: ExecutorDeps) {
               throw error;
             }));
           recordToolOutput(executionId, result);
-          if (!isToolPauseResult(result)) {
-            await answer(result, isFailedToolResult(result), toolArtifactIds(result));
-          }
-          return result;
+          if (isToolPauseResult(result)) return result;
+          await answer(result, isFailedToolResult(result), toolArtifactIds(result));
+          if (!containsSecret(result, runSecrets)) return result;
+          // The runtime hands the result to its guest and keeps it as the call's receipt: mask it
+          // in the JSON form the guest receives, as the model relay does.
+          return redactTranscript(JSON.parse(JSON.stringify(result)), secretRedactor(runSecrets));
         };
         const writeRunEntry = (entry: ToolLogEntry) => logEntry({ ...runLog, ...entry });
         const effort = runtimeModel.thinkingLevel ?? null;

@@ -264,7 +264,7 @@ msgstr ""
 msgid "About spaces"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:305
+#: src/components/integrations/IntegrationSetup.tsx:262
 msgid "Access token"
 msgstr ""
 
@@ -336,11 +336,11 @@ msgstr "Etkinlik"
 msgid "Activity, last run failed"
 msgstr "Etkinlik, son çalışma başarısız oldu"
 
-#: src/pages/plugins/advanced-integrations.tsx:171
+#: src/pages/plugins/advanced-integrations.tsx:169
 #: src/pages/PluginsOverlay.tsx:83
 #: src/pages/ScratchpadSection.tsx:196
 #: src/pages/shell/message-cards.tsx:201
-#: src/pages/VaultSettingsPanel.tsx:53
+#: src/pages/VaultSettingsPanel.tsx:54
 msgid "Add"
 msgstr "Ekle"
 
@@ -372,36 +372,24 @@ msgstr "Bir HTTPS sunucu URL'si gir."
 msgid "Add another"
 msgstr ""
 
-#: src/pages/plugins/advanced-integrations.tsx:217
+#: src/pages/plugins/advanced-integrations.tsx:197
 msgid "Add Executor"
 msgstr "Executor ekle"
-
-#: src/pages/plugins/advanced-integrations.tsx:208
-msgid "Add GraphQL"
-msgstr "GraphQL ekle"
-
-#: src/pages/plugins/advanced-integrations.tsx:243
-msgid "Add GraphQL endpoint"
-msgstr "GraphQL uç noktası ekle"
 
 #: src/pages/ScratchpadSection.tsx:185
 msgid "Add item"
 msgstr "Öğe ekle"
 
-#: src/components/integrations/IntegrationSetup.tsx:129
-#: src/pages/plugins/advanced-integrations.tsx:190
+#: src/components/integrations/IntegrationSetup.tsx:114
+#: src/pages/plugins/advanced-integrations.tsx:188
 msgid "Add MCP server"
 msgstr "MCP sunucusu ekle"
-
-#: src/pages/plugins/advanced-integrations.tsx:199
-msgid "Add OpenAPI"
-msgstr "OpenAPI ekle"
 
 #: src/pages/AccountProfileSettings.tsx:115
 msgid "Add photo"
 msgstr ""
 
-#: src/pages/plugins/advanced-integrations.tsx:241
+#: src/pages/plugins/advanced-integrations.tsx:221
 msgid "Add remote MCP server"
 msgstr "Uzak MCP sunucusu ekle"
 
@@ -410,7 +398,7 @@ msgstr "Uzak MCP sunucusu ekle"
 msgid "Add server"
 msgstr "Sunucu ekle"
 
-#: src/components/integrations/IntegrationSetup.tsx:273
+#: src/components/integrations/IntegrationSetup.tsx:230
 msgid "Add server URL"
 msgstr ""
 
@@ -418,7 +406,7 @@ msgstr ""
 msgid "Add to routine"
 msgstr "Rutine ekle"
 
-#: src/pages/plugins/advanced-integrations.tsx:226
+#: src/pages/plugins/advanced-integrations.tsx:206
 msgid "Add Treg"
 msgstr "Treg ekle"
 
@@ -556,7 +544,7 @@ msgid "API is back, but the update did not finish. Check the host logs."
 msgstr "API geri geldi ama güncelleme tamamlanmadı. Sunucu günlüklerini kontrol edin."
 
 #: src/components/AskCard.tsx:123
-#: src/components/integrations/IntegrationSetup.tsx:189
+#: src/components/integrations/IntegrationSetup.tsx:150
 #: src/lib/localized-provider-hint.ts:9
 #: src/pages/model-settings/model-detail.tsx:284
 #: src/pages/model-settings/model-detail.tsx:287
@@ -568,7 +556,7 @@ msgstr "API geri geldi ama güncelleme tamamlanmadı. Sunucu günlüklerini kont
 msgid "API key"
 msgstr "API anahtarı"
 
-#: src/pages/plugins/advanced-integrations.tsx:283
+#: src/pages/plugins/advanced-integrations.tsx:255
 msgid "API key header"
 msgstr "API anahtarı üstbilgisi"
 
@@ -657,7 +645,7 @@ msgstr "Satın almadan önce sor"
 msgid "Ask before sending external email"
 msgstr "Dışarıya e-posta göndermeden önce sor"
 
-#: src/components/integrations/IntegrationSetup.tsx:223
+#: src/components/integrations/IntegrationSetup.tsx:180
 msgid "Ask the server owner to configure this provider."
 msgstr ""
 
@@ -751,7 +739,7 @@ msgid "Bcc"
 msgstr ""
 
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:48
-#: src/pages/plugins/advanced-integrations.tsx:280
+#: src/pages/plugins/advanced-integrations.tsx:252
 msgid "Bearer token"
 msgstr "Bearer token"
 
@@ -848,7 +836,7 @@ msgstr "Sunucuya ulaşılamıyor."
 #: src/pages/bot-page/RoutineTriggers.tsx:296
 #: src/pages/KnowledgeSection.tsx:227
 #: src/pages/KnowledgeSection.tsx:692
-#: src/pages/plugins/advanced-integrations.tsx:337
+#: src/pages/plugins/advanced-integrations.tsx:309
 #: src/pages/shell/dialogs.tsx:88
 #: src/pages/shell/dialogs.tsx:199
 #: src/pages/shell/dialogs.tsx:263
@@ -856,7 +844,7 @@ msgstr "Sunucuya ulaşılamıyor."
 #: src/pages/shell/dialogs.tsx:395
 #: src/pages/shell/dialogs.tsx:448
 #: src/pages/shell/dialogs.tsx:505
-#: src/pages/VaultSettingsPanel.tsx:225
+#: src/pages/VaultSettingsPanel.tsx:226
 msgid "Cancel"
 msgstr "İptal"
 
@@ -992,14 +980,6 @@ msgstr "Yönergeler temizlensin mi?"
 #: src/pages/shell/dialogs.tsx:319
 msgid "Clearing…"
 msgstr "Temizleniyor…"
-
-#: src/components/integrations/IntegrationSetup.tsx:167
-msgid "Client ID"
-msgstr ""
-
-#: src/components/integrations/IntegrationSetup.tsx:189
-msgid "Client secret"
-msgstr ""
 
 #: src/pages/CustomizeOverlay.tsx:130
 #: src/pages/KnowledgeSection.tsx:692
@@ -1150,10 +1130,10 @@ msgstr "Silmeyi onayla"
 msgid "Confirm password"
 msgstr "Parolayı doğrulayın"
 
-#: src/components/integrations/IntegrationSetup.tsx:217
-#: src/components/integrations/IntegrationSetup.tsx:262
-#: src/components/integrations/IntegrationSetup.tsx:286
-#: src/components/integrations/IntegrationSetup.tsx:319
+#: src/components/integrations/IntegrationSetup.tsx:174
+#: src/components/integrations/IntegrationSetup.tsx:219
+#: src/components/integrations/IntegrationSetup.tsx:243
+#: src/components/integrations/IntegrationSetup.tsx:276
 #: src/pages/DecisionModelSettingsPanel.tsx:176
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
@@ -1173,7 +1153,7 @@ msgstr ""
 msgid "Connect API key"
 msgstr "API anahtarıyla bağlan"
 
-#: src/pages/plugins/advanced-integrations.tsx:239
+#: src/pages/plugins/advanced-integrations.tsx:219
 msgid "Connect Executor"
 msgstr "Executor'a bağlan"
 
@@ -1189,12 +1169,12 @@ msgstr "OAuth ile bağlan"
 msgid "Connect this provider to use it as your personal model."
 msgstr "Kişisel modelin olarak kullanmak için bu sağlayıcıyı bağla."
 
-#: src/pages/plugins/advanced-integrations.tsx:237
+#: src/pages/plugins/advanced-integrations.tsx:217
 msgid "Connect Treg"
 msgstr "Treg'i bağla"
 
-#: src/components/integrations/IntegrationSetup.tsx:159
-#: src/components/integrations/IntegrationSetup.tsx:262
+#: src/components/integrations/IntegrationSetup.tsx:144
+#: src/components/integrations/IntegrationSetup.tsx:219
 #: src/pages/DecisionModelSettingsPanel.tsx:98
 #: src/pages/McpOAuthCallback.tsx:54
 #: src/pages/MemorySettingsOverlay.tsx:191
@@ -1225,8 +1205,8 @@ msgstr "Bağlandı, {0} kullanılıyor."
 msgid "Connected. Its tools are available from your next message."
 msgstr "Bağlandı. Araçları bir sonraki mesajından itibaren kullanılabilir."
 
-#: src/components/integrations/IntegrationSetup.tsx:217
-#: src/components/integrations/IntegrationSetup.tsx:356
+#: src/components/integrations/IntegrationSetup.tsx:174
+#: src/components/integrations/IntegrationSetup.tsx:310
 #: src/pages/DecisionModelSettingsPanel.tsx:176
 #: src/pages/McpServersOverlay.tsx:38
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
@@ -1238,7 +1218,7 @@ msgid "Connecting…"
 msgstr "Bağlanıyor…"
 
 #. placeholder {0}: item.name
-#: src/pages/plugins/use-integrations.ts:230
+#: src/pages/plugins/use-integrations.ts:226
 msgid "Connection to {0} is still pending. You can close this and check again."
 msgstr "{0} bağlantısı hâlâ beklemede. Bunu kapatıp daha sonra tekrar kontrol edebilirsin."
 
@@ -1251,7 +1231,7 @@ msgstr ""
 msgid "Context limit"
 msgstr "Bağlam sınırı"
 
-#: src/components/integrations/IntegrationSetup.tsx:356
+#: src/components/integrations/IntegrationSetup.tsx:310
 #: src/pages/Invite.tsx:108
 #: src/pages/Onboarding.tsx:664
 msgid "Continue"
@@ -1338,8 +1318,8 @@ msgstr "OAuth tamamlanamadı"
 msgid "Could not complete the update. Try again."
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:76
-#: src/pages/plugins/use-integrations.ts:235
+#: src/components/integrations/IntegrationSetup.tsx:71
+#: src/pages/plugins/use-integrations.ts:231
 msgid "Could not connect"
 msgstr "Bağlanılamadı"
 
@@ -1447,7 +1427,7 @@ msgstr "{name} indirilemedi. Tekrar dene."
 msgid "Could not import skill"
 msgstr "Yetenek içe aktarılamadı"
 
-#: src/pages/plugins/use-integrations.ts:386
+#: src/pages/plugins/use-integrations.ts:376
 msgid "Could not install connector"
 msgstr "Bağlayıcı kurulamadı"
 
@@ -1487,8 +1467,8 @@ msgstr ""
 msgid "Could not load decision model settings"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:67
-#: src/pages/plugins/use-integrations.ts:109
+#: src/components/integrations/IntegrationSetup.tsx:62
+#: src/pages/plugins/use-integrations.ts:105
 #: src/pages/PluginsOverlay.tsx:173
 msgid "Could not load integrations"
 msgstr "Entegrasyonlar yüklenemedi"
@@ -1555,7 +1535,7 @@ msgstr "Bu dosya okunamadı"
 msgid "Could not remove"
 msgstr "Kaldırılamadı"
 
-#: src/pages/plugins/use-integrations.ts:399
+#: src/pages/plugins/use-integrations.ts:389
 msgid "Could not remove connector"
 msgstr "Bağlayıcı kaldırılamadı"
 
@@ -1567,7 +1547,7 @@ msgstr "Grup kaldırılamadı"
 msgid "Could not remove rule"
 msgstr "Kural kaldırılamadı"
 
-#: src/pages/plugins/use-integrations.ts:300
+#: src/pages/plugins/use-integrations.ts:296
 msgid "Could not rename connection"
 msgstr ""
 
@@ -1579,8 +1559,8 @@ msgstr ""
 msgid "Could not reset password"
 msgstr "Parola sıfırlanamadı"
 
-#: src/pages/plugins/use-integrations.ts:256
-#: src/pages/plugins/use-integrations.ts:279
+#: src/pages/plugins/use-integrations.ts:252
+#: src/pages/plugins/use-integrations.ts:275
 msgid "Could not revoke connection"
 msgstr "Bağlantı iptal edilemedi"
 
@@ -1592,7 +1572,7 @@ msgstr "Rutin çalıştırılamadı"
 #: src/pages/bot-page/RoutineDetail.tsx:87
 #: src/pages/ExternalConversationSettings.tsx:250
 #: src/pages/KnowledgeSection.tsx:207
-#: src/pages/VaultSettingsPanel.tsx:116
+#: src/pages/VaultSettingsPanel.tsx:117
 msgid "Could not save"
 msgstr "Kaydedilemedi"
 
@@ -1628,7 +1608,7 @@ msgstr "Bu ses kaydedilemedi"
 msgid "Could not save this choice"
 msgstr "Bu seçim kaydedilemedi"
 
-#: src/pages/plugins/use-integrations.ts:327
+#: src/pages/plugins/use-integrations.ts:323
 msgid "Could not search catalog"
 msgstr ""
 
@@ -1806,16 +1786,16 @@ msgstr "Oluşturuldu"
 msgid "Creating…"
 msgstr "Oluşturuluyor…"
 
-#: src/pages/plugins/advanced-integrations.tsx:305
+#: src/pages/plugins/advanced-integrations.tsx:277
 msgid "Credential"
 msgstr "Kimlik bilgisi"
 
 #: src/pages/McpServersOverlay.tsx:34
-#: src/pages/plugins/advanced-integrations.tsx:363
+#: src/pages/plugins/advanced-integrations.tsx:335
 msgid "credential saved"
 msgstr "kimlik bilgisi kaydedildi"
 
-#: src/pages/plugins/advanced-integrations.tsx:310
+#: src/pages/plugins/advanced-integrations.tsx:282
 msgid "Credentials are encrypted and never sent to the model."
 msgstr "Kimlik bilgileri şifrelenir ve modele asla gönderilmez."
 
@@ -1899,8 +1879,8 @@ msgstr "Varsayılan kapsam"
 #: src/pages/shell/dialogs.tsx:470
 #: src/pages/shell/sidebar-footer.tsx:99
 #: src/pages/shell/sidebar-footer.tsx:132
-#: src/pages/VaultSettingsPanel.tsx:136
-#: src/pages/VaultSettingsPanel.tsx:221
+#: src/pages/VaultSettingsPanel.tsx:137
+#: src/pages/VaultSettingsPanel.tsx:222
 msgid "Delete"
 msgstr "Sil"
 
@@ -1915,7 +1895,7 @@ msgstr "{0} sil"
 #. placeholder {0}: item.name
 #: src/pages/shell/dialogs.tsx:346
 #: src/pages/shell/dialogs.tsx:439
-#: src/pages/VaultSettingsPanel.tsx:136
+#: src/pages/VaultSettingsPanel.tsx:137
 msgid "Delete {0}?"
 msgstr "{0} silinsin mi?"
 
@@ -1990,7 +1970,7 @@ msgstr ""
 msgid "Dictating"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:40
+#: src/components/integrations/IntegrationSetup.tsx:38
 msgid "Direct MCP"
 msgstr ""
 
@@ -2035,7 +2015,7 @@ msgstr "Hatayı kapat"
 msgid "Dismissed. Reconnect anytime from MCP settings."
 msgstr "Kapatıldı. MCP ayarlarından istediğin zaman yeniden bağlanabilirsin."
 
-#: src/pages/plugins/advanced-integrations.tsx:253
+#: src/pages/plugins/advanced-integrations.tsx:229
 msgid "Display name"
 msgstr "Görünen ad"
 
@@ -2074,7 +2054,7 @@ msgstr "{name} indir"
 msgid "Download as markdown"
 msgstr "Markdown olarak indir"
 
-#: src/components/integrations/IntegrationSetup.tsx:331
+#: src/components/integrations/IntegrationSetup.tsx:288
 msgid "Download Executor"
 msgstr ""
 
@@ -2223,7 +2203,7 @@ msgstr ""
 msgid "Everyone who uses this bot can see its files and browser sign-ins."
 msgstr ""
 
-#: src/pages/plugins/advanced-integrations.tsx:304
+#: src/pages/plugins/advanced-integrations.tsx:276
 msgid "Executor token"
 msgstr "Executor belirteci"
 
@@ -2360,7 +2340,7 @@ msgstr ""
 msgid "General"
 msgstr "Genel"
 
-#: src/components/integrations/IntegrationSetup.tsx:209
+#: src/components/integrations/IntegrationSetup.tsx:166
 msgid "Get credentials"
 msgstr ""
 
@@ -2410,13 +2390,13 @@ msgstr "Görüşmeyi sonlandırın, sonra ekrandaki kodu girin."
 msgid "header"
 msgstr "başlık"
 
-#: src/pages/VaultSettingsPanel.tsx:185
+#: src/pages/VaultSettingsPanel.tsx:186
 msgid "Header"
 msgstr ""
 
 #: src/pages/McpServersOverlay.tsx:450
-#: src/pages/plugins/advanced-integrations.tsx:291
-#: src/pages/VaultSettingsPanel.tsx:193
+#: src/pages/plugins/advanced-integrations.tsx:263
+#: src/pages/VaultSettingsPanel.tsx:194
 msgid "Header name"
 msgstr "Üstbilgi adı"
 
@@ -2507,10 +2487,6 @@ msgstr ""
 msgid "Import"
 msgstr "İçe aktar"
 
-#: src/pages/plugins/advanced-integrations.tsx:245
-msgid "Import OpenAPI JSON"
-msgstr "OpenAPI JSON içe aktar"
-
 #: src/pages/bot-page/KnowledgeTab.tsx:136
 msgid "Inherit default"
 msgstr "Varsayılanı devral"
@@ -2550,7 +2526,7 @@ msgstr "Yönergeler"
 msgid "Integration domain"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:133
+#: src/components/integrations/IntegrationSetup.tsx:118
 msgid "Integration options"
 msgstr ""
 
@@ -2619,7 +2595,7 @@ msgstr "Hafızayı koru"
 msgid "key"
 msgstr "anahtar"
 
-#: src/pages/VaultSettingsPanel.tsx:204
+#: src/pages/VaultSettingsPanel.tsx:205
 msgid "Key"
 msgstr ""
 
@@ -2759,7 +2735,7 @@ msgstr "Düşük"
 msgid "Make sure nothing is still running on this computer."
 msgstr "Bu bilgisayarda hâlâ çalışan bir şey olmadığından emin ol."
 
-#: src/pages/plugins/advanced-integrations.tsx:389
+#: src/pages/plugins/advanced-integrations.tsx:361
 msgid "Manage MCP servers"
 msgstr "MCP sunucularını yönet"
 
@@ -2772,11 +2748,11 @@ msgstr "Mesajlaşma ayarlarını yönet"
 msgid "Manage the Space semantic memory provider."
 msgstr "Çalışma alanının semantik hafıza sağlayıcısını yönet."
 
-#: src/pages/plugins/advanced-integrations.tsx:171
+#: src/pages/plugins/advanced-integrations.tsx:169
 msgid "Manual"
 msgstr ""
 
-#: src/pages/plugins/advanced-integrations.tsx:168
+#: src/pages/plugins/advanced-integrations.tsx:166
 msgid "Manual setup required"
 msgstr ""
 
@@ -3013,7 +2989,7 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx:187
 #: src/pages/shell/dialogs.tsx:250
 #: src/pages/SpaceGeneralSettings.tsx:113
-#: src/pages/VaultSettingsPanel.tsx:168
+#: src/pages/VaultSettingsPanel.tsx:169
 msgid "Name"
 msgstr "Ad"
 
@@ -3041,7 +3017,7 @@ msgstr "Sizi bekliyor"
 msgid "Needs your call"
 msgstr ""
 
-#: src/pages/VaultSettingsPanel.tsx:149
+#: src/pages/VaultSettingsPanel.tsx:150
 msgid "New API key"
 msgstr ""
 
@@ -3102,11 +3078,11 @@ msgstr "Henüz ajan bağlantısı yok."
 msgid "No apps match your search."
 msgstr "Aramanla eşleşen uygulama yok."
 
-#: src/pages/plugins/advanced-integrations.tsx:365
+#: src/pages/plugins/advanced-integrations.tsx:337
 msgid "no auth"
 msgstr "kimlik doğrulamasız"
 
-#: src/pages/plugins/advanced-integrations.tsx:277
+#: src/pages/plugins/advanced-integrations.tsx:249
 msgid "No authentication"
 msgstr "Kimlik doğrulaması yok"
 
@@ -3156,13 +3132,13 @@ msgstr "Bu kurulumda yönetilen bir uygulama kataloğu yapılandırılmamış."
 msgid "No matching models"
 msgstr "Eşleşen model yok"
 
-#: src/pages/plugins/advanced-integrations.tsx:350
-msgid "No MCP or API tool sources installed yet."
-msgstr "Henüz MCP veya API araç kaynağı kurulmadı."
-
 #: src/pages/McpServersOverlay.tsx:509
 msgid "No MCP servers yet."
 msgstr "Henüz MCP sunucusu yok."
+
+#: src/pages/plugins/advanced-integrations.tsx:322
+msgid "No MCP tool sources installed yet."
+msgstr "Henüz MCP araç kaynağı kurulmadı."
 
 #: src/pages/PeerMessagesOverlay.tsx:159
 msgid "No messages with {peerBotName} yet."
@@ -3180,7 +3156,7 @@ msgstr "Bağlı model yok"
 msgid "No providers found."
 msgstr "Sağlayıcı bulunamadı."
 
-#: src/components/integrations/IntegrationSetup.tsx:268
+#: src/components/integrations/IntegrationSetup.tsx:225
 msgid "No remote MCP servers found"
 msgstr ""
 
@@ -3518,10 +3494,6 @@ msgstr "Profil"
 msgid "Profile photo"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:177
-msgid "Project ID"
-msgstr ""
-
 #: src/pages/MemorySettingsOverlay.tsx:219
 #: src/pages/Onboarding.tsx:388
 #: src/pages/Onboarding.tsx:395
@@ -3673,7 +3645,7 @@ msgstr ""
 #: src/pages/AccountProfileSettings.tsx:124
 #: src/pages/bot-page/RoutineTriggers.tsx:237
 #: src/pages/bot-page/RoutineTriggers.tsx:291
-#: src/pages/plugins/advanced-integrations.tsx:377
+#: src/pages/plugins/advanced-integrations.tsx:349
 #: src/pages/plugins/connection-detail.tsx:110
 #: src/pages/ScratchpadSection.tsx:165
 #: src/pages/SpaceGeneralSettings.tsx:239
@@ -3730,7 +3702,7 @@ msgstr "Sohbeti, bilgisayarı ve hafızasıyla birlikte kaldırıldı."
 msgid "Removed, but list refresh failed"
 msgstr "Kaldırıldı ama liste yenilenemedi"
 
-#: src/pages/plugins/advanced-integrations.tsx:377
+#: src/pages/plugins/advanced-integrations.tsx:349
 #: src/pages/plugins/connection-detail.tsx:75
 #: src/pages/plugins/connection-detail.tsx:110
 msgid "Removing…"
@@ -3753,7 +3725,7 @@ msgid "Replace API key"
 msgstr "API anahtarını değiştir"
 
 #: src/pages/ProvidersSettings.tsx:267
-#: src/pages/VaultSettingsPanel.tsx:228
+#: src/pages/VaultSettingsPanel.tsx:229
 msgid "Replace key"
 msgstr "Anahtarı değiştir"
 
@@ -3946,7 +3918,7 @@ msgstr ""
 #: src/pages/KnowledgeSection.tsx:706
 #: src/pages/model-settings/model-detail.tsx:332
 #: src/pages/shell/dialogs.tsx:266
-#: src/pages/VaultSettingsPanel.tsx:228
+#: src/pages/VaultSettingsPanel.tsx:229
 msgid "Save"
 msgstr "Kaydet"
 
@@ -4006,8 +3978,8 @@ msgstr "Ekran"
 msgid "Search"
 msgstr "Ara"
 
-#: src/components/integrations/IntegrationSetup.tsx:245
-#: src/components/integrations/IntegrationSetup.tsx:246
+#: src/components/integrations/IntegrationSetup.tsx:202
+#: src/components/integrations/IntegrationSetup.tsx:203
 #: src/pages/PluginsOverlay.tsx:150
 #: src/pages/PluginsOverlay.tsx:151
 msgid "Search apps"
@@ -4021,7 +3993,7 @@ msgstr "Botlarda ara ve sohbetler arasında geçiş yap"
 msgid "Search by domain"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:251
+#: src/components/integrations/IntegrationSetup.tsx:208
 msgid "Search integrations.sh"
 msgstr ""
 
@@ -4072,12 +4044,12 @@ msgstr "Gönderiliyor…"
 msgid "Sent"
 msgstr ""
 
-#: src/pages/VaultSettingsPanel.tsx:175
-#: src/pages/VaultSettingsPanel.tsx:177
+#: src/pages/VaultSettingsPanel.tsx:176
+#: src/pages/VaultSettingsPanel.tsx:178
 msgid "Sent as"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:129
+#: src/components/integrations/IntegrationSetup.tsx:114
 #: src/pages/AccountSettingsOverlay.tsx:166
 msgid "Server integrations"
 msgstr ""
@@ -4086,8 +4058,8 @@ msgstr ""
 msgid "Server name"
 msgstr "Sunucu adı"
 
-#: src/components/integrations/IntegrationSetup.tsx:277
-#: src/components/integrations/IntegrationSetup.tsx:295
+#: src/components/integrations/IntegrationSetup.tsx:234
+#: src/components/integrations/IntegrationSetup.tsx:252
 #: src/pages/McpServersOverlay.tsx:397
 #: src/pages/model-settings/model-detail.tsx:80
 #: src/pages/Onboarding.tsx:411
@@ -4112,7 +4084,7 @@ msgstr "Ayarlar: Genel"
 msgid "Settings: Usage"
 msgstr "Ayarlar: Kullanım"
 
-#: src/components/integrations/IntegrationSetup.tsx:323
+#: src/components/integrations/IntegrationSetup.tsx:280
 #: src/pages/model-settings/model-detail.tsx:93
 msgid "Setup help"
 msgstr "Kurulum yardımı"
@@ -4196,7 +4168,7 @@ msgstr "Tangow'da oturum aç"
 msgid "Sign up"
 msgstr "Kaydol"
 
-#: src/pages/VaultSettingsPanel.tsx:161
+#: src/pages/VaultSettingsPanel.tsx:162
 msgid "Site"
 msgstr ""
 
@@ -4228,7 +4200,7 @@ msgid "Skills this bot can use"
 msgstr ""
 
 #: src/components/ask/QuestionCard.tsx:198
-#: src/components/integrations/IntegrationSetup.tsx:359
+#: src/components/integrations/IntegrationSetup.tsx:313
 #: src/pages/shell/side-panel.tsx:502
 msgid "Skip"
 msgstr "Atla"
@@ -4528,7 +4500,7 @@ msgstr "Bugün"
 msgid "Tokens"
 msgstr "Tokenlar"
 
-#: src/pages/plugins/advanced-integrations.tsx:346
+#: src/pages/plugins/advanced-integrations.tsx:318
 msgid "Tool sources"
 msgstr "Araç kaynakları"
 
@@ -4540,7 +4512,7 @@ msgstr ""
 msgid "Treat like a person"
 msgstr ""
 
-#: src/pages/plugins/advanced-integrations.tsx:302
+#: src/pages/plugins/advanced-integrations.tsx:274
 msgid "Treg token"
 msgstr "Treg token'ı"
 
@@ -4682,7 +4654,7 @@ msgstr ""
 msgid "Use this model"
 msgstr "Bu modeli kullan"
 
-#: src/pages/VaultSettingsPanel.tsx:199
+#: src/pages/VaultSettingsPanel.tsx:200
 msgid "Username"
 msgstr ""
 
@@ -4690,11 +4662,11 @@ msgstr ""
 msgid "Vault"
 msgstr ""
 
-#: src/pages/plugins/advanced-integrations.tsx:327
+#: src/pages/plugins/advanced-integrations.tsx:299
 msgid "Verify and add"
 msgstr "Doğrula ve ekle"
 
-#: src/pages/plugins/advanced-integrations.tsx:325
+#: src/pages/plugins/advanced-integrations.tsx:297
 msgid "Verifying…"
 msgstr "Doğrulanıyor…"
 
