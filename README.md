@@ -166,6 +166,6 @@ request. For security vulnerabilities, follow [SECURITY.md](./SECURITY.md) inste
 issue.
 
 Tangow is licensed under the [Apache License 2.0](./LICENSE). The Tangow characters and their
-images in [`packages/avatars`](./packages/avatars/LICENSE) are not: they remain Tangow's property.
+images in [`packages/avatars`](./packages/avatars/LICENSE) are not: all rights to them are reserved.
 
 Questions and ideas are welcome in the [Tangow Discord community](https://discord.gg/RWwKa2Sn7h).
