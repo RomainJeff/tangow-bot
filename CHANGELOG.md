@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
-- Pipedream Connect is no longer offered as a managed app catalog on web, desktop and iOS; server owners connect apps through Composio, MCP or OpenAPI instead, and existing Pipedream connections are removed.
+- Pipedream Connect is no longer offered as a managed app catalog on web, desktop and iOS; server owners connect apps through Composio, MCP or OpenAPI instead, and existing Pipedream connections are removed, so disconnect them before updating to also revoke their accounts at Pipedream.
 
 #### Fixed
 
