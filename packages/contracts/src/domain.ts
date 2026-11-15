@@ -1,4 +1,5 @@
 import * as z from "zod";
+import { AvatarCharacterIdSchema } from "./avatar-characters.js";
 import { ProductEventSchema } from "./events.js";
 import {
   AVATAR_SHAPE_COUNT,
@@ -55,6 +56,7 @@ export const BotSchema = z.object({
   instructions: z.string(),
   color: z.string(),
   shapeSeed: ShapeSeedSchema.nullable(),
+  avatarCharacter: z.string().nullable(),
   notifyOnFinish: z.boolean(),
   pinned: z.boolean(),
   sectionId: Id.nullable(),
@@ -120,6 +122,7 @@ export const GroupMemberSchema = z.object({
   name: z.string(),
   color: z.string(),
   shapeSeed: ShapeSeedSchema.nullable(),
+  avatarCharacter: z.string().nullable(),
   status: z.string().optional(),
   /** Whether the actor owns the bot or it is shared with them: only then can they wake it. */
   canUse: z.boolean(),
@@ -218,6 +221,7 @@ export const SpaceBotSchema = BotSchema.pick({
   title: true,
   color: true,
   shapeSeed: true,
+  avatarCharacter: true,
   notifyOnFinish: true,
   pinned: true,
   sectionId: true,
@@ -399,6 +403,7 @@ export const UpdateBotInput = z
     notifyOnFinish: z.boolean().optional(),
     color: z.string().optional(),
     shapeSeed: ShapeSeedSchema.nullable().optional(),
+    avatarCharacter: AvatarCharacterIdSchema.optional(),
     pinned: z.boolean().optional(),
     memoryScope: MemoryScopeSchema.nullable().optional(),
     sectionId: Id.nullable().optional(),
@@ -877,6 +882,7 @@ export const UsageCellSchema = z.object({
       name: z.string(),
       color: z.string().nullable(),
       shapeSeed: ShapeSeedSchema.nullable(),
+      avatarCharacter: z.string().nullable(),
       deleted: z.boolean(),
     })
     .nullable(),

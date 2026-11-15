@@ -11,6 +11,7 @@ import {
 import type { SessionEntries } from "@tangow/contracts";
 import {
   type Actor,
+  botDisplayColor,
   GROUP_MEMBER_MIN,
   type GroupMember,
   type MessageBlock,
@@ -436,8 +437,9 @@ export async function resolveThreadTarget(
     const members = group.members.map((member) => ({
       botId: member.bot.id,
       name: member.bot.name,
-      color: member.bot.color,
+      color: botDisplayColor(member.bot),
       shapeSeed: member.bot.shapeSeed,
+      avatarCharacter: member.bot.avatarCharacter,
       status: member.bot.runs[0]?.status ?? "idle",
       canUse: usable.has(member.bot.id),
     }));
