@@ -107,6 +107,7 @@ export function ThreadHeader({
               color={active.color}
               identity={active.id}
               shapeSeed={active.shapeSeed}
+              character={active.avatarCharacter}
               status={active.status}
               size={26}
             />
@@ -125,6 +126,7 @@ export function ThreadHeader({
                 color: member.color,
                 identity: member.botId,
                 shapeSeed: member.shapeSeed,
+                character: member.avatarCharacter,
                 working: isWorkingStatus(member.status),
               }))}
             />

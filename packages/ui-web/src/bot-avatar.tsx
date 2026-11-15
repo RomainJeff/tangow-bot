@@ -17,6 +17,7 @@ import {
 import type { CSSProperties } from "react";
 import { memo, useEffect, useId, useRef, useState } from "react";
 import { type AvatarStyle, useAvatarStyle } from "./avatar-style.js";
+import { ClayAvatar } from "./clay-avatar.js";
 import { usePrefersReducedMotion } from "./lib/reduced-motion.js";
 import { cn } from "./lib/utils.js";
 import "./styles.css";
@@ -29,6 +30,12 @@ export interface BotAvatarProps {
   identity?: string;
   /** Picked organic shape; falls back to a shape derived from `identity`. */
   shapeSeed?: number | null;
+  /**
+   * Catalogue character. `null` is the neutral character and `undefined` the legacy renderer,
+   * which the avatar-style preview and unknown authors use. When defined, `variant`, `shapeSeed`
+   * and `followPointer` are ignored.
+   */
+  character?: string | null;
   /**
    * The organic avatar looks toward a fine pointer (a mouse) wherever it is on
    * the page, and back to rest when the pointer leaves the window. A working
@@ -45,12 +52,18 @@ export const BotAvatar = memo(function BotAvatar({
   variant,
   identity,
   shapeSeed,
+  character,
   followPointer,
   className,
 }: BotAvatarProps) {
   const isWorking = isWorkingStatus(status);
   const gradId = `spin-grad-${useId().replace(/[^a-zA-Z0-9-_]/g, "")}`;
   const preferredVariant = useAvatarStyle();
+  if (character !== undefined) {
+    return (
+      <ClayAvatar character={character} size={size} isWorking={isWorking} className={className} />
+    );
+  }
   if ((variant ?? preferredVariant) === "organic") {
     return (
       <BloubAvatar

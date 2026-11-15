@@ -76,6 +76,7 @@ export function SidebarArchived({
                   color={bot.color}
                   identity={bot.id}
                   shapeSeed={bot.shapeSeed}
+                  character={bot.avatarCharacter}
                   size={28}
                   status={bot.status}
                 />

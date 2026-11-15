@@ -36,6 +36,8 @@ describe("BotAvatar", () => {
       );
       expect(html).toContain(`data-working="${working}"`);
     }
+    const clay = renderToString(<BotAvatar color="#3B82F6" character="atlas" status={status} />);
+    expect(clay).toContain(`data-working="${working}"`);
   });
 
   it("keeps the working ring mounted when idle so its timeline does not reset", () => {

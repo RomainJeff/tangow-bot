@@ -5,7 +5,7 @@ export type AvatarCharacterShape = "ball" | "capsule" | "block";
 /** A crop of the character image, in the 1024 pixel square the images are exported in. */
 export type AvatarCrop = { x: number; y: number; side: number };
 
-export type AvatarCharacter = {
+type AvatarCharacterData = {
   id: string;
   name: string;
   shape: AvatarCharacterShape;
@@ -124,11 +124,14 @@ export const AVATAR_CHARACTERS = [
       close: { x: 285.2, y: 322.0, side: 395.6 },
     },
   },
-] as const satisfies readonly AvatarCharacter[];
+] as const satisfies readonly AvatarCharacterData[];
+
+export type AvatarCharacter = (typeof AVATAR_CHARACTERS)[number];
+export type AvatarCharacterId = AvatarCharacter["id"];
 
 export const AVATAR_CHARACTER_IDS = AVATAR_CHARACTERS.map((character) => character.id) as [
-  (typeof AVATAR_CHARACTERS)[number]["id"],
-  ...(typeof AVATAR_CHARACTERS)[number]["id"][],
+  AvatarCharacterId,
+  ...AvatarCharacterId[],
 ];
 
 /** Strict, for writes. Reads stay `z.string()` so an app older than the server still parses. */

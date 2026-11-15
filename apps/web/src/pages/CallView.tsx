@@ -33,6 +33,7 @@ export function CallView({
   botName,
   botColor,
   botShapeSeed,
+  botAvatarCharacter,
   botIdentity,
   transcribe,
   thread,
@@ -45,6 +46,7 @@ export function CallView({
   botName: string;
   botColor: string;
   botShapeSeed?: number | null;
+  botAvatarCharacter?: string | null;
   botIdentity?: string;
   transcribe: boolean;
   thread: CallThread | null;
@@ -350,6 +352,7 @@ export function CallView({
             color={botColor}
             identity={botIdentity}
             shapeSeed={botShapeSeed}
+            character={botAvatarCharacter}
             size={120}
             status={phase !== "listening" ? "running" : undefined}
           />

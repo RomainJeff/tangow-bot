@@ -13,6 +13,7 @@ export interface StackedAvatarItem {
   identity?: string;
   working?: boolean;
   shapeSeed?: number | null;
+  character?: string | null;
 }
 
 export interface StackedAvatarsProps extends Omit<ComponentPropsWithoutRef<"span">, "children"> {
@@ -62,6 +63,7 @@ export function StackedAvatars({
             color={item.color}
             identity={item.identity}
             shapeSeed={item.shapeSeed}
+            character={item.character}
             size={size}
             status={item.working ? "running" : undefined}
           />
