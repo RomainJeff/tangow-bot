@@ -17,7 +17,7 @@ provider, or run the complete stack locally.
 - Graphile Worker
 - Pi
 - Docker and E2B
-- Composio, Pipedream Connect, MCP, and OpenAPI integrations
+- Composio, Pipedream Connect, and MCP integrations
 
 For an existing source deployment, use the [`./tangow` operator CLI](./docs/tangow.md) on the server to update it,
 inspect services, rebuild workers and computers, or migrate Docker homes to E2B.
@@ -65,7 +65,7 @@ model provider during onboarding.
 
 Managed app catalogs are optional. Set `COMPOSIO_API_KEY` for Composio, or the
 `PIPEDREAM_CLIENT_ID`, `PIPEDREAM_CLIENT_SECRET`, and `PIPEDREAM_PROJECT_ID` trio for Pipedream
-Connect. Users can add an HTTPS MCP server, Treg endpoint, or OpenAPI JSON document from
+Connect. Users can add an HTTPS MCP server or Treg endpoint from
 **Integrations** without enabling either managed catalog. Connector credentials are encrypted on the
 server and are never returned by the API.
 
