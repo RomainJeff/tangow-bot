@@ -16,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Fixed
 
 - When DuckDuckGo blocks the bot's built-in web search with a bot check, the bot now opens the search on its computer and asks you to solve the check, instead of treating every search as returning nothing.
+- On a Docker-hosted Team Computer, a screen that fails to start now shows an error with Retry screen instead of staying on Connecting forever.
 
 ### 2026-11-14
 
@@ -28,10 +29,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Changed
 
 - In a phone browser, a long press on a bot, a group or a section now opens its menu, as a right click does on desktop, with the sections to move a bot to listed in the menu itself, and the bot picker's info buttons are now visible without hovering.
-
-#### Fixed
-
-- On a Docker-hosted Team Computer, a screen that fails to start now shows an error with Retry screen instead of staying on Connecting forever.
 
 ### 2026-11-12
 
