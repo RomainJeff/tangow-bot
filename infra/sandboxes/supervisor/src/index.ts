@@ -259,6 +259,7 @@ app.post("/computers", async (c) => {
           volumeHomeMatches(info.Config.Labels, volumeHome)
         ) {
           if (!info.State.Running) await existing.start();
+          await joinComputerNetwork(runtimeInfo, networkMode);
           return c.json({
             id: existing.id,
             image: COMPUTER_IMAGE,
@@ -328,6 +329,7 @@ app.post("/computers", async (c) => {
           await createdNetwork?.remove().catch(() => undefined);
           throw error;
         }
+        await joinComputerNetwork(runtimeInfo, networkMode);
         return c.json({
           id: container.id,
           image: COMPUTER_IMAGE,
@@ -1504,6 +1506,17 @@ function computerNetworkName(botId: string, info: Docker.ContainerInspectInfo | 
   return computerNetworkNameFor(botId);
 }
 
+// A recreated supervisor is no longer on the computers' isolated networks, so
+// computer control would time out until someone opens a screen.
+async function joinComputerNetwork(
+  info: Docker.ContainerInspectInfo | undefined,
+  networkName: string | undefined,
+) {
+  if (screenNetworkMode === "isolated" && info && networkName) {
+    await connectToNetwork(networkName, [info.Id]);
+  }
+}
+
 async function connectComposeScreenPeers(networkName: string, info: Docker.ContainerInspectInfo) {
   const peerIds = new Set([info.Id]);
   const project = info.Config.Labels?.["com.docker.compose.project"];
@@ -1516,11 +1529,15 @@ async function connectComposeScreenPeers(networkName: string, info: Docker.Conta
     });
     for (const container of webContainers) peerIds.add(container.Id);
   }
+  await connectToNetwork(networkName, peerIds);
+}
+
+async function connectToNetwork(networkName: string, containerIds: Iterable<string>) {
   const network = docker.getNetwork(networkName);
   const networkInfo = await network.inspect();
   const connectedIds = new Set(Object.keys(networkInfo.Containers ?? {}));
   await Promise.all(
-    [...peerIds]
+    [...containerIds]
       .filter((containerId) => !connectedIds.has(containerId))
       .map((containerId) =>
         network.connect({ Container: containerId }).catch((error) => {
