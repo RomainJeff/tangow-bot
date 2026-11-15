@@ -17,7 +17,7 @@ loader.exec_module(helper)
 
 class PageBrowserTest(unittest.TestCase):
     def test_closed_stdin_cancels_helper_without_a_browser(self):
-        with subprocess.Popen([sys.executable, str(Path(__file__).with_name("tangow-page-browser")), "snapshot", "{}"],
+        with subprocess.Popen([sys.executable, str(Path(__file__).with_name("tangow-page-browser")), "snapshot"],
                               env={**os.environ, "TANGOW_BROWSER_WATCH_STDIN": "1", "TANGOW_CDP_PORT": "0"},
                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
             process.stdin.close()

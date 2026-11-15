@@ -571,8 +571,8 @@ export function createKubernetesComputerRuntime(options: {
         const http = `${(error as { message?: unknown })?.message}`.match(/response: (\d{3})/);
         throw new Error(`computer command could not start${http ? ` (HTTP ${http[1]})` : ""}`);
       });
-    if (options.stdin !== undefined) stdin.end(options.stdin);
-    else if (!signal) stdin.end();
+    if (options.stdin !== undefined) stdin.write(options.stdin);
+    if (!signal) stdin.end();
     let onAbort: (() => void) | undefined;
     try {
       await new Promise<void>((resolve, reject) => {

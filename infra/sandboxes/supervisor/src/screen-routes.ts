@@ -2,7 +2,12 @@ import { readBoundedJsonResponse } from "@tangow/core";
 import type { Hono } from "hono";
 import { z } from "zod";
 import type { ComputerSession } from "./computer-session.js";
-import { screenPorts, screenUrlWithToken, xdotoolCommand } from "./computer-spec.js";
+import {
+  screenPorts,
+  screenUrlWithToken,
+  XDOTOOL_TYPE_STDIN,
+  xdotoolCommand,
+} from "./computer-spec.js";
 import {
   attemptComputerControl,
   ComputerControlUnavailableError,
@@ -81,20 +86,18 @@ export function registerScreenRoutes(app: Hono, session: ComputerSession) {
         c.req.header("x-tangow-screen-id"),
         c.req.header("x-tangow-screen-lease-id"),
       );
-      const result = await runCommand(
-        id,
-        ["/usr/local/bin/tangow-page-browser", body.command, JSON.stringify(body)],
-        {
-          env: [
-            `DISPLAY=${layout.display}`,
-            `TANGOW_CDP_PORT=${layout.debugPort}`,
-            "HOME=/home/tangow",
-            "TANGOW_BROWSER_WATCH_STDIN=1",
-          ],
-          timeoutMs: 25_000,
-          signal,
-        },
-      );
+      const result = await runCommand(id, ["/usr/local/bin/tangow-page-browser", body.command], {
+        // Typed text may be a password: the request is the first stdin line, never argv.
+        stdin: Buffer.from(`${JSON.stringify(body)}\n`),
+        env: [
+          `DISPLAY=${layout.display}`,
+          `TANGOW_CDP_PORT=${layout.debugPort}`,
+          "HOME=/home/tangow",
+          "TANGOW_BROWSER_WATCH_STDIN=1",
+        ],
+        timeoutMs: 25_000,
+        signal,
+      });
       // A nonzero exit or malformed output cannot establish which mutations ran.
       if (result.code !== 0 || Buffer.byteLength(result.stdout) > 512 * 1024) {
         throw new Error("Page browser unavailable or interrupted");
@@ -285,11 +288,16 @@ export function registerScreenRoutes(app: Hono, session: ComputerSession) {
         c.req.header("x-tangow-screen-id"),
         c.req.header("x-tangow-screen-lease-id"),
       );
-      const result = await runCommand(id, [
-        "env",
-        `DISPLAY=${layout.display}`,
-        ...xdotoolCommand(input),
-      ]);
+      // Typed text may be a password: xdotool types it from stdin, never argv.
+      const result = await runCommand(
+        id,
+        [
+          "env",
+          `DISPLAY=${layout.display}`,
+          ...(input.kind === "clipboard" ? XDOTOOL_TYPE_STDIN : xdotoolCommand(input)),
+        ],
+        input.kind === "clipboard" ? { stdin: Buffer.from(input.text) } : {},
+      );
       if (result.code !== 0) {
         return c.json({ ok: false, error: "input failed" }, 500);
       }

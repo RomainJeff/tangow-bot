@@ -636,6 +636,8 @@ def exit_when_stdin_closes() -> None:
 
 
 def run(argv: list[str]) -> int:
+    # The request is stdin's first line, never argv: it can hold typed text such as a password.
+    request = sys.stdin.buffer.readline()
     if os.environ.get("TANGOW_BROWSER_WATCH_STDIN") == "1":
         threading.Thread(target=exit_when_stdin_closes, daemon=True).start()
     if len(argv) < 2:
@@ -643,16 +645,14 @@ def run(argv: list[str]) -> int:
             json.dumps(
                 {
                     "ok": False,
-                    "error": "usage: tangow-page-browser <command> [json-args]",
+                    "error": "usage: tangow-page-browser <command> < json-request-line",
                     "fallback": "computer_act",
                 }
             )
         )
         return 2
     command = argv[1]
-    args: dict[str, Any] = {}
-    if len(argv) >= 3 and argv[2].strip():
-        args = json.loads(argv[2])
+    args: dict[str, Any] = json.loads(request) if request.strip() else {}
     port = cdp_port()
     try:
         wait_for_cdp(port)

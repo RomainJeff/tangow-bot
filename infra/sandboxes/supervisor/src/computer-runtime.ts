@@ -37,7 +37,7 @@ export interface Computer {
 export interface ExecOptions {
   cwd: string;
   env: string[];
-  /** Written to the command's stdin, then closed. */
+  /** Written to the command's stdin, which then closes, unless a signal owns its end. */
   stdin?: Buffer;
   /** Aborting closes the command's stdin and abandons it. */
   signal?: AbortSignal;

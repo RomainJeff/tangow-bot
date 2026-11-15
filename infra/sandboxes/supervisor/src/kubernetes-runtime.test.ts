@@ -380,6 +380,74 @@ describe("Kubernetes commands", () => {
     expect(decodeURIComponent(paths[0]!)).not.toContain(secret);
     expect(failed).toEqual(new Error("computer command could not start (HTTP 403)"));
   });
+
+  /** The exec URL the real client builds for a command. */
+  async function execUrl(command: string[]) {
+    let url = "";
+    const exec = new Exec(new KubeConfig(), {
+      connect: async (path: string) => {
+        url = decodeURIComponent(path);
+        throw new Error("offline");
+      },
+    } as unknown as ConstructorParameters<typeof Exec>[1]);
+    await exec.exec("sandboxes", pod, "computer", command, null, null, null, false).catch(() => {});
+    return url;
+  }
+
+  /** What the command reads after the envelope's env preamble. */
+  const afterPreamble = (stdin: Buffer) => {
+    const text = stdin.toString();
+    return text.slice(text.indexOf("\n\n") + 2);
+  };
+
+  const typed = 'placeholder-pass "q" \\ end\nnext line';
+
+  it("sends page-browser text on stdin after the env, never in the command or its URL", async () => {
+    const { provision, app, state } = kubernetes();
+    await provision();
+    const body = { command: "act", actions: [{ kind: "fill", ref: "e1", text: typed }] };
+    const controller = new AbortController();
+
+    const response = app.request(`/computers/${pod}/browser`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    // The helper's stdin stays open until it ends or the request is cancelled.
+    const helper = () =>
+      state.execs.find((call) => call.command.includes("/usr/local/bin/tangow-page-browser"));
+    while (!helper()?.stdin.toString().endsWith("\n"))
+      await new Promise((resolve) => setImmediate(resolve));
+    controller.abort();
+    const failed = await (await response).text();
+
+    for (const call of state.execs) {
+      expect(call.command.join(" ")).not.toContain("placeholder-pass");
+      expect(await execUrl(call.command)).not.toContain("placeholder-pass");
+    }
+    expect(await execUrl(helper()!.command)).toContain("tangow-page-browser");
+    expect(afterPreamble(helper()!.stdin)).toBe(`${JSON.stringify(body)}\n`);
+    expect(failed).not.toContain("placeholder-pass");
+  });
+
+  it("types screen input from stdin, never from the command or its URL", async () => {
+    const { provision, app, state } = kubernetes();
+    await provision();
+
+    const response = await app.request(`/computers/${pod}/input`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ input: { kind: "clipboard", text: typed } }),
+    });
+
+    expect(await response.json()).toMatchObject({ ok: true });
+    const call = state.execs.at(-1)!;
+    expect(await execUrl(call.command)).toContain("xdotool");
+    expect(call.command.join(" ")).not.toContain("placeholder-pass");
+    expect(await execUrl(call.command)).not.toContain("placeholder-pass");
+    expect(afterPreamble(call.stdin)).toBe(typed);
+  });
 });
 
 describe("Kubernetes computers", () => {
