@@ -74,6 +74,7 @@ export default function Account() {
     { label: t("Computer"), href: "/computer-settings" },
     { label: t("Integrations"), href: "/integrations" },
     { label: t("Skills"), href: "/skills" },
+    { label: t("Vault"), href: "/vault" },
     { label: t("Usage"), href: "/usage" },
   ];
 

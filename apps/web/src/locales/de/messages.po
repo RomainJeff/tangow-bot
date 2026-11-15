@@ -340,6 +340,7 @@ msgstr "Aktivität, letzter Lauf fehlgeschlagen"
 #: src/pages/PluginsOverlay.tsx:83
 #: src/pages/ScratchpadSection.tsx:196
 #: src/pages/shell/message-cards.tsx:201
+#: src/pages/VaultSettingsPanel.tsx:53
 msgid "Add"
 msgstr "Hinzufügen"
 
@@ -855,6 +856,7 @@ msgstr "Server nicht erreichbar."
 #: src/pages/shell/dialogs.tsx:395
 #: src/pages/shell/dialogs.tsx:448
 #: src/pages/shell/dialogs.tsx:505
+#: src/pages/VaultSettingsPanel.tsx:225
 msgid "Cancel"
 msgstr "Abbrechen"
 
@@ -1028,7 +1030,7 @@ msgid "Close MCP servers"
 msgstr "MCP-Server schließen"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:170
+#: src/pages/SettingsOverlay.tsx:173
 msgid "Close memory settings"
 msgstr "Erinnerungseinstellungen schließen"
 
@@ -1037,7 +1039,7 @@ msgid "Close messaging settings"
 msgstr "Nachrichteneinstellungen schließen"
 
 #: src/pages/ModelSettingsOverlay.tsx:51
-#: src/pages/SettingsOverlay.tsx:168
+#: src/pages/SettingsOverlay.tsx:171
 msgid "Close model settings"
 msgstr "Modelleinstellungen schließen"
 
@@ -1054,11 +1056,11 @@ msgstr "Vorschau schließen"
 msgid "Close skills"
 msgstr "Skills schließen"
 
-#: src/pages/SettingsOverlay.tsx:173
+#: src/pages/SettingsOverlay.tsx:176
 msgid "Close user settings"
 msgstr "Benutzereinstellungen schließen"
 
-#: src/pages/SettingsOverlay.tsx:172
+#: src/pages/SettingsOverlay.tsx:175
 #: src/pages/VoiceSettingsOverlay.tsx:141
 msgid "Close voice settings"
 msgstr "Stimmeinstellungen schließen"
@@ -1100,7 +1102,7 @@ msgstr "Komplex"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:156
+#: src/pages/SettingsOverlay.tsx:158
 #: src/pages/shell/block-views.tsx:136
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
@@ -1590,6 +1592,7 @@ msgstr "Routine konnte nicht ausgeführt werden"
 #: src/pages/bot-page/RoutineDetail.tsx:87
 #: src/pages/ExternalConversationSettings.tsx:250
 #: src/pages/KnowledgeSection.tsx:207
+#: src/pages/VaultSettingsPanel.tsx:116
 msgid "Could not save"
 msgstr "Speichern fehlgeschlagen"
 
@@ -1861,7 +1864,7 @@ msgstr "Tage"
 msgid "Debug mode"
 msgstr "Debug-Modus"
 
-#: src/pages/SettingsOverlay.tsx:155
+#: src/pages/SettingsOverlay.tsx:157
 msgid "Decision Model"
 msgstr ""
 
@@ -1896,6 +1899,8 @@ msgstr "Standardbereich"
 #: src/pages/shell/dialogs.tsx:470
 #: src/pages/shell/sidebar-footer.tsx:99
 #: src/pages/shell/sidebar-footer.tsx:132
+#: src/pages/VaultSettingsPanel.tsx:136
+#: src/pages/VaultSettingsPanel.tsx:221
 msgid "Delete"
 msgstr "Löschen"
 
@@ -1910,6 +1915,7 @@ msgstr "{0} löschen"
 #. placeholder {0}: item.name
 #: src/pages/shell/dialogs.tsx:346
 #: src/pages/shell/dialogs.tsx:439
+#: src/pages/VaultSettingsPanel.tsx:136
 msgid "Delete {0}?"
 msgstr "{0} löschen?"
 
@@ -2350,7 +2356,7 @@ msgstr "Vollbild"
 msgid "FYI"
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:151
+#: src/pages/SettingsOverlay.tsx:153
 msgid "General"
 msgstr "Allgemein"
 
@@ -2404,8 +2410,13 @@ msgstr "Lege auf und gib dann den Code auf dem Bildschirm ein."
 msgid "header"
 msgstr "Kopfzeile"
 
+#: src/pages/VaultSettingsPanel.tsx:185
+msgid "Header"
+msgstr ""
+
 #: src/pages/McpServersOverlay.tsx:450
 #: src/pages/plugins/advanced-integrations.tsx:291
+#: src/pages/VaultSettingsPanel.tsx:193
 msgid "Header name"
 msgstr "Header-Name"
 
@@ -2607,6 +2618,10 @@ msgstr "Erinnerungen behalten"
 #: src/pages/bot-page/RoutineTriggers.tsx:380
 msgid "key"
 msgstr "Schlüssel"
+
+#: src/pages/VaultSettingsPanel.tsx:204
+msgid "Key"
+msgstr ""
 
 #: src/pages/bot-page/BotPage.tsx:101
 msgid "Knowledge"
@@ -2819,7 +2834,7 @@ msgstr "Mitglieder ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX} auswählen)"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:38
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:154
+#: src/pages/SettingsOverlay.tsx:156
 msgid "Memory"
 msgstr "Erinnerungen"
 
@@ -2950,7 +2965,7 @@ msgstr "Modell aktualisiert."
 #: src/pages/ModelSettingsOverlay.tsx:44
 #: src/pages/ProvidersSettings.tsx:140
 #: src/pages/ProvidersSettings.tsx:142
-#: src/pages/SettingsOverlay.tsx:152
+#: src/pages/SettingsOverlay.tsx:154
 #: src/pages/usage-settings.tsx:69
 msgid "Models"
 msgstr "Modelle"
@@ -2998,6 +3013,7 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx:187
 #: src/pages/shell/dialogs.tsx:250
 #: src/pages/SpaceGeneralSettings.tsx:113
+#: src/pages/VaultSettingsPanel.tsx:168
 msgid "Name"
 msgstr "Name"
 
@@ -3023,6 +3039,10 @@ msgstr "Braucht dich"
 
 #: src/components/AskCard.tsx:244
 msgid "Needs your call"
+msgstr ""
+
+#: src/pages/VaultSettingsPanel.tsx:149
+msgid "New API key"
 msgstr ""
 
 #: src/pages/shell/bot-panel.tsx:93
@@ -3490,7 +3510,7 @@ msgstr ""
 msgid "Private workspace with its own bots and groups."
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:148
+#: src/pages/SettingsOverlay.tsx:150
 msgid "Profile"
 msgstr "Profil"
 
@@ -3508,7 +3528,7 @@ msgstr ""
 msgid "Provider"
 msgstr "Anbieter"
 
-#: src/pages/SettingsOverlay.tsx:149
+#: src/pages/SettingsOverlay.tsx:151
 #: src/pages/VoiceSettingsOverlay.tsx:154
 msgid "Providers"
 msgstr "Anbieter"
@@ -3733,6 +3753,7 @@ msgid "Replace API key"
 msgstr "API-Schlüssel ersetzen"
 
 #: src/pages/ProvidersSettings.tsx:267
+#: src/pages/VaultSettingsPanel.tsx:228
 msgid "Replace key"
 msgstr "Schlüssel ersetzen"
 
@@ -3925,6 +3946,7 @@ msgstr ""
 #: src/pages/KnowledgeSection.tsx:706
 #: src/pages/model-settings/model-detail.tsx:332
 #: src/pages/shell/dialogs.tsx:266
+#: src/pages/VaultSettingsPanel.tsx:228
 msgid "Save"
 msgstr "Speichern"
 
@@ -4050,6 +4072,11 @@ msgstr "Wird gesendet…"
 msgid "Sent"
 msgstr ""
 
+#: src/pages/VaultSettingsPanel.tsx:175
+#: src/pages/VaultSettingsPanel.tsx:177
+msgid "Sent as"
+msgstr ""
+
 #: src/components/integrations/IntegrationSetup.tsx:129
 #: src/pages/AccountSettingsOverlay.tsx:166
 msgid "Server integrations"
@@ -4069,9 +4096,9 @@ msgstr "Server-URL"
 
 #: src/pages/bot-page/BotPage.tsx:102
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:164
-#: src/pages/SettingsOverlay.tsx:239
-#: src/pages/SettingsOverlay.tsx:290
+#: src/pages/SettingsOverlay.tsx:167
+#: src/pages/SettingsOverlay.tsx:242
+#: src/pages/SettingsOverlay.tsx:293
 #: src/pages/shell/sidebar-footer.tsx:211
 #: src/pages/shell/sidebar-footer.tsx:218
 msgid "Settings"
@@ -4168,6 +4195,10 @@ msgstr "Bei Tangow anmelden"
 #: src/pages/Welcome.tsx:32
 msgid "Sign up"
 msgstr "Registrieren"
+
+#: src/pages/VaultSettingsPanel.tsx:161
+msgid "Site"
+msgstr ""
 
 #. placeholder {0}: skill.name
 #: src/pages/shell/composer-pickers.tsx:200
@@ -4334,7 +4365,7 @@ msgstr "Unterstützt Denkmodus"
 msgid "Switch bot"
 msgstr "Bot wechseln"
 
-#: src/pages/SettingsOverlay.tsx:533
+#: src/pages/SettingsOverlay.tsx:537
 msgid "Switch space"
 msgstr "Space wechseln"
 
@@ -4570,8 +4601,8 @@ msgstr ""
 
 #: src/components/ComputerMaintenanceActions.tsx:116
 #: src/components/SoftwareUpdateSection.tsx:260
-#: src/pages/SettingsOverlay.tsx:430
-#: src/pages/SettingsOverlay.tsx:430
+#: src/pages/SettingsOverlay.tsx:434
+#: src/pages/SettingsOverlay.tsx:434
 #: src/pages/shell/computer-preview.tsx:75
 msgid "Update available"
 msgstr "Update verfügbar"
@@ -4599,7 +4630,7 @@ msgstr ""
 msgid "Updated"
 msgstr "Aktualisiert"
 
-#: src/pages/SettingsOverlay.tsx:150
+#: src/pages/SettingsOverlay.tsx:152
 msgid "Updates"
 msgstr "Updates"
 
@@ -4627,7 +4658,7 @@ msgstr ""
 msgid "Updating…"
 msgstr "Wird aktualisiert …"
 
-#: src/pages/SettingsOverlay.tsx:157
+#: src/pages/SettingsOverlay.tsx:160
 #: src/pages/shell/sidebar-footer.tsx:223
 #: src/pages/shell/sidebar-footer.tsx:230
 msgid "Usage"
@@ -4651,6 +4682,14 @@ msgstr ""
 msgid "Use this model"
 msgstr "Dieses Modell verwenden"
 
+#: src/pages/VaultSettingsPanel.tsx:199
+msgid "Username"
+msgstr ""
+
+#: src/pages/SettingsOverlay.tsx:159
+msgid "Vault"
+msgstr ""
+
 #: src/pages/plugins/advanced-integrations.tsx:327
 msgid "Verify and add"
 msgstr "Prüfen und hinzufügen"
@@ -4663,7 +4702,7 @@ msgstr "Wird geprüft…"
 #: src/pages/bot-page/SettingDetails.tsx:189
 #: src/pages/ProvidersSettings.tsx:187
 #: src/pages/ProvidersSettings.tsx:189
-#: src/pages/SettingsOverlay.tsx:153
+#: src/pages/SettingsOverlay.tsx:155
 #: src/pages/shell/thread-header.tsx:142
 #: src/pages/shell/thread-header.tsx:143
 #: src/pages/VoiceSettingsOverlay.tsx:137

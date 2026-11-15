@@ -116,9 +116,10 @@ export function createRunSecretWriter(secretStore: EncryptedSecretStore): RunSec
         await storeBotSecret({
           tx,
           secretStore,
-          scope: { userId, spaceId, botId },
+          scope: { userId, spaceId },
           destination: credential,
           plaintext,
+          createdByBotId: botId,
         });
         return;
       }

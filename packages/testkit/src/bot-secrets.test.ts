@@ -279,7 +279,8 @@ describeIntegration("reusable credential lifecycle", () => {
           `Bearer ${key}-rotated`,
         );
         const count = fetch.mock.calls.length;
-        await nextRun([{ name: "forget_secret", args: { name: destination.name } }, request]);
+        await rpc(seeded.cookie, "vault/remove", { name: destination.name });
+        await nextRun([request]);
         expect(await handles.prisma.botSecret.count({ where: { botId: seeded.bot.id } })).toBe(0);
         expect(fetch).toHaveBeenCalledTimes(count);
         const [messages, events, effects, tasks] = await Promise.all([
@@ -296,6 +297,44 @@ describeIntegration("reusable credential lifecycle", () => {
       }
     },
   );
+
+  it("keeps the vault to its person and space, never returns values, and serves every bot", async () => {
+    fetch.mockClear();
+    const owner = await seedRun("vault-owner", "Use the vault key");
+    const vaultKey = "fake-vault-api-key";
+    const saved = await rpc(owner.cookie, "vault/put", { ...destination, value: vaultKey });
+    const listed = await rpc(owner.cookie, "vault/list");
+    expect(listed).toEqual([destination]);
+    expect(JSON.stringify({ saved, listed })).not.toContain(vaultKey);
+
+    const stranger = await seedRun("vault-stranger", "Use someone else's key");
+    expect(await rpc(stranger.cookie, "vault/list")).toEqual([]);
+    const otherSpace = await rpc<{ id: string }>(owner.cookie, "spaces/create", { name: "Other" });
+    expect(await rpc(owner.cookie, "vault/list", {}, otherSpace.id)).toEqual([]);
+
+    // Saved from the screen, not by a bot: any bot of the person in the space can use it.
+    const runtime = vi
+      .spyOn(ScriptedAgentRuntime.prototype, "run")
+      .mockImplementation(async function* (request): AsyncIterable<AgentRuntimeEvent> {
+        yield {
+          type: "tool",
+          name: "secret_request",
+          args: { name: destination.name, url: `${destination.origin}/v1/items` },
+          executionId: `${request.runId}:0`,
+        };
+        yield { type: "done", text: "Done" };
+      });
+    try {
+      await handles.executor.continueRun(stranger.run.id, "test-worker");
+      expect(fetch).not.toHaveBeenCalled();
+      await handles.executor.continueRun(owner.run.id, "test-worker");
+      expect(new Headers(fetch.mock.calls.at(-1)?.[1]?.headers).get("Authorization")).toBe(
+        `Bearer ${vaultKey}`,
+      );
+    } finally {
+      runtime.mockRestore();
+    }
+  });
 
   describe("webhook key", () => {
     async function keyedBot(label: string) {
@@ -451,13 +490,19 @@ describeIntegration("reusable credential lifecycle", () => {
     return `better-auth.session_token=${match![1]}`;
   }
 
-  async function rpc<T>(cookie: string, procedure: string, body: unknown = {}): Promise<T> {
+  async function rpc<T>(
+    cookie: string,
+    procedure: string,
+    body: unknown = {},
+    spaceId?: string,
+  ): Promise<T> {
     const response = await handles.app.request(`/rpc/${procedure}`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
         origin: "http://127.0.0.1:5173",
         cookie,
+        ...(spaceId ? { "x-tangow-space-id": spaceId } : {}),
       },
       body: JSON.stringify({ json: body }),
     });

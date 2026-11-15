@@ -896,4 +896,12 @@ export const ZH_MESSAGES: Record<string, string> = {
   "{app} is disconnected.": "{app} 已断开连接。",
   "Remove {address}": "移除 {address}",
   "Not an email address": "这不是电子邮件地址",
+  Vault: "保险库",
+  "New API key": "新 API 密钥",
+  Site: "网站",
+  "Sent as": "发送方式",
+  Header: "请求头",
+  "Header name": "请求头名称",
+  Username: "用户名",
+  Key: "密钥",
 };

@@ -6,9 +6,15 @@ import { createSafeRemoteFetch, type RemoteTransportDependencies } from "./remot
 import type { EncryptedSecretStore } from "./secrets.js";
 import { readBodyCapped, withAbort } from "./web-ssrf.js";
 
-export type BotSecretScope = { userId: string; spaceId: string; botId: string };
-function scopeFields({ userId, spaceId, botId }: BotSecretScope): BotSecretScope {
-  return { userId, spaceId, botId };
+/** A credential belongs to a person in a space; every bot of theirs there can use it. */
+export type BotSecretScope = { userId: string; spaceId: string };
+function scopeFields({ userId, spaceId }: BotSecretScope): BotSecretScope {
+  return { userId, spaceId };
+}
+
+/** Serializes saves and deletions in one person's vault, including concurrent first saves. */
+async function lockScope(tx: Prisma.TransactionClient, { userId, spaceId }: BotSecretScope) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('bot-secrets'), hashtext(${`${userId}:${spaceId}`}))`;
 }
 
 const metadata = { name: true, origin: true, auth: true } as const;
@@ -60,13 +66,13 @@ export async function storeBotSecret(input: {
   scope: BotSecretScope;
   destination: BotSecretDestination;
   plaintext: string;
+  createdByBotId?: string;
 }): Promise<void> {
   const { tx, secretStore, scope, plaintext } = input;
   if (!plaintext || plaintext.length > 16_384) throw new Error("Invalid credential length");
   const destination = normalizeSecretDestination(input.destination);
   credentialHeader(destination, plaintext);
-  // Serialize credential updates and deletions for a bot, including concurrent first saves.
-  await tx.$queryRaw`SELECT id FROM bots WHERE id = ${scope.botId} FOR UPDATE`;
+  await lockScope(tx, scope);
   const existing = await tx.botSecret.findFirst({
     where: { ...scopeFields(scope), name: destination.name },
   });
@@ -92,7 +98,13 @@ export async function storeBotSecret(input: {
     await tx.botSecret.update({ where: { id }, data: { ciphertext: encrypted.ciphertext } });
   } else {
     await tx.botSecret.create({
-      data: { id, ...scopeFields(scope), ...destination, ciphertext: encrypted.ciphertext },
+      data: {
+        id,
+        ...scopeFields(scope),
+        botId: input.createdByBotId ?? null,
+        ...destination,
+        ciphertext: encrypted.ciphertext,
+      },
     });
   }
 }
@@ -106,12 +118,11 @@ export function listBotSecrets(prisma: PrismaClient, scope: BotSecretScope) {
   });
 }
 
-export async function forgetBotSecret(prisma: PrismaClient, scope: BotSecretScope, name: string) {
+export async function removeBotSecret(prisma: PrismaClient, scope: BotSecretScope, name: string) {
   await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT id FROM bots WHERE id = ${scope.botId} FOR UPDATE`;
+    await lockScope(tx, scope);
     await tx.botSecret.deleteMany({ where: { ...scopeFields(scope), name } });
   });
-  return { removed: true };
 }
 
 /** Credentials are resolved only inside this destination-bound HTTP boundary. */

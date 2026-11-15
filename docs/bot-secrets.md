@@ -16,7 +16,7 @@ For example, the bot can request:
 }
 ```
 
-The value is encrypted in Postgres `bot_secrets` using the deployment's `ENCRYPTION_KEY` (AES-256-GCM with record-bound authentication). Only the run's user can submit a reusable credential. It belongs to that user, space and bot, survives later runs, and is deleted when its owner, space or bot is deleted. Names, destinations and authentication configuration are metadata; `list_secrets` returns those fields without values. No hosted credential service or prebuilt connector is required.
+The value is encrypted in Postgres `bot_secrets` using the deployment's `ENCRYPTION_KEY` (AES-256-GCM with record-bound authentication). Only the run's user can submit a reusable credential. It belongs to that user in that space, so every bot of theirs there can use it, still only at its saved origin. It survives later runs and the deletion of the bot that asked for it, and is deleted with its owner or space. Settings > Vault on web, desktop and mobile lists these credentials by name and site, adds one, replaces a value and deletes one; a saved value is never shown again. Names, destinations and authentication configuration are metadata; `list_secrets` returns those fields without values. No hosted credential service or prebuilt connector is required.
 
 The bot uses `secret_request` to ask the backend to decrypt and inject the credential:
 
@@ -30,7 +30,7 @@ The bot uses `secret_request` to ask the backend to decrypt and inject the crede
 
 Authentication supports Bearer tokens, a named header (`{"type":"header","name":"X-Api-Key"}`), and Basic authentication (`{"type":"basic","username":"api-user"}`). Basic uses the protected value as the password. Requests can send JSON, form-encoded or plain text bodies. The saved origin must match exactly, including port. Redirects and unsafe network destinations are rejected through the shared remote-request policy. Requests follow the existing action approval rules, have a 30-second deadline and a 1 MB response limit, and return at most 20,000 characters of redacted response content without response headers.
 
-Calling `request_secret` again with the same name and configuration returns the saved reference. Add `"replace": true` to show another protected card and replace its value. `forget_secret` with `{"name":"example_api"}` removes the stored value and prevents future use; an already-started request may finish. Remove a credential before changing its origin or authentication configuration. Each user can save up to 100 credentials per bot, with values limited to 16,384 characters.
+Calling `request_secret` again with the same name and configuration returns the saved reference. Add `"replace": true` to show another protected card and replace its value. Deleting a credential in Settings > Vault prevents future use; an already-started request may finish. Delete a credential before changing its origin or authentication configuration. Each user can save up to 100 credentials per space, with values limited to 16,384 characters.
 
 The model has no tool for reading these values, and the backend removes direct and common encoded echoes from API responses. The approved service still receives the credential: redaction cannot defend against a malicious service deliberately transforming it. Choose a service you trust and use appropriately scoped credentials.
 

@@ -235,6 +235,12 @@ async function seedFixture(app: App, prisma: PrismaClient) {
     notifyOnFinish: true,
   });
   await rpc(app, cookie, "bots/archive", { botId: archived.id });
+  await rpc(app, cookie, "vault/put", {
+    name: "example_api",
+    origin: "https://api.example.test",
+    auth: { type: "bearer" },
+    value: "fake-fixture-api-key",
+  });
 
   const group = await rpc<{ id: string }>(app, cookie, "groups/create", {
     name: "Launch team",

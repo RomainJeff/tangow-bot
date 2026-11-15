@@ -50,6 +50,10 @@ export const BotSecretDestination = z.object({
 });
 export type BotSecretDestination = z.infer<typeof BotSecretDestination>;
 
+/** Saves a credential from the vault screen. The value is write-only: no response returns it. */
+export const VaultPutInput = BotSecretDestination.extend({ value: z.string().min(1).max(16_384) });
+export type VaultPutInput = z.infer<typeof VaultPutInput>;
+
 /** Written atomically with the protected value, distinct from action approval. */
 export const BotSecretSubmission = z.object({ credentialSaved: BotSecretDestination });
 

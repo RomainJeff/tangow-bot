@@ -913,4 +913,12 @@ export const RU_MESSAGES: Record<string, string> = {
   "{app} is disconnected.": "{app} отключено.",
   "Remove {address}": "Удалить {address}",
   "Not an email address": "Это не адрес электронной почты",
+  Vault: "Хранилище",
+  "New API key": "Новый API-ключ",
+  Site: "Сайт",
+  "Sent as": "Способ отправки",
+  Header: "Заголовок",
+  "Header name": "Имя заголовка",
+  Username: "Имя пользователя",
+  Key: "Ключ",
 };

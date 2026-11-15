@@ -81,7 +81,7 @@ describe("authenticated secret requests", () => {
     },
   );
 
-  it.each(["userId", "spaceId", "botId"] as const)(
+  it.each(["userId", "spaceId"] as const)(
     "denies a different %s before decrypting or sending",
     async (key) => {
       const { input, fetch } = await fixture();

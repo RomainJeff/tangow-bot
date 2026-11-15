@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-11-15
 
+#### Added
+
+- **Keep your logins and API keys in a vault in Settings.** On web, desktop, iPhone and Android, Settings > Vault lists your API keys by name and site in the current space and lets you add one, replace its value or delete it; a saved value is never shown again, and the bot can no longer delete keys itself.
+
+#### Changed
+
+- API keys you gave one bot are now usable by all your bots in the space, still only on their own site, and stay when that bot is deleted.
+
 #### Fixed
 
 - When DuckDuckGo blocks the bot's built-in web search with a bot check, the bot now opens the search on its computer and asks you to solve the check, instead of treating every search as returning nothing.

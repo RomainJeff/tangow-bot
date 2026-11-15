@@ -9,6 +9,7 @@ export const SPACE_SETTINGS_SECTIONS = [
   "memory",
   "decision-model",
   "computer",
+  "vault",
   "usage",
 ] as const;
 

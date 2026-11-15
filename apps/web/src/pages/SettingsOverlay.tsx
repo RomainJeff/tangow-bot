@@ -21,6 +21,7 @@ import {
   Cpu,
   Gauge,
   KeyRound,
+  LockKeyhole,
   Monitor,
   Signpost,
   SlidersHorizontal,
@@ -50,6 +51,7 @@ import {
 import { PHONE_MEDIA } from "./shell/layout";
 import { UsageSettingsPanel } from "./usage-settings";
 import { usePushedFocus } from "./use-pushed-focus";
+import { VaultSettingsPanel } from "./VaultSettingsPanel";
 import { VoiceSettingsOverlay } from "./VoiceSettingsOverlay";
 
 type NavItem = {
@@ -154,6 +156,7 @@ export function SettingsOverlay({
     memory: { label: t`Memory`, icon: Brain },
     "decision-model": { label: t`Decision Model`, icon: Signpost },
     computer: { label: t`Computer`, icon: Monitor, updateAvailable: computerUpdateAvailable },
+    vault: { label: t`Vault`, icon: LockKeyhole },
     usage: { label: t`Usage`, icon: Gauge },
   };
 
@@ -353,6 +356,7 @@ export function SettingsOverlay({
                 />
               ) : null}
               {section === "usage" ? <UsageSettingsPanel panelRef={usageRef} /> : null}
+              {section === "vault" ? <VaultSettingsPanel /> : null}
               {section === "computer" ? (
                 <ComputerSettingsPanel onUpdateAvailableChange={setComputerUpdateAvailable} />
               ) : null}

@@ -1514,8 +1514,9 @@ model BotSecret {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   spaceId    String
   space      Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  botId      String
-  bot        Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  /// The bot whose request saved it, if any. Every bot of the user in the space can use it.
+  botId      String?
+  bot        Bot?     @relation(fields: [botId], references: [id], onDelete: SetNull)
   name       String
   origin     String
   auth       Json
@@ -1523,7 +1524,7 @@ model BotSecret {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  @@unique([userId, spaceId, botId, name])
+  @@unique([userId, spaceId, name])
   @@index([botId])
   @@index([spaceId])
   @@map("bot_secrets")
