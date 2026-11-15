@@ -6,7 +6,7 @@ import { useEffect, useId, useState } from "react";
 import { connectMcpOauth } from "../../lib/mcp-connect";
 import { rpc } from "../../lib/rpc";
 
-type Choice = "direct" | "composio" | "pipedream" | "executor";
+type Choice = "direct" | "composio" | "executor";
 
 export function IntegrationSetup({
   onDone,
@@ -27,8 +27,6 @@ export function IntegrationSetup({
   const [selectedChoice, setChoice] = useState<Choice>("direct");
   const choice = serverSetup ? selectedChoice : "direct";
   const [apiKey, setApiKey] = useState("");
-  const [clientId, setClientId] = useState("");
-  const [projectId, setProjectId] = useState("");
   const [endpoint, setEndpoint] = useState("");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<IntegrationCatalogResult[]>([]);
@@ -39,13 +37,10 @@ export function IntegrationSetup({
   const choices: { id: Choice; label: string }[] = [
     { id: "direct", label: t`Direct MCP` },
     { id: "composio", label: "Composio" },
-    { id: "pipedream", label: "Pipedream" },
     { id: "executor", label: "Executor" },
   ];
-  const managed = choice === "composio" || choice === "pipedream";
+  const managed = choice === "composio";
   const hasCredentials = Boolean(apiKey.trim());
-  const credentialsReady =
-    hasCredentials && (choice !== "pipedream" || Boolean(clientId.trim() && projectId.trim()));
   const remoteResults = [
     ...new Map(
       results.flatMap((result) =>
@@ -81,17 +76,7 @@ export function IntegrationSetup({
 
   async function saveProvider() {
     await run(async () => {
-      await rpc.integrationSetup.save(
-        choice === "composio"
-          ? { provider: "composio", apiKey }
-          : {
-              provider: "pipedream",
-              clientId,
-              clientSecret: apiKey,
-              projectId,
-              environment: "production",
-            },
-      );
+      await rpc.integrationSetup.save({ provider: "composio", apiKey });
       setApiKey("");
       setState(await rpc.integrationSetup.get());
       onDone?.();
@@ -152,7 +137,7 @@ export function IntegrationSetup({
           ))}
         </fieldset>
       ) : null}
-      {choice === "composio" || choice === "pipedream" ? (
+      {managed ? (
         <>
           {configured ? (
             <p className="text-sm text-success">
@@ -161,32 +146,8 @@ export function IntegrationSetup({
           ) : null}
           {state?.canConfigure ? (
             <>
-              {choice === "pipedream" ? (
-                <>
-                  <label htmlFor={`${fieldId}-client-id`} className="block text-sm">
-                    <Trans>Client ID</Trans>
-                    <Input
-                      id={`${fieldId}-client-id`}
-                      className="mt-2"
-                      value={clientId}
-                      onChange={(event) => setClientId(event.target.value)}
-                      autoComplete="off"
-                    />
-                  </label>
-                  <label htmlFor={`${fieldId}-project-id`} className="block text-sm">
-                    <Trans>Project ID</Trans>
-                    <Input
-                      id={`${fieldId}-project-id`}
-                      className="mt-2"
-                      value={projectId}
-                      onChange={(event) => setProjectId(event.target.value)}
-                      autoComplete="off"
-                    />
-                  </label>
-                </>
-              ) : null}
               <label htmlFor={`${fieldId}-key`} className="block text-sm">
-                {choice === "composio" ? t`API key` : t`Client secret`}
+                {t`API key`}
                 <Input
                   id={`${fieldId}-key`}
                   className="mt-2"
@@ -198,11 +159,7 @@ export function IntegrationSetup({
               </label>
               <a
                 className="text-sm text-muted-foreground underline"
-                href={
-                  choice === "composio"
-                    ? "https://dashboard.composio.dev"
-                    : "https://pipedream.com/docs/connect/mcp/developers"
-                }
+                href="https://dashboard.composio.dev"
                 target="_blank"
                 rel="noreferrer"
               >
@@ -211,7 +168,7 @@ export function IntegrationSetup({
               {!onDone ? (
                 <Button
                   className="ml-3"
-                  disabled={busy || !credentialsReady}
+                  disabled={busy || !hasCredentials}
                   onClick={() => void saveProvider()}
                 >
                   {busy ? t`Connecting…` : t`Connect`}
@@ -343,10 +300,7 @@ export function IntegrationSetup({
           <Button
             disabled={
               busy ||
-              (managed &&
-                state?.canConfigure &&
-                !credentialsReady &&
-                (!configured || hasCredentials))
+              (managed && state?.canConfigure && !hasCredentials && (!configured || hasCredentials))
             }
             onClick={() => {
               if (managed && hasCredentials) void saveProvider();

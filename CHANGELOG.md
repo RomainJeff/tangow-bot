@@ -8,9 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-11-15
 
+#### Changed
+
+- Pipedream Connect is no longer offered as a managed app catalog on web, desktop and iOS; server owners connect apps through Composio or MCP instead, and existing Pipedream connections are removed, so disconnect them before updating to also revoke their accounts at Pipedream.
+- OpenAPI and GraphQL tool sources are no longer offered in Integrations on web, desktop and mobile, and the ones already added are removed, so bots reach outside tools through apps and MCP servers.
+
 #### Fixed
 
 - When DuckDuckGo blocks the bot's built-in web search with a bot check, the bot now opens the search on its computer and asks you to solve the check, instead of treating every search as returning nothing.
+- When the computer service refuses to start a reply's or a routine's computer, the run now fails within seconds with the real reason, instead of after 15 minutes with an unrelated message.
 
 ### 2026-11-14
 

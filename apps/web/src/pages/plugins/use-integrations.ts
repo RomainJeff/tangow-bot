@@ -11,7 +11,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { optionalCatalogFeedProbe } from "../../lib/optional-catalog-feed";
 import { rpc } from "../../lib/rpc";
 
-type SourceKind = "treg" | "executor" | "mcp" | "api" | "graphql";
+type SourceKind = "treg" | "executor" | "mcp";
 
 type ConnectionTool = { name: string; description: string };
 
@@ -94,11 +94,7 @@ export function useIntegrations({ activeBotId }: { activeBotId?: string }) {
       }
       return next;
     });
-    setSources(
-      installs.filter(
-        (install) => install.kind === "mcp" || install.kind === "api" || install.kind === "graphql",
-      ),
-    );
+    setSources(installs.filter((install) => install.kind === "mcp"));
     setCatalogFeedEnabled(catalogFeed.enabled);
     return items;
   }
@@ -334,8 +330,8 @@ export function useIntegrations({ activeBotId }: { activeBotId?: string }) {
     result: IntegrationCatalogResult,
     surface: IntegrationCatalogSurface,
   ) {
-    if (!surface.source || (surface.kind !== "mcp" && surface.kind !== "openapi")) return;
-    setSourceKind(surface.kind === "mcp" ? "mcp" : "api");
+    if (!surface.source || surface.kind !== "mcp") return;
+    setSourceKind("mcp");
     setSourceName(result.name);
     setSourceUrl(surface.source);
     setCredential("");
@@ -355,29 +351,23 @@ export function useIntegrations({ activeBotId }: { activeBotId?: string }) {
         ...(authType === "header" ? { name: authName.trim() } : {}),
       };
       await rpc.capabilities.install({
-        kind: sourceKind === "treg" || sourceKind === "executor" ? "mcp" : sourceKind,
+        kind: "mcp",
         name:
           sourceName.trim() ||
           (sourceKind === "treg"
             ? "Treg"
             : sourceKind === "executor"
               ? "Executor"
-              : sourceKind === "graphql"
-                ? "GraphQL"
-                : "Custom connector"),
+              : "Custom connector"),
         source: sourceUrl.trim(),
         credential: credential.trim() || undefined,
         config:
           sourceKind === "treg"
             ? { preset: "treg", auth: { type: "bearer" } }
-            : sourceKind === "api"
-              ? { openApi: true, auth }
-              : sourceKind === "graphql"
-                ? { auth }
-                : {
-                    preset: "custom",
-                    auth: sourceKind === "executor" ? { type: "bearer" } : auth,
-                  },
+            : {
+                preset: "custom",
+                auth: sourceKind === "executor" ? { type: "bearer" } : auth,
+              },
       });
       setCredential("");
       setSourceKind(null);
