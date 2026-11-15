@@ -50,7 +50,6 @@ export * from "./fake-worker-provider.js";
 export * from "./feedback.js";
 export * from "./fish-audio-voice.js";
 export * from "./github-webhook-emulator.js";
-export * from "./graphql-connectors.js";
 export * from "./group-handoff.js";
 export * from "./home.js";
 export * from "./home-volume-migration.js";

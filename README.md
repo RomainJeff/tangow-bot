@@ -17,7 +17,7 @@ provider, or run the complete stack locally.
 - Graphile Worker
 - Pi
 - Docker and E2B
-- Composio, MCP, and OpenAPI integrations
+- Composio and MCP integrations
 
 For an existing source deployment, use the [`./tangow` operator CLI](./docs/tangow.md) on the server to update it,
 inspect services, rebuild workers and computers, or migrate Docker homes to E2B.
@@ -64,7 +64,7 @@ independent long random values. Docker sandboxes also need a dedicated
 model provider during onboarding.
 
 The managed app catalog is optional. Set `COMPOSIO_API_KEY` for Composio. Users can add an HTTPS
-MCP server, Treg endpoint, or OpenAPI JSON document from **Integrations** without enabling it. Connector credentials are encrypted on the
+MCP server or Treg endpoint from **Integrations** without enabling it. Connector credentials are encrypted on the
 server and are never returned by the API.
 
 Treg is usage-metered. Self-hosters supply their own Treg token; operators embedding Treg in a

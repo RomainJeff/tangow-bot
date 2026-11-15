@@ -28,7 +28,7 @@ import { useI18n } from "../lib/i18n";
 import { loadLastBotId } from "../lib/last-bot";
 import { native, useThemedStyles } from "../lib/native";
 
-type SourceKind = "treg" | "executor" | "mcp" | "api" | "graphql";
+type SourceKind = "treg" | "executor" | "mcp";
 type ConnectionTool = { name: string; description: string };
 
 function itemKey(item: Pick<ConnectionCatalogItem, "connectorId" | "slug">) {
@@ -107,11 +107,7 @@ export default function Integrations() {
     }
     try {
       const installs = await rpc<CapabilityInstall[]>("capabilities/list");
-      setSources(
-        installs.filter(
-          (item) => item.kind === "mcp" || item.kind === "api" || item.kind === "graphql",
-        ),
-      );
+      setSources(installs.filter((item) => item.kind === "mcp"));
     } catch {
       // Tool sources are optional; keep featured/catalog usable if this fails.
     }
@@ -322,29 +318,23 @@ export default function Integrations() {
     setSourceError(null);
     try {
       await rpc("capabilities/install", {
-        kind: sourceKind === "treg" || sourceKind === "executor" ? "mcp" : sourceKind,
+        kind: "mcp",
         name:
           name.trim() ||
           (sourceKind === "treg"
             ? "Treg"
             : sourceKind === "executor"
               ? "Executor"
-              : sourceKind === "graphql"
-                ? "GraphQL"
-                : t("Custom connector")),
+              : t("Custom connector")),
         source: url.trim(),
         credential: credential.trim() || undefined,
         config:
           sourceKind === "treg"
             ? { preset: "treg", auth: { type: "bearer" } }
-            : sourceKind === "api"
-              ? { openApi: true, auth: { type: requiresAuth ? "bearer" : "none" } }
-              : sourceKind === "graphql"
-                ? { auth: { type: requiresAuth ? "bearer" : "none" } }
-                : {
-                    preset: "custom",
-                    auth: { type: sourceKind === "executor" || requiresAuth ? "bearer" : "none" },
-                  },
+            : {
+                preset: "custom",
+                auth: { type: sourceKind === "executor" || requiresAuth ? "bearer" : "none" },
+              },
       });
       setCredential("");
       setSourceKind(null);
@@ -670,7 +660,7 @@ export default function Integrations() {
             {advancedOpen ? (
               <View style={styles.advancedBody}>
                 <View style={styles.accountActions}>
-                  {(["mcp", "api", "graphql", "executor", "treg"] as const).map((kind) => (
+                  {(["mcp", "executor", "treg"] as const).map((kind) => (
                     <Pressable
                       key={kind}
                       accessibilityRole="button"
@@ -682,11 +672,7 @@ export default function Integrations() {
                           ? t("Add Treg")
                           : kind === "executor"
                             ? t("Add Executor")
-                            : kind === "mcp"
-                              ? t("Add MCP server")
-                              : kind === "graphql"
-                                ? t("Add GraphQL")
-                                : t("Add OpenAPI")}
+                            : t("Add MCP server")}
                       </Text>
                     </Pressable>
                   ))}
@@ -701,11 +687,7 @@ export default function Integrations() {
                         ? t("Connect Treg")
                         : sourceKind === "executor"
                           ? t("Connect Executor")
-                          : sourceKind === "mcp"
-                            ? t("Remote MCP server")
-                            : sourceKind === "graphql"
-                              ? t("GraphQL endpoint")
-                              : t("OpenAPI JSON")}
+                          : t("Remote MCP server")}
                     </Text>
                     <TextInput
                       value={name}
@@ -721,13 +703,9 @@ export default function Integrations() {
                         autoCapitalize="none"
                         autoCorrect={false}
                         placeholder={
-                          sourceKind === "mcp"
-                            ? t("https://example.com/mcp")
-                            : sourceKind === "executor"
-                              ? t("https://executor.example/mcp")
-                              : sourceKind === "graphql"
-                                ? t("https://example.com/graphql")
-                                : t("https://example.com/openapi.json")
+                          sourceKind === "executor"
+                            ? t("https://executor.example/mcp")
+                            : t("https://example.com/mcp")
                         }
                         placeholderTextColor={native.tertiaryLabel}
                         style={styles.input}

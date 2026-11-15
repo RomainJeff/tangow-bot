@@ -419,138 +419,18 @@ describeWithDatabase("Composio catalog reconciliation", () => {
         host: "mcp.example.test",
       }),
     );
-  });
 
-  it("imports an OpenAPI connector, keeps its credential encrypted, and routes calls", async () => {
-    const cookie = await signup(app, `api-connector-${stamp}@tangow.test`, "API Connector");
-    const actor = await rpc<Actor>(app, cookie, "me");
-    const credential = "test-connector-secret-value";
-    const install = await rpc<{
-      id: string;
-      config: Record<string, unknown>;
-      secretConfigured: boolean;
-    }>(app, cookie, "capabilities/install", {
-      kind: "api",
-      name: "CRM API",
-      source: "https://api.example.test/openapi.json",
-      credential,
-      config: { openApi: true, auth: { type: "bearer" } },
-    });
-    expect(install.secretConfigured).toBe(true);
-    expect(JSON.stringify(install)).not.toContain(credential);
-
-    const storedInstall = await handles.prisma.capabilityInstall.findUniqueOrThrow({
-      where: { id: install.id },
+    const { secretId } = await handles.prisma.capabilityInstall.findUniqueOrThrow({
+      where: { id: executor.id },
     });
     const storedSecret = await handles.prisma.secret.findUniqueOrThrow({
-      where: { id: storedInstall.secretId! },
+      where: { id: secretId! },
     });
-    expect(storedSecret.ciphertext).not.toContain(credential);
-
-    const provider = new InstalledConnectorProvider(
-      handles.prisma,
-      new EncryptedSecretStore(TEST_ENCRYPTION_KEY),
-      { fetch: thirdParties.fetch, resolveHostname: thirdParties.resolveHostname },
-    );
-    const adapterContext = {
-      operationId: "api-connector-test",
-      traceId: "api-connector-test",
-      spaceId: actor.spaceId,
-      userId: actor.userId,
-      signal: new AbortController().signal,
-    };
-    const tools = await provider.discoverTools(adapterContext);
-    const tool = tools.find((candidate) => candidate.route?.toolName === "getContact");
-    expect(tool).toMatchObject({
-      name: "getContact",
-      readOnly: true,
-    });
-
-    const events = [];
-    for await (const event of provider.execute(
-      {
-        tool: tool!.name,
-        args: { contactId: "contact-1" },
-        executionId: "api-call-1",
-        route: tool!.route,
-      },
-      adapterContext,
-    )) {
-      events.push(event);
-    }
-    expect(JSON.stringify(events)).toContain("contact-1");
-    expect(JSON.stringify(events)).not.toContain(credential);
-    expect(thirdParties.records).toContainEqual(
-      expect.objectContaining({
-        provider: "openapi",
-        path: "/v1/contacts/contact-1",
-        authenticated: true,
-      }),
-    );
-
-    await rpc(app, cookie, "capabilities/remove", { id: install.id });
+    expect(storedSecret.ciphertext).not.toContain(executorCredential);
+    await rpc(app, cookie, "capabilities/remove", { id: executor.id });
     await expect(
       handles.prisma.secret.findUnique({ where: { id: storedSecret.id } }),
     ).resolves.toBeNull();
-  });
-
-  it("imports a GraphQL connector, introspects operations, and routes calls", async () => {
-    const cookie = await signup(app, `graphql-connector-${stamp}@tangow.test`, "GraphQL Connector");
-    const actor = await rpc<Actor>(app, cookie, "me");
-    const install = await rpc<{
-      id: string;
-      config: Record<string, unknown>;
-      secretConfigured: boolean;
-    }>(app, cookie, "capabilities/install", {
-      kind: "graphql",
-      name: "Star Wars API",
-      source: "https://graphql.example.test/graphql",
-      config: { auth: { type: "none" } },
-    });
-    expect(install.secretConfigured).toBe(false);
-    expect(Array.isArray((install.config as { operations?: unknown[] }).operations)).toBe(true);
-    expect((install.config as { operations: unknown[] }).operations.length).toBeGreaterThan(0);
-
-    const provider = new InstalledConnectorProvider(
-      handles.prisma,
-      new EncryptedSecretStore(TEST_ENCRYPTION_KEY),
-      { fetch: thirdParties.fetch, resolveHostname: thirdParties.resolveHostname },
-    );
-    const adapterContext = {
-      operationId: "graphql-connector-test",
-      traceId: "graphql-connector-test",
-      spaceId: actor.spaceId,
-      userId: actor.userId,
-      signal: new AbortController().signal,
-    };
-    const tools = await provider.discoverTools(adapterContext);
-    const tool = tools.find((candidate) => candidate.route?.toolName === "query_hero");
-    expect(tool).toMatchObject({
-      name: "hero",
-      readOnly: true,
-    });
-
-    const events = [];
-    for await (const event of provider.execute(
-      {
-        tool: tool!.name,
-        args: { episode: "EMPIRE" },
-        executionId: "graphql-call-1",
-        route: tool!.route,
-      },
-      adapterContext,
-    )) {
-      events.push(event);
-    }
-    expect(JSON.stringify(events)).toContain("ok");
-    expect(thirdParties.records).toContainEqual(
-      expect.objectContaining({
-        provider: "graphql",
-        authenticated: false,
-      }),
-    );
-
-    await rpc(app, cookie, "capabilities/remove", { id: install.id });
   });
 
   async function createConnection(owner: Actor, provider: string) {

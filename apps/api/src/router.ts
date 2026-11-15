@@ -59,8 +59,6 @@ import {
   modelCredentialDto,
   onOwnBot,
   planLiveConnectionSync,
-  prepareApiInstall,
-  prepareGraphqlInstall,
   probeOpenAiCompatibleModels,
   provisionComputer,
   queueComputerUpdate,
@@ -3138,7 +3136,7 @@ export function createRouter(deps: RouterDeps) {
         });
         return rows.map((row) => ({
           id: row.id,
-          kind: row.kind as "skill" | "plugin" | "mcp" | "api" | "connection",
+          kind: row.kind as "skill" | "plugin" | "mcp" | "connection",
           name: row.name,
           source: row.source,
           version: row.version,
@@ -3183,14 +3181,9 @@ export function createRouter(deps: RouterDeps) {
         if (JSON.stringify(config).length > 2_000_000) {
           throw new ORPCError("BAD_REQUEST", { message: "Capability configuration is too large" });
         }
-        if (
-          credential &&
-          input.kind !== "mcp" &&
-          input.kind !== "api" &&
-          input.kind !== "graphql"
-        ) {
+        if (credential && input.kind !== "mcp") {
           throw new ORPCError("BAD_REQUEST", {
-            message: "Credentials are only accepted for MCP, API, and GraphQL tool sources",
+            message: "Credentials are only accepted for MCP tool sources",
           });
         }
         try {
@@ -3207,28 +3200,6 @@ export function createRouter(deps: RouterDeps) {
               remote: deps.remoteConnectors,
             });
             config = verified.config;
-          }
-          if (input.kind === "api") {
-            const prepared = await prepareApiInstall({
-              source,
-              config,
-              credential,
-              signal: context.signal,
-              remote: deps.remoteConnectors,
-            });
-            source = prepared.source;
-            config = prepared.config;
-          }
-          if (input.kind === "graphql") {
-            const prepared = await prepareGraphqlInstall({
-              source,
-              config,
-              credential,
-              signal: context.signal,
-              remote: deps.remoteConnectors,
-            });
-            source = prepared.source;
-            config = prepared.config;
           }
         } catch (error) {
           const message = sanitizeComposioError(error);
@@ -3276,7 +3247,7 @@ export function createRouter(deps: RouterDeps) {
         });
         return {
           id: row.id,
-          kind: row.kind as "skill" | "plugin" | "mcp" | "api" | "connection",
+          kind: row.kind as "skill" | "plugin" | "mcp" | "connection",
           name: row.name,
           source: row.source,
           version: row.version,

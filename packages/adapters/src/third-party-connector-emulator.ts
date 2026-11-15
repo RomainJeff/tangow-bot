@@ -9,9 +9,7 @@ type EmulatorRecord =
       host: string;
       authenticated?: boolean;
       args?: Record<string, unknown>;
-    }
-  | { provider: "openapi"; operation: string; path: string; authenticated: boolean }
-  | { provider: "graphql"; operation: string; authenticated: boolean };
+    };
 
 /** Expected Executor test bearer. Compared at the boundary; never written into records. */
 const EXPECTED_EXECUTOR_BEARER = "Bearer fake-executor-credential-value";
@@ -30,8 +28,6 @@ export class ThirdPartyConnectorEmulator {
     ) {
       return this.mcp(url, init);
     }
-    if (url.hostname === "api.example.test") return this.openapi(url, init);
-    if (url.hostname === "graphql.example.test") return this.graphql(url, init);
     if (url.hostname === "catalog.example.test") return this.catalog(url);
     throw new Error(`Third-party connector emulator received unexpected URL ${url}`);
   };
@@ -128,149 +124,6 @@ export class ThirdPartyConnectorEmulator {
       });
     }
     return jsonRpcError(id, -32601, `Unhandled MCP method ${method}`);
-  }
-
-  private async openapi(url: URL, init?: RequestInit): Promise<Response> {
-    if (url.pathname === "/openapi.json") {
-      return Response.json({
-        openapi: "3.1.0",
-        servers: [{ url: "https://api.example.test/v1" }],
-        paths: {
-          "/contacts/{contactId}": {
-            get: {
-              operationId: "getContact",
-              summary: "Get one contact",
-              parameters: [
-                {
-                  name: "contactId",
-                  in: "path",
-                  required: true,
-                  schema: { type: "string" },
-                },
-              ],
-            },
-          },
-        },
-      });
-    }
-    const authenticated = new Headers(init?.headers).has("authorization");
-    this.records.push({
-      provider: "openapi",
-      operation: init?.method ?? "GET",
-      path: url.pathname,
-      authenticated,
-    });
-    return Response.json({ ok: true, contactId: url.pathname.split("/").at(-1) });
-  }
-
-  private async graphql(url: URL, init?: RequestInit): Promise<Response> {
-    const authenticated = new Headers(init?.headers).has("authorization");
-    const body = parseBody(init?.body);
-    const query = typeof body.query === "string" ? body.query : "";
-    if (query.includes("__schema")) {
-      this.records.push({ provider: "graphql", operation: "introspect", authenticated });
-      return Response.json({
-        data: {
-          __schema: {
-            queryType: { name: "Query" },
-            mutationType: { name: "Mutation" },
-            types: [
-              {
-                kind: "OBJECT",
-                name: "Query",
-                fields: [
-                  {
-                    name: "hero",
-                    description: "Fetch a hero",
-                    args: [
-                      {
-                        name: "episode",
-                        description: "Episode code",
-                        type: { kind: "ENUM", name: "Episode", ofType: null },
-                        defaultValue: null,
-                      },
-                    ],
-                    type: {
-                      kind: "OBJECT",
-                      name: "Character",
-                      ofType: null,
-                    },
-                  },
-                  {
-                    name: "hello",
-                    description: "Say hello",
-                    args: [],
-                    type: { kind: "SCALAR", name: "String", ofType: null },
-                  },
-                ],
-                inputFields: null,
-                enumValues: null,
-              },
-              {
-                kind: "OBJECT",
-                name: "Mutation",
-                fields: [
-                  {
-                    name: "createNote",
-                    description: "Create a note",
-                    args: [
-                      {
-                        name: "text",
-                        type: {
-                          kind: "NON_NULL",
-                          name: null,
-                          ofType: { kind: "SCALAR", name: "String", ofType: null },
-                        },
-                        defaultValue: null,
-                      },
-                    ],
-                    type: { kind: "SCALAR", name: "String", ofType: null },
-                  },
-                ],
-                inputFields: null,
-                enumValues: null,
-              },
-              {
-                kind: "OBJECT",
-                name: "Character",
-                fields: [
-                  {
-                    name: "name",
-                    args: [],
-                    type: { kind: "SCALAR", name: "String", ofType: null },
-                  },
-                  {
-                    name: "appearsIn",
-                    args: [],
-                    type: {
-                      kind: "LIST",
-                      name: null,
-                      ofType: { kind: "ENUM", name: "Episode", ofType: null },
-                    },
-                  },
-                ],
-                inputFields: null,
-                enumValues: null,
-              },
-              {
-                kind: "ENUM",
-                name: "Episode",
-                fields: null,
-                inputFields: null,
-                enumValues: [{ name: "NEWHOPE" }, { name: "EMPIRE" }, { name: "JEDI" }],
-              },
-              { kind: "SCALAR", name: "String", fields: null, inputFields: null, enumValues: null },
-            ],
-          },
-        },
-      });
-    }
-    this.records.push({
-      provider: "graphql",
-      operation: typeof body.operationName === "string" ? body.operationName : "execute",
-      authenticated,
-    });
-    return Response.json({ data: { ok: true, path: url.pathname } });
   }
 }
 
