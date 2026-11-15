@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
+- After Tangow is updated, bots can click, type and scroll on their computer again right away, where every click used to fail until someone opened the computer's screen.
 - When DuckDuckGo blocks the bot's built-in web search with a bot check, the bot now opens the search on its computer and asks you to solve the check, instead of treating every search as returning nothing.
 
 ### 2026-11-14
