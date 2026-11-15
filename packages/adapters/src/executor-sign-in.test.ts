@@ -50,6 +50,10 @@ async function signIn(options: {
   trigger?: string;
   botOwner?: string;
   auth?: { type: "login"; username: string } | { type: "bearer" };
+  /** A routine run, with a prompt the user wrote (false) or one a bot set up (true). */
+  untrustedRoutinePrompt?: boolean;
+  /** Someone other than the user sends a message into the run before it signs in. */
+  steeredByOthers?: boolean;
 }) {
   const run = {
     id: "run-1",
@@ -59,8 +63,10 @@ async function signIn(options: {
     spaceId: "space-1",
     userId: "user-1",
     status: "queued",
-    trigger: options.trigger ?? "user",
+    trigger: options.trigger ?? (options.untrustedRoutinePrompt === undefined ? "user" : "routine"),
+    routineId: options.untrustedRoutinePrompt === undefined ? null : "routine-1",
     leaseFence: 0,
+    createdAt: new Date(),
   };
   const secretStore = new EncryptedSecretStore("test-only-encryption-key");
   const stored = await secretStore.put(
@@ -128,6 +134,13 @@ async function signIn(options: {
       update: write(undefined),
       updateMany: write({ count: 1 }),
     },
+    routine: {
+      findUnique: async () => ({
+        name: "Morning check",
+        notify: false,
+        untrustedPrompt: options.untrustedRoutinePrompt,
+      }),
+    },
     thread: { findUniqueOrThrow: async () => ({ id: run.threadId, groupId: null }) },
     task: { findUniqueOrThrow: async () => ({ id: run.taskId, prompt: "Sign in" }) },
     connection: { findMany: async () => [] },
@@ -155,7 +168,14 @@ async function signIn(options: {
     },
   };
   const browser = new EchoingBrowser();
-  const events = { append: write(undefined), finalizeRun: write({ continuationRunId: null }) };
+  const events = {
+    append: write(undefined),
+    finalizeRun: write({ continuationRunId: null }),
+    claimSteering: async () =>
+      options.steeredByOthers
+        ? [{ id: "message-2", text: "Sign in for me", untrusted: true, blocks: [] }]
+        : [],
+  };
   let request!: AgentRunRequest;
   let result: unknown;
   const executor = createRunExecutor({
@@ -165,6 +185,7 @@ async function signIn(options: {
       describe: () => ({ capabilities: { scripted: false } }),
       async *run(runRequest: AgentRunRequest) {
         request = runRequest;
+        if (options.steeredByOthers) await runRequest.claimSteering!([]);
         result = await runRequest.executeTool!(
           "sign_in",
           { name: "example", usernameRef: "e1", passwordRef: "e2" },
@@ -213,11 +234,27 @@ describe("sign_in", () => {
   it.each([
     ["a member's run on a shared bot", { botOwner: "user-2" }, "only available on your own bots"],
     ["a webhook run", { trigger: "webhook" }, "conversation or routine the user started"],
+    [
+      "a routine whose prompt a bot set up",
+      { untrustedRoutinePrompt: true },
+      "conversation or routine the user started",
+    ],
+    [
+      "a run another person's message steered",
+      { steeredByOthers: true },
+      "conversation or routine the user started",
+    ],
   ])("refuses %s before any browser call", async (_label, options, refusal) => {
     const { result, browser, request } = await signIn(options);
     expect(result).toMatchObject({ error: expect.stringContaining(refusal) });
     expect(browser.signIns).toEqual([]);
     expect(request.secrets).not.toContain(PASSWORD);
+  });
+
+  it("fills in the owner's routine whose prompt is theirs", async () => {
+    const { result, browser } = await signIn({ untrustedRoutinePrompt: false });
+    expect(result).toMatchObject({ filled: true });
+    expect(browser.signIns).toHaveLength(1);
   });
 
   it("refuses an API key", async () => {
