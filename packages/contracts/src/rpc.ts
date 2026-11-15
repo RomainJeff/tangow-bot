@@ -711,7 +711,7 @@ export const appContract = {
     install: oc
       .input(
         z.object({
-          kind: z.enum(["skill", "plugin", "mcp", "api", "graphql"]),
+          kind: z.enum(["skill", "plugin", "mcp"]),
           name: z.string().min(1).max(120),
           source: z.string().min(1).max(2048),
           config: z.record(z.string(), z.unknown()).default({}),

@@ -23,8 +23,6 @@ export default function IntegrationSetup() {
   const [state, setState] = useState<IntegrationSetupState | null>(null);
   const [choice, setChoice] = useState("direct");
   const [key, setKey] = useState("");
-  const [clientId, setClientId] = useState("");
-  const [projectId, setProjectId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -41,27 +39,15 @@ export default function IntegrationSetup() {
   const choices = [
     { id: "direct", label: t("Direct MCP") },
     { id: "composio", label: "Composio" },
-    { id: "pipedream", label: "Pipedream" },
     { id: "executor", label: "Executor" },
   ];
-  const managed = choice === "composio" || choice === "pipedream";
+  const managed = choice === "composio";
   const configured = state?.providers.find((provider) => provider.id === choice)?.configured;
   async function save() {
     setBusy(true);
     setError(null);
     try {
-      await rpc(
-        "integrationSetup/save",
-        choice === "composio"
-          ? { provider: "composio", apiKey: key }
-          : {
-              provider: "pipedream",
-              clientId,
-              clientSecret: key,
-              projectId,
-              environment: "production",
-            },
-      );
+      await rpc("integrationSetup/save", { provider: "composio", apiKey: key });
       setKey("");
       router.replace("/integrations");
     } catch {
@@ -104,38 +90,14 @@ export default function IntegrationSetup() {
           </Pressable>
         ))}
       </View>
-      {choice === "composio" || choice === "pipedream" ? (
+      {managed ? (
         <>
           {configured ? <Text style={styles.text}>{t("Connected")}</Text> : null}
           {state?.canConfigure ? (
             <>
-              {choice === "pipedream" ? (
-                <>
-                  <Text style={styles.text}>{t("Client ID")}</Text>
-                  <TextInput
-                    accessibilityLabel={t("Client ID")}
-                    value={clientId}
-                    onChangeText={setClientId}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    style={styles.input}
-                  />
-                  <Text style={styles.text}>{t("Project ID")}</Text>
-                  <TextInput
-                    accessibilityLabel={t("Project ID")}
-                    value={projectId}
-                    onChangeText={setProjectId}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    style={styles.input}
-                  />
-                </>
-              ) : null}
-              <Text style={styles.text}>
-                {choice === "composio" ? t("API key") : t("Client secret")}
-              </Text>
+              <Text style={styles.text}>{t("API key")}</Text>
               <TextInput
-                accessibilityLabel={choice === "composio" ? t("API key") : t("Client secret")}
+                accessibilityLabel={t("API key")}
                 value={key}
                 onChangeText={setKey}
                 secureTextEntry
@@ -144,11 +106,7 @@ export default function IntegrationSetup() {
                 style={styles.input}
               />
               {button(t("Get credentials"), () => {
-                void Linking.openURL(
-                  choice === "composio"
-                    ? "https://dashboard.composio.dev"
-                    : "https://pipedream.com/docs/connect/mcp/developers",
-                );
+                void Linking.openURL("https://dashboard.composio.dev");
               })}
             </>
           ) : state && !configured ? (
@@ -185,11 +143,7 @@ export default function IntegrationSetup() {
           if (managed && key.trim()) void save();
           else router.replace("/");
         },
-        busy ||
-          (managed &&
-            state?.canConfigure &&
-            !configured &&
-            (!key.trim() || (choice === "pipedream" && (!clientId.trim() || !projectId.trim())))),
+        busy || (managed && state?.canConfigure && !configured && !key.trim()),
       )}
       {button(t("Skip"), () => router.replace("/"), busy)}
     </ScrollView>
