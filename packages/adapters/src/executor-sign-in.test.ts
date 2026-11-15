@@ -44,6 +44,15 @@ class EchoingBrowser extends FakeBrowserProvider {
       elements: [{ ref: "e2", role: "textbox", name: "Password", value: request.password }],
     };
   }
+  override async act() {
+    return {
+      ok: true,
+      completed: 1,
+      url: `${ORIGIN}/login`,
+      title: "Sign in",
+      tree: `Password: ${PASSWORD}`,
+    };
+  }
 }
 
 async function signIn(options: {
@@ -54,6 +63,8 @@ async function signIn(options: {
   untrustedRoutinePrompt?: boolean;
   /** Someone other than the user sends a message into the run before it signs in. */
   steeredByOthers?: boolean;
+  /** After signing in, a browser_act whose page still shows the password. */
+  thenAct?: boolean;
 }) {
   const run = {
     id: "run-1",
@@ -191,6 +202,13 @@ async function signIn(options: {
           { name: "example", usernameRef: "e1", passwordRef: "e2" },
           "call-1",
         );
+        if (options.thenAct) {
+          await runRequest.executeTool!(
+            "browser_act",
+            { actions: [{ kind: "click", ref: "e3" }] },
+            "call-2",
+          );
+        }
         yield { type: "done" as const, text: "Signed in" };
       },
     },
@@ -229,6 +247,20 @@ describe("sign_in", () => {
       expect(text).not.toContain(PASSWORD);
       expect(text).not.toContain(JSON.stringify(PASSWORD).slice(1, -1));
     }
+  });
+
+  it("stores a later tool's receipt with the signed-in password masked", async () => {
+    const { writes } = await signIn({ thenAct: true });
+    const receipts = writes.flatMap((args) => {
+      const data = (args as { data?: { status?: unknown; result?: unknown } }).data;
+      return data?.status === "completed" ? [data.result] : [];
+    });
+    expect(receipts).toContainEqual(
+      expect.objectContaining({ ok: true, tree: "Password: [redacted]" }),
+    );
+    const text = JSON.stringify(receipts);
+    expect(text).not.toContain(PASSWORD);
+    expect(text).not.toContain(JSON.stringify(PASSWORD).slice(1, -1));
   });
 
   it.each([
