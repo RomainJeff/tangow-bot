@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
-import { createServer as createHttpServer, type Server } from "node:http";
+import {
+  createServer as createHttpServer,
+  request as httpRequest,
+  type IncomingHttpHeaders,
+  type Server,
+} from "node:http";
 import type { AddressInfo, Server as NetServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -58,10 +63,12 @@ for (const mode of ["development", "preview"] as const) {
 
     let authorized = true;
     let assetAttempts = 0;
+    const received: IncomingHttpHeaders[] = [];
     test.beforeAll(async () => {
       const root = await mkdtemp(path.join(tmpdir(), "tangow-screen-test-"));
       await mkdir(path.join(root, "dist"));
       const upstream = createHttpServer((req, res) => {
+        received.push(req.headers);
         // Even a listener explicitly requesting same-origin access cannot loosen the proxy policy.
         res.setHeader(
           "Content-Security-Policy",
@@ -81,6 +88,7 @@ for (const mode of ["development", "preview"] as const) {
         }
       });
       upstream.on("upgrade", (req, socket) => {
+        received.push(req.headers);
         const accept = createHash("sha1")
           .update(`${req.headers["sec-websocket-key"]}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
           .digest("base64");
@@ -217,6 +225,48 @@ for (const mode of ["development", "preview"] as const) {
       } finally {
         authorized = true;
       }
+    });
+
+    test("credentials attached to the request never reach the computer", async ({ request }) => {
+      const credentials = {
+        cookie: "app-session=fake-session",
+        authorization: "Bearer fake",
+        "cf-access-client-id": "fake-id",
+        "cf-access-client-secret": "fake-secret",
+        "cf-access-jwt-assertion": "fake-jwt",
+        "x-forwarded-access-token": "fake-token",
+        "x-auth-request-access-token": "fake-token",
+        "x-forwarded-user": "fake-user",
+        "x-forwarded-email": "user@example.com",
+      };
+      received.length = 0;
+      expect((await request.get(screenUrl, { headers: credentials })).status()).toBe(200);
+      const socketUrl = new URL(screenUrl);
+      socketUrl.pathname = socketUrl.pathname.replace("/embed.html", "/websockify");
+      await new Promise<void>((resolve, reject) => {
+        httpRequest(socketUrl, {
+          headers: {
+            ...credentials,
+            connection: "Upgrade",
+            upgrade: "websocket",
+            "sec-websocket-key": "dGhlIHNhbXBsZSBub25jZQ==",
+            "sec-websocket-version": "13",
+          },
+        })
+          .on("upgrade", (_response, socket) => {
+            socket.destroy();
+            resolve();
+          })
+          .on("response", () => reject(new Error("upgrade refused")))
+          .on("error", reject)
+          .end();
+      });
+      // One entry per path: the HTTP relay, then the hand-written WebSocket upgrade.
+      const leaked = received.map((headers) =>
+        Object.keys(credentials).filter((name) => name in headers),
+      );
+      expect(leaked).toEqual([[], []]);
+      expect(received[1]).toMatchObject({ upgrade: "websocket", "sec-websocket-version": "13" });
     });
 
     for (const sandbox of ["allow-scripts allow-pointer-lock", null]) {
