@@ -167,9 +167,15 @@ export const MessageView = memo(function MessageView({
   onOpenBot: (botId: string) => void;
   speakerName?: string;
   memberName?: (botId: string | undefined) => string | undefined;
-  peerBot: (
-    botId: string,
-  ) => { color: string; name?: string; shapeSeed?: number | null; status?: string } | undefined;
+  peerBot: (botId: string) =>
+    | {
+        color: string;
+        name?: string;
+        shapeSeed?: number | null;
+        avatarCharacter?: string | null;
+        status?: string;
+      }
+    | undefined;
   replyPreview?: MessageItem;
   replyToMessageId?: string;
   onJumpToMessage?: (messageId: string) => void;
@@ -222,6 +228,7 @@ export const MessageView = memo(function MessageView({
       color: bot?.color ?? FALLBACK_BOT_COLOR,
       identity: botId,
       shapeSeed: bot?.shapeSeed,
+      character: bot?.avatarCharacter,
     };
   };
   /** A bot speaking: a shared name/avatar per group in a multi-bot thread
@@ -241,6 +248,7 @@ export const MessageView = memo(function MessageView({
             color={author?.color ?? FALLBACK_BOT_COLOR}
             identity={botId}
             shapeSeed={author?.shapeSeed}
+            character={author?.avatarCharacter}
             size={26}
           />
         )

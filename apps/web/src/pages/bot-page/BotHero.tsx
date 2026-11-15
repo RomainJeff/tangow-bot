@@ -128,6 +128,7 @@ function AppearancePicker({
           color={color}
           identity={bot.id}
           shapeSeed={shapeSeed}
+          character={bot.avatarCharacter}
           size={80}
           status={bot.status}
           followPointer

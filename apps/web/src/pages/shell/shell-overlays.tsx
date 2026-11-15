@@ -552,12 +552,16 @@ export function ShellOverlays({
             botName={active.name}
             botColor={active.color}
             botShapeSeed={active.shapeSeed}
+            botAvatarCharacter={active.avatarCharacter}
             peerBotId={peerConversation.peerBotId}
             peerBotName={peerConversation.peerBotName}
             peerBotColor={
               thread.resolveTranscriptBot(peerConversation.peerBotId)?.color ?? FALLBACK_BOT_COLOR
             }
             peerBotShapeSeed={thread.resolveTranscriptBot(peerConversation.peerBotId)?.shapeSeed}
+            peerBotAvatarCharacter={
+              thread.resolveTranscriptBot(peerConversation.peerBotId)?.avatarCharacter
+            }
             onClose={() => setPeerConversation(null)}
           />
         ) : null}

@@ -25,20 +25,24 @@ export function PeerMessagesOverlay({
   botName,
   botColor,
   botShapeSeed,
+  botAvatarCharacter,
   peerBotId,
   peerBotName: initialPeerBotName,
   peerBotColor,
   peerBotShapeSeed,
+  peerBotAvatarCharacter,
   onClose,
 }: {
   botId: string;
   botName: string;
   botColor: string;
   botShapeSeed?: number | null;
+  botAvatarCharacter?: string | null;
   peerBotId: string;
   peerBotName: string;
   peerBotColor: string;
   peerBotShapeSeed?: number | null;
+  peerBotAvatarCharacter?: string | null;
   onClose: () => void;
 }) {
   const { t } = useLingui();
@@ -117,11 +121,18 @@ export function PeerMessagesOverlay({
             {/* The overlay covers the shell header, so it reserves room for the window controls itself. */}
             {desktopBridge() ? <WindowChrome /> : null}
             <div className="flex items-center -space-x-2">
-              <BotAvatar color={botColor} identity={botId} shapeSeed={botShapeSeed} size={28} />
+              <BotAvatar
+                color={botColor}
+                identity={botId}
+                shapeSeed={botShapeSeed}
+                character={botAvatarCharacter}
+                size={28}
+              />
               <BotAvatar
                 color={peerBotColor}
                 identity={peerBotId}
                 shapeSeed={peerBotShapeSeed}
+                character={peerBotAvatarCharacter}
                 size={28}
               />
             </div>
@@ -170,6 +181,7 @@ export function PeerMessagesOverlay({
               const name = sent ? botName : peerBotName;
               const color = sent ? botColor : peerBotColor;
               const shapeSeed = sent ? botShapeSeed : peerBotShapeSeed;
+              const avatarCharacter = sent ? botAvatarCharacter : peerBotAvatarCharacter;
               const identity = sent ? botId : peerBotId;
               const timeMarker = showsTimeMarker(
                 conversation.messages[index - 1]?.createdAt,
@@ -202,6 +214,7 @@ export function PeerMessagesOverlay({
                           color={color}
                           identity={identity}
                           shapeSeed={shapeSeed}
+                          character={avatarCharacter}
                           size={26}
                         />
                       ) : null}

@@ -35,7 +35,9 @@ function sameMembers(left: readonly string[], right: readonly string[]) {
   return left.every((id) => rightIds.has(id));
 }
 
-type PickerBot = Pick<Bot, "id" | "name" | "color" | "shapeSeed"> & { status?: string };
+type PickerBot = Pick<Bot, "id" | "name" | "color" | "shapeSeed" | "avatarCharacter"> & {
+  status?: string;
+};
 
 /** The Space's other people, those a group's creator can add; none when they can't be read. */
 function useSpacePeople(spaceId: string | undefined, userId: string): GroupPerson[] {
@@ -76,6 +78,7 @@ function botAvatar(bot: PickerBot) {
       color={bot.color}
       identity={bot.id}
       shapeSeed={bot.shapeSeed}
+      character={bot.avatarCharacter}
       size={32}
       status={bot.status}
     />

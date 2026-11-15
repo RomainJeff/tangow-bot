@@ -245,6 +245,7 @@ export function SidebarRoster({
                         color={item.chat.color}
                         identity={item.chat.id}
                         shapeSeed={item.chat.shapeSeed}
+                        character={item.chat.avatarCharacter}
                         size={28}
                         status={item.chat.status}
                       />

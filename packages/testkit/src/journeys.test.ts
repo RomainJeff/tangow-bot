@@ -359,12 +359,13 @@ describeJourneys("required product journeys", () => {
       description: chief.description,
       instructions: chief.instructions,
       notifyOnFinish: chief.notifyOnFinish,
-      color: chief.color,
       pinned: false,
       sectionId: null,
       unread: false,
     });
     expect(duplicate.id).not.toBe(chief.id);
+    expect(duplicate.avatarCharacter).toBeTruthy();
+    expect(duplicate.avatarCharacter).not.toBe(chief.avatarCharacter);
     expect((await rpc<Bot[]>(app, ada, "bots/list"))[0]?.id).toBe(coder.id);
 
     await sendAndWait(

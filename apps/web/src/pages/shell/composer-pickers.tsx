@@ -331,6 +331,7 @@ function MentionOptionIcon({ mention }: { mention: ComposerMention }) {
       color={mention.color ?? FALLBACK_BOT_COLOR}
       identity={mention.id}
       shapeSeed={mention.shapeSeed}
+      character={mention.avatarCharacter}
       size={16}
     />
   );
@@ -356,6 +357,7 @@ function MentionChipIcon({ mention }: { mention: ComposerMention }) {
       color={mention.color ?? FALLBACK_BOT_COLOR}
       identity={mention.id}
       shapeSeed={mention.shapeSeed}
+      character={mention.avatarCharacter}
       size={18}
     />
   );

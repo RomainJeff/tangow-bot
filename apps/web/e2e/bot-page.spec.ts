@@ -57,6 +57,28 @@ for (const theme of ["light", "dark"] as const) {
   }
 }
 
+const HERO_VIEWPORTS = [
+  { name: "default", size: null },
+  { name: "phone", size: { width: 390, height: 844 } },
+] as const;
+
+for (const theme of ["light", "dark"] as const) {
+  for (const viewport of HERO_VIEWPORTS) {
+    test(`the hero shows the clay character, ${viewport.name}, ${theme}`, async ({
+      page,
+    }, testInfo) => {
+      if (viewport.size) await page.setViewportSize(viewport.size);
+      await page.goto(`${FIXTURE}?tab=settings&theme=${theme}`);
+      const avatar = page.getByTestId("bot-appearance-trigger").locator("img");
+      await expect(avatar).toBeVisible();
+      await expect
+        .poll(() => avatar.evaluate((image: HTMLImageElement) => image.naturalWidth))
+        .toBeGreaterThan(0);
+      await captureScreenshot(page, testInfo, `bot-page-hero-${viewport.name}-${theme}`);
+    });
+  }
+}
+
 test("the tabs are one tab stop, moved with the arrow keys", async ({ page }) => {
   await page.goto(`${FIXTURE}?tab=activity`);
   const tabs = page.getByRole("tablist");

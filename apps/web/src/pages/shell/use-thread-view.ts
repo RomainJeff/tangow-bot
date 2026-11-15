@@ -171,6 +171,7 @@ export function useThreadView(snapshot: ThreadState | null, roster: Roster) {
       botId: run.botId,
       color: bot?.color ?? FALLBACK_BOT_COLOR,
       shapeSeed: bot?.shapeSeed,
+      avatarCharacter: bot?.avatarCharacter,
       name: bot?.name,
       status: run.status,
     };
