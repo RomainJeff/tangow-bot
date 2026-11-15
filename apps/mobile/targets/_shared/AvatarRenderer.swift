@@ -1,8 +1,14 @@
 import UIKit
 
-/// Draws a bot's resting bloub the way the app does, for the extensions that cannot run it.
+/// A bot's avatar for the extensions, which cannot run the app's renderer.
 enum AvatarRenderer {
-  /// The bloub a bot wears: its picked seed, or a hash of its id (`avatarIdentitySeed`).
+  /// A character's notification image (`targets/avatar-images.js`). An id this app predates gets
+  /// the neutral character, never a hole.
+  static func character(_ id: String) -> UIImage? {
+    UIImage(named: "avatar-\(id)") ?? UIImage(named: "avatar-scout")
+  }
+
+  /// The bloub a bot wears for a server that predates characters: its picked seed, or a hash of its id (`avatarIdentitySeed`).
   static func shape(seed: Int?, botId: String) -> AvatarShape {
     avatarShapes[(seed ?? identitySeed(botId)) % avatarShapes.count]
   }
