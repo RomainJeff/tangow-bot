@@ -2,7 +2,6 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { MessageBlock } from "@tangow/contracts";
-import { AVATAR_CHARACTERS, botDisplayColor } from "@tangow/contracts";
 import {
   avatarIdentitySeed,
   BOT_DELEGATION_GUIDANCE,
@@ -539,13 +538,14 @@ describe("run notification preference", () => {
       notificationAvatar(prismaFor({ shapeSeed: 11, avatarCharacter: "atlas" }), run),
     ).resolves.toEqual({
       character: "atlas",
-      color: botDisplayColor({ color: "#E5484D", avatarCharacter: "atlas" }),
+      // Atlas is a capsule: the clay colour, not the bot's own.
+      color: "#8287AD",
       shape: 11 % SHAPES.length,
     });
     await expect(
       notificationAvatar(prismaFor({ shapeSeed: null, avatarCharacter: null }), run),
     ).resolves.toEqual({
-      character: AVATAR_CHARACTERS[0].id,
+      character: "scout",
       color: "#E5484D",
       shape: avatarIdentitySeed("bot-1") % SHAPES.length,
     });
