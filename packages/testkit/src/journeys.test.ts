@@ -359,7 +359,6 @@ describeJourneys("required product journeys", () => {
       description: chief.description,
       instructions: chief.instructions,
       notifyOnFinish: chief.notifyOnFinish,
-      color: chief.color,
       pinned: false,
       sectionId: null,
       unread: false,
