@@ -264,7 +264,7 @@ msgstr ""
 msgid "About spaces"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:305
+#: src/components/integrations/IntegrationSetup.tsx:262
 msgid "Access token"
 msgstr ""
 
@@ -387,7 +387,7 @@ msgstr "添加 GraphQL 端点"
 msgid "Add item"
 msgstr "添加项目"
 
-#: src/components/integrations/IntegrationSetup.tsx:129
+#: src/components/integrations/IntegrationSetup.tsx:114
 #: src/pages/plugins/advanced-integrations.tsx:190
 msgid "Add MCP server"
 msgstr "添加 MCP 服务器"
@@ -409,7 +409,7 @@ msgstr "添加远程 MCP 服务器"
 msgid "Add server"
 msgstr "添加服务器"
 
-#: src/components/integrations/IntegrationSetup.tsx:273
+#: src/components/integrations/IntegrationSetup.tsx:230
 msgid "Add server URL"
 msgstr ""
 
@@ -555,7 +555,7 @@ msgid "API is back, but the update did not finish. Check the host logs."
 msgstr "API 已恢复，但更新未完成。请查看宿主日志。"
 
 #: src/components/AskCard.tsx:123
-#: src/components/integrations/IntegrationSetup.tsx:189
+#: src/components/integrations/IntegrationSetup.tsx:150
 #: src/lib/localized-provider-hint.ts:9
 #: src/pages/model-settings/model-detail.tsx:284
 #: src/pages/model-settings/model-detail.tsx:287
@@ -656,7 +656,7 @@ msgstr "购买前询问"
 msgid "Ask before sending external email"
 msgstr "发送外部邮件前询问"
 
-#: src/components/integrations/IntegrationSetup.tsx:223
+#: src/components/integrations/IntegrationSetup.tsx:180
 msgid "Ask the server owner to configure this provider."
 msgstr ""
 
@@ -991,14 +991,6 @@ msgstr "清空指令？"
 msgid "Clearing…"
 msgstr "正在清空…"
 
-#: src/components/integrations/IntegrationSetup.tsx:167
-msgid "Client ID"
-msgstr ""
-
-#: src/components/integrations/IntegrationSetup.tsx:189
-msgid "Client secret"
-msgstr ""
-
 #: src/pages/CustomizeOverlay.tsx:130
 #: src/pages/KnowledgeSection.tsx:692
 #: src/pages/KnowledgeSection.tsx:848
@@ -1148,10 +1140,10 @@ msgstr "确认删除"
 msgid "Confirm password"
 msgstr "确认密码"
 
-#: src/components/integrations/IntegrationSetup.tsx:217
-#: src/components/integrations/IntegrationSetup.tsx:262
-#: src/components/integrations/IntegrationSetup.tsx:286
-#: src/components/integrations/IntegrationSetup.tsx:319
+#: src/components/integrations/IntegrationSetup.tsx:174
+#: src/components/integrations/IntegrationSetup.tsx:219
+#: src/components/integrations/IntegrationSetup.tsx:243
+#: src/components/integrations/IntegrationSetup.tsx:276
 #: src/pages/DecisionModelSettingsPanel.tsx:176
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
@@ -1191,8 +1183,8 @@ msgstr "连接此提供方，作为你的个人模型。"
 msgid "Connect Treg"
 msgstr "连接 Treg"
 
-#: src/components/integrations/IntegrationSetup.tsx:159
-#: src/components/integrations/IntegrationSetup.tsx:262
+#: src/components/integrations/IntegrationSetup.tsx:144
+#: src/components/integrations/IntegrationSetup.tsx:219
 #: src/pages/DecisionModelSettingsPanel.tsx:98
 #: src/pages/McpOAuthCallback.tsx:54
 #: src/pages/MemorySettingsOverlay.tsx:191
@@ -1223,8 +1215,8 @@ msgstr "已连接并使用 {0}。"
 msgid "Connected. Its tools are available from your next message."
 msgstr "已连接，下一条消息起即可使用其工具。"
 
-#: src/components/integrations/IntegrationSetup.tsx:217
-#: src/components/integrations/IntegrationSetup.tsx:356
+#: src/components/integrations/IntegrationSetup.tsx:174
+#: src/components/integrations/IntegrationSetup.tsx:310
 #: src/pages/DecisionModelSettingsPanel.tsx:176
 #: src/pages/McpServersOverlay.tsx:38
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
@@ -1249,7 +1241,7 @@ msgstr ""
 msgid "Context limit"
 msgstr "上下文限制"
 
-#: src/components/integrations/IntegrationSetup.tsx:356
+#: src/components/integrations/IntegrationSetup.tsx:310
 #: src/pages/Invite.tsx:108
 #: src/pages/Onboarding.tsx:664
 msgid "Continue"
@@ -1336,7 +1328,7 @@ msgstr "无法完成 OAuth"
 msgid "Could not complete the update. Try again."
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:76
+#: src/components/integrations/IntegrationSetup.tsx:71
 #: src/pages/plugins/use-integrations.ts:235
 msgid "Could not connect"
 msgstr "无法连接"
@@ -1485,7 +1477,7 @@ msgstr ""
 msgid "Could not load decision model settings"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:67
+#: src/components/integrations/IntegrationSetup.tsx:62
 #: src/pages/plugins/use-integrations.ts:109
 #: src/pages/PluginsOverlay.tsx:173
 msgid "Could not load integrations"
@@ -1984,7 +1976,7 @@ msgstr ""
 msgid "Dictating"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:40
+#: src/components/integrations/IntegrationSetup.tsx:38
 msgid "Direct MCP"
 msgstr ""
 
@@ -2068,7 +2060,7 @@ msgstr "下载 {name}"
 msgid "Download as markdown"
 msgstr "下载为 Markdown"
 
-#: src/components/integrations/IntegrationSetup.tsx:331
+#: src/components/integrations/IntegrationSetup.tsx:288
 msgid "Download Executor"
 msgstr ""
 
@@ -2354,7 +2346,7 @@ msgstr "供参考"
 msgid "General"
 msgstr "通用"
 
-#: src/components/integrations/IntegrationSetup.tsx:209
+#: src/components/integrations/IntegrationSetup.tsx:166
 msgid "Get credentials"
 msgstr ""
 
@@ -2539,7 +2531,7 @@ msgstr "指令"
 msgid "Integration domain"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:133
+#: src/components/integrations/IntegrationSetup.tsx:118
 msgid "Integration options"
 msgstr ""
 
@@ -3160,7 +3152,7 @@ msgstr "未连接模型"
 msgid "No providers found."
 msgstr "未找到提供方。"
 
-#: src/components/integrations/IntegrationSetup.tsx:268
+#: src/components/integrations/IntegrationSetup.tsx:225
 msgid "No remote MCP servers found"
 msgstr ""
 
@@ -3496,10 +3488,6 @@ msgstr "个人资料"
 
 #: src/pages/AccountProfileSettings.tsx:86
 msgid "Profile photo"
-msgstr ""
-
-#: src/components/integrations/IntegrationSetup.tsx:177
-msgid "Project ID"
 msgstr ""
 
 #: src/pages/MemorySettingsOverlay.tsx:219
@@ -3984,8 +3972,8 @@ msgstr "屏幕"
 msgid "Search"
 msgstr "搜索"
 
-#: src/components/integrations/IntegrationSetup.tsx:245
-#: src/components/integrations/IntegrationSetup.tsx:246
+#: src/components/integrations/IntegrationSetup.tsx:202
+#: src/components/integrations/IntegrationSetup.tsx:203
 #: src/pages/PluginsOverlay.tsx:150
 #: src/pages/PluginsOverlay.tsx:151
 msgid "Search apps"
@@ -3999,7 +3987,7 @@ msgstr "搜索机器人并切换会话"
 msgid "Search by domain"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:251
+#: src/components/integrations/IntegrationSetup.tsx:208
 msgid "Search integrations.sh"
 msgstr ""
 
@@ -4050,7 +4038,7 @@ msgstr "正在发送…"
 msgid "Sent"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:129
+#: src/components/integrations/IntegrationSetup.tsx:114
 #: src/pages/AccountSettingsOverlay.tsx:166
 msgid "Server integrations"
 msgstr ""
@@ -4059,8 +4047,8 @@ msgstr ""
 msgid "Server name"
 msgstr "服务器名称"
 
-#: src/components/integrations/IntegrationSetup.tsx:277
-#: src/components/integrations/IntegrationSetup.tsx:295
+#: src/components/integrations/IntegrationSetup.tsx:234
+#: src/components/integrations/IntegrationSetup.tsx:252
 #: src/pages/McpServersOverlay.tsx:397
 #: src/pages/model-settings/model-detail.tsx:80
 #: src/pages/Onboarding.tsx:411
@@ -4085,7 +4073,7 @@ msgstr "设置：通用"
 msgid "Settings: Usage"
 msgstr "设置：用量"
 
-#: src/components/integrations/IntegrationSetup.tsx:323
+#: src/components/integrations/IntegrationSetup.tsx:280
 #: src/pages/model-settings/model-detail.tsx:93
 msgid "Setup help"
 msgstr "设置帮助"
@@ -4197,7 +4185,7 @@ msgid "Skills this bot can use"
 msgstr ""
 
 #: src/components/ask/QuestionCard.tsx:198
-#: src/components/integrations/IntegrationSetup.tsx:359
+#: src/components/integrations/IntegrationSetup.tsx:313
 #: src/pages/shell/side-panel.tsx:502
 msgid "Skip"
 msgstr "跳过"

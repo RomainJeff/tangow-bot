@@ -5,7 +5,6 @@ import { RPCHandler } from "@orpc/server/fetch";
 import type {
   AgentRuntime,
   JobPublisher,
-  ManagedConnectorProvider,
   MessagingSurface,
   RealtimeFanout,
   SandboxProvider,
@@ -50,17 +49,14 @@ import {
   IntegrationProviderSettings,
   isComposioEnabled,
   isMessagingSurfaceEnabled,
-  isPipedreamEnabled,
   LocalAgentHomeStore,
   LocalArtifactStore,
   McpConnector,
   McpOAuthBroker,
   messagingPlatformsFromEnv,
   PiOAuthLogins,
-  PipedreamConnector,
   PostgresRealtimeFanout,
   PostgresSessionLog,
-  pipedreamConfigFromEnv,
   pushTokenPath,
   reconcileComputerUpdates,
   removeUserSkillDirs,
@@ -138,7 +134,6 @@ export async function createApp(
     sandbox?: SandboxProvider;
     workers?: WorkerProvider & GuestConnector;
     composio?: ComposioProvider;
-    pipedream?: ManagedConnectorProvider;
     messaging?: MessagingSurface;
     email?: TransactionalEmailProvider;
     remoteConnectors?: RemoteConnectorDependencies;
@@ -151,7 +146,6 @@ export async function createApp(
     sandbox: sandboxOverride,
     workers: workersOverride,
     composio: composioOverride,
-    pipedream: pipedreamOverride,
     messaging: messagingOverride,
     email: emailOverride,
     remoteConnectors,
@@ -261,10 +255,6 @@ export async function createApp(
     },
     mcpOAuth,
   );
-  const pipedreamConfig = pipedreamConfigFromEnv(env);
-  const pipedream =
-    pipedreamOverride ??
-    (isPipedreamEnabled(pipedreamConfig) ? new PipedreamConnector(pipedreamConfig) : undefined);
   // This process registers the inbound sink (messaging.onInbound below),
   // so it's the one that must hold Telegram's live getUpdates connection —
   // see messagingPlatformsFromEnv's docstring for why a second poller
@@ -295,13 +285,12 @@ export async function createApp(
       ? new SmtpEmailProvider({ url: env.smtpUrl, from: env.emailFrom ?? "" })
       : localEmailEmulator);
   const installed = new InstalledConnectorProvider(prisma, secrets, remoteConnectors);
-  const integrationSettings = new IntegrationProviderSettings(prisma, secrets, env.encryptionKey, {
+  const integrationSettings = new IntegrationProviderSettings(prisma, secrets, {
     composio:
       composioOverride ??
       (isComposioEnabled(env.composioApiKey)
         ? new ComposioConnector(env.composioApiKey)
         : undefined),
-    pipedream,
   });
   const stack = createConnectorStack(false, composioOverride, [
     installed,
@@ -864,7 +853,6 @@ export async function createApp(
       runtime: env.agentRuntime,
       sandbox: env.sandboxProvider,
       composio: Boolean(stack.composio),
-      pipedream: Boolean(pipedream),
       messaging: Boolean(messaging),
       email: email?.describe().id ?? null,
       jobs: jobKind,

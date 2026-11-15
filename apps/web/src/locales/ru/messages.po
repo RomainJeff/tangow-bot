@@ -264,7 +264,7 @@ msgstr "О группах"
 msgid "About spaces"
 msgstr "О пространствах"
 
-#: src/components/integrations/IntegrationSetup.tsx:305
+#: src/components/integrations/IntegrationSetup.tsx:262
 msgid "Access token"
 msgstr "Токен доступа"
 
@@ -387,7 +387,7 @@ msgstr "Добавить конечную точку GraphQL"
 msgid "Add item"
 msgstr "Добавить элемент"
 
-#: src/components/integrations/IntegrationSetup.tsx:129
+#: src/components/integrations/IntegrationSetup.tsx:114
 #: src/pages/plugins/advanced-integrations.tsx:190
 msgid "Add MCP server"
 msgstr "Добавить MCP-сервер"
@@ -409,7 +409,7 @@ msgstr "Добавить удалённый MCP-сервер"
 msgid "Add server"
 msgstr "Добавить сервер"
 
-#: src/components/integrations/IntegrationSetup.tsx:273
+#: src/components/integrations/IntegrationSetup.tsx:230
 msgid "Add server URL"
 msgstr "Добавьте URL сервера"
 
@@ -555,7 +555,7 @@ msgid "API is back, but the update did not finish. Check the host logs."
 msgstr "API вернулся, но обновление не завершилось. Проверьте журналы хоста."
 
 #: src/components/AskCard.tsx:123
-#: src/components/integrations/IntegrationSetup.tsx:189
+#: src/components/integrations/IntegrationSetup.tsx:150
 #: src/lib/localized-provider-hint.ts:9
 #: src/pages/model-settings/model-detail.tsx:284
 #: src/pages/model-settings/model-detail.tsx:287
@@ -656,7 +656,7 @@ msgstr "Спрашивайте перед покупкой"
 msgid "Ask before sending external email"
 msgstr "Спросите перед отправкой внешнего электронного письма"
 
-#: src/components/integrations/IntegrationSetup.tsx:223
+#: src/components/integrations/IntegrationSetup.tsx:180
 msgid "Ask the server owner to configure this provider."
 msgstr "Попросите владельца сервера настроить этого провайдера."
 
@@ -991,14 +991,6 @@ msgstr "Очистить инструкции?"
 msgid "Clearing…"
 msgstr "Очистка…"
 
-#: src/components/integrations/IntegrationSetup.tsx:167
-msgid "Client ID"
-msgstr "ID клиента"
-
-#: src/components/integrations/IntegrationSetup.tsx:189
-msgid "Client secret"
-msgstr "Секрет клиента"
-
 #: src/pages/CustomizeOverlay.tsx:130
 #: src/pages/KnowledgeSection.tsx:692
 #: src/pages/KnowledgeSection.tsx:848
@@ -1148,10 +1140,10 @@ msgstr "Подтвердить удаление"
 msgid "Confirm password"
 msgstr "Подтвердите пароль"
 
-#: src/components/integrations/IntegrationSetup.tsx:217
-#: src/components/integrations/IntegrationSetup.tsx:262
-#: src/components/integrations/IntegrationSetup.tsx:286
-#: src/components/integrations/IntegrationSetup.tsx:319
+#: src/components/integrations/IntegrationSetup.tsx:174
+#: src/components/integrations/IntegrationSetup.tsx:219
+#: src/components/integrations/IntegrationSetup.tsx:243
+#: src/components/integrations/IntegrationSetup.tsx:276
 #: src/pages/DecisionModelSettingsPanel.tsx:176
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
@@ -1191,8 +1183,8 @@ msgstr "Подключите этого провайдера, чтобы исп�
 msgid "Connect Treg"
 msgstr "Подключить Treg"
 
-#: src/components/integrations/IntegrationSetup.tsx:159
-#: src/components/integrations/IntegrationSetup.tsx:262
+#: src/components/integrations/IntegrationSetup.tsx:144
+#: src/components/integrations/IntegrationSetup.tsx:219
 #: src/pages/DecisionModelSettingsPanel.tsx:98
 #: src/pages/McpOAuthCallback.tsx:54
 #: src/pages/MemorySettingsOverlay.tsx:191
@@ -1223,8 +1215,8 @@ msgstr "Подключено и используется {0}."
 msgid "Connected. Its tools are available from your next message."
 msgstr "Подключено. Его инструменты доступны из вашего следующего сообщения."
 
-#: src/components/integrations/IntegrationSetup.tsx:217
-#: src/components/integrations/IntegrationSetup.tsx:356
+#: src/components/integrations/IntegrationSetup.tsx:174
+#: src/components/integrations/IntegrationSetup.tsx:310
 #: src/pages/DecisionModelSettingsPanel.tsx:176
 #: src/pages/McpServersOverlay.tsx:38
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
@@ -1249,7 +1241,7 @@ msgstr ""
 msgid "Context limit"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:356
+#: src/components/integrations/IntegrationSetup.tsx:310
 #: src/pages/Invite.tsx:108
 #: src/pages/Onboarding.tsx:664
 msgid "Continue"
@@ -1336,7 +1328,7 @@ msgstr "Не удалось завершить OAuth"
 msgid "Could not complete the update. Try again."
 msgstr "Не удалось завершить обновление. Попробуйте снова."
 
-#: src/components/integrations/IntegrationSetup.tsx:76
+#: src/components/integrations/IntegrationSetup.tsx:71
 #: src/pages/plugins/use-integrations.ts:235
 msgid "Could not connect"
 msgstr "Не удалось подключиться"
@@ -1485,7 +1477,7 @@ msgstr ""
 msgid "Could not load decision model settings"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:67
+#: src/components/integrations/IntegrationSetup.tsx:62
 #: src/pages/plugins/use-integrations.ts:109
 #: src/pages/PluginsOverlay.tsx:173
 msgid "Could not load integrations"
@@ -1984,7 +1976,7 @@ msgstr ""
 msgid "Dictating"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:40
+#: src/components/integrations/IntegrationSetup.tsx:38
 msgid "Direct MCP"
 msgstr "Прямой MCP"
 
@@ -2068,7 +2060,7 @@ msgstr "Скачать {name}"
 msgid "Download as markdown"
 msgstr "Скачать как Markdown"
 
-#: src/components/integrations/IntegrationSetup.tsx:331
+#: src/components/integrations/IntegrationSetup.tsx:288
 msgid "Download Executor"
 msgstr "Скачать Executor"
 
@@ -2354,7 +2346,7 @@ msgstr "К сведению"
 msgid "General"
 msgstr "Общие"
 
-#: src/components/integrations/IntegrationSetup.tsx:209
+#: src/components/integrations/IntegrationSetup.tsx:166
 msgid "Get credentials"
 msgstr "Получить учетные данные"
 
@@ -2539,7 +2531,7 @@ msgstr "Инструкции"
 msgid "Integration domain"
 msgstr "Домен интеграции"
 
-#: src/components/integrations/IntegrationSetup.tsx:133
+#: src/components/integrations/IntegrationSetup.tsx:118
 msgid "Integration options"
 msgstr "Параметры интеграции"
 
@@ -3160,7 +3152,7 @@ msgstr "Модель не подключена"
 msgid "No providers found."
 msgstr "Поставщики не найдены."
 
-#: src/components/integrations/IntegrationSetup.tsx:268
+#: src/components/integrations/IntegrationSetup.tsx:225
 msgid "No remote MCP servers found"
 msgstr "Удаленные MCP-серверы не найдены"
 
@@ -3497,10 +3489,6 @@ msgstr "Профиль"
 #: src/pages/AccountProfileSettings.tsx:86
 msgid "Profile photo"
 msgstr ""
-
-#: src/components/integrations/IntegrationSetup.tsx:177
-msgid "Project ID"
-msgstr "ID проекта"
 
 #: src/pages/MemorySettingsOverlay.tsx:219
 #: src/pages/Onboarding.tsx:388
@@ -3984,8 +3972,8 @@ msgstr "Экран"
 msgid "Search"
 msgstr "Поиск"
 
-#: src/components/integrations/IntegrationSetup.tsx:245
-#: src/components/integrations/IntegrationSetup.tsx:246
+#: src/components/integrations/IntegrationSetup.tsx:202
+#: src/components/integrations/IntegrationSetup.tsx:203
 #: src/pages/PluginsOverlay.tsx:150
 #: src/pages/PluginsOverlay.tsx:151
 msgid "Search apps"
@@ -3999,7 +3987,7 @@ msgstr "Искать ботов и переключать диалоги"
 msgid "Search by domain"
 msgstr "Поиск по домену"
 
-#: src/components/integrations/IntegrationSetup.tsx:251
+#: src/components/integrations/IntegrationSetup.tsx:208
 msgid "Search integrations.sh"
 msgstr "Поиск integrations.sh"
 
@@ -4050,7 +4038,7 @@ msgstr "Отправка…"
 msgid "Sent"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:129
+#: src/components/integrations/IntegrationSetup.tsx:114
 #: src/pages/AccountSettingsOverlay.tsx:166
 msgid "Server integrations"
 msgstr "Интеграции сервера"
@@ -4059,8 +4047,8 @@ msgstr "Интеграции сервера"
 msgid "Server name"
 msgstr "Имя сервера"
 
-#: src/components/integrations/IntegrationSetup.tsx:277
-#: src/components/integrations/IntegrationSetup.tsx:295
+#: src/components/integrations/IntegrationSetup.tsx:234
+#: src/components/integrations/IntegrationSetup.tsx:252
 #: src/pages/McpServersOverlay.tsx:397
 #: src/pages/model-settings/model-detail.tsx:80
 #: src/pages/Onboarding.tsx:411
@@ -4085,7 +4073,7 @@ msgstr "Настройки: Общие"
 msgid "Settings: Usage"
 msgstr "Настройки: Использование"
 
-#: src/components/integrations/IntegrationSetup.tsx:323
+#: src/components/integrations/IntegrationSetup.tsx:280
 #: src/pages/model-settings/model-detail.tsx:93
 msgid "Setup help"
 msgstr "Помощь по настройке"
@@ -4197,7 +4185,7 @@ msgid "Skills this bot can use"
 msgstr ""
 
 #: src/components/ask/QuestionCard.tsx:198
-#: src/components/integrations/IntegrationSetup.tsx:359
+#: src/components/integrations/IntegrationSetup.tsx:313
 #: src/pages/shell/side-panel.tsx:502
 msgid "Skip"
 msgstr "Пропустить"

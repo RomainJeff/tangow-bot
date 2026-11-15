@@ -5,7 +5,6 @@ import {
   ComposioEmulator,
   EncryptedSecretStore,
   InstalledConnectorProvider,
-  PipedreamConnector,
   ThirdPartyConnectorEmulator,
 } from "@tangow/adapters";
 import type { Space } from "@tangow/contracts";
@@ -38,23 +37,12 @@ describeWithDatabase("Composio catalog reconciliation", () => {
     const { createApp } = await import("../../../apps/api/src/app.ts");
     composio = new ComposioEmulator();
     thirdParties = new ThirdPartyConnectorEmulator();
-    const pipedream = new PipedreamConnector(
-      {
-        clientId: "fake-client-id",
-        clientSecret: "fake-client-secret",
-        projectId: "fake-project-id",
-        environment: "development",
-        identitySecret: TEST_ENCRYPTION_KEY,
-      },
-      { fetch: thirdParties.fetch, resolveHostname: thirdParties.resolveHostname },
-    );
     handles = await createApp({
       databaseUrl: process.env.DATABASE_URL!,
       dataDir,
       sandboxProvider: "fake",
       agentRuntime: "scripted",
       composio,
-      pipedream,
       remoteConnectors: {
         fetch: thirdParties.fetch,
         resolveHostname: thirdParties.resolveHostname,
@@ -330,73 +318,6 @@ describeWithDatabase("Composio catalog reconciliation", () => {
         tool: "GMAIL_FETCH_EMAILS",
         args: { query: "from:teammate", max_results: 5 },
       }),
-    );
-  });
-
-  it("runs Pipedream connection and MCP tool execution through the product registry", async () => {
-    const cookie = await signup(app, `pipedream-${stamp}@tangow.test`, "Pipedream Connector");
-    const actor = await rpc<Actor>(app, cookie, "me");
-    const catalog = await rpc<Array<{ connectorId: string; slug: string; connected: boolean }>>(
-      app,
-      cookie,
-      "connections/catalog",
-      { connectorId: "pipedream" },
-    );
-    expect(catalog).toContainEqual(
-      expect.objectContaining({ connectorId: "pipedream", slug: "linear", connected: false }),
-    );
-
-    const started = await rpc<{ connectionId: string; authorizationUrl: string }>(
-      app,
-      cookie,
-      "connections/begin",
-      { connectorId: "pipedream", provider: "linear", displayName: "Linear" },
-    );
-    expect(started.authorizationUrl).toBe("https://pipedream.example.test/connect?app=linear");
-    await expect(
-      rpc<{ status: string }>(app, cookie, "connections/complete", {
-        connectionId: started.connectionId,
-      }),
-    ).resolves.toMatchObject({ status: "connected" });
-
-    const context = {
-      operationId: "pipedream-product-test",
-      traceId: "pipedream-product-test",
-      spaceId: actor.spaceId,
-      userId: actor.userId,
-      signal: new AbortController().signal,
-      connectedConnections: [
-        {
-          id: started.connectionId,
-          connectorId: "pipedream",
-          externalId: "linear",
-          displayName: "Linear",
-        },
-      ],
-    };
-    const tool = (await handles.connectors.discoverTools(context)).find(
-      (candidate) => candidate.route?.connectorId === "pipedream",
-    );
-    expect(tool).toMatchObject({ name: "notes.write" });
-    const events = [];
-    for await (const event of handles.connectors.execute(
-      {
-        tool: tool!.name,
-        args: { text: "product-pipedream-ok" },
-        executionId: "pipedream-product-execution",
-        route: tool!.route,
-      },
-      context,
-    )) {
-      events.push(event);
-    }
-    expect(events).toContainEqual(expect.objectContaining({ type: "result" }));
-
-    await rpc(app, cookie, "connections/revoke", { connectionId: started.connectionId });
-    await expect(
-      rpc<Array<{ id: string; status: string }>>(app, cookie, "connections/list"),
-    ).resolves.toContainEqual(
-      expect.objectContaining({ id: started.connectionId, status: "revoked" }),
     );
   });
 

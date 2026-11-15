@@ -37,17 +37,14 @@ import {
   InstalledConnectorProvider,
   isComposioEnabled,
   isMessagingSurfaceEnabled,
-  isPipedreamEnabled,
   LocalAgentHomeStore,
   LocalArtifactStore,
   McpConnector,
   McpOAuthBroker,
   messagingEnvFromProcess,
   messagingPlatformsFromEnv,
-  PipedreamConnector,
   PostgresRealtimeFanout,
   PostgresSessionLog,
-  pipedreamConfigFromEnv,
   reconcileComputerUpdates,
   resolveDeploymentModel,
   resolveSandboxProvider,
@@ -111,16 +108,6 @@ async function main() {
     },
     mcpOAuth,
   );
-  const pipedreamConfig = pipedreamConfigFromEnv({
-    pipedreamClientId: process.env.PIPEDREAM_CLIENT_ID,
-    pipedreamClientSecret: process.env.PIPEDREAM_CLIENT_SECRET,
-    pipedreamProjectId: process.env.PIPEDREAM_PROJECT_ID,
-    pipedreamEnvironment: process.env.PIPEDREAM_ENVIRONMENT,
-    encryptionKey: resolveEncryptionKey(process.env),
-  });
-  const pipedream = isPipedreamEnabled(pipedreamConfig)
-    ? new PipedreamConnector(pipedreamConfig)
-    : undefined;
   // pollInboundMessages stays false (the default) here: this process
   // only ever sends outbound (messaging.deliver jobs). It must never poll
   // Telegram — that would steal the single getUpdates slot away from the
@@ -132,17 +119,11 @@ async function main() {
   })
     ? new ChatSdkMessagingSurface(messagingPlatforms)
     : undefined;
-  const integrationSettings = new IntegrationProviderSettings(
-    prisma,
-    secrets,
-    resolveEncryptionKey(process.env),
-    {
-      composio: isComposioEnabled(process.env.COMPOSIO_API_KEY)
-        ? new ComposioConnector(process.env.COMPOSIO_API_KEY)
-        : undefined,
-      pipedream,
-    },
-  );
+  const integrationSettings = new IntegrationProviderSettings(prisma, secrets, {
+    composio: isComposioEnabled(process.env.COMPOSIO_API_KEY)
+      ? new ComposioConnector(process.env.COMPOSIO_API_KEY)
+      : undefined,
+  });
   const stack = createConnectorStack(false, undefined, [
     new InstalledConnectorProvider(prisma, secrets),
     ...integrationSettings.providers(),

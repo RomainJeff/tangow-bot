@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-11-15
 
+#### Changed
+
+- Pipedream Connect is no longer offered as a managed app catalog on web, desktop and iOS; server owners connect apps through Composio, MCP or OpenAPI instead, and existing Pipedream connections are removed.
+
 #### Fixed
 
 - When DuckDuckGo blocks the bot's built-in web search with a bot check, the bot now opens the search on its computer and asks you to solve the check, instead of treating every search as returning nothing.
