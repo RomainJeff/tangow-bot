@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
+- The macOS desktop app now finds new Tangow versions on GitHub at launch and every hour, downloads them in the background and installs them on restart, instead of reporting that no desktop release was published.
 - When DuckDuckGo blocks the bot's built-in web search with a bot check, the bot now opens the search on its computer and asks you to solve the check, instead of treating every search as returning nothing.
 
 ### 2026-11-14
