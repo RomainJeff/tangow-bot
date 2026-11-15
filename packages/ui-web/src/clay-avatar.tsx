@@ -66,7 +66,10 @@ export function ClayAvatar({
   const crop = crops[cropForSize(size)];
   return (
     <div
-      className={cn("tangow-bot-avatar relative flex-none rounded-full select-none", className)}
+      className={cn(
+        "tangow-bot-avatar tangow-clay-avatar relative flex-none rounded-full select-none",
+        className,
+      )}
       data-working={isWorking}
       style={{ width: size, height: size }}
     >
