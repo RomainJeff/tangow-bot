@@ -130,6 +130,11 @@ export class KeylessHttpWebProvider implements WebProvider {
 export function parseDuckDuckGoResults(html: string, maxResults: number): WebSearchHit[] {
   const dom = new JSDOM(html, { url: DEFAULT_SEARCH_ENDPOINT });
   const document = dom.window.document;
+  if (document.querySelector("form#challenge-form")) {
+    throw new Error(
+      "DuckDuckGo answered with a bot challenge instead of results, so this search did not run. Do not retry web_search with reworded queries. Open https://html.duckduckgo.com/html/?q=<your query> with browser_navigate, call request_takeover so the user can solve the challenge on your computer, then read the results with browser_snapshot.",
+    );
+  }
   const results: WebSearchHit[] = [];
 
   for (const node of Array.from(document.querySelectorAll(".result"))) {

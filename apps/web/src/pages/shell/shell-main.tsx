@@ -1,13 +1,15 @@
 import { Trans } from "@lingui/react/macro";
 import type { AgentSkillCatalogEntry } from "@tangow/contracts";
+import { ATTACHMENT_MAX_BYTES } from "@tangow/contracts";
 import type { ComposerMention, SkillSourceBlock } from "@tangow/core";
 import { Button } from "@tangow/ui-web";
-import { Plus } from "lucide-react";
-import { lazy, Suspense, useCallback } from "react";
+import { Paperclip, Plus } from "lucide-react";
+import { lazy, Suspense, useCallback, useState } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import { dictation } from "../../lib/dictation";
 import { rpc } from "../../lib/rpc";
 import { Composer } from "./composer";
+import { useComposerFileDrop } from "./composer-attachments";
 import { botPageFor, threadJumpLocation } from "./layout";
 import { SessionView } from "./session-view";
 import { skillPageView } from "./skill-link";
@@ -23,6 +25,8 @@ import type { ThreadSync } from "./use-thread-sync";
 import type { ThreadViewState } from "./use-thread-view";
 import type { TranscriptWindow } from "./use-transcript-window";
 import type { Voice } from "./use-voice";
+
+const ATTACHMENT_MAX_MB = ATTACHMENT_MAX_BYTES / (1024 * 1024);
 
 const CallView = lazy(() => import("../CallView").then((module) => ({ default: module.CallView })));
 
@@ -80,6 +84,11 @@ export function ShellMain({
   const { activeSnapshot, view } = thread;
   const { openSettings, setPeerConversation, runView, setRunView } = overlays;
   const { setReplyTarget, setRewindArtifacts } = draft;
+  const [composerDictating, setComposerDictating] = useState(false);
+  const { draggingFiles, dropHandlers } = useComposerFileDrop({
+    disabled: recording || composerDictating || !(active || activeGroup),
+    onAttachmentPick: draft.onAttachmentPick,
+  });
   const openBot = useCallback(
     (id: string, messageId?: string) => navigate(threadJumpLocation({ botId: id, messageId })),
     [navigate],
@@ -136,8 +145,27 @@ export function ShellMain({
         data-testid="conversation-column"
         aria-hidden={callOpen || panelCoversColumn || undefined}
         inert={callOpen || panelCoversColumn}
-        className="flex min-h-0 flex-1 flex-col"
+        data-dragging={draggingFiles ? "files" : undefined}
+        {...dropHandlers}
+        className="relative flex min-h-0 flex-1 flex-col"
       >
+        {draggingFiles ? (
+          // A pane floating 8 from the edges like the sidebar, on the composer's lighter glass; beside an open sidebar
+          // the column already starts 8 past it.
+          <div
+            className={`rk-glass-control pointer-events-none absolute inset-2 z-40 flex animate-in flex-col items-center justify-center gap-1 rounded-pane fade-in px-6 text-center duration-(--duration-arrive) ${
+              botsSidebarCollapsed ? "" : "md:start-0"
+            }`}
+          >
+            <Paperclip size={24} aria-hidden="true" className="mb-2" />
+            <p className="text-title">
+              <Trans>Drop files to attach</Trans>
+            </p>
+            <p className="text-meta text-muted-foreground">
+              <Trans>Images, PDFs, text, CSV or JSON, up to {ATTACHMENT_MAX_MB} MB each</Trans>
+            </p>
+          </div>
+        ) : null}
         <ThreadHeader
           botsSidebarCollapsed={botsSidebarCollapsed}
           setBotsSidebarCollapsedPref={setBotsSidebarCollapsedPref}
@@ -281,6 +309,7 @@ export function ShellMain({
               mentionTargets={mentionTargets}
               agentSkills={agentSkills}
               recentWriting={thread.recentWriting}
+              onDictatingChange={setComposerDictating}
               onSlashOpen={refreshAgentSkills}
               chatSettings={inGroup || active?.isOwner !== false}
               onSlashAction={(action) => {

@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-11-15
+
+#### Changed
+
+- Pipedream Connect is no longer offered as a managed app catalog on web, desktop and iOS; server owners connect apps through Composio or MCP instead, and existing Pipedream connections are removed, so disconnect them before updating to also revoke their accounts at Pipedream.
+- OpenAPI and GraphQL tool sources are no longer offered in Integrations on web, desktop and mobile, and the ones already added are removed, so bots reach outside tools through apps and MCP servers.
+
+#### Fixed
+
+- When DuckDuckGo blocks the bot's built-in web search with a bot check, the bot now opens the search on its computer and asks you to solve the check, instead of treating every search as returning nothing.
+
+### 2026-11-14
+
+#### Fixed
+
+- On web and desktop, a file dragged anywhere onto the conversation now joins the message as an attachment, not only when dropped on the message field, and a file let go elsewhere in the app is ignored instead of the browser opening it in place of Tangow.
+
 ### 2026-11-13
 
 #### Added
