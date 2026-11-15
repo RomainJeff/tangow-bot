@@ -336,7 +336,7 @@ msgstr "Activity"
 msgid "Activity, last run failed"
 msgstr "Activity, last run failed"
 
-#: src/pages/plugins/advanced-integrations.tsx:171
+#: src/pages/plugins/advanced-integrations.tsx:169
 #: src/pages/PluginsOverlay.tsx:83
 #: src/pages/ScratchpadSection.tsx:196
 #: src/pages/shell/message-cards.tsx:201
@@ -371,36 +371,24 @@ msgstr "Add an HTTPS server URL."
 msgid "Add another"
 msgstr "Add another"
 
-#: src/pages/plugins/advanced-integrations.tsx:217
+#: src/pages/plugins/advanced-integrations.tsx:197
 msgid "Add Executor"
 msgstr "Add Executor"
-
-#: src/pages/plugins/advanced-integrations.tsx:208
-msgid "Add GraphQL"
-msgstr "Add GraphQL"
-
-#: src/pages/plugins/advanced-integrations.tsx:243
-msgid "Add GraphQL endpoint"
-msgstr "Add GraphQL endpoint"
 
 #: src/pages/ScratchpadSection.tsx:185
 msgid "Add item"
 msgstr "Add item"
 
 #: src/components/integrations/IntegrationSetup.tsx:129
-#: src/pages/plugins/advanced-integrations.tsx:190
+#: src/pages/plugins/advanced-integrations.tsx:188
 msgid "Add MCP server"
 msgstr "Add MCP server"
-
-#: src/pages/plugins/advanced-integrations.tsx:199
-msgid "Add OpenAPI"
-msgstr "Add OpenAPI"
 
 #: src/pages/AccountProfileSettings.tsx:115
 msgid "Add photo"
 msgstr "Add photo"
 
-#: src/pages/plugins/advanced-integrations.tsx:241
+#: src/pages/plugins/advanced-integrations.tsx:221
 msgid "Add remote MCP server"
 msgstr "Add remote MCP server"
 
@@ -417,7 +405,7 @@ msgstr "Add server URL"
 msgid "Add to routine"
 msgstr "Add to routine"
 
-#: src/pages/plugins/advanced-integrations.tsx:226
+#: src/pages/plugins/advanced-integrations.tsx:206
 msgid "Add Treg"
 msgstr "Add Treg"
 
@@ -567,7 +555,7 @@ msgstr "API is back, but the update did not finish. Check the host logs."
 msgid "API key"
 msgstr "API key"
 
-#: src/pages/plugins/advanced-integrations.tsx:283
+#: src/pages/plugins/advanced-integrations.tsx:255
 msgid "API key header"
 msgstr "API key header"
 
@@ -750,7 +738,7 @@ msgid "Bcc"
 msgstr "Bcc"
 
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:48
-#: src/pages/plugins/advanced-integrations.tsx:280
+#: src/pages/plugins/advanced-integrations.tsx:252
 msgid "Bearer token"
 msgstr "Bearer token"
 
@@ -847,7 +835,7 @@ msgstr "Can't reach the server."
 #: src/pages/bot-page/RoutineTriggers.tsx:296
 #: src/pages/KnowledgeSection.tsx:227
 #: src/pages/KnowledgeSection.tsx:692
-#: src/pages/plugins/advanced-integrations.tsx:337
+#: src/pages/plugins/advanced-integrations.tsx:309
 #: src/pages/shell/dialogs.tsx:88
 #: src/pages/shell/dialogs.tsx:199
 #: src/pages/shell/dialogs.tsx:263
@@ -1171,7 +1159,7 @@ msgstr "Connect a voice provider"
 msgid "Connect API key"
 msgstr "Connect API key"
 
-#: src/pages/plugins/advanced-integrations.tsx:239
+#: src/pages/plugins/advanced-integrations.tsx:219
 msgid "Connect Executor"
 msgstr "Connect Executor"
 
@@ -1187,7 +1175,7 @@ msgstr "Connect OAuth"
 msgid "Connect this provider to use it as your personal model."
 msgstr "Connect this provider to use it as your personal model."
 
-#: src/pages/plugins/advanced-integrations.tsx:237
+#: src/pages/plugins/advanced-integrations.tsx:217
 msgid "Connect Treg"
 msgstr "Connect Treg"
 
@@ -1236,7 +1224,7 @@ msgid "Connecting…"
 msgstr "Connecting…"
 
 #. placeholder {0}: item.name
-#: src/pages/plugins/use-integrations.ts:230
+#: src/pages/plugins/use-integrations.ts:226
 msgid "Connection to {0} is still pending. You can close this and check again."
 msgstr "Connection to {0} is still pending. You can close this and check again."
 
@@ -1337,7 +1325,7 @@ msgid "Could not complete the update. Try again."
 msgstr "Could not complete the update. Try again."
 
 #: src/components/integrations/IntegrationSetup.tsx:76
-#: src/pages/plugins/use-integrations.ts:235
+#: src/pages/plugins/use-integrations.ts:231
 msgid "Could not connect"
 msgstr "Could not connect"
 
@@ -1445,7 +1433,7 @@ msgstr "Could not download {name}. Try again."
 msgid "Could not import skill"
 msgstr "Could not import skill"
 
-#: src/pages/plugins/use-integrations.ts:386
+#: src/pages/plugins/use-integrations.ts:376
 msgid "Could not install connector"
 msgstr "Could not install connector"
 
@@ -1486,7 +1474,7 @@ msgid "Could not load decision model settings"
 msgstr "Could not load decision model settings"
 
 #: src/components/integrations/IntegrationSetup.tsx:67
-#: src/pages/plugins/use-integrations.ts:109
+#: src/pages/plugins/use-integrations.ts:105
 #: src/pages/PluginsOverlay.tsx:173
 msgid "Could not load integrations"
 msgstr "Could not load integrations"
@@ -1553,7 +1541,7 @@ msgstr "Could not read this file"
 msgid "Could not remove"
 msgstr "Could not remove"
 
-#: src/pages/plugins/use-integrations.ts:399
+#: src/pages/plugins/use-integrations.ts:389
 msgid "Could not remove connector"
 msgstr "Could not remove connector"
 
@@ -1565,7 +1553,7 @@ msgstr "Could not remove group"
 msgid "Could not remove rule"
 msgstr "Could not remove rule"
 
-#: src/pages/plugins/use-integrations.ts:300
+#: src/pages/plugins/use-integrations.ts:296
 msgid "Could not rename connection"
 msgstr "Could not rename connection"
 
@@ -1577,8 +1565,8 @@ msgstr "Could not rename section"
 msgid "Could not reset password"
 msgstr "Could not reset password"
 
-#: src/pages/plugins/use-integrations.ts:256
-#: src/pages/plugins/use-integrations.ts:279
+#: src/pages/plugins/use-integrations.ts:252
+#: src/pages/plugins/use-integrations.ts:275
 msgid "Could not revoke connection"
 msgstr "Could not revoke connection"
 
@@ -1625,7 +1613,7 @@ msgstr "Could not save that voice"
 msgid "Could not save this choice"
 msgstr "Could not save this choice"
 
-#: src/pages/plugins/use-integrations.ts:327
+#: src/pages/plugins/use-integrations.ts:323
 msgid "Could not search catalog"
 msgstr "Could not search catalog"
 
@@ -1803,16 +1791,16 @@ msgstr "Created"
 msgid "Creating…"
 msgstr "Creating…"
 
-#: src/pages/plugins/advanced-integrations.tsx:305
+#: src/pages/plugins/advanced-integrations.tsx:277
 msgid "Credential"
 msgstr "Credential"
 
 #: src/pages/McpServersOverlay.tsx:34
-#: src/pages/plugins/advanced-integrations.tsx:363
+#: src/pages/plugins/advanced-integrations.tsx:335
 msgid "credential saved"
 msgstr "credential saved"
 
-#: src/pages/plugins/advanced-integrations.tsx:310
+#: src/pages/plugins/advanced-integrations.tsx:282
 msgid "Credentials are encrypted and never sent to the model."
 msgstr "Credentials are encrypted and never sent to the model."
 
@@ -2029,7 +2017,7 @@ msgstr "Dismiss error"
 msgid "Dismissed. Reconnect anytime from MCP settings."
 msgstr "Dismissed. Reconnect anytime from MCP settings."
 
-#: src/pages/plugins/advanced-integrations.tsx:253
+#: src/pages/plugins/advanced-integrations.tsx:229
 msgid "Display name"
 msgstr "Display name"
 
@@ -2217,7 +2205,7 @@ msgstr "Everyone in {spaceName}"
 msgid "Everyone who uses this bot can see its files and browser sign-ins."
 msgstr "Everyone who uses this bot can see its files and browser sign-ins."
 
-#: src/pages/plugins/advanced-integrations.tsx:304
+#: src/pages/plugins/advanced-integrations.tsx:276
 msgid "Executor token"
 msgstr "Executor token"
 
@@ -2405,7 +2393,7 @@ msgid "header"
 msgstr "header"
 
 #: src/pages/McpServersOverlay.tsx:450
-#: src/pages/plugins/advanced-integrations.tsx:291
+#: src/pages/plugins/advanced-integrations.tsx:263
 msgid "Header name"
 msgstr "Header name"
 
@@ -2495,10 +2483,6 @@ msgstr "Images, PDFs, text, CSV or JSON, up to {ATTACHMENT_MAX_MB} MB each"
 #: src/pages/KnowledgeSection.tsx:427
 msgid "Import"
 msgstr "Import"
-
-#: src/pages/plugins/advanced-integrations.tsx:245
-msgid "Import OpenAPI JSON"
-msgstr "Import OpenAPI JSON"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:136
 msgid "Inherit default"
@@ -2744,7 +2728,7 @@ msgstr "Low"
 msgid "Make sure nothing is still running on this computer."
 msgstr "Make sure nothing is still running on this computer."
 
-#: src/pages/plugins/advanced-integrations.tsx:389
+#: src/pages/plugins/advanced-integrations.tsx:361
 msgid "Manage MCP servers"
 msgstr "Manage MCP servers"
 
@@ -2757,11 +2741,11 @@ msgstr "Manage messaging settings"
 msgid "Manage the Space semantic memory provider."
 msgstr "Manage the Space semantic memory provider."
 
-#: src/pages/plugins/advanced-integrations.tsx:171
+#: src/pages/plugins/advanced-integrations.tsx:169
 msgid "Manual"
 msgstr "Manual"
 
-#: src/pages/plugins/advanced-integrations.tsx:168
+#: src/pages/plugins/advanced-integrations.tsx:166
 msgid "Manual setup required"
 msgstr "Manual setup required"
 
@@ -3082,11 +3066,11 @@ msgstr "No agent connections yet."
 msgid "No apps match your search."
 msgstr "No apps match your search."
 
-#: src/pages/plugins/advanced-integrations.tsx:365
+#: src/pages/plugins/advanced-integrations.tsx:337
 msgid "no auth"
 msgstr "no auth"
 
-#: src/pages/plugins/advanced-integrations.tsx:277
+#: src/pages/plugins/advanced-integrations.tsx:249
 msgid "No authentication"
 msgstr "No authentication"
 
@@ -3136,13 +3120,13 @@ msgstr "No managed app catalog is configured on this deployment."
 msgid "No matching models"
 msgstr "No matching models"
 
-#: src/pages/plugins/advanced-integrations.tsx:350
-msgid "No MCP or API tool sources installed yet."
-msgstr "No MCP or API tool sources installed yet."
-
 #: src/pages/McpServersOverlay.tsx:509
 msgid "No MCP servers yet."
 msgstr "No MCP servers yet."
+
+#: src/pages/plugins/advanced-integrations.tsx:322
+msgid "No MCP tool sources installed yet."
+msgstr "No MCP tool sources installed yet."
 
 #: src/pages/PeerMessagesOverlay.tsx:159
 msgid "No messages with {peerBotName} yet."
@@ -3653,7 +3637,7 @@ msgstr "Release interrupted computer?"
 #: src/pages/AccountProfileSettings.tsx:124
 #: src/pages/bot-page/RoutineTriggers.tsx:237
 #: src/pages/bot-page/RoutineTriggers.tsx:291
-#: src/pages/plugins/advanced-integrations.tsx:377
+#: src/pages/plugins/advanced-integrations.tsx:349
 #: src/pages/plugins/connection-detail.tsx:110
 #: src/pages/ScratchpadSection.tsx:165
 #: src/pages/SpaceGeneralSettings.tsx:239
@@ -3710,7 +3694,7 @@ msgstr "Removed with chat, computer, and memory."
 msgid "Removed, but list refresh failed"
 msgstr "Removed, but list refresh failed"
 
-#: src/pages/plugins/advanced-integrations.tsx:377
+#: src/pages/plugins/advanced-integrations.tsx:349
 #: src/pages/plugins/connection-detail.tsx:75
 #: src/pages/plugins/connection-detail.tsx:110
 msgid "Removing…"
@@ -4497,7 +4481,7 @@ msgstr "Today"
 msgid "Tokens"
 msgstr "Tokens"
 
-#: src/pages/plugins/advanced-integrations.tsx:346
+#: src/pages/plugins/advanced-integrations.tsx:318
 msgid "Tool sources"
 msgstr "Tool sources"
 
@@ -4509,7 +4493,7 @@ msgstr "Tools"
 msgid "Treat like a person"
 msgstr "Treat like a person"
 
-#: src/pages/plugins/advanced-integrations.tsx:302
+#: src/pages/plugins/advanced-integrations.tsx:274
 msgid "Treg token"
 msgstr "Treg token"
 
@@ -4651,11 +4635,11 @@ msgstr "Use default guidance"
 msgid "Use this model"
 msgstr "Use this model"
 
-#: src/pages/plugins/advanced-integrations.tsx:327
+#: src/pages/plugins/advanced-integrations.tsx:299
 msgid "Verify and add"
 msgstr "Verify and add"
 
-#: src/pages/plugins/advanced-integrations.tsx:325
+#: src/pages/plugins/advanced-integrations.tsx:297
 msgid "Verifying…"
 msgstr "Verifying…"
 

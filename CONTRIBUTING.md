@@ -65,9 +65,9 @@ For the separate real-model desktop acceptance test, see
 The product path is **Pi in Docker workers + Graphile**. Emulator settings (`AGENT_RUNTIME=scripted`, the in-process scripted runtime, `SANDBOX_PROVIDER=fake`, `WAKEUP_DRIVER=memory`) are for tests only.
 
 **Integrations** can use [Composio](https://composio.dev/) or Pipedream Connect as optional managed
-app catalogs. Users can also install HTTPS MCP servers (including Treg) and bounded OpenAPI tool
-sources. Connector tests must stay deterministic and offline. Never put connector credentials in
-capability config, fixtures, logs, or snapshots; use the encrypted secret store and fake placeholders.
+app catalogs. Users can also install HTTPS MCP servers (including Treg). Connector tests must stay
+deterministic and offline. Never put connector credentials in capability config, fixtures, logs, or
+snapshots; use the encrypted secret store and fake placeholders.
 
 ## Pull requests
 
