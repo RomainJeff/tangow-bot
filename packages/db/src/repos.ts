@@ -1,3 +1,4 @@
+import type { AvatarCharacterId } from "@tangow/contracts";
 import {
   type Actor,
   AVATAR_CHARACTER_IDS,
@@ -30,7 +31,7 @@ function isSpawnKeyConflict(error: unknown): boolean {
 }
 
 /** The catalogue character the owner has the fewest of, the earliest in the catalogue on a tie. */
-export function pickFreeCharacter(usedIds: readonly (string | null)[]): string {
+export function pickFreeCharacter(usedIds: readonly (string | null)[]): AvatarCharacterId {
   const uses = (id: string) => usedIds.filter((used) => used === id).length;
   return AVATAR_CHARACTER_IDS.reduce((best, id) => (uses(id) < uses(best) ? id : best));
 }

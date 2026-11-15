@@ -20,7 +20,8 @@ import toutankit from "@tangow/avatars/characters/toutankit.webp";
 import toutankitMini from "@tangow/avatars/characters/toutankit-mini.webp";
 import viking from "@tangow/avatars/characters/viking.webp";
 import vikingMini from "@tangow/avatars/characters/viking-mini.webp";
-import { type AvatarCharacter, type AvatarCharacterId, characterById } from "@tangow/contracts";
+import type { AvatarCharacter, AvatarCharacterId } from "@tangow/contracts";
+import { characterById } from "@tangow/contracts";
 import { cn } from "./lib/utils.js";
 import "./styles.css";
 

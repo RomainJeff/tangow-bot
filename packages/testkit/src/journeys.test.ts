@@ -364,6 +364,8 @@ describeJourneys("required product journeys", () => {
       unread: false,
     });
     expect(duplicate.id).not.toBe(chief.id);
+    expect(duplicate.avatarCharacter).toBeTruthy();
+    expect(duplicate.avatarCharacter).not.toBe(chief.avatarCharacter);
     expect((await rpc<Bot[]>(app, ada, "bots/list"))[0]?.id).toBe(coder.id);
 
     await sendAndWait(
