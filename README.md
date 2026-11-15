@@ -165,6 +165,7 @@ Contributions are welcome. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) befo
 request. For security vulnerabilities, follow [SECURITY.md](./SECURITY.md) instead of filing a public
 issue.
 
-Tangow is licensed under the [Apache License 2.0](./LICENSE).
+Tangow is licensed under the [Apache License 2.0](./LICENSE). The Tangow characters and their
+images in [`packages/avatars`](./packages/avatars/LICENSE) are not: they remain Tangow's property.
 
 Questions and ideas are welcome in the [Tangow Discord community](https://discord.gg/RWwKa2Sn7h).
