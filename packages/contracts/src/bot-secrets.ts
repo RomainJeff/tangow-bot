@@ -24,6 +24,15 @@ export const BotSecretAuth = z.discriminatedUnion("type", [
       .max(200)
       .regex(/^[^:\r\n]+$/),
   }),
+  /** A site login: the bot fills it into that exact site's sign-in form with `sign_in` only. */
+  z.object({
+    type: z.literal("login"),
+    username: z
+      .string()
+      .min(1)
+      .max(200)
+      .regex(/^[^\r\n]+$/),
+  }),
 ]);
 
 export const BotSecretDestination = z.object({

@@ -2,6 +2,7 @@
 import importlib.machinery
 import importlib.util
 from pathlib import Path
+import json
 import struct
 import os
 import subprocess
@@ -22,6 +23,28 @@ class PageBrowserTest(unittest.TestCase):
                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
             process.stdin.close()
             self.assertEqual(process.wait(timeout=3), 130)
+
+    def test_sign_in_reads_the_password_from_stdin_and_never_prints_it(self):
+        password = 'fake-pa"ss\\word-é'
+        with subprocess.Popen([sys.executable, str(Path(__file__).with_name("tangow-page-browser")), "sign_in",
+                               '{"origin": "https://example.test", "passwordRef": "e1"}'],
+                              env={**os.environ, "TANGOW_BROWSER_WATCH_STDIN": "1", "TANGOW_CDP_PORT": "1"},
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
+            # stdin stays open: closing it is the helper's cancellation signal.
+            process.stdin.write(json.dumps(password).encode() + b"\n")
+            process.stdin.flush()
+            stdout = process.stdout.readline()
+            process.stdin.close()
+            stderr = process.stderr.read()
+        self.assertIn(b'"ok": false', stdout)
+        for form in (password, json.dumps(password)[1:-1]):
+            self.assertNotIn(form.encode(), stdout + stderr)
+
+    def test_output_scrubs_the_password_from_any_message(self):
+        password = 'fake-pa"ss\\word-é'
+        printed = helper.output({"ok": False, "error": f"rejected {password}", "tree": [password]}, password)
+        self.assertNotIn(json.dumps(password)[1:-1], printed)
+        self.assertIn("[redacted]", printed)
 
     def test_closed_extended_frame_does_not_spin(self):
         for partial in (b"\x81\x7e", b"\x81\x7f", b"\x81\x80"):

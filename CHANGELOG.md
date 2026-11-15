@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
+- **Bots sign in to sites with your saved logins.** On web, desktop, iPhone and Android, Settings > Vault now also saves a site, a username and a password; in a conversation or routine you started on your own bot, the bot fills that site's sign-in form with it, only on that exact site, without ever seeing the password.
 - **Keep your API keys in a vault in Settings.** On web, desktop, iPhone and Android, Settings > Vault lists your API keys by name and site in the current space and lets you add one, replace its value or delete it; a saved value is never shown again, and the bot can no longer delete keys itself.
 
 #### Changed

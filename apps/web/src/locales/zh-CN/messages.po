@@ -844,7 +844,7 @@ msgstr "无法连接服务器。"
 #: src/pages/shell/dialogs.tsx:395
 #: src/pages/shell/dialogs.tsx:448
 #: src/pages/shell/dialogs.tsx:505
-#: src/pages/VaultSettingsPanel.tsx:225
+#: src/pages/VaultSettingsPanel.tsx:227
 msgid "Cancel"
 msgstr "取消"
 
@@ -1572,7 +1572,7 @@ msgstr "无法运行例行任务"
 #: src/pages/bot-page/RoutineDetail.tsx:87
 #: src/pages/ExternalConversationSettings.tsx:250
 #: src/pages/KnowledgeSection.tsx:207
-#: src/pages/VaultSettingsPanel.tsx:116
+#: src/pages/VaultSettingsPanel.tsx:117
 msgid "Could not save"
 msgstr "无法保存"
 
@@ -1879,8 +1879,8 @@ msgstr "默认范围"
 #: src/pages/shell/dialogs.tsx:470
 #: src/pages/shell/sidebar-footer.tsx:99
 #: src/pages/shell/sidebar-footer.tsx:132
-#: src/pages/VaultSettingsPanel.tsx:136
-#: src/pages/VaultSettingsPanel.tsx:221
+#: src/pages/VaultSettingsPanel.tsx:137
+#: src/pages/VaultSettingsPanel.tsx:223
 msgid "Delete"
 msgstr "删除"
 
@@ -1895,7 +1895,7 @@ msgstr "删除 {0}"
 #. placeholder {0}: item.name
 #: src/pages/shell/dialogs.tsx:346
 #: src/pages/shell/dialogs.tsx:439
-#: src/pages/VaultSettingsPanel.tsx:136
+#: src/pages/VaultSettingsPanel.tsx:137
 msgid "Delete {0}?"
 msgstr "删除 {0}？"
 
@@ -2390,13 +2390,13 @@ msgstr "请挂断，然后输入屏幕上的代码。"
 msgid "header"
 msgstr "请求头"
 
-#: src/pages/VaultSettingsPanel.tsx:185
+#: src/pages/VaultSettingsPanel.tsx:186
 msgid "Header"
 msgstr ""
 
 #: src/pages/McpServersOverlay.tsx:450
 #: src/pages/plugins/advanced-integrations.tsx:263
-#: src/pages/VaultSettingsPanel.tsx:193
+#: src/pages/VaultSettingsPanel.tsx:195
 msgid "Header name"
 msgstr "请求头名称"
 
@@ -2595,7 +2595,7 @@ msgstr "保留记忆"
 msgid "key"
 msgstr "密钥"
 
-#: src/pages/VaultSettingsPanel.tsx:204
+#: src/pages/VaultSettingsPanel.tsx:206
 msgid "Key"
 msgstr ""
 
@@ -2724,6 +2724,10 @@ msgstr "本地"
 #: src/pages/shell/sidebar-footer.tsx:243
 msgid "Log out"
 msgstr "退出登录"
+
+#: src/pages/VaultSettingsPanel.tsx:188
+msgid "Login"
+msgstr ""
 
 #: src/pages/bot-page/model-options.ts:15
 #: src/pages/model-settings/model-detail.tsx:181
@@ -2989,7 +2993,7 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx:187
 #: src/pages/shell/dialogs.tsx:250
 #: src/pages/SpaceGeneralSettings.tsx:113
-#: src/pages/VaultSettingsPanel.tsx:168
+#: src/pages/VaultSettingsPanel.tsx:169
 msgid "Name"
 msgstr "名称"
 
@@ -3017,7 +3021,7 @@ msgstr "需要你处理"
 msgid "Needs your call"
 msgstr ""
 
-#: src/pages/VaultSettingsPanel.tsx:149
+#: src/pages/VaultSettingsPanel.tsx:150
 msgid "New API key"
 msgstr ""
 
@@ -3028,6 +3032,10 @@ msgstr "新建 Bot"
 #: src/pages/GroupPanel.tsx:242
 msgid "New group"
 msgstr "新建群组"
+
+#: src/pages/VaultSettingsPanel.tsx:150
+msgid "New login"
+msgstr ""
 
 #: src/pages/ScratchpadSection.tsx:186
 msgid "New open-work item"
@@ -3407,6 +3415,7 @@ msgstr "搁置"
 #: src/pages/AccountProfileSettings.tsx:180
 #: src/pages/Auth.tsx:164
 #: src/pages/Auth.tsx:173
+#: src/pages/VaultSettingsPanel.tsx:206
 msgid "Password"
 msgstr "密码"
 
@@ -3725,9 +3734,13 @@ msgid "Replace API key"
 msgstr "替换 API 密钥"
 
 #: src/pages/ProvidersSettings.tsx:267
-#: src/pages/VaultSettingsPanel.tsx:228
+#: src/pages/VaultSettingsPanel.tsx:230
 msgid "Replace key"
 msgstr "替换密钥"
+
+#: src/pages/VaultSettingsPanel.tsx:230
+msgid "Replace password"
+msgstr ""
 
 #: src/components/DraftCard.tsx:239
 msgid "Replaced"
@@ -3918,7 +3931,7 @@ msgstr ""
 #: src/pages/KnowledgeSection.tsx:706
 #: src/pages/model-settings/model-detail.tsx:332
 #: src/pages/shell/dialogs.tsx:266
-#: src/pages/VaultSettingsPanel.tsx:228
+#: src/pages/VaultSettingsPanel.tsx:230
 msgid "Save"
 msgstr "保存"
 
@@ -4044,8 +4057,8 @@ msgstr "正在发送…"
 msgid "Sent"
 msgstr ""
 
-#: src/pages/VaultSettingsPanel.tsx:175
-#: src/pages/VaultSettingsPanel.tsx:177
+#: src/pages/VaultSettingsPanel.tsx:176
+#: src/pages/VaultSettingsPanel.tsx:178
 msgid "Sent as"
 msgstr ""
 
@@ -4168,7 +4181,7 @@ msgstr "登录 Tangow"
 msgid "Sign up"
 msgstr "注册"
 
-#: src/pages/VaultSettingsPanel.tsx:161
+#: src/pages/VaultSettingsPanel.tsx:162
 msgid "Site"
 msgstr ""
 
@@ -4654,7 +4667,7 @@ msgstr ""
 msgid "Use this model"
 msgstr "使用此模型"
 
-#: src/pages/VaultSettingsPanel.tsx:199
+#: src/pages/VaultSettingsPanel.tsx:201
 msgid "Username"
 msgstr ""
 

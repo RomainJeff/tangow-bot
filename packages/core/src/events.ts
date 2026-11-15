@@ -226,8 +226,18 @@ export function secretRedactor(secrets: string[]): (value: string) => string {
   };
 }
 
+/**
+ * Whether `secretRedactor` would mask anything in `value`: a secret, or its JSON-escaped form that
+ * text holding JSON carries for a secret with `"` or `\`.
+ */
 export function containsSecret(value: unknown, secrets: string[]): boolean {
-  const active = secrets.filter((secret) => secret.length > 0);
+  const active = [
+    ...new Set(
+      secrets
+        .filter((secret) => secret.length > 0)
+        .flatMap((secret) => [secret, JSON.stringify(secret).slice(1, -1)]),
+    ),
+  ];
   if (active.length === 0) return false;
   const serialized = JSON.stringify(value);
   if (serialized === undefined) return false;

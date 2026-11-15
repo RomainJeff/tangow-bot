@@ -178,7 +178,7 @@ describe("browser tools", () => {
 
   it("hides page browser tools when the computer is not graphical", () => {
     const tools = [...PAGE_BROWSER_TOOL_NAMES].map((name) => ({ name }));
-    expect(filterPageBrowserTools(tools, true)).toHaveLength(4);
+    expect(filterPageBrowserTools(tools, true)).toEqual(tools);
     expect(filterPageBrowserTools(tools, false)).toEqual([]);
     expect(filterPageBrowserTools([{ name: "computer_act" }, ...tools], false)).toEqual([
       { name: "computer_act" },

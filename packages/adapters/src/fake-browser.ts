@@ -5,9 +5,11 @@ import type {
   BrowserNavigateRequest,
   BrowserNavigateResult,
   BrowserProvider,
+  BrowserSignInRequest,
   BrowserSnapshotRequest,
   BrowserSnapshotResult,
   ComputerRef,
+  PageBrowserResult,
 } from "@tangow/adapter-kit";
 import { PageBrowserSessionStore, pageBrowserSessionKey } from "./page-browser-session.js";
 import { fetchSafeWebText } from "./web-ssrf.js";
@@ -137,6 +139,15 @@ export class FakeBrowserProvider implements BrowserProvider {
       };
     }
     return this.sessions.get(pageBrowserSessionKey(computer, context)).act(request.actions);
+  }
+
+  /** The in-process page cannot submit a form, so a saved login is filled on live computers only. */
+  async signIn(
+    _computer: ComputerRef,
+    _request: BrowserSignInRequest,
+    _context: AdapterContext,
+  ): Promise<PageBrowserResult> {
+    return { ok: false, fallback: "computer_act", error: "Sign-in needs a live computer." };
   }
 }
 

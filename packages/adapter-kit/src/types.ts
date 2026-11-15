@@ -1003,9 +1003,27 @@ export interface BrowserActResult {
 export type PageBrowserCommand =
   | { command: "navigate"; url: string }
   | { command: "snapshot" }
-  | { command: "act"; actions: BrowserActStep[] };
+  | { command: "act"; actions: BrowserActStep[] }
+  | ({ command: "sign_in" } & BrowserSignInRequest);
 
-export type PageBrowserResult = Partial<BrowserSnapshotResult & BrowserActResult> & { ok: boolean };
+export type PageBrowserResult = Partial<BrowserSnapshotResult & BrowserActResult> & {
+  ok: boolean;
+  /** sign_in only: the saved login was filled on its site. */
+  filled?: true;
+};
+
+/**
+ * Fills a saved login into fields from the latest snapshot. The page must be the top frame of
+ * exactly `origin`, and `passwordRef` a password input, checked where the fill happens. Adapters
+ * hand `password` to the computer on stdin only, never in argv or the environment.
+ */
+export interface BrowserSignInRequest {
+  origin: string;
+  usernameRef?: string;
+  username?: string;
+  passwordRef?: string;
+  password?: string;
+}
 
 /** Typed questions about a text state, answered with probabilities. Not a text generator. */
 export interface DecisionCapabilities {

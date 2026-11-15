@@ -140,3 +140,44 @@ it("closes helper stdin when the request is cancelled", async () => {
   expect(await (await response).json()).toMatchObject({ ok: false, uncertain: true });
   expect(stream.destroyed).toBe(true);
 });
+
+it("hands a sign-in password to the helper on stdin, never in argv or the environment", async () => {
+  const password = 'fake-pa"ss\\word';
+  const stdin = new PassThrough();
+  const written: string[] = [];
+  stdin.write = ((chunk: string) => written.push(chunk) > 0) as typeof stdin.write;
+  let options!: { Cmd: string[]; Env: string[] };
+  const defaultExec = mock.exec.getMockImplementation()!;
+  mock.exec.mockImplementation(async (exec: { Cmd: string[]; Env: string[] }) => {
+    if (!exec.Cmd.includes("/usr/local/bin/tangow-page-browser")) return defaultExec(exec);
+    options = exec;
+    return {
+      start: async () => {
+        setImmediate(() => {
+          stdin.push(Buffer.from(JSON.stringify({ ok: true, url: "", title: "", filled: true })));
+          stdin.push(null);
+        });
+        return stdin;
+      },
+      inspect: async () => ({ ExitCode: 0 }),
+    };
+  });
+  const response = await supervisorApp.request("/computers/computer-sign-in/browser", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${resolveSupervisorToken(process.env)}`,
+      "content-type": "application/json",
+      "x-tangow-bot-id": "home",
+      "x-tangow-space-id": "space",
+    },
+    body: JSON.stringify({
+      command: "sign_in",
+      origin: "https://example.test",
+      passwordRef: "e1",
+      password,
+    }),
+  });
+  expect(await response.json()).toMatchObject({ ok: true, filled: true });
+  expect(JSON.stringify([options.Cmd, options.Env])).not.toContain("fake-pa");
+  expect(written.join("")).toBe(`${JSON.stringify(password)}\n`);
+});

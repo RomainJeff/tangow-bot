@@ -844,7 +844,7 @@ msgstr "Can't reach the server."
 #: src/pages/shell/dialogs.tsx:395
 #: src/pages/shell/dialogs.tsx:448
 #: src/pages/shell/dialogs.tsx:505
-#: src/pages/VaultSettingsPanel.tsx:225
+#: src/pages/VaultSettingsPanel.tsx:227
 msgid "Cancel"
 msgstr "Cancel"
 
@@ -1572,7 +1572,7 @@ msgstr "Could not run routine"
 #: src/pages/bot-page/RoutineDetail.tsx:87
 #: src/pages/ExternalConversationSettings.tsx:250
 #: src/pages/KnowledgeSection.tsx:207
-#: src/pages/VaultSettingsPanel.tsx:116
+#: src/pages/VaultSettingsPanel.tsx:117
 msgid "Could not save"
 msgstr "Could not save"
 
@@ -1879,8 +1879,8 @@ msgstr "Default scope"
 #: src/pages/shell/dialogs.tsx:470
 #: src/pages/shell/sidebar-footer.tsx:99
 #: src/pages/shell/sidebar-footer.tsx:132
-#: src/pages/VaultSettingsPanel.tsx:136
-#: src/pages/VaultSettingsPanel.tsx:221
+#: src/pages/VaultSettingsPanel.tsx:137
+#: src/pages/VaultSettingsPanel.tsx:223
 msgid "Delete"
 msgstr "Delete"
 
@@ -1895,7 +1895,7 @@ msgstr "Delete {0}"
 #. placeholder {0}: item.name
 #: src/pages/shell/dialogs.tsx:346
 #: src/pages/shell/dialogs.tsx:439
-#: src/pages/VaultSettingsPanel.tsx:136
+#: src/pages/VaultSettingsPanel.tsx:137
 msgid "Delete {0}?"
 msgstr "Delete {0}?"
 
@@ -2390,13 +2390,13 @@ msgstr "Hang up, then enter the code on screen."
 msgid "header"
 msgstr "header"
 
-#: src/pages/VaultSettingsPanel.tsx:185
+#: src/pages/VaultSettingsPanel.tsx:186
 msgid "Header"
 msgstr "Header"
 
 #: src/pages/McpServersOverlay.tsx:450
 #: src/pages/plugins/advanced-integrations.tsx:263
-#: src/pages/VaultSettingsPanel.tsx:193
+#: src/pages/VaultSettingsPanel.tsx:195
 msgid "Header name"
 msgstr "Header name"
 
@@ -2595,7 +2595,7 @@ msgstr "Keep memories"
 msgid "key"
 msgstr "key"
 
-#: src/pages/VaultSettingsPanel.tsx:204
+#: src/pages/VaultSettingsPanel.tsx:206
 msgid "Key"
 msgstr "Key"
 
@@ -2724,6 +2724,10 @@ msgstr "Local"
 #: src/pages/shell/sidebar-footer.tsx:243
 msgid "Log out"
 msgstr "Log out"
+
+#: src/pages/VaultSettingsPanel.tsx:188
+msgid "Login"
+msgstr "Login"
 
 #: src/pages/bot-page/model-options.ts:15
 #: src/pages/model-settings/model-detail.tsx:181
@@ -2989,7 +2993,7 @@ msgstr "Mute"
 #: src/pages/shell/dialogs.tsx:187
 #: src/pages/shell/dialogs.tsx:250
 #: src/pages/SpaceGeneralSettings.tsx:113
-#: src/pages/VaultSettingsPanel.tsx:168
+#: src/pages/VaultSettingsPanel.tsx:169
 msgid "Name"
 msgstr "Name"
 
@@ -3017,7 +3021,7 @@ msgstr "Needs you"
 msgid "Needs your call"
 msgstr "Needs your call"
 
-#: src/pages/VaultSettingsPanel.tsx:149
+#: src/pages/VaultSettingsPanel.tsx:150
 msgid "New API key"
 msgstr "New API key"
 
@@ -3028,6 +3032,10 @@ msgstr "New bot"
 #: src/pages/GroupPanel.tsx:242
 msgid "New group"
 msgstr "New group"
+
+#: src/pages/VaultSettingsPanel.tsx:150
+msgid "New login"
+msgstr "New login"
 
 #: src/pages/ScratchpadSection.tsx:186
 msgid "New open-work item"
@@ -3407,6 +3415,7 @@ msgstr "Park"
 #: src/pages/AccountProfileSettings.tsx:180
 #: src/pages/Auth.tsx:164
 #: src/pages/Auth.tsx:173
+#: src/pages/VaultSettingsPanel.tsx:206
 msgid "Password"
 msgstr "Password"
 
@@ -3725,9 +3734,13 @@ msgid "Replace API key"
 msgstr "Replace API key"
 
 #: src/pages/ProvidersSettings.tsx:267
-#: src/pages/VaultSettingsPanel.tsx:228
+#: src/pages/VaultSettingsPanel.tsx:230
 msgid "Replace key"
 msgstr "Replace key"
+
+#: src/pages/VaultSettingsPanel.tsx:230
+msgid "Replace password"
+msgstr "Replace password"
 
 #: src/components/DraftCard.tsx:239
 msgid "Replaced"
@@ -3918,7 +3931,7 @@ msgstr "Runs when this bot receives a verified message from this provider."
 #: src/pages/KnowledgeSection.tsx:706
 #: src/pages/model-settings/model-detail.tsx:332
 #: src/pages/shell/dialogs.tsx:266
-#: src/pages/VaultSettingsPanel.tsx:228
+#: src/pages/VaultSettingsPanel.tsx:230
 msgid "Save"
 msgstr "Save"
 
@@ -4044,8 +4057,8 @@ msgstr "Sending…"
 msgid "Sent"
 msgstr "Sent"
 
-#: src/pages/VaultSettingsPanel.tsx:175
-#: src/pages/VaultSettingsPanel.tsx:177
+#: src/pages/VaultSettingsPanel.tsx:176
+#: src/pages/VaultSettingsPanel.tsx:178
 msgid "Sent as"
 msgstr "Sent as"
 
@@ -4168,7 +4181,7 @@ msgstr "Sign in to Tangow"
 msgid "Sign up"
 msgstr "Sign up"
 
-#: src/pages/VaultSettingsPanel.tsx:161
+#: src/pages/VaultSettingsPanel.tsx:162
 msgid "Site"
 msgstr "Site"
 
@@ -4654,7 +4667,7 @@ msgstr "Use default guidance"
 msgid "Use this model"
 msgstr "Use this model"
 
-#: src/pages/VaultSettingsPanel.tsx:199
+#: src/pages/VaultSettingsPanel.tsx:201
 msgid "Username"
 msgstr "Username"
 

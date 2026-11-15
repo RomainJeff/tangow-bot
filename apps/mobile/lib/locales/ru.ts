@@ -914,4 +914,7 @@ export const RU_MESSAGES: Record<string, string> = {
   "Header name": "Имя заголовка",
   Username: "Имя пользователя",
   Key: "Ключ",
+  "New login": "Новый логин",
+  "Replace password": "Заменить пароль",
+  Login: "Логин",
 };

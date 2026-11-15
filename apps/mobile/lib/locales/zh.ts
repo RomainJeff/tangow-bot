@@ -897,4 +897,7 @@ export const ZH_MESSAGES: Record<string, string> = {
   "Header name": "请求头名称",
   Username: "用户名",
   Key: "密钥",
+  "New login": "新登录信息",
+  "Replace password": "替换密码",
+  Login: "登录信息",
 };

@@ -14,6 +14,7 @@ import type {
   BrowserCapabilities,
   BrowserNavigateRequest,
   BrowserNavigateResult,
+  BrowserSignInRequest,
   BrowserSnapshotRequest,
   BrowserSnapshotResult,
   CommandRequest,
@@ -513,6 +514,11 @@ export interface BrowserProvider {
     request: BrowserActRequest,
     context: AdapterContext,
   ): Promise<BrowserActResult>;
+  signIn(
+    computer: ComputerRef,
+    request: BrowserSignInRequest,
+    context: AdapterContext,
+  ): Promise<PageBrowserResult>;
 }
 
 /**

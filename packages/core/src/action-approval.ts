@@ -7,6 +7,7 @@ const APPROVAL_EXEMPT_TOOLS = new Set([
   "browser_snapshot",
   "browser_act",
   "browser_run",
+  "sign_in",
   "list_files",
   "read_file",
   "grep",

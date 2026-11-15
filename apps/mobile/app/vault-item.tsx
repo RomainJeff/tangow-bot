@@ -42,6 +42,7 @@ export default function VaultItem() {
     Boolean(value) &&
     (item !== null ||
       (Boolean(site.trim() && name) && (authType === "bearer" || Boolean(authField.trim()))));
+  const login = (item?.auth.type ?? authType) === "login";
 
   function close() {
     if (router.canGoBack()) router.back();
@@ -65,8 +66,8 @@ export default function VaultItem() {
     const auth: BotSecretDestination["auth"] =
       authType === "header"
         ? { type: "header", name: authField.trim() }
-        : authType === "basic"
-          ? { type: "basic", username: authField.trim() }
+        : authType === "basic" || authType === "login"
+          ? { type: authType, username: authField.trim() }
           : { type: "bearer" };
     const destination = item ?? { name, origin: siteOrigin(site), auth };
     // Cleared before the request, so the value is never shown again.
@@ -113,7 +114,7 @@ export default function VaultItem() {
     <>
       <Stack.Screen
         options={{
-          title: item ? item.name : t("New API key"),
+          title: item ? item.name : login ? t("New login") : t("New API key"),
           headerBackVisible: false,
           unstable_headerLeftItems: () => [
             {
@@ -127,7 +128,7 @@ export default function VaultItem() {
           unstable_headerRightItems: () => [
             {
               type: "button",
-              label: item ? t("Replace key") : t("Save"),
+              label: item ? (login ? t("Replace password") : t("Replace key")) : t("Save"),
               variant: "done",
               disabled: busy || !ready,
               onPress: save,
@@ -161,6 +162,7 @@ export default function VaultItem() {
                   ["bearer", "Bearer"],
                   ["header", t("Header")],
                   ["basic", "Basic"],
+                  ["login", t("Login")],
                 ] as const
               ).map(([type, label]) => (
                 <Row
@@ -176,12 +178,12 @@ export default function VaultItem() {
             </Group>
             {authType === "header"
               ? field(t("Header name"), authField, setAuthField, { placeholder: "X-Api-Key" })
-              : authType === "basic"
+              : authType === "basic" || authType === "login"
                 ? field(t("Username"), authField, setAuthField)
                 : null}
           </>
         )}
-        {field(t("Key"), value, setValue, {
+        {field(login ? t("Password") : t("Key"), value, setValue, {
           secureTextEntry: true,
           autoComplete: "off",
           autoFocus: item !== null,
