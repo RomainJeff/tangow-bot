@@ -154,9 +154,7 @@ export function AdvancedIntegrations({
                   ) : null}
                   <div className="mt-3 flex flex-wrap gap-2">
                     {result.surfaces.map((surface) => {
-                      const canAdd =
-                        Boolean(surface.source) &&
-                        (surface.kind === "mcp" || surface.kind === "openapi");
+                      const canAdd = Boolean(surface.source) && surface.kind === "mcp";
                       return (
                         <Button
                           key={`${result.domain}:${surface.slug}`}
@@ -194,24 +192,6 @@ export function AdvancedIntegrations({
             variant="secondary"
             className="rounded-full"
             size="sm"
-            onClick={() => beginSource("api")}
-          >
-            <Trans>Add OpenAPI</Trans>
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            className="rounded-full"
-            size="sm"
-            onClick={() => beginSource("graphql")}
-          >
-            <Trans>Add GraphQL</Trans>
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            className="rounded-full"
-            size="sm"
             onClick={() => beginSource("executor")}
           >
             <Trans>Add Executor</Trans>
@@ -237,12 +217,8 @@ export function AdvancedIntegrations({
                   <Trans>Connect Treg</Trans>
                 ) : sourceKind === "executor" ? (
                   <Trans>Connect Executor</Trans>
-                ) : sourceKind === "mcp" ? (
-                  <Trans>Add remote MCP server</Trans>
-                ) : sourceKind === "graphql" ? (
-                  <Trans>Add GraphQL endpoint</Trans>
                 ) : (
-                  <Trans>Import OpenAPI JSON</Trans>
+                  <Trans>Add remote MCP server</Trans>
                 )}
               </CardTitle>
             </CardHeader>
@@ -257,13 +233,9 @@ export function AdvancedIntegrations({
                   value={sourceUrl}
                   onChange={(event) => setSourceUrl(event.target.value)}
                   placeholder={
-                    sourceKind === "mcp"
-                      ? "https://example.com/mcp"
-                      : sourceKind === "executor"
-                        ? "https://executor.example/mcp"
-                        : sourceKind === "graphql"
-                          ? "https://example.com/graphql"
-                          : "https://example.com/openapi.json"
+                    sourceKind === "executor"
+                      ? "https://executor.example/mcp"
+                      : "https://example.com/mcp"
                   }
                 />
               ) : null}
@@ -347,13 +319,13 @@ export function AdvancedIntegrations({
           </div>
           {sources.length === 0 && !sourceKind ? (
             <p className="text-muted-foreground/80">
-              <Trans>No MCP or API tool sources installed yet.</Trans>
+              <Trans>No MCP tool sources installed yet.</Trans>
             </p>
           ) : null}
           {sources.map((source) => (
             <div key={source.id} className="flex items-center gap-4 rounded-xl px-3 py-2.5">
               <div className="grid h-[42px] w-[42px] place-items-center rounded-xl bg-accent font-semibold uppercase text-foreground">
-                {source.kind === "mcp" ? "M" : source.kind === "graphql" ? "G" : "A"}
+                M
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-[15.5px] font-medium text-foreground">{source.name}</div>

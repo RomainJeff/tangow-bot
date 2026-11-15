@@ -264,7 +264,7 @@ msgstr "О группах"
 msgid "About spaces"
 msgstr "О пространствах"
 
-#: src/components/integrations/IntegrationSetup.tsx:305
+#: src/components/integrations/IntegrationSetup.tsx:262
 msgid "Access token"
 msgstr "Токен доступа"
 
@@ -336,7 +336,7 @@ msgstr "Активность"
 msgid "Activity, last run failed"
 msgstr "Активность, последний запуск не удался"
 
-#: src/pages/plugins/advanced-integrations.tsx:171
+#: src/pages/plugins/advanced-integrations.tsx:169
 #: src/pages/PluginsOverlay.tsx:83
 #: src/pages/ScratchpadSection.tsx:196
 #: src/pages/shell/message-cards.tsx:201
@@ -371,36 +371,24 @@ msgstr "Добавьте URL-адрес HTTPS-сервера."
 msgid "Add another"
 msgstr "Добавить еще"
 
-#: src/pages/plugins/advanced-integrations.tsx:217
+#: src/pages/plugins/advanced-integrations.tsx:197
 msgid "Add Executor"
 msgstr "Добавить Executor"
-
-#: src/pages/plugins/advanced-integrations.tsx:208
-msgid "Add GraphQL"
-msgstr "Добавить GraphQL"
-
-#: src/pages/plugins/advanced-integrations.tsx:243
-msgid "Add GraphQL endpoint"
-msgstr "Добавить конечную точку GraphQL"
 
 #: src/pages/ScratchpadSection.tsx:185
 msgid "Add item"
 msgstr "Добавить элемент"
 
-#: src/components/integrations/IntegrationSetup.tsx:129
-#: src/pages/plugins/advanced-integrations.tsx:190
+#: src/components/integrations/IntegrationSetup.tsx:114
+#: src/pages/plugins/advanced-integrations.tsx:188
 msgid "Add MCP server"
 msgstr "Добавить MCP-сервер"
-
-#: src/pages/plugins/advanced-integrations.tsx:199
-msgid "Add OpenAPI"
-msgstr "Добавить OpenAPI"
 
 #: src/pages/AccountProfileSettings.tsx:115
 msgid "Add photo"
 msgstr ""
 
-#: src/pages/plugins/advanced-integrations.tsx:241
+#: src/pages/plugins/advanced-integrations.tsx:221
 msgid "Add remote MCP server"
 msgstr "Добавить удалённый MCP-сервер"
 
@@ -409,7 +397,7 @@ msgstr "Добавить удалённый MCP-сервер"
 msgid "Add server"
 msgstr "Добавить сервер"
 
-#: src/components/integrations/IntegrationSetup.tsx:273
+#: src/components/integrations/IntegrationSetup.tsx:230
 msgid "Add server URL"
 msgstr "Добавьте URL сервера"
 
@@ -417,7 +405,7 @@ msgstr "Добавьте URL сервера"
 msgid "Add to routine"
 msgstr "Добавить в задачу"
 
-#: src/pages/plugins/advanced-integrations.tsx:226
+#: src/pages/plugins/advanced-integrations.tsx:206
 msgid "Add Treg"
 msgstr "Добавить Treg"
 
@@ -555,7 +543,7 @@ msgid "API is back, but the update did not finish. Check the host logs."
 msgstr "API вернулся, но обновление не завершилось. Проверьте журналы хоста."
 
 #: src/components/AskCard.tsx:123
-#: src/components/integrations/IntegrationSetup.tsx:189
+#: src/components/integrations/IntegrationSetup.tsx:150
 #: src/lib/localized-provider-hint.ts:9
 #: src/pages/model-settings/model-detail.tsx:284
 #: src/pages/model-settings/model-detail.tsx:287
@@ -567,7 +555,7 @@ msgstr "API вернулся, но обновление не завершило�
 msgid "API key"
 msgstr "API-ключ"
 
-#: src/pages/plugins/advanced-integrations.tsx:283
+#: src/pages/plugins/advanced-integrations.tsx:255
 msgid "API key header"
 msgstr "Заголовок ключа API"
 
@@ -656,7 +644,7 @@ msgstr "Спрашивайте перед покупкой"
 msgid "Ask before sending external email"
 msgstr "Спросите перед отправкой внешнего электронного письма"
 
-#: src/components/integrations/IntegrationSetup.tsx:223
+#: src/components/integrations/IntegrationSetup.tsx:180
 msgid "Ask the server owner to configure this provider."
 msgstr "Попросите владельца сервера настроить этого провайдера."
 
@@ -750,7 +738,7 @@ msgid "Bcc"
 msgstr ""
 
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:48
-#: src/pages/plugins/advanced-integrations.tsx:280
+#: src/pages/plugins/advanced-integrations.tsx:252
 msgid "Bearer token"
 msgstr "Bearer-токен"
 
@@ -847,7 +835,7 @@ msgstr "Не удаётся связаться с сервером."
 #: src/pages/bot-page/RoutineTriggers.tsx:296
 #: src/pages/KnowledgeSection.tsx:227
 #: src/pages/KnowledgeSection.tsx:692
-#: src/pages/plugins/advanced-integrations.tsx:337
+#: src/pages/plugins/advanced-integrations.tsx:309
 #: src/pages/shell/dialogs.tsx:88
 #: src/pages/shell/dialogs.tsx:199
 #: src/pages/shell/dialogs.tsx:263
@@ -990,14 +978,6 @@ msgstr "Очистить инструкции?"
 #: src/pages/shell/dialogs.tsx:319
 msgid "Clearing…"
 msgstr "Очистка…"
-
-#: src/components/integrations/IntegrationSetup.tsx:167
-msgid "Client ID"
-msgstr "ID клиента"
-
-#: src/components/integrations/IntegrationSetup.tsx:189
-msgid "Client secret"
-msgstr "Секрет клиента"
 
 #: src/pages/CustomizeOverlay.tsx:130
 #: src/pages/KnowledgeSection.tsx:692
@@ -1148,10 +1128,10 @@ msgstr "Подтвердить удаление"
 msgid "Confirm password"
 msgstr "Подтвердите пароль"
 
-#: src/components/integrations/IntegrationSetup.tsx:217
-#: src/components/integrations/IntegrationSetup.tsx:262
-#: src/components/integrations/IntegrationSetup.tsx:286
-#: src/components/integrations/IntegrationSetup.tsx:319
+#: src/components/integrations/IntegrationSetup.tsx:174
+#: src/components/integrations/IntegrationSetup.tsx:219
+#: src/components/integrations/IntegrationSetup.tsx:243
+#: src/components/integrations/IntegrationSetup.tsx:276
 #: src/pages/DecisionModelSettingsPanel.tsx:176
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
@@ -1171,7 +1151,7 @@ msgstr "Подключить провайдера голоса"
 msgid "Connect API key"
 msgstr "Подключить API-ключ"
 
-#: src/pages/plugins/advanced-integrations.tsx:239
+#: src/pages/plugins/advanced-integrations.tsx:219
 msgid "Connect Executor"
 msgstr "Подключить Executor"
 
@@ -1187,12 +1167,12 @@ msgstr "Подключить OAuth"
 msgid "Connect this provider to use it as your personal model."
 msgstr "Подключите этого провайдера, чтобы использовать его в качестве своей личной модели."
 
-#: src/pages/plugins/advanced-integrations.tsx:237
+#: src/pages/plugins/advanced-integrations.tsx:217
 msgid "Connect Treg"
 msgstr "Подключить Treg"
 
-#: src/components/integrations/IntegrationSetup.tsx:159
-#: src/components/integrations/IntegrationSetup.tsx:262
+#: src/components/integrations/IntegrationSetup.tsx:144
+#: src/components/integrations/IntegrationSetup.tsx:219
 #: src/pages/DecisionModelSettingsPanel.tsx:98
 #: src/pages/McpOAuthCallback.tsx:54
 #: src/pages/MemorySettingsOverlay.tsx:191
@@ -1223,8 +1203,8 @@ msgstr "Подключено и используется {0}."
 msgid "Connected. Its tools are available from your next message."
 msgstr "Подключено. Его инструменты доступны из вашего следующего сообщения."
 
-#: src/components/integrations/IntegrationSetup.tsx:217
-#: src/components/integrations/IntegrationSetup.tsx:356
+#: src/components/integrations/IntegrationSetup.tsx:174
+#: src/components/integrations/IntegrationSetup.tsx:310
 #: src/pages/DecisionModelSettingsPanel.tsx:176
 #: src/pages/McpServersOverlay.tsx:38
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
@@ -1236,7 +1216,7 @@ msgid "Connecting…"
 msgstr "Подключение…"
 
 #. placeholder {0}: item.name
-#: src/pages/plugins/use-integrations.ts:230
+#: src/pages/plugins/use-integrations.ts:226
 msgid "Connection to {0} is still pending. You can close this and check again."
 msgstr "Соединение с {0} все еще не завершено. Вы можете закрыть это и проверить еще раз."
 
@@ -1249,7 +1229,7 @@ msgstr ""
 msgid "Context limit"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:356
+#: src/components/integrations/IntegrationSetup.tsx:310
 #: src/pages/Invite.tsx:108
 #: src/pages/Onboarding.tsx:664
 msgid "Continue"
@@ -1336,8 +1316,8 @@ msgstr "Не удалось завершить OAuth"
 msgid "Could not complete the update. Try again."
 msgstr "Не удалось завершить обновление. Попробуйте снова."
 
-#: src/components/integrations/IntegrationSetup.tsx:76
-#: src/pages/plugins/use-integrations.ts:235
+#: src/components/integrations/IntegrationSetup.tsx:71
+#: src/pages/plugins/use-integrations.ts:231
 msgid "Could not connect"
 msgstr "Не удалось подключиться"
 
@@ -1445,7 +1425,7 @@ msgstr "Не удалось загрузить {name}. Попробуйте ещ
 msgid "Could not import skill"
 msgstr ""
 
-#: src/pages/plugins/use-integrations.ts:386
+#: src/pages/plugins/use-integrations.ts:376
 msgid "Could not install connector"
 msgstr "Не удалось установить коннектор"
 
@@ -1485,8 +1465,8 @@ msgstr ""
 msgid "Could not load decision model settings"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:67
-#: src/pages/plugins/use-integrations.ts:109
+#: src/components/integrations/IntegrationSetup.tsx:62
+#: src/pages/plugins/use-integrations.ts:105
 #: src/pages/PluginsOverlay.tsx:173
 msgid "Could not load integrations"
 msgstr "Не удалось загрузить интеграции"
@@ -1553,7 +1533,7 @@ msgstr ""
 msgid "Could not remove"
 msgstr "Не удалось удалить"
 
-#: src/pages/plugins/use-integrations.ts:399
+#: src/pages/plugins/use-integrations.ts:389
 msgid "Could not remove connector"
 msgstr "Не удалось удалить коннектор"
 
@@ -1565,7 +1545,7 @@ msgstr "Не удалось удалить группу"
 msgid "Could not remove rule"
 msgstr "Не удалось удалить правило"
 
-#: src/pages/plugins/use-integrations.ts:300
+#: src/pages/plugins/use-integrations.ts:296
 msgid "Could not rename connection"
 msgstr "Не удалось переименовать соединение"
 
@@ -1577,8 +1557,8 @@ msgstr ""
 msgid "Could not reset password"
 msgstr "Не удалось сбросить пароль"
 
-#: src/pages/plugins/use-integrations.ts:256
-#: src/pages/plugins/use-integrations.ts:279
+#: src/pages/plugins/use-integrations.ts:252
+#: src/pages/plugins/use-integrations.ts:275
 msgid "Could not revoke connection"
 msgstr "Не удалось отменить соединение"
 
@@ -1625,7 +1605,7 @@ msgstr "Не удалось сохранить этот голос"
 msgid "Could not save this choice"
 msgstr "Не удалось сохранить этот выбор."
 
-#: src/pages/plugins/use-integrations.ts:327
+#: src/pages/plugins/use-integrations.ts:323
 msgid "Could not search catalog"
 msgstr "Не удалось выполнить поиск по каталогу"
 
@@ -1803,16 +1783,16 @@ msgstr "Создано"
 msgid "Creating…"
 msgstr "Создание…"
 
-#: src/pages/plugins/advanced-integrations.tsx:305
+#: src/pages/plugins/advanced-integrations.tsx:277
 msgid "Credential"
 msgstr "Учётные данные"
 
 #: src/pages/McpServersOverlay.tsx:34
-#: src/pages/plugins/advanced-integrations.tsx:363
+#: src/pages/plugins/advanced-integrations.tsx:335
 msgid "credential saved"
 msgstr "учетные данные сохранены"
 
-#: src/pages/plugins/advanced-integrations.tsx:310
+#: src/pages/plugins/advanced-integrations.tsx:282
 msgid "Credentials are encrypted and never sent to the model."
 msgstr "Учётные данные зашифрованы и никогда не передаются модели."
 
@@ -1984,7 +1964,7 @@ msgstr ""
 msgid "Dictating"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:40
+#: src/components/integrations/IntegrationSetup.tsx:38
 msgid "Direct MCP"
 msgstr "Прямой MCP"
 
@@ -2029,7 +2009,7 @@ msgstr "Закрыть ошибку"
 msgid "Dismissed. Reconnect anytime from MCP settings."
 msgstr "Закрыто. Подключиться снова можно в любое время в настройках MCP."
 
-#: src/pages/plugins/advanced-integrations.tsx:253
+#: src/pages/plugins/advanced-integrations.tsx:229
 msgid "Display name"
 msgstr "Отображаемое имя"
 
@@ -2068,7 +2048,7 @@ msgstr "Скачать {name}"
 msgid "Download as markdown"
 msgstr "Скачать как Markdown"
 
-#: src/components/integrations/IntegrationSetup.tsx:331
+#: src/components/integrations/IntegrationSetup.tsx:288
 msgid "Download Executor"
 msgstr "Скачать Executor"
 
@@ -2217,7 +2197,7 @@ msgstr ""
 msgid "Everyone who uses this bot can see its files and browser sign-ins."
 msgstr ""
 
-#: src/pages/plugins/advanced-integrations.tsx:304
+#: src/pages/plugins/advanced-integrations.tsx:276
 msgid "Executor token"
 msgstr "Токен Executor"
 
@@ -2354,7 +2334,7 @@ msgstr "К сведению"
 msgid "General"
 msgstr "Общие"
 
-#: src/components/integrations/IntegrationSetup.tsx:209
+#: src/components/integrations/IntegrationSetup.tsx:166
 msgid "Get credentials"
 msgstr "Получить учетные данные"
 
@@ -2405,7 +2385,7 @@ msgid "header"
 msgstr "заголовок"
 
 #: src/pages/McpServersOverlay.tsx:450
-#: src/pages/plugins/advanced-integrations.tsx:291
+#: src/pages/plugins/advanced-integrations.tsx:263
 msgid "Header name"
 msgstr "Название заголовка"
 
@@ -2496,10 +2476,6 @@ msgstr ""
 msgid "Import"
 msgstr ""
 
-#: src/pages/plugins/advanced-integrations.tsx:245
-msgid "Import OpenAPI JSON"
-msgstr "Импортировать OpenAPI JSON"
-
 #: src/pages/bot-page/KnowledgeTab.tsx:136
 msgid "Inherit default"
 msgstr "Наследовать значение по умолчанию"
@@ -2539,7 +2515,7 @@ msgstr "Инструкции"
 msgid "Integration domain"
 msgstr "Домен интеграции"
 
-#: src/components/integrations/IntegrationSetup.tsx:133
+#: src/components/integrations/IntegrationSetup.tsx:118
 msgid "Integration options"
 msgstr "Параметры интеграции"
 
@@ -2744,7 +2720,7 @@ msgstr "Низкий"
 msgid "Make sure nothing is still running on this computer."
 msgstr ""
 
-#: src/pages/plugins/advanced-integrations.tsx:389
+#: src/pages/plugins/advanced-integrations.tsx:361
 msgid "Manage MCP servers"
 msgstr "Управление серверами MCP"
 
@@ -2757,11 +2733,11 @@ msgstr "Управление настройками обмена сообщен�
 msgid "Manage the Space semantic memory provider."
 msgstr "Управляйте провайдером семантической памяти Space."
 
-#: src/pages/plugins/advanced-integrations.tsx:171
+#: src/pages/plugins/advanced-integrations.tsx:169
 msgid "Manual"
 msgstr "Вручную"
 
-#: src/pages/plugins/advanced-integrations.tsx:168
+#: src/pages/plugins/advanced-integrations.tsx:166
 msgid "Manual setup required"
 msgstr "Требуется ручная настройка"
 
@@ -3082,11 +3058,11 @@ msgstr "Агентских подключений пока нет."
 msgid "No apps match your search."
 msgstr "Нет приложений, соответствующих вашему запросу."
 
-#: src/pages/plugins/advanced-integrations.tsx:365
+#: src/pages/plugins/advanced-integrations.tsx:337
 msgid "no auth"
 msgstr "нет авторизации"
 
-#: src/pages/plugins/advanced-integrations.tsx:277
+#: src/pages/plugins/advanced-integrations.tsx:249
 msgid "No authentication"
 msgstr "Нет аутентификации"
 
@@ -3136,13 +3112,13 @@ msgstr "В этом развертывании не настроен катал�
 msgid "No matching models"
 msgstr "Нет подходящих моделей"
 
-#: src/pages/plugins/advanced-integrations.tsx:350
-msgid "No MCP or API tool sources installed yet."
-msgstr "Источники инструментов MCP или API пока не установлены."
-
 #: src/pages/McpServersOverlay.tsx:509
 msgid "No MCP servers yet."
 msgstr "Серверов MCP пока нет."
+
+#: src/pages/plugins/advanced-integrations.tsx:322
+msgid "No MCP tool sources installed yet."
+msgstr "Источники инструментов MCP пока не установлены."
 
 #: src/pages/PeerMessagesOverlay.tsx:159
 msgid "No messages with {peerBotName} yet."
@@ -3160,7 +3136,7 @@ msgstr "Модель не подключена"
 msgid "No providers found."
 msgstr "Поставщики не найдены."
 
-#: src/components/integrations/IntegrationSetup.tsx:268
+#: src/components/integrations/IntegrationSetup.tsx:225
 msgid "No remote MCP servers found"
 msgstr "Удаленные MCP-серверы не найдены"
 
@@ -3498,10 +3474,6 @@ msgstr "Профиль"
 msgid "Profile photo"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:177
-msgid "Project ID"
-msgstr "ID проекта"
-
 #: src/pages/MemorySettingsOverlay.tsx:219
 #: src/pages/Onboarding.tsx:388
 #: src/pages/Onboarding.tsx:395
@@ -3653,7 +3625,7 @@ msgstr "Освободить прерванный компьютер?"
 #: src/pages/AccountProfileSettings.tsx:124
 #: src/pages/bot-page/RoutineTriggers.tsx:237
 #: src/pages/bot-page/RoutineTriggers.tsx:291
-#: src/pages/plugins/advanced-integrations.tsx:377
+#: src/pages/plugins/advanced-integrations.tsx:349
 #: src/pages/plugins/connection-detail.tsx:110
 #: src/pages/ScratchpadSection.tsx:165
 #: src/pages/SpaceGeneralSettings.tsx:239
@@ -3710,7 +3682,7 @@ msgstr "Удалено вместе с чатом, компьютером и п�
 msgid "Removed, but list refresh failed"
 msgstr "Удалено, но обновить список не удалось."
 
-#: src/pages/plugins/advanced-integrations.tsx:377
+#: src/pages/plugins/advanced-integrations.tsx:349
 #: src/pages/plugins/connection-detail.tsx:75
 #: src/pages/plugins/connection-detail.tsx:110
 msgid "Removing…"
@@ -3984,8 +3956,8 @@ msgstr "Экран"
 msgid "Search"
 msgstr "Поиск"
 
-#: src/components/integrations/IntegrationSetup.tsx:245
-#: src/components/integrations/IntegrationSetup.tsx:246
+#: src/components/integrations/IntegrationSetup.tsx:202
+#: src/components/integrations/IntegrationSetup.tsx:203
 #: src/pages/PluginsOverlay.tsx:150
 #: src/pages/PluginsOverlay.tsx:151
 msgid "Search apps"
@@ -3999,7 +3971,7 @@ msgstr "Искать ботов и переключать диалоги"
 msgid "Search by domain"
 msgstr "Поиск по домену"
 
-#: src/components/integrations/IntegrationSetup.tsx:251
+#: src/components/integrations/IntegrationSetup.tsx:208
 msgid "Search integrations.sh"
 msgstr "Поиск integrations.sh"
 
@@ -4050,7 +4022,7 @@ msgstr "Отправка…"
 msgid "Sent"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:129
+#: src/components/integrations/IntegrationSetup.tsx:114
 #: src/pages/AccountSettingsOverlay.tsx:166
 msgid "Server integrations"
 msgstr "Интеграции сервера"
@@ -4059,8 +4031,8 @@ msgstr "Интеграции сервера"
 msgid "Server name"
 msgstr "Имя сервера"
 
-#: src/components/integrations/IntegrationSetup.tsx:277
-#: src/components/integrations/IntegrationSetup.tsx:295
+#: src/components/integrations/IntegrationSetup.tsx:234
+#: src/components/integrations/IntegrationSetup.tsx:252
 #: src/pages/McpServersOverlay.tsx:397
 #: src/pages/model-settings/model-detail.tsx:80
 #: src/pages/Onboarding.tsx:411
@@ -4085,7 +4057,7 @@ msgstr "Настройки: Общие"
 msgid "Settings: Usage"
 msgstr "Настройки: Использование"
 
-#: src/components/integrations/IntegrationSetup.tsx:323
+#: src/components/integrations/IntegrationSetup.tsx:280
 #: src/pages/model-settings/model-detail.tsx:93
 msgid "Setup help"
 msgstr "Помощь по настройке"
@@ -4197,7 +4169,7 @@ msgid "Skills this bot can use"
 msgstr ""
 
 #: src/components/ask/QuestionCard.tsx:198
-#: src/components/integrations/IntegrationSetup.tsx:359
+#: src/components/integrations/IntegrationSetup.tsx:313
 #: src/pages/shell/side-panel.tsx:502
 msgid "Skip"
 msgstr "Пропустить"
@@ -4497,7 +4469,7 @@ msgstr ""
 msgid "Tokens"
 msgstr "Токены"
 
-#: src/pages/plugins/advanced-integrations.tsx:346
+#: src/pages/plugins/advanced-integrations.tsx:318
 msgid "Tool sources"
 msgstr "Источники инструментов"
 
@@ -4509,7 +4481,7 @@ msgstr "Инструменты"
 msgid "Treat like a person"
 msgstr "Считать человеком"
 
-#: src/pages/plugins/advanced-integrations.tsx:302
+#: src/pages/plugins/advanced-integrations.tsx:274
 msgid "Treg token"
 msgstr "Токен Treg"
 
@@ -4651,11 +4623,11 @@ msgstr "Использовать рекомендации по умолчани�
 msgid "Use this model"
 msgstr "Используйте эту модель"
 
-#: src/pages/plugins/advanced-integrations.tsx:327
+#: src/pages/plugins/advanced-integrations.tsx:299
 msgid "Verify and add"
 msgstr "Проверить и добавить"
 
-#: src/pages/plugins/advanced-integrations.tsx:325
+#: src/pages/plugins/advanced-integrations.tsx:297
 msgid "Verifying…"
 msgstr "Проверка…"
 
