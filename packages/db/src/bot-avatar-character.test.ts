@@ -28,7 +28,11 @@ describe("a bot's avatar character", () => {
       await prisma.user.create({
         data: { id: "owner", name: "Owner", email: "owner@tangow.test" },
       });
-      await bootstrapUserSpace(prisma, { id: "owner" }, { signupsEnabled: "true" });
+      await bootstrapUserSpace(
+        prisma,
+        { id: "owner" },
+        { signupsEnabled: "true", signupAllowlist: undefined },
+      );
       const { spaceId } = await prisma.spaceMember.findFirstOrThrow({ where: { userId: "owner" } });
       const actor = {
         userId: "owner",

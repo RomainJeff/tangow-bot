@@ -380,6 +380,7 @@ export function createRepos(prisma: PrismaClient) {
         ...shared.map(
           ({ thread, createdAt, updatedAt, ...bot }): Bot => ({
             ...bot,
+            color: botDisplayColor(bot),
             threadId: thread.id,
             unread: thread.unread,
             preview: previews.get(thread.sessionId) ?? "",

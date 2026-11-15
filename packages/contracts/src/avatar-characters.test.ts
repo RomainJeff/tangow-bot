@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  AVATAR_CHARACTERS,
-  botDisplayColor,
-  characterById,
-  characterColor,
-} from "./avatar-characters.js";
+import { AVATAR_CHARACTERS, botDisplayColor, characterById } from "./avatar-characters.js";
 import { UpdateBotInput } from "./domain.js";
 
 describe("avatar characters", () => {
@@ -15,7 +10,6 @@ describe("avatar characters", () => {
   });
 
   it("shows a bot in its character's clay colour, else in its own", () => {
-    expect(characterColor(characterById("ivy"))).toBe("#96BCA3");
     expect(botDisplayColor({ color: "#123456", avatarCharacter: "ivy" })).toBe("#96BCA3");
     expect(botDisplayColor({ color: "#123456", avatarCharacter: null })).toBe("#123456");
   });

@@ -1,9 +1,9 @@
 import * as z from "zod";
 
-export type AvatarCharacterShape = "ball" | "capsule" | "block";
+type AvatarCharacterShape = "ball" | "capsule" | "block";
 
 /** A crop of the character image, in the 1024 pixel square the images are exported in. */
-export type AvatarCrop = { x: number; y: number; side: number };
+type AvatarCrop = { x: number; y: number; side: number };
 
 type AvatarCharacterData = {
   id: string;
@@ -148,7 +148,7 @@ const SHAPE_COLORS: Record<AvatarCharacterShape, string> = {
 };
 
 /** The clay colour of the character's body. */
-export function characterColor(character: AvatarCharacter): string {
+function characterColor(character: AvatarCharacter): string {
   return SHAPE_COLORS[character.shape];
 }
 

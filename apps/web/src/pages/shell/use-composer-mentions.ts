@@ -88,7 +88,13 @@ export function useComposerMentions({ bots, groups, groupId, inGroup, initialBot
         query: "",
         includeEveryone: inGroup,
         currentGroupId: groupId,
-        bots: bots.map((bot) => ({ id: bot.id, name: bot.name, color: bot.color })),
+        bots: bots.map((bot) => ({
+          id: bot.id,
+          name: bot.name,
+          color: bot.color,
+          shapeSeed: bot.shapeSeed,
+          avatarCharacter: bot.avatarCharacter,
+        })),
         groups: groups.map((group) => ({ id: group.id, name: group.name })),
         routines: mentionRoutines.map((routine) => ({
           id: routine.id,
