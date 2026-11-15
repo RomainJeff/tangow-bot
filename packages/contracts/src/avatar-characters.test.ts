@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { AVATAR_CHARACTERS, botDisplayColor, characterById } from "./avatar-characters.js";
+import {
+  AVATAR_CHARACTERS,
+  botDisplayColor,
+  characterById,
+  cropForSize,
+} from "./avatar-characters.js";
 import { UpdateBotInput } from "./domain.js";
 
 describe("avatar characters", () => {
@@ -21,5 +26,18 @@ describe("avatar characters", () => {
     expect(UpdateBotInput.safeParse({ botId: "bot_1", avatarCharacter: "nobody" }).success).toBe(
       false,
     );
+  });
+});
+
+describe("cropForSize", () => {
+  it.each([
+    [96, "full"],
+    [64, "full"],
+    [56, "portrait"],
+    [32, "portrait"],
+    [28, "close"],
+    [16, "close"],
+  ])("frames a %s px avatar on the %s crop", (size, crop) => {
+    expect(cropForSize(size)).toBe(crop);
   });
 });

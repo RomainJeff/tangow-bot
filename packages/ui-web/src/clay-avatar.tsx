@@ -20,12 +20,10 @@ import toutankit from "@tangow/avatars/characters/toutankit.webp";
 import toutankitMini from "@tangow/avatars/characters/toutankit-mini.webp";
 import viking from "@tangow/avatars/characters/viking.webp";
 import vikingMini from "@tangow/avatars/characters/viking-mini.webp";
-import type { AvatarCharacter, AvatarCharacterId } from "@tangow/contracts";
-import { characterById } from "@tangow/contracts";
+import type { AvatarCharacterId } from "@tangow/contracts";
+import { CLAY_MINI_MAX_SIZE, characterById, cropForSize } from "@tangow/contracts";
 import { cn } from "./lib/utils.js";
 import "./styles.css";
-
-const MINI_MAX_SIZE = 20;
 
 const IMAGES: Record<AvatarCharacterId, { full: string; mini: string }> = {
   scout: { full: scout, mini: scoutMini },
@@ -40,13 +38,6 @@ const IMAGES: Record<AvatarCharacterId, { full: string; mini: string }> = {
   toutankit: { full: toutankit, mini: toutankitMini },
   "docteur-disquette": { full: docteurDisquette, mini: docteurDisquetteMini },
 };
-
-/** Whole character when large, face when medium, close on the eyes when small. */
-export function cropForSize(size: number): keyof AvatarCharacter["crops"] {
-  if (size >= 64) return "full";
-  if (size >= 32) return "portrait";
-  return "close";
-}
 
 /**
  * A clay character in a round disc. A working bot gets the spinning ring in ink, which holds
@@ -76,7 +67,7 @@ export function ClayAvatar({
     >
       <div className="relative size-full overflow-hidden rounded-full bg-muted">
         <img
-          src={IMAGES[id][size <= MINI_MAX_SIZE ? "mini" : "full"]}
+          src={IMAGES[id][size <= CLAY_MINI_MAX_SIZE ? "mini" : "full"]}
           alt=""
           aria-hidden="true"
           draggable={false}
