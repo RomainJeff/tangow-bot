@@ -5,7 +5,7 @@ import path from "node:path";
 import type { Readable } from "node:stream";
 import { duplexPair } from "node:stream";
 import type { V1Pod, V1Status } from "@kubernetes/client-node";
-import { ApiException } from "@kubernetes/client-node";
+import { ApiException, Exec, KubeConfig } from "@kubernetes/client-node";
 import { resolveSupervisorToken } from "@tangow/core";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -22,7 +22,6 @@ import {
   computerPod,
   computerPodName,
   createKubernetesComputerRuntime,
-  execInEnvelope,
   workerPod,
 } from "./kubernetes-runtime.js";
 
@@ -328,21 +327,58 @@ describe("computer pod", () => {
       },
     });
   });
+});
 
-  it("runs a command in its cwd with its env, expanding none of its values", () => {
+describe("Kubernetes commands", () => {
+  const secret = "placeholder-secret-value";
+  const env = [`API_KEY=${secret}`, "A=$HOME", "MULTI=one\\n\ntwo\\"];
+
+  it("hands the env, secrets included, to the command on stdin, never in its argv", async () => {
+    const { provision, runtime, state } = kubernetes();
+    await provision();
     const cwd = realpathSync(mkdtempSync(path.join(tmpdir(), "tangow envelope ")));
     try {
-      const run = (argv: string[]) => {
-        const [shell, ...args] = execInEnvelope(cwd, ["A=$HOME"], argv);
-        return spawnSync(shell!, args, { encoding: "utf8" }).stdout;
-      };
+      await runtime.exec(pod, ["sh", "-c", 'pwd; printf "%s\\n" "$API_KEY" "$A" "$MULTI"; cat'], {
+        cwd,
+        env,
+        stdin: Buffer.from("rest of stdin"),
+      });
+      const { command, stdin } = state.execs.at(-1)!;
+      expect(command.join(" ")).not.toContain(secret);
 
-      expect(run(["pwd"])).toBe(`${cwd}\n`);
-      expect(run(["printenv", "A"])).toBe("$HOME\n");
-      expect(run(["printf", "%s|", "$HOME", "`id`"])).toBe("$HOME|`id`|");
+      // What the pod would run, with what the exec would send on its stdin.
+      const [shell, ...args] = command;
+      const ran = spawnSync(shell!, args, { input: stdin, encoding: "utf8" });
+      expect(ran.stdout).toBe(`${cwd}\n${secret}\n$HOME\none\\n\ntwo\\\nrest of stdin`);
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
+  });
+
+  it("keeps the env out of the exec URL and the URL out of a failed exec's error", async () => {
+    const paths: string[] = [];
+    const exec = new Exec(new KubeConfig(), {
+      connect: async (path: string) => {
+        paths.push(path);
+        // What the socket rejects with: an error event whose target is the socket and its URL.
+        throw { message: "Unexpected server response: 403", target: { url: `wss://api${path}` } };
+      },
+    } as unknown as ConstructorParameters<typeof Exec>[1]);
+    const cluster = fakeCluster();
+    const runtime = createKubernetesComputerRuntime({
+      namespace: "sandboxes",
+      dataClaim: "data",
+      dataDir,
+      client: { ...cluster.client, podExec: exec },
+    });
+
+    const failed = await runtime
+      .exec(pod, ["printenv"], { cwd: "/home/tangow", env })
+      .catch((error: Error) => error);
+
+    expect(decodeURIComponent(paths[0]!)).toContain("printenv");
+    expect(decodeURIComponent(paths[0]!)).not.toContain(secret);
+    expect(failed).toEqual(new Error("computer command could not start (HTTP 403)"));
   });
 });
 
@@ -463,7 +499,7 @@ describe("Kubernetes computers", () => {
       body: JSON.stringify({ path: "notes.txt", content: Buffer.from("hello").toString("base64") }),
     });
     expect(written.status).toBe(200);
-    expect(state.execs.at(-1)!.stdin.toString()).toBe("hello");
+    expect(state.execs.at(-1)!.stdin.toString()).toMatch(/\n\nhello$/);
 
     state.exitCode = 3;
     const ran = await app.request(`/computers/${pod}/exec`, {
