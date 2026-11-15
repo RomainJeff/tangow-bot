@@ -53,7 +53,7 @@ test("adds a site login whose password is never shown again", async ({ page }, t
   await dialog.getByRole("button", { name: "Login", exact: true }).click();
   await expect(dialog.getByRole("heading", { name: "New login" })).toBeVisible();
   await dialog.getByLabel("Site").fill("example.test");
-  await dialog.getByLabel("Name").fill("example_site");
+  await dialog.getByLabel("Name", { exact: true }).fill("example_site");
   await dialog.getByLabel("Username").fill("me@example.test");
   await dialog.getByLabel("Password").fill(password);
   await captureScreenshot(page, testInfo, "vault-login-add");

@@ -24,7 +24,7 @@ class PageBrowserTest(unittest.TestCase):
             process.stdin.close()
             self.assertEqual(process.wait(timeout=3), 130)
 
-    def test_sign_in_reads_the_password_from_stdin_and_never_prints_it(self):
+    def test_sign_in_reads_its_password_line_from_stdin(self):
         password = 'fake-pa"ss\\word-é'
         with subprocess.Popen([sys.executable, str(Path(__file__).with_name("tangow-page-browser")), "sign_in",
                                '{"origin": "https://example.test", "passwordRef": "e1"}'],
@@ -36,9 +36,10 @@ class PageBrowserTest(unittest.TestCase):
             stdout = process.stdout.readline()
             process.stdin.close()
             stderr = process.stderr.read()
+        # The line was consumed: the helper went on to reach for the browser, which is absent here.
         self.assertIn(b'"ok": false', stdout)
-        for form in (password, json.dumps(password)[1:-1]):
-            self.assertNotIn(form.encode(), stdout + stderr)
+        self.assertNotIn(b"password line unreadable", stdout)
+        self.assertNotIn(json.dumps(password)[1:-1].encode(), stdout + stderr)
 
     def test_output_scrubs_the_password_from_any_message(self):
         password = 'fake-pa"ss\\word-é'

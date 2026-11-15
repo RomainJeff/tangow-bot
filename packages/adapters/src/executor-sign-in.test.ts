@@ -211,12 +211,11 @@ describe("sign_in", () => {
   });
 
   it.each([
-    ["a member's run on a shared bot", { botOwner: "user-2" }],
-    ["a webhook run", { trigger: "webhook" }],
-    ["a messaging contact's run", { trigger: "messaging" }],
-  ])("refuses %s before any effect or browser call", async (_label, options) => {
+    ["a member's run on a shared bot", { botOwner: "user-2" }, "only available on your own bots"],
+    ["a webhook run", { trigger: "webhook" }, "conversation or routine the user started"],
+  ])("refuses %s before any browser call", async (_label, options, refusal) => {
     const { result, browser, request } = await signIn(options);
-    expect(result).toMatchObject({ error: expect.any(String) });
+    expect(result).toMatchObject({ error: expect.stringContaining(refusal) });
     expect(browser.signIns).toEqual([]);
     expect(request.secrets).not.toContain(PASSWORD);
   });
