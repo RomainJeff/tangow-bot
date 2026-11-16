@@ -13,6 +13,7 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: nplurals=2; plural=(n > 1);\n"
 
+#: src/pages/shell/command-palette.tsx:325
 #: src/pages/shell/sidebar-roster.tsx:283
 msgid " (unread)"
 msgstr " (não lido)"
@@ -264,7 +265,7 @@ msgstr ""
 msgid "About spaces"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:200
+#: src/components/integrations/IntegrationSetup.tsx:196
 #: src/pages/custom-apps/AppEditor.tsx:136
 #: src/pages/custom-apps/CustomApps.tsx:220
 msgid "Access token"
@@ -297,12 +298,12 @@ msgstr "Confirmações de ação"
 #: src/pages/bot-page/BotPage.tsx:344
 #: src/pages/BotContextMenu.tsx:134
 #: src/pages/custom-apps/CustomApps.tsx:307
-#: src/pages/shell/shell-overlays.tsx:421
+#: src/pages/shell/shell-overlays.tsx:424
 #: src/pages/shell/sidebar-roster.tsx:161
 msgid "Actions for {0}"
 msgstr "Ações para {0}"
 
-#: src/pages/shell/shell-overlays.tsx:282
+#: src/pages/shell/shell-overlays.tsx:285
 msgid "Actions for space"
 msgstr ""
 
@@ -326,8 +327,8 @@ msgstr "Ativa: {0}"
 
 #: src/pages/bot-page/BotPage.tsx:99
 #: src/pages/bot-page/RoutineDetail.tsx:191
-#: src/pages/shell/sidebar-header.tsx:61
-#: src/pages/shell/sidebar-header.tsx:63
+#: src/pages/shell/sidebar-header.tsx:95
+#: src/pages/shell/sidebar-header.tsx:97
 msgid "Activity"
 msgstr "Atividade"
 
@@ -367,7 +368,7 @@ msgstr "Adicionar item"
 msgid "Add photo"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:168
+#: src/components/integrations/IntegrationSetup.tsx:165
 msgid "Add server URL"
 msgstr ""
 
@@ -501,7 +502,7 @@ msgid "API is back, but the update did not finish. Check the host logs."
 msgstr "A API voltou, mas a atualização não terminou. Verifique os logs do host."
 
 #: src/components/AskCard.tsx:123
-#: src/components/integrations/IntegrationSetup.tsx:129
+#: src/components/integrations/IntegrationSetup.tsx:127
 #: src/lib/localized-provider-hint.ts:9
 #: src/pages/model-settings/model-detail.tsx:284
 #: src/pages/model-settings/model-detail.tsx:287
@@ -605,7 +606,7 @@ msgstr "Perguntar antes de comprar"
 msgid "Ask before sending external email"
 msgstr "Perguntar antes de enviar e-mail externo"
 
-#: src/components/integrations/IntegrationSetup.tsx:159
+#: src/components/integrations/IntegrationSetup.tsx:157
 msgid "Ask the server owner to configure this provider."
 msgstr ""
 
@@ -740,7 +741,7 @@ msgid "Bot screen preview"
 msgstr "Pré-visualização da tela"
 
 #: src/pages/shell/composer-pickers.tsx:300
-#: src/pages/shell/shell-overlays.tsx:171
+#: src/pages/shell/shell-overlays.tsx:174
 #: src/pages/shell/thread-header.tsx:174
 #: src/pages/shell/thread-header.tsx:175
 msgid "Bot settings"
@@ -750,6 +751,7 @@ msgstr ""
 msgid "Bot to link"
 msgstr "Bot a vincular"
 
+#: src/pages/shell/command-palette.tsx:239
 #: src/pages/usage-settings.tsx:68
 msgid "Bots"
 msgstr ""
@@ -807,7 +809,7 @@ msgstr "Cancelar"
 msgid "Cancel dictation"
 msgstr ""
 
-#: src/pages/shell/composer-notices.tsx:131
+#: src/pages/shell/composer-notices.tsx:137
 msgid "Cancel edit"
 msgstr "Cancelar edição"
 
@@ -819,7 +821,7 @@ msgstr "Cancelar novo bot"
 msgid "Cancel new group"
 msgstr "Cancelar novo grupo"
 
-#: src/pages/shell/composer-notices.tsx:112
+#: src/pages/shell/composer-notices.tsx:118
 msgid "Cancel reply"
 msgstr "cancelar resposta"
 
@@ -868,6 +870,10 @@ msgstr "Apps de chat"
 #: src/pages/SpaceGeneralSettings.tsx:37
 msgid "Chat apps, group channels, and agent connections."
 msgstr "Apps de chat, canais de grupo e conexões de agentes."
+
+#: src/pages/shell/command-palette.tsx:242
+msgid "Chats"
+msgstr ""
 
 #: src/components/SoftwareUpdateSection.tsx:157
 msgid "Check failed"
@@ -965,7 +971,7 @@ msgid "Close integrations"
 msgstr "Fechar integrações"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:176
+#: src/pages/SettingsOverlay.tsx:153
 msgid "Close memory settings"
 msgstr "Fechar configurações de memória"
 
@@ -974,7 +980,7 @@ msgid "Close messaging settings"
 msgstr "Fechar as configurações de mensagens"
 
 #: src/pages/ModelSettingsOverlay.tsx:51
-#: src/pages/SettingsOverlay.tsx:174
+#: src/pages/SettingsOverlay.tsx:151
 msgid "Close model settings"
 msgstr "Fechar configurações do modelo"
 
@@ -991,11 +997,11 @@ msgstr "Fechar pré-visualização"
 msgid "Close skills"
 msgstr "Fechar skills"
 
-#: src/pages/SettingsOverlay.tsx:179
+#: src/pages/SettingsOverlay.tsx:156
 msgid "Close user settings"
 msgstr "Fechar configurações do usuário"
 
-#: src/pages/SettingsOverlay.tsx:178
+#: src/pages/SettingsOverlay.tsx:155
 #: src/pages/VoiceSettingsOverlay.tsx:141
 msgid "Close voice settings"
 msgstr "Fechar configurações de voz"
@@ -1039,7 +1045,7 @@ msgstr "Complexo"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:162
+#: src/pages/settings-sections.ts:47
 #: src/pages/shell/block-views.tsx:136
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
@@ -1083,9 +1089,9 @@ msgstr "Confirmar exclusão"
 msgid "Confirm password"
 msgstr "Confirmar senha"
 
-#: src/components/integrations/IntegrationSetup.tsx:153
-#: src/components/integrations/IntegrationSetup.tsx:181
-#: src/components/integrations/IntegrationSetup.tsx:214
+#: src/components/integrations/IntegrationSetup.tsx:151
+#: src/components/integrations/IntegrationSetup.tsx:178
+#: src/components/integrations/IntegrationSetup.tsx:210
 #: src/pages/DecisionModelSettingsPanel.tsx:176
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
@@ -1113,7 +1119,7 @@ msgstr "Conecte o servidor MCP “{name}”"
 msgid "Connect this provider to use it as your personal model."
 msgstr "Conecte este provedor para usá-lo como seu modelo pessoal."
 
-#: src/components/integrations/IntegrationSetup.tsx:123
+#: src/components/integrations/IntegrationSetup.tsx:121
 #: src/pages/DecisionModelSettingsPanel.tsx:98
 #: src/pages/McpOAuthCallback.tsx:54
 #: src/pages/MemorySettingsOverlay.tsx:191
@@ -1144,8 +1150,8 @@ msgstr "Conectado e usando {0}."
 msgid "Connected. Its tools are available from your next message."
 msgstr "Conectado. Suas ferramentas estão disponíveis na sua próxima mensagem."
 
-#: src/components/integrations/IntegrationSetup.tsx:153
-#: src/components/integrations/IntegrationSetup.tsx:248
+#: src/components/integrations/IntegrationSetup.tsx:151
+#: src/components/integrations/IntegrationSetup.tsx:244
 #: src/pages/DecisionModelSettingsPanel.tsx:176
 #: src/pages/memory-providers/SerenitySettingsForm.tsx:107
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
@@ -1156,7 +1162,7 @@ msgid "Connecting…"
 msgstr "Conectando…"
 
 #. placeholder {0}: item.name
-#: src/pages/plugins/use-integrations.ts:202
+#: src/pages/plugins/use-integrations.ts:195
 msgid "Connection to {0} is still pending. You can close this and check again."
 msgstr "A conexão com o {0} ainda está pendente. Você pode fechar isso e verificar novamente."
 
@@ -1169,7 +1175,7 @@ msgstr ""
 msgid "Context limit"
 msgstr "Limite de contexto"
 
-#: src/components/integrations/IntegrationSetup.tsx:248
+#: src/components/integrations/IntegrationSetup.tsx:244
 #: src/pages/Invite.tsx:108
 #: src/pages/Onboarding.tsx:664
 msgid "Continue"
@@ -1251,11 +1257,11 @@ msgstr "Não foi possível concluir o OAuth"
 msgid "Could not complete the update. Try again."
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:54
+#: src/components/integrations/IntegrationSetup.tsx:53
 #: src/pages/custom-apps/AppEditor.tsx:63
 #: src/pages/custom-apps/CustomApps.tsx:54
 #: src/pages/custom-apps/CustomApps.tsx:110
-#: src/pages/plugins/use-integrations.ts:207
+#: src/pages/plugins/use-integrations.ts:200
 msgid "Could not connect"
 msgstr "Não foi possível conectar"
 
@@ -1391,8 +1397,8 @@ msgstr ""
 msgid "Could not load decision model settings"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:45
-#: src/pages/plugins/use-integrations.ts:81
+#: src/components/integrations/IntegrationSetup.tsx:44
+#: src/pages/plugins/use-integrations.ts:74
 msgid "Could not load integrations"
 msgstr "Não foi possível carregar as integrações"
 
@@ -1461,7 +1467,7 @@ msgstr "Não foi possível remover o grupo"
 msgid "Could not remove rule"
 msgstr "Não foi possível remover."
 
-#: src/pages/plugins/use-integrations.ts:272
+#: src/pages/plugins/use-integrations.ts:265
 msgid "Could not rename connection"
 msgstr ""
 
@@ -1473,8 +1479,8 @@ msgstr ""
 msgid "Could not reset password"
 msgstr "Não foi possível redefinir a senha"
 
-#: src/pages/plugins/use-integrations.ts:228
-#: src/pages/plugins/use-integrations.ts:251
+#: src/pages/plugins/use-integrations.ts:221
+#: src/pages/plugins/use-integrations.ts:244
 msgid "Could not revoke connection"
 msgstr "Não foi possível revogar a conexão"
 
@@ -1627,7 +1633,7 @@ msgstr "Não foi possível atualizar as configurações de mensagens"
 #: src/pages/bot-page/RoutineCreateForm.tsx:149
 #: src/pages/shell/bot-panel.tsx:155
 #: src/pages/shell/dialogs.tsx:202
-#: src/pages/shell/sidebar-header.tsx:78
+#: src/pages/shell/sidebar-header.tsx:112
 msgid "Create"
 msgstr "Criar"
 
@@ -1740,7 +1746,7 @@ msgstr "dias"
 msgid "Debug mode"
 msgstr "Modo de depuração"
 
-#: src/pages/SettingsOverlay.tsx:161
+#: src/pages/settings-sections.ts:46
 msgid "Decision Model"
 msgstr ""
 
@@ -1804,7 +1810,7 @@ msgstr "Excluir memórias também"
 msgid "Delete routine"
 msgstr "Excluir rotina"
 
-#: src/pages/shell/shell-overlays.tsx:296
+#: src/pages/shell/shell-overlays.tsx:299
 msgid "Delete space"
 msgstr ""
 
@@ -1863,7 +1869,7 @@ msgstr ""
 msgid "Dictating"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:33
+#: src/components/integrations/IntegrationSetup.tsx:32
 msgid "Direct MCP"
 msgstr ""
 
@@ -1900,7 +1906,7 @@ msgstr "Desconectando…"
 msgid "Dismiss"
 msgstr "Dispensar"
 
-#: src/pages/shell/composer-notices.tsx:95
+#: src/pages/shell/composer-notices.tsx:101
 msgid "Dismiss error"
 msgstr "Dispensar o erro"
 
@@ -1943,7 +1949,7 @@ msgstr "Baixar {name}"
 msgid "Download as markdown"
 msgstr "Baixar como markdown"
 
-#: src/components/integrations/IntegrationSetup.tsx:226
+#: src/components/integrations/IntegrationSetup.tsx:222
 msgid "Download Executor"
 msgstr ""
 
@@ -1986,7 +1992,7 @@ msgstr "Editar e reenviar"
 msgid "Edit message"
 msgstr ""
 
-#: src/pages/shell/shell-overlays.tsx:171
+#: src/pages/shell/shell-overlays.tsx:174
 msgid "Edit Profile"
 msgstr "Editar Perfil"
 
@@ -1999,7 +2005,7 @@ msgid "Editing"
 msgstr ""
 
 #. placeholder {0}: rewindRemovedCount ?? 0
-#: src/pages/shell/composer-notices.tsx:127
+#: src/pages/shell/composer-notices.tsx:133
 msgid "Editing message from {rewindTime} · {0} messages after it will be removed"
 msgstr "Editando a mensagem de {rewindTime} · as {0} mensagens seguintes serão removidas"
 
@@ -2162,6 +2168,7 @@ msgid "Featured"
 msgstr "Em destaque"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:67
+#: src/pages/shell/command-palette.tsx:164
 msgid "Files"
 msgstr "Arquivos"
 
@@ -2222,11 +2229,11 @@ msgstr "Tela Cheia"
 msgid "FYI"
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:157
+#: src/pages/settings-sections.ts:42
 msgid "General"
 msgstr "Geral"
 
-#: src/components/integrations/IntegrationSetup.tsx:145
+#: src/components/integrations/IntegrationSetup.tsx:143
 msgid "Get credentials"
 msgstr ""
 
@@ -2288,7 +2295,7 @@ msgstr "Ouvir uma amostra"
 msgid "Hi, this is how I'll sound when I read replies out loud."
 msgstr "Olá, é assim que vou soar quando ler as respostas em voz alta."
 
-#: src/pages/shell/sidebar.tsx:133
+#: src/pages/shell/sidebar.tsx:80
 msgid "Hide bots"
 msgstr "Ocultar bots"
 
@@ -2398,7 +2405,7 @@ msgstr "Instrução"
 msgid "Instructions"
 msgstr "Instruções"
 
-#: src/components/integrations/IntegrationSetup.tsx:98
+#: src/components/integrations/IntegrationSetup.tsx:96
 msgid "Integration options"
 msgstr ""
 
@@ -2531,6 +2538,10 @@ msgstr "Claro"
 msgid "Link a chat app"
 msgstr "Vincular um app de chat"
 
+#: src/pages/shell/command-palette.tsx:165
+msgid "Links"
+msgstr ""
+
 #: src/pages/ExternalConversationSettings.tsx:99
 msgid "Listen"
 msgstr ""
@@ -2662,7 +2673,7 @@ msgstr "Membros (escolha {GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX})"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:38
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:160
+#: src/pages/settings-sections.ts:45
 msgid "Memory"
 msgstr "Memória"
 
@@ -2724,6 +2735,10 @@ msgstr "Mensagem…"
 msgid "Messaged {peer}"
 msgstr "Enviou mensagem para {peer}"
 
+#: src/pages/shell/command-palette.tsx:162
+msgid "Messages"
+msgstr ""
+
 #: src/pages/MessagingSettingsOverlay.tsx:99
 #: src/pages/SpaceGeneralSettings.tsx:34
 msgid "Messaging"
@@ -2743,8 +2758,8 @@ msgstr "Mínimo"
 msgid "Minimize"
 msgstr "Minimizar"
 
-#: src/pages/shell/sidebar-header.tsx:48
-#: src/pages/shell/sidebar-header.tsx:49
+#: src/pages/shell/sidebar-header.tsx:61
+#: src/pages/shell/sidebar-header.tsx:62
 msgid "Minimize bots"
 msgstr "Minimizar bots"
 
@@ -2793,7 +2808,7 @@ msgstr "Modelo Atualizado"
 #: src/pages/ModelSettingsOverlay.tsx:44
 #: src/pages/ProvidersSettings.tsx:140
 #: src/pages/ProvidersSettings.tsx:142
-#: src/pages/SettingsOverlay.tsx:158
+#: src/pages/settings-sections.ts:43
 #: src/pages/usage-settings.tsx:69
 msgid "Models"
 msgstr "Modelos"
@@ -2925,10 +2940,6 @@ msgstr "Ainda não há conexões de agentes."
 msgid "No apps match your search."
 msgstr "Nenhum aplicativo corresponde à sua pesquisa."
 
-#: src/pages/shell/command-palette.tsx:107
-msgid "No bots"
-msgstr "Nenhum bot"
-
 #: src/pages/shell/bot-picker.tsx:63
 msgid "No bots match"
 msgstr "Nenhum bot corresponde"
@@ -2991,7 +3002,7 @@ msgstr "Nenhum provedor encontrado"
 msgid "No report"
 msgstr "Sem relatório"
 
-#: src/pages/SpaceSearch.tsx:23
+#: src/pages/shell/command-palette.tsx:236
 msgid "No results"
 msgstr "Nenhum resultado"
 
@@ -3103,7 +3114,7 @@ msgstr "no dia 1º às {0}"
 msgid "One-time"
 msgstr "Uma vez"
 
-#: src/pages/shell/shell-overlays.tsx:347
+#: src/pages/shell/shell-overlays.tsx:350
 msgid "Only empty spaces can be deleted. Delete its bots and groups first."
 msgstr ""
 
@@ -3304,7 +3315,7 @@ msgstr ""
 msgid "Private workspace with its own bots and groups."
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:154
+#: src/pages/settings-sections.ts:39
 msgid "Profile"
 msgstr "Perfil"
 
@@ -3318,7 +3329,7 @@ msgstr ""
 msgid "Provider"
 msgstr "Provedor"
 
-#: src/pages/SettingsOverlay.tsx:155
+#: src/pages/settings-sections.ts:40
 #: src/pages/VoiceSettingsOverlay.tsx:154
 msgid "Providers"
 msgstr "Provedores"
@@ -3530,7 +3541,7 @@ msgstr "Removendo…"
 
 #: src/pages/BotContextMenu.tsx:108
 #: src/pages/shell/dialogs.tsx:246
-#: src/pages/shell/shell-overlays.tsx:436
+#: src/pages/shell/shell-overlays.tsx:439
 msgid "Rename section"
 msgstr ""
 
@@ -3562,7 +3573,7 @@ msgstr "Responder"
 msgid "Reply in several short messages"
 msgstr "Responder em várias mensagens curtas"
 
-#: src/pages/shell/composer-notices.tsx:109
+#: src/pages/shell/composer-notices.tsx:115
 msgid "Replying to {replyName}"
 msgstr "Respondendo a {replyName}"
 
@@ -3697,6 +3708,7 @@ msgid "Routine updated"
 msgstr "Rotina atualizada"
 
 #: src/pages/bot-page/BotPage.tsx:100
+#: src/pages/shell/command-palette.tsx:163
 msgid "Routines"
 msgstr "Rotinas"
 
@@ -3791,8 +3803,9 @@ msgstr "Tela"
 #: src/pages/model-settings/model-picker.tsx:224
 #: src/pages/shell/bot-picker.tsx:55
 #: src/pages/shell/bot-picker.tsx:56
-#: src/pages/shell/command-palette.tsx:102
-#: src/pages/shell/sidebar.tsx:99
+#: src/pages/shell/command-palette.tsx:219
+#: src/pages/shell/sidebar-header.tsx:77
+#: src/pages/shell/sidebar-header.tsx:87
 msgid "Search"
 msgstr "Pesquisar"
 
@@ -3801,9 +3814,10 @@ msgstr "Pesquisar"
 msgid "Search apps"
 msgstr "Pesquisar apps"
 
-#: src/pages/shell/command-palette.tsx:91
-msgid "Search bots and switch conversations"
-msgstr "Buscar bots e trocar de conversa"
+#: src/pages/shell/command-palette.tsx:220
+#: src/pages/shell/command-palette.tsx:231
+msgid "Search bots, chats, settings"
+msgstr ""
 
 #: src/pages/model-settings/model-picker.tsx:219
 msgid "Search models"
@@ -3819,7 +3833,7 @@ msgstr "Pesquisar provedores"
 msgid "Search skills"
 msgstr "Buscar skills"
 
-#: src/pages/SpaceSearch.tsx:16
+#: src/pages/shell/command-palette.tsx:236
 msgid "Searching…"
 msgstr "Pesquisando…"
 
@@ -3851,7 +3865,7 @@ msgstr "Enviando…"
 msgid "Sent"
 msgstr ""
 
-#: src/components/integrations/IntegrationSetup.tsx:96
+#: src/components/integrations/IntegrationSetup.tsx:94
 #: src/pages/AccountSettingsOverlay.tsx:166
 msgid "Server integrations"
 msgstr ""
@@ -3862,8 +3876,8 @@ msgstr ""
 msgid "Server name"
 msgstr "Nome do servidor"
 
-#: src/components/integrations/IntegrationSetup.tsx:172
-#: src/components/integrations/IntegrationSetup.tsx:190
+#: src/components/integrations/IntegrationSetup.tsx:169
+#: src/components/integrations/IntegrationSetup.tsx:186
 #: src/pages/model-settings/model-detail.tsx:80
 #: src/pages/Onboarding.tsx:411
 msgid "Server URL"
@@ -3871,9 +3885,10 @@ msgstr "URL do servidor"
 
 #: src/pages/bot-page/BotPage.tsx:102
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:170
-#: src/pages/SettingsOverlay.tsx:245
-#: src/pages/SettingsOverlay.tsx:296
+#: src/pages/SettingsOverlay.tsx:147
+#: src/pages/SettingsOverlay.tsx:222
+#: src/pages/SettingsOverlay.tsx:273
+#: src/pages/shell/command-palette.tsx:284
 #: src/pages/shell/sidebar-footer.tsx:211
 #: src/pages/shell/sidebar-footer.tsx:218
 msgid "Settings"
@@ -3887,7 +3902,7 @@ msgstr "Opções > Geral"
 msgid "Settings: Usage"
 msgstr "Configurações: Uso"
 
-#: src/components/integrations/IntegrationSetup.tsx:218
+#: src/components/integrations/IntegrationSetup.tsx:214
 #: src/pages/model-settings/model-detail.tsx:93
 msgid "Setup help"
 msgstr "Ajuda"
@@ -3924,7 +3939,7 @@ msgstr "Documentos compartilhados"
 msgid "Show agent steps, and every run in a bot's activity."
 msgstr "Mostra as etapas do agente e cada execução na atividade de um bot."
 
-#: src/pages/shell/sidebar.tsx:133
+#: src/pages/shell/sidebar.tsx:80
 #: src/pages/shell/thread-header.tsx:86
 #: src/pages/shell/thread-header.tsx:87
 msgid "Show bots"
@@ -3999,7 +4014,7 @@ msgid "Skills this bot can use"
 msgstr ""
 
 #: src/components/ask/QuestionCard.tsx:198
-#: src/components/integrations/IntegrationSetup.tsx:251
+#: src/components/integrations/IntegrationSetup.tsx:247
 #: src/pages/shell/side-panel.tsx:502
 msgid "Skip"
 msgstr "Pular"
@@ -4136,11 +4151,7 @@ msgstr "Suporta imagens"
 msgid "Supports thinking"
 msgstr "Suporta raciocínio"
 
-#: src/pages/shell/command-palette.tsx:90
-msgid "Switch bot"
-msgstr "Trocar de bot"
-
-#: src/pages/SettingsOverlay.tsx:542
+#: src/pages/SettingsOverlay.tsx:519
 msgid "Switch space"
 msgstr "Trocar de espaço"
 
@@ -4372,8 +4383,8 @@ msgstr ""
 
 #: src/components/ComputerMaintenanceActions.tsx:116
 #: src/components/SoftwareUpdateSection.tsx:260
-#: src/pages/SettingsOverlay.tsx:437
-#: src/pages/SettingsOverlay.tsx:437
+#: src/pages/SettingsOverlay.tsx:414
+#: src/pages/SettingsOverlay.tsx:414
 #: src/pages/shell/computer-preview.tsx:75
 msgid "Update available"
 msgstr "Atualização disponível"
@@ -4401,7 +4412,7 @@ msgstr ""
 msgid "Updated"
 msgstr "Atualizado"
 
-#: src/pages/SettingsOverlay.tsx:156
+#: src/pages/settings-sections.ts:41
 msgid "Updates"
 msgstr "Atualizações"
 
@@ -4429,7 +4440,7 @@ msgstr ""
 msgid "Updating…"
 msgstr "Atualizando…"
 
-#: src/pages/SettingsOverlay.tsx:163
+#: src/pages/settings-sections.ts:48
 #: src/pages/shell/sidebar-footer.tsx:223
 #: src/pages/shell/sidebar-footer.tsx:230
 msgid "Usage"
@@ -4457,7 +4468,7 @@ msgstr "Use este modelo"
 #: src/pages/bot-page/SettingDetails.tsx:189
 #: src/pages/ProvidersSettings.tsx:187
 #: src/pages/ProvidersSettings.tsx:189
-#: src/pages/SettingsOverlay.tsx:159
+#: src/pages/settings-sections.ts:44
 #: src/pages/shell/thread-header.tsx:142
 #: src/pages/shell/thread-header.tsx:143
 #: src/pages/VoiceSettingsOverlay.tsx:137

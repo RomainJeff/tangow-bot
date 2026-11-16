@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-11-17
+
+#### Changed
+
+- Search on web and desktop moves from the sidebar field to a search button beside Activity, which opens a larger ⌘K palette that finds bots, chats, messages, files, links, routines and settings sections.
+
 ### 2026-11-16
 
 #### Added
