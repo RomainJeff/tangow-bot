@@ -148,5 +148,3 @@ request. For security vulnerabilities, follow [SECURITY.md](./SECURITY.md) inste
 issue.
 
 Tangow is licensed under the [Apache License 2.0](./LICENSE).
-
-Questions and ideas are welcome in the [Tangow Discord community](https://discord.gg/RWwKa2Sn7h).
