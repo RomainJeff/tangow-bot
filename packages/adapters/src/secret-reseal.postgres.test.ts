@@ -150,7 +150,14 @@ describePostgres("resealing pre-v2 ciphertexts", () => {
     );
 
     // Counters only: no row id, value, ciphertext, length or exception text.
-    expect(sink.events).toHaveLength(1);
+    expect(sink.events.map(({ table, resealed, failed }) => ({ table, resealed, failed }))).toEqual(
+      [
+        { table: "secrets", resealed: 1, failed: 1 },
+        { table: "mcp_oauth_sessions", resealed: 1, failed: 0 },
+        { table: "bot_secrets", resealed: 1, failed: 0 },
+        { table: "integration_provider_configs", resealed: 1, failed: 0 },
+      ],
+    );
     const logged = JSON.stringify(sink.events);
     const current = [
       (await prisma.secret.findUniqueOrThrow({ where: { id: server.secretId } })).ciphertext,

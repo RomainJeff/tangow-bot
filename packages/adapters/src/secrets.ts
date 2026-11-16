@@ -175,7 +175,7 @@ export type ResealCounts = Record<string, { resealed: number; failed: number }>;
 /**
  * Rewrites every pre-v2 ciphertext as v2, bound to the record id its reader uses. Run by the API
  * and the worker before serving; idempotent, and safe with several replicas. A row that does not
- * decrypt is kept untouched and counted. Logs counts per table only.
+ * decrypt is kept untouched and counted. Logs counters per table only.
  */
 export async function resealLegacySecrets(
   prisma: PrismaClient,
@@ -198,8 +198,9 @@ export async function resealLegacySecrets(
       count.resealed += await spec.swap(row.id, row.ciphertext, next);
     }
     counts[table] = count;
+    // One line per table, keyed so log redaction (which hides any "secret" key) keeps the counts.
+    getLogger().info("secrets.resealed", { table, ...count });
   }
-  getLogger().info("secrets.resealed", counts);
   return counts;
 }
 
