@@ -92,6 +92,11 @@ for (const theme of ["light", "dark"] as const) {
             ),
         )
         .toBe(true);
+      await expect(page.getByTestId("bot-page").getByText(/^Saved/)).toBeVisible();
+      // Playwright scrolled the panel to reach the tile; the capture shows the hero.
+      await page.getByTestId("bot-appearance-trigger").evaluate((trigger) => {
+        for (let node = trigger.parentElement; node; node = node.parentElement) node.scrollTop = 0;
+      });
       await captureScreenshot(page, testInfo, `bot-page-picker-${viewport.name}-${theme}`);
     });
   }
