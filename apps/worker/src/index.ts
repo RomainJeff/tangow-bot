@@ -46,6 +46,7 @@ import {
   PostgresRealtimeFanout,
   PostgresSessionLog,
   reconcileComputerUpdates,
+  resealLegacySecrets,
   resolveDeploymentModel,
   resolveSandboxProvider,
   resolveWorkerProvider,
@@ -83,6 +84,8 @@ async function main() {
     publisher: pool,
   });
   const secrets = new EncryptedSecretStore(resolveEncryptionKey(process.env));
+  // Before serving: readers accept only v2 ciphertexts.
+  await resealLegacySecrets(prisma, secrets);
   const events = createThreadEvents(prisma, realtime, {
     runSecretWriter: createRunSecretWriter(secrets),
   });

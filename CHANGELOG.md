@@ -16,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
-- **Keep your API keys in a vault in Settings.** On web, desktop, iPhone and Android, Settings > Vault lists your API keys by name and site in the current space and lets you add one, replace its value or delete it; a saved value is never shown again, and the bot can no longer delete keys itself.
+- **Keep your API keys in a vault in Settings.** On web, desktop, iPhone and Android, Settings > Vault lists your API keys by name and site in the current space and lets you add one, replace its value or delete it; a saved value is never shown again, and the bot can no longer delete keys itself. You can share a key with chosen people, or with everyone in the space now and later, so bots shared between you can use it at its saved site.
 
 #### Changed
 

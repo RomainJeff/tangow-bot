@@ -82,6 +82,7 @@ export function SettingsOverlay({
   onSpaceRenamed,
   onClose,
   onVoiceStatusMaybeChanged,
+  userId,
 }: {
   email?: string | null;
   name: string;
@@ -101,6 +102,7 @@ export function SettingsOverlay({
   onSpaceRenamed?: () => void | Promise<void>;
   onClose: () => void;
   onVoiceStatusMaybeChanged?: () => void | Promise<void>;
+  userId?: string;
 }) {
   const { t } = useLingui();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -363,7 +365,9 @@ export function SettingsOverlay({
                 />
               ) : null}
               {section === "usage" ? <UsageSettingsPanel panelRef={usageRef} /> : null}
-              {section === "vault" ? <VaultSettingsPanel /> : null}
+              {section === "vault" ? (
+                <VaultSettingsPanel space={currentSpace} userId={userId} />
+              ) : null}
               {section === "computer" ? (
                 <ComputerSettingsPanel onUpdateAvailableChange={setComputerUpdateAvailable} />
               ) : null}

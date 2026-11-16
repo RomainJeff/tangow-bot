@@ -2,18 +2,53 @@ import { ORPCError } from "@orpc/server";
 import type { EncryptedSecretStore } from "@tangow/adapters";
 import {
   listBotSecrets,
+  listSecretsSharedWith,
   normalizeSecretDestination,
   removeBotSecret,
+  shareBotSecret,
   storeBotSecret,
 } from "@tangow/adapters";
-import type { Actor, BotSecretDestination, VaultPutInput } from "@tangow/contracts";
+import type {
+  Actor,
+  BotSecretDestination,
+  VaultList,
+  VaultPutInput,
+  VaultShareInput,
+} from "@tangow/contracts";
 import type { PrismaClient } from "@tangow/db";
 
 type VaultDeps = { prisma: PrismaClient; secrets: EncryptedSecretStore };
 
-/** The person's credentials in the active space: names, sites and methods, never values. */
-export async function listVault(deps: VaultDeps, actor: Actor): Promise<BotSecretDestination[]> {
-  return (await listBotSecrets(deps.prisma, actor)).map(normalizeSecretDestination);
+/** The person's keys and the keys shared with them in the active space; never a value. */
+export async function listVault(deps: VaultDeps, actor: Actor): Promise<VaultList> {
+  const [mine, shared] = await Promise.all([
+    listBotSecrets(deps.prisma, actor),
+    listSecretsSharedWith(deps.prisma, actor),
+  ]);
+  return {
+    mine: mine.map((row) => ({
+      ...normalizeSecretDestination(row),
+      botId: row.botId,
+      userIds: row.shares.map((share) => share.userId),
+      space: row.sharedWithSpace,
+    })),
+    shared: shared.map((row) => ({ ...normalizeSecretDestination(row), ownerName: row.user.name })),
+  };
+}
+
+/** Only the key's owner chooses who it is shared with: the lookup is scoped to the actor's keys. */
+export async function shareVaultItem(deps: VaultDeps, actor: Actor, input: VaultShareInput) {
+  try {
+    await shareBotSecret(deps.prisma, actor, input);
+  } catch (error) {
+    throw new ORPCError(
+      error instanceof Error && error.message === "Credential not found"
+        ? "NOT_FOUND"
+        : "BAD_REQUEST",
+      { message: error instanceof Error ? error.message : "Could not save" },
+    );
+  }
+  return { ok: true as const };
 }
 
 /** Adds a credential, or replaces the value of one with the same name and destination. */

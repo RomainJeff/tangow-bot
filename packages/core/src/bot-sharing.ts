@@ -83,3 +83,29 @@ export function showsTeamMemory(
 ): boolean {
   return sharing.visibility !== "private" || teamDocuments.length > 0;
 }
+
+type KeyShare = { userIds: readonly string[]; space: boolean };
+
+/**
+ * A key counts as shared with the bot's audience when everyone ticked has it, or, for a bot shared
+ * with the Space, when its owner chose to share it with the whole Space. Never inferred otherwise.
+ */
+export function keySharedWithAudience(key: KeyShare, audience: Audience): boolean {
+  if (audience.visibility === "space") return key.space;
+  if (audience.visibility !== "people" || audience.userIds.length === 0) return false;
+  return audience.userIds.every((id) => key.userIds.includes(id));
+}
+
+/** Ticking a key shares it with the bot's audience; unticking takes exactly that audience away. */
+export function shareKeyWithAudience(
+  key: KeyShare,
+  audience: Audience,
+  checked: boolean,
+): { userIds: string[]; space: boolean } {
+  if (audience.visibility === "space") return { userIds: [...key.userIds], space: checked };
+  const people = audience.visibility === "people" ? audience.userIds : [];
+  const userIds = checked
+    ? [...new Set([...key.userIds, ...people])]
+    : key.userIds.filter((id) => !people.includes(id));
+  return { userIds, space: key.space };
+}

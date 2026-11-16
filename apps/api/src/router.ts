@@ -264,7 +264,7 @@ import {
   threadSnapshot,
 } from "./thread-target.js";
 import { userFileArtifact } from "./user-file-artifact.js";
-import { listVault, putVaultItem, removeVaultItem } from "./vault.js";
+import { listVault, putVaultItem, removeVaultItem, shareVaultItem } from "./vault.js";
 import {
   disconnectVoiceCredential,
   listVoiceCatalog,
@@ -4677,6 +4677,9 @@ export function createRouter(deps: RouterDeps) {
       ),
       remove: authed.vault.remove.handler(async ({ context, input }) =>
         removeVaultItem({ prisma: deps.prisma, secrets: deps.secrets }, context.actor, input.name),
+      ),
+      share: authed.vault.share.handler(async ({ context, input }) =>
+        shareVaultItem({ prisma: deps.prisma, secrets: deps.secrets }, context.actor, input),
       ),
     },
     approvalRules: {

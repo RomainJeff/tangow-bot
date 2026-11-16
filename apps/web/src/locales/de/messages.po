@@ -340,7 +340,7 @@ msgstr "Aktivität, letzter Lauf fehlgeschlagen"
 #: src/pages/PluginsOverlay.tsx:83
 #: src/pages/ScratchpadSection.tsx:196
 #: src/pages/shell/message-cards.tsx:201
-#: src/pages/VaultSettingsPanel.tsx:54
+#: src/pages/VaultSettingsPanel.tsx:84
 msgid "Add"
 msgstr "Hinzufügen"
 
@@ -586,7 +586,7 @@ msgstr "Bestätige es im Chat oder sag Nein, um abzubrechen."
 msgid "Approve this server to let your agent use its tools."
 msgstr "Genehmige diesen Server, damit dein Agent seine Tools verwenden kann."
 
-#: src/pages/ShareBotDialog.tsx:206
+#: src/pages/ShareBotDialog.tsx:228
 msgid "Apps this bot can use"
 msgstr ""
 
@@ -844,7 +844,7 @@ msgstr "Server nicht erreichbar."
 #: src/pages/shell/dialogs.tsx:395
 #: src/pages/shell/dialogs.tsx:448
 #: src/pages/shell/dialogs.tsx:505
-#: src/pages/VaultSettingsPanel.tsx:226
+#: src/pages/VaultSettingsPanel.tsx:285
 msgid "Cancel"
 msgstr "Abbrechen"
 
@@ -1010,7 +1010,7 @@ msgid "Close MCP servers"
 msgstr "MCP-Server schließen"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:173
+#: src/pages/SettingsOverlay.tsx:181
 msgid "Close memory settings"
 msgstr "Erinnerungseinstellungen schließen"
 
@@ -1019,7 +1019,7 @@ msgid "Close messaging settings"
 msgstr "Nachrichteneinstellungen schließen"
 
 #: src/pages/ModelSettingsOverlay.tsx:51
-#: src/pages/SettingsOverlay.tsx:171
+#: src/pages/SettingsOverlay.tsx:179
 msgid "Close model settings"
 msgstr "Modelleinstellungen schließen"
 
@@ -1036,11 +1036,11 @@ msgstr "Vorschau schließen"
 msgid "Close skills"
 msgstr "Skills schließen"
 
-#: src/pages/SettingsOverlay.tsx:176
+#: src/pages/SettingsOverlay.tsx:184
 msgid "Close user settings"
 msgstr "Benutzereinstellungen schließen"
 
-#: src/pages/SettingsOverlay.tsx:175
+#: src/pages/SettingsOverlay.tsx:183
 #: src/pages/VoiceSettingsOverlay.tsx:141
 msgid "Close voice settings"
 msgstr "Stimmeinstellungen schließen"
@@ -1082,7 +1082,7 @@ msgstr "Komplex"
 
 #: src/pages/bot-page/SettingsTab.tsx:109
 #: src/pages/bot-page/SettingsTab.tsx:118
-#: src/pages/SettingsOverlay.tsx:158
+#: src/pages/SettingsOverlay.tsx:166
 #: src/pages/shell/block-views.tsx:136
 #: src/pages/shell/bot-panel.tsx:28
 msgid "Computer"
@@ -1213,7 +1213,7 @@ msgstr "Verbunden. Die Tools sind ab deiner nächsten Nachricht verfügbar."
 #: src/pages/memory-providers/SupermemorySettingsForm.tsx:82
 #: src/pages/ProvidersSettings.tsx:265
 #: src/pages/shell/message-cards.tsx:294
-#: src/pages/shell/screen-frame.tsx:44
+#: src/pages/shell/screen-frame.tsx:34
 msgid "Connecting…"
 msgstr "Verbindung wird hergestellt…"
 
@@ -1572,7 +1572,7 @@ msgstr "Routine konnte nicht ausgeführt werden"
 #: src/pages/bot-page/RoutineDetail.tsx:87
 #: src/pages/ExternalConversationSettings.tsx:250
 #: src/pages/KnowledgeSection.tsx:207
-#: src/pages/VaultSettingsPanel.tsx:117
+#: src/pages/VaultSettingsPanel.tsx:173
 msgid "Could not save"
 msgstr "Speichern fehlgeschlagen"
 
@@ -1682,7 +1682,7 @@ msgstr "Konnte nicht erstellt werden"
 msgid "Couldn't invite them"
 msgstr ""
 
-#: src/pages/ShareBotDialog.tsx:85
+#: src/pages/ShareBotDialog.tsx:90
 msgid "Couldn't load"
 msgstr ""
 
@@ -1707,8 +1707,10 @@ msgstr "Der Space konnte nicht umbenannt werden"
 msgid "Couldn't revoke the invite link"
 msgstr ""
 
-#: src/pages/ShareBotDialog.tsx:118
-#: src/pages/ShareBotDialog.tsx:133
+#: src/pages/ShareBotDialog.tsx:127
+#: src/pages/ShareBotDialog.tsx:142
+#: src/pages/ShareBotDialog.tsx:155
+#: src/pages/VaultSettingsPanel.tsx:328
 msgid "Couldn't save"
 msgstr ""
 
@@ -1844,7 +1846,7 @@ msgstr "Tage"
 msgid "Debug mode"
 msgstr "Debug-Modus"
 
-#: src/pages/SettingsOverlay.tsx:157
+#: src/pages/SettingsOverlay.tsx:165
 msgid "Decision Model"
 msgstr ""
 
@@ -1879,8 +1881,8 @@ msgstr "Standardbereich"
 #: src/pages/shell/dialogs.tsx:470
 #: src/pages/shell/sidebar-footer.tsx:99
 #: src/pages/shell/sidebar-footer.tsx:132
-#: src/pages/VaultSettingsPanel.tsx:137
-#: src/pages/VaultSettingsPanel.tsx:222
+#: src/pages/VaultSettingsPanel.tsx:193
+#: src/pages/VaultSettingsPanel.tsx:281
 msgid "Delete"
 msgstr "Löschen"
 
@@ -1895,7 +1897,7 @@ msgstr "{0} löschen"
 #. placeholder {0}: item.name
 #: src/pages/shell/dialogs.tsx:346
 #: src/pages/shell/dialogs.tsx:439
-#: src/pages/VaultSettingsPanel.tsx:137
+#: src/pages/VaultSettingsPanel.tsx:193
 msgid "Delete {0}?"
 msgstr "{0} löschen?"
 
@@ -1915,7 +1917,7 @@ msgstr "Routine löschen"
 msgid "Delete space"
 msgstr ""
 
-#: src/pages/ShareBotDialog.tsx:96
+#: src/pages/ShareBotDialog.tsx:101
 #: src/pages/usage-settings.tsx:197
 msgid "Deleted"
 msgstr ""
@@ -2163,6 +2165,15 @@ msgstr "Alle"
 msgid "every {intervalAmountSelect} {intervalUnitSelect}"
 msgstr "alle {intervalAmountSelect} {intervalUnitSelect}"
 
+#. placeholder {0}: space.name
+#: src/pages/VaultSettingsPanel.tsx:378
+msgid "Every current and future member of {0} can use this key on its site, from their bots and yours that you can see, including webhooks and routines."
+msgstr ""
+
+#: src/pages/ShareBotDialog.tsx:257
+msgid "Every current and future member of {spaceName} can use ticked keys on their sites, from their bots and yours that you can see, including webhooks and routines."
+msgstr ""
+
 #: src/pages/bot-page/RoutineTriggers.tsx:78
 #: src/pages/RoutineSchedule.tsx:37
 #: src/pages/RoutineSchedule.tsx:166
@@ -2194,12 +2205,22 @@ msgstr "Jede Woche"
 msgid "Everyday"
 msgstr "Alltag"
 
-#: src/pages/ShareBotDialog.tsx:159
-#: src/pages/ShareBotDialog.tsx:161
+#: src/pages/VaultSettingsPanel.tsx:73
+msgid "Everyone"
+msgstr ""
+
+#. placeholder {0}: space.name
+#: src/pages/VaultSettingsPanel.tsx:338
+#: src/pages/VaultSettingsPanel.tsx:340
+msgid "Everyone in {0}"
+msgstr ""
+
+#: src/pages/ShareBotDialog.tsx:181
+#: src/pages/ShareBotDialog.tsx:183
 msgid "Everyone in {spaceName}"
 msgstr ""
 
-#: src/pages/ShareBotDialog.tsx:221
+#: src/pages/ShareBotDialog.tsx:264
 msgid "Everyone who uses this bot can see its files and browser sign-ins."
 msgstr ""
 
@@ -2336,7 +2357,7 @@ msgstr "Vollbild"
 msgid "FYI"
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:153
+#: src/pages/SettingsOverlay.tsx:161
 msgid "General"
 msgstr "Allgemein"
 
@@ -2390,13 +2411,13 @@ msgstr "Lege auf und gib dann den Code auf dem Bildschirm ein."
 msgid "header"
 msgstr "Kopfzeile"
 
-#: src/pages/VaultSettingsPanel.tsx:186
+#: src/pages/VaultSettingsPanel.tsx:245
 msgid "Header"
 msgstr ""
 
 #: src/pages/McpServersOverlay.tsx:450
 #: src/pages/plugins/advanced-integrations.tsx:263
-#: src/pages/VaultSettingsPanel.tsx:194
+#: src/pages/VaultSettingsPanel.tsx:253
 msgid "Header name"
 msgstr "Header-Name"
 
@@ -2595,8 +2616,12 @@ msgstr "Erinnerungen behalten"
 msgid "key"
 msgstr "Schlüssel"
 
-#: src/pages/VaultSettingsPanel.tsx:205
+#: src/pages/VaultSettingsPanel.tsx:264
 msgid "Key"
+msgstr ""
+
+#: src/pages/ShareBotDialog.tsx:243
+msgid "Keys"
 msgstr ""
 
 #: src/pages/bot-page/BotPage.tsx:101
@@ -2810,7 +2835,7 @@ msgstr "Mitglieder ({GROUP_MEMBER_MIN}–{GROUP_MEMBER_MAX} auswählen)"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:38
 #: src/pages/MemorySettingsOverlay.tsx:159
-#: src/pages/SettingsOverlay.tsx:156
+#: src/pages/SettingsOverlay.tsx:164
 msgid "Memory"
 msgstr "Erinnerungen"
 
@@ -2941,7 +2966,7 @@ msgstr "Modell aktualisiert."
 #: src/pages/ModelSettingsOverlay.tsx:44
 #: src/pages/ProvidersSettings.tsx:140
 #: src/pages/ProvidersSettings.tsx:142
-#: src/pages/SettingsOverlay.tsx:154
+#: src/pages/SettingsOverlay.tsx:162
 #: src/pages/usage-settings.tsx:69
 msgid "Models"
 msgstr "Modelle"
@@ -2989,7 +3014,7 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx:187
 #: src/pages/shell/dialogs.tsx:250
 #: src/pages/SpaceGeneralSettings.tsx:113
-#: src/pages/VaultSettingsPanel.tsx:169
+#: src/pages/VaultSettingsPanel.tsx:228
 msgid "Name"
 msgstr "Name"
 
@@ -3017,7 +3042,7 @@ msgstr "Braucht dich"
 msgid "Needs your call"
 msgstr ""
 
-#: src/pages/VaultSettingsPanel.tsx:150
+#: src/pages/VaultSettingsPanel.tsx:206
 msgid "New API key"
 msgstr ""
 
@@ -3486,7 +3511,7 @@ msgstr ""
 msgid "Private workspace with its own bots and groups."
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:150
+#: src/pages/SettingsOverlay.tsx:158
 msgid "Profile"
 msgstr "Profil"
 
@@ -3500,7 +3525,7 @@ msgstr ""
 msgid "Provider"
 msgstr "Anbieter"
 
-#: src/pages/SettingsOverlay.tsx:151
+#: src/pages/SettingsOverlay.tsx:159
 #: src/pages/VoiceSettingsOverlay.tsx:154
 msgid "Providers"
 msgstr "Anbieter"
@@ -3567,7 +3592,7 @@ msgstr "OAuth erneut verbinden"
 
 #: src/App.tsx:182
 #: src/components/ComputerUpdateProgress.tsx:58
-#: src/pages/shell/screen-frame.tsx:44
+#: src/pages/shell/screen-frame.tsx:34
 msgid "Reconnecting"
 msgstr "Verbindung wird wiederhergestellt"
 
@@ -3725,7 +3750,7 @@ msgid "Replace API key"
 msgstr "API-Schlüssel ersetzen"
 
 #: src/pages/ProvidersSettings.tsx:267
-#: src/pages/VaultSettingsPanel.tsx:229
+#: src/pages/VaultSettingsPanel.tsx:288
 msgid "Replace key"
 msgstr "Schlüssel ersetzen"
 
@@ -3918,7 +3943,7 @@ msgstr ""
 #: src/pages/KnowledgeSection.tsx:706
 #: src/pages/model-settings/model-detail.tsx:332
 #: src/pages/shell/dialogs.tsx:266
-#: src/pages/VaultSettingsPanel.tsx:229
+#: src/pages/VaultSettingsPanel.tsx:288
 msgid "Save"
 msgstr "Speichern"
 
@@ -4044,8 +4069,8 @@ msgstr "Wird gesendet…"
 msgid "Sent"
 msgstr ""
 
-#: src/pages/VaultSettingsPanel.tsx:176
-#: src/pages/VaultSettingsPanel.tsx:178
+#: src/pages/VaultSettingsPanel.tsx:235
+#: src/pages/VaultSettingsPanel.tsx:237
 msgid "Sent as"
 msgstr ""
 
@@ -4068,9 +4093,9 @@ msgstr "Server-URL"
 
 #: src/pages/bot-page/BotPage.tsx:102
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:167
-#: src/pages/SettingsOverlay.tsx:242
-#: src/pages/SettingsOverlay.tsx:293
+#: src/pages/SettingsOverlay.tsx:175
+#: src/pages/SettingsOverlay.tsx:250
+#: src/pages/SettingsOverlay.tsx:301
 #: src/pages/shell/sidebar-footer.tsx:211
 #: src/pages/shell/sidebar-footer.tsx:218
 msgid "Settings"
@@ -4100,7 +4125,7 @@ msgid "Share"
 msgstr ""
 
 #. placeholder {0}: bot.name
-#: src/pages/ShareBotDialog.tsx:153
+#: src/pages/ShareBotDialog.tsx:175
 msgid "Share {0}"
 msgstr ""
 
@@ -4116,6 +4141,14 @@ msgstr ""
 #: src/pages/KnowledgeSection.tsx:37
 msgid "Shared documents"
 msgstr "Geteilte Dokumente"
+
+#: src/pages/VaultSettingsPanel.tsx:336
+msgid "Shared with"
+msgstr ""
+
+#: src/pages/VaultSettingsPanel.tsx:107
+msgid "Shared with you"
+msgstr ""
 
 #: src/pages/AccountSettingsOverlay.tsx:108
 msgid "Show agent steps, and every run in a bot's activity."
@@ -4168,7 +4201,7 @@ msgstr "Bei Tangow anmelden"
 msgid "Sign up"
 msgstr "Registrieren"
 
-#: src/pages/VaultSettingsPanel.tsx:162
+#: src/pages/VaultSettingsPanel.tsx:221
 msgid "Site"
 msgstr ""
 
@@ -4195,7 +4228,7 @@ msgstr ""
 msgid "Skills"
 msgstr "Skills"
 
-#: src/pages/ShareBotDialog.tsx:193
+#: src/pages/ShareBotDialog.tsx:215
 msgid "Skills this bot can use"
 msgstr ""
 
@@ -4337,7 +4370,7 @@ msgstr "Unterstützt Denkmodus"
 msgid "Switch bot"
 msgstr "Bot wechseln"
 
-#: src/pages/SettingsOverlay.tsx:537
+#: src/pages/SettingsOverlay.tsx:550
 msgid "Switch space"
 msgstr "Space wechseln"
 
@@ -4409,6 +4442,14 @@ msgstr "Die API ist nicht zurückgekehrt. Lade diese Seite neu."
 #: src/pages/MemorySettingsOverlay.tsx:245
 msgid "The selected memory provider is not available in this build."
 msgstr "Der ausgewählte Erinnerungsanbieter ist in diesem Build nicht verfügbar."
+
+#: src/pages/VaultSettingsPanel.tsx:382
+msgid "These people can use this key on its site, from their bots and yours that you can see, including webhooks and routines."
+msgstr ""
+
+#: src/pages/ShareBotDialog.tsx:258
+msgid "These people can use ticked keys on their sites, from their bots and yours that you can see, including webhooks and routines."
+msgstr ""
 
 #: src/pages/bot-page/SettingDetails.tsx:139
 msgid "Thinking"
@@ -4573,8 +4614,8 @@ msgstr ""
 
 #: src/components/ComputerMaintenanceActions.tsx:116
 #: src/components/SoftwareUpdateSection.tsx:260
-#: src/pages/SettingsOverlay.tsx:434
-#: src/pages/SettingsOverlay.tsx:434
+#: src/pages/SettingsOverlay.tsx:445
+#: src/pages/SettingsOverlay.tsx:445
 #: src/pages/shell/computer-preview.tsx:75
 msgid "Update available"
 msgstr "Update verfügbar"
@@ -4602,7 +4643,7 @@ msgstr ""
 msgid "Updated"
 msgstr "Aktualisiert"
 
-#: src/pages/SettingsOverlay.tsx:152
+#: src/pages/SettingsOverlay.tsx:160
 msgid "Updates"
 msgstr "Updates"
 
@@ -4630,7 +4671,7 @@ msgstr ""
 msgid "Updating…"
 msgstr "Wird aktualisiert …"
 
-#: src/pages/SettingsOverlay.tsx:160
+#: src/pages/SettingsOverlay.tsx:168
 #: src/pages/shell/sidebar-footer.tsx:223
 #: src/pages/shell/sidebar-footer.tsx:230
 msgid "Usage"
@@ -4654,11 +4695,11 @@ msgstr ""
 msgid "Use this model"
 msgstr "Dieses Modell verwenden"
 
-#: src/pages/VaultSettingsPanel.tsx:200
+#: src/pages/VaultSettingsPanel.tsx:259
 msgid "Username"
 msgstr ""
 
-#: src/pages/SettingsOverlay.tsx:159
+#: src/pages/SettingsOverlay.tsx:167
 msgid "Vault"
 msgstr ""
 
@@ -4674,7 +4715,7 @@ msgstr "Wird geprüft…"
 #: src/pages/bot-page/SettingDetails.tsx:189
 #: src/pages/ProvidersSettings.tsx:187
 #: src/pages/ProvidersSettings.tsx:189
-#: src/pages/SettingsOverlay.tsx:155
+#: src/pages/SettingsOverlay.tsx:163
 #: src/pages/shell/thread-header.tsx:142
 #: src/pages/shell/thread-header.tsx:143
 #: src/pages/VoiceSettingsOverlay.tsx:137

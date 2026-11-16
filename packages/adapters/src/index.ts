@@ -6,8 +6,10 @@ export * from "./background-job-handlers.js";
 export * from "./bot-messages.js";
 export {
   listBotSecrets,
+  listSecretsSharedWith,
   normalizeSecretDestination,
   removeBotSecret,
+  shareBotSecret,
   storeBotSecret,
 } from "./bot-secrets.js";
 export { recoverBrowserApprovalScreens } from "./browser-approval.js";

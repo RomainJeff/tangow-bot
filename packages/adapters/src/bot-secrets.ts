@@ -60,6 +60,116 @@ export async function findBotSecret(prisma: PrismaClient, scope: BotSecretScope,
   return row ? normalizeSecretDestination(row) : null;
 }
 
+/**
+ * Space roles that count for sharing. Spaces have owners and members only; any other role added
+ * later (a guest, say) neither receives a shared key nor makes one usable.
+ */
+export const SHARING_ROLES = ["owner", "member"];
+
+const nothing: Prisma.BotSecretWhereInput = { id: { in: [] } };
+
+/**
+ * The only rule for which saved keys a run may use on a bot, evaluated on every call. A key K is
+ * usable by run R on bot X, all three in R's space, when either:
+ * - own: R, X's owner and K's owner are the same person; or
+ * - shared: R and X's owner are members, K's owner is a member who can see X, and R and X's owner
+ *   are each K's owner, a person K is shared with, or (K shared with the whole space) any member.
+ * Leaving the space, unsharing the bot or the key, or archiving the bot ends access on the next call.
+ */
+export async function usableSecretsWhere(
+  prisma: PrismaClient,
+  run: BotSecretScope,
+  botId: string,
+): Promise<Prisma.BotSecretWhereInput> {
+  const { spaceId } = run;
+  const bot = await prisma.bot.findFirst({
+    where: { id: botId, spaceId, archivedAt: null },
+    select: { userId: true, visibility: true, shares: { select: { userId: true } } },
+  });
+  if (!bot) return nothing;
+  const people = [...new Set([run.userId, bot.userId])];
+  const members = await prisma.spaceMember.count({
+    where: { spaceId, userId: { in: people }, role: { in: SHARING_ROLES } },
+  });
+  const seeBot =
+    bot.visibility === "space"
+      ? {}
+      : {
+          userId: {
+            in: [
+              bot.userId,
+              ...(bot.visibility === "people" ? bot.shares : []).map((s) => s.userId),
+            ],
+          },
+        };
+  const usable = [
+    ...(run.userId === bot.userId ? [{ userId: run.userId }] : []),
+    ...(members === people.length
+      ? [
+          {
+            ...seeBot,
+            user: {
+              members: {
+                some: { spaceMemberships: { some: { spaceId, role: { in: SHARING_ROLES } } } },
+              },
+            },
+            OR: [
+              { sharedWithSpace: true },
+              {
+                AND: people.map((userId) => ({
+                  OR: [{ userId }, { shares: { some: { userId } } }],
+                })),
+              },
+            ],
+          },
+        ]
+      : []),
+  ];
+  return usable.length > 0 ? { spaceId, OR: usable } : nothing;
+}
+
+/** The run user's own key first, then everyone else's oldest first, so a name always resolves the same way. */
+function byPreference<T extends { userId: string; createdAt: Date; id: string }>(
+  rows: T[],
+  userId: string,
+): T[] {
+  return rows.sort(
+    (a, b) =>
+      Number(b.userId === userId) - Number(a.userId === userId) ||
+      a.createdAt.getTime() - b.createdAt.getTime() ||
+      (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+}
+
+/** Names, sites and methods of the keys a run may use, each name once, never a value or owner. */
+export async function listUsableSecrets(
+  prisma: PrismaClient,
+  run: BotSecretScope,
+  botId: string,
+): Promise<BotSecretDestination[]> {
+  const rows = await prisma.botSecret.findMany({
+    where: await usableSecretsWhere(prisma, run, botId),
+    select: { ...metadata, id: true, userId: true, createdAt: true },
+  });
+  const byName = new Map<string, BotSecretDestination>();
+  for (const row of byPreference(rows, run.userId)) {
+    if (!byName.has(row.name)) byName.set(row.name, normalizeSecretDestination(row));
+  }
+  return [...byName.values()].sort((a, b) => (a.name < b.name ? -1 : 1)).slice(0, 100);
+}
+
+async function findUsableSecret(
+  prisma: PrismaClient,
+  run: BotSecretScope,
+  botId: string,
+  name: string,
+) {
+  const rows = await prisma.botSecret.findMany({
+    where: { AND: [await usableSecretsWhere(prisma, run, botId), { name }] },
+  });
+  return byPreference(rows, run.userId)[0];
+}
+
 export async function storeBotSecret(input: {
   tx: Prisma.TransactionClient;
   secretStore: EncryptedSecretStore;
@@ -109,12 +219,75 @@ export async function storeBotSecret(input: {
   }
 }
 
+/** The person's own keys in the space and who each is shared with; never a value. */
 export function listBotSecrets(prisma: PrismaClient, scope: BotSecretScope) {
   return prisma.botSecret.findMany({
     where: scopeFields(scope),
-    select: metadata,
+    select: {
+      ...metadata,
+      botId: true,
+      sharedWithSpace: true,
+      shares: { select: { userId: true }, orderBy: { createdAt: "asc" } },
+    },
     orderBy: { name: "asc" },
     take: 100,
+  });
+}
+
+/** Keys other members share with this person, while they can use them; never a value. */
+export function listSecretsSharedWith(prisma: PrismaClient, scope: BotSecretScope) {
+  const { userId, spaceId } = scope;
+  return prisma.botSecret.findMany({
+    where: {
+      spaceId,
+      userId: { not: userId },
+      user: {
+        members: { some: { spaceMemberships: { some: { spaceId, role: { in: SHARING_ROLES } } } } },
+      },
+      OR: [
+        { shares: { some: { userId } } },
+        {
+          sharedWithSpace: true,
+          space: { memberships: { some: { userId, role: { in: SHARING_ROLES } } } },
+        },
+      ],
+    },
+    select: { ...metadata, user: { select: { name: true } } },
+    orderBy: [{ name: "asc" }, { createdAt: "asc" }],
+    take: 100,
+  });
+}
+
+/**
+ * The owner chooses who a key is shared with: people of the space, and whether every current and
+ * future member may use it. Never inferred from a bot's sharing.
+ */
+export async function shareBotSecret(
+  prisma: PrismaClient,
+  scope: BotSecretScope,
+  input: { name: string; userIds: readonly string[]; space: boolean },
+): Promise<void> {
+  const userIds = [...new Set(input.userIds)].filter((id) => id !== scope.userId);
+  await prisma.$transaction(async (tx) => {
+    await lockScope(tx, scope);
+    const secret = await tx.botSecret.findFirst({
+      where: { ...scopeFields(scope), name: input.name },
+      select: { id: true },
+    });
+    if (!secret) throw new Error("Credential not found");
+    const members = await tx.spaceMember.count({
+      where: { spaceId: scope.spaceId, userId: { in: userIds }, role: { in: SHARING_ROLES } },
+    });
+    if (members !== userIds.length)
+      throw new Error("A key can only be shared with members of its space");
+    await tx.botSecret.update({ where: { id: secret.id }, data: { sharedWithSpace: input.space } });
+    await tx.botSecretShare.deleteMany({
+      where: { secretId: secret.id, userId: { notIn: userIds } },
+    });
+    await tx.botSecretShare.createMany({
+      data: userIds.map((userId) => ({ secretId: secret.id, spaceId: scope.spaceId, userId })),
+      skipDuplicates: true,
+    });
   });
 }
 
@@ -129,16 +302,16 @@ export async function removeBotSecret(prisma: PrismaClient, scope: BotSecretScop
 export async function requestWithBotSecret(input: {
   prisma: PrismaClient;
   secretStore: EncryptedSecretStore;
-  scope: BotSecretScope;
+  run: BotSecretScope;
+  botId: string;
   request: unknown;
   signal: AbortSignal;
   remote?: RemoteTransportDependencies;
   registerRedactions?: (values: string[]) => void;
 }): Promise<unknown> {
   const request = SecretHttpRequest.parse(input.request);
-  const row = await input.prisma.botSecret.findFirst({
-    where: { ...scopeFields(input.scope), name: request.name },
-  });
+  const row = await findUsableSecret(input.prisma, input.run, input.botId, request.name);
+  // Missing, someone's private key, or a shared key outside the rule: one answer, no owner.
   if (!row) return { error: "Credential is unavailable. Use request_secret to save it first." };
   const destination = normalizeSecretDestination(row);
   const url = new URL(request.url);

@@ -914,4 +914,16 @@ export const RU_MESSAGES: Record<string, string> = {
   "Header name": "Имя заголовка",
   Username: "Имя пользователя",
   Key: "Ключ",
+  Everyone: "Все",
+  "Shared with you": "Доступны вам",
+  "Shared with": "Доступ",
+  Keys: "Ключи",
+  "Every current and future member of {space} can use this key on its site, from their bots and yours that you can see, including webhooks and routines.":
+    "Все нынешние и будущие участники {space} могут использовать этот ключ на его сайте из своих и ваших ботов, которые вы видите, включая вебхуки и регулярные задачи.",
+  "These people can use this key on its site, from their bots and yours that you can see, including webhooks and routines.":
+    "Эти люди могут использовать этот ключ на его сайте из своих и ваших ботов, которые вы видите, включая вебхуки и регулярные задачи.",
+  "Every current and future member of {space} can use the keys switched on, each on its own site, from their bots and yours that you can see, including webhooks and routines.":
+    "Все нынешние и будущие участники {space} могут использовать включённые ключи, каждый на своём сайте, из своих и ваших ботов, которые вы видите, включая вебхуки и регулярные задачи.",
+  "These people can use the keys switched on, each on its own site, from their bots and yours that you can see, including webhooks and routines.":
+    "Эти люди могут использовать включённые ключи, каждый на своём сайте, из своих и ваших ботов, которые вы видите, включая вебхуки и регулярные задачи.",
 };

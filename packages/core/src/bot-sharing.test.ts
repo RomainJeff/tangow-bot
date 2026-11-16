@@ -9,7 +9,9 @@ import { describe, expect, it } from "vitest";
 import {
   declareApp,
   givableSkills,
+  keySharedWithAudience,
   shareableApps,
+  shareKeyWithAudience,
   shareWithPerson,
   shareWithSpace,
   showsTeamMemory,
@@ -103,5 +105,38 @@ describe("showsTeamMemory", () => {
     expect(showsTeamMemory({ visibility: "space" }, [])).toBe(true);
     expect(showsTeamMemory({ visibility: "private" }, [{}])).toBe(true);
     expect(showsTeamMemory({ visibility: "private" }, [])).toBe(false);
+  });
+});
+
+describe("a key in a bot's share sheet", () => {
+  const key = { userIds: ["grace"], space: false };
+  const people = { visibility: "people", userIds: ["grace", "linus"] } as const;
+  const space = { visibility: "space", userIds: [] } as const;
+
+  it("is ticked only when everyone the bot is shared with already has it", () => {
+    expect(keySharedWithAudience(key, people)).toBe(false);
+    expect(
+      keySharedWithAudience({ userIds: ["grace", "linus", "ada"], space: false }, people),
+    ).toBe(true);
+    expect(keySharedWithAudience(key, { visibility: "private", userIds: [] })).toBe(false);
+  });
+
+  it("adds or takes away exactly the bot's people, never the whole Space", () => {
+    expect(shareKeyWithAudience(key, people, true)).toEqual({
+      userIds: ["grace", "linus"],
+      space: false,
+    });
+    expect(shareKeyWithAudience({ userIds: ["grace", "ada"], space: true }, people, false)).toEqual(
+      {
+        userIds: ["ada"],
+        space: true,
+      },
+    );
+  });
+
+  it("follows the whole Space only from the owner's own tick", () => {
+    expect(keySharedWithAudience(key, space)).toBe(false);
+    expect(shareKeyWithAudience(key, space, true)).toEqual({ userIds: ["grace"], space: true });
+    expect(shareKeyWithAudience({ userIds: ["grace"], space: true }, space, false)).toEqual(key);
   });
 });

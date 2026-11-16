@@ -1,7 +1,13 @@
 import { eventIterator, oc } from "@orpc/contract";
 import * as z from "zod";
 import { ATTACHMENT_MAX_BASE64_LENGTH, ATTACHMENT_MAX_COUNT } from "./attachments.js";
-import { BotSecretDestination, BotSecretName, VaultPutInput } from "./bot-secrets.js";
+import {
+  BotSecretDestination,
+  BotSecretName,
+  VaultList,
+  VaultPutInput,
+  VaultShareInput,
+} from "./bot-secrets.js";
 import {
   ActionApprovalRuleSchema,
   ActionAutoReviewSettingsSchema,
@@ -982,9 +988,10 @@ export const appContract = {
     remove: oc.input(z.object({ id: Id })).output(z.object({ ok: z.literal(true) })),
   },
   vault: {
-    list: oc.output(z.array(BotSecretDestination)),
+    list: oc.output(VaultList),
     put: oc.input(VaultPutInput).output(BotSecretDestination),
     remove: oc.input(z.object({ name: BotSecretName })).output(z.object({ ok: z.literal(true) })),
+    share: oc.input(VaultShareInput).output(z.object({ ok: z.literal(true) })),
   },
 };
 

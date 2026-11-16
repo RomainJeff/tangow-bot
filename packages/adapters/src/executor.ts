@@ -267,7 +267,7 @@ import {
 import { messageBot, resolveRunHop, returnBotMessageOutcome } from "./bot-messages.js";
 import {
   findBotSecret,
-  listBotSecrets,
+  listUsableSecrets,
   normalizeSecretDestination,
   requestWithBotSecret,
   sameSecretDestination,
@@ -3492,15 +3492,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 name,
               );
           if (skillRefusal) return { error: skillRefusal };
-          // Saved API keys belong to the person in the space and serve only their own bots: a bot
-          // shared with them must not reach their keys.
+          // A key is saved only into the vault of the person who owns the bot. Which saved keys a
+          // run may use is decided by usableSecretsWhere, for listing and sending alike.
           if (
             run.userId !== bot.userId &&
-            (name === "list_secrets" ||
-              name === "secret_request" ||
-              (name === "request_secret" && args.credential !== undefined))
+            name === "request_secret" &&
+            args.credential !== undefined
           ) {
-            return { error: "Saved API keys are only available on your own bots." };
+            return { error: "Saved API keys can only be added on your own bots." };
           }
           const effectName = replaysApproval
             ? nextApprovedTool
@@ -4923,13 +4922,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
               ),
             );
           }
-          if (name === "list_secrets") return listBotSecrets(deps.prisma, run);
+          if (name === "list_secrets") return listUsableSecrets(deps.prisma, run, bot.id);
           if (name === "secret_request") {
             try {
               const result = await requestWithBotSecret({
                 prisma: deps.prisma,
                 secretStore: deps.secretStore,
-                scope: run,
+                run,
+                botId: bot.id,
                 request: args,
                 signal: context.signal,
                 remote: deps.secretHttp,
