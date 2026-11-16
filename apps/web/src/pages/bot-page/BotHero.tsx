@@ -7,8 +7,10 @@ import {
   characterById,
 } from "@tangow/contracts";
 import type { FieldSaveState } from "@tangow/core";
-import { BotAvatar, type FieldSave, SaveMeta, TextSettingField } from "@tangow/ui-web";
+import type { FieldSave } from "@tangow/ui-web";
+import { BotAvatar, SaveMeta, TextSettingField } from "@tangow/ui-web";
 import { Check, Pencil } from "lucide-react";
+import type { KeyboardEvent } from "react";
 import { useId, useRef, useState } from "react";
 import { type BotPageContext, useBotField, useSaveLabels } from "./page-kit";
 
@@ -92,7 +94,7 @@ function savedAt(state: FieldSaveState<unknown>): number {
   return state.kind === "saved" ? state.at : 0;
 }
 
-/** The catalogue a row per shape, so the family reads in rhythm: balls, capsules, blocks. */
+/** The catalogue, one row per shape, so the family reads in rhythm: balls, capsules, blocks. */
 const PICKER_CHARACTERS = (["ball", "capsule", "block"] as const).flatMap((shape) =>
   AVATAR_CHARACTERS.filter((entry) => entry.shape === shape),
 );
@@ -114,6 +116,11 @@ function CharacterPicker({
   const [swaps, setSwaps] = useState(0);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
+  const closeOnEscape = (event: KeyboardEvent) => {
+    if (event.key !== "Escape" || !open) return;
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
   return (
     <>
       <button
@@ -125,6 +132,7 @@ function CharacterPicker({
         aria-controls={panelId}
         disabled={disabled}
         onClick={() => setOpen((value) => !value)}
+        onKeyDown={closeOnEscape}
         className="group relative rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       >
         <span key={swaps} className={swaps > 0 ? "block animate-swap" : "block"}>
@@ -151,11 +159,7 @@ function CharacterPicker({
           id={panelId}
           data-testid="bot-appearance-picker"
           aria-label={t`Appearance`}
-          onKeyDown={(event) => {
-            if (event.key !== "Escape") return;
-            setOpen(false);
-            triggerRef.current?.focus();
-          }}
+          onKeyDown={closeOnEscape}
           className="mt-3 grid animate-arrive grid-cols-4 justify-items-center gap-y-3.5 self-stretch -mx-1 rounded-card bg-group p-4 shadow-group"
         >
           {PICKER_CHARACTERS.map(({ id, name, shape }, index) => (
