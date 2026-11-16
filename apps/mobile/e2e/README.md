@@ -39,3 +39,26 @@ local session and endpoint data; it does not delete server-side bots.
 Run **Actions → mobile Android screenshots → Run workflow** to build the app, seed an isolated fake
 workspace, capture light and dark Android emulator views, upload diagnostics for seven days, and publish a
 persistent gallery beside the Playwright reports.
+
+### iOS simulator
+
+`pnpm test:mobile-screenshots` seeds a disposable workspace, serves it on port 3110 and runs the
+Maestro flows against the booted simulator. Screenshots land in `test-report/mobile-screenshots/`.
+
+1. Maestro needs Java. With Homebrew's `openjdk`, point `JAVA_HOME` at it:
+   `export JAVA_HOME="$(brew --prefix openjdk)/libexec/openjdk.jdk/Contents/Home"`.
+2. Give it an empty Postgres in `DATABASE_URL`, for example a throwaway
+   `docker run --rm -d -p 127.0.0.1:55432:5432 -e POSTGRES_PASSWORD=pw postgres:16-alpine`.
+3. Install a release build that talks to the fixture API:
+   `EXPO_PUBLIC_API_URL=http://127.0.0.1:3110 pnpm --filter @tangow/mobile exec expo run:ios --configuration Release --no-bundler`.
+4. The flows tap English system buttons ("Not Now", "Open"), so set the simulator to English.
+5. `clearState` keeps the iOS keychain, which can restore a session from an earlier run's deleted
+   database. Reset it before each run: `xcrun simctl keychain booted reset`.
+6. The flow dismisses the "Save Password?" sheet when it shows up. Turning off password AutoFill
+   once in the simulator's Settings (General → AutoFill & Passwords) avoids it altogether.
+
+The notification demo is Android only, so run just the screenshot flow on iOS:
+
+```sh
+pnpm test:mobile-screenshots screenshots
+```

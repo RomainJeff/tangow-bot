@@ -39,14 +39,20 @@ tags:
 - tapOn:
     text: "Don’t allow"
     optional: true
-# iOS offers to save the password over the inbox.
+
+# iOS can offer to save the password a moment after the inbox loads, hiding the whole app.
+# iOS also reads a bot row as one label ("Researcher, Product research, ...").
+- extendedWaitUntil:
+    visible: "Researcher.*|Not Now"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: "Not Now"
+    timeout: 5000
+    optional: true
 - tapOn:
     text: "Not Now"
     optional: true
-
-- extendedWaitUntil:
-    visible: "Researcher"
-    timeout: 30000
+- assertVisible: "Researcher.*"
 - takeScreenshot: "04-inbox"
 
 - tapOn: "Activity"
