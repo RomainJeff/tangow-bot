@@ -1,26 +1,10 @@
 # Tangow
 
-![tangow](docs/assets/readme-header.png)
-
 Tangow is an open-source platform for running persistent AI teammates. It is available on the web,
 as an Electron desktop app, and through an Expo mobile app. Bring your own model and computer
 provider, or run the complete stack locally.
 
-## Stack
-
-- TypeScript
-- React 19, Vite, and Tailwind CSS
-- Electron and Expo
-- Hono and oRPC
-- PostgreSQL and Prisma
-- Better Auth
-- Graphile Worker
-- Pi
-- Docker and E2B
-- Composio and MCP integrations
-
-For an existing source deployment, use the [`./tangow` operator CLI](./docs/tangow.md) on the server to update it,
-inspect services, rebuild workers and computers, or migrate Docker homes to E2B.
+Originally forked from [Rakazo](https://github.com/elie222/rakazo).
 
 ## Getting started
 
