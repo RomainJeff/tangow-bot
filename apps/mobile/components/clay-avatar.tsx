@@ -2,9 +2,9 @@ import type { AvatarCharacterId } from "@tangow/contracts";
 import { CLAY_MINI_MAX_SIZE, characterById, cropForSize } from "@tangow/contracts";
 import { useEffect, useRef } from "react";
 import type { ImageSourcePropType } from "react-native";
-import { Animated, Easing, Image, StyleSheet, View } from "react-native";
+import { Animated, Easing, StyleSheet, View } from "react-native";
 import { useReducedMotion } from "react-native-reanimated";
-import Svg, { Circle } from "react-native-svg";
+import Svg, { Circle, Image as SvgImage } from "react-native-svg";
 import { useMobileTokens } from "../lib/native";
 
 const IMAGES: Record<AvatarCharacterId, { full: ImageSourcePropType; mini: ImageSourcePropType }> =
@@ -61,7 +61,8 @@ const RING_INSET = 4;
 
 /**
  * A clay character in a round disc, as on web. A working bot gets the spinning ink ring, which
- * holds still under Reduce Motion.
+ * holds still under Reduce Motion. The image is drawn in SVG, framed by the crop's viewBox: a
+ * native `Image` in the thread's transparent header title blurred the whole thread on iOS 26+.
  */
 export function ClayAvatar({
   character,
@@ -75,7 +76,6 @@ export function ClayAvatar({
   const tokens = useMobileTokens();
   const { id, crops } = characterById(character);
   const crop = crops[cropForSize(size)];
-  const scale = size / crop.side;
   return (
     <View style={{ width: size, height: size }}>
       <View
@@ -84,17 +84,13 @@ export function ClayAvatar({
           { width: size, height: size, borderRadius: size / 2, backgroundColor: tokens.muted },
         ]}
       >
-        <Image
-          source={IMAGES[id][size <= CLAY_MINI_MAX_SIZE ? "mini" : "full"]}
-          accessible={false}
-          style={{
-            position: "absolute",
-            width: SOURCE_SIDE * scale,
-            height: SOURCE_SIDE * scale,
-            left: -crop.x * scale,
-            top: -crop.y * scale,
-          }}
-        />
+        <Svg width={size} height={size} viewBox={`${crop.x} ${crop.y} ${crop.side} ${crop.side}`}>
+          <SvgImage
+            href={IMAGES[id][size <= CLAY_MINI_MAX_SIZE ? "mini" : "full"]}
+            width={SOURCE_SIDE}
+            height={SOURCE_SIDE}
+          />
+        </Svg>
       </View>
       {isWorking ? <WorkingRing size={size} color={tokens.foreground} /> : null}
     </View>
