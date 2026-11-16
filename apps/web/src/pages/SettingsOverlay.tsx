@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import { useEffect, useId, useRef, useState } from "react";
+import { desktopBridge } from "../lib/desktop";
 import { rpc } from "../lib/rpc";
 import { useMediaQuery } from "../lib/use-media-query";
 import { ProfileSettingsPanels, UpdatesSettingsPanel } from "./AccountSettingsOverlay";
@@ -146,6 +147,11 @@ export function SettingsOverlay({
   const back = usePushedFocus(section, panelRef);
   const providerBack = usePushedFocus(providerDetail?.key ?? null, panelRef);
 
+  // Updates only concern the desktop app; a browser always runs what the server serves.
+  const accountSections = desktopBridge()?.update
+    ? ACCOUNT_SETTINGS_SECTIONS
+    : ACCOUNT_SETTINGS_SECTIONS.filter((id) => id !== "updates");
+
   const navItems: Record<SettingsSection, NavItem> = {
     profile: { label: t`Profile`, icon: UserRound },
     providers: { label: t`Providers`, icon: KeyRound },
@@ -247,7 +253,7 @@ export function SettingsOverlay({
                 <UserAvatar initials={initials} image={image} className="size-6 text-label" />
                 <span className="truncate text-row-name font-semibold text-foreground">{name}</span>
               </div>
-              {ACCOUNT_SETTINGS_SECTIONS.map((id) => (
+              {accountSections.map((id) => (
                 <SettingsNavButton
                   key={id}
                   id={id}
@@ -321,6 +327,7 @@ export function SettingsOverlay({
               {section === null ? (
                 <SettingsList
                   navItems={navItems}
+                  accountSections={accountSections}
                   disabled={panelBusy}
                   spaceSwitcher={spaceSwitcher}
                   spaceLabelId={currentSpace ? spaceLabelId : undefined}
@@ -440,12 +447,14 @@ function UpdateAvailableIcon() {
 /** At phone width the sections are a list the person picks from, grouped as the window's nav. */
 function SettingsList({
   navItems,
+  accountSections,
   disabled,
   spaceSwitcher,
   spaceLabelId,
   onSelect,
 }: {
   navItems: Record<SettingsSection, NavItem>;
+  accountSections: readonly SettingsSection[];
   disabled: boolean;
   spaceSwitcher: ReactNode;
   spaceLabelId: string | undefined;
@@ -471,7 +480,7 @@ function SettingsList({
     });
   return (
     <div className="flex flex-col gap-6">
-      <SettingsGroup>{rows(ACCOUNT_SETTINGS_SECTIONS)}</SettingsGroup>
+      <SettingsGroup>{rows(accountSections)}</SettingsGroup>
       <div className="flex flex-col gap-1.5">
         {spaceSwitcher}
         <fieldset aria-labelledby={spaceLabelId} className="contents">

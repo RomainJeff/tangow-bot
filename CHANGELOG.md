@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-11-16
+
+#### Fixed
+
+- A bot's computer screen now shows on web and desktop when Tangow sits behind a sign-in proxy such as Cloudflare Access or oauth2-proxy, instead of staying black.
+
 ### 2026-11-15
 
 #### Added
@@ -17,10 +23,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - API keys you gave one bot are now usable by all your bots in the space, still only on their own site, and stay when that bot is deleted.
 - Pipedream Connect is no longer offered as a managed app catalog on web, desktop and iOS; server owners connect apps through Composio or MCP instead, and existing Pipedream connections are removed, so disconnect them before updating to also revoke their accounts at Pipedream.
 - OpenAPI and GraphQL tool sources are no longer offered in Integrations on web, desktop and mobile, and the ones already added are removed, so bots reach outside tools through apps and MCP servers.
+- In a browser, Settings no longer lists Updates, since the web app always runs the version its server serves; the desktop app keeps the section.
 
 #### Fixed
 
+- The macOS desktop app now finds new Tangow versions on GitHub at launch and every hour, downloads them in the background and installs them on restart, instead of reporting that no desktop release was published.
 - When DuckDuckGo blocks the bot's built-in web search with a bot check, the bot now opens the search on its computer and asks you to solve the check, instead of treating every search as returning nothing.
+- When the computer service refuses to start a reply's or a routine's computer, the run now fails within seconds with the real reason, instead of after 15 minutes with an unrelated message.
 
 ### 2026-11-14
 

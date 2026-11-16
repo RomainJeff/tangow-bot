@@ -1,11 +1,5 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  attachMobileTrackpad,
-  isTouchBrowser,
-  mobileInputChanges,
-} from "../../computer/mobile-keyboard.js";
+import { attachMobileTrackpad, isTouchBrowser, mobileInputChanges } from "./mobile-keyboard.js";
 
 type TouchLike = { identifier: number; clientX: number; clientY: number };
 type TouchEventLike = {
@@ -141,23 +135,6 @@ describe("mobile computer keyboard", () => {
     expect(classes.has("active")).toBe(true);
     detach();
     expect(rfb.showDotCursor).toBe(false);
-  });
-
-  it("ships and initializes the keyboard bridge in the computer image", () => {
-    const root = path.resolve(import.meta.dirname, "../../computer");
-    const dockerfile = readFileSync(path.join(root, "Dockerfile"), "utf8");
-    const embed = readFileSync(path.join(root, "embed.html"), "utf8");
-    const start = readFileSync(path.join(root, "start.sh"), "utf8");
-    const supervisor = readFileSync(path.join(import.meta.dirname, "index.ts"), "utf8");
-    expect(dockerfile).toMatch(/mobile-keyboard\.js/);
-    expect(embed).toMatch(/attachMobileKeyboard/);
-    expect(embed).toMatch(/mobile-keyboard-input/);
-    expect(embed).toMatch(/attachMobileTrackpad/);
-    expect(embed).toMatch(/mobile-trackpad/);
-    expect(embed).toMatch(/mobile-keyboard-open #screen/);
-    expect(embed).toMatch(/--mobile-visual-height/);
-    expect(start).toMatch(/mobile-keyboard\.js/);
-    expect(supervisor).toMatch(/"mobile-keyboard\.js"/);
   });
 });
 
