@@ -1,5 +1,4 @@
 import { useLingui } from "@lingui/react/macro";
-import { AvatarStyleProvider } from "@tangow/ui-web";
 import { useCallback, useLayoutEffect, useRef } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ComputerUpdateProgress } from "../components/ComputerUpdateProgress";
@@ -370,7 +369,5 @@ export function ShellPage() {
     </div>
   );
 
-  return (
-    <AvatarStyleProvider value={bootstrapMe?.avatarStyle ?? "organic"}>{shell}</AvatarStyleProvider>
-  );
+  return shell;
 }

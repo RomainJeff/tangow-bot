@@ -100,12 +100,12 @@ test("bot creation, editing, and deletion persist", async ({ page }, testInfo) =
 
   await botPage.getByTestId("bot-appearance-trigger").click();
   const picker = page.getByTestId("bot-appearance-picker");
-  const colorSaved = page.waitForResponse(
+  const characterSaved = page.waitForResponse(
     (response) => response.url().includes("/rpc/bots/update") && response.ok(),
   );
-  await picker.getByRole("button", { name: "Color 7" }).click();
-  await colorSaved;
-  await expect(picker.getByRole("button", { name: "Color 7" })).toHaveAttribute(
+  await picker.getByRole("button", { name: "Viking végan" }).click();
+  await characterSaved;
+  await expect(picker.getByRole("button", { name: "Viking végan" })).toHaveAttribute(
     "aria-pressed",
     "true",
   );
@@ -189,6 +189,12 @@ test("bot creation, editing, and deletion persist", async ({ page }, testInfo) =
   await page.locator("main").getByRole("button", { name: "Atlas", exact: true }).click();
   await expect(nameInput).toHaveValue("Atlas");
   await expect(titleInput).toHaveValue("Research lead");
+  await botPage.getByTestId("bot-appearance-trigger").click();
+  await expect(picker.getByRole("button", { name: "Viking végan" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await botPage.getByTestId("bot-appearance-trigger").click();
   await botPage.getByRole("tab", { name: "Settings" }).click();
   await expect(settings.getByRole("button", { name: /^Description/ })).toContainText(
     "Finds reliable sources",

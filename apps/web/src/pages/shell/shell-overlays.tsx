@@ -515,16 +515,11 @@ export function ShellOverlays({
             image={userImage}
             email={email}
             initialSection={overlays.settingsSection}
-            avatarStyle={bootstrapMe?.avatarStyle ?? "organic"}
             isDeploymentOwner={bootstrapMe?.isDeploymentOwner === true}
             messagingEnabled={overlays.messagingSurfaceEnabled}
             onOpenMessaging={() => {
               overlays.setSettingsOpen(false);
               overlays.setMessagingSettingsOpen(true);
-            }}
-            onAvatarStyleChange={async (avatarStyle) => {
-              const nextMe = await rpc.preferences.update({ avatarStyle });
-              roster.setBootstrapMe(nextMe);
             }}
             memoryConfig={overlays.memoryProviderConfig}
             onMemoryConfigChange={overlays.changeMemoryConfig}
