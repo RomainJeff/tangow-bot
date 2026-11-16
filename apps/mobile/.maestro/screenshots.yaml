@@ -380,7 +380,7 @@ tags:
 
 - openLink: "tangow:///"
 - extendedWaitUntil:
-    visible: "Researcher"
+    visible: "Researcher.*"
     timeout: 10000
 - takeScreenshot: "28c-inbox-dark"
 
