@@ -3316,7 +3316,25 @@ export function createRouter(deps: RouterDeps) {
           );
         }),
         create: authed.mcp.servers.create.handler(async ({ context, input }) => {
-          const row = await createMcpServer(deps, context.actor, input);
+          const row = await createMcpServer(deps, context.actor, input, async (tx, server) => {
+            for (const botId of new Set(input.botIds ?? [])) {
+              const bot = await tx.bot.findFirst({
+                where: { id: botId, spaceId: context.actor.spaceId, userId: context.actor.userId },
+                select: { id: true },
+              });
+              if (!bot) throw new IsolationError();
+              await tx.botMcpServer.create({
+                data: {
+                  spaceId: context.actor.spaceId,
+                  userId: context.actor.userId,
+                  botId,
+                  serverId: server.id,
+                  allowAllTools: true,
+                  allowedTools: [],
+                },
+              });
+            }
+          });
           return mcpServerDto(row, await mcpOAuth.statusFor(row, context.actor));
         }),
         update: authed.mcp.servers.update.handler(async ({ context, input }) => {
@@ -3685,6 +3703,7 @@ export function createRouter(deps: RouterDeps) {
           : [];
         return {
           canConfigure,
+          mcpStdioEnabled: Boolean(deps.env.mcpStdioEnabled),
           needsSetup: canConfigure && !providers.some((provider) => provider.configured),
           webUrl: new URL("/integrations/setup", deps.env.webOrigin).toString(),
           providers,
