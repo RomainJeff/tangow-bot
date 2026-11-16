@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-11-16
 
+#### Changed
+
+- The web app's browser tab, home screen and installed app icon now show the same "tw" mark as the desktop and iOS apps, instead of the blue face.
+
 #### Fixed
 
 - A bot's computer screen now shows on web and desktop when Tangow sits behind a sign-in proxy such as Cloudflare Access or oauth2-proxy, instead of staying black.
