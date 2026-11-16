@@ -11,13 +11,7 @@ import {
 } from "@tangow/ui-web";
 import type { Integrations } from "./use-integrations";
 
-export function AdvancedIntegrations({
-  integrations,
-  onOpenMcp,
-}: {
-  integrations: Integrations;
-  onOpenMcp?: () => void;
-}) {
+export function AdvancedIntegrations({ integrations }: { integrations: Integrations }) {
   const { t } = useLingui();
   const {
     sources,
@@ -350,17 +344,6 @@ export function AdvancedIntegrations({
               </Button>
             </div>
           ))}
-          {onOpenMcp ? (
-            <Button
-              type="button"
-              variant="link"
-              size="xs"
-              className="mt-2 px-0 text-muted-foreground"
-              onClick={onOpenMcp}
-            >
-              <Trans>Manage MCP servers</Trans>
-            </Button>
-          ) : null}
         </div>
       </div>
     </details>
