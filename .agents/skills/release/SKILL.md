@@ -135,12 +135,13 @@ Skip this section for `mobile`.
 Run from `apps/desktop`:
 
 ```sh
-npm run pack -- --publish never
+npm run release
 ```
 
-The current `pack` script targets macOS, Windows, and Linux. Keep the requested
-script; do not replace it with `pack:dir` or silently change the package scripts.
-`--publish never` reserves GitHub publication for the final step.
+The `release` script builds the web app and packages only for the host, macOS:
+no Windows or Linux build. Do not replace it with `pack` or `pack:dir` or silently
+change the package scripts. Its `--publish never` reserves GitHub publication for
+the final step.
 
 Identify the fresh DMG under the configured `build.directories.output`, currently
 `apps/desktop/out`. Check its app version against the package and its architecture
@@ -152,8 +153,8 @@ From the same `out` run, also select the macOS update feed that installed
 desktop apps read through electron-updater: `latest-mac.yml`, every `-mac.zip` it
 names (one per architecture), and each ZIP's `.blockmap` when present. Require the yml's `version` to
 equal the desktop version and every `files[].url` and `path` it lists to exist
-next to it in `out`. Leave `latest.yml`, `latest-linux.yml` and the Windows and
-Linux artifacts out of the release; those platforms are not tested. A missing
+next to it in `out`. Leave any `latest.yml`, `latest-linux.yml` or Windows and
+Linux artifacts left in `out` by other runs out of the release. A missing
 blockmap only costs clients a full download and must not fail the release.
 
 Mount the selected DMG read-only with `hdiutil attach -readonly -nobrowse` and
