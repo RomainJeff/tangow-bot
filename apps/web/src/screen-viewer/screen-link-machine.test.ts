@@ -1,11 +1,31 @@
+import {
+  parseScreenLinkMessage,
+  SCREEN_LINK_MESSAGE_TYPE,
+  SCREEN_LINK_STATES,
+  SCREEN_LINK_VERSION,
+} from "@tangow/core";
 import { describe, expect, it } from "vitest";
-import type { Effect, Event } from "../../computer/screen-link-machine.js";
+import type { Effect, Event } from "./screen-link-machine.js";
 import {
   encodeStateMessage,
   initialModel,
+  MESSAGE_TYPE,
+  MESSAGE_VERSION,
   nextWake,
+  SCREEN_STATES,
   step,
-} from "../../computer/screen-link-machine.js";
+} from "./screen-link-machine.js";
+
+describe("host link drift", () => {
+  it("shares the wire vocabulary with the hosts", () => {
+    expect([...SCREEN_STATES]).toEqual([...SCREEN_LINK_STATES]);
+    expect(MESSAGE_TYPE).toBe(SCREEN_LINK_MESSAGE_TYPE);
+    expect(MESSAGE_VERSION).toBe(SCREEN_LINK_VERSION);
+    expect(SCREEN_STATES.map((state) => parseScreenLinkMessage(encodeStateMessage(state)))).toEqual(
+      ["connecting", "connected", "reconnecting", "stalled", "failed"],
+    );
+  });
+});
 
 type WithoutNow<E> = E extends unknown ? Omit<E, "now"> : never;
 type Input = WithoutNow<Event>;

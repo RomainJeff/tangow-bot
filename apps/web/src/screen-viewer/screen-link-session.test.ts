@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { attachHostClipboardPaste } from "../../computer/clipboard-bridge.js";
-import { attachMobileKeyboard } from "../../computer/mobile-keyboard.js";
-import { encodeStateMessage, SCREEN_STATES } from "../../computer/screen-link-machine.js";
-import type { RfbLike } from "../../computer/screen-link-session.js";
-import { hostPoster, startScreenLinkSession } from "../../computer/screen-link-session.js";
+import { attachHostClipboardPaste } from "./clipboard-bridge.js";
+import { attachMobileKeyboard } from "./mobile-keyboard.js";
+import { encodeStateMessage, SCREEN_STATES } from "./screen-link-machine.js";
+import type { RfbLike } from "./screen-link-session.js";
+import { hostPoster, startScreenLinkSession } from "./screen-link-session.js";
 
 const URL = "wss://screen.test/novnc/session/control/1.token/websockify";
 const MODIFIER_RELEASES = 8;

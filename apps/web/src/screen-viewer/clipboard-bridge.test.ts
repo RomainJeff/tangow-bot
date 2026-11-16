@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   attachHostClipboardPaste,
@@ -8,7 +6,7 @@ import {
   pasteHostText,
   releaseModifierKeys,
   sendRemotePaste,
-} from "../../computer/clipboard-bridge.js";
+} from "./clipboard-bridge.js";
 
 describe("host clipboard paste bridge", () => {
   it("detects Ctrl/Cmd+V and ignores other chords", () => {
@@ -198,30 +196,4 @@ describe("host clipboard paste bridge", () => {
     detach();
     expect(listeners.size).toBe(0);
   });
-
-  it("ships the bridge next to embed.html in the computer image", () => {
-    const root = path.resolve(import.meta.dirname, "../../computer");
-    const dockerfile = readFileSync(path.join(root, "Dockerfile"), "utf8");
-    const embed = readFileSync(path.join(root, "embed.html"), "utf8");
-    const start = readFileSync(path.join(root, "start.sh"), "utf8");
-    const supervisor = readFileSync(path.join(import.meta.dirname, "index.ts"), "utf8");
-    expect(dockerfile).toMatch(/clipboard-bridge\.js/);
-    expect(embed).toMatch(/attachHostClipboardPaste/);
-    expect(embed).toMatch(/clipboard-bridge\.js/);
-    expect(start).toMatch(/clipboard-bridge\.js/);
-    expect(supervisor).toMatch(/"clipboard-bridge\.js"/);
-  });
-
-  it.each(["screen-link-machine.js", "screen-link-session.js"])(
-    "ships %s with the embed and checks it at startup",
-    (file) => {
-      const root = path.resolve(import.meta.dirname, "../../computer");
-      const supervisor = readFileSync(path.join(import.meta.dirname, "index.ts"), "utf8");
-      expect(readFileSync(path.join(root, "Dockerfile"), "utf8")).toContain(
-        `COPY --chmod=644 ${file} /usr/share/novnc/${file}`,
-      );
-      expect(readFileSync(path.join(root, "start.sh"), "utf8")).toContain(`$NOVNC_ROOT/${file}`);
-      expect(supervisor).toContain(`"${file}"`);
-    },
-  );
 });
