@@ -556,6 +556,17 @@ describeIntegration("reusable credential lifecycle", () => {
       expect((await use(a, x, "b_private")).sent).toBeNull();
     });
 
+    it("marks a key someone else owns as shared when listing, without naming them", async () => {
+      // B's run on A's bot: A's key shared with B, and B's own key shared with A.
+      const { listed } = await use(b, x, "a_shared");
+      const keys = JSON.parse(listed) as Array<{ name: string; shared: boolean }>;
+      expect(keys.find((key) => key.name === "a_shared")?.shared).toBe(true);
+      expect(keys.find((key) => key.name === "b_shared")?.shared).toBe(false);
+      for (const owner of [a.userId, "Executor share-a", "executor-share-a"]) {
+        expect(listed).not.toContain(owner);
+      }
+    });
+
     it("never saves a key from a bot someone else owns, even when keys are shared", async () => {
       const before = await handles.prisma.botSecret.count({ where: { userId: b.userId } });
       const result = await use(b, x, "a_shared", undefined, [

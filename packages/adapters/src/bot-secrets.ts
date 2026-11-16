@@ -141,19 +141,28 @@ function byPreference<T extends { userId: string; createdAt: Date; id: string }>
   );
 }
 
-/** Names, sites and methods of the keys a run may use, each name once, never a value or owner. */
+/**
+ * Names, sites and methods of the keys a run may use, each name once, never a value or owner.
+ * `shared` marks a key someone else owns, whose site they chose: a key planted under a familiar
+ * name to catch what the bot sends must not pass for the run user's own.
+ */
 export async function listUsableSecrets(
   prisma: PrismaClient,
   run: BotSecretScope,
   botId: string,
-): Promise<BotSecretDestination[]> {
+): Promise<Array<BotSecretDestination & { shared: boolean }>> {
   const rows = await prisma.botSecret.findMany({
     where: await usableSecretsWhere(prisma, run, botId),
     select: { ...metadata, id: true, userId: true, createdAt: true },
   });
-  const byName = new Map<string, BotSecretDestination>();
+  const byName = new Map<string, BotSecretDestination & { shared: boolean }>();
   for (const row of byPreference(rows, run.userId)) {
-    if (!byName.has(row.name)) byName.set(row.name, normalizeSecretDestination(row));
+    if (!byName.has(row.name)) {
+      byName.set(row.name, {
+        ...normalizeSecretDestination(row),
+        shared: row.userId !== run.userId,
+      });
+    }
   }
   return [...byName.values()].sort((a, b) => (a.name < b.name ? -1 : 1)).slice(0, 100);
 }
