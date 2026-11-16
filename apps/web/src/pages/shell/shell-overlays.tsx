@@ -49,9 +49,6 @@ const PeerMessagesOverlay = lazy(() =>
 const CustomizeOverlay = lazy(() =>
   import("../CustomizeOverlay").then((module) => ({ default: module.CustomizeOverlay })),
 );
-const McpServersOverlay = lazy(() =>
-  import("../McpServersOverlay").then((module) => ({ default: module.McpServersOverlay })),
-);
 
 /** Everything that opens over the shell: context menus, confirmations, palette and overlays. */
 export function ShellOverlays({
@@ -501,14 +498,10 @@ export function ShellOverlays({
           <CustomizeOverlay
             activeBotId={roster.activeBotId.current}
             onClose={() => overlays.setCustomizeOpen(false)}
-            onOpenMcp={() => {
-              overlays.setCustomizeOpen(false);
-              overlays.setMcpOpen(true);
-            }}
+            initialSection={overlays.customizeSection}
             onSkillsChanged={refreshAgentSkills}
           />
         ) : null}
-        {overlays.mcpOpen ? <McpServersOverlay onClose={() => overlays.setMcpOpen(false)} /> : null}
         {overlays.messagingSettingsOpen ? (
           <MessagingSettingsOverlay onClose={() => overlays.setMessagingSettingsOpen(false)} />
         ) : null}

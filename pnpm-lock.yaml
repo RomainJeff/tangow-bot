@@ -363,6 +363,9 @@ importers:
       react-router-dom:
         specifier: 7.18.3
         version: 7.18.3(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      tldts:
+        specifier: 7.4.10
+        version: 7.4.10
     devDependencies:
       '@babel/core':
         specifier: 7.29.7

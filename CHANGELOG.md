@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
+- MCP servers now have their own Custom apps section in Customize on web and desktop: paste a URL and Tangow signs in or asks for a token, replacing the MCP servers window.
+
 - The web app's browser tab, home screen and installed app icon now show the same "tw" mark as the desktop and iOS apps, instead of the blue face.
 
 #### Fixed
