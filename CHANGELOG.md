@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-11-16
+
+#### Fixed
+
+- A bot's computer screen now shows on web and desktop when Tangow sits behind a sign-in proxy such as Cloudflare Access or oauth2-proxy, instead of staying black.
+
 ### 2026-11-15
 
 #### Changed
