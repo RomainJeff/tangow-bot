@@ -63,6 +63,7 @@ const RING_INSET = 4;
  * A clay character in a round disc, as on web. A working bot gets the spinning ink ring, which
  * holds still under Reduce Motion. The image is drawn in SVG, framed by the crop's viewBox: a
  * native `Image` in the thread's transparent header title blurred the whole thread on iOS 26+.
+ * The disc is the translucent `avatarDisc` veil, so it holds over every part of the ambient light.
  */
 export function ClayAvatar({
   character,
@@ -81,7 +82,7 @@ export function ClayAvatar({
       <View
         style={[
           styles.disc,
-          { width: size, height: size, borderRadius: size / 2, backgroundColor: tokens.muted },
+          { width: size, height: size, borderRadius: size / 2, backgroundColor: tokens.avatarDisc },
         ]}
       >
         <Svg width={size} height={size} viewBox={`${crop.x} ${crop.y} ${crop.side} ${crop.side}`}>
