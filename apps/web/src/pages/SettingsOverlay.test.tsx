@@ -79,14 +79,14 @@ it("opens a phone on the section list and pushes then pops a section", async () 
   expect(byTestId("settings-nav")).toBeNull();
   expect(byTestId("settings-list-profile")).not.toBeNull();
 
-  await act(async () => byTestId("settings-list-updates")?.click());
-  expect(title()).toBe("Updates");
-  expect(document.body.textContent).toContain("updates body");
+  await act(async () => byTestId("settings-list-profile")?.click());
+  expect(title()).toBe("Profile");
+  expect(document.body.textContent).toContain("profile body");
   expect(document.activeElement).toBe(backButton());
 
   await act(async () => backButton()?.click());
   expect(title()).toBe("Settings");
-  expect(document.activeElement).toBe(byTestId("settings-list-updates"));
+  expect(document.activeElement).toBe(byTestId("settings-list-profile"));
   await close();
 });
 

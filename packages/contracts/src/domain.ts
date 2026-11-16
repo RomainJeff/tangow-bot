@@ -1286,7 +1286,7 @@ export const ServerUpdateStepSchema = z.object({
   output: z.string().max(8_001),
 });
 
-/** How an update reaches new code: published images, a build on the server, or a git checkout. */
+/** How an update reaches new code: a build on the server or a git checkout. `pull` is kept so runs recorded by older updaters still parse. */
 export const ServerUpdateStrategySchema = z.enum(["pull", "build", "checkout"]);
 export type ServerUpdateStrategy = z.infer<typeof ServerUpdateStrategySchema>;
 

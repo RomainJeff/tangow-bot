@@ -202,11 +202,11 @@ test("remote members skip server setup and keep direct MCP connections", async (
   await captureScreenshot(page, testInfo, "remote-member-onboarding");
   await completeOnboarding(page);
   await page.goto("/integrations/setup?mode=mcp");
-  await expect(page.getByRole("heading", { name: "Add MCP server" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Custom apps" })).toBeVisible();
   for (const name of ["Composio", "Executor"]) {
     await expect(page.getByRole("button", { name, exact: true })).toBeHidden();
   }
-  await expect(page.getByRole("textbox", { name: "Search apps", exact: true })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "App URL", exact: true })).toBeVisible();
   await captureScreenshot(page, testInfo, "remote-member-mcp");
   await page.goto("/integrations/setup");
   await page.waitForURL(/\/app/);

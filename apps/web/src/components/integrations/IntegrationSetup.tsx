@@ -10,13 +10,11 @@ type Choice = "direct" | "composio" | "executor";
 
 export function IntegrationSetup({
   onDone,
-  serverSetup = false,
   initialState,
   botId,
   onServerConnected,
 }: {
   onDone?: () => void;
-  serverSetup?: boolean;
   initialState?: IntegrationSetupState | null;
   botId?: string;
   onServerConnected?: (id: string) => void;
@@ -25,7 +23,7 @@ export function IntegrationSetup({
   const fieldId = useId();
   const [state, setState] = useState<IntegrationSetupState | null>(initialState ?? null);
   const [selectedChoice, setChoice] = useState<Choice>("direct");
-  const choice = serverSetup ? selectedChoice : "direct";
+  const choice = selectedChoice;
   const [apiKey, setApiKey] = useState("");
   const [endpoint, setEndpoint] = useState("");
   const [query, setQuery] = useState("");
@@ -55,12 +53,12 @@ export function IntegrationSetup({
   ];
   const configured = state?.providers.find((provider) => provider.id === choice)?.configured;
   useEffect(() => {
-    if (!serverSetup || initialState) return;
+    if (initialState) return;
     void rpc.integrationSetup
       .get()
       .then(setState)
       .catch(() => setError(t`Could not load integrations`));
-  }, [serverSetup, initialState]);
+  }, [initialState]);
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -106,37 +104,33 @@ export function IntegrationSetup({
     });
   }
 
-  if (serverSetup && !state?.canConfigure) return error ? <p role="alert">{error}</p> : null;
+  if (!state?.canConfigure) return error ? <p role="alert">{error}</p> : null;
 
   return (
     <div className="space-y-6">
-      <h1 className="text-[32px] font-medium text-foreground">
-        {serverSetup ? t`Server integrations` : t`Add MCP server`}
-      </h1>
-      {serverSetup ? (
-        <fieldset
-          aria-label={t`Integration options`}
-          className="overflow-hidden rounded-card bg-group shadow-group"
-        >
-          {choices.map(({ id, label }) => (
-            <button
-              key={id}
-              type="button"
-              aria-pressed={choice === id}
-              disabled={busy}
-              onClick={() => {
-                setChoice(id);
-                setApiKey("");
-                setError(null);
-              }}
-              className={`flex min-h-11 w-full items-center justify-between border-b border-border px-3.5 py-2.5 text-left last:border-0 ${choice === id ? "bg-muted" : "hover:bg-accent"}`}
-            >
-              <span>{label}</span>
-              {choice === id ? <Check className="size-4" aria-hidden /> : null}
-            </button>
-          ))}
-        </fieldset>
-      ) : null}
+      <h1 className="text-[32px] font-medium text-foreground">{t`Server integrations`}</h1>
+      <fieldset
+        aria-label={t`Integration options`}
+        className="overflow-hidden rounded-card bg-group shadow-group"
+      >
+        {choices.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={choice === id}
+            disabled={busy}
+            onClick={() => {
+              setChoice(id);
+              setApiKey("");
+              setError(null);
+            }}
+            className={`flex min-h-11 w-full items-center justify-between border-b border-border px-3.5 py-2.5 text-left last:border-0 ${choice === id ? "bg-muted" : "hover:bg-accent"}`}
+          >
+            <span>{label}</span>
+            {choice === id ? <Check className="size-4" aria-hidden /> : null}
+          </button>
+        ))}
+      </fieldset>
       {managed ? (
         <>
           {configured ? (
