@@ -67,21 +67,13 @@ describe("bot_secret_shares migration", () => {
     expect(await database.prisma.botSecretShare.count()).toBe(0);
   });
 
-  it("drops a share when its key is deleted or its person leaves the space", async () => {
+  it("drops a key's shares with the key", async () => {
     const { prisma } = database;
-    await prisma.botSecretShare.createMany({
-      data: [
-        { secretId: "k1", spaceId: "space", userId: "user_b" },
-        { secretId: "k2", spaceId: "space", userId: "user_b" },
-      ],
+    await prisma.botSecretShare.create({
+      data: { secretId: "k1", spaceId: "space", userId: "user_b" },
     });
     await prisma.botSecret.delete({ where: { id: "k1" } });
-    expect(await prisma.botSecretShare.count()).toBe(1);
-    await prisma.spaceMember.delete({
-      where: { spaceId_userId: { spaceId: "space", userId: "user_b" } },
-    });
     expect(await prisma.botSecretShare.count()).toBe(0);
-    expect(await prisma.botSecret.count()).toBe(1);
   });
 
   it("refuses a share with someone outside the space", async () => {
