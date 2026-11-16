@@ -1,5 +1,6 @@
 import type { SpaceMembers, VaultItem, VaultList } from "@tangow/contracts";
-import { type MobileSpaceNavigation, rpc } from "./api";
+import type { MobileSpaceNavigation } from "./api";
+import { rpc } from "./api";
 import { readViewer } from "./bot-page";
 import { t } from "./i18n";
 

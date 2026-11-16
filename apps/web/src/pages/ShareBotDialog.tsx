@@ -12,6 +12,7 @@ import {
   connectorKey,
   declareApp,
   givableSkills,
+  keyLockedBySpace,
   keySharedWithAudience,
   shareableApps,
   shareKeyWithAudience,
@@ -246,7 +247,7 @@ export function ShareBotDialog({
                       <Checkbox
                         aria-label={key.name}
                         checked={keySharedWithAudience(key, sharing)}
-                        disabled={pending}
+                        disabled={pending || keyLockedBySpace(key, sharing)}
                         onCheckedChange={(checked) => void shareKey(key, checked)}
                       />
                     </SettingRow>

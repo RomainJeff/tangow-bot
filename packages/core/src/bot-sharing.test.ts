@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   declareApp,
   givableSkills,
+  keyLockedBySpace,
   keySharedWithAudience,
   shareableApps,
   shareKeyWithAudience,
@@ -129,12 +130,19 @@ describe("a key in a bot's share sheet", () => {
       userIds: ["grace", "linus"],
       space: false,
     });
-    expect(shareKeyWithAudience({ userIds: ["grace", "ada"], space: true }, people, false)).toEqual(
-      {
-        userIds: ["ada"],
-        space: true,
-      },
-    );
+    expect(
+      shareKeyWithAudience({ userIds: ["grace", "ada"], space: false }, people, false),
+    ).toEqual({
+      userIds: ["ada"],
+      space: false,
+    });
+  });
+
+  it("shows a key shared with the whole Space as ticked and locked for chosen people", () => {
+    const everyone = { userIds: [], space: true };
+    expect(keySharedWithAudience(everyone, people)).toBe(true);
+    expect(keyLockedBySpace(everyone, people)).toBe(true);
+    expect(shareKeyWithAudience(everyone, people, false)).toEqual(everyone);
   });
 
   it("follows the whole Space only from the owner's own tick", () => {

@@ -3,6 +3,7 @@ import type { ShareableApp } from "@tangow/core";
 import {
   connectorKey,
   declareApp,
+  keyLockedBySpace,
   keySharedWithAudience,
   shareKeyWithAudience,
   shareWithPerson,
@@ -237,7 +238,7 @@ export default function BotShareScreen() {
                         <InkSwitch
                           accessibilityLabel={key.name}
                           value={keySharedWithAudience(key, sharing)}
-                          disabled={pending}
+                          disabled={pending || keyLockedBySpace(key, sharing)}
                           onValueChange={(checked) => void shareKey(key, checked)}
                         />
                       }

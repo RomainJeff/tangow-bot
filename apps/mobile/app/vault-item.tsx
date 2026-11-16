@@ -13,7 +13,8 @@ import { userInitials } from "../lib/inbox";
 import { useMobileTokens, useThemedStyles } from "../lib/native";
 import { serverMessage } from "../lib/server-error";
 import { nativeTextStyle } from "../lib/typography";
-import { readSpacePeople, type VaultScreen } from "../lib/vault";
+import type { VaultScreen } from "../lib/vault";
+import { readSpacePeople } from "../lib/vault";
 
 type AuthType = BotSecretDestination["auth"]["type"];
 
