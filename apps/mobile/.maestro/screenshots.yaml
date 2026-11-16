@@ -41,7 +41,7 @@ tags:
     optional: true
 
 # iOS can offer to save the password a moment after the inbox loads, hiding the whole app.
-# iOS also reads a bot row as one label ("Researcher, Product research, ...").
+# iOS reads a whole row as one label ("Researcher, Product research, ...", "Usage, Forward").
 - extendedWaitUntil:
     visible: "Researcher.*|Not Now"
     timeout: 30000
@@ -49,10 +49,18 @@ tags:
     visible: "Not Now"
     timeout: 5000
     optional: true
-- tapOn:
-    text: "Not Now"
-    optional: true
-- assertVisible: "Researcher.*"
+# The inbox does not reload after the sheet, so relaunch to show it.
+- runFlow:
+    when:
+      visible: "Not Now"
+    commands:
+      - tapOn: "Not Now"
+      - launchApp:
+          permissions:
+            notifications: deny
+- extendedWaitUntil:
+    visible: "Researcher.*"
+    timeout: 30000
 - takeScreenshot: "04-inbox"
 
 - tapOn: "Activity"
@@ -63,54 +71,82 @@ tags:
 
 - tapOn: "Search"
 - inputText: "fixture"
-- hideKeyboard
+# On iOS, hiding the keyboard taps the content behind it and opens a result.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - hideKeyboard
 - extendedWaitUntil:
-    visible: "Weekly fixture review"
+    visible: "Weekly fixture review.*"
     timeout: 10000
 - takeScreenshot: "06-search-results"
 
+# iOS asks before opening each link.
 - openLink: "tangow:///new"
+- tapOn:
+    text: "Open"
+    optional: true
 - assertVisible: "Name this bot"
 - takeScreenshot: "07-new-bot"
 
 - openLink: "tangow:///new-group"
+- tapOn:
+    text: "Open"
+    optional: true
 - assertVisible: "Name this group"
 - takeScreenshot: "08-new-group"
 
 - openLink: "tangow:///new-space"
+- tapOn:
+    text: "Open"
+    optional: true
 - assertVisible: "Customer support"
 - takeScreenshot: "09-new-space"
 
 - openLink: "tangow:///account"
+- tapOn:
+    text: "Open"
+    optional: true
 - extendedWaitUntil:
-    visible: "Integrations"
+    visible: "Integrations.*"
     timeout: 10000
 - takeScreenshot: "10-settings"
-- tapOn: "Usage"
+- tapOn: "Usage.*"
 - extendedWaitUntil:
     visible: "Model spend uses your provider keys."
     timeout: 10000
 - takeScreenshot: "10d-usage"
-- back
+# Maestro's back is Android only.
+- openLink: "tangow:///account"
+- tapOn:
+    text: "Open"
+    optional: true
 
-- tapOn: "Computer"
+- tapOn: "Computer.*"
 - extendedWaitUntil:
-    visible: "Update all computers|No computers"
+    visible: "Update all computers|Update computer|No computers"
     timeout: 10000
 - takeScreenshot: "10c-computer-settings"
-- back
+- openLink: "tangow:///account"
+- tapOn:
+    text: "Open"
+    optional: true
 
-- tapOn: ${TANGOW_SCREENSHOT_EMAIL}
+- tapOn: ".*${TANGOW_SCREENSHOT_EMAIL}.*"
 - extendedWaitUntil:
-    visible: "Change password"
+    visible: "Change password.*"
     timeout: 10000
 - takeScreenshot: "10e-profile"
-- tapOn: "Change password"
+- tapOn: "Change password.*"
 - assertVisible: "Current password"
 - takeScreenshot: "10b-change-password"
 - back
 
 - openLink: "tangow:///models"
+- tapOn:
+    text: "Open"
+    optional: true
 - extendedWaitUntil:
     visible: "Active model"
     timeout: 10000
@@ -121,11 +157,24 @@ tags:
 - assertVisible: "Complex"
 - takeScreenshot: "11-auto-models"
 - tapOn: "Active model"
-- tapOn: "Scripted.*"
+# The iOS menu can list Auto alone; keep it then.
+- runFlow:
+    when:
+      visible: "Scripted.*"
+    commands:
+      - tapOn: "Scripted.*"
+- runFlow:
+    when:
+      notVisible: "Scripted.*"
+    commands:
+      - tapOn: "Auto"
 - takeScreenshot: "11-models"
 
 - openLink: "tangow:///account"
-- tapOn: "Providers"
+- tapOn:
+    text: "Open"
+    optional: true
+- tapOn: "Providers.*"
 - extendedWaitUntil:
     visible: "Models"
     timeout: 10000
@@ -137,15 +186,22 @@ tags:
 - scrollUntilVisible:
     element: "Show less"
     direction: DOWN
+    timeout: 60000
 - takeScreenshot: "11b-all-providers"
 
 - openLink: "tangow:///voice"
+- tapOn:
+    text: "Open"
+    optional: true
 - extendedWaitUntil:
     visible: "Connect a voice provider"
     timeout: 10000
 - takeScreenshot: "12-voice"
 
 - openLink: "tangow:///integrations"
+- tapOn:
+    text: "Open"
+    optional: true
 - extendedWaitUntil:
     visible: "Search apps"
     timeout: 10000
@@ -156,38 +212,57 @@ tags:
 - takeScreenshot: "14-integrations-advanced"
 
 - openLink: "tangow:///skills"
+- tapOn:
+    text: "Open"
+    optional: true
 - extendedWaitUntil:
     visible: "New skill"
     timeout: 10000
 - takeScreenshot: "14b-skills"
-- tapOn: "team-review"
+- scrollUntilVisible:
+    element: "team-review.*"
+    direction: DOWN
+- tapOn: "team-review.*"
 - assertVisible: "Review shared work before publishing."
 - assertVisible: "Content lives on the shared volume."
 - takeScreenshot: "14c-shared-skill"
 
 - openLink: "tangow:///thread?botId=${TANGOW_SCREENSHOT_BOT_ID}&name=Researcher"
-- extendedWaitUntil:
-    visible: "The fixture workspace is ready."
-    timeout: 10000
-- assertNotVisible: "Reply"
-- assertNotVisible: "Select text"
+- tapOn:
+    text: "Open"
+    optional: true
+- scrollUntilVisible:
+    element: "The fixture workspace is ready."
+    direction: UP
+    centerElement: true
+- assertNotVisible: ".*Reply"
+- assertNotVisible: ".*Select text"
 - takeScreenshot: "15-thread"
 - longPressOn: "The fixture workspace is ready."
-- assertVisible: "Reply"
-- assertVisible: "Speak message"
-- assertVisible: "Copy"
-- assertVisible: "Select text"
+- assertVisible: ".*Reply"
+- assertVisible: ".*Speak message"
+- assertVisible: ".*Copy"
+- assertVisible: ".*Select text"
 - takeScreenshot: "15b-message-actions"
-- tapOn: "Select text"
-- assertNotVisible: "Reply"
+- tapOn: ".*Select text"
+- assertNotVisible: ".*Reply"
 - takeScreenshot: "15d-message-select-text"
-- back
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn: "Close"
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
 # User messages have no Speak.
 - longPressOn: "Summarize the fixture launch checklist."
-- assertVisible: "Reply"
-- assertVisible: "Copy"
-- assertNotVisible: "Speak message"
-- tapOn: "Reply"
+- assertVisible: ".*Reply"
+- assertVisible: ".*Copy"
+- assertNotVisible: ".*Speak message"
+- tapOn: ".*Reply"
 - assertVisible: "Replying to"
 - tapOn: "Cancel reply"
 # Bot actions live on a long press of the header title (its accessible name
@@ -209,29 +284,38 @@ tags:
       - back
 
 - openLink: "tangow:///bot?botId=${TANGOW_SCREENSHOT_BOT_ID}&tab=settings"
+- tapOn:
+    text: "Open"
+    optional: true
 - extendedWaitUntil:
-    visible: "Instructions"
+    visible: "Instructions.*"
     timeout: 10000
-- assertVisible: "Voice and replies"
-- assertVisible: "Model"
-- assertVisible: "Space default.*"
+- assertVisible: "Voice and replies.*"
+- assertVisible: "Model.*"
+- assertVisible: ".*(Space default|Default \\().*"
 - takeScreenshot: "17-bot-settings"
 
 - openLink: "tangow:///computer?botId=${TANGOW_SCREENSHOT_BOT_ID}&name=Researcher"
+- tapOn:
+    text: "Open"
+    optional: true
 - extendedWaitUntil:
     visible: "Take control"
     timeout: 10000
 - takeScreenshot: "18-computer"
 
 - openLink: "tangow:///group-thread?groupId=${TANGOW_SCREENSHOT_GROUP_ID}&name=Launch%20team"
+- tapOn:
+    text: "Open"
+    optional: true
 - extendedWaitUntil:
     visible: "The fixture launch plan is ready."
     timeout: 10000
-- assertNotVisible: "Reply"
+- assertNotVisible: ".*Reply"
 - takeScreenshot: "19-group-thread"
 - longPressOn: "The fixture launch plan is ready."
-- assertVisible: "Reply"
-- assertVisible: "Select text"
+- assertVisible: ".*Reply"
+- assertVisible: ".*Select text"
 - back
 - tapOn: "Open in full screen"
 - takeScreenshot: "19b-widget-full-screen"
@@ -244,6 +328,9 @@ tags:
 - takeScreenshot: "19c-group-thread-people"
 
 - openLink: "tangow:///group-settings?groupId=${TANGOW_SCREENSHOT_GROUP_ID}"
+- tapOn:
+    text: "Open"
+    optional: true
 - extendedWaitUntil:
     visible: "Delete group"
     timeout: 10000
@@ -252,6 +339,9 @@ tags:
 - takeScreenshot: "20-group-settings"
 
 - openLink: "tangow:///bot-routine?botId=${TANGOW_SCREENSHOT_BOT_ID}&routineId=${TANGOW_SCREENSHOT_ROUTINE_ID}"
+- tapOn:
+    text: "Open"
+    optional: true
 - extendedWaitUntil:
     visible: "Weekly fixture review"
     timeout: 10000
@@ -260,7 +350,6 @@ tags:
 # A bot shared with this user: their own thread, the team save under the reply, the MCP card
 # pointing to web or desktop, and a title menu without the owner's screens.
 - openLink: "tangow:///thread?botId=${TANGOW_SCREENSHOT_SHARED_BOT_ID}&name=Release%20notes"
-# iOS asks before opening its own link.
 - tapOn:
     text: "Open"
     optional: true
@@ -289,7 +378,6 @@ tags:
 # The shared bot's computer as the member sees it: no mode picker, and no Take control until
 # their own run asks for them.
 - openLink: "tangow:///computer?botId=${TANGOW_SCREENSHOT_SHARED_BOT_ID}&name=Release%20notes&shared=1"
-# iOS asks before opening its own link.
 - tapOn:
     text: "Open"
     optional: true
@@ -302,7 +390,6 @@ tags:
 
 # The owner's share sheet for Writer, shared with the teammate, then its team memory.
 - openLink: "tangow:///bot-share?botId=${TANGOW_SCREENSHOT_SHARE_BOT_ID}"
-# iOS asks before opening its own link.
 - tapOn:
     text: "Open"
     optional: true
@@ -316,7 +403,6 @@ tags:
 - tapOn: "Done"
 
 - openLink: "tangow:///bot?botId=${TANGOW_SCREENSHOT_SHARE_BOT_ID}"
-# iOS asks before opening its own link.
 - tapOn:
     text: "Open"
     optional: true
@@ -331,7 +417,6 @@ tags:
 
 # A group the teammate created with the user: who is in it, read-only, and Leave group.
 - openLink: "tangow:///group-settings?groupId=${TANGOW_SCREENSHOT_MEMBER_GROUP_ID}"
-# iOS asks before opening its own link.
 - tapOn:
     text: "Open"
     optional: true
@@ -344,6 +429,9 @@ tags:
 
 # Verify saved appearance changes on already-mounted screens and modal routes.
 - openLink: "tangow:///account"
+- tapOn:
+    text: "Open"
+    optional: true
 - extendedWaitUntil:
     visible: "Dark"
     timeout: 10000
@@ -351,37 +439,65 @@ tags:
 - takeScreenshot: "22-account-dark"
 
 - openLink: "tangow:///new"
+- tapOn:
+    text: "Open"
+    optional: true
 - assertVisible: "Name this bot"
 - takeScreenshot: "23-new-bot-dark"
 
 - openLink: "tangow:///new-group"
+- tapOn:
+    text: "Open"
+    optional: true
 - assertVisible: "Name this group"
 - takeScreenshot: "24-new-group-dark"
 
 - openLink: "tangow:///new-space"
+- tapOn:
+    text: "Open"
+    optional: true
 - assertVisible: "Customer support"
 - takeScreenshot: "25-new-space-dark"
 
 - openLink: "tangow:///thread?botId=${TANGOW_SCREENSHOT_BOT_ID}&name=Researcher"
-- extendedWaitUntil:
-    visible: "The fixture workspace is ready."
-    timeout: 10000
+- tapOn:
+    text: "Open"
+    optional: true
+- scrollUntilVisible:
+    element: "The fixture workspace is ready."
+    direction: UP
+    centerElement: true
 - takeScreenshot: "26-thread-dark"
 
 - openLink: "tangow:///group-thread?groupId=${TANGOW_SCREENSHOT_GROUP_ID}&name=Launch%20team"
+- tapOn:
+    text: "Open"
+    optional: true
 - extendedWaitUntil:
     visible: "The fixture launch plan is ready."
     timeout: 10000
 - takeScreenshot: "27-group-thread-dark"
 
 - openLink: "tangow:///group-settings?groupId=${TANGOW_SCREENSHOT_GROUP_ID}"
+- tapOn:
+    text: "Open"
+    optional: true
 - assertVisible: "Delete group"
 - takeScreenshot: "28-group-settings-dark"
 
 - openLink: "tangow:///account"
+- tapOn:
+    text: "Open"
+    optional: true
 - tapOn: "Light"
 - openLink: "tangow:///thread?botId=${TANGOW_SCREENSHOT_BOT_ID}&name=Researcher"
-- assertVisible: "The fixture workspace is ready."
+- tapOn:
+    text: "Open"
+    optional: true
+- scrollUntilVisible:
+    element: "The fixture workspace is ready."
+    direction: UP
+    centerElement: true
 - takeScreenshot: "29-thread-light-restored"
 
 # Capture the reaction after theme comparisons. Reactions are append-only, so adding
@@ -391,11 +507,14 @@ tags:
 - extendedWaitUntil:
     visible: "👍"
     timeout: 10000
-- assertNotVisible: "Reply"
+- assertNotVisible: ".*Reply"
 - takeScreenshot: "15c-message-reaction"
 
 # The computer was booted above, so its update runs through the real fixture API.
 - openLink: "tangow:///computer-settings"
+- tapOn:
+    text: "Open"
+    optional: true
 - extendedWaitUntil:
     visible: "Update computer"
     timeout: 10000
