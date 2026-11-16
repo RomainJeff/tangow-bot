@@ -142,9 +142,9 @@ pnpm test:e2e
 - [Performance testing](./docs/performance.md)
 
 ## Contributing
+We don't take pull requests. Have your agent [open an issue](https://github.com/RomainJeff/tangow-bot/issues) describing the bug or idea, and our agents usually turn it around fast.
 
-Contributions are welcome. Please read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a pull
-request. For security vulnerabilities, follow [SECURITY.md](./SECURITY.md) instead of filing a public
+For security vulnerabilities, follow [SECURITY.md](./SECURITY.md) instead of filing a public
 issue.
 
 Tangow is licensed under the [Apache License 2.0](./LICENSE).
