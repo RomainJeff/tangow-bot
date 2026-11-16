@@ -357,8 +357,25 @@ describeWithDatabase("Composio catalog reconciliation", () => {
         allowedTools: ["read"],
       },
     });
+    const takenSecret = await secrets.put(JSON.stringify({ secret: "fake-oauth-token" }), {
+      ...owner,
+      operationId: "test",
+      traceId: "test",
+      signal: new AbortController().signal,
+    });
+    await handles.prisma.secret.create({ data: { ...owner, ...takenSecret, kind: "mcp" } });
+    const taken = await handles.prisma.mcpServer.create({
+      data: {
+        ...owner,
+        name: "Taken",
+        slug: "taken",
+        endpoint: "https://taken.example.test/mcp",
+        transport: "streamable_http",
+        secretId: takenSecret.id,
+      },
+    });
     const oldSecrets: string[] = [];
-    for (const type of ["bearer", "header", "none", "existing", "broken"] as const) {
+    for (const type of ["bearer", "header", "none", "existing", "taken", "broken"] as const) {
       const stored =
         type === "none"
           ? null
@@ -388,7 +405,7 @@ describeWithDatabase("Composio catalog reconciliation", () => {
           secretId: stored?.id,
           config: {
             auth: {
-              type: type === "existing" || type === "broken" ? "bearer" : type,
+              type: type === "existing" || type === "taken" || type === "broken" ? "bearer" : type,
               name: "X-Api-Key",
             },
             ...(type === "header" ? { headers: { "X-Region": "test" } } : {}),
@@ -402,10 +419,14 @@ describeWithDatabase("Composio catalog reconciliation", () => {
       where: owner,
       include: { secret: true, assignments: true },
     });
-    expect(servers).toHaveLength(4);
-    expect(new Set(servers.map((row) => row.slug)).size).toBe(4);
+    expect(servers).toHaveLength(6);
+    expect(new Set(servers.map((row) => row.slug)).size).toBe(6);
     const byHost = (host: string) =>
-      servers.find((row) => row.endpoint === `https://${host}.example.test/mcp`)!;
+      servers.find(
+        (row) => row.endpoint === `https://${host}.example.test/mcp` && row.id !== taken.id,
+      )!;
+    const credential = (row: (typeof servers)[number]) =>
+      JSON.parse(secrets.load(row.secret!.ciphertext, row.secret!.id));
     expect(
       JSON.parse(secrets.load(byHost("bearer").secret!.ciphertext, byHost("bearer").secret!.id)),
     ).toEqual({ secret: "fake-bearer-token", env: {}, headers: {} });
@@ -415,10 +436,19 @@ describeWithDatabase("Composio catalog reconciliation", () => {
     expect(byHost("none").secretId).toBeNull();
     expect(byHost("existing").id).toBe(existing.id);
     expect(byHost("existing").transport).toBe("sse");
+    expect(credential(byHost("existing"))).toEqual({
+      secret: "fake-existing-token",
+      env: {},
+      headers: {},
+    });
+    expect(credential(servers.find((row) => row.id === taken.id)!)).toEqual({
+      secret: "fake-oauth-token",
+    });
+    expect(credential(byHost("taken"))).toMatchObject({ secret: "fake-taken-token" });
     expect(byHost("existing").assignments).toContainEqual(
       expect.objectContaining({ botId: active.id, allowAllTools: false, allowedTools: ["read"] }),
     );
-    for (const row of servers.filter((row) => row.id !== existing.id)) {
+    for (const row of servers.filter((row) => row.id !== existing.id && row.id !== taken.id)) {
       expect(row.assignments).toContainEqual(
         expect.objectContaining({ botId: active.id, allowAllTools: true }),
       );
