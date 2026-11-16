@@ -236,7 +236,6 @@ import {
   approvedReplayArgs,
   boundDirectApprovalDetails,
   boundDirectApprovalRequest,
-  catalogApprovalConnectorId,
   catalogApprovalDetails,
   catalogApprovalInnerArgs,
   catalogApprovalMatchesLiveRoute,
@@ -248,7 +247,6 @@ import {
   inputPausedToolResult,
   isFailedToolResult,
   isToolPauseResult,
-  parseCatalogApprovalTarget,
   replaceCompletedExternalEffectResult,
   resolveDuplicateEffectGate,
   SPAWN_BOT_CANCELLED_RESULT,
@@ -354,7 +352,6 @@ import {
   CATALOG_EXECUTE,
   catalogIndexText,
   EXACT_TOOL_SEARCH_TEXT,
-  uniquifyInstalledToolName,
 } from "./lazy-tool-catalog.js";
 import {
   buildMcpCredentialBlob,
@@ -1075,26 +1072,11 @@ function approvedCall(
     }
     // Catalog shrank: wrapper is gone — resume as the matching direct tool.
     const innerArgs = catalogApprovalInnerArgs(catalog) ?? {};
-    if (exposed.has(effect.kind)) return { tool: effect.kind, args: innerArgs };
-    const target = parseCatalogApprovalTarget(catalog.args);
-    const connectorId = catalogApprovalConnectorId(catalog.toolName);
-    const uniquified =
-      target && connectorId === "installed"
-        ? uniquifyInstalledToolName(target.resourceId, target.toolName)
-        : undefined;
-    if (uniquified && exposed.has(uniquified)) return { tool: uniquified, args: innerArgs };
     return { tool: effect.kind, args: innerArgs };
   }
   const bound = boundDirectApprovalDetails(effect.request, CATALOG_APPROVAL_TOOL);
   if (bound) {
     if (!exposed || exposed.has(effect.kind)) return { tool: effect.kind, args: bound.args };
-    // Name collision uniquify can rename the direct tool while the catalog is still
-    // small — prefer that exposed name over a catalog wrapper that does not exist yet.
-    const uniquified =
-      bound.route.connectorId === "installed"
-        ? uniquifyInstalledToolName(bound.route.resourceId, bound.route.toolName)
-        : undefined;
-    if (uniquified && exposed.has(uniquified)) return { tool: uniquified, args: bound.args };
     const wrapper = catalogExecuteToolName(bound.route.connectorId);
     if (exposed.has(wrapper)) {
       return {
@@ -1102,7 +1084,7 @@ function approvedCall(
         args: { id: catalogIdForRoute(bound.route), arguments: bound.args },
       };
     }
-    return { tool: uniquified ?? effect.kind, args: bound.args };
+    return { tool: effect.kind, args: bound.args };
   }
   return approvedReplayCall(effect.kind, effect.request);
 }
@@ -3512,8 +3494,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               : undefined;
           const nextBound = boundDirectApprovalDetails(nextApprovedRequest, CATALOG_APPROVAL_TOOL);
           const nextCatalog = catalogApprovalDetails(nextApprovedRequest, CATALOG_APPROVAL_TOOL);
-          // After collision uniquify, the live tool name may differ from the stored effect
-          // kind while still targeting the same bound connector resource.
+          // A renamed server can expose a new name for the same bound resource.
           const sameBoundResource = Boolean(
             nextBound && liveRoute && approvalRoutesMatch(nextBound.route, liveRoute),
           );

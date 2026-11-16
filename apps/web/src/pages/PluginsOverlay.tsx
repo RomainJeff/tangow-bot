@@ -8,7 +8,6 @@ import {
 } from "@tangow/core";
 import { Button, Input } from "@tangow/ui-web";
 import { useMemo, useState } from "react";
-import { AdvancedIntegrations } from "./plugins/advanced-integrations";
 import { ConnectionDetail } from "./plugins/connection-detail";
 import { itemKey, useIntegrations } from "./plugins/use-integrations";
 
@@ -278,8 +277,6 @@ export function PluginsOverlay({ activeBotId }: { activeBotId?: string }) {
                 </Button>
               </div>
             ) : null}
-
-            <AdvancedIntegrations integrations={integrations} />
           </>
         )}
       </div>

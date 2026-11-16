@@ -1,6 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { Bot, BotMcpServer, DeclaredMcp, McpServer } from "@tangow/contracts";
-import { deriveMcpSlug } from "@tangow/core";
+import { deriveMcpApp } from "@tangow/core";
 import {
   Button,
   Card,
@@ -13,7 +13,6 @@ import {
 } from "@tangow/ui-web";
 import { Check, Ellipsis } from "lucide-react";
 import { useEffect, useId, useState } from "react";
-import { getDomainWithoutSuffix } from "tldts";
 import { connectMcpOauth, MCP_OAUTH_CHANNEL } from "../../lib/mcp-connect";
 import { rpc } from "../../lib/rpc";
 import { AppEditor } from "./AppEditor";
@@ -122,16 +121,10 @@ export function CustomApps({ declared }: { declared?: DeclaredAppContext }) {
     const existing = servers.find(
       (server) => server.endpoint && new URL(server.endpoint).href === url.href,
     );
-    const host = url.hostname.replace(/^(?:(?:mcp|api|www)\.)+/, "");
-    const label = getDomainWithoutSuffix(host) ?? host.split(".")[0] ?? host;
-    const name = label.charAt(0).toUpperCase() + label.slice(1);
     const server =
       existing ??
       (await rpc.mcp.servers.create({
-        name,
-        slug: deriveMcpSlug(name),
-        endpoint: url.href,
-        transport: url.pathname.endsWith("/sse") ? "sse" : "streamable_http",
+        ...deriveMcpApp(url.href),
         botIds: bots.map((bot) => bot.id),
       }));
     await connect(server, !existing);
