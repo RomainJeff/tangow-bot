@@ -266,7 +266,7 @@ msgstr ""
 
 #: src/components/integrations/IntegrationSetup.tsx:256
 #: src/pages/custom-apps/AppEditor.tsx:136
-#: src/pages/custom-apps/CustomApps.tsx:220
+#: src/pages/custom-apps/CustomApps.tsx:227
 msgid "Access token"
 msgstr "액세스 토큰"
 
@@ -296,7 +296,7 @@ msgstr "작업 실행 전 확인"
 #. placeholder {0}: sectionMenu.section.name
 #: src/pages/bot-page/BotPage.tsx:344
 #: src/pages/BotContextMenu.tsx:134
-#: src/pages/custom-apps/CustomApps.tsx:307
+#: src/pages/custom-apps/CustomApps.tsx:314
 #: src/pages/shell/shell-overlays.tsx:421
 #: src/pages/shell/sidebar-roster.tsx:161
 msgid "Actions for {0}"
@@ -336,7 +336,7 @@ msgid "Activity, last run failed"
 msgstr "활동, 마지막 실행 실패"
 
 #: src/pages/custom-apps/AppEditor.tsx:154
-#: src/pages/custom-apps/CustomApps.tsx:239
+#: src/pages/custom-apps/CustomApps.tsx:246
 #: src/pages/plugins/advanced-integrations.tsx:163
 #: src/pages/PluginsOverlay.tsx:73
 #: src/pages/ScratchpadSection.tsx:196
@@ -536,8 +536,8 @@ msgid "API key header"
 msgstr "API 키 헤더"
 
 #: src/pages/custom-apps/AppEditor.tsx:119
-#: src/pages/custom-apps/CustomApps.tsx:183
-#: src/pages/custom-apps/CustomApps.tsx:202
+#: src/pages/custom-apps/CustomApps.tsx:187
+#: src/pages/custom-apps/CustomApps.tsx:206
 msgid "App URL"
 msgstr "앱 URL"
 
@@ -813,7 +813,7 @@ msgstr "서버에 연결할 수 없습니다."
 #: src/pages/bot-page/page-kit.tsx:148
 #: src/pages/bot-page/RoutineTriggers.tsx:296
 #: src/pages/custom-apps/AppEditor.tsx:157
-#: src/pages/custom-apps/CustomApps.tsx:255
+#: src/pages/custom-apps/CustomApps.tsx:262
 #: src/pages/KnowledgeSection.tsx:227
 #: src/pages/KnowledgeSection.tsx:692
 #: src/pages/plugins/advanced-integrations.tsx:303
@@ -1044,7 +1044,7 @@ msgstr "색상 {0}"
 
 #: src/pages/custom-apps/AppEditor.tsx:103
 #: src/pages/custom-apps/AppEditor.tsx:104
-#: src/pages/custom-apps/CustomApps.tsx:183
+#: src/pages/custom-apps/CustomApps.tsx:187
 msgid "Command"
 msgstr "실행 명령"
 
@@ -1097,7 +1097,7 @@ msgstr "컴퓨터를 사용할 수 없음"
 msgid "Computer updated"
 msgstr ""
 
-#: src/pages/custom-apps/CustomApps.tsx:346
+#: src/pages/custom-apps/CustomApps.tsx:353
 #: src/pages/KnowledgeSection.tsx:687
 msgid "Confirm delete"
 msgstr "삭제 확인"
@@ -1288,7 +1288,7 @@ msgstr ""
 #: src/components/integrations/IntegrationSetup.tsx:69
 #: src/pages/custom-apps/AppEditor.tsx:63
 #: src/pages/custom-apps/CustomApps.tsx:55
-#: src/pages/custom-apps/CustomApps.tsx:106
+#: src/pages/custom-apps/CustomApps.tsx:111
 #: src/pages/plugins/use-integrations.ts:231
 msgid "Could not connect"
 msgstr "연결하지 못했습니다."
@@ -1827,7 +1827,7 @@ msgstr "기본 기억 범위"
 
 #: src/pages/bot-page/BotPage.tsx:383
 #: src/pages/BotContextMenu.tsx:204
-#: src/pages/custom-apps/CustomApps.tsx:348
+#: src/pages/custom-apps/CustomApps.tsx:355
 #: src/pages/KnowledgeSection.tsx:687
 #: src/pages/shell/dialogs.tsx:409
 #: src/pages/shell/dialogs.tsx:470
@@ -1939,7 +1939,7 @@ msgstr ""
 msgid "Discarded"
 msgstr ""
 
-#: src/pages/custom-apps/CustomApps.tsx:327
+#: src/pages/custom-apps/CustomApps.tsx:334
 #: src/pages/DecisionModelSettingsPanel.tsx:111
 #: src/pages/MemorySettingsOverlay.tsx:211
 #: src/pages/ProvidersSettings.tsx:282
@@ -2035,7 +2035,7 @@ msgid "Earlier messages summarized"
 msgstr ""
 
 #: src/components/AskCard.tsx:332
-#: src/pages/custom-apps/CustomApps.tsx:315
+#: src/pages/custom-apps/CustomApps.tsx:322
 msgid "Edit"
 msgstr "수정"
 
@@ -3338,7 +3338,7 @@ msgstr "비밀번호가 일치하지 않습니다"
 msgid "Paste a replacement key"
 msgstr "새 API 키를 붙여넣으세요"
 
-#: src/pages/custom-apps/CustomApps.tsx:288
+#: src/pages/custom-apps/CustomApps.tsx:295
 msgid "Paste an app's MCP URL to give it to your agents."
 msgstr "앱의 MCP URL을 붙여넣어 에이전트에 추가하세요."
 
@@ -3471,7 +3471,7 @@ msgstr ""
 msgid "Recommended · {description}"
 msgstr ""
 
-#: src/pages/custom-apps/CustomApps.tsx:365
+#: src/pages/custom-apps/CustomApps.tsx:372
 msgid "Reconnect"
 msgstr "다시 연결"
 
@@ -3479,7 +3479,7 @@ msgstr "다시 연결"
 msgid "Reconnect {app}"
 msgstr ""
 
-#: src/pages/custom-apps/CustomApps.tsx:357
+#: src/pages/custom-apps/CustomApps.tsx:364
 msgid "Reconnect needed"
 msgstr "다시 연결 필요"
 
@@ -3968,7 +3968,7 @@ msgstr ""
 
 #: src/pages/custom-apps/AppEditor.tsx:79
 #: src/pages/custom-apps/AppEditor.tsx:80
-#: src/pages/custom-apps/CustomApps.tsx:181
+#: src/pages/custom-apps/CustomApps.tsx:185
 msgid "Server name"
 msgstr "서버 이름"
 
@@ -4187,7 +4187,7 @@ msgstr "시작하는 중…"
 msgid "Status"
 msgstr ""
 
-#: src/pages/custom-apps/CustomApps.tsx:268
+#: src/pages/custom-apps/CustomApps.tsx:275
 msgid "stdio command"
 msgstr "stdio 명령"
 
@@ -4217,7 +4217,7 @@ msgid "Stopped."
 msgstr "중지되었습니다."
 
 #: src/pages/custom-apps/AppEditor.tsx:142
-#: src/pages/custom-apps/CustomApps.tsx:226
+#: src/pages/custom-apps/CustomApps.tsx:233
 msgid "Stored encrypted"
 msgstr "암호화해 저장"
 
@@ -4326,6 +4326,14 @@ msgstr "선택한 기억 서비스는 현재 빌드에서 사용할 수 없습�
 #: src/pages/bot-page/SettingDetails.tsx:139
 msgid "Thinking"
 msgstr "생각 깊이"
+
+#: src/pages/custom-apps/CustomApps.tsx:102
+msgid "This access token was refused."
+msgstr "이 액세스 토큰이 거부되었습니다."
+
+#: src/pages/custom-apps/CustomApps.tsx:103
+msgid "This app needs an access token."
+msgstr "이 앱에는 액세스 토큰이 필요합니다."
 
 #: src/components/AgentSteps.tsx:101
 msgid "This call ran before step details were recorded."

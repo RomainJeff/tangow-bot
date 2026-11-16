@@ -141,19 +141,14 @@ test("reveals a token only after connection failure, retries and reuses the save
   await page.route("**/rpc/mcp/oauth/begin", async (route) => {
     if (tokenSaved)
       await route.fulfill({ json: { json: { status: "authorization_not_requested" } } });
-    else
-      await route.fulfill({
-        status: 400,
-        json: {
-          json: { defined: false, code: "BAD_REQUEST", status: 400, message: "Unauthorized" },
-        },
-      });
+    else await route.fulfill({ json: { json: { status: "token_required" } } });
   });
   await page.goto("/integrations/setup?mode=mcp");
   await expect(page.getByRole("heading", { name: "Custom apps" })).toBeVisible();
   await page.getByLabel("App URL", { exact: true }).fill("https://mcp.linear.app/mcp");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByLabel("Access token", { exact: true })).toBeVisible();
+  await expect(page.getByText("This app needs an access token.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add", exact: true })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Actions for Linear", exact: true })).toBeVisible();
   await captureScreenshot(page, testInfo, "custom-apps-token-desktop");

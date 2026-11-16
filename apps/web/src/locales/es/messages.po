@@ -266,7 +266,7 @@ msgstr ""
 
 #: src/components/integrations/IntegrationSetup.tsx:256
 #: src/pages/custom-apps/AppEditor.tsx:136
-#: src/pages/custom-apps/CustomApps.tsx:220
+#: src/pages/custom-apps/CustomApps.tsx:227
 msgid "Access token"
 msgstr "Token de acceso"
 
@@ -296,7 +296,7 @@ msgstr "Confirmaciones de acción"
 #. placeholder {0}: sectionMenu.section.name
 #: src/pages/bot-page/BotPage.tsx:344
 #: src/pages/BotContextMenu.tsx:134
-#: src/pages/custom-apps/CustomApps.tsx:307
+#: src/pages/custom-apps/CustomApps.tsx:314
 #: src/pages/shell/shell-overlays.tsx:421
 #: src/pages/shell/sidebar-roster.tsx:161
 msgid "Actions for {0}"
@@ -336,7 +336,7 @@ msgid "Activity, last run failed"
 msgstr "Actividad, la última ejecución falló"
 
 #: src/pages/custom-apps/AppEditor.tsx:154
-#: src/pages/custom-apps/CustomApps.tsx:239
+#: src/pages/custom-apps/CustomApps.tsx:246
 #: src/pages/plugins/advanced-integrations.tsx:163
 #: src/pages/PluginsOverlay.tsx:73
 #: src/pages/ScratchpadSection.tsx:196
@@ -536,8 +536,8 @@ msgid "API key header"
 msgstr "Encabezado de clave de API"
 
 #: src/pages/custom-apps/AppEditor.tsx:119
-#: src/pages/custom-apps/CustomApps.tsx:183
-#: src/pages/custom-apps/CustomApps.tsx:202
+#: src/pages/custom-apps/CustomApps.tsx:187
+#: src/pages/custom-apps/CustomApps.tsx:206
 msgid "App URL"
 msgstr "URL de la app"
 
@@ -813,7 +813,7 @@ msgstr "No se puede alcanzar el servidor."
 #: src/pages/bot-page/page-kit.tsx:148
 #: src/pages/bot-page/RoutineTriggers.tsx:296
 #: src/pages/custom-apps/AppEditor.tsx:157
-#: src/pages/custom-apps/CustomApps.tsx:255
+#: src/pages/custom-apps/CustomApps.tsx:262
 #: src/pages/KnowledgeSection.tsx:227
 #: src/pages/KnowledgeSection.tsx:692
 #: src/pages/plugins/advanced-integrations.tsx:303
@@ -1044,7 +1044,7 @@ msgstr "Color {0}"
 
 #: src/pages/custom-apps/AppEditor.tsx:103
 #: src/pages/custom-apps/AppEditor.tsx:104
-#: src/pages/custom-apps/CustomApps.tsx:183
+#: src/pages/custom-apps/CustomApps.tsx:187
 msgid "Command"
 msgstr "Comando"
 
@@ -1097,7 +1097,7 @@ msgstr "Computadora no disponible"
 msgid "Computer updated"
 msgstr ""
 
-#: src/pages/custom-apps/CustomApps.tsx:346
+#: src/pages/custom-apps/CustomApps.tsx:353
 #: src/pages/KnowledgeSection.tsx:687
 msgid "Confirm delete"
 msgstr "Confirmar eliminación"
@@ -1288,7 +1288,7 @@ msgstr ""
 #: src/components/integrations/IntegrationSetup.tsx:69
 #: src/pages/custom-apps/AppEditor.tsx:63
 #: src/pages/custom-apps/CustomApps.tsx:55
-#: src/pages/custom-apps/CustomApps.tsx:106
+#: src/pages/custom-apps/CustomApps.tsx:111
 #: src/pages/plugins/use-integrations.ts:231
 msgid "Could not connect"
 msgstr "No se pudo conectar"
@@ -1827,7 +1827,7 @@ msgstr "Alcance predeterminado"
 
 #: src/pages/bot-page/BotPage.tsx:383
 #: src/pages/BotContextMenu.tsx:204
-#: src/pages/custom-apps/CustomApps.tsx:348
+#: src/pages/custom-apps/CustomApps.tsx:355
 #: src/pages/KnowledgeSection.tsx:687
 #: src/pages/shell/dialogs.tsx:409
 #: src/pages/shell/dialogs.tsx:470
@@ -1939,7 +1939,7 @@ msgstr ""
 msgid "Discarded"
 msgstr ""
 
-#: src/pages/custom-apps/CustomApps.tsx:327
+#: src/pages/custom-apps/CustomApps.tsx:334
 #: src/pages/DecisionModelSettingsPanel.tsx:111
 #: src/pages/MemorySettingsOverlay.tsx:211
 #: src/pages/ProvidersSettings.tsx:282
@@ -2035,7 +2035,7 @@ msgid "Earlier messages summarized"
 msgstr ""
 
 #: src/components/AskCard.tsx:332
-#: src/pages/custom-apps/CustomApps.tsx:315
+#: src/pages/custom-apps/CustomApps.tsx:322
 msgid "Edit"
 msgstr "Editar"
 
@@ -3338,7 +3338,7 @@ msgstr "Las contraseñas no coinciden"
 msgid "Paste a replacement key"
 msgstr "Pega una clave de reemplazo"
 
-#: src/pages/custom-apps/CustomApps.tsx:288
+#: src/pages/custom-apps/CustomApps.tsx:295
 msgid "Paste an app's MCP URL to give it to your agents."
 msgstr "Pega la URL MCP de una app para dársela a tus agentes."
 
@@ -3471,7 +3471,7 @@ msgstr ""
 msgid "Recommended · {description}"
 msgstr ""
 
-#: src/pages/custom-apps/CustomApps.tsx:365
+#: src/pages/custom-apps/CustomApps.tsx:372
 msgid "Reconnect"
 msgstr "Reconectar"
 
@@ -3479,7 +3479,7 @@ msgstr "Reconectar"
 msgid "Reconnect {app}"
 msgstr ""
 
-#: src/pages/custom-apps/CustomApps.tsx:357
+#: src/pages/custom-apps/CustomApps.tsx:364
 msgid "Reconnect needed"
 msgstr "Es necesario reconectar"
 
@@ -3968,7 +3968,7 @@ msgstr ""
 
 #: src/pages/custom-apps/AppEditor.tsx:79
 #: src/pages/custom-apps/AppEditor.tsx:80
-#: src/pages/custom-apps/CustomApps.tsx:181
+#: src/pages/custom-apps/CustomApps.tsx:185
 msgid "Server name"
 msgstr "Nombre del servidor"
 
@@ -4187,7 +4187,7 @@ msgstr "Iniciando…"
 msgid "Status"
 msgstr ""
 
-#: src/pages/custom-apps/CustomApps.tsx:268
+#: src/pages/custom-apps/CustomApps.tsx:275
 msgid "stdio command"
 msgstr "comando stdio"
 
@@ -4217,7 +4217,7 @@ msgid "Stopped."
 msgstr "Detenido."
 
 #: src/pages/custom-apps/AppEditor.tsx:142
-#: src/pages/custom-apps/CustomApps.tsx:226
+#: src/pages/custom-apps/CustomApps.tsx:233
 msgid "Stored encrypted"
 msgstr "Almacenado cifrado"
 
@@ -4326,6 +4326,14 @@ msgstr "El proveedor de memoria seleccionado no está disponible en esta build."
 #: src/pages/bot-page/SettingDetails.tsx:139
 msgid "Thinking"
 msgstr "Pensando"
+
+#: src/pages/custom-apps/CustomApps.tsx:102
+msgid "This access token was refused."
+msgstr "Se rechazó este token de acceso."
+
+#: src/pages/custom-apps/CustomApps.tsx:103
+msgid "This app needs an access token."
+msgstr "Esta app necesita un token de acceso."
 
 #: src/components/AgentSteps.tsx:101
 msgid "This call ran before step details were recorded."

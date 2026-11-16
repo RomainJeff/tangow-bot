@@ -19,7 +19,7 @@ import { rpc } from "../../lib/rpc";
 import { AppEditor } from "./AppEditor";
 
 export type DeclaredAppContext = { botId: string; serverId: string; onAdded: () => void };
-type PendingApp = { server: McpServer; created: boolean; error: string };
+type PendingApp = { server: McpServer; created: boolean; error: string; failed: boolean };
 
 export function CustomApps({ declared }: { declared?: DeclaredAppContext }) {
   const { t } = useLingui();
@@ -91,27 +91,31 @@ export function CustomApps({ declared }: { declared?: DeclaredAppContext }) {
     };
   }, [declared?.botId, declared?.serverId]);
 
-  async function connect(server: McpServer, created: boolean) {
+  async function connect(server: McpServer, created: boolean, withToken = false) {
+    const ask = (error: string, failed = true) => {
+      setEndpoint(server.endpoint ?? "");
+      setPending({ server, created, error, failed });
+    };
     try {
       const result = await connectMcpOauth(server.id);
-      if (result === "cancelled" && created) await rpc.mcp.servers.remove({ id: server.id });
-      setPending(null);
-      setEndpoint("");
-      setSecret("");
+      if (result === "token_required") {
+        if (withToken) ask(t`This access token was refused.`);
+        else ask(t`This app needs an access token.`, false);
+      } else {
+        if (result === "cancelled" && created) await rpc.mcp.servers.remove({ id: server.id });
+        setPending(null);
+        setEndpoint("");
+        setSecret("");
+      }
     } catch (err) {
-      setEndpoint(server.endpoint ?? "");
-      setPending({
-        server,
-        created,
-        error: err instanceof Error ? err.message : t`Could not connect`,
-      });
+      ask(err instanceof Error ? err.message : t`Could not connect`);
     }
     await refresh();
   }
   async function add() {
     if (pending) {
       await rpc.mcp.servers.update({ id: pending.server.id, secret });
-      await connect(pending.server, pending.created);
+      await connect(pending.server, pending.created, true);
       return;
     }
     const url = new URL(endpoint.trim());
@@ -211,7 +215,10 @@ export function CustomApps({ declared }: { declared?: DeclaredAppContext }) {
             {pending || need ? (
               <>
                 {pending ? (
-                  <p role="alert" className="text-sm text-destructive">
+                  <p
+                    role="alert"
+                    className={`text-sm ${pending.failed ? "text-destructive" : "text-muted-foreground"}`}
+                  >
                     {pending.error}
                   </p>
                 ) : null}
