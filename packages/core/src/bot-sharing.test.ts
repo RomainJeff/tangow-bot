@@ -110,8 +110,11 @@ describe("showsTeamMemory", () => {
 
 describe("a key in a bot's share sheet", () => {
   const key = { userIds: ["grace"], space: false };
-  const people = { visibility: "people", userIds: ["grace", "linus"] } as const;
-  const space = { visibility: "space", userIds: [] } as const;
+  const people: Pick<BotSharing, "visibility" | "userIds"> = {
+    visibility: "people",
+    userIds: ["grace", "linus"],
+  };
+  const space: Pick<BotSharing, "visibility" | "userIds"> = { visibility: "space", userIds: [] };
 
   it("is ticked only when everyone the bot is shared with already has it", () => {
     expect(keySharedWithAudience(key, people)).toBe(false);
