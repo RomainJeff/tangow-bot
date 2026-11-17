@@ -34,7 +34,6 @@ import {
   GraphileJobPublisher,
   GraphileJobWorkerHost,
   InMemoryJobQueue,
-  InstalledConnectorProvider,
   isComposioEnabled,
   isMessagingSurfaceEnabled,
   LocalAgentHomeStore,
@@ -124,11 +123,7 @@ async function main() {
       ? new ComposioConnector(process.env.COMPOSIO_API_KEY)
       : undefined,
   });
-  const stack = createConnectorStack(false, undefined, [
-    new InstalledConnectorProvider(prisma, secrets),
-    ...integrationSettings.providers(),
-    mcp,
-  ]);
+  const stack = createConnectorStack(false, undefined, [...integrationSettings.providers(), mcp]);
   const connector = stack.destination;
   await connector.start();
   integrationSettings.warmDirectories();

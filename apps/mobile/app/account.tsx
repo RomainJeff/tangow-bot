@@ -73,6 +73,7 @@ export default function Account() {
     { label: t("Voice"), href: "/voice" },
     { label: t("Computer"), href: "/computer-settings" },
     { label: t("Integrations"), href: "/integrations" },
+    { label: t("Custom apps"), href: "/custom-apps" },
     { label: t("Skills"), href: "/skills" },
     { label: t("Usage"), href: "/usage" },
   ];

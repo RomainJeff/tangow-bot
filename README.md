@@ -1,3 +1,5 @@
+![Tangow on a MacBook and an iPhone, with bots, groups and teammates in one Space](./docs/assets/readme-banner.png)
+
 # Tangow
 
 Tangow is an open-source platform for running persistent AI teammates. It is available on the web,

@@ -8,7 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-11-16
 
+#### Added
+
+- **Custom apps on iOS and Android.** Add an app by its MCP URL, choose which agents can use it, and manage its connection from the native Custom apps screen.
+
 #### Changed
+
+- MCP sources added under Integrations › Advanced now appear in Custom apps automatically, and the domain catalog search is gone.
 
 - MCP servers now have their own Custom apps section in Customize on web and desktop: paste a URL and Tangow signs in or asks for a token, replacing the MCP servers window.
 
@@ -17,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### Fixed
 
 - A bot's computer screen now shows on web and desktop when Tangow sits behind a sign-in proxy such as Cloudflare Access or oauth2-proxy, instead of staying black.
+- On iPhone, a failed reply's error now sits above the message field, where you can dismiss it, instead of covering the conversation.
 
 ### 2026-11-15
 
