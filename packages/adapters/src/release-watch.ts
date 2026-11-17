@@ -43,22 +43,22 @@ export type EmulatedGithubRelease = {
 /** Seeded tangow releases so evals succeed without the public internet. */
 export const DEFAULT_TANGOW_EMULATED_RELEASES: readonly EmulatedGithubRelease[] = [
   {
-    owner: "RomainJeff",
+    owner: "tangow-ai",
     repo: "tangow-bot",
     tag: "v0.4.2",
     name: "v0.4.2 — routine tools + connector emulators",
     body: "Routines can bind connector tools. Composio emulator covers GitHub releases offline.",
     publishedAt: "2026-08-28T12:00:00.000Z",
-    htmlUrl: "https://github.com/RomainJeff/tangow-bot/releases/tag/v0.4.2",
+    htmlUrl: "https://github.com/tangow-ai/tangow-bot/releases/tag/v0.4.2",
   },
   {
-    owner: "RomainJeff",
+    owner: "tangow-ai",
     repo: "tangow-bot",
     tag: "v0.4.1",
     name: "v0.4.1 — computer + plugin guidance",
     body: "Prefer connected plugins over browsing when reading app data.",
     publishedAt: "2026-08-20T12:00:00.000Z",
-    htmlUrl: "https://github.com/RomainJeff/tangow-bot/releases/tag/v0.4.1",
+    htmlUrl: "https://github.com/tangow-ai/tangow-bot/releases/tag/v0.4.1",
   },
 ];
 
@@ -116,7 +116,7 @@ export function assessReleaseWatchRoutinePrompt(prompt: string): {
 
   if (!mentionsRepo || !mentionsReleases || !mentionsGithubTool) {
     const missing = [
-      !mentionsRepo ? "repo (RomainJeff/tangow-bot)" : null,
+      !mentionsRepo ? "repo (tangow-ai/tangow-bot)" : null,
       !mentionsReleases ? "releases" : null,
       !mentionsGithubTool ? "GitHub/releases tool steps" : null,
     ]

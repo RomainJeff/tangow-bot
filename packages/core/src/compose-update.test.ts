@@ -484,12 +484,12 @@ describe("sidecar boundary validation", () => {
   it("normalizes a request the API already validated", () => {
     expect(
       validateUpdateRequest({
-        repoUrl: "https://github.com/RomainJeff/tangow-bot.git",
+        repoUrl: "https://github.com/tangow-ai/tangow-bot.git",
         branch: " main ",
       }),
     ).toEqual({
       request: {
-        repoUrl: "https://github.com/RomainJeff/tangow-bot.git",
+        repoUrl: "https://github.com/tangow-ai/tangow-bot.git",
         branch: "main",
       },
     });
