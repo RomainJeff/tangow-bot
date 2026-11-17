@@ -829,7 +829,7 @@ export interface ExecutorDeps {
   secretHttp?: RemoteTransportDependencies;
   /** Per-Space decision provider. Omit or resolve null and browser_run stays hidden. */
   decisionProviders?: DecisionProviderResolver;
-  /** Aborted when the process stops: in-flight runs end and are handed back for another worker. */
+  /** Aborted when the process stops: in-flight runs end, and those whose guest has not begun are handed back. */
   shutdownSignal?: AbortSignal;
   /** Serializes skill writes with the API's; production passes createPostgresSkillLock. */
   skillLock: SkillOwnerLock;
@@ -1662,6 +1662,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
       });
 
       let leaseValid = true;
+      // A guest that began can only resume from its pause snapshot, so a shutdown then fails the
+      // run as before; until then the run is handed back for another worker.
+      let guestBegun = false;
+      let handedBack = false;
       let lastLeaseCheckAt = 0;
       let retainComputerLease = false;
       const runComputer =
@@ -1895,9 +1899,13 @@ export function createRunExecutor(deps: ExecutorDeps) {
             : null;
         runAbortController = new AbortController();
         if (!leaseValid) runAbortController.abort();
-        // A shutdown gives the run up like a lost lease: `finally` hands it to the next worker.
+        // A shutdown before the guest began gives the run up like a lost lease: `finally` hands it
+        // to the next worker.
         const onShutdown = () => {
-          leaseValid = false;
+          if (!guestBegun) {
+            handedBack = true;
+            leaseValid = false;
+          }
           runAbortController?.abort(deps.shutdownSignal?.reason);
         };
         if (deps.shutdownSignal?.aborted) onShutdown();
@@ -6100,6 +6108,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 ? {
                     persistence: {
                       ...persistence,
+                      async begin() {
+                        if (handedBack) throw new Error("The worker is stopping");
+                        guestBegun = true;
+                        await persistence.begin();
+                      },
                       async resolve() {
                         // The guest has validated its native state before any approved send leaves.
                         if (!(await sendApprovedDrafts())) {
@@ -6848,7 +6861,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               .catch((error) => getLogger().error("history.compact enqueue failed", error));
           }
         } catch (error) {
-          if (draftReopened || deps.shutdownSignal?.aborted) return;
+          if (draftReopened || handedBack) return;
           // A guest that could not start or was lost requeues the run like a failed setup.
           if (error instanceof AgentRuntimeUnavailableError) throw error;
           if (!terminalCheckpointComplete) {
@@ -7040,7 +7053,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
             data: { status: "interrupted", finishedAt: new Date() },
           })
           .catch(() => undefined);
-        if (deps.shutdownSignal?.aborted) {
+        if (handedBack) {
           // An expired lease lets the reconciler's next pass resume it, not the lease's end.
           await deps.prisma.run
             .updateMany({

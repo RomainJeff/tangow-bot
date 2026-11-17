@@ -20,7 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Fixed
 
-- On self-hosted servers, a run interrupted by a server update or restart now resumes within about a minute instead of staying stuck or failing.
+- On self-hosted servers, a run interrupted by a server update or restart while it is still starting now resumes within about a minute instead of staying stuck or failing.
 
 ### 2026-11-16
 
