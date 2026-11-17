@@ -18,6 +18,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Search on web and desktop moves from the sidebar field to a search button beside Activity, which opens a larger ⌘K palette that finds bots, chats, messages, files, links, routines and settings sections.
 
+#### Fixed
+
+- On self-hosted servers, a run interrupted by a server update or restart while it is still starting now resumes within about a minute instead of staying stuck or failing.
+
 ### 2026-11-16
 
 #### Added
