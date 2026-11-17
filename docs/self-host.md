@@ -65,6 +65,21 @@ in. Configure SMTP below before enabling an allowlist or upgrading an allowliste
 For a public deployment, configure SMTP and an allowlist before the API's first start.
 Keep an installation without email on a trusted local network.
 
+### Host-specific Compose tweaks
+
+To change the stack for one host without editing tracked files, create `.env.tangow.compose.yml`
+at the repository root. It is ignored by Git, and every `./tangow` command and the backup and
+restore scripts pass it to Compose as the last `-f` file, so it overrides everything else and
+survives `./tangow update`. The [updater sidecar](#updater-sidecar) does not read it; add it to
+`TANGOW_COMPOSE_FILE` there. For example, to disable MPTCP inside a service's network namespace:
+
+```yaml
+services:
+  api:
+    sysctls:
+      net.mptcp.enabled: "0"
+```
+
 ### Bot computer resource ceilings
 
 Each Docker computer runs Xvfb, a window manager and a full Chromium driven by an agent that

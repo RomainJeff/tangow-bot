@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Auto-review on iOS and Android.** Settings on mobile now has the Auto-review bot actions switch, so actions flagged as dangerous wait for your confirmation without a trip to the web app.
 
+- **Host-specific Compose overrides for self-hosted servers.** An untracked `.env.tangow.compose.yml` at the checkout root is applied last by every `./tangow` command and by backup and restore, so a host tweak survives `./tangow update` without a dirty tree or a second restart. See [self-hosting](docs/self-host.md#host-specific-compose-tweaks).
+
 #### Changed
 
 - On web and desktop, the auto-review switch moves from Advanced to General settings, is called Auto-review bot actions, and suggests setting up a decision model when none is connected.
