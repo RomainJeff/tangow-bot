@@ -1,5 +1,6 @@
 export const ZH_MESSAGES: Record<string, string> = {
   "Action confirmations": "操作确认",
+  "Improve accuracy by setting up a decision model.": "设置决策模型可以更准确地标记操作。",
   "Auto-review bot actions": "自动审核 Bot 操作",
   "You'll be asked to confirm actions flagged as dangerous.": "被标记为危险的操作需要你确认。",
   "Add a model in Settings to use this.": "请在设置中添加模型后再使用。",

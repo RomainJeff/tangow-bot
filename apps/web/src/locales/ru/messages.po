@@ -165,7 +165,7 @@ msgstr "{count} · следующая {next}"
 msgid "{count} more"
 msgstr ""
 
-#: src/pages/SpaceGeneralSettings.tsx:254
+#: src/pages/SpaceGeneralSettings.tsx:259
 msgid "{days, plural, one {Expires in # day} other {Expires in # days}}"
 msgstr ""
 
@@ -288,7 +288,7 @@ msgstr "Ярлык аккаунта"
 msgid "Accounts"
 msgstr "Аккаунты"
 
-#: src/components/ApprovalRulesSettings.tsx:112
+#: src/components/AutoReviewSettings.tsx:61
 msgid "Action confirmations"
 msgstr "Подтверждения действий"
 
@@ -344,7 +344,7 @@ msgstr "Активность, последний запуск не удался"
 msgid "Add"
 msgstr "Добавить"
 
-#: src/components/ApprovalRulesSettings.tsx:151
+#: src/components/AutoReviewSettings.tsx:78
 msgid "Add a model in Settings to use this."
 msgstr "Чтобы использовать это, добавьте модель в настройках."
 
@@ -395,7 +395,7 @@ msgstr "Добавление…"
 #: src/pages/model-settings/routing-settings.tsx:118
 #: src/pages/Onboarding.tsx:496
 #: src/pages/RoutineSchedule.tsx:47
-#: src/pages/SpaceGeneralSettings.tsx:49
+#: src/pages/SpaceGeneralSettings.tsx:54
 msgid "Advanced"
 msgstr "Расширенные"
 
@@ -598,11 +598,11 @@ msgstr "Спрашивать перед каждым действием"
 msgid "Ask before purchase actions"
 msgstr "Спросите перед действиями по покупке"
 
-#: src/components/ApprovalRulesSettings.tsx:133
+#: src/components/ApprovalRulesSettings.tsx:109
 msgid "Ask before purchases"
 msgstr "Спрашивайте перед покупкой"
 
-#: src/components/ApprovalRulesSettings.tsx:126
+#: src/components/ApprovalRulesSettings.tsx:102
 msgid "Ask before sending external email"
 msgstr "Спросите перед отправкой внешнего электронного письма"
 
@@ -654,7 +654,7 @@ msgstr ""
 msgid "Auto"
 msgstr "Авто"
 
-#: src/components/ApprovalRulesSettings.tsx:147
+#: src/components/AutoReviewSettings.tsx:74
 msgid "Auto-review bot actions"
 msgstr "Автопроверка действий ботов"
 
@@ -760,7 +760,7 @@ msgstr "Бот для ссылки"
 msgid "Bots"
 msgstr ""
 
-#: src/components/ApprovalRulesSettings.tsx:115
+#: src/components/ApprovalRulesSettings.tsx:91
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "По умолчанию боты действуют, не спрашивая. Добавляйте исключение только в том случае, если вы хотите сначала просмотреть тип действия."
 
@@ -871,7 +871,7 @@ msgstr ""
 msgid "Chat apps"
 msgstr "Приложения для чата"
 
-#: src/pages/SpaceGeneralSettings.tsx:37
+#: src/pages/SpaceGeneralSettings.tsx:40
 msgid "Chat apps, group channels, and agent connections."
 msgstr "Приложения чата, групповые каналы и подключения агентов."
 
@@ -1197,7 +1197,7 @@ msgstr "Продолжить по электронной почте"
 msgid "Conversation cleared"
 msgstr ""
 
-#: src/pages/SpaceGeneralSettings.tsx:260
+#: src/pages/SpaceGeneralSettings.tsx:265
 msgid "Copied"
 msgstr ""
 
@@ -1216,7 +1216,7 @@ msgstr ""
 msgid "Copy diagnostic"
 msgstr "Скопировать диагностику"
 
-#: src/pages/SpaceGeneralSettings.tsx:260
+#: src/pages/SpaceGeneralSettings.tsx:265
 msgid "Copy link"
 msgstr ""
 
@@ -1385,9 +1385,13 @@ msgstr "Не удалось загрузить"
 msgid "Could not load · Retry"
 msgstr "Не удалось загрузить · Повторить"
 
-#: src/components/ApprovalRulesSettings.tsx:48
+#: src/components/ApprovalRulesSettings.tsx:40
 msgid "Could not load approval rules"
 msgstr "Не удалось загрузить правила одобрения."
+
+#: src/components/AutoReviewSettings.tsx:25
+msgid "Could not load Auto Review"
+msgstr "Не удалось загрузить автопроверку"
 
 #: src/pages/IntegrationSetup.tsx:74
 msgid "Could not load bots. Reload to try again."
@@ -1467,7 +1471,7 @@ msgstr "Не удалось удалить"
 msgid "Could not remove group"
 msgstr "Не удалось удалить группу"
 
-#: src/components/ApprovalRulesSettings.tsx:92
+#: src/components/ApprovalRulesSettings.tsx:84
 msgid "Could not remove rule"
 msgstr "Не удалось удалить правило"
 
@@ -1499,7 +1503,7 @@ msgstr "Не удалось запустить задачу"
 msgid "Could not save"
 msgstr "Не удалось сохранить"
 
-#: src/components/ApprovalRulesSettings.tsx:103
+#: src/components/AutoReviewSettings.tsx:45
 msgid "Could not save Auto Review"
 msgstr "Не удалось сохранить автообзор."
 
@@ -1515,7 +1519,7 @@ msgstr "Не удалось сохранить модель"
 msgid "Could not save routine"
 msgstr "Не удалось сохранить задачу"
 
-#: src/components/ApprovalRulesSettings.tsx:80
+#: src/components/ApprovalRulesSettings.tsx:72
 msgid "Could not save rule"
 msgstr "Не удалось сохранить правило."
 
@@ -1583,7 +1587,7 @@ msgstr "Не удалось обновить область памяти по у
 msgid "Could not update your photo"
 msgstr ""
 
-#: src/pages/SpaceGeneralSettings.tsx:194
+#: src/pages/SpaceGeneralSettings.tsx:199
 msgid "Couldn't copy the link"
 msgstr ""
 
@@ -1592,7 +1596,7 @@ msgstr ""
 msgid "Couldn't create"
 msgstr "Не удалось создать"
 
-#: src/pages/SpaceGeneralSettings.tsx:184
+#: src/pages/SpaceGeneralSettings.tsx:189
 msgid "Couldn't invite them"
 msgstr ""
 
@@ -1600,7 +1604,7 @@ msgstr ""
 msgid "Couldn't load"
 msgstr ""
 
-#: src/pages/SpaceGeneralSettings.tsx:157
+#: src/pages/SpaceGeneralSettings.tsx:162
 msgid "Couldn't load members"
 msgstr ""
 
@@ -1609,15 +1613,15 @@ msgid "Couldn't load messaging settings"
 msgstr "Не удалось загрузить настройки обмена сообщениями."
 
 #. placeholder {0}: member.name
-#: src/pages/SpaceGeneralSettings.tsx:235
+#: src/pages/SpaceGeneralSettings.tsx:240
 msgid "Couldn't remove {0}"
 msgstr ""
 
-#: src/pages/SpaceGeneralSettings.tsx:97
+#: src/pages/SpaceGeneralSettings.tsx:102
 msgid "Couldn't rename the space"
 msgstr "Не удалось переименовать пространство"
 
-#: src/pages/SpaceGeneralSettings.tsx:272
+#: src/pages/SpaceGeneralSettings.tsx:277
 msgid "Couldn't revoke the invite link"
 msgstr ""
 
@@ -2021,7 +2025,7 @@ msgstr "Усилие"
 msgid "Email"
 msgstr "Электронная почта"
 
-#: src/pages/SpaceGeneralSettings.tsx:291
+#: src/pages/SpaceGeneralSettings.tsx:296
 msgid "Emails to invite"
 msgstr ""
 
@@ -2370,6 +2374,10 @@ msgstr ""
 msgid "Import"
 msgstr ""
 
+#: src/components/AutoReviewSettings.tsx:90
+msgid "Improve accuracy by setting up a decision model."
+msgstr "Настройте модель решений, чтобы точнее отмечать действия."
+
 #: src/pages/bot-page/KnowledgeTab.tsx:136
 msgid "Inherit default"
 msgstr "Наследовать значение по умолчанию"
@@ -2427,7 +2435,7 @@ msgstr "Значение интервала"
 msgid "Interval unit"
 msgstr "Единица интервала"
 
-#: src/pages/SpaceGeneralSettings.tsx:295
+#: src/pages/SpaceGeneralSettings.tsx:300
 msgid "Invite"
 msgstr ""
 
@@ -2575,7 +2583,7 @@ msgstr "Загрузка каталога моделей…"
 msgid "Loading preview…"
 msgstr "Загрузка предварительного просмотра…"
 
-#: src/components/ApprovalRulesSettings.tsx:161
+#: src/components/ApprovalRulesSettings.tsx:115
 msgid "Loading rules…"
 msgstr "Загрузка правил…"
 
@@ -2614,7 +2622,7 @@ msgstr "Низкий"
 msgid "Make sure nothing is still running on this computer."
 msgstr ""
 
-#: src/pages/SpaceGeneralSettings.tsx:40
+#: src/pages/SpaceGeneralSettings.tsx:43
 msgid "Manage messaging settings"
 msgstr "Управление настройками обмена сообщениями"
 
@@ -2659,7 +2667,7 @@ msgstr ""
 msgid "Medium"
 msgstr "Средний"
 
-#: src/pages/SpaceGeneralSettings.tsx:209
+#: src/pages/SpaceGeneralSettings.tsx:214
 msgid "Members"
 msgstr ""
 
@@ -2740,7 +2748,7 @@ msgid "Messages"
 msgstr ""
 
 #: src/pages/MessagingSettingsOverlay.tsx:99
-#: src/pages/SpaceGeneralSettings.tsx:34
+#: src/pages/SpaceGeneralSettings.tsx:37
 msgid "Messaging"
 msgstr "Обмен сообщениями"
 
@@ -2855,7 +2863,7 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx:72
 #: src/pages/shell/dialogs.tsx:187
 #: src/pages/shell/dialogs.tsx:250
-#: src/pages/SpaceGeneralSettings.tsx:113
+#: src/pages/SpaceGeneralSettings.tsx:118
 msgid "Name"
 msgstr "Имя"
 
@@ -2952,7 +2960,7 @@ msgstr "Приложения для чата пока не связаны."
 msgid "No computers"
 msgstr ""
 
-#: src/components/ApprovalRulesSettings.tsx:165
+#: src/components/ApprovalRulesSettings.tsx:119
 msgid "No exceptions. Actions run automatically."
 msgstr "Никаких исключений. Действия выполняются автоматически."
 
@@ -3180,7 +3188,7 @@ msgstr ""
 msgid "Optional"
 msgstr "Необязательно"
 
-#: src/pages/SpaceGeneralSettings.tsx:52
+#: src/pages/SpaceGeneralSettings.tsx:57
 msgid "Optional controls most people never need"
 msgstr "Дополнительные элементы управления, которые большинству людей никогда не понадобятся"
 
@@ -3219,7 +3227,7 @@ msgstr ""
 msgid "Output"
 msgstr ""
 
-#: src/pages/SpaceGeneralSettings.tsx:222
+#: src/pages/SpaceGeneralSettings.tsx:227
 msgid "Owner"
 msgstr ""
 
@@ -3474,13 +3482,13 @@ msgstr "Освободить компьютер"
 msgid "Release interrupted computer?"
 msgstr "Освободить прерванный компьютер?"
 
-#: src/components/ApprovalRulesSettings.tsx:181
+#: src/components/ApprovalRulesSettings.tsx:135
 #: src/pages/AccountProfileSettings.tsx:124
 #: src/pages/bot-page/RoutineTriggers.tsx:237
 #: src/pages/bot-page/RoutineTriggers.tsx:291
 #: src/pages/plugins/connection-detail.tsx:110
 #: src/pages/ScratchpadSection.tsx:165
-#: src/pages/SpaceGeneralSettings.tsx:239
+#: src/pages/SpaceGeneralSettings.tsx:244
 msgid "Remove"
 msgstr "Удалить"
 
@@ -3665,7 +3673,7 @@ msgid "rev {0}"
 msgstr "версия {0}"
 
 #: src/pages/MessagingSettingsOverlay.tsx:325
-#: src/pages/SpaceGeneralSettings.tsx:276
+#: src/pages/SpaceGeneralSettings.tsx:281
 msgid "Revoke"
 msgstr "Отозвать"
 
@@ -3882,6 +3890,10 @@ msgstr "Имя сервера"
 #: src/pages/Onboarding.tsx:411
 msgid "Server URL"
 msgstr "URL-адрес сервера"
+
+#: src/components/AutoReviewSettings.tsx:98
+msgid "Set up"
+msgstr "Настроить"
 
 #: src/pages/bot-page/BotPage.tsx:102
 #: src/pages/MessagingSettingsOverlay.tsx:362
@@ -4151,7 +4163,7 @@ msgstr ""
 msgid "Supports thinking"
 msgstr "Поддерживает рассуждения"
 
-#: src/pages/SettingsOverlay.tsx:519
+#: src/pages/SettingsOverlay.tsx:520
 msgid "Switch space"
 msgstr "Сменить пространство"
 
@@ -4383,8 +4395,8 @@ msgstr ""
 
 #: src/components/ComputerMaintenanceActions.tsx:116
 #: src/components/SoftwareUpdateSection.tsx:260
-#: src/pages/SettingsOverlay.tsx:414
-#: src/pages/SettingsOverlay.tsx:414
+#: src/pages/SettingsOverlay.tsx:415
+#: src/pages/SettingsOverlay.tsx:415
 #: src/pages/shell/computer-preview.tsx:75
 msgid "Update available"
 msgstr "Доступно обновление"
@@ -4613,7 +4625,7 @@ msgstr "Вы можете закрыть это окно."
 msgid "You have control"
 msgstr "Вы управляете"
 
-#: src/components/ApprovalRulesSettings.tsx:153
+#: src/components/AutoReviewSettings.tsx:80
 msgid "You'll be asked to confirm actions flagged as dangerous."
 msgstr "Действия, помеченные как опасные, потребуют вашего подтверждения."
 

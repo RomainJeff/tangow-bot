@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Changed
 
-- The auto-review switch on web and desktop is now called Auto-review bot actions and says that actions flagged as dangerous will ask for your confirmation.
+- On web and desktop, the auto-review switch moves from Advanced to General settings, is called Auto-review bot actions, and suggests setting up a decision model when none is connected.
 
 - Search on web and desktop moves from the sidebar field to a search button beside Activity, which opens a larger ⌘K palette that finds bots, chats, messages, files, links, routines and settings sections.
 

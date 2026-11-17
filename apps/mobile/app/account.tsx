@@ -1,4 +1,8 @@
-import type { ActionAutoReviewSettings, ComputerListItem } from "@tangow/contracts";
+import type {
+  ActionAutoReviewSettings,
+  ComputerListItem,
+  SpaceDecisionConfig,
+} from "@tangow/contracts";
 import type { Href } from "expo-router";
 import { useRouter } from "expo-router";
 import { Fragment, useCallback, useEffect, useState } from "react";
@@ -64,6 +68,9 @@ export default function Account() {
   const [archivedBots, setArchivedBots] = useState<MobileBot[]>([]);
   const [autoReview, setAutoReview] = useState<ActionAutoReviewSettings | null>(null);
   const [autoReviewPending, setAutoReviewPending] = useState(false);
+  // undefined while loading or unreadable: the decision-model hint stays hidden.
+  const [decision, setDecision] = useState<SpaceDecisionConfig | null | undefined>(undefined);
+  const tokens = useMobileTokens();
   const photo = useProfilePhoto();
   const styles = useThemedStyles(createAccountStyles);
   const versionInfo = getAppVersionInfo();
@@ -98,6 +105,9 @@ export default function Account() {
       rpc<ActionAutoReviewSettings>("autoReview/get")
         .then(setAutoReview)
         .catch(() => undefined),
+      rpc<SpaceDecisionConfig | null>("decision/providerConfig")
+        .then(setDecision)
+        .catch(() => setDecision(undefined)),
       Platform.OS === "android"
         ? getLiveNotificationSettings()
             .then(setNotifications)
@@ -350,6 +360,19 @@ export default function Account() {
               disabled={autoReviewPending || switching}
               onChange={(enabled) => void toggleAutoReview(enabled)}
             />
+            {autoReview.enabled && autoReview.checkerAvailable && decision === null ? (
+              <View style={styles.hint}>
+                <NativeSymbol
+                  ios="exclamationmark.triangle.fill"
+                  android="warning"
+                  size={13}
+                  color={tokens.warning}
+                />
+                <Text style={styles.hintLabel}>
+                  {t("Improve accuracy by setting up a decision model.")}
+                </Text>
+              </View>
+            ) : null}
           </View>
         ) : null}
 
@@ -650,6 +673,16 @@ function createAccountStyles() {
       color: tokens.destructive,
       fontSize: 14,
       marginTop: 10,
+    },
+    hint: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    hintLabel: {
+      flex: 1,
+      color: native.secondaryLabel,
+      fontSize: 12.5,
     },
     disabled: {
       opacity: 0.45,

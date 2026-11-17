@@ -165,7 +165,7 @@ msgstr "{count} · próxima {next}"
 msgid "{count} more"
 msgstr ""
 
-#: src/pages/SpaceGeneralSettings.tsx:254
+#: src/pages/SpaceGeneralSettings.tsx:259
 msgid "{days, plural, one {Expires in # day} other {Expires in # days}}"
 msgstr ""
 
@@ -288,7 +288,7 @@ msgstr ""
 msgid "Accounts"
 msgstr ""
 
-#: src/components/ApprovalRulesSettings.tsx:112
+#: src/components/AutoReviewSettings.tsx:61
 msgid "Action confirmations"
 msgstr "Confirmaciones de acción"
 
@@ -344,7 +344,7 @@ msgstr "Actividad, la última ejecución falló"
 msgid "Add"
 msgstr "Agregar"
 
-#: src/components/ApprovalRulesSettings.tsx:151
+#: src/components/AutoReviewSettings.tsx:78
 msgid "Add a model in Settings to use this."
 msgstr "Agrega un modelo en Configuración para usarlo."
 
@@ -395,7 +395,7 @@ msgstr "Agregando…"
 #: src/pages/model-settings/routing-settings.tsx:118
 #: src/pages/Onboarding.tsx:496
 #: src/pages/RoutineSchedule.tsx:47
-#: src/pages/SpaceGeneralSettings.tsx:49
+#: src/pages/SpaceGeneralSettings.tsx:54
 msgid "Advanced"
 msgstr "Avanzado"
 
@@ -598,11 +598,11 @@ msgstr "Preguntar antes de cada acción"
 msgid "Ask before purchase actions"
 msgstr "Preguntar antes de acciones de compra"
 
-#: src/components/ApprovalRulesSettings.tsx:133
+#: src/components/ApprovalRulesSettings.tsx:109
 msgid "Ask before purchases"
 msgstr "Preguntar antes de compras"
 
-#: src/components/ApprovalRulesSettings.tsx:126
+#: src/components/ApprovalRulesSettings.tsx:102
 msgid "Ask before sending external email"
 msgstr "Preguntar antes de enviar correo externo"
 
@@ -654,7 +654,7 @@ msgstr "Autoriza este servidor para que tus agentes usen sus herramientas. Se ab
 msgid "Auto"
 msgstr "Automático"
 
-#: src/components/ApprovalRulesSettings.tsx:147
+#: src/components/AutoReviewSettings.tsx:74
 msgid "Auto-review bot actions"
 msgstr "Revisar automáticamente las acciones del bot"
 
@@ -760,7 +760,7 @@ msgstr "Bot a vincular"
 msgid "Bots"
 msgstr ""
 
-#: src/components/ApprovalRulesSettings.tsx:115
+#: src/components/ApprovalRulesSettings.tsx:91
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "Los bots actúan sin preguntar de forma predeterminada. Agrega una excepción solo cuando quieras revisar primero un tipo de acción."
 
@@ -871,7 +871,7 @@ msgstr ""
 msgid "Chat apps"
 msgstr "Apps de chat"
 
-#: src/pages/SpaceGeneralSettings.tsx:37
+#: src/pages/SpaceGeneralSettings.tsx:40
 msgid "Chat apps, group channels, and agent connections."
 msgstr "Apps de chat, canales de grupo y conexiones de agentes."
 
@@ -1197,7 +1197,7 @@ msgstr "Continuar con el correo"
 msgid "Conversation cleared"
 msgstr ""
 
-#: src/pages/SpaceGeneralSettings.tsx:260
+#: src/pages/SpaceGeneralSettings.tsx:265
 msgid "Copied"
 msgstr ""
 
@@ -1216,7 +1216,7 @@ msgstr ""
 msgid "Copy diagnostic"
 msgstr "Copiar diagnóstico"
 
-#: src/pages/SpaceGeneralSettings.tsx:260
+#: src/pages/SpaceGeneralSettings.tsx:265
 msgid "Copy link"
 msgstr ""
 
@@ -1385,9 +1385,13 @@ msgstr "No se pudo cargar"
 msgid "Could not load · Retry"
 msgstr "No se pudo cargar · Intentarlo de nuevo"
 
-#: src/components/ApprovalRulesSettings.tsx:48
+#: src/components/ApprovalRulesSettings.tsx:40
 msgid "Could not load approval rules"
 msgstr "No se pudieron cargar las reglas de aprobación"
+
+#: src/components/AutoReviewSettings.tsx:25
+msgid "Could not load Auto Review"
+msgstr "No se pudo cargar la revisión automática"
 
 #: src/pages/IntegrationSetup.tsx:74
 msgid "Could not load bots. Reload to try again."
@@ -1467,7 +1471,7 @@ msgstr "No se pudo quitar"
 msgid "Could not remove group"
 msgstr "No se pudo quitar el grupo"
 
-#: src/components/ApprovalRulesSettings.tsx:92
+#: src/components/ApprovalRulesSettings.tsx:84
 msgid "Could not remove rule"
 msgstr "No se pudo quitar la regla"
 
@@ -1499,7 +1503,7 @@ msgstr "No se pudo ejecutar la rutina"
 msgid "Could not save"
 msgstr "No se pudo guardar"
 
-#: src/components/ApprovalRulesSettings.tsx:103
+#: src/components/AutoReviewSettings.tsx:45
 msgid "Could not save Auto Review"
 msgstr "No se pudo guardar Auto Review"
 
@@ -1515,7 +1519,7 @@ msgstr "No se pudo guardar el modelo"
 msgid "Could not save routine"
 msgstr "No se pudo guardar la rutina"
 
-#: src/components/ApprovalRulesSettings.tsx:80
+#: src/components/ApprovalRulesSettings.tsx:72
 msgid "Could not save rule"
 msgstr "No se pudo guardar la regla"
 
@@ -1583,7 +1587,7 @@ msgstr "No se pudo actualizar el alcance de memoria predeterminado"
 msgid "Could not update your photo"
 msgstr ""
 
-#: src/pages/SpaceGeneralSettings.tsx:194
+#: src/pages/SpaceGeneralSettings.tsx:199
 msgid "Couldn't copy the link"
 msgstr ""
 
@@ -1592,7 +1596,7 @@ msgstr ""
 msgid "Couldn't create"
 msgstr "No se pudo crear"
 
-#: src/pages/SpaceGeneralSettings.tsx:184
+#: src/pages/SpaceGeneralSettings.tsx:189
 msgid "Couldn't invite them"
 msgstr ""
 
@@ -1600,7 +1604,7 @@ msgstr ""
 msgid "Couldn't load"
 msgstr ""
 
-#: src/pages/SpaceGeneralSettings.tsx:157
+#: src/pages/SpaceGeneralSettings.tsx:162
 msgid "Couldn't load members"
 msgstr ""
 
@@ -1609,15 +1613,15 @@ msgid "Couldn't load messaging settings"
 msgstr "No se pudo cargar la configuración de mensajería"
 
 #. placeholder {0}: member.name
-#: src/pages/SpaceGeneralSettings.tsx:235
+#: src/pages/SpaceGeneralSettings.tsx:240
 msgid "Couldn't remove {0}"
 msgstr ""
 
-#: src/pages/SpaceGeneralSettings.tsx:97
+#: src/pages/SpaceGeneralSettings.tsx:102
 msgid "Couldn't rename the space"
 msgstr "No se pudo cambiar el nombre del espacio"
 
-#: src/pages/SpaceGeneralSettings.tsx:272
+#: src/pages/SpaceGeneralSettings.tsx:277
 msgid "Couldn't revoke the invite link"
 msgstr ""
 
@@ -2021,7 +2025,7 @@ msgstr "Esfuerzo"
 msgid "Email"
 msgstr "Correo"
 
-#: src/pages/SpaceGeneralSettings.tsx:291
+#: src/pages/SpaceGeneralSettings.tsx:296
 msgid "Emails to invite"
 msgstr ""
 
@@ -2370,6 +2374,10 @@ msgstr ""
 msgid "Import"
 msgstr "Importar"
 
+#: src/components/AutoReviewSettings.tsx:90
+msgid "Improve accuracy by setting up a decision model."
+msgstr "Configura un modelo de decisión para marcar acciones con más precisión."
+
 #: src/pages/bot-page/KnowledgeTab.tsx:136
 msgid "Inherit default"
 msgstr "Heredar predeterminado"
@@ -2427,7 +2435,7 @@ msgstr "Cantidad del intervalo"
 msgid "Interval unit"
 msgstr "Unidad del intervalo"
 
-#: src/pages/SpaceGeneralSettings.tsx:295
+#: src/pages/SpaceGeneralSettings.tsx:300
 msgid "Invite"
 msgstr ""
 
@@ -2575,7 +2583,7 @@ msgstr "Cargando catálogo de modelos…"
 msgid "Loading preview…"
 msgstr "Cargando vista previa…"
 
-#: src/components/ApprovalRulesSettings.tsx:161
+#: src/components/ApprovalRulesSettings.tsx:115
 msgid "Loading rules…"
 msgstr "Cargando reglas…"
 
@@ -2614,7 +2622,7 @@ msgstr "Bajo"
 msgid "Make sure nothing is still running on this computer."
 msgstr "Asegúrate de que no quede nada en ejecución en este ordenador."
 
-#: src/pages/SpaceGeneralSettings.tsx:40
+#: src/pages/SpaceGeneralSettings.tsx:43
 msgid "Manage messaging settings"
 msgstr "Administrar configuración de mensajería"
 
@@ -2659,7 +2667,7 @@ msgstr ""
 msgid "Medium"
 msgstr "Medio"
 
-#: src/pages/SpaceGeneralSettings.tsx:209
+#: src/pages/SpaceGeneralSettings.tsx:214
 msgid "Members"
 msgstr ""
 
@@ -2740,7 +2748,7 @@ msgid "Messages"
 msgstr ""
 
 #: src/pages/MessagingSettingsOverlay.tsx:99
-#: src/pages/SpaceGeneralSettings.tsx:34
+#: src/pages/SpaceGeneralSettings.tsx:37
 msgid "Messaging"
 msgstr "Mensajería"
 
@@ -2855,7 +2863,7 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx:72
 #: src/pages/shell/dialogs.tsx:187
 #: src/pages/shell/dialogs.tsx:250
-#: src/pages/SpaceGeneralSettings.tsx:113
+#: src/pages/SpaceGeneralSettings.tsx:118
 msgid "Name"
 msgstr "Nombre"
 
@@ -2952,7 +2960,7 @@ msgstr "Aún no hay apps de chat vinculadas."
 msgid "No computers"
 msgstr ""
 
-#: src/components/ApprovalRulesSettings.tsx:165
+#: src/components/ApprovalRulesSettings.tsx:119
 msgid "No exceptions. Actions run automatically."
 msgstr "Sin excepciones. Las acciones se ejecutan automáticamente."
 
@@ -3180,7 +3188,7 @@ msgstr ""
 msgid "Optional"
 msgstr "Opcional"
 
-#: src/pages/SpaceGeneralSettings.tsx:52
+#: src/pages/SpaceGeneralSettings.tsx:57
 msgid "Optional controls most people never need"
 msgstr "Controles opcionales que la mayoría nunca necesita"
 
@@ -3219,7 +3227,7 @@ msgstr ""
 msgid "Output"
 msgstr "Salida"
 
-#: src/pages/SpaceGeneralSettings.tsx:222
+#: src/pages/SpaceGeneralSettings.tsx:227
 msgid "Owner"
 msgstr ""
 
@@ -3474,13 +3482,13 @@ msgstr ""
 msgid "Release interrupted computer?"
 msgstr ""
 
-#: src/components/ApprovalRulesSettings.tsx:181
+#: src/components/ApprovalRulesSettings.tsx:135
 #: src/pages/AccountProfileSettings.tsx:124
 #: src/pages/bot-page/RoutineTriggers.tsx:237
 #: src/pages/bot-page/RoutineTriggers.tsx:291
 #: src/pages/plugins/connection-detail.tsx:110
 #: src/pages/ScratchpadSection.tsx:165
-#: src/pages/SpaceGeneralSettings.tsx:239
+#: src/pages/SpaceGeneralSettings.tsx:244
 msgid "Remove"
 msgstr "Quitar"
 
@@ -3665,7 +3673,7 @@ msgid "rev {0}"
 msgstr "rev. {0}"
 
 #: src/pages/MessagingSettingsOverlay.tsx:325
-#: src/pages/SpaceGeneralSettings.tsx:276
+#: src/pages/SpaceGeneralSettings.tsx:281
 msgid "Revoke"
 msgstr "Revocar"
 
@@ -3882,6 +3890,10 @@ msgstr "Nombre del servidor"
 #: src/pages/Onboarding.tsx:411
 msgid "Server URL"
 msgstr "URL del servidor"
+
+#: src/components/AutoReviewSettings.tsx:98
+msgid "Set up"
+msgstr "Configurar"
 
 #: src/pages/bot-page/BotPage.tsx:102
 #: src/pages/MessagingSettingsOverlay.tsx:362
@@ -4151,7 +4163,7 @@ msgstr "Admite imágenes"
 msgid "Supports thinking"
 msgstr "Admite razonamiento"
 
-#: src/pages/SettingsOverlay.tsx:519
+#: src/pages/SettingsOverlay.tsx:520
 msgid "Switch space"
 msgstr "Cambiar de espacio"
 
@@ -4383,8 +4395,8 @@ msgstr ""
 
 #: src/components/ComputerMaintenanceActions.tsx:116
 #: src/components/SoftwareUpdateSection.tsx:260
-#: src/pages/SettingsOverlay.tsx:414
-#: src/pages/SettingsOverlay.tsx:414
+#: src/pages/SettingsOverlay.tsx:415
+#: src/pages/SettingsOverlay.tsx:415
 #: src/pages/shell/computer-preview.tsx:75
 msgid "Update available"
 msgstr "Actualización disponible"
@@ -4613,7 +4625,7 @@ msgstr "Puedes cerrar esta ventana."
 msgid "You have control"
 msgstr "Tienes el control"
 
-#: src/components/ApprovalRulesSettings.tsx:153
+#: src/components/AutoReviewSettings.tsx:80
 msgid "You'll be asked to confirm actions flagged as dangerous."
 msgstr "Se te pedirá confirmar las acciones marcadas como peligrosas."
 

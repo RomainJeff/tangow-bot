@@ -1,5 +1,7 @@
 export const RU_MESSAGES: Record<string, string> = {
   "Action confirmations": "Подтверждения действий",
+  "Improve accuracy by setting up a decision model.":
+    "Настройте модель решений, чтобы точнее отмечать действия.",
   "Auto-review bot actions": "Автопроверка действий ботов",
   "You'll be asked to confirm actions flagged as dangerous.":
     "Действия, помеченные как опасные, потребуют вашего подтверждения.",
