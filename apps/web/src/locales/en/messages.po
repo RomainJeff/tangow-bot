@@ -13,7 +13,7 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#: src/pages/shell/command-palette.tsx:325
+#: src/pages/shell/command-palette.tsx:333
 #: src/pages/shell/sidebar-roster.tsx:283
 msgid " (unread)"
 msgstr " (unread)"
@@ -165,7 +165,7 @@ msgstr "{count} · next {next}"
 msgid "{count} more"
 msgstr "{count} more"
 
-#: src/pages/SpaceGeneralSettings.tsx:254
+#: src/pages/SpaceGeneralSettings.tsx:259
 msgid "{days, plural, one {Expires in # day} other {Expires in # days}}"
 msgstr "{days, plural, one {Expires in # day} other {Expires in # days}}"
 
@@ -288,7 +288,7 @@ msgstr "Account label"
 msgid "Accounts"
 msgstr "Accounts"
 
-#: src/components/ApprovalRulesSettings.tsx:112
+#: src/components/AutoReviewSettings.tsx:61
 msgid "Action confirmations"
 msgstr "Action confirmations"
 
@@ -344,7 +344,7 @@ msgstr "Activity, last run failed"
 msgid "Add"
 msgstr "Add"
 
-#: src/components/ApprovalRulesSettings.tsx:151
+#: src/components/AutoReviewSettings.tsx:78
 msgid "Add a model in Settings to use this."
 msgstr "Add a model in Settings to use this."
 
@@ -395,7 +395,7 @@ msgstr "Adding…"
 #: src/pages/model-settings/routing-settings.tsx:118
 #: src/pages/Onboarding.tsx:496
 #: src/pages/RoutineSchedule.tsx:47
-#: src/pages/SpaceGeneralSettings.tsx:49
+#: src/pages/SpaceGeneralSettings.tsx:54
 msgid "Advanced"
 msgstr "Advanced"
 
@@ -598,11 +598,11 @@ msgstr "Ask before every action"
 msgid "Ask before purchase actions"
 msgstr "Ask before purchase actions"
 
-#: src/components/ApprovalRulesSettings.tsx:133
+#: src/components/ApprovalRulesSettings.tsx:109
 msgid "Ask before purchases"
 msgstr "Ask before purchases"
 
-#: src/components/ApprovalRulesSettings.tsx:126
+#: src/components/ApprovalRulesSettings.tsx:102
 msgid "Ask before sending external email"
 msgstr "Ask before sending external email"
 
@@ -653,6 +653,10 @@ msgstr "Authorize this server so agents can use its tools. A popup opens."
 #: src/pages/model-settings/routing-settings.tsx:74
 msgid "Auto"
 msgstr "Auto"
+
+#: src/components/AutoReviewSettings.tsx:74
+msgid "Auto-review bot actions"
+msgstr "Auto-review bot actions"
 
 #: src/pages/ExternalConversationSettings.tsx:160
 msgid "Automated senders"
@@ -751,12 +755,12 @@ msgstr "Bot settings"
 msgid "Bot to link"
 msgstr "Bot to link"
 
-#: src/pages/shell/command-palette.tsx:239
+#: src/pages/shell/command-palette.tsx:247
 #: src/pages/usage-settings.tsx:68
 msgid "Bots"
 msgstr "Bots"
 
-#: src/components/ApprovalRulesSettings.tsx:115
+#: src/components/ApprovalRulesSettings.tsx:91
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 
@@ -867,11 +871,11 @@ msgstr "Chat"
 msgid "Chat apps"
 msgstr "Chat apps"
 
-#: src/pages/SpaceGeneralSettings.tsx:37
+#: src/pages/SpaceGeneralSettings.tsx:40
 msgid "Chat apps, group channels, and agent connections."
 msgstr "Chat apps, group channels, and agent connections."
 
-#: src/pages/shell/command-palette.tsx:242
+#: src/pages/shell/command-palette.tsx:250
 msgid "Chats"
 msgstr "Chats"
 
@@ -1193,7 +1197,7 @@ msgstr "Continue with email"
 msgid "Conversation cleared"
 msgstr "Conversation cleared"
 
-#: src/pages/SpaceGeneralSettings.tsx:260
+#: src/pages/SpaceGeneralSettings.tsx:265
 msgid "Copied"
 msgstr "Copied"
 
@@ -1212,7 +1216,7 @@ msgstr "Copy {label}"
 msgid "Copy diagnostic"
 msgstr "Copy diagnostic"
 
-#: src/pages/SpaceGeneralSettings.tsx:260
+#: src/pages/SpaceGeneralSettings.tsx:265
 msgid "Copy link"
 msgstr "Copy link"
 
@@ -1381,9 +1385,13 @@ msgstr "Could not load"
 msgid "Could not load · Retry"
 msgstr "Could not load · Retry"
 
-#: src/components/ApprovalRulesSettings.tsx:48
+#: src/components/ApprovalRulesSettings.tsx:40
 msgid "Could not load approval rules"
 msgstr "Could not load approval rules"
+
+#: src/components/AutoReviewSettings.tsx:25
+msgid "Could not load Auto Review"
+msgstr "Could not load Auto Review"
 
 #: src/pages/IntegrationSetup.tsx:74
 msgid "Could not load bots. Reload to try again."
@@ -1463,7 +1471,7 @@ msgstr "Could not remove"
 msgid "Could not remove group"
 msgstr "Could not remove group"
 
-#: src/components/ApprovalRulesSettings.tsx:92
+#: src/components/ApprovalRulesSettings.tsx:84
 msgid "Could not remove rule"
 msgstr "Could not remove rule"
 
@@ -1495,7 +1503,7 @@ msgstr "Could not run routine"
 msgid "Could not save"
 msgstr "Could not save"
 
-#: src/components/ApprovalRulesSettings.tsx:103
+#: src/components/AutoReviewSettings.tsx:45
 msgid "Could not save Auto Review"
 msgstr "Could not save Auto Review"
 
@@ -1511,7 +1519,7 @@ msgstr "Could not save model"
 msgid "Could not save routine"
 msgstr "Could not save routine"
 
-#: src/components/ApprovalRulesSettings.tsx:80
+#: src/components/ApprovalRulesSettings.tsx:72
 msgid "Could not save rule"
 msgstr "Could not save rule"
 
@@ -1579,7 +1587,7 @@ msgstr "Could not update the default memory scope"
 msgid "Could not update your photo"
 msgstr "Could not update your photo"
 
-#: src/pages/SpaceGeneralSettings.tsx:194
+#: src/pages/SpaceGeneralSettings.tsx:199
 msgid "Couldn't copy the link"
 msgstr "Couldn't copy the link"
 
@@ -1588,7 +1596,7 @@ msgstr "Couldn't copy the link"
 msgid "Couldn't create"
 msgstr "Couldn't create"
 
-#: src/pages/SpaceGeneralSettings.tsx:184
+#: src/pages/SpaceGeneralSettings.tsx:189
 msgid "Couldn't invite them"
 msgstr "Couldn't invite them"
 
@@ -1596,7 +1604,7 @@ msgstr "Couldn't invite them"
 msgid "Couldn't load"
 msgstr "Couldn't load"
 
-#: src/pages/SpaceGeneralSettings.tsx:157
+#: src/pages/SpaceGeneralSettings.tsx:162
 msgid "Couldn't load members"
 msgstr "Couldn't load members"
 
@@ -1605,15 +1613,15 @@ msgid "Couldn't load messaging settings"
 msgstr "Couldn't load messaging settings"
 
 #. placeholder {0}: member.name
-#: src/pages/SpaceGeneralSettings.tsx:235
+#: src/pages/SpaceGeneralSettings.tsx:240
 msgid "Couldn't remove {0}"
 msgstr "Couldn't remove {0}"
 
-#: src/pages/SpaceGeneralSettings.tsx:97
+#: src/pages/SpaceGeneralSettings.tsx:102
 msgid "Couldn't rename the space"
 msgstr "Couldn't rename the space"
 
-#: src/pages/SpaceGeneralSettings.tsx:272
+#: src/pages/SpaceGeneralSettings.tsx:277
 msgid "Couldn't revoke the invite link"
 msgstr "Couldn't revoke the invite link"
 
@@ -2017,7 +2025,7 @@ msgstr "Effort"
 msgid "Email"
 msgstr "Email"
 
-#: src/pages/SpaceGeneralSettings.tsx:291
+#: src/pages/SpaceGeneralSettings.tsx:296
 msgid "Emails to invite"
 msgstr "Emails to invite"
 
@@ -2168,7 +2176,7 @@ msgid "Featured"
 msgstr "Featured"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:67
-#: src/pages/shell/command-palette.tsx:164
+#: src/pages/shell/command-palette.tsx:172
 msgid "Files"
 msgstr "Files"
 
@@ -2204,10 +2212,6 @@ msgstr "Finishing MCP connection…"
 #: src/pages/usage-settings.tsx:49
 msgid "Fixed"
 msgstr "Fixed"
-
-#: src/components/ApprovalRulesSettings.tsx:147
-msgid "Flag unexpected actions"
-msgstr "Flag unexpected actions"
 
 #: src/pages/Auth.tsx:194
 msgid "Forgot password?"
@@ -2370,6 +2374,10 @@ msgstr "Images, PDFs, text, CSV or JSON, up to {ATTACHMENT_MAX_MB} MB each"
 msgid "Import"
 msgstr "Import"
 
+#: src/components/AutoReviewSettings.tsx:90
+msgid "Improve accuracy by setting up a decision model."
+msgstr "Improve accuracy by setting up a decision model."
+
 #: src/pages/bot-page/KnowledgeTab.tsx:136
 msgid "Inherit default"
 msgstr "Inherit default"
@@ -2427,7 +2435,7 @@ msgstr "Interval amount"
 msgid "Interval unit"
 msgstr "Interval unit"
 
-#: src/pages/SpaceGeneralSettings.tsx:295
+#: src/pages/SpaceGeneralSettings.tsx:300
 msgid "Invite"
 msgstr "Invite"
 
@@ -2538,7 +2546,7 @@ msgstr "Light"
 msgid "Link a chat app"
 msgstr "Link a chat app"
 
-#: src/pages/shell/command-palette.tsx:165
+#: src/pages/shell/command-palette.tsx:173
 msgid "Links"
 msgstr "Links"
 
@@ -2575,7 +2583,7 @@ msgstr "Loading model catalog…"
 msgid "Loading preview…"
 msgstr "Loading preview…"
 
-#: src/components/ApprovalRulesSettings.tsx:159
+#: src/components/ApprovalRulesSettings.tsx:115
 msgid "Loading rules…"
 msgstr "Loading rules…"
 
@@ -2614,7 +2622,7 @@ msgstr "Low"
 msgid "Make sure nothing is still running on this computer."
 msgstr "Make sure nothing is still running on this computer."
 
-#: src/pages/SpaceGeneralSettings.tsx:40
+#: src/pages/SpaceGeneralSettings.tsx:43
 msgid "Manage messaging settings"
 msgstr "Manage messaging settings"
 
@@ -2659,7 +2667,7 @@ msgstr "MCP endpoint"
 msgid "Medium"
 msgstr "Medium"
 
-#: src/pages/SpaceGeneralSettings.tsx:209
+#: src/pages/SpaceGeneralSettings.tsx:214
 msgid "Members"
 msgstr "Members"
 
@@ -2735,12 +2743,12 @@ msgstr "Message…"
 msgid "Messaged {peer}"
 msgstr "Messaged {peer}"
 
-#: src/pages/shell/command-palette.tsx:162
+#: src/pages/shell/command-palette.tsx:170
 msgid "Messages"
 msgstr "Messages"
 
 #: src/pages/MessagingSettingsOverlay.tsx:99
-#: src/pages/SpaceGeneralSettings.tsx:34
+#: src/pages/SpaceGeneralSettings.tsx:37
 msgid "Messaging"
 msgstr "Messaging"
 
@@ -2855,7 +2863,7 @@ msgstr "Mute"
 #: src/pages/shell/dialogs.tsx:72
 #: src/pages/shell/dialogs.tsx:187
 #: src/pages/shell/dialogs.tsx:250
-#: src/pages/SpaceGeneralSettings.tsx:113
+#: src/pages/SpaceGeneralSettings.tsx:118
 msgid "Name"
 msgstr "Name"
 
@@ -2952,7 +2960,7 @@ msgstr "No chat apps linked yet."
 msgid "No computers"
 msgstr "No computers"
 
-#: src/components/ApprovalRulesSettings.tsx:163
+#: src/components/ApprovalRulesSettings.tsx:119
 msgid "No exceptions. Actions run automatically."
 msgstr "No exceptions. Actions run automatically."
 
@@ -3002,7 +3010,7 @@ msgstr "No providers found."
 msgid "No report"
 msgstr "No report"
 
-#: src/pages/shell/command-palette.tsx:236
+#: src/pages/shell/command-palette.tsx:244
 msgid "No results"
 msgstr "No results"
 
@@ -3180,7 +3188,7 @@ msgstr "OpenRouter API key"
 msgid "Optional"
 msgstr "Optional"
 
-#: src/pages/SpaceGeneralSettings.tsx:52
+#: src/pages/SpaceGeneralSettings.tsx:57
 msgid "Optional controls most people never need"
 msgstr "Optional controls most people never need"
 
@@ -3219,7 +3227,7 @@ msgstr "Other…"
 msgid "Output"
 msgstr "Output"
 
-#: src/pages/SpaceGeneralSettings.tsx:222
+#: src/pages/SpaceGeneralSettings.tsx:227
 msgid "Owner"
 msgstr "Owner"
 
@@ -3474,13 +3482,13 @@ msgstr "Release computer"
 msgid "Release interrupted computer?"
 msgstr "Release interrupted computer?"
 
-#: src/components/ApprovalRulesSettings.tsx:179
+#: src/components/ApprovalRulesSettings.tsx:135
 #: src/pages/AccountProfileSettings.tsx:124
 #: src/pages/bot-page/RoutineTriggers.tsx:237
 #: src/pages/bot-page/RoutineTriggers.tsx:291
 #: src/pages/plugins/connection-detail.tsx:110
 #: src/pages/ScratchpadSection.tsx:165
-#: src/pages/SpaceGeneralSettings.tsx:239
+#: src/pages/SpaceGeneralSettings.tsx:244
 msgid "Remove"
 msgstr "Remove"
 
@@ -3665,7 +3673,7 @@ msgid "rev {0}"
 msgstr "rev {0}"
 
 #: src/pages/MessagingSettingsOverlay.tsx:325
-#: src/pages/SpaceGeneralSettings.tsx:276
+#: src/pages/SpaceGeneralSettings.tsx:281
 msgid "Revoke"
 msgstr "Revoke"
 
@@ -3708,7 +3716,7 @@ msgid "Routine updated"
 msgstr "Routine updated"
 
 #: src/pages/bot-page/BotPage.tsx:100
-#: src/pages/shell/command-palette.tsx:163
+#: src/pages/shell/command-palette.tsx:171
 msgid "Routines"
 msgstr "Routines"
 
@@ -3803,7 +3811,7 @@ msgstr "Screen"
 #: src/pages/model-settings/model-picker.tsx:224
 #: src/pages/shell/bot-picker.tsx:55
 #: src/pages/shell/bot-picker.tsx:56
-#: src/pages/shell/command-palette.tsx:219
+#: src/pages/shell/command-palette.tsx:227
 #: src/pages/shell/sidebar-header.tsx:77
 #: src/pages/shell/sidebar-header.tsx:87
 msgid "Search"
@@ -3814,8 +3822,8 @@ msgstr "Search"
 msgid "Search apps"
 msgstr "Search apps"
 
-#: src/pages/shell/command-palette.tsx:220
-#: src/pages/shell/command-palette.tsx:231
+#: src/pages/shell/command-palette.tsx:228
+#: src/pages/shell/command-palette.tsx:239
 msgid "Search bots, chats, settings"
 msgstr "Search bots, chats, settings"
 
@@ -3833,7 +3841,7 @@ msgstr "Search providers"
 msgid "Search skills"
 msgstr "Search skills"
 
-#: src/pages/shell/command-palette.tsx:236
+#: src/pages/shell/command-palette.tsx:244
 msgid "Searching…"
 msgstr "Searching…"
 
@@ -3883,12 +3891,16 @@ msgstr "Server name"
 msgid "Server URL"
 msgstr "Server URL"
 
+#: src/components/AutoReviewSettings.tsx:98
+msgid "Set up"
+msgstr "Set up"
+
 #: src/pages/bot-page/BotPage.tsx:102
 #: src/pages/MessagingSettingsOverlay.tsx:362
 #: src/pages/SettingsOverlay.tsx:147
 #: src/pages/SettingsOverlay.tsx:222
 #: src/pages/SettingsOverlay.tsx:273
-#: src/pages/shell/command-palette.tsx:284
+#: src/pages/shell/command-palette.tsx:292
 #: src/pages/shell/sidebar-footer.tsx:211
 #: src/pages/shell/sidebar-footer.tsx:218
 msgid "Settings"
@@ -4151,7 +4163,7 @@ msgstr "Supports images"
 msgid "Supports thinking"
 msgstr "Supports thinking"
 
-#: src/pages/SettingsOverlay.tsx:519
+#: src/pages/SettingsOverlay.tsx:520
 msgid "Switch space"
 msgstr "Switch space"
 
@@ -4383,8 +4395,8 @@ msgstr "Update all computers"
 
 #: src/components/ComputerMaintenanceActions.tsx:116
 #: src/components/SoftwareUpdateSection.tsx:260
-#: src/pages/SettingsOverlay.tsx:414
-#: src/pages/SettingsOverlay.tsx:414
+#: src/pages/SettingsOverlay.tsx:415
+#: src/pages/SettingsOverlay.tsx:415
 #: src/pages/shell/computer-preview.tsx:75
 msgid "Update available"
 msgstr "Update available"
@@ -4612,6 +4624,10 @@ msgstr "You can close this window."
 #: src/pages/shell/side-panel.tsx:352
 msgid "You have control"
 msgstr "You have control"
+
+#: src/components/AutoReviewSettings.tsx:80
+msgid "You'll be asked to confirm actions flagged as dangerous."
+msgstr "You'll be asked to confirm actions flagged as dangerous."
 
 #: src/components/ask/AskSettled.tsx:47
 msgid "Your answer: {answer}"

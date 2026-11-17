@@ -334,6 +334,7 @@ export function SettingsOverlay({
                   onOpenMessaging={
                     onOpenMessaging ? () => leaveSettings(onOpenMessaging) : undefined
                   }
+                  onOpenDecisionModel={() => setSection("decision-model")}
                 />
               ) : null}
               {section === "usage" ? <UsageSettingsPanel panelRef={usageRef} /> : null}

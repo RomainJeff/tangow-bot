@@ -13,7 +13,7 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#: src/pages/shell/command-palette.tsx:325
+#: src/pages/shell/command-palette.tsx:333
 #: src/pages/shell/sidebar-roster.tsx:283
 msgid " (unread)"
 msgstr " (अपठित)"
@@ -165,7 +165,7 @@ msgstr "{count} · अगला {next}"
 msgid "{count} more"
 msgstr ""
 
-#: src/pages/SpaceGeneralSettings.tsx:254
+#: src/pages/SpaceGeneralSettings.tsx:259
 msgid "{days, plural, one {Expires in # day} other {Expires in # days}}"
 msgstr ""
 
@@ -288,7 +288,7 @@ msgstr ""
 msgid "Accounts"
 msgstr ""
 
-#: src/components/ApprovalRulesSettings.tsx:112
+#: src/components/AutoReviewSettings.tsx:61
 msgid "Action confirmations"
 msgstr "कार्रवाई की पुष्टि"
 
@@ -344,7 +344,7 @@ msgstr "गतिविधि, पिछला रन विफल रहा"
 msgid "Add"
 msgstr "जोड़ें"
 
-#: src/components/ApprovalRulesSettings.tsx:151
+#: src/components/AutoReviewSettings.tsx:78
 msgid "Add a model in Settings to use this."
 msgstr "इसे उपयोग करने के लिए सेटिंग्स में एक मॉडल जोड़ें।"
 
@@ -395,7 +395,7 @@ msgstr "जोड़ा जा रहा है…"
 #: src/pages/model-settings/routing-settings.tsx:118
 #: src/pages/Onboarding.tsx:496
 #: src/pages/RoutineSchedule.tsx:47
-#: src/pages/SpaceGeneralSettings.tsx:49
+#: src/pages/SpaceGeneralSettings.tsx:54
 msgid "Advanced"
 msgstr "उन्नत"
 
@@ -598,11 +598,11 @@ msgstr "हर कार्रवाई से पहले पूछें"
 msgid "Ask before purchase actions"
 msgstr "खरीद कार्रवाइयों से पहले पूछें"
 
-#: src/components/ApprovalRulesSettings.tsx:133
+#: src/components/ApprovalRulesSettings.tsx:109
 msgid "Ask before purchases"
 msgstr "खरीद से पहले पूछें"
 
-#: src/components/ApprovalRulesSettings.tsx:126
+#: src/components/ApprovalRulesSettings.tsx:102
 msgid "Ask before sending external email"
 msgstr "बाहरी ईमेल भेजने से पहले पूछें"
 
@@ -653,6 +653,10 @@ msgstr "एजेंटों को इसके टूल का उपयो�
 #: src/pages/model-settings/routing-settings.tsx:74
 msgid "Auto"
 msgstr "स्वतः"
+
+#: src/components/AutoReviewSettings.tsx:74
+msgid "Auto-review bot actions"
+msgstr "बॉट क्रियाओं की स्वतः समीक्षा"
 
 #: src/pages/ExternalConversationSettings.tsx:160
 msgid "Automated senders"
@@ -751,12 +755,12 @@ msgstr ""
 msgid "Bot to link"
 msgstr "जोड़ने के लिए बॉट"
 
-#: src/pages/shell/command-palette.tsx:239
+#: src/pages/shell/command-palette.tsx:247
 #: src/pages/usage-settings.tsx:68
 msgid "Bots"
 msgstr ""
 
-#: src/components/ApprovalRulesSettings.tsx:115
+#: src/components/ApprovalRulesSettings.tsx:91
 msgid "Bots act without asking by default. Add an exception only when you want to review a type of action first."
 msgstr "बॉट डिफ़ॉल्ट रूप से बिना पूछे कार्रवाई करते हैं। अपवाद तभी जोड़ें जब आप किसी प्रकार की कार्रवाई की पहले समीक्षा करना चाहते हों।"
 
@@ -867,11 +871,11 @@ msgstr ""
 msgid "Chat apps"
 msgstr "चैट ऐप्स"
 
-#: src/pages/SpaceGeneralSettings.tsx:37
+#: src/pages/SpaceGeneralSettings.tsx:40
 msgid "Chat apps, group channels, and agent connections."
 msgstr "चैट ऐप्स, ग्रुप चैनल और एजेंट कनेक्शन।"
 
-#: src/pages/shell/command-palette.tsx:242
+#: src/pages/shell/command-palette.tsx:250
 msgid "Chats"
 msgstr ""
 
@@ -1193,7 +1197,7 @@ msgstr "ईमेल से जारी रखें"
 msgid "Conversation cleared"
 msgstr ""
 
-#: src/pages/SpaceGeneralSettings.tsx:260
+#: src/pages/SpaceGeneralSettings.tsx:265
 msgid "Copied"
 msgstr ""
 
@@ -1212,7 +1216,7 @@ msgstr ""
 msgid "Copy diagnostic"
 msgstr "निदान कॉपी करें"
 
-#: src/pages/SpaceGeneralSettings.tsx:260
+#: src/pages/SpaceGeneralSettings.tsx:265
 msgid "Copy link"
 msgstr ""
 
@@ -1381,9 +1385,13 @@ msgstr "लोड नहीं हो सका"
 msgid "Could not load · Retry"
 msgstr "लोड नहीं हो सका · फिर से कोशिश करें"
 
-#: src/components/ApprovalRulesSettings.tsx:48
+#: src/components/ApprovalRulesSettings.tsx:40
 msgid "Could not load approval rules"
 msgstr "अनुमोदन नियम लोड नहीं हो सके"
+
+#: src/components/AutoReviewSettings.tsx:25
+msgid "Could not load Auto Review"
+msgstr "ऑटो समीक्षा लोड नहीं हो सकी"
 
 #: src/pages/IntegrationSetup.tsx:74
 msgid "Could not load bots. Reload to try again."
@@ -1463,7 +1471,7 @@ msgstr "हटाया नहीं जा सका"
 msgid "Could not remove group"
 msgstr "समूह हटाया नहीं जा सका"
 
-#: src/components/ApprovalRulesSettings.tsx:92
+#: src/components/ApprovalRulesSettings.tsx:84
 msgid "Could not remove rule"
 msgstr "नियम हटाया नहीं जा सका"
 
@@ -1495,7 +1503,7 @@ msgstr "रूटीन चलाया नहीं जा सका"
 msgid "Could not save"
 msgstr "सहेजा नहीं जा सका"
 
-#: src/components/ApprovalRulesSettings.tsx:103
+#: src/components/AutoReviewSettings.tsx:45
 msgid "Could not save Auto Review"
 msgstr "ऑटो रिव्यू सहेजा नहीं जा सका"
 
@@ -1511,7 +1519,7 @@ msgstr "मॉडल सहेजा नहीं जा सका"
 msgid "Could not save routine"
 msgstr "रूटीन सहेजा नहीं जा सका"
 
-#: src/components/ApprovalRulesSettings.tsx:80
+#: src/components/ApprovalRulesSettings.tsx:72
 msgid "Could not save rule"
 msgstr "नियम सहेजा नहीं जा सका"
 
@@ -1579,7 +1587,7 @@ msgstr "डिफ़ॉल्ट मेमोरी स्कोप अपडे
 msgid "Could not update your photo"
 msgstr ""
 
-#: src/pages/SpaceGeneralSettings.tsx:194
+#: src/pages/SpaceGeneralSettings.tsx:199
 msgid "Couldn't copy the link"
 msgstr ""
 
@@ -1588,7 +1596,7 @@ msgstr ""
 msgid "Couldn't create"
 msgstr "नहीं बनाया जा सका"
 
-#: src/pages/SpaceGeneralSettings.tsx:184
+#: src/pages/SpaceGeneralSettings.tsx:189
 msgid "Couldn't invite them"
 msgstr ""
 
@@ -1596,7 +1604,7 @@ msgstr ""
 msgid "Couldn't load"
 msgstr ""
 
-#: src/pages/SpaceGeneralSettings.tsx:157
+#: src/pages/SpaceGeneralSettings.tsx:162
 msgid "Couldn't load members"
 msgstr ""
 
@@ -1605,15 +1613,15 @@ msgid "Couldn't load messaging settings"
 msgstr "मैसेजिंग सेटिंग्स लोड नहीं हो सकीं"
 
 #. placeholder {0}: member.name
-#: src/pages/SpaceGeneralSettings.tsx:235
+#: src/pages/SpaceGeneralSettings.tsx:240
 msgid "Couldn't remove {0}"
 msgstr ""
 
-#: src/pages/SpaceGeneralSettings.tsx:97
+#: src/pages/SpaceGeneralSettings.tsx:102
 msgid "Couldn't rename the space"
 msgstr "स्पेस का नाम नहीं बदला जा सका"
 
-#: src/pages/SpaceGeneralSettings.tsx:272
+#: src/pages/SpaceGeneralSettings.tsx:277
 msgid "Couldn't revoke the invite link"
 msgstr ""
 
@@ -2017,7 +2025,7 @@ msgstr "प्रयास"
 msgid "Email"
 msgstr "ईमेल"
 
-#: src/pages/SpaceGeneralSettings.tsx:291
+#: src/pages/SpaceGeneralSettings.tsx:296
 msgid "Emails to invite"
 msgstr ""
 
@@ -2168,7 +2176,7 @@ msgid "Featured"
 msgstr "विशेष"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:67
-#: src/pages/shell/command-palette.tsx:164
+#: src/pages/shell/command-palette.tsx:172
 msgid "Files"
 msgstr "फ़ाइलें"
 
@@ -2204,10 +2212,6 @@ msgstr "MCP कनेक्शन पूरा हो रहा है…"
 #: src/pages/usage-settings.tsx:49
 msgid "Fixed"
 msgstr ""
-
-#: src/components/ApprovalRulesSettings.tsx:147
-msgid "Flag unexpected actions"
-msgstr "अप्रत्याशित क्रियाओं को चिह्नित करें"
 
 #: src/pages/Auth.tsx:194
 msgid "Forgot password?"
@@ -2370,6 +2374,10 @@ msgstr ""
 msgid "Import"
 msgstr "आयात करें"
 
+#: src/components/AutoReviewSettings.tsx:90
+msgid "Improve accuracy by setting up a decision model."
+msgstr "निर्णय मॉडल सेट करके क्रियाओं को अधिक सटीकता से चिह्नित करें।"
+
 #: src/pages/bot-page/KnowledgeTab.tsx:136
 msgid "Inherit default"
 msgstr "डिफ़ॉल्ट का पालन करें"
@@ -2427,7 +2435,7 @@ msgstr "अंतराल मात्रा"
 msgid "Interval unit"
 msgstr "अंतराल इकाई"
 
-#: src/pages/SpaceGeneralSettings.tsx:295
+#: src/pages/SpaceGeneralSettings.tsx:300
 msgid "Invite"
 msgstr ""
 
@@ -2538,7 +2546,7 @@ msgstr "लाइट"
 msgid "Link a chat app"
 msgstr "चैट ऐप जोड़ें"
 
-#: src/pages/shell/command-palette.tsx:165
+#: src/pages/shell/command-palette.tsx:173
 msgid "Links"
 msgstr ""
 
@@ -2575,7 +2583,7 @@ msgstr "मॉडल कैटलॉग लोड हो रहा है…"
 msgid "Loading preview…"
 msgstr "प्रीव्यू लोड हो रहा है…"
 
-#: src/components/ApprovalRulesSettings.tsx:159
+#: src/components/ApprovalRulesSettings.tsx:115
 msgid "Loading rules…"
 msgstr "नियम लोड हो रहे हैं…"
 
@@ -2614,7 +2622,7 @@ msgstr "निम्न"
 msgid "Make sure nothing is still running on this computer."
 msgstr "सुनिश्चित करें कि इस कंप्यूटर पर कुछ भी चल नहीं रहा है।"
 
-#: src/pages/SpaceGeneralSettings.tsx:40
+#: src/pages/SpaceGeneralSettings.tsx:43
 msgid "Manage messaging settings"
 msgstr "मैसेजिंग सेटिंग्स प्रबंधित करें"
 
@@ -2659,7 +2667,7 @@ msgstr ""
 msgid "Medium"
 msgstr "मध्यम"
 
-#: src/pages/SpaceGeneralSettings.tsx:209
+#: src/pages/SpaceGeneralSettings.tsx:214
 msgid "Members"
 msgstr ""
 
@@ -2735,12 +2743,12 @@ msgstr "संदेश…"
 msgid "Messaged {peer}"
 msgstr "{peer} को संदेश भेजा"
 
-#: src/pages/shell/command-palette.tsx:162
+#: src/pages/shell/command-palette.tsx:170
 msgid "Messages"
 msgstr ""
 
 #: src/pages/MessagingSettingsOverlay.tsx:99
-#: src/pages/SpaceGeneralSettings.tsx:34
+#: src/pages/SpaceGeneralSettings.tsx:37
 msgid "Messaging"
 msgstr "मैसेजिंग"
 
@@ -2855,7 +2863,7 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx:72
 #: src/pages/shell/dialogs.tsx:187
 #: src/pages/shell/dialogs.tsx:250
-#: src/pages/SpaceGeneralSettings.tsx:113
+#: src/pages/SpaceGeneralSettings.tsx:118
 msgid "Name"
 msgstr "नाम"
 
@@ -2952,7 +2960,7 @@ msgstr "अभी कोई चैट ऐप नहीं जुड़ा।"
 msgid "No computers"
 msgstr ""
 
-#: src/components/ApprovalRulesSettings.tsx:163
+#: src/components/ApprovalRulesSettings.tsx:119
 msgid "No exceptions. Actions run automatically."
 msgstr "कोई अपवाद नहीं। कार्रवाइयां स्वतः चलती हैं।"
 
@@ -3002,7 +3010,7 @@ msgstr "कोई प्रोवाइडर नहीं मिला।"
 msgid "No report"
 msgstr "कोई रिपोर्ट नहीं"
 
-#: src/pages/shell/command-palette.tsx:236
+#: src/pages/shell/command-palette.tsx:244
 msgid "No results"
 msgstr "कोई परिणाम नहीं"
 
@@ -3180,7 +3188,7 @@ msgstr ""
 msgid "Optional"
 msgstr "वैकल्पिक"
 
-#: src/pages/SpaceGeneralSettings.tsx:52
+#: src/pages/SpaceGeneralSettings.tsx:57
 msgid "Optional controls most people never need"
 msgstr "वैकल्पिक नियंत्रण जिनकी अधिकांश लोगों को कभी ज़रूरत नहीं होती"
 
@@ -3219,7 +3227,7 @@ msgstr ""
 msgid "Output"
 msgstr "आउटपुट"
 
-#: src/pages/SpaceGeneralSettings.tsx:222
+#: src/pages/SpaceGeneralSettings.tsx:227
 msgid "Owner"
 msgstr ""
 
@@ -3474,13 +3482,13 @@ msgstr ""
 msgid "Release interrupted computer?"
 msgstr ""
 
-#: src/components/ApprovalRulesSettings.tsx:179
+#: src/components/ApprovalRulesSettings.tsx:135
 #: src/pages/AccountProfileSettings.tsx:124
 #: src/pages/bot-page/RoutineTriggers.tsx:237
 #: src/pages/bot-page/RoutineTriggers.tsx:291
 #: src/pages/plugins/connection-detail.tsx:110
 #: src/pages/ScratchpadSection.tsx:165
-#: src/pages/SpaceGeneralSettings.tsx:239
+#: src/pages/SpaceGeneralSettings.tsx:244
 msgid "Remove"
 msgstr "हटाएं"
 
@@ -3665,7 +3673,7 @@ msgid "rev {0}"
 msgstr "रिवीज़न {0}"
 
 #: src/pages/MessagingSettingsOverlay.tsx:325
-#: src/pages/SpaceGeneralSettings.tsx:276
+#: src/pages/SpaceGeneralSettings.tsx:281
 msgid "Revoke"
 msgstr "रद्द करें"
 
@@ -3708,7 +3716,7 @@ msgid "Routine updated"
 msgstr "रूटीन अपडेट किया गया"
 
 #: src/pages/bot-page/BotPage.tsx:100
-#: src/pages/shell/command-palette.tsx:163
+#: src/pages/shell/command-palette.tsx:171
 msgid "Routines"
 msgstr "रूटीन्स"
 
@@ -3803,7 +3811,7 @@ msgstr "स्क्रीन"
 #: src/pages/model-settings/model-picker.tsx:224
 #: src/pages/shell/bot-picker.tsx:55
 #: src/pages/shell/bot-picker.tsx:56
-#: src/pages/shell/command-palette.tsx:219
+#: src/pages/shell/command-palette.tsx:227
 #: src/pages/shell/sidebar-header.tsx:77
 #: src/pages/shell/sidebar-header.tsx:87
 msgid "Search"
@@ -3814,8 +3822,8 @@ msgstr "खोजें"
 msgid "Search apps"
 msgstr "ऐप खोजें"
 
-#: src/pages/shell/command-palette.tsx:220
-#: src/pages/shell/command-palette.tsx:231
+#: src/pages/shell/command-palette.tsx:228
+#: src/pages/shell/command-palette.tsx:239
 msgid "Search bots, chats, settings"
 msgstr ""
 
@@ -3833,7 +3841,7 @@ msgstr "प्रोवाइडर्स खोजें"
 msgid "Search skills"
 msgstr "स्किल्स खोजें"
 
-#: src/pages/shell/command-palette.tsx:236
+#: src/pages/shell/command-palette.tsx:244
 msgid "Searching…"
 msgstr "खोजा जा रहा है…"
 
@@ -3883,12 +3891,16 @@ msgstr "सर्वर का नाम"
 msgid "Server URL"
 msgstr "सर्वर URL"
 
+#: src/components/AutoReviewSettings.tsx:98
+msgid "Set up"
+msgstr "सेट करें"
+
 #: src/pages/bot-page/BotPage.tsx:102
 #: src/pages/MessagingSettingsOverlay.tsx:362
 #: src/pages/SettingsOverlay.tsx:147
 #: src/pages/SettingsOverlay.tsx:222
 #: src/pages/SettingsOverlay.tsx:273
-#: src/pages/shell/command-palette.tsx:284
+#: src/pages/shell/command-palette.tsx:292
 #: src/pages/shell/sidebar-footer.tsx:211
 #: src/pages/shell/sidebar-footer.tsx:218
 msgid "Settings"
@@ -4151,7 +4163,7 @@ msgstr "छवियों का समर्थन"
 msgid "Supports thinking"
 msgstr "सोचने की क्षमता का समर्थन करता है"
 
-#: src/pages/SettingsOverlay.tsx:519
+#: src/pages/SettingsOverlay.tsx:520
 msgid "Switch space"
 msgstr "स्पेस बदलें"
 
@@ -4383,8 +4395,8 @@ msgstr ""
 
 #: src/components/ComputerMaintenanceActions.tsx:116
 #: src/components/SoftwareUpdateSection.tsx:260
-#: src/pages/SettingsOverlay.tsx:414
-#: src/pages/SettingsOverlay.tsx:414
+#: src/pages/SettingsOverlay.tsx:415
+#: src/pages/SettingsOverlay.tsx:415
 #: src/pages/shell/computer-preview.tsx:75
 msgid "Update available"
 msgstr "अपडेट उपलब्ध"
@@ -4612,6 +4624,10 @@ msgstr "आप यह विंडो बंद कर सकते हैं।
 #: src/pages/shell/side-panel.tsx:352
 msgid "You have control"
 msgstr "नियंत्रण आपके पास है"
+
+#: src/components/AutoReviewSettings.tsx:80
+msgid "You'll be asked to confirm actions flagged as dangerous."
+msgstr "खतरनाक चिह्नित क्रियाओं के लिए आपसे पुष्टि मांगी जाएगी।"
 
 #: src/components/ask/AskSettled.tsx:47
 msgid "Your answer: {answer}"

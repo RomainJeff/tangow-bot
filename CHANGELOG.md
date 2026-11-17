@@ -8,7 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-11-17
 
+#### Added
+
+- **Auto-review on iOS and Android.** Settings on mobile now has the Auto-review bot actions switch, so actions flagged as dangerous wait for your confirmation without a trip to the web app.
+
 #### Changed
+
+- On web and desktop, the auto-review switch moves from Advanced to General settings, is called Auto-review bot actions, and suggests setting up a decision model when none is connected.
 
 - Search on web and desktop moves from the sidebar field to a search button beside Activity, which opens a larger ⌘K palette that finds bots, chats, messages, files, links, routines and settings sections.
 
