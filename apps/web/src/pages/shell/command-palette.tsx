@@ -71,11 +71,14 @@ export function CommandPalette({
 }) {
   const { t } = useLingui();
   const [search, setSearch] = useState("");
-  const [hits, setHits] = useState<SearchHit[]>([]);
+  // Hits remember their query, so a finished search never shows under a newer one.
+  const [found, setFound] = useState<{ query: string; hits: SearchHit[] }>({ query: "", hits: [] });
   const [loading, setLoading] = useState(false);
   const modKey = commandModifierKey();
   const query = search.trim();
   const needle = query.toLowerCase();
+  const allHits = useMemo(() => (found.query === query ? found.hits : []), [found, query]);
+  const hits = allHits.filter((hit) => hit.kind !== "conversation");
 
   useEffect(() => {
     if (!open) setSearch("");
@@ -83,12 +86,18 @@ export function CommandPalette({
 
   const chats = useMemo(() => {
     const items = groups.flatMap((group) => group.bots);
-    const visible = needle ? items.filter((item) => chatSearchText(item).includes(needle)) : items;
+    // The server also matches what the roster doesn't carry, such as a bot's description.
+    const matched = new Set(
+      allHits.flatMap((hit) => (hit.kind === "conversation" ? [hit.botId ?? hit.groupId] : [])),
+    );
+    const visible = needle
+      ? items.filter((item) => matched.has(item.chat.id) || chatSearchText(item).includes(needle))
+      : items;
     return {
       bots: visible.filter((item) => item.kind === "bot"),
       groups: visible.filter((item) => item.kind === "group"),
     };
-  }, [groups, needle]);
+  }, [groups, needle, allHits]);
 
   const settings = useMemo(() => {
     if (!needle) return [];
@@ -99,7 +108,6 @@ export function CommandPalette({
 
   useEffect(() => {
     if (!open || !query) {
-      setHits([]);
       setLoading(false);
       return;
     }
@@ -110,11 +118,11 @@ export function CommandPalette({
         .query({ q: query })
         .then((result) => {
           if (!abort.signal.aborted) {
-            setHits(result.hits.filter((hit) => hit.kind !== "conversation"));
+            setFound({ query, hits: result.hits });
           }
         })
         .catch(() => {
-          if (!abort.signal.aborted) setHits([]);
+          if (!abort.signal.aborted) setFound({ query, hits: [] });
         })
         .finally(() => {
           if (!abort.signal.aborted) setLoading(false);
@@ -231,7 +239,7 @@ export function CommandPalette({
           placeholder={t`Search bots, chats, settings`}
           data-testid="command-palette-search"
         />
-        <CommandList className="max-h-96" data-testid="command-palette-list">
+        <CommandList className="max-h-[min(24rem,50svh)]" data-testid="command-palette-list">
           <CommandEmpty>
             {loading ? <Trans>Searching…</Trans> : <Trans>No results</Trans>}
           </CommandEmpty>
