@@ -1,6 +1,6 @@
 {
   "name": "@tangow/mobile",
-  "version": "2026.11.9",
+  "version": "2026.11.10",
   "license": "Apache-2.0",
   "main": "expo-router/entry",
   "expo": {
