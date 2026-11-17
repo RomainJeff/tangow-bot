@@ -33,6 +33,11 @@ export type ColorTokens = {
   linkMentionTile: string;
   muted: string;
   mutedForeground: string;
+  /**
+   * The disc behind a bot's clay character: a translucent veil, as iOS fills are, so it reads
+   * over every part of the ambient light (opaque `muted` dissolves where the gradient matches it).
+   */
+  avatarDisc: string;
   accent: string;
   accentForeground: string;
   destructive: string;
@@ -96,6 +101,7 @@ export const darkTokens = {
   linkMentionTile: "#444447",
   muted: "#2A2A2D",
   mutedForeground: "#AEAEB2",
+  avatarDisc: "rgba(118, 118, 128, 0.24)",
   accent: "#252527",
   accentForeground: "#F5F5F7",
   destructive: "#EF4444",
@@ -147,6 +153,7 @@ export const lightTokens = {
   linkMentionTile: "#F2F2F4",
   muted: "#E8E8EA",
   mutedForeground: "#6E6E73",
+  avatarDisc: "rgba(118, 118, 128, 0.12)",
   accent: "#EBEBED",
   accentForeground: "#1D1D1F",
   destructive: "#DC2626",

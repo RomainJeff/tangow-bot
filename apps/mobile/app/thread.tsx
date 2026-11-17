@@ -638,6 +638,7 @@ function Thread() {
           id: bot.id,
           name: bot.name,
           color: bot.color,
+          avatarCharacter: bot.avatarCharacter,
         })),
         groups: mentionGroups.map((group) => ({
           id: group.id,
@@ -885,6 +886,7 @@ function Thread() {
         color: member.color,
         identity: member.botId,
         shapeSeed: member.shapeSeed,
+        character: member.avatarCharacter,
         working: workingBotIds.has(member.botId),
       })),
     [snap?.members, workingBotIds],
@@ -946,6 +948,7 @@ function Thread() {
                 color={currentBot.color}
                 identity={currentBot.id}
                 shapeSeed={currentBot.shapeSeed}
+                character={currentBot.avatarCharacter}
                 size={34}
                 status={currentBotStatus}
                 muted={rosterMuted(currentBot)}
@@ -2136,6 +2139,7 @@ function Thread() {
       color: member?.color ?? bot?.color ?? tokens.mutedForeground,
       name: member?.name ?? bot?.name ?? displayName ?? t("Bot"),
       shapeSeed: member?.shapeSeed ?? bot?.shapeSeed,
+      avatarCharacter: member ? member.avatarCharacter : bot?.avatarCharacter,
     };
   }
 
@@ -2397,6 +2401,7 @@ function Thread() {
                 color={author.color}
                 identity={authorBotId}
                 shapeSeed={author.shapeSeed}
+                character={author.avatarCharacter}
                 size={sizes.message}
                 status={authorStatus}
                 still
@@ -2496,6 +2501,7 @@ function Thread() {
             name: currentBot.name,
             color: currentBot.color,
             shapeSeed: currentBot.shapeSeed,
+            avatarCharacter: currentBot.avatarCharacter,
             status: currentBotStatus,
           },
         ]
@@ -2511,6 +2517,7 @@ function Thread() {
         color={workingBotsForLine[0]?.color ?? tokens.mutedForeground}
         identity={workingBotsForLine[0]?.botId}
         shapeSeed={workingBotsForLine[0]?.shapeSeed}
+        character={workingBotsForLine[0]?.avatarCharacter}
         size={sizes.message}
         status="running"
       />
@@ -3560,6 +3567,7 @@ function MentionChipIcon({ mention }: { mention: ComposerMention }) {
       color={mention.color ?? tokens.mutedForeground}
       identity={mention.id}
       shapeSeed={mention.shapeSeed}
+      character={mention.avatarCharacter}
       size={sizes.chip}
       still
     />
@@ -4262,11 +4270,17 @@ const ItemRow = memo(function ItemRow({
     bots.find((bot) => bot.id === id)?.color ??
     members?.find((member) => member.botId === id)?.color ??
     tokens.mutedForeground;
-  const avatarOf = (id: string | undefined) => ({
-    color: botColorOf(id),
-    identity: id,
-    shapeSeed: members?.find((member) => member.botId === id)?.shapeSeed,
-  });
+  const avatarOf = (id: string | undefined) => {
+    const member = members?.find((candidate) => candidate.botId === id);
+    return {
+      color: botColorOf(id),
+      identity: id,
+      shapeSeed: member?.shapeSeed,
+      character: member
+        ? member.avatarCharacter
+        : bots.find((bot) => bot.id === id)?.avatarCharacter,
+    };
+  };
   const openPeerMessages = readOnly
     ? undefined
     : (ownBotId: string, peerBotId: string, peer: string) =>
@@ -4277,10 +4291,12 @@ const ItemRow = memo(function ItemRow({
             botName: memberName(members, ownBotId) ?? botName ?? "",
             botColor: botColorOf(ownBotId),
             botShapeSeed: avatarOf(ownBotId).shapeSeed?.toString() ?? "",
+            botCharacter: avatarOf(ownBotId).character ?? "",
             peerBotId,
             peerBotName: peer,
             peerColor: botColorOf(peerBotId),
             peerShapeSeed: avatarOf(peerBotId).shapeSeed?.toString() ?? "",
+            peerCharacter: avatarOf(peerBotId).character ?? "",
           },
         });
   const body = (() => {

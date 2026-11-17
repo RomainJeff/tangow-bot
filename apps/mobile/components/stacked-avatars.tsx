@@ -15,6 +15,7 @@ export interface StackedAvatarItem {
   identity?: string;
   working?: boolean;
   shapeSeed?: number | null;
+  character?: string | null;
   /** 7f: this item's bloub glances once toward the other item, at mount. */
   glance?: BotAvatarGlance;
 }
@@ -77,6 +78,7 @@ export function StackedAvatars({
             color={item.color}
             identity={item.identity}
             shapeSeed={item.shapeSeed}
+            character={item.character}
             size={size}
             status={item.working ? "running" : undefined}
             glance={item.glance}

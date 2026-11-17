@@ -141,6 +141,16 @@ export function characterById(id: string | null | undefined): AvatarCharacter {
   return AVATAR_CHARACTERS.find((character) => character.id === id) ?? AVATAR_CHARACTERS[0];
 }
 
+/** At this size and below, the simplified mini image replaces the full one. */
+export const CLAY_MINI_MAX_SIZE = 20;
+
+/** Whole character when large, face when medium, close on the eyes when small. */
+export function cropForSize(size: number): keyof AvatarCharacter["crops"] {
+  if (size >= 64) return "full";
+  if (size >= 32) return "portrait";
+  return "close";
+}
+
 const SHAPE_COLORS: Record<AvatarCharacterShape, string> = {
   ball: "#A34B50",
   capsule: "#8287AD",

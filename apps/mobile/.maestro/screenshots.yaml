@@ -372,6 +372,18 @@ tags:
 - assertVisible: "Delete group"
 - takeScreenshot: "28-group-settings-dark"
 
+- openLink: "tangow:///bot?botId=${TANGOW_SCREENSHOT_BOT_ID}"
+- extendedWaitUntil:
+    visible: "Appearance"
+    timeout: 10000
+- takeScreenshot: "28b-bot-page-dark"
+
+- openLink: "tangow:///"
+- extendedWaitUntil:
+    visible: "Researcher.*"
+    timeout: 10000
+- takeScreenshot: "28c-inbox-dark"
+
 - openLink: "tangow:///account"
 - tapOn: "Light"
 - openLink: "tangow:///thread?botId=${TANGOW_SCREENSHOT_BOT_ID}&name=Researcher"

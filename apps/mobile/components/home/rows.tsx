@@ -97,6 +97,7 @@ function ActivityRow({
         <BotAvatar
           identity={run.botId}
           color={bot?.color ?? FALLBACK_COLOR}
+          character={bot?.avatarCharacter}
           status={run.status}
           size={sizes.mobileStack}
           still
@@ -231,6 +232,7 @@ export function BotRow({
           color={bot.color || FALLBACK_COLOR}
           identity={bot.id}
           shapeSeed={bot.shapeSeed}
+          character={bot.avatarCharacter}
           status={bot.status}
           muted={rosterMuted(bot)}
           size={sizes.mobileStack}

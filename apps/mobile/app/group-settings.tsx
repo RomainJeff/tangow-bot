@@ -304,6 +304,7 @@ export default function GroupSettingsScreen() {
                   color={leadBot.color}
                   identity={leadBot.id}
                   shapeSeed={leadBot.shapeSeed}
+                  character={leadBot.avatarCharacter}
                   size={22}
                 />
               ) : null}

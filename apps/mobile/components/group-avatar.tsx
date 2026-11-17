@@ -9,6 +9,7 @@ export interface GroupAvatarMember {
   name?: string;
   color: string;
   shapeSeed?: number | null;
+  avatarCharacter?: string | null;
   status?: string;
 }
 
@@ -73,6 +74,7 @@ export const GroupAvatar = memo(function GroupAvatar({
         color={tile.bot.color}
         identity={tile.bot.botId ?? tile.bot.name}
         shapeSeed={tile.bot.shapeSeed}
+        character={tile.bot.avatarCharacter}
         size={tileSize}
         status={tile.bot.status}
         still={still}

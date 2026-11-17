@@ -9,7 +9,9 @@ import { useMobileTokens } from "../lib/native";
 import { BotAvatar } from "./bot-avatar";
 import { UserAvatar } from "./user-avatar";
 
-type PickerBot = Pick<MobileBot, "id" | "name" | "color" | "shapeSeed"> & { status?: string };
+type PickerBot = Pick<MobileBot, "id" | "name" | "color" | "shapeSeed" | "avatarCharacter"> & {
+  status?: string;
+};
 
 /** A group's bots, each switched in or out; without `onChange`, only listed. */
 export function BotMemberPicker({
@@ -31,6 +33,7 @@ export function BotMemberPicker({
           color={bot.color}
           identity={bot.id}
           shapeSeed={bot.shapeSeed}
+          character={bot.avatarCharacter}
           size={34}
           status={bot.status}
         />

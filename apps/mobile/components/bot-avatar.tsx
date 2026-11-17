@@ -20,6 +20,7 @@ import { CHAT_MOTION } from "../lib/chat-motion";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
 import { useAvatarStyle } from "./avatar-style";
+import { ClayAvatar } from "./clay-avatar";
 import { NativeSymbol } from "./native-symbol";
 
 /** A one-shot look, right after mount only (7f) — see `OrganicAvatar`. */
@@ -31,6 +32,7 @@ export const BotAvatar = memo(function BotAvatar({
   status,
   identity,
   shapeSeed,
+  character,
   variant,
   muted = false,
   glance,
@@ -42,6 +44,12 @@ export const BotAvatar = memo(function BotAvatar({
   identity?: string;
   /** Picked organic shape; falls back to a shape derived from `identity`. */
   shapeSeed?: number | null;
+  /**
+   * Catalogue character, as on web. `null` is the neutral character and `undefined` the legacy
+   * renderer, which the avatar-style preview and unknown authors use. When defined, `variant`,
+   * `shapeSeed`, `glance` and `still` are ignored and the ring replaces the working dot.
+   */
+  character?: string | null;
   variant?: AvatarStyle;
   muted?: boolean;
   /**
@@ -68,7 +76,9 @@ export const BotAvatar = memo(function BotAvatar({
   const gap = Math.max(3, Math.round(size * 0.11));
   return (
     <View style={{ width: size, height: size }}>
-      {(variant ?? avatarStyle) === "organic" ? (
+      {character !== undefined ? (
+        <ClayAvatar character={character} size={size} isWorking={isWorking} />
+      ) : (variant ?? avatarStyle) === "organic" ? (
         <OrganicAvatar
           color={color}
           identity={identity}
@@ -115,7 +125,7 @@ export const BotAvatar = memo(function BotAvatar({
           </View>
         </View>
       )}
-      {isWorking ? (
+      {isWorking && character === undefined ? (
         <View
           accessibilityLabel={t("Working")}
           style={{
