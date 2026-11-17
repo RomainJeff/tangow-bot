@@ -527,23 +527,29 @@ describe("run notification preference", () => {
     expect(findFirst).not.toHaveBeenCalled();
   });
 
-  it("sends the bot's organic avatar, and none on the robot style", async () => {
-    const run = { botId: "bot-1", spaceId: "workspace-1", userId: "user-1" };
-    const prismaFor = (shapeSeed: number | null, avatarStyle: string) =>
+  it("sends the bot's character with the old shape for apps that predate characters", async () => {
+    const run = { botId: "bot-1", spaceId: "workspace-1" };
+    const prismaFor = (bot: { shapeSeed: number | null; avatarCharacter: string | null } | null) =>
       ({
-        bot: { findFirst: vi.fn(async () => ({ id: "bot-1", color: "#E5484D", shapeSeed })) },
-        user: { findUnique: vi.fn(async () => ({ avatarStyle })) },
+        bot: { findFirst: vi.fn(async () => bot && { id: "bot-1", color: "#E5484D", ...bot }) },
       }) as unknown as PrismaClient;
 
-    await expect(notificationAvatar(prismaFor(11, "organic"), run)).resolves.toEqual({
-      color: "#E5484D",
+    await expect(
+      notificationAvatar(prismaFor({ shapeSeed: 11, avatarCharacter: "atlas" }), run),
+    ).resolves.toEqual({
+      character: "atlas",
+      // Atlas is a capsule: the clay colour, not the bot's own.
+      color: "#8287AD",
       shape: 11 % SHAPES.length,
     });
-    await expect(notificationAvatar(prismaFor(null, "organic"), run)).resolves.toEqual({
+    await expect(
+      notificationAvatar(prismaFor({ shapeSeed: null, avatarCharacter: null }), run),
+    ).resolves.toEqual({
+      character: "scout",
       color: "#E5484D",
       shape: avatarIdentitySeed("bot-1") % SHAPES.length,
     });
-    await expect(notificationAvatar(prismaFor(2, "robot"), run)).resolves.toBeUndefined();
+    await expect(notificationAvatar(prismaFor(null), run)).resolves.toBeUndefined();
   });
 });
 
