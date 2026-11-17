@@ -21,7 +21,8 @@ import {
   PickerInfoDialog,
   RenameBotSectionDialog,
 } from "./dialogs";
-import { botPageFor, FALLBACK_BOT_COLOR } from "./layout";
+import type { SidebarGroup } from "./layout";
+import { botPageFor, FALLBACK_BOT_COLOR, threadJumpLocation } from "./layout";
 import type { Panels } from "./use-panels";
 import type { Roster } from "./use-roster";
 import type { ShellOverlayState } from "./use-shell-overlays";
@@ -62,6 +63,7 @@ export function ShellOverlays({
   runBotAction,
   refreshAgentSkills,
   openSpaceChat,
+  sidebarGroups,
   userName,
   initials,
   userImage,
@@ -77,6 +79,7 @@ export function ShellOverlays({
   runBotAction: (botId: string, action: BotAction) => void;
   refreshAgentSkills: () => void;
   openSpaceChat: (spaceId: string, path: string) => void;
+  sidebarGroups: SidebarGroup[];
   userName: string;
   initials: string;
   userImage: string | null;
@@ -442,10 +445,18 @@ export function ShellOverlays({
         <CommandPalette
           open={overlays.commandPaletteOpen}
           onOpenChange={overlays.setCommandPaletteOpen}
-          bots={bots}
-          onSelectBot={(id) => {
-            navigate(`/app/${id}`);
-          }}
+          groups={sidebarGroups}
+          userId={bootstrapMe?.userId}
+          initials={initials}
+          userImage={userImage}
+          onSelectChat={(item) =>
+            openSpaceChat(
+              item.chat.spaceId,
+              item.kind === "bot" ? `/app/${item.chat.id}` : `/app/g/${item.chat.id}`,
+            )
+          }
+          onSelectSettings={overlays.openSettings}
+          onSelectHit={(hit) => navigate(threadJumpLocation(hit))}
         />
 
         {overlays.newSpaceOpen ? (
