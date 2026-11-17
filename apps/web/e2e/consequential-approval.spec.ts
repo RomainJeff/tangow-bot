@@ -39,7 +39,7 @@ test("actions run by default while optional confirmations live in advanced user 
   await expect(settings.getByText("No exceptions. Actions run automatically.")).toBeVisible();
   await expect(settings.getByTestId("auto-review-toggle")).toBeVisible();
   await expect(settings.getByTestId("auto-review-toggle")).not.toBeChecked();
-  await expect(settings.getByText("Flag unexpected actions")).toBeVisible();
+  await expect(settings.getByText("Auto-review bot actions")).toBeVisible();
   await settings.getByRole("button", { name: "Ask before sending external email" }).click();
   await expect(settings.getByText("Ask before email actions", { exact: true })).toBeVisible();
   await captureScreenshot(page, testInfo, "52-advanced-action-confirmations");

@@ -13,7 +13,7 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#: src/pages/shell/command-palette.tsx:325
+#: src/pages/shell/command-palette.tsx:333
 #: src/pages/shell/sidebar-roster.tsx:283
 msgid " (unread)"
 msgstr " (unread)"
@@ -654,6 +654,10 @@ msgstr "Authorize this server so agents can use its tools. A popup opens."
 msgid "Auto"
 msgstr "Auto"
 
+#: src/components/ApprovalRulesSettings.tsx:147
+msgid "Auto-review bot actions"
+msgstr "Auto-review bot actions"
+
 #: src/pages/ExternalConversationSettings.tsx:160
 msgid "Automated senders"
 msgstr "Automated senders"
@@ -751,7 +755,7 @@ msgstr "Bot settings"
 msgid "Bot to link"
 msgstr "Bot to link"
 
-#: src/pages/shell/command-palette.tsx:239
+#: src/pages/shell/command-palette.tsx:247
 #: src/pages/usage-settings.tsx:68
 msgid "Bots"
 msgstr "Bots"
@@ -871,7 +875,7 @@ msgstr "Chat apps"
 msgid "Chat apps, group channels, and agent connections."
 msgstr "Chat apps, group channels, and agent connections."
 
-#: src/pages/shell/command-palette.tsx:242
+#: src/pages/shell/command-palette.tsx:250
 msgid "Chats"
 msgstr "Chats"
 
@@ -2168,7 +2172,7 @@ msgid "Featured"
 msgstr "Featured"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:67
-#: src/pages/shell/command-palette.tsx:164
+#: src/pages/shell/command-palette.tsx:172
 msgid "Files"
 msgstr "Files"
 
@@ -2204,10 +2208,6 @@ msgstr "Finishing MCP connection…"
 #: src/pages/usage-settings.tsx:49
 msgid "Fixed"
 msgstr "Fixed"
-
-#: src/components/ApprovalRulesSettings.tsx:147
-msgid "Flag unexpected actions"
-msgstr "Flag unexpected actions"
 
 #: src/pages/Auth.tsx:194
 msgid "Forgot password?"
@@ -2538,7 +2538,7 @@ msgstr "Light"
 msgid "Link a chat app"
 msgstr "Link a chat app"
 
-#: src/pages/shell/command-palette.tsx:165
+#: src/pages/shell/command-palette.tsx:173
 msgid "Links"
 msgstr "Links"
 
@@ -2575,7 +2575,7 @@ msgstr "Loading model catalog…"
 msgid "Loading preview…"
 msgstr "Loading preview…"
 
-#: src/components/ApprovalRulesSettings.tsx:159
+#: src/components/ApprovalRulesSettings.tsx:161
 msgid "Loading rules…"
 msgstr "Loading rules…"
 
@@ -2735,7 +2735,7 @@ msgstr "Message…"
 msgid "Messaged {peer}"
 msgstr "Messaged {peer}"
 
-#: src/pages/shell/command-palette.tsx:162
+#: src/pages/shell/command-palette.tsx:170
 msgid "Messages"
 msgstr "Messages"
 
@@ -2952,7 +2952,7 @@ msgstr "No chat apps linked yet."
 msgid "No computers"
 msgstr "No computers"
 
-#: src/components/ApprovalRulesSettings.tsx:163
+#: src/components/ApprovalRulesSettings.tsx:165
 msgid "No exceptions. Actions run automatically."
 msgstr "No exceptions. Actions run automatically."
 
@@ -3002,7 +3002,7 @@ msgstr "No providers found."
 msgid "No report"
 msgstr "No report"
 
-#: src/pages/shell/command-palette.tsx:236
+#: src/pages/shell/command-palette.tsx:244
 msgid "No results"
 msgstr "No results"
 
@@ -3474,7 +3474,7 @@ msgstr "Release computer"
 msgid "Release interrupted computer?"
 msgstr "Release interrupted computer?"
 
-#: src/components/ApprovalRulesSettings.tsx:179
+#: src/components/ApprovalRulesSettings.tsx:181
 #: src/pages/AccountProfileSettings.tsx:124
 #: src/pages/bot-page/RoutineTriggers.tsx:237
 #: src/pages/bot-page/RoutineTriggers.tsx:291
@@ -3708,7 +3708,7 @@ msgid "Routine updated"
 msgstr "Routine updated"
 
 #: src/pages/bot-page/BotPage.tsx:100
-#: src/pages/shell/command-palette.tsx:163
+#: src/pages/shell/command-palette.tsx:171
 msgid "Routines"
 msgstr "Routines"
 
@@ -3803,7 +3803,7 @@ msgstr "Screen"
 #: src/pages/model-settings/model-picker.tsx:224
 #: src/pages/shell/bot-picker.tsx:55
 #: src/pages/shell/bot-picker.tsx:56
-#: src/pages/shell/command-palette.tsx:219
+#: src/pages/shell/command-palette.tsx:227
 #: src/pages/shell/sidebar-header.tsx:77
 #: src/pages/shell/sidebar-header.tsx:87
 msgid "Search"
@@ -3814,8 +3814,8 @@ msgstr "Search"
 msgid "Search apps"
 msgstr "Search apps"
 
-#: src/pages/shell/command-palette.tsx:220
-#: src/pages/shell/command-palette.tsx:231
+#: src/pages/shell/command-palette.tsx:228
+#: src/pages/shell/command-palette.tsx:239
 msgid "Search bots, chats, settings"
 msgstr "Search bots, chats, settings"
 
@@ -3833,7 +3833,7 @@ msgstr "Search providers"
 msgid "Search skills"
 msgstr "Search skills"
 
-#: src/pages/shell/command-palette.tsx:236
+#: src/pages/shell/command-palette.tsx:244
 msgid "Searching…"
 msgstr "Searching…"
 
@@ -3888,7 +3888,7 @@ msgstr "Server URL"
 #: src/pages/SettingsOverlay.tsx:147
 #: src/pages/SettingsOverlay.tsx:222
 #: src/pages/SettingsOverlay.tsx:273
-#: src/pages/shell/command-palette.tsx:284
+#: src/pages/shell/command-palette.tsx:292
 #: src/pages/shell/sidebar-footer.tsx:211
 #: src/pages/shell/sidebar-footer.tsx:218
 msgid "Settings"
@@ -4612,6 +4612,10 @@ msgstr "You can close this window."
 #: src/pages/shell/side-panel.tsx:352
 msgid "You have control"
 msgstr "You have control"
+
+#: src/components/ApprovalRulesSettings.tsx:153
+msgid "You'll be asked to confirm actions flagged as dangerous."
+msgstr "You'll be asked to confirm actions flagged as dangerous."
 
 #: src/components/ask/AskSettled.tsx:47
 msgid "Your answer: {answer}"

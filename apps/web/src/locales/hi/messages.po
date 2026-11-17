@@ -13,7 +13,7 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#: src/pages/shell/command-palette.tsx:325
+#: src/pages/shell/command-palette.tsx:333
 #: src/pages/shell/sidebar-roster.tsx:283
 msgid " (unread)"
 msgstr " (अपठित)"
@@ -654,6 +654,10 @@ msgstr "एजेंटों को इसके टूल का उपयो�
 msgid "Auto"
 msgstr "स्वतः"
 
+#: src/components/ApprovalRulesSettings.tsx:147
+msgid "Auto-review bot actions"
+msgstr "बॉट क्रियाओं की स्वतः समीक्षा"
+
 #: src/pages/ExternalConversationSettings.tsx:160
 msgid "Automated senders"
 msgstr ""
@@ -751,7 +755,7 @@ msgstr ""
 msgid "Bot to link"
 msgstr "जोड़ने के लिए बॉट"
 
-#: src/pages/shell/command-palette.tsx:239
+#: src/pages/shell/command-palette.tsx:247
 #: src/pages/usage-settings.tsx:68
 msgid "Bots"
 msgstr ""
@@ -871,7 +875,7 @@ msgstr "चैट ऐप्स"
 msgid "Chat apps, group channels, and agent connections."
 msgstr "चैट ऐप्स, ग्रुप चैनल और एजेंट कनेक्शन।"
 
-#: src/pages/shell/command-palette.tsx:242
+#: src/pages/shell/command-palette.tsx:250
 msgid "Chats"
 msgstr ""
 
@@ -2168,7 +2172,7 @@ msgid "Featured"
 msgstr "विशेष"
 
 #: src/pages/bot-page/KnowledgeTab.tsx:67
-#: src/pages/shell/command-palette.tsx:164
+#: src/pages/shell/command-palette.tsx:172
 msgid "Files"
 msgstr "फ़ाइलें"
 
@@ -2204,10 +2208,6 @@ msgstr "MCP कनेक्शन पूरा हो रहा है…"
 #: src/pages/usage-settings.tsx:49
 msgid "Fixed"
 msgstr ""
-
-#: src/components/ApprovalRulesSettings.tsx:147
-msgid "Flag unexpected actions"
-msgstr "अप्रत्याशित क्रियाओं को चिह्नित करें"
 
 #: src/pages/Auth.tsx:194
 msgid "Forgot password?"
@@ -2538,7 +2538,7 @@ msgstr "लाइट"
 msgid "Link a chat app"
 msgstr "चैट ऐप जोड़ें"
 
-#: src/pages/shell/command-palette.tsx:165
+#: src/pages/shell/command-palette.tsx:173
 msgid "Links"
 msgstr ""
 
@@ -2575,7 +2575,7 @@ msgstr "मॉडल कैटलॉग लोड हो रहा है…"
 msgid "Loading preview…"
 msgstr "प्रीव्यू लोड हो रहा है…"
 
-#: src/components/ApprovalRulesSettings.tsx:159
+#: src/components/ApprovalRulesSettings.tsx:161
 msgid "Loading rules…"
 msgstr "नियम लोड हो रहे हैं…"
 
@@ -2735,7 +2735,7 @@ msgstr "संदेश…"
 msgid "Messaged {peer}"
 msgstr "{peer} को संदेश भेजा"
 
-#: src/pages/shell/command-palette.tsx:162
+#: src/pages/shell/command-palette.tsx:170
 msgid "Messages"
 msgstr ""
 
@@ -2952,7 +2952,7 @@ msgstr "अभी कोई चैट ऐप नहीं जुड़ा।"
 msgid "No computers"
 msgstr ""
 
-#: src/components/ApprovalRulesSettings.tsx:163
+#: src/components/ApprovalRulesSettings.tsx:165
 msgid "No exceptions. Actions run automatically."
 msgstr "कोई अपवाद नहीं। कार्रवाइयां स्वतः चलती हैं।"
 
@@ -3002,7 +3002,7 @@ msgstr "कोई प्रोवाइडर नहीं मिला।"
 msgid "No report"
 msgstr "कोई रिपोर्ट नहीं"
 
-#: src/pages/shell/command-palette.tsx:236
+#: src/pages/shell/command-palette.tsx:244
 msgid "No results"
 msgstr "कोई परिणाम नहीं"
 
@@ -3474,7 +3474,7 @@ msgstr ""
 msgid "Release interrupted computer?"
 msgstr ""
 
-#: src/components/ApprovalRulesSettings.tsx:179
+#: src/components/ApprovalRulesSettings.tsx:181
 #: src/pages/AccountProfileSettings.tsx:124
 #: src/pages/bot-page/RoutineTriggers.tsx:237
 #: src/pages/bot-page/RoutineTriggers.tsx:291
@@ -3708,7 +3708,7 @@ msgid "Routine updated"
 msgstr "रूटीन अपडेट किया गया"
 
 #: src/pages/bot-page/BotPage.tsx:100
-#: src/pages/shell/command-palette.tsx:163
+#: src/pages/shell/command-palette.tsx:171
 msgid "Routines"
 msgstr "रूटीन्स"
 
@@ -3803,7 +3803,7 @@ msgstr "स्क्रीन"
 #: src/pages/model-settings/model-picker.tsx:224
 #: src/pages/shell/bot-picker.tsx:55
 #: src/pages/shell/bot-picker.tsx:56
-#: src/pages/shell/command-palette.tsx:219
+#: src/pages/shell/command-palette.tsx:227
 #: src/pages/shell/sidebar-header.tsx:77
 #: src/pages/shell/sidebar-header.tsx:87
 msgid "Search"
@@ -3814,8 +3814,8 @@ msgstr "खोजें"
 msgid "Search apps"
 msgstr "ऐप खोजें"
 
-#: src/pages/shell/command-palette.tsx:220
-#: src/pages/shell/command-palette.tsx:231
+#: src/pages/shell/command-palette.tsx:228
+#: src/pages/shell/command-palette.tsx:239
 msgid "Search bots, chats, settings"
 msgstr ""
 
@@ -3833,7 +3833,7 @@ msgstr "प्रोवाइडर्स खोजें"
 msgid "Search skills"
 msgstr "स्किल्स खोजें"
 
-#: src/pages/shell/command-palette.tsx:236
+#: src/pages/shell/command-palette.tsx:244
 msgid "Searching…"
 msgstr "खोजा जा रहा है…"
 
@@ -3888,7 +3888,7 @@ msgstr "सर्वर URL"
 #: src/pages/SettingsOverlay.tsx:147
 #: src/pages/SettingsOverlay.tsx:222
 #: src/pages/SettingsOverlay.tsx:273
-#: src/pages/shell/command-palette.tsx:284
+#: src/pages/shell/command-palette.tsx:292
 #: src/pages/shell/sidebar-footer.tsx:211
 #: src/pages/shell/sidebar-footer.tsx:218
 msgid "Settings"
@@ -4612,6 +4612,10 @@ msgstr "आप यह विंडो बंद कर सकते हैं।
 #: src/pages/shell/side-panel.tsx:352
 msgid "You have control"
 msgstr "नियंत्रण आपके पास है"
+
+#: src/components/ApprovalRulesSettings.tsx:153
+msgid "You'll be asked to confirm actions flagged as dangerous."
+msgstr "खतरनाक चिह्नित क्रियाओं के लिए आपसे पुष्टि मांगी जाएगी।"
 
 #: src/components/ask/AskSettled.tsx:47
 msgid "Your answer: {answer}"

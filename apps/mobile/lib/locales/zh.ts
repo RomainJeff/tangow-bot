@@ -1,4 +1,9 @@
 export const ZH_MESSAGES: Record<string, string> = {
+  "Action confirmations": "操作确认",
+  "Auto-review bot actions": "自动审核 Bot 操作",
+  "You'll be asked to confirm actions flagged as dangerous.": "被标记为危险的操作需要你确认。",
+  "Add a model in Settings to use this.": "请在设置中添加模型后再使用。",
+  "Could not save Auto Review": "无法保存自动审核",
   Reconnect: "重新连接",
   "Paste an app's MCP URL to give it to your agents.": "粘贴应用的 MCP URL，让你的智能体使用它。",
   "This access token was refused.": "此访问令牌被拒绝。",

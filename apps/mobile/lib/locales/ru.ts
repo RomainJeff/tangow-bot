@@ -1,4 +1,10 @@
 export const RU_MESSAGES: Record<string, string> = {
+  "Action confirmations": "Подтверждения действий",
+  "Auto-review bot actions": "Автопроверка действий ботов",
+  "You'll be asked to confirm actions flagged as dangerous.":
+    "Действия, помеченные как опасные, потребуют вашего подтверждения.",
+  "Add a model in Settings to use this.": "Чтобы использовать это, добавьте модель в настройках.",
+  "Could not save Auto Review": "Не удалось сохранить автообзор.",
   Reconnect: "Переподключить",
   "Paste an app's MCP URL to give it to your agents.":
     "Вставьте MCP URL приложения, чтобы предоставить его вашим агентам.",

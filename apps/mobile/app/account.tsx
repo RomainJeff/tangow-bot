@@ -1,4 +1,4 @@
-import type { ComputerListItem } from "@tangow/contracts";
+import type { ActionAutoReviewSettings, ComputerListItem } from "@tangow/contracts";
 import type { Href } from "expo-router";
 import { useRouter } from "expo-router";
 import { Fragment, useCallback, useEffect, useState } from "react";
@@ -62,6 +62,8 @@ export default function Account() {
   const [notificationPending, setNotificationPending] = useState(false);
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [archivedBots, setArchivedBots] = useState<MobileBot[]>([]);
+  const [autoReview, setAutoReview] = useState<ActionAutoReviewSettings | null>(null);
+  const [autoReviewPending, setAutoReviewPending] = useState(false);
   const photo = useProfilePhoto();
   const styles = useThemedStyles(createAccountStyles);
   const versionInfo = getAppVersionInfo();
@@ -92,6 +94,9 @@ export default function Account() {
         .catch(() => undefined),
       rpc<MobileBot[]>("bots/listArchived")
         .then(setArchivedBots)
+        .catch(() => undefined),
+      rpc<ActionAutoReviewSettings>("autoReview/get")
+        .then(setAutoReview)
         .catch(() => undefined),
       Platform.OS === "android"
         ? getLiveNotificationSettings()
@@ -162,6 +167,20 @@ export default function Account() {
         t("Could not restore bot"),
         restoreError instanceof Error ? restoreError.message : t("Try again."),
       );
+    }
+  }
+
+  async function toggleAutoReview(enabled: boolean) {
+    setAutoReviewPending(true);
+    try {
+      setAutoReview(await rpc<ActionAutoReviewSettings>("autoReview/set", { enabled }));
+    } catch (cause) {
+      Alert.alert(
+        t("Could not save Auto Review"),
+        cause instanceof Error ? cause.message : t("Try again."),
+      );
+    } finally {
+      setAutoReviewPending(false);
     }
   }
 
@@ -316,6 +335,23 @@ export default function Account() {
             </Fragment>
           ))}
         </View>
+
+        {autoReview ? (
+          <View accessibilityLabel={t("Action confirmations")} style={styles.card}>
+            <Text style={styles.settingsTitle}>{t("Action confirmations")}</Text>
+            <SettingSwitch
+              label={t("Auto-review bot actions")}
+              detail={
+                autoReview.enabled && !autoReview.checkerAvailable
+                  ? t("Add a model in Settings to use this.")
+                  : t("You'll be asked to confirm actions flagged as dangerous.")
+              }
+              value={autoReview.enabled}
+              disabled={autoReviewPending || switching}
+              onChange={(enabled) => void toggleAutoReview(enabled)}
+            />
+          </View>
+        ) : null}
 
         {Platform.OS === "android" ? (
           <View accessibilityLabel={t("Notifications")} style={styles.card}>

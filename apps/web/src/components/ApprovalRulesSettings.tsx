@@ -144,13 +144,15 @@ export function ApprovalRulesSettings() {
         />
         <div>
           <Label htmlFor={autoReviewId} className="text-[14px] font-normal text-foreground/75">
-            <Trans>Flag unexpected actions</Trans>
+            <Trans>Auto-review bot actions</Trans>
           </Label>
-          {autoReview?.enabled && !autoReview.checkerAvailable ? (
-            <p className="mt-1 text-[13px] text-muted-foreground">
+          <p className="mt-1 text-[13px] text-muted-foreground">
+            {autoReview?.enabled && !autoReview.checkerAvailable ? (
               <Trans>Add a model in Settings to use this.</Trans>
-            </p>
-          ) : null}
+            ) : (
+              <Trans>You'll be asked to confirm actions flagged as dangerous.</Trans>
+            )}
+          </p>
         </div>
       </div>
       {error ? <p className="mt-3 text-[13px] text-destructive">{error}</p> : null}
