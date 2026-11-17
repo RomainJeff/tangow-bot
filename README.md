@@ -14,7 +14,7 @@ You need Git, Docker with Compose, and Node.js 22.22.2 or newer in the 22.x line
 Node.js 24.x, or Node.js 26+. Node.js 23.x and 25.x are not supported.
 
 ```bash
-git clone https://github.com/RomainJeff/tangow-bot.git
+git clone https://github.com/tangow-ai/tangow-bot.git
 cd tangow-bot
 ./tangow setup
 ```
@@ -42,7 +42,7 @@ setup, host hardening, provider selection, backups, and upgrades. In the desktop
 
 ## Mobile & Desktop
 Tangow comes with both a Mac App and an iOS App, both are signed. For now the iOS App is not available in the App Store.
-Both can be found in [Releases](https://github.com/RomainJeff/tangow-bot/releases).
+Both can be found in [Releases](https://github.com/tangow-ai/tangow-bot/releases).
 
 ## Documentation
 
@@ -56,7 +56,7 @@ Both can be found in [Releases](https://github.com/RomainJeff/tangow-bot/release
 - [Performance testing](./docs/performance.md)
 
 ## Contributing
-We don't take pull requests. Have your agent [open an issue](https://github.com/RomainJeff/tangow-bot/issues) describing the bug or idea, and our agents usually turn it around fast.
+We don't take pull requests. Have your agent [open an issue](https://github.com/tangow-ai/tangow-bot/issues) describing the bug or idea, and our agents usually turn it around fast.
 
 For security vulnerabilities, follow [SECURITY.md](./SECURITY.md) instead of filing a public
 issue.

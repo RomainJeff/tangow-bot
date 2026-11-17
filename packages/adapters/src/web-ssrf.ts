@@ -115,7 +115,7 @@ export async function fetchSafeWebText(
       resolve,
       dispatcher,
       maxBytes,
-      userAgent: options.userAgent ?? "Tangow/0.1 (+https://github.com/RomainJeff/tangow-bot)",
+      userAgent: options.userAgent ?? "Tangow/0.1 (+https://github.com/tangow-ai/tangow-bot)",
       headers: options.headers,
       signal,
       redirectsRemaining: MAX_REDIRECTS,

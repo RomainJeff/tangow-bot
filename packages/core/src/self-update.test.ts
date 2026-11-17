@@ -18,7 +18,7 @@ import {
 describe("normalizeRepoUrl", () => {
   it("accepts the official repository and https forks", () => {
     expect(normalizeRepoUrl(OFFICIAL_REPO_URL)).toEqual({
-      url: "https://github.com/RomainJeff/tangow-bot",
+      url: "https://github.com/tangow-ai/tangow-bot",
     });
     expect(normalizeRepoUrl("  https://github.com/me/tangow.git/  ")).toEqual({
       url: "https://github.com/me/tangow.git",
@@ -69,18 +69,18 @@ describe("normalizeRepoUrl", () => {
 
 describe("repoIdentity", () => {
   it("treats every spelling of the same remote as one repository", () => {
-    const identity = "github.com/romainjeff/tangow-bot";
-    expect(repoIdentity("https://github.com/RomainJeff/tangow-bot")).toBe(identity);
-    expect(repoIdentity("https://github.com/RomainJeff/tangow-bot.git")).toBe(identity);
-    expect(repoIdentity("git@github.com:RomainJeff/tangow-bot.git")).toBe(identity);
-    expect(repoIdentity("ssh://git@github.com/romainjeff/TANGOW-BOT")).toBe(identity);
+    const identity = "github.com/tangow-ai/tangow-bot";
+    expect(repoIdentity("https://github.com/tangow-ai/tangow-bot")).toBe(identity);
+    expect(repoIdentity("https://github.com/tangow-ai/tangow-bot.git")).toBe(identity);
+    expect(repoIdentity("git@github.com:tangow-ai/tangow-bot.git")).toBe(identity);
+    expect(repoIdentity("ssh://git@github.com/tangow-ai/TANGOW-BOT")).toBe(identity);
     expect(repoIdentity("not a url")).toBeNull();
   });
 
   it("only calls the real upstream official", () => {
-    expect(isOfficialRepoUrl("git@github.com:RomainJeff/tangow-bot.git")).toBe(true);
+    expect(isOfficialRepoUrl("git@github.com:tangow-ai/tangow-bot.git")).toBe(true);
     expect(isOfficialRepoUrl("https://github.com/attacker/tangow")).toBe(false);
-    expect(isOfficialRepoUrl("https://githubb.com/RomainJeff/tangow-bot")).toBe(false);
+    expect(isOfficialRepoUrl("https://githubb.com/tangow-ai/tangow-bot")).toBe(false);
   });
 });
 

@@ -12,7 +12,7 @@ describe("desktop child windows", () => {
     expect(
       shouldOpenInAppPopup(
         appOrigin,
-        "https://github.com/RomainJeff/tangow-bot/pull/395",
+        "https://github.com/tangow-ai/tangow-bot/pull/395",
         "_blank",
       ),
     ).toBe(false);
