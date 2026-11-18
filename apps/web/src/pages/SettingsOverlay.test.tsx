@@ -5,7 +5,13 @@ import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 
 vi.mock("@lingui/react/macro", () => ({
-  useLingui: () => ({ t: (parts: TemplateStringsArray) => parts.join("") }),
+  useLingui: () => ({
+    t: (parts: TemplateStringsArray | { message: string }) =>
+      "message" in parts ? parts.message : parts.join(""),
+  }),
+}));
+vi.mock("@lingui/core/macro", () => ({
+  msg: (parts: TemplateStringsArray) => ({ message: parts.join("") }),
 }));
 vi.mock("../lib/rpc", () => ({ rpc: { computer: { list: async () => [] } } }));
 vi.mock("./AccountSettingsOverlay", () => ({

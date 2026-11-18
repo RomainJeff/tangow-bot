@@ -51,7 +51,7 @@ async function checkoutDeployment(env?: string) {
  */
 function checkoutRunner(
   docker: (args: string[]) => ReturnType<typeof ok> | Promise<ReturnType<typeof ok>> = () => ok(),
-  remote = "https://github.com/RomainJeff/tangow-bot",
+  remote = "https://github.com/tangow-ai/tangow-bot",
 ): UpdaterCommandRunner {
   let merged = false;
   return async (command, args) => {
@@ -139,7 +139,7 @@ describe("updater HTTP surface", () => {
       method: "POST",
       headers: authorized,
       body: JSON.stringify({
-        repoUrl: "https://github.com/RomainJeff/tangow-bot",
+        repoUrl: "https://github.com/tangow-ai/tangow-bot",
         branch: "--exec=id",
       }),
     });
@@ -210,7 +210,7 @@ describe("updater orchestration", () => {
       return checkout(command, args, options);
     };
     const subject = createUpdaterApp(fixture.config, { run });
-    const input = { repoUrl: "https://github.com/RomainJeff/tangow-bot", branch: "main" };
+    const input = { repoUrl: "https://github.com/tangow-ai/tangow-bot", branch: "main" };
     const first = request(subject, "/apply", input);
     await atRemote;
     const second = await request(subject, "/apply", input);
@@ -265,7 +265,7 @@ describe("updater orchestration", () => {
     };
     const subject = createUpdaterApp(fixture.config, { run });
     const response = await request(subject, "/apply", {
-      repoUrl: "https://github.com/RomainJeff/tangow-bot",
+      repoUrl: "https://github.com/tangow-ai/tangow-bot",
       branch: "main",
     });
     const record = (await response.json()) as ServerUpdateRun;
@@ -314,7 +314,7 @@ describe("updater orchestration", () => {
       return failed("api did not become healthy");
     });
     const response = await request(createUpdaterApp(fixture.config, { run }), "/apply", {
-      repoUrl: "https://github.com/RomainJeff/tangow-bot",
+      repoUrl: "https://github.com/tangow-ai/tangow-bot",
       branch: "main",
     });
     const record = (await response.json()) as ServerUpdateRun;
@@ -403,7 +403,7 @@ describe("updater orchestration", () => {
     const before = await lstat(envFile);
     const run = checkoutRunner();
     const response = await request(createUpdaterApp(fixture.config, { run }), "/apply", {
-      repoUrl: "https://github.com/RomainJeff/tangow-bot",
+      repoUrl: "https://github.com/tangow-ai/tangow-bot",
       branch: "main",
     });
     expect(response.status).toBe(200);
@@ -426,7 +426,7 @@ describe("updater orchestration", () => {
     await symlink(target, envFile);
     const run = checkoutRunner();
     const response = await request(createUpdaterApp(fixture.config, { run }), "/apply", {
-      repoUrl: "https://github.com/RomainJeff/tangow-bot",
+      repoUrl: "https://github.com/tangow-ai/tangow-bot",
       branch: "main",
     });
     expect(response.status).toBe(200);

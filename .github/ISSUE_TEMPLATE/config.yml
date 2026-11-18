@@ -1,7 +1,7 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security vulnerabilities
-    url: https://github.com/RomainJeff/tangow-bot/blob/main/SECURITY.md
+    url: https://github.com/tangow-ai/tangow-bot/blob/main/SECURITY.md
     about: Report security issues to security@tangow.app — do not open a public issue.
   - name: Maintainer
     url: mailto:romainjeff@tangow.app

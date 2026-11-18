@@ -260,6 +260,7 @@ export function ShellPage() {
         setMenuOpen={overlays.setMenuOpen}
         userName={userName}
         openSettings={overlays.openSettings}
+        openSearch={() => overlays.setCommandPaletteOpen(true)}
       />
 
       <ShellMain
@@ -329,6 +330,7 @@ export function ShellPage() {
         runBotAction={runBotAction}
         refreshAgentSkills={refreshAgentSkills}
         openSpaceChat={sidebar.openSpaceChat}
+        sidebarGroups={sidebar.sidebarGroups}
         userName={userName}
         initials={initials}
         userImage={userImage}
