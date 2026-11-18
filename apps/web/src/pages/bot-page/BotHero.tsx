@@ -136,14 +136,7 @@ function CharacterPicker({
         className="group relative rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       >
         <span key={swaps} className={swaps > 0 ? "block animate-swap" : "block"}>
-          <BotAvatar
-            color={bot.color}
-            identity={bot.id}
-            character={character}
-            size={80}
-            status={bot.status}
-            followPointer
-          />
+          <BotAvatar character={character} size={80} status={bot.status} />
         </span>
         {disabled ? null : (
           <span
@@ -177,7 +170,7 @@ function CharacterPicker({
                 PICKER_CHARACTERS[index - 1]?.shape !== shape ? "col-start-1" : ""
               }`}
             >
-              <BotAvatar color={bot.color} identity={bot.id} character={id} size={64} />
+              <BotAvatar character={id} size={64} />
               {character === id ? (
                 <span
                   aria-hidden

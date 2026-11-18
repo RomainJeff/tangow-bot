@@ -22,7 +22,7 @@ import {
   RenameBotSectionDialog,
 } from "./dialogs";
 import type { SidebarGroup } from "./layout";
-import { botPageFor, FALLBACK_BOT_COLOR, threadJumpLocation } from "./layout";
+import { botPageFor, threadJumpLocation } from "./layout";
 import type { Panels } from "./use-panels";
 import type { Roster } from "./use-roster";
 import type { ShellOverlayState } from "./use-shell-overlays";
@@ -549,15 +549,9 @@ export function ShellOverlays({
           <PeerMessagesOverlay
             botId={active.id}
             botName={active.name}
-            botColor={active.color}
-            botShapeSeed={active.shapeSeed}
             botAvatarCharacter={active.avatarCharacter}
             peerBotId={peerConversation.peerBotId}
             peerBotName={peerConversation.peerBotName}
-            peerBotColor={
-              thread.resolveTranscriptBot(peerConversation.peerBotId)?.color ?? FALLBACK_BOT_COLOR
-            }
-            peerBotShapeSeed={thread.resolveTranscriptBot(peerConversation.peerBotId)?.shapeSeed}
             peerBotAvatarCharacter={
               thread.resolveTranscriptBot(peerConversation.peerBotId)?.avatarCharacter
             }

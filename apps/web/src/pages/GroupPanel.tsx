@@ -35,7 +35,7 @@ function sameMembers(left: readonly string[], right: readonly string[]) {
   return left.every((id) => rightIds.has(id));
 }
 
-type PickerBot = Pick<Bot, "id" | "name" | "color" | "shapeSeed" | "avatarCharacter"> & {
+type PickerBot = Pick<Bot, "id" | "name" | "avatarCharacter"> & {
   status?: string;
 };
 
@@ -73,16 +73,7 @@ function personAvatar(person: GroupPerson) {
 }
 
 function botAvatar(bot: PickerBot) {
-  return (
-    <BotAvatar
-      color={bot.color}
-      identity={bot.id}
-      shapeSeed={bot.shapeSeed}
-      character={bot.avatarCharacter}
-      size={32}
-      status={bot.status}
-    />
-  );
+  return <BotAvatar character={bot.avatarCharacter} size={32} status={bot.status} />;
 }
 
 /** A person or bot of the group: a toggle while it is being picked, a plain row otherwise. */
