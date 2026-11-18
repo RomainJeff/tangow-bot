@@ -13,6 +13,7 @@ import type {
   MobileSpaceNavigation,
 } from "./api";
 import { fetchProfileImage, loadSessionToken, rpc, selectInitialSpace } from "./api";
+import { subscribeBotSaved, withSavedAvatar } from "./bot-page-state";
 import { useI18n } from "./i18n";
 import { filterBots } from "./inbox";
 import type { InboxSpace, InboxSpaceItem } from "./inbox-spaces";
@@ -112,6 +113,11 @@ export function useHomeInbox() {
       setRefreshing(false);
     }
   }, [loadBots]);
+
+  useEffect(
+    () => subscribeBotSaved((saved) => setBots((list) => withSavedAvatar(list, saved))),
+    [],
+  );
 
   useEffect(() => {
     void loadSessionToken().then((token) => {

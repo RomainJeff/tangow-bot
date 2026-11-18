@@ -194,7 +194,7 @@ import {
   confirmDeleteBot,
 } from "../lib/bot-lifecycle";
 import { botMessageCard } from "../lib/bot-message-card";
-import { noteBotRunEnded } from "../lib/bot-page-state";
+import { noteBotRunEnded, subscribeBotSaved, withSavedAvatar } from "../lib/bot-page-state";
 import { CHAT_MOTION } from "../lib/chat-motion";
 import { useDebugMode } from "../lib/debug-mode";
 import type { CardEdits } from "../lib/draft-edit";
@@ -764,6 +764,11 @@ function Thread() {
   useEffect(() => {
     setThreadScrollState(scrollBehavior.current.state());
   }, [threadKey]);
+
+  useEffect(
+    () => subscribeBotSaved((saved) => setMentionBots((list) => withSavedAvatar(list, saved))),
+    [],
+  );
 
   const refreshMentionBots = useCallback(async () => {
     if (!botId && !groupId) return;

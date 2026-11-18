@@ -5,6 +5,7 @@ import { BotAvatar } from "../components/bot-avatar";
 import { NativeSymbol } from "../components/native-symbol";
 import { mobileTokens } from "../lib/appearance";
 import { type BotPageContext, useBotPageContext, useBotSetting } from "../lib/bot-page";
+import { selectionHaptic } from "../lib/haptics";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens, useThemedStyles } from "../lib/native";
 
@@ -42,7 +43,9 @@ function CharacterPicker({ page }: { page: BotPageContext }) {
                 accessibilityLabel={name}
                 accessibilityState={{ selected }}
                 onPress={() => {
-                  if (!selected) void field.save(id);
+                  if (selected) return;
+                  selectionHaptic();
+                  void field.save(id);
                 }}
                 style={({ pressed }) => pressed && styles.pressed}
               >
