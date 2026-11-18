@@ -34,15 +34,13 @@ import type {
   SessionViewTarget,
 } from "../../lib/thread-items";
 import { LinkPreviewRow } from "./block-views";
-import { FALLBACK_BOT_COLOR, threadJumpLocation } from "./layout";
+import { threadJumpLocation } from "./layout";
 import { MessageView, skillLine, useLinkMentions } from "./message-view";
 import { RoutineFailureLine } from "./routine-run-line";
 
 type PeerBot = (botId: string) =>
   | {
-      color: string;
       name?: string;
-      shapeSeed?: number | null;
       avatarCharacter?: string | null;
       status?: string;
     }
@@ -531,9 +529,7 @@ function avatarLookup(peerBot: PeerBot) {
   return (botId: string): StackedAvatarItem => {
     const bot = peerBot(botId);
     return {
-      color: bot?.color ?? FALLBACK_BOT_COLOR,
       identity: botId,
-      shapeSeed: bot?.shapeSeed,
       character: bot?.avatarCharacter,
     };
   };

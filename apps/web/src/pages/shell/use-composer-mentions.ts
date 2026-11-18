@@ -91,8 +91,6 @@ export function useComposerMentions({ bots, groups, groupId, inGroup, initialBot
         bots: bots.map((bot) => ({
           id: bot.id,
           name: bot.name,
-          color: bot.color,
-          shapeSeed: bot.shapeSeed,
           avatarCharacter: bot.avatarCharacter,
         })),
         groups: groups.map((group) => ({ id: group.id, name: group.name })),

@@ -170,13 +170,7 @@ export function UsageSettingsPanel({ panelRef }: { panelRef?: RefObject<HTMLDivE
                   leading={
                     shown === "bots" ? (
                       row.bot?.color ? (
-                        <BotAvatar
-                          color={row.bot.color}
-                          identity={row.bot.id}
-                          shapeSeed={row.bot.shapeSeed}
-                          character={row.bot.avatarCharacter}
-                          size={28}
-                        />
+                        <BotAvatar character={row.bot.avatarCharacter} size={28} />
                       ) : (
                         <span
                           aria-hidden

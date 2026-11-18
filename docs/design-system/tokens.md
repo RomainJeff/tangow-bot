@@ -196,7 +196,6 @@ not count as an elevation.
 | `arrive` | 240 ms, `translateY(6px)` → 0, 0 → 1 opacity | a message, block or capsule arriving (`animate-arrive`) |
 | `press` | 160 ms, `scale(0.96)` capsules (`rk-press`), `scale(0.94)` round controls (`rk-press-round`), `scale(0.985)` option tiles (`rk-press-tile`) | pressing |
 | `hover` | 160 ms | colour and fill on hover (`duration-(--duration-hover)`) |
-| `breathe` | 5.6 s | the idle avatar |
 | `caret` | 1 s step-end | the typing caret |
 | `pivot` | 320 ms, rotate -90° → 0 with scale and fade | the send arrow arriving with the first character |
 | `morph` | 260 ms, rotate 45° | the mobile + turning into × while its sheet is open |

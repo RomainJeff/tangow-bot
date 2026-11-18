@@ -55,7 +55,6 @@ import {
   UserText,
 } from "./block-views";
 import { ImageStack } from "./image-stack";
-import { FALLBACK_BOT_COLOR } from "./layout";
 import { messageLinkPreview } from "./message-actions";
 import { AppConnectCard, ChoiceCard, LinkMentionIcon, McpApprovalCard } from "./message-cards";
 
@@ -169,9 +168,7 @@ export const MessageView = memo(function MessageView({
   memberName?: (botId: string | undefined) => string | undefined;
   peerBot: (botId: string) =>
     | {
-        color: string;
         name?: string;
-        shapeSeed?: number | null;
         avatarCharacter?: string | null;
         status?: string;
       }
@@ -225,9 +222,7 @@ export const MessageView = memo(function MessageView({
   const avatarOf = (botId: string): StackedAvatarItem => {
     const bot = peerBot(botId);
     return {
-      color: bot?.color ?? FALLBACK_BOT_COLOR,
       identity: botId,
-      shapeSeed: bot?.shapeSeed,
       character: bot?.avatarCharacter,
     };
   };
@@ -244,13 +239,7 @@ export const MessageView = memo(function MessageView({
             className="size-message text-label"
           />
         ) : (
-          <BotAvatar
-            color={author?.color ?? FALLBACK_BOT_COLOR}
-            identity={botId}
-            shapeSeed={author?.shapeSeed}
-            character={author?.avatarCharacter}
-            size={26}
-          />
+          <BotAvatar character={author?.avatarCharacter} size={26} />
         )
       }
       author={<span dir="auto">{person?.name ?? speakerName ?? author?.name ?? t`Bot`}</span>}

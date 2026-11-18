@@ -1,5 +1,4 @@
 export { ActionSheet, type ActionSheetProps } from "./action-sheet.js";
-export { type AvatarStyle, AvatarStyleProvider, useAvatarStyle } from "./avatar-style.js";
 export { BotAvatar, Wordmark } from "./bot-avatar.js";
 export { ClippedPreview, type ClippedPreviewProps } from "./clipped-preview.js";
 export * from "./components/ui/alert-dialog.js";

@@ -184,14 +184,7 @@ export function CommandPalette({
         className="gap-2.75 px-2.5 py-2.25"
       >
         {item.kind === "bot" ? (
-          <BotAvatar
-            color={item.chat.color}
-            identity={item.chat.id}
-            shapeSeed={item.chat.shapeSeed}
-            character={item.chat.avatarCharacter}
-            size={28}
-            status={item.chat.status}
-          />
+          <BotAvatar character={item.chat.avatarCharacter} size={28} status={item.chat.status} />
         ) : (
           <GroupAvatar
             members={item.chat.members}
@@ -266,13 +259,7 @@ export function CommandPalette({
                       className="gap-2.75 px-2.5 py-2.25"
                     >
                       {bot ? (
-                        <BotAvatar
-                          color={bot.color}
-                          identity={bot.id}
-                          shapeSeed={bot.shapeSeed}
-                          character={bot.avatarCharacter}
-                          size={28}
-                        />
+                        <BotAvatar character={bot.avatarCharacter} size={28} />
                       ) : (
                         <IconTile icon={HIT_ICONS[kind]} />
                       )}

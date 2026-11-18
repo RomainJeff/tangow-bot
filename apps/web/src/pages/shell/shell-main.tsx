@@ -126,9 +126,7 @@ export function ShellMain({
               botId={active.id}
               botName={active.name}
               botColor={active.color}
-              botShapeSeed={active.shapeSeed}
               botAvatarCharacter={active.avatarCharacter}
-              botIdentity={active.id}
               transcribe={Boolean(voiceStatus?.transcribe)}
               thread={activeSnapshot ? thread.callThread : null}
               onSend={send.sendMessage}
