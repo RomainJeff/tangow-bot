@@ -134,9 +134,8 @@ colour chase each other around a 2 px ring, one lap per `--duration-flow`
 `bg-primary-foreground` square marks the button underneath. No head, no
 accessible name — it fills a `roundIcon` button that already has one.
 
-Props: `color?` — the bot's identity colour as a plain CSS colour string, the
-same precedent as `BotAvatar`'s `color` prop (data, not a token; carried as
-the inline custom property `--contour`). Omit it in a group, or when no bot is
+Props: `color?` — the bot's colour (`botDisplayColor`) as a plain CSS colour string
+(data, not a token; carried as the inline custom property `--contour`). Omit it in a group, or when no bot is
 known: the contour falls back to `color-mix(in srgb, var(--foreground) 45%,
 transparent)`. Reduced motion: the ring holds still, fully lit, no rotation.
 
@@ -170,17 +169,16 @@ A light sweep across a label that is still being written, as the `rk-shimmer`
 class. Ported from beautifului.dev
 (github.com/TurboKach/ai-native-react-components, MIT © 2026 Turbo).
 
-## BotAvatar — followPointer
+## BotAvatar
 
-`followPointer` lets the organic avatar look toward a fine pointer (a mouse)
-anywhere on the page: the pointer's position against the avatar's own box
-(`pointerLook` in `@tangow/core`, zero at the centre, ±1 at the edges, held
-beyond) is mapped onto the range the working glances already use (yaw ±26°,
-pitch -8° to 18°) and eased by the engine's `LOOK_MORPH`. It returns to rest
-when the pointer leaves the window. A working bot keeps its own glances and no
-listener is attached then; under reduced motion or on a touch screen none is
-attached either; the robot avatar ignores it. Only the avatar at the top of the
-bot page sets it, never a sidebar row.
+A bot's clay character in a round disc: the catalogue image (`characterById`,
+neutral Scout when the character is missing or unknown) cropped by size, on the
+`bg-muted` disc on web and the `avatarDisc` veil on iPhone. Sizes up to 20 px
+use the mini image. A working bot gets a spinning ink ring around the disc,
+held still under reduced motion.
+
+Props: `character?`, `size?`, `status?`. It carries no accessible name: the
+name beside it does.
 
 ## SettingRow
 

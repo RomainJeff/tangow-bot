@@ -56,8 +56,6 @@ async function open(initialSection?: SettingsSection) {
         initials="A"
         image={null}
         initialSection={initialSection}
-        avatarStyle="organic"
-        onAvatarStyleChange={async () => {}}
         memoryConfig={null}
         onMemoryConfigChange={() => {}}
         spaces={[]}

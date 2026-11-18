@@ -94,8 +94,8 @@ test("create group from + and see two bots in one transcript", async ({ page }, 
     .getByRole("button", { name: /^Draft team/ })
     .locator(".tangow-group-avatar");
   await expect(groupAvatar).toBeVisible();
-  await expect(groupAvatar.locator(".tangow-organic-avatar")).toHaveCount(2);
-  const workingAvatar = groupAvatar.locator('.tangow-organic-avatar[data-working="true"]');
+  await expect(groupAvatar.locator(".tangow-clay-avatar")).toHaveCount(2);
+  const workingAvatar = groupAvatar.locator('.tangow-clay-avatar[data-working="true"]');
   await expect(workingAvatar).toHaveCount(1);
   await expect(workingAvatar).toHaveAttribute("data-working", "true");
   await captureScreenshot(page, testInfo, "group-avatar-active");
