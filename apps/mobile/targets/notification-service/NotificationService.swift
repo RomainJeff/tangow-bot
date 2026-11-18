@@ -54,26 +54,13 @@ struct BotSender {
 
   init?(_ content: UNNotificationContent) {
     let data = BotSender.payload(content.userInfo)
-    guard let botId = data["botId"] as? String, let image = BotSender.avatar(data),
+    guard let botId = data["botId"] as? String,
+      let image = AvatarRenderer.character(data["avatarCharacter"] as? String)?.pngData(),
       !content.title.isEmpty
     else { return nil }
     self.botId = botId
     self.name = content.subtitle.isEmpty ? content.title : "\(content.title) · \(content.subtitle)"
     self.image = image
-  }
-
-  /// The bot's character, or the bloub a server that predates characters still describes.
-  private static func avatar(_ data: [String: Any]) -> Data? {
-    if let character = data["avatarCharacter"] as? String {
-      return AvatarRenderer.character(character)?.pngData()
-    }
-    guard
-      let hex = data["avatarColor"] as? String,
-      let color = UIColor(hex: hex),
-      let index = (data["avatarShape"] as? NSNumber)?.intValue,
-      avatarShapes.indices.contains(index)
-    else { return nil }
-    return AvatarRenderer.png(shape: avatarShapes[index], color: color)
   }
 
   private static func payload(_ userInfo: [AnyHashable: Any]) -> [String: Any] {

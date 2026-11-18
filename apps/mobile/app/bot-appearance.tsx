@@ -49,7 +49,7 @@ function CharacterPicker({ page }: { page: BotPageContext }) {
                 }}
                 style={({ pressed }) => pressed && styles.pressed}
               >
-                <BotAvatar color={page.bot.color} character={id} size={64} />
+                <BotAvatar character={id} size={64} />
                 {selected ? (
                   <View style={styles.check}>
                     <NativeSymbol

@@ -19,12 +19,10 @@
     "ios": "expo run:ios",
     "check": "expo install --check && tsc --noEmit -p tsconfig.json",
     "test": "vitest run --root ../.. apps/mobile/lib",
-    "generate-splash-assets": "tsx scripts/generate-splash-assets.ts",
     "test:e2e": "maestro test .maestro/smoke.yaml",
     "submit:ios": "npx eas-cli@latest submit --platform ios --profile production --latest",
     "build:ios:preview": "mkdir -p builds && npx eas-cli@latest build --platform ios --profile preview --local --output builds/tangow-preview.ipa",
     "release:ios": "mkdir -p builds && npx eas-cli@latest build --platform ios --profile production --local --output builds/tangow-production.ipa && npx eas-cli@latest submit --platform ios --profile production --path builds/tangow-production.ipa",
-    "generate:notification-avatars": "tsx scripts/generate-notification-avatars.ts",
     "generate:share-tokens": "tsx scripts/generate-share-tokens.ts"
   },
   "dependencies": {

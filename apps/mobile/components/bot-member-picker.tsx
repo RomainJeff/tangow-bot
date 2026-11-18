@@ -9,7 +9,7 @@ import { useMobileTokens } from "../lib/native";
 import { BotAvatar } from "./bot-avatar";
 import { UserAvatar } from "./user-avatar";
 
-type PickerBot = Pick<MobileBot, "id" | "name" | "color" | "shapeSeed" | "avatarCharacter"> & {
+type PickerBot = Pick<MobileBot, "id" | "name" | "avatarCharacter"> & {
   status?: string;
 };
 
@@ -28,16 +28,7 @@ export function BotMemberPicker({
   return bots.map((bot) => (
     <MemberRow
       key={bot.id}
-      avatar={
-        <BotAvatar
-          color={bot.color}
-          identity={bot.id}
-          shapeSeed={bot.shapeSeed}
-          character={bot.avatarCharacter}
-          size={34}
-          status={bot.status}
-        />
-      }
+      avatar={<BotAvatar character={bot.avatarCharacter} size={34} status={bot.status} />}
       name={bot.name}
       checked={selected.includes(bot.id)}
       disabled={disabled || (!selected.includes(bot.id) && selected.length >= GROUP_MEMBER_MAX)}
