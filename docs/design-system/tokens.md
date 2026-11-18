@@ -45,7 +45,7 @@ way: `sheet`, then its `group`s.
 | `ring` | `#6E6E73` | `#AEAEB2` | focus |
 | `surface` | `#FFFFFF` | `#3C3C3F` | the one elevation: the decision card |
 | `sheet` | `#F5F5F7` | `#232326` | the opaque plane of the side panel and the overlay windows |
-| `group` | `#FFFFFF` | `#333336` | a settings group or an activity day on a sheet; at phone width, the bot list's search field |
+| `group` | `#FFFFFF` | `#333336` | a settings group or an activity day on a sheet |
 | `well` | `#EEEEF1` | `#4E4E50` | reading matter and fields inside a decision card; a file's or the computer's icon tile |
 | `sidebar` | `#F5F5F7` | `#2C2C2E` | the opaque fallback of the sidebar's glass |
 | `sidebarForeground` | `#1D1D1F` | `#F5F5F7` | |
@@ -196,7 +196,6 @@ not count as an elevation.
 | `arrive` | 240 ms, `translateY(6px)` → 0, 0 → 1 opacity | a message, block or capsule arriving (`animate-arrive`) |
 | `press` | 160 ms, `scale(0.96)` capsules (`rk-press`), `scale(0.94)` round controls (`rk-press-round`), `scale(0.985)` option tiles (`rk-press-tile`) | pressing |
 | `hover` | 160 ms | colour and fill on hover (`duration-(--duration-hover)`) |
-| `breathe` | 5.6 s | the idle avatar |
 | `caret` | 1 s step-end | the typing caret |
 | `pivot` | 320 ms, rotate -90° → 0 with scale and fade | the send arrow arriving with the first character |
 | `morph` | 260 ms, rotate 45° | the mobile + turning into × while its sheet is open |

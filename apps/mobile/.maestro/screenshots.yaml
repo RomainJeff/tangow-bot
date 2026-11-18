@@ -221,6 +221,11 @@ tags:
 - assertVisible: "Model"
 - assertVisible: "Space default.*"
 - takeScreenshot: "17-bot-settings"
+- tapOn: "Appearance"
+- extendedWaitUntil:
+    visible: "Docteur Disquette"
+    timeout: 10000
+- takeScreenshot: "17b-bot-appearance"
 
 - openLink: "tangow:///computer?botId=${TANGOW_SCREENSHOT_BOT_ID}&name=Researcher"
 - extendedWaitUntil:
@@ -261,6 +266,14 @@ tags:
     visible: "Weekly fixture review"
     timeout: 10000
 - takeScreenshot: "21-routine"
+
+# A failed run's error sits above the composer, out of the conversation, until dismissed.
+- openLink: "tangow:///thread?botId=${TANGOW_SCREENSHOT_FAILED_BOT_ID}&name=Support"
+- extendedWaitUntil:
+    visible: "Dismiss error"
+    timeout: 10000
+- assertVisible: "Draft the reply to the refund request."
+- takeScreenshot: "21b-thread-run-error"
 
 # A bot shared with this user: their own thread, the team save under the reply, the MCP card
 # pointing to web or desktop, and a title menu without the owner's screens.
@@ -373,6 +386,14 @@ tags:
     timeout: 10000
 - takeScreenshot: "26-thread-dark"
 
+- openLink: "tangow:///thread?botId=${TANGOW_SCREENSHOT_FAILED_BOT_ID}&name=Support"
+- extendedWaitUntil:
+    visible: "Dismiss error"
+    timeout: 10000
+- takeScreenshot: "26b-thread-run-error-dark"
+- tapOn: "Dismiss error"
+- assertNotVisible: "Dismiss error"
+
 - openLink: "tangow:///group-thread?groupId=${TANGOW_SCREENSHOT_GROUP_ID}&name=Launch%20team"
 - extendedWaitUntil:
     visible: "The fixture launch plan is ready."
@@ -382,6 +403,18 @@ tags:
 - openLink: "tangow:///group-settings?groupId=${TANGOW_SCREENSHOT_GROUP_ID}"
 - assertVisible: "Delete group"
 - takeScreenshot: "28-group-settings-dark"
+
+- openLink: "tangow:///bot?botId=${TANGOW_SCREENSHOT_BOT_ID}"
+- extendedWaitUntil:
+    visible: "Appearance"
+    timeout: 10000
+- takeScreenshot: "28b-bot-page-dark"
+
+- openLink: "tangow:///"
+- extendedWaitUntil:
+    visible: "Researcher.*"
+    timeout: 10000
+- takeScreenshot: "28c-inbox-dark"
 
 - openLink: "tangow:///account"
 - tapOn: "Light"
