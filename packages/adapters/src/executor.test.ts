@@ -2,12 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { MessageBlock } from "@tangow/contracts";
-import {
-  avatarIdentitySeed,
-  BOT_DELEGATION_GUIDANCE,
-  BOT_OFFER_DEDICATED_BOT,
-  ONCE_ROUTINE_CRON,
-} from "@tangow/core";
+import { BOT_DELEGATION_GUIDANCE, BOT_OFFER_DEDICATED_BOT, ONCE_ROUTINE_CRON } from "@tangow/core";
 import type { PrismaClient } from "@tangow/db";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -546,7 +541,7 @@ describe("run notification preference", () => {
     ).resolves.toEqual({
       character: "scout",
       color: "#E5484D",
-      shape: avatarIdentitySeed("bot-1") % 8,
+      shape: 3,
     });
     await expect(notificationAvatar(prismaFor(null), run)).resolves.toBeUndefined();
   });

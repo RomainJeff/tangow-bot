@@ -10,13 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
-- **Bots are clay characters.** Every bot now shows a whole clay character from Tangow's catalogue, on web, desktop and iOS, in notifications and in the iOS share sheet. Tap the avatar on a bot's page to pick another character; a new bot gets one your other bots are not using yet, and existing bots received one with this update.
+- **Bots are clay characters.** Every bot now shows a whole clay character from Tangow's catalogue, on web, desktop, iOS and Android, and in iOS notifications and the iOS share sheet. Tap the avatar on a bot's page to pick another character; a new bot gets one your other bots are not using yet, and existing bots received one with this update.
 
 #### Changed
 
 - A bot's colour and shape choices, and the Robot / Organic avatar style in account settings, are gone: a bot's look and colour now come from its character.
 
 - The iOS launch screen shows the Tangow mark instead of the animated avatar.
+
+- On Android, the notification of a working bot shows the app icon instead of the bot's shape.
 
 ### 2026-11-17
 

@@ -27,7 +27,8 @@ npx --yes hyperframes@0.8.181 snapshot --at 1.5,5.5,9.8,12.5 --no-end -o snaps .
 The example film (14.5 s) must snapshot cleanly before you change anything. The CLI renders in its own Chromium, with
 the HTML-in-canvas support the screens need.
 
-Films show bots with the clay character images from `packages/avatars/characters`: copy the `.webp` files into the film's `assets/` like any other asset and draw them in the working line's mark.
+Films show bots with the clay character images from `packages/avatars/characters`: copy the `.webp` files into
+the film's `assets/` like any other asset and draw them in the working line's mark.
 
 ## 2. Brief, script, words
 
