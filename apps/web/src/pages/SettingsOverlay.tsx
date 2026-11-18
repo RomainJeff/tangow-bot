@@ -38,6 +38,7 @@ import {
 import { PHONE_MEDIA } from "./shell/layout";
 import { UsageSettingsPanel } from "./usage-settings";
 import { usePushedFocus } from "./use-pushed-focus";
+import { VaultSettingsPanel } from "./VaultSettingsPanel";
 import { VoiceSettingsOverlay } from "./VoiceSettingsOverlay";
 
 type NavItem = {
@@ -67,6 +68,7 @@ export function SettingsOverlay({
   onSpaceRenamed,
   onClose,
   onVoiceStatusMaybeChanged,
+  userId,
 }: {
   email?: string | null;
   name: string;
@@ -86,6 +88,7 @@ export function SettingsOverlay({
   onSpaceRenamed?: () => void | Promise<void>;
   onClose: () => void;
   onVoiceStatusMaybeChanged?: () => void | Promise<void>;
+  userId?: string;
 }) {
   const { t } = useLingui();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -338,6 +341,9 @@ export function SettingsOverlay({
                 />
               ) : null}
               {section === "usage" ? <UsageSettingsPanel panelRef={usageRef} /> : null}
+              {section === "vault" ? (
+                <VaultSettingsPanel space={currentSpace} userId={userId} />
+              ) : null}
               {section === "computer" ? (
                 <ComputerSettingsPanel onUpdateAvailableChange={setComputerUpdateAvailable} />
               ) : null}
