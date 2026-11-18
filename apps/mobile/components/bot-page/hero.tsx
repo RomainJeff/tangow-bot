@@ -25,9 +25,8 @@ export function BotHero({
   const { bot, readOnly } = page;
   const name = useBotSetting(page, "name");
   const title = useBotSetting(page, "title");
-  const color = useBotSetting(page, "color");
-  const shape = useBotSetting(page, "shapeSeed");
-  const meta = shownSave([name, title, color, shape]);
+  const character = useBotSetting(page, "avatarCharacter");
+  const meta = shownSave([name, title, character]);
 
   return (
     <View style={styles.hero}>
@@ -39,10 +38,9 @@ export function BotHero({
         hitSlop={8}
       >
         <BotAvatar
-          color={color.value}
+          color={bot.color}
           identity={bot.id}
-          shapeSeed={shape.value}
-          character={bot.avatarCharacter}
+          character={character.value}
           size={88}
           status={bot.status}
         />
