@@ -59,14 +59,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 2026-11-15
 
-#### Added
-
-- **Bots sign in to sites with your saved logins.** On web, desktop, iPhone and Android, Settings > Vault now also saves a site, a username and a password; in a conversation or routine you started on your own bot, the bot fills that site's sign-in form with it, only on that exact site, without ever seeing the password.
-- **Keep your API keys in a vault in Settings.** On web, desktop, iPhone and Android, Settings > Vault lists your API keys by name and site in the current space and lets you add one, replace its value or delete it; a saved value is never shown again, and the bot can no longer delete keys itself.
-
 #### Changed
 
-- API keys you gave one bot are now usable by all your bots in the space, still only on their own site, and stay when that bot is deleted.
 - Pipedream Connect is no longer offered as a managed app catalog on web, desktop and iOS; server owners connect apps through Composio or MCP instead, and existing Pipedream connections are removed, so disconnect them before updating to also revoke their accounts at Pipedream.
 - OpenAPI and GraphQL tool sources are no longer offered in Integrations on web, desktop and mobile, and the ones already added are removed, so bots reach outside tools through apps and MCP servers.
 - In a browser, Settings no longer lists Updates, since the web app always runs the version its server serves; the desktop app keeps the section.

@@ -68,7 +68,10 @@ describe("bot_secrets person scope migration", () => {
   it("keeps a credential when the bot that saved it is deleted", async () => {
     await database.prisma.bot.delete({ where: { id: "bot_3" } });
     expect(
-      await database.prisma.botSecret.findUniqueOrThrow({ where: { id: "s3" } }),
+      await database.prisma.botSecret.findUniqueOrThrow({
+        where: { id: "s3" },
+        select: { botId: true },
+      }),
     ).toMatchObject({ botId: null });
   });
 });

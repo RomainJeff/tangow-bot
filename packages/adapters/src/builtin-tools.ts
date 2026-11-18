@@ -457,7 +457,7 @@ that merely narrate internal operations.`,
   {
     name: "list_secrets",
     description:
-      "List saved credential names and destinations available to this user in this space. Values are never returned.",
+      "List saved credential names and destinations available to this user in this space. Values are never returned. A credential marked shared belongs to someone else, who chose the site it is sent to.",
     inputSchema: { type: "object", properties: {} },
   },
   {

@@ -1,15 +1,21 @@
-import type { BotSecretDestination } from "@tangow/contracts";
+import type { BotSecretDestination, VaultItem as Key } from "@tangow/contracts";
+import { isShareableBotSecret } from "@tangow/contracts";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { type ComponentProps, useState } from "react";
+import type { ComponentProps } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { Group, Row } from "../components/bot-page/kit";
+import { Group, InkSwitch, Row } from "../components/bot-page/kit";
 import { SpokenError } from "../components/bot-page/spoken-error";
+import { UserAvatar } from "../components/user-avatar";
 import { rpc } from "../lib/api";
 import { mobileTokens } from "../lib/appearance";
 import { useI18n } from "../lib/i18n";
+import { userInitials } from "../lib/inbox";
 import { useMobileTokens, useThemedStyles } from "../lib/native";
 import { serverMessage } from "../lib/server-error";
 import { nativeTextStyle } from "../lib/typography";
+import type { VaultScreen } from "../lib/vault";
+import { readSpacePeople } from "../lib/vault";
 
 type AuthType = BotSecretDestination["auth"]["type"];
 
@@ -30,7 +36,7 @@ export default function VaultItem() {
   const tokens = useMobileTokens();
   const styles = useThemedStyles(createVaultItemStyles);
   const params = useLocalSearchParams<{ item?: string }>();
-  const item = params.item ? (JSON.parse(params.item) as BotSecretDestination) : null;
+  const item = params.item ? (JSON.parse(params.item) as Key) : null;
   const [site, setSite] = useState("");
   const [name, setName] = useState("");
   const [authType, setAuthType] = useState<AuthType>("bearer");
@@ -69,7 +75,9 @@ export default function VaultItem() {
         : authType === "basic" || authType === "login"
           ? { type: authType, username: authField.trim() }
           : { type: "bearer" };
-    const destination = item ?? { name, origin: siteOrigin(site), auth };
+    const destination = item
+      ? { name: item.name, origin: item.origin, auth: item.auth }
+      : { name, origin: siteOrigin(site), auth };
     // Cleared before the request, so the value is never shown again.
     setValue("");
     void run(() => rpc("vault/put", { ...destination, value }));
@@ -122,6 +130,7 @@ export default function VaultItem() {
               label: t("Cancel"),
               variant: "plain",
               hidesSharedBackground: true,
+              disabled: busy,
               onPress: close,
             },
           ],
@@ -183,6 +192,7 @@ export default function VaultItem() {
                 : null}
           </>
         )}
+        {item && isShareableBotSecret(item) ? <KeySharing item={item} /> : null}
         {field(login ? t("Password") : t("Key"), value, setValue, {
           secureTextEntry: true,
           autoComplete: "off",
@@ -204,6 +214,105 @@ export default function VaultItem() {
   );
 }
 
+/**
+ * Who the owner shares one key with; each change saves itself. "Everyone" is the owner's explicit
+ * choice and also covers people who join the space later.
+ */
+function KeySharing({ item }: { item: Key }) {
+  const { t } = useI18n();
+  const styles = useThemedStyles(createVaultItemStyles);
+  const [others, setOthers] = useState<Omit<VaultScreen, "vault"> | null>(null);
+  const [share, setShare] = useState({ userIds: item.userIds, space: item.space });
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    readSpacePeople().then(
+      (read) => live && setOthers(read),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  async function save(next: typeof share) {
+    const previous = share;
+    setShare(next);
+    setPending(true);
+    setError(null);
+    try {
+      await rpc("vault/share", { name: item.name, ...next });
+    } catch {
+      setShare(previous);
+      setError(t("Could not save"));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  if (!others || others.people.length === 0) return null;
+  const everyone = t("Everyone in {space}", { space: others.space.name });
+  return (
+    <>
+      <Group label={t("Shared with")}>
+        <Row
+          label={everyone}
+          control={
+            <InkSwitch
+              accessibilityLabel={everyone}
+              value={share.space}
+              disabled={pending}
+              onValueChange={(checked) => void save({ ...share, space: checked })}
+            />
+          }
+        />
+        {share.space
+          ? null
+          : others.people.map((member) => (
+              <Row
+                key={member.userId}
+                leading={
+                  <UserAvatar initials={userInitials(member.name)} image={member.image} size={28} />
+                }
+                label={member.name}
+                control={
+                  <InkSwitch
+                    accessibilityLabel={member.name}
+                    value={share.userIds.includes(member.userId)}
+                    disabled={pending}
+                    onValueChange={(checked) =>
+                      void save({
+                        ...share,
+                        userIds: checked
+                          ? [...share.userIds, member.userId]
+                          : share.userIds.filter((id) => id !== member.userId),
+                      })
+                    }
+                  />
+                }
+              />
+            ))}
+      </Group>
+      {share.space ? (
+        <Text style={styles.note}>
+          {t(
+            "Every current and future member of {space} can use this key on its site, from their bots and yours that you can see, including webhooks and routines.",
+            { space: others.space.name },
+          )}
+        </Text>
+      ) : share.userIds.length > 0 ? (
+        <Text style={styles.note}>
+          {t(
+            "These people can use this key on its site, from their bots and yours that you can see, including webhooks and routines.",
+          )}
+        </Text>
+      ) : null}
+      <SpokenError>{error}</SpokenError>
+    </>
+  );
+}
+
 function createVaultItemStyles() {
   const tokens = mobileTokens();
   return StyleSheet.create({
@@ -214,5 +323,10 @@ function createVaultItemStyles() {
     delete: { alignSelf: "center", paddingVertical: 10, paddingHorizontal: 16 },
     deleteLabel: { color: tokens.destructive, ...nativeTextStyle("body") },
     pressed: { opacity: 0.6 },
+    note: {
+      paddingHorizontal: 16,
+      color: tokens.mutedForeground,
+      ...nativeTextStyle("meta", { size: 14 }),
+    },
   });
 }

@@ -59,9 +59,42 @@ export const BotSecretDestination = z.object({
 });
 export type BotSecretDestination = z.infer<typeof BotSecretDestination>;
 
+export const SHAREABLE_BOT_SECRET_AUTH_TYPES: readonly BotSecretDestination["auth"]["type"][] = [
+  "bearer",
+  "header",
+  "basic",
+];
+
+export function isShareableBotSecret({ auth }: Pick<BotSecretDestination, "auth">): boolean {
+  return SHAREABLE_BOT_SECRET_AUTH_TYPES.includes(auth.type);
+}
+
 /** Saves a credential from the vault screen. The value is write-only: no response returns it. */
 export const VaultPutInput = BotSecretDestination.extend({ value: z.string().min(1).max(16_384) });
 export type VaultPutInput = z.infer<typeof VaultPutInput>;
+
+/** One of the person's own keys: where it goes, the bot that saved it, and who it is shared with. */
+export const VaultItem = BotSecretDestination.extend({
+  botId: z.string().nullable(),
+  userIds: z.array(z.string()),
+  space: z.boolean(),
+});
+export type VaultItem = z.infer<typeof VaultItem>;
+
+/** A key another member shares with the person. Read-only for them. */
+export const SharedVaultItem = BotSecretDestination.extend({ ownerName: z.string() });
+export type SharedVaultItem = z.infer<typeof SharedVaultItem>;
+
+export const VaultList = z.object({ mine: z.array(VaultItem), shared: z.array(SharedVaultItem) });
+export type VaultList = z.infer<typeof VaultList>;
+
+/** The owner sets who a key is shared with; `space` also covers future members of the space. */
+export const VaultShareInput = z.object({
+  name: BotSecretName,
+  userIds: z.array(z.string().min(1).max(200)).max(1000),
+  space: z.boolean(),
+});
+export type VaultShareInput = z.infer<typeof VaultShareInput>;
 
 /** Written atomically with the protected value, distinct from action approval. */
 export const BotSecretSubmission = z.object({ credentialSaved: BotSecretDestination });

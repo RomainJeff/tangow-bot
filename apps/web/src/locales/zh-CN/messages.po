@@ -341,7 +341,7 @@ msgstr "动态，上次运行失败"
 #: src/pages/PluginsOverlay.tsx:72
 #: src/pages/ScratchpadSection.tsx:196
 #: src/pages/shell/message-cards.tsx:201
-#: src/pages/VaultSettingsPanel.tsx:53
+#: src/pages/VaultSettingsPanel.tsx:85
 msgid "Add"
 msgstr "添加"
 
@@ -547,7 +547,7 @@ msgstr "请在聊天中批准，或说“不”以取消。"
 msgid "Approve this server to let your agent use its tools."
 msgstr "批准此服务器后，Agent 才能使用它的工具。"
 
-#: src/pages/ShareBotDialog.tsx:206
+#: src/pages/ShareBotDialog.tsx:232
 msgid "Apps this bot can use"
 msgstr ""
 
@@ -715,16 +715,16 @@ msgstr "正在启动 {0} 的电脑"
 msgid "bot"
 msgstr "Bot"
 
-#. js-lingui-explicit-id
-#: src/lib/browser-notifications.ts:70
-msgid "Bot"
-msgstr ""
-
 #: src/pages/IntegrationSetup.tsx:55
 #: src/pages/shell/message-view.tsx:245
 #: src/pages/shell/message-view.tsx:452
 #: src/pages/shell/thread-row.tsx:317
 #: src/pages/shell/use-composer-draft.ts:53
+msgid "Bot"
+msgstr "Bot"
+
+#. js-lingui-explicit-id
+#: src/lib/browser-notifications.ts:70
 msgid "Bot"
 msgstr "Bot"
 
@@ -798,7 +798,7 @@ msgstr "无法连接服务器。"
 #: src/pages/shell/dialogs.tsx:395
 #: src/pages/shell/dialogs.tsx:448
 #: src/pages/shell/dialogs.tsx:505
-#: src/pages/VaultSettingsPanel.tsx:227
+#: src/pages/VaultSettingsPanel.tsx:288
 msgid "Cancel"
 msgstr "取消"
 
@@ -968,7 +968,7 @@ msgid "Close integrations"
 msgstr "关闭集成"
 
 #: src/pages/MemorySettingsOverlay.tsx:168
-#: src/pages/SettingsOverlay.tsx:150
+#: src/pages/SettingsOverlay.tsx:152
 msgid "Close memory settings"
 msgstr "关闭记忆设置"
 
@@ -977,7 +977,7 @@ msgid "Close messaging settings"
 msgstr "关闭消息设置"
 
 #: src/pages/ModelSettingsOverlay.tsx:51
-#: src/pages/SettingsOverlay.tsx:148
+#: src/pages/SettingsOverlay.tsx:150
 msgid "Close model settings"
 msgstr "关闭模型设置"
 
@@ -994,11 +994,11 @@ msgstr "关闭预览"
 msgid "Close skills"
 msgstr "关闭技能"
 
-#: src/pages/SettingsOverlay.tsx:153
+#: src/pages/SettingsOverlay.tsx:155
 msgid "Close user settings"
 msgstr "关闭用户设置"
 
-#: src/pages/SettingsOverlay.tsx:152
+#: src/pages/SettingsOverlay.tsx:154
 #: src/pages/VoiceSettingsOverlay.tsx:141
 msgid "Close voice settings"
 msgstr "关闭语音设置"
@@ -1488,7 +1488,7 @@ msgstr "无法运行例行任务"
 #: src/pages/bot-page/RoutineDetail.tsx:87
 #: src/pages/ExternalConversationSettings.tsx:250
 #: src/pages/KnowledgeSection.tsx:207
-#: src/pages/VaultSettingsPanel.tsx:117
+#: src/pages/VaultSettingsPanel.tsx:175
 msgid "Could not save"
 msgstr "无法保存"
 
@@ -1589,7 +1589,7 @@ msgstr "无法创建"
 msgid "Couldn't invite them"
 msgstr ""
 
-#: src/pages/ShareBotDialog.tsx:85
+#: src/pages/ShareBotDialog.tsx:92
 msgid "Couldn't load"
 msgstr ""
 
@@ -1614,8 +1614,10 @@ msgstr "无法重命名空间"
 msgid "Couldn't revoke the invite link"
 msgstr ""
 
-#: src/pages/ShareBotDialog.tsx:118
-#: src/pages/ShareBotDialog.tsx:133
+#: src/pages/ShareBotDialog.tsx:131
+#: src/pages/ShareBotDialog.tsx:146
+#: src/pages/ShareBotDialog.tsx:159
+#: src/pages/VaultSettingsPanel.tsx:331
 msgid "Couldn't save"
 msgstr ""
 
@@ -1774,8 +1776,8 @@ msgstr "默认范围"
 #: src/pages/shell/dialogs.tsx:470
 #: src/pages/shell/sidebar-footer.tsx:93
 #: src/pages/shell/sidebar-footer.tsx:126
-#: src/pages/VaultSettingsPanel.tsx:137
-#: src/pages/VaultSettingsPanel.tsx:223
+#: src/pages/VaultSettingsPanel.tsx:195
+#: src/pages/VaultSettingsPanel.tsx:284
 msgid "Delete"
 msgstr "删除"
 
@@ -1790,7 +1792,7 @@ msgstr "删除 {0}"
 #. placeholder {0}: item.name
 #: src/pages/shell/dialogs.tsx:346
 #: src/pages/shell/dialogs.tsx:439
-#: src/pages/VaultSettingsPanel.tsx:137
+#: src/pages/VaultSettingsPanel.tsx:195
 msgid "Delete {0}?"
 msgstr "删除 {0}？"
 
@@ -1810,7 +1812,7 @@ msgstr "删除例行任务"
 msgid "Delete space"
 msgstr ""
 
-#: src/pages/ShareBotDialog.tsx:96
+#: src/pages/ShareBotDialog.tsx:103
 #: src/pages/usage-settings.tsx:192
 msgid "Deleted"
 msgstr ""
@@ -2055,6 +2057,15 @@ msgstr "每"
 msgid "every {intervalAmountSelect} {intervalUnitSelect}"
 msgstr "每 {intervalAmountSelect} {intervalUnitSelect}"
 
+#. placeholder {0}: space.name
+#: src/pages/VaultSettingsPanel.tsx:381
+msgid "Every current and future member of {0} can use this key on its site, from their bots and yours that you can see, including webhooks and routines."
+msgstr ""
+
+#: src/pages/ShareBotDialog.tsx:261
+msgid "Every current and future member of {spaceName} can use ticked keys on their sites, from their bots and yours that you can see, including webhooks and routines."
+msgstr ""
+
 #: src/pages/bot-page/RoutineTriggers.tsx:78
 #: src/pages/RoutineSchedule.tsx:37
 #: src/pages/RoutineSchedule.tsx:166
@@ -2086,12 +2097,22 @@ msgstr "每周"
 msgid "Everyday"
 msgstr "日常"
 
-#: src/pages/ShareBotDialog.tsx:159
-#: src/pages/ShareBotDialog.tsx:161
+#: src/pages/VaultSettingsPanel.tsx:74
+msgid "Everyone"
+msgstr ""
+
+#. placeholder {0}: space.name
+#: src/pages/VaultSettingsPanel.tsx:341
+#: src/pages/VaultSettingsPanel.tsx:343
+msgid "Everyone in {0}"
+msgstr ""
+
+#: src/pages/ShareBotDialog.tsx:185
+#: src/pages/ShareBotDialog.tsx:187
 msgid "Everyone in {spaceName}"
 msgstr ""
 
-#: src/pages/ShareBotDialog.tsx:221
+#: src/pages/ShareBotDialog.tsx:268
 msgid "Everyone who uses this bot can see its files and browser sign-ins."
 msgstr ""
 
@@ -2275,12 +2296,12 @@ msgstr "请挂断，然后输入屏幕上的代码。"
 msgid "header"
 msgstr "请求头"
 
-#: src/pages/VaultSettingsPanel.tsx:186
+#: src/pages/VaultSettingsPanel.tsx:247
 msgid "Header"
 msgstr ""
 
 #: src/pages/custom-apps/AppEditor.tsx:127
-#: src/pages/VaultSettingsPanel.tsx:195
+#: src/pages/VaultSettingsPanel.tsx:256
 msgid "Header name"
 msgstr "请求头名称"
 
@@ -2475,8 +2496,12 @@ msgstr "保留记忆"
 msgid "key"
 msgstr "密钥"
 
-#: src/pages/VaultSettingsPanel.tsx:206
+#: src/pages/VaultSettingsPanel.tsx:267
 msgid "Key"
+msgstr ""
+
+#: src/pages/ShareBotDialog.tsx:247
+msgid "Keys"
 msgstr ""
 
 #: src/pages/bot-page/BotPage.tsx:101
@@ -2609,7 +2634,7 @@ msgstr "本地"
 msgid "Log out"
 msgstr "退出登录"
 
-#: src/pages/VaultSettingsPanel.tsx:188
+#: src/pages/VaultSettingsPanel.tsx:249
 msgid "Login"
 msgstr ""
 
@@ -2699,14 +2724,14 @@ msgstr "提及"
 msgid "Mentions only"
 msgstr ""
 
-#. js-lingui-explicit-id
-#: src/lib/browser-notifications.ts:76
-msgid "Message"
-msgstr ""
-
 #: src/pages/bot-page/BotActivity.tsx:358
 #: src/pages/shell/composer.tsx:293
 #: src/pages/shell/message-view.tsx:92
+msgid "Message"
+msgstr "消息"
+
+#. js-lingui-explicit-id
+#: src/lib/browser-notifications.ts:76
 msgid "Message"
 msgstr "消息"
 
@@ -2865,7 +2890,7 @@ msgstr ""
 #: src/pages/shell/dialogs.tsx:187
 #: src/pages/shell/dialogs.tsx:250
 #: src/pages/SpaceGeneralSettings.tsx:118
-#: src/pages/VaultSettingsPanel.tsx:169
+#: src/pages/VaultSettingsPanel.tsx:230
 msgid "Name"
 msgstr "名称"
 
@@ -2893,7 +2918,7 @@ msgstr "需要你处理"
 msgid "Needs your call"
 msgstr ""
 
-#: src/pages/VaultSettingsPanel.tsx:150
+#: src/pages/VaultSettingsPanel.tsx:208
 msgid "New API key"
 msgstr ""
 
@@ -2905,7 +2930,7 @@ msgstr "新建 Bot"
 msgid "New group"
 msgstr "新建群组"
 
-#: src/pages/VaultSettingsPanel.tsx:150
+#: src/pages/VaultSettingsPanel.tsx:208
 msgid "New login"
 msgstr ""
 
@@ -3246,7 +3271,7 @@ msgstr "搁置"
 #: src/pages/AccountProfileSettings.tsx:180
 #: src/pages/Auth.tsx:164
 #: src/pages/Auth.tsx:173
-#: src/pages/VaultSettingsPanel.tsx:206
+#: src/pages/VaultSettingsPanel.tsx:267
 msgid "Password"
 msgstr "密码"
 
@@ -3571,11 +3596,11 @@ msgid "Replace API key"
 msgstr "替换 API 密钥"
 
 #: src/pages/ProvidersSettings.tsx:267
-#: src/pages/VaultSettingsPanel.tsx:230
+#: src/pages/VaultSettingsPanel.tsx:291
 msgid "Replace key"
 msgstr "替换密钥"
 
-#: src/pages/VaultSettingsPanel.tsx:230
+#: src/pages/VaultSettingsPanel.tsx:291
 msgid "Replace password"
 msgstr ""
 
@@ -3766,7 +3791,7 @@ msgstr ""
 #: src/pages/KnowledgeSection.tsx:706
 #: src/pages/model-settings/model-detail.tsx:332
 #: src/pages/shell/dialogs.tsx:266
-#: src/pages/VaultSettingsPanel.tsx:230
+#: src/pages/VaultSettingsPanel.tsx:291
 msgid "Save"
 msgstr "保存"
 
@@ -3882,8 +3907,8 @@ msgstr "正在发送…"
 msgid "Sent"
 msgstr ""
 
-#: src/pages/VaultSettingsPanel.tsx:176
-#: src/pages/VaultSettingsPanel.tsx:178
+#: src/pages/VaultSettingsPanel.tsx:237
+#: src/pages/VaultSettingsPanel.tsx:239
 msgid "Sent as"
 msgstr ""
 
@@ -3911,9 +3936,9 @@ msgstr "设置"
 
 #: src/pages/bot-page/BotPage.tsx:102
 #: src/pages/MessagingSettingsOverlay.tsx:362
-#: src/pages/SettingsOverlay.tsx:144
-#: src/pages/SettingsOverlay.tsx:219
-#: src/pages/SettingsOverlay.tsx:270
+#: src/pages/SettingsOverlay.tsx:146
+#: src/pages/SettingsOverlay.tsx:221
+#: src/pages/SettingsOverlay.tsx:272
 #: src/pages/shell/command-palette.tsx:281
 #: src/pages/shell/sidebar-footer.tsx:205
 #: src/pages/shell/sidebar-footer.tsx:212
@@ -3939,7 +3964,7 @@ msgid "Share"
 msgstr ""
 
 #. placeholder {0}: bot.name
-#: src/pages/ShareBotDialog.tsx:153
+#: src/pages/ShareBotDialog.tsx:179
 msgid "Share {0}"
 msgstr ""
 
@@ -3955,6 +3980,14 @@ msgstr ""
 #: src/pages/KnowledgeSection.tsx:37
 msgid "Shared documents"
 msgstr "共享文档"
+
+#: src/pages/VaultSettingsPanel.tsx:339
+msgid "Shared with"
+msgstr ""
+
+#: src/pages/VaultSettingsPanel.tsx:108
+msgid "Shared with you"
+msgstr ""
 
 #: src/pages/AccountSettingsOverlay.tsx:88
 msgid "Show agent steps, and every run in a bot's activity."
@@ -4007,7 +4040,7 @@ msgstr "登录 Tangow"
 msgid "Sign up"
 msgstr "注册"
 
-#: src/pages/VaultSettingsPanel.tsx:162
+#: src/pages/VaultSettingsPanel.tsx:223
 msgid "Site"
 msgstr ""
 
@@ -4034,7 +4067,7 @@ msgstr ""
 msgid "Skills"
 msgstr "技能"
 
-#: src/pages/ShareBotDialog.tsx:193
+#: src/pages/ShareBotDialog.tsx:219
 msgid "Skills this bot can use"
 msgstr ""
 
@@ -4176,7 +4209,7 @@ msgstr "支持图片"
 msgid "Supports thinking"
 msgstr "支持思考"
 
-#: src/pages/SettingsOverlay.tsx:516
+#: src/pages/SettingsOverlay.tsx:520
 msgid "Switch space"
 msgstr "切换空间"
 
@@ -4248,6 +4281,14 @@ msgstr "API 未恢复。请刷新此页面。"
 #: src/pages/MemorySettingsOverlay.tsx:245
 msgid "The selected memory provider is not available in this build."
 msgstr "所选记忆提供方在此构建中不可用。"
+
+#: src/pages/VaultSettingsPanel.tsx:385
+msgid "These people can use this key on its site, from their bots and yours that you can see, including webhooks and routines."
+msgstr ""
+
+#: src/pages/ShareBotDialog.tsx:262
+msgid "These people can use ticked keys on their sites, from their bots and yours that you can see, including webhooks and routines."
+msgstr ""
 
 #: src/pages/bot-page/SettingDetails.tsx:139
 msgid "Thinking"
@@ -4408,8 +4449,8 @@ msgstr ""
 
 #: src/components/ComputerMaintenanceActions.tsx:116
 #: src/components/SoftwareUpdateSection.tsx:260
-#: src/pages/SettingsOverlay.tsx:411
-#: src/pages/SettingsOverlay.tsx:411
+#: src/pages/SettingsOverlay.tsx:415
+#: src/pages/SettingsOverlay.tsx:415
 #: src/pages/shell/computer-preview.tsx:75
 msgid "Update available"
 msgstr "有可用更新"
@@ -4489,7 +4530,7 @@ msgstr ""
 msgid "Use this model"
 msgstr "使用此模型"
 
-#: src/pages/VaultSettingsPanel.tsx:201
+#: src/pages/VaultSettingsPanel.tsx:262
 msgid "Username"
 msgstr ""
 
@@ -4665,3 +4706,24 @@ msgstr "你的名字"
 #: src/pages/Welcome.tsx:21
 msgid "Your team of always-on agents<0/>that you can give real work to."
 msgstr "你的一支随时在线的 Agent 团队<0/>可以交给它们真正的工作。"
+
+#~ msgid "Automatic shape"
+#~ msgstr "自动形状"
+
+#~ msgid "Avatars"
+#~ msgstr "头像"
+
+#~ msgid "Color {0}"
+#~ msgstr "颜色 {0}"
+
+#~ msgid "Couldn't update avatars"
+#~ msgstr "无法更新头像"
+
+#~ msgid "Organic"
+#~ msgstr "自然"
+
+#~ msgid "Robot"
+#~ msgstr "机器人"
+
+#~ msgid "Shape {0}"
+#~ msgstr "形状 {0}"

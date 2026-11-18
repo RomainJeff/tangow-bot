@@ -128,7 +128,6 @@ import {
   LIVE_WORKER_STATES,
   MAIN_BOT_BLOCKED_TOOLS,
   MISSING_MODEL_MESSAGE,
-  MODEL_PROVIDER_NOT_CONNECTED_MESSAGE,
   messagingChannelId,
   messagingChannelPrivacyBlock,
   messagingDmSurfaceNote,
@@ -266,7 +265,7 @@ import {
 import { messageBot, resolveRunHop, returnBotMessageOutcome } from "./bot-messages.js";
 import {
   findBotSecret,
-  listBotSecrets,
+  listUsableSecrets,
   normalizeSecretDestination,
   requestWithBotSecret,
   sameSecretDestination,
@@ -3488,16 +3487,17 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 name,
               );
           if (skillRefusal) return { error: skillRefusal };
-          // Saved API keys belong to the person in the space and serve only their own bots: a bot
-          // shared with them must not reach their keys.
+          // A key is saved only into the vault of the person who owns the bot. Which saved keys a
+          // run may use is decided by usableSecretsWhere, for listing and sending alike.
           if (
             run.userId !== bot.userId &&
-            (name === "list_secrets" ||
-              name === "secret_request" ||
-              name === "sign_in" ||
-              (name === "request_secret" && args.credential !== undefined))
+            name === "request_secret" &&
+            args.credential !== undefined
           ) {
-            return { error: "Saved keys and logins are only available on your own bots." };
+            return { error: "Saved API keys can only be added on your own bots." };
+          }
+          if (name === "sign_in" && run.userId !== bot.userId) {
+            return { error: "Saved logins are only available on your own bots." };
           }
           // A saved login fills only in a run its owner started: never on a webhook's, a contact's
           // or another bot's word, nor once someone else's message steered the run.
@@ -4950,13 +4950,14 @@ export function createRunExecutor(deps: ExecutorDeps) {
               ),
             );
           }
-          if (name === "list_secrets") return listBotSecrets(deps.prisma, run);
+          if (name === "list_secrets") return listUsableSecrets(deps.prisma, run, bot.id);
           if (name === "secret_request") {
             try {
               const result = await requestWithBotSecret({
                 prisma: deps.prisma,
                 secretStore: deps.secretStore,
-                scope: run,
+                run,
+                botId: bot.id,
                 request: args,
                 signal: context.signal,
                 remote: deps.secretHttp,

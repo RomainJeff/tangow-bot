@@ -886,4 +886,16 @@ export const ZH_MESSAGES: Record<string, string> = {
   "New login": "新登录信息",
   "Replace password": "替换密码",
   Login: "登录信息",
+  Everyone: "所有人",
+  "Shared with you": "与你共享",
+  "Shared with": "共享对象",
+  Keys: "密钥",
+  "Every current and future member of {space} can use this key on its site, from their bots and yours that you can see, including webhooks and routines.":
+    "{space} 的所有现有和未来成员都可以在该密钥的网站上使用它，来源包括你能看到的他们的和你的机器人，以及 Webhook 和例行任务。",
+  "These people can use this key on its site, from their bots and yours that you can see, including webhooks and routines.":
+    "这些人可以在该密钥的网站上使用它，来源包括你能看到的他们的和你的机器人，以及 Webhook 和例行任务。",
+  "Every current and future member of {space} can use the keys switched on, each on its own site, from their bots and yours that you can see, including webhooks and routines.":
+    "{space} 的所有现有和未来成员都可以使用已开启的密钥，每个仅用于其网站，来源包括你能看到的他们的和你的机器人，以及 Webhook 和例行任务。",
+  "These people can use the keys switched on, each on its own site, from their bots and yours that you can see, including webhooks and routines.":
+    "这些人可以使用已开启的密钥，每个仅用于其网站，来源包括你能看到的他们的和你的机器人，以及 Webhook 和例行任务。",
 };

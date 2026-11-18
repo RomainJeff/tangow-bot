@@ -221,6 +221,7 @@ model SpaceMember {
   modelCategories SpaceModelCategory[]
   modelAuto Boolean @default(false)
   voicePreferences SpaceVoicePreference[]
+  botSecretShares BotSecretShare[]
 
   @@unique([spaceId, userId])
   @@index([organizationId, userId])
@@ -1522,6 +1523,9 @@ model BotSecret {
   origin     String
   auth       Json
   ciphertext String
+  /// The owner lets every current and future member of the space use it (see bot-secrets.ts).
+  sharedWithSpace Boolean @default(false)
+  shares     BotSecretShare[]
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -1529,6 +1533,20 @@ model BotSecret {
   @@index([botId])
   @@index([spaceId])
   @@map("bot_secrets")
+}
+
+/// A person the key's owner shares it with. Leaving the space removes the share.
+model BotSecretShare {
+  secretId    String
+  secret      BotSecret   @relation(fields: [secretId], references: [id], onDelete: Cascade)
+  spaceId     String
+  userId      String
+  spaceMember SpaceMember @relation(fields: [spaceId, userId], references: [spaceId, userId], onDelete: Cascade)
+  createdAt   DateTime    @default(now())
+
+  @@id([secretId, userId])
+  @@index([spaceId, userId])
+  @@map("bot_secret_shares")
 }
 
 

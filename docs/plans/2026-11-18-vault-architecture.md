@@ -1,8 +1,8 @@
 # Vault architecture: third-party key custody and site sign-in
 
-Status: proposal for review. No code beyond this pull request's existing draft is written before the document is agreed.
+Status: proposal for review. No code beyond the existing site sign-in draft (PR #540) is written before the document is agreed.
 
-Facts about the vault code were read at commit `a488311d6` of the vault branch (PR #536) and facts about `sign_in` at commit `556ea78d0` of this branch. Facts about OpenBao come from its public documentation; nothing was installed or tested. Two independent reviews (security, then site sign-in) are folded in.
+Facts about the vault code were read at commit `a488311d6` of the vault branch (PR #536) and facts about `sign_in` at commit `556ea78d0` of the site sign-in branch (PR #540). Facts about OpenBao come from its public documentation; nothing was installed or tested. Two independent reviews (security, then site sign-in) are folded in.
 
 An interactive walkthrough of the flows below is in [`docs/assets/vault-architecture.html`](../assets/vault-architecture.html) (in French; download the file and open it in a browser).
 
@@ -12,7 +12,7 @@ Tangow encrypts every stored secret itself, with one key (`ENCRYPTION_KEY`) held
 
 The goal is that an operator can hand key custody, cryptography, rotation, the ability to cut future access, and a log of decryptions to a dedicated tool, and that Tangow depends on an interface, not on that tool.
 
-A second goal comes with this pull request: a bot can sign in to a website with a saved login when nobody is at the screen.
+A second goal comes with the site sign-in slice (PR #540): a bot can sign in to a website with a saved login when nobody is at the screen.
 
 Out of scope:
 
@@ -25,7 +25,7 @@ Out of scope:
 
 > The controller authorizes every release of a vault credential. An API key never leaves the controller: the controller makes the request to the origin saved with the key, and that origin is trusted with it. A site login may be filled into the bot's browser on the exact saved origin; the bot's computer and that page can then read the password, and the website controls the session that follows.
 
-Four cases put a credential in the bot's machine. The first is new with this pull request; the others exist today and are unchanged.
+Four cases put a credential in the bot's machine. The first is new with the site sign-in slice (PR #540); the others exist today and are unchanged.
 
 | Case | Where it is documented |
 | --- | --- |
@@ -131,7 +131,7 @@ Accepted risks, decided:
 - **Pages that show the password back.** The tool result keeps its page snapshot. A site that renders a password in a form Tangow does not recognise is that site's responsibility. The promise is worded accordingly: Tangow never puts the password in the model's tool arguments, the chat, the logs or a trace, and masks its direct and common encoded echoes. It does not promise that the model can never see it.
 - **A bot that reads the field.** A bot that deliberately reads the filled field from its own computer can see the password, as with a password typed during a takeover.
 
-Changes still to make before this pull request merges:
+Changes still to make before the site sign-in slice (PR #540) merges:
 
 1. Check the origin and the field before the password leaves the controller. Today the password is opened and sent to the computer first, and a rejected page has already received it.
 2. Re-check the field immediately before the value is written, and refuse a form whose declared target is another origin.
@@ -199,7 +199,9 @@ It does not buy:
 1. This document, agreed.
 2. One pull request that makes the interface real: `open` on the port, call sites typed on the port and awaited, the two failure kinds, the abort-before-write rule and its test, the catch-block audit, the reseal selection fixed, unused members removed. The local driver's behaviour and format do not change and no data moves.
 3. The OpenBao transit driver, the writer and readers setting, the AppRole delivery, the shared conformance test, the checks against a real OpenBao, and a self-host tutorial that covers policy, audit, unseal after restart, rotation and restore.
-4. Site sign-in (this pull request), after the vault feature (PR #536), with the six changes listed under "Site sign-in".
+4. Site sign-in (PR #540), after the vault feature (PR #536), with the six changes listed under "Site sign-in".
+
+All four ship as one feature. Each step is a slice that merges into the `feature/vault` branch, and a single pull request carries the feature to `main` once every slice is in and the whole works together.
 
 Steps 2 and 3 are independent of the vault feature and of step 4: the vault feature touches the store at three call sites, and `sign_in` adds one. Whichever lands second adapts its call sites to `open` and must fail closed when the store is unavailable.
 

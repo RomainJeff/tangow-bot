@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AgentRuntimeEvent } from "@tangow/adapter-kit";
 import { ScriptedAgentRuntime } from "@tangow/adapters";
+import type { BotSecretDestination } from "@tangow/contracts";
 import { answerRunInput } from "@tangow/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
@@ -308,13 +309,19 @@ describeIntegration("reusable credential lifecycle", () => {
     const vaultKey = "fake-vault-api-key";
     const saved = await rpc(owner.cookie, "vault/put", { ...destination, value: vaultKey });
     const listed = await rpc(owner.cookie, "vault/list");
-    expect(listed).toEqual([destination]);
+    expect(listed).toEqual({
+      mine: [{ ...destination, botId: null, userIds: [], space: false }],
+      shared: [],
+    });
     expect(JSON.stringify({ saved, listed })).not.toContain(vaultKey);
 
     const stranger = await seedRun("vault-stranger", "Use someone else's key");
-    expect(await rpc(stranger.cookie, "vault/list")).toEqual([]);
+    expect(await rpc(stranger.cookie, "vault/list")).toEqual({ mine: [], shared: [] });
     const otherSpace = await rpc<{ id: string }>(owner.cookie, "spaces/create", { name: "Other" });
-    expect(await rpc(owner.cookie, "vault/list", {}, otherSpace.id)).toEqual([]);
+    expect(await rpc(owner.cookie, "vault/list", {}, otherSpace.id)).toEqual({
+      mine: [],
+      shared: [],
+    });
 
     // Saved from the screen, not by a bot: any bot of the person in the space can use it.
     const runtime = vi
@@ -357,44 +364,116 @@ describeIntegration("reusable credential lifecycle", () => {
     await rpc(owner.cookie, "vault/put", { ...destination, value: vaultKey }, otherSpace.id);
   });
 
-  it("keeps a person's keys from bots other people shared with them", async () => {
-    fetch.mockClear();
-    const owner = await seedRun("vault-share-owner", "Shared bot");
-    const { spaceId } = owner.me;
-    const { invitations } = await rpc<{ invitations: Array<{ id: string }> }>(
-      owner.cookie,
-      "spaces/createInvite",
-      { spaceId, emails: [`vault-share-member-${stamp}@tangow.test`] },
-    );
-    const member = await signup(`vault-share-member-${stamp}@tangow.test`, "Member");
-    await rpc(member, "spaces/acceptInvite", { token: invitations[0]!.id });
-    const memberKey = "fake-member-api-key";
-    await rpc(member, "vault/put", { ...destination, value: memberKey }, spaceId);
-    // Sharing waits for the bot's runs to end.
-    await handles.prisma.run.update({
-      where: { id: owner.run.id },
-      data: { status: "completed", completedAt: new Date() },
+  describe("keys shared between people", () => {
+    type Person = { cookie: string; userId: string; email: string };
+    // A owns the Space, bot X (shared with B and C) and bot Z (shared with the whole Space).
+    let a: Person;
+    let b: Person;
+    let c: Person;
+    let spaceId: string;
+    let x: string;
+    let z: string;
+    let calls: Array<{ name: string; args: Record<string, unknown> }> = [];
+    let runtime: { mockRestore(): void } | undefined;
+    const values = new Set<string>();
+
+    beforeAll(async () => {
+      const owner = await seedRun("share-a", "Unused");
+      await handles.prisma.run.update({
+        where: { id: owner.run.id },
+        data: { status: "completed", completedAt: new Date() },
+      });
+      spaceId = owner.me.spaceId;
+      a = { cookie: owner.cookie, userId: owner.me.userId, email: "" };
+      b = await join("share-b");
+      c = await join("share-c");
+      x = owner.bot.id;
+      z = (
+        await rpc<{ id: string }>(
+          a.cookie,
+          "bots/create",
+          { name: "Z", title: "", description: "", instructions: "", notifyOnFinish: false },
+          spaceId,
+        )
+      ).id;
+      await rpc(a.cookie, "bots/share", {
+        botId: x,
+        visibility: "people",
+        userIds: [b.userId, c.userId],
+      });
+      await rpc(a.cookie, "bots/share", { botId: z, visibility: "space", userIds: [] });
+      runtime = vi
+        .spyOn(ScriptedAgentRuntime.prototype, "run")
+        .mockImplementation(async function* (request): AsyncIterable<AgentRuntimeEvent> {
+          for (const [index, call] of calls.entries()) {
+            yield { type: "tool", ...call, executionId: `${request.runId}:${index}` };
+          }
+          yield { type: "done", text: "Done" };
+        });
     });
-    await rpc(owner.cookie, "bots/share", {
-      botId: owner.bot.id,
-      visibility: "space",
-      userIds: [],
-    });
-    const memberMe = await rpc<{ userId: string }>(member, "me", {}, spaceId);
-    await rpc(member, "bots/list", {}, spaceId);
-    const memberBot = await rpc<{ id: string }>(
-      member,
-      "bots/create",
-      { name: "Member bot", title: "", description: "", instructions: "", notifyOnFinish: false },
-      spaceId,
-    );
-    const runFor = async (botId: string, thread: { id: string }) => {
+    afterAll(() => runtime?.mockRestore());
+
+    async function join(label: string, email = `vault-${label}-${stamp}@tangow.test`) {
+      const { invitations } = await rpc<{ invitations: Array<{ id: string }> }>(
+        a.cookie,
+        "spaces/createInvite",
+        { spaceId, emails: [email] },
+      );
+      const cookie = await signup(email, `Share ${label}`).catch(() => signin(email));
+      await rpc(cookie, "spaces/acceptInvite", { token: invitations[0]!.id });
+      const me = await rpc<{ userId: string }>(cookie, "me", {}, spaceId);
+      return { cookie, userId: me.userId, email };
+    }
+
+    async function put(
+      person: Person,
+      name: string,
+      value: string,
+      origin = destination.origin,
+      auth: BotSecretDestination["auth"] = { type: "bearer" },
+    ) {
+      values.add(value);
+      await rpc(person.cookie, "vault/put", { name, origin, auth, value }, spaceId);
+    }
+
+    const share = (person: Person, name: string, userIds: string[], space = false) =>
+      rpc(person.cookie, "vault/share", { name, userIds, space }, spaceId);
+
+    const vault = (person: Person) =>
+      rpc<{
+        mine: Array<{ name: string; userIds: string[]; space: boolean }>;
+        shared: unknown[];
+      }>(person.cookie, "vault/list", {}, spaceId);
+
+    /** Runs `botId` as `person`, listing keys then sending `name` to `url`. */
+    async function use(
+      person: Person,
+      botId: string,
+      name: string,
+      url = `${destination.origin}/v1/items`,
+      extra: typeof calls = [],
+    ) {
+      fetch.mockClear();
+      calls = [
+        { name: "list_secrets", args: {} },
+        { name: "secret_request", args: { name, url } },
+        ...extra,
+      ];
+      // Creates the member's thread with a bot shared with them; a removed member cannot list.
+      await rpc(person.cookie, "bots/list", {}, spaceId).catch(() => undefined);
+      const bot = await handles.prisma.bot.findUniqueOrThrow({ where: { id: botId } });
+      const thread =
+        bot.userId === person.userId
+          ? await handles.prisma.thread.findUniqueOrThrow({ where: { botId } })
+          : await handles.prisma.thread.findFirstOrThrow({
+              where: { memberBotId: botId, userId: person.userId },
+            });
       const task = await handles.prisma.task.create({
         data: {
           spaceId,
           botId,
           threadId: thread.id,
-          userId: memberMe.userId,
+          userId: person.userId,
           prompt: "Use it",
           status: "queued",
         },
@@ -405,52 +484,265 @@ describeIntegration("reusable credential lifecycle", () => {
           botId,
           threadId: thread.id,
           taskId: task.id,
-          userId: memberMe.userId,
+          userId: person.userId,
           status: "queued",
           trigger: "user",
         },
       });
       await handles.executor.continueRun(run.id, "test-worker");
-      return run.id;
-    };
-    const runtime = vi
-      .spyOn(ScriptedAgentRuntime.prototype, "run")
-      .mockImplementation(async function* (request): AsyncIterable<AgentRuntimeEvent> {
-        yield { type: "tool", name: "list_secrets", args: {}, executionId: `${request.runId}:0` };
-        yield {
-          type: "tool",
-          name: "secret_request",
-          args: { name: destination.name, url: `${destination.origin}/v1/items` },
-          executionId: `${request.runId}:1`,
-        };
-        yield { type: "done", text: "Done" };
-      });
-    // What the bot received from its tools, as written to the conversation's log.
-    const toolResults = async (runId: string) =>
-      (await handles.prisma.sessionEntry.findMany({ where: { runId, type: "tool.result" } }))
-        .map((entry) => (entry.payload as { output: string }).output)
-        .join("\n");
-    try {
-      const sharedThread = await handles.prisma.thread.findFirstOrThrow({
-        where: { memberBotId: owner.bot.id, userId: memberMe.userId },
-      });
-      const sharedRun = await runFor(owner.bot.id, sharedThread);
-      expect(fetch).not.toHaveBeenCalled();
-      const shared = await toolResults(sharedRun);
-      expect(shared).toContain("only available on your own bots");
-      expect(shared).not.toContain(destination.name);
-
-      const ownThread = await handles.prisma.thread.findUniqueOrThrow({
-        where: { botId: memberBot.id },
-      });
-      const ownRun = await runFor(memberBot.id, ownThread);
-      expect(await toolResults(ownRun)).toContain(destination.name);
-      expect(new Headers(fetch.mock.calls.at(-1)?.[1]?.headers).get("Authorization")).toBe(
-        `Bearer ${memberKey}`,
-      );
-    } finally {
-      runtime.mockRestore();
+      const outputs = (
+        await handles.prisma.sessionEntry.findMany({
+          where: { runId: run.id, type: "tool.result" },
+          orderBy: { seq: "asc" },
+        })
+      ).map((entry) => (entry.payload as { output: string }).output);
+      for (const output of outputs) {
+        for (const value of values) expect(output).not.toContain(value);
+      }
+      const sent = fetch.mock.calls.at(-1);
+      return {
+        runId: run.id,
+        listed: outputs[0] ?? "",
+        answer: outputs[1] ?? "",
+        outputs,
+        sent: sent ? new Headers(sent[1]?.headers).get("Authorization") : null,
+        sentTo: sent ? new URL(String(sent[0])).origin : null,
+      };
     }
+
+    it("serves a key only by the rule, with one refusal for every key outside it", async () => {
+      await put(a, "a_private", "fake-a-private");
+      await put(b, "b_private", "fake-b-private");
+      await put(a, "a_shared", "fake-a-shared");
+      await share(a, "a_shared", [b.userId]);
+      await put(b, "b_shared", "fake-b-shared");
+      await share(b, "b_shared", [a.userId]);
+      await put(a, "a_with_c", "fake-a-with-c");
+      await share(a, "a_with_c", [c.userId]);
+
+      // B's run on A's bot: keys shared between A and B, from either side.
+      const used = await use(b, x, "a_shared");
+      expect(used.sent).toBe("Bearer fake-a-shared");
+      for (const name of ["a_shared", "b_shared"]) expect(used.listed).toContain(name);
+      for (const name of ["a_private", "b_private", "a_with_c"]) {
+        expect(used.listed).not.toContain(name);
+      }
+      expect((await use(b, x, "b_shared")).sent).toBe("Bearer fake-b-shared");
+      // Missing, someone's private key, a key shared with someone else: the same answer, no owner.
+      const refusals = new Set<string>();
+      for (const name of ["not_saved", "a_private", "b_private", "a_with_c"]) {
+        const refused = await use(b, x, name);
+        expect(refused.sent).toBeNull();
+        refusals.add(refused.answer);
+      }
+      expect(refusals.size).toBe(1);
+      expect([...refusals][0]).not.toMatch(/Executor|Share /);
+
+      // A key of the same person in another Space never serves this one.
+      const elsewhere = await rpc<{ id: string }>(a.cookie, "spaces/create", { name: "Elsewhere" });
+      values.add("fake-elsewhere");
+      await rpc(
+        a.cookie,
+        "vault/put",
+        { ...destination, name: "elsewhere_only", value: "fake-elsewhere" },
+        elsewhere.id,
+      );
+      expect((await use(a, x, "elsewhere_only")).sent).toBeNull();
+
+      // B's own bot is private: A cannot see it, so A's key does not serve it.
+      const hidden = await rpc<{ id: string }>(
+        b.cookie,
+        "bots/create",
+        { name: "W", title: "", description: "", instructions: "", notifyOnFinish: false },
+        spaceId,
+      );
+      expect((await use(b, hidden.id, "a_shared")).sent).toBeNull();
+
+      // A's own run on A's bot can use B's key shared with A (documented widening), not B's private one.
+      expect((await use(a, x, "b_shared")).sent).toBe("Bearer fake-b-shared");
+      expect((await use(a, x, "b_private")).sent).toBeNull();
+    });
+
+    it("marks a key someone else owns as shared when listing, without naming them", async () => {
+      // B's run on A's bot: A's key shared with B, and B's own key shared with A.
+      const { listed } = await use(b, x, "a_shared");
+      const keys = JSON.parse(listed) as Array<{ name: string; shared: boolean }>;
+      expect(keys.find((key) => key.name === "a_shared")?.shared).toBe(true);
+      expect(keys.find((key) => key.name === "b_shared")?.shared).toBe(false);
+      for (const owner of [a.userId, "Executor share-a", "executor-share-a"]) {
+        expect(listed).not.toContain(owner);
+      }
+    });
+
+    it("never saves a key from a bot someone else owns, even when keys are shared", async () => {
+      const before = await handles.prisma.botSecret.count({ where: { userId: b.userId } });
+      const result = await use(b, x, "a_shared", undefined, [
+        {
+          name: "request_secret",
+          args: {
+            label: "API key",
+            purpose: "api_key",
+            credential: { ...destination, name: "a_shared" },
+          },
+        },
+      ]);
+      expect(result.outputs[2]).toContain("Saved API keys can only be added on your own bots.");
+      expect(
+        await handles.prisma.externalEffect.count({
+          where: { runId: result.runId, kind: "request_secret" },
+        }),
+      ).toBe(0);
+      expect(await handles.prisma.botSecret.count({ where: { userId: b.userId } })).toBe(before);
+    });
+
+    it("resolves a name the same way every time and sends only to the chosen key's site", async () => {
+      const elsewhere = "https://other.example.test";
+      await put(a, "dup", "fake-a-dup");
+      await put(b, "dup", "fake-b-dup", elsewhere);
+      await share(b, "dup", [a.userId]);
+      // A's own key is never shadowed by B's, and never goes to B's site.
+      expect(await use(a, x, "dup")).toMatchObject({
+        sent: "Bearer fake-a-dup",
+        sentTo: destination.origin,
+      });
+      expect((await use(a, x, "dup", `${elsewhere}/v1`)).sent).toBeNull();
+      // B's run picks B's own key, at B's site.
+      expect(await use(b, x, "dup", `${elsewhere}/v1`)).toMatchObject({
+        sent: "Bearer fake-b-dup",
+        sentTo: elsewhere,
+      });
+      // The same name shared by two others: the oldest, every time.
+      await put(b, "twin", "fake-b-twin");
+      await share(b, "twin", [a.userId]);
+      await put(c, "twin", "fake-c-twin");
+      await share(c, "twin", [a.userId]);
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        expect((await use(a, x, "twin")).sent).toBe("Bearer fake-b-twin");
+      }
+    });
+
+    it("lets only the key's owner choose who it is shared with", async () => {
+      await expect(share(b, "a_shared", [c.userId])).rejects.toThrow("(404)");
+      await expect(share(a, "a_shared", ["not-a-member"])).rejects.toThrow("(400)");
+      expect((await vault(a)).mine.find((key) => key.name === "a_shared")).toMatchObject({
+        userIds: [b.userId],
+        space: false,
+      });
+      expect(JSON.stringify([await vault(a), await vault(b)])).not.toMatch(/fake-/);
+    });
+
+    it("refuses to share a site login with a member or the whole space", async () => {
+      await put(a, "private_login", "fake-private-login", destination.origin, {
+        type: "login",
+        username: "site-user",
+      });
+      await expect(share(a, "private_login", [b.userId])).rejects.toThrow("(404)");
+      await expect(share(a, "private_login", [], true)).rejects.toThrow("(404)");
+    });
+
+    it("hides a site login from other members even if it has both kinds of sharing grants", async () => {
+      const name = "stale_shared_login";
+      await put(a, name, "fake-stale-shared-login", destination.origin, {
+        type: "login",
+        username: "site-user",
+      });
+      const { id } = await handles.prisma.botSecret.update({
+        where: { userId_spaceId_name: { userId: a.userId, spaceId, name } },
+        data: { sharedWithSpace: true },
+      });
+      try {
+        await handles.prisma.botSecretShare.create({
+          data: { secretId: id, spaceId, userId: b.userId },
+        });
+        const output = await use(b, x, name);
+        expect(output.listed).not.toContain(name);
+        expect(output.answer).toBe((await use(b, x, "unknown_login")).answer);
+        expect(output.sent).toBeNull();
+        expect((await vault(b)).shared).not.toContainEqual(expect.objectContaining({ name }));
+      } finally {
+        await handles.prisma.botSecret.delete({ where: { id } });
+      }
+    });
+
+    it("keeps the owner's login ahead of a shared API key with the same name", async () => {
+      await put(a, "same_name", "fake-owner-login", destination.origin, {
+        type: "login",
+        username: "site-user",
+      });
+      const otherOrigin = "https://other.example.test";
+      await put(b, "same_name", "fake-shared-same-name", otherOrigin);
+      await share(b, "same_name", [a.userId]);
+
+      const { listed, answer, sent } = await use(a, x, "same_name", otherOrigin);
+      expect(JSON.parse(listed)).toContainEqual({
+        name: "same_name",
+        origin: destination.origin,
+        auth: { type: "login", username: "site-user" },
+        shared: false,
+      });
+      expect(JSON.parse(answer)).toEqual({
+        error: "This is a site login. Use sign_in on its sign-in page instead.",
+      });
+      expect(sent).toBeNull();
+    });
+
+    it.each([
+      [{ type: "bearer" }, "Authorization", "Bearer fake-three-auth-types"],
+      [{ type: "header", name: "X-Api-Key" }, "X-Api-Key", "fake-three-auth-types"],
+      [
+        { type: "basic", username: "api-user" },
+        "Authorization",
+        `Basic ${Buffer.from("api-user:fake-three-auth-types").toString("base64")}`,
+      ],
+    ] as const)(
+      "shares and sends an API key with %j authentication",
+      async (auth, header, expected) => {
+        const name = `shared_${auth.type}`;
+        await put(a, name, "fake-three-auth-types", destination.origin, auth);
+        await share(a, name, [b.userId]);
+        const { listed } = await use(b, x, name);
+        expect(JSON.parse(listed)).toContainEqual({
+          name,
+          origin: destination.origin,
+          auth,
+          shared: true,
+        });
+        expect((await vault(b)).shared).toContainEqual(expect.objectContaining({ name, auth }));
+        expect(new Headers(fetch.mock.calls.at(-1)?.[1]?.headers).get(header)).toBe(expected);
+      },
+    );
+
+    it("shares with the whole Space only when the owner ticks it, future members included", async () => {
+      await put(a, "everyone", "fake-everyone");
+      // Sharing bot Z with the Space ticked no key.
+      expect((await vault(a)).mine.every((key) => !key.space)).toBe(true);
+      expect((await use(b, z, "everyone")).sent).toBeNull();
+
+      await share(a, "everyone", [], true);
+      expect((await use(b, z, "everyone")).sent).toBe("Bearer fake-everyone");
+      const later = await join("share-d");
+      expect((await use(later, z, "everyone")).sent).toBe("Bearer fake-everyone");
+      expect((await vault(later)).shared).toEqual([
+        { ...destination, name: "everyone", ownerName: "Executor share-a" },
+      ]);
+
+      await rpc(a.cookie, "spaces/removeMember", { spaceId, userId: later.userId }, spaceId);
+      expect((await use(later, z, "everyone")).sent).toBeNull();
+
+      await share(a, "everyone", [], false);
+      expect((await use(b, z, "everyone")).sent).toBeNull();
+    });
+
+    it("stops serving a key whose owner left the Space, and resumes when they rejoin", async () => {
+      // Z is shared with the whole Space, so only B's membership decides here.
+      expect((await use(a, z, "b_shared")).sent).toBe("Bearer fake-b-shared");
+      await rpc(a.cookie, "spaces/removeMember", { spaceId, userId: b.userId }, spaceId);
+      // Shares to B went with B's membership.
+      expect(await handles.prisma.botSecretShare.count({ where: { userId: b.userId } })).toBe(0);
+      expect((await use(a, z, "b_shared")).sent).toBeNull();
+      b = await join("share-b", b.email);
+      expect((await use(a, z, "b_shared")).sent).toBe("Bearer fake-b-shared");
+    });
   });
 
   describe("webhook key", () => {
@@ -604,6 +896,19 @@ describeIntegration("reusable credential lifecycle", () => {
     const raw = response.headers.get("set-cookie") ?? "";
     const match = raw.match(/better-auth\.session_token=([^;]+)/);
     expect(match?.[1]).toBeTruthy();
+    return `better-auth.session_token=${match![1]}`;
+  }
+
+  async function signin(email: string) {
+    const response = await handles.app.request("/api/auth/sign-in/email", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "http://127.0.0.1:5173" },
+      body: JSON.stringify({ email, password: "password12" }),
+    });
+    expect(response.status).toBeLessThan(400);
+    const match = (response.headers.get("set-cookie") ?? "").match(
+      /better-auth\.session_token=([^;]+)/,
+    );
     return `better-auth.session_token=${match![1]}`;
   }
 

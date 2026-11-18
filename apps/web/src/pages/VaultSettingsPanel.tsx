@@ -1,7 +1,9 @@
 import { useLingui } from "@lingui/react/macro";
-import type { BotSecretDestination } from "@tangow/contracts";
+import type { BotSecretDestination, SpaceMembers, VaultItem, VaultList } from "@tangow/contracts";
+import { isShareableBotSecret } from "@tangow/contracts";
 import {
   Button,
+  Checkbox,
   Dialog,
   DialogContent,
   DialogFooter,
@@ -11,10 +13,14 @@ import {
   Label,
   SegmentedControl,
   SettingRow,
+  Switch,
+  UserAvatar,
 } from "@tangow/ui-web";
 import { Plus } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useId, useState } from "react";
+import type { ReactNode } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { rpc } from "../lib/rpc";
+import { userInitials } from "../lib/user-initials";
 import { PendingRead, SettingsGroup, useConfirm } from "./bot-page/page-kit";
 
 type AuthType = BotSecretDestination["auth"]["type"];
@@ -29,21 +35,47 @@ function siteOrigin(site: string): string {
   }
 }
 
-/** The person's credentials in this space. Values are write-only: never read back. */
-export function VaultSettingsPanel() {
+type Member = SpaceMembers["members"][number];
+type Space = { id: string; name: string };
+
+/**
+ * The person's credentials in this space, then the ones others share with them (read-only).
+ * Values are write-only: never read back.
+ */
+export function VaultSettingsPanel({ space, userId }: { space?: Space; userId?: string }) {
   const { t } = useLingui();
-  const [items, setItems] = useState<BotSecretDestination[] | null>(null);
+  const [vault, setVault] = useState<VaultList | null>(null);
+  const [people, setPeople] = useState<Member[]>([]);
   const [failed, setFailed] = useState(false);
-  const [editing, setEditing] = useState<BotSecretDestination | "new" | null>(null);
+  const [editing, setEditing] = useState<VaultItem | "new" | null>(null);
 
   const load = useCallback(() => {
     setFailed(false);
     rpc.vault
       .list()
-      .then(setItems)
+      .then(setVault)
       .catch(() => setFailed(true));
   }, []);
   useEffect(load, [load]);
+  useEffect(() => {
+    if (!space) return;
+    let live = true;
+    rpc.spaces.members({ spaceId: space.id }).then(
+      (view) => live && setPeople(view.members.filter((member) => member.userId !== userId)),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [space, userId]);
+
+  const sharedWith = (item: VaultItem) =>
+    item.space
+      ? t`Everyone`
+      : people
+          .filter((member) => item.userIds.includes(member.userId))
+          .map((member) => member.name)
+          .join(", ");
 
   return (
     <div data-testid="vault-settings" className="flex flex-col gap-4">
@@ -53,24 +85,44 @@ export function VaultSettingsPanel() {
           {t`Add`}
         </Button>
       </div>
-      {items === null ? (
+      {vault === null ? (
         <PendingRead failed={failed} onRetry={load} />
-      ) : items.length > 0 ? (
-        <SettingsGroup>
-          {items.map((item) => (
-            <SettingRow
-              key={item.name}
-              label={item.name}
-              subline={new URL(item.origin).host}
-              chevron
-              onClick={() => setEditing(item)}
-            />
-          ))}
-        </SettingsGroup>
-      ) : null}
+      ) : (
+        <>
+          {vault.mine.length > 0 ? (
+            <SettingsGroup>
+              {vault.mine.map((item) => (
+                <SettingRow
+                  key={item.name}
+                  label={item.name}
+                  subline={[new URL(item.origin).host, sharedWith(item)]
+                    .filter(Boolean)
+                    .join(" · ")}
+                  chevron
+                  onClick={() => setEditing(item)}
+                />
+              ))}
+            </SettingsGroup>
+          ) : null}
+          {vault.shared.length > 0 ? (
+            <SettingsGroup label={t`Shared with you`}>
+              {vault.shared.map((item) => (
+                <SettingRow
+                  key={`${item.ownerName}:${item.name}:${item.origin}`}
+                  label={item.name}
+                  subline={`${new URL(item.origin).host} · ${item.ownerName}`}
+                />
+              ))}
+            </SettingsGroup>
+          ) : null}
+        </>
+      )}
       {editing ? (
         <VaultItemDialog
           item={editing === "new" ? null : editing}
+          space={space}
+          people={people}
+          onShared={load}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
@@ -85,10 +137,16 @@ export function VaultSettingsPanel() {
 /** Adds a credential, or replaces the value of `item` and offers to delete it. */
 function VaultItemDialog({
   item,
+  space,
+  people,
+  onShared,
   onClose,
   onSaved,
 }: {
-  item: BotSecretDestination | null;
+  item: VaultItem | null;
+  space?: Space;
+  people: Member[];
+  onShared: () => void;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -149,6 +207,9 @@ function VaultItemDialog({
         <DialogHeader>
           <DialogTitle>{item ? item.name : login ? t`New login` : t`New API key`}</DialogTitle>
         </DialogHeader>
+        {item && isShareableBotSecret(item) && space && people.length > 0 ? (
+          <KeySharing item={item} space={space} people={people} onShared={onShared} />
+        ) : null}
         <form
           className="flex flex-col gap-4"
           onSubmit={(event) => {
@@ -205,7 +266,7 @@ function VaultItemDialog({
           <LabeledInput
             label={login ? t`Password` : t`Key`}
             type="password"
-            autoComplete="off"
+            autoComplete="new-password"
             value={value}
             onChange={setValue}
             autoFocus={item !== null}
@@ -234,6 +295,98 @@ function VaultItemDialog({
         {dialog}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Who the owner shares one key with; each change saves itself. "Everyone" is the owner's explicit
+ * choice and also covers people who join the space later.
+ */
+function KeySharing({
+  item,
+  space,
+  people,
+  onShared,
+}: {
+  item: VaultItem;
+  space: Space;
+  people: Member[];
+  onShared: () => void;
+}) {
+  const { t } = useLingui();
+  const [share, setShare] = useState({ userIds: item.userIds, space: item.space });
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save(next: typeof share) {
+    const previous = share;
+    setShare(next);
+    setPending(true);
+    setError(null);
+    try {
+      await rpc.vault.share({ name: item.name, ...next });
+      onShared();
+    } catch {
+      setShare(previous);
+      setError(t`Couldn't save`);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Label>{t`Shared with`}</Label>
+      <SettingsGroup>
+        <SettingRow label={t`Everyone in ${space.name}`}>
+          <Switch
+            aria-label={t`Everyone in ${space.name}`}
+            checked={share.space}
+            disabled={pending}
+            onCheckedChange={(checked) => void save({ ...share, space: checked })}
+          />
+        </SettingRow>
+        {share.space
+          ? null
+          : people.map((member) => (
+              <SettingRow
+                key={member.userId}
+                leading={
+                  <UserAvatar
+                    initials={userInitials(member.name)}
+                    image={member.image}
+                    className="size-7 text-label"
+                  />
+                }
+                label={member.name}
+              >
+                <Checkbox
+                  aria-label={member.name}
+                  checked={share.userIds.includes(member.userId)}
+                  disabled={pending}
+                  onCheckedChange={(checked) =>
+                    void save({
+                      ...share,
+                      userIds: checked
+                        ? [...share.userIds, member.userId]
+                        : share.userIds.filter((id) => id !== member.userId),
+                    })
+                  }
+                />
+              </SettingRow>
+            ))}
+      </SettingsGroup>
+      {share.space ? (
+        <p className="text-meta text-muted-foreground">
+          {t`Every current and future member of ${space.name} can use this key on its site, from their bots and yours that you can see, including webhooks and routines.`}
+        </p>
+      ) : share.userIds.length > 0 ? (
+        <p className="text-meta text-muted-foreground">
+          {t`These people can use this key on its site, from their bots and yours that you can see, including webhooks and routines.`}
+        </p>
+      ) : null}
+      {error ? <p className="text-meta text-destructive">{error}</p> : null}
+    </div>
   );
 }
 

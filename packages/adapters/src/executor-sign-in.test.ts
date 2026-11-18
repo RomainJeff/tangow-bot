@@ -1,8 +1,6 @@
 import type { AgentRunRequest, BrowserSignInRequest } from "@tangow/adapter-kit";
 import { redactSecrets } from "@tangow/core";
-import type { PrismaClient } from "@tangow/db";
 import { describe, expect, it, vi } from "vitest";
-import { requestWithBotSecret } from "./bot-secrets.js";
 import type * as ComputerLifecycleModule from "./computer-lifecycle.js";
 import type * as ComputerWorkspaceModule from "./computer-workspace.js";
 import { createRunExecutor } from "./executor.js";
@@ -122,7 +120,7 @@ async function signIn(options: {
       },
     },
     bot: {
-      findFirst: async () => ({ visibility: "private" }),
+      findFirst: async () => ({ visibility: options.botOwner ? "space" : "private" }),
       findUniqueOrThrow: async () => ({
         id: run.botId,
         userId: options.botOwner ?? run.userId,
@@ -293,27 +291,5 @@ describe("sign_in", () => {
     const { result, browser } = await signIn({ auth: { type: "bearer" } });
     expect(result).toMatchObject({ error: expect.stringContaining("API key") });
     expect(browser.signIns).toEqual([]);
-  });
-
-  it("is the only use of a login: secret_request refuses it", async () => {
-    const prisma = {
-      botSecret: {
-        findFirst: async () => ({
-          id: "secret-1",
-          name: "example",
-          origin: ORIGIN,
-          auth: { type: "login", username: "me" },
-          ciphertext: "unused",
-        }),
-      },
-    } as unknown as PrismaClient;
-    const result = await requestWithBotSecret({
-      prisma,
-      secretStore: new EncryptedSecretStore("test-only-encryption-key"),
-      scope: { userId: "user-1", spaceId: "space-1" },
-      request: { name: "example", url: `${ORIGIN}/api` },
-      signal: new AbortController().signal,
-    });
-    expect(result).toMatchObject({ error: expect.stringContaining("sign_in") });
   });
 });

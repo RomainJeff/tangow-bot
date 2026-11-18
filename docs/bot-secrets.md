@@ -16,7 +16,20 @@ For example, the bot can request:
 }
 ```
 
-The value is encrypted in Postgres `bot_secrets` using the deployment's `ENCRYPTION_KEY` (AES-256-GCM with record-bound authentication). Only the run's user can submit a reusable credential. It belongs to that user in that space, so every bot they own there can use it, still only at its saved origin. A bot someone else shared with them cannot list, use or save their credentials. It survives later runs and the deletion of the bot that asked for it, and is deleted with its owner or space. Settings > Vault on web, desktop and mobile lists these credentials by name and site, adds one, replaces a value and deletes one; a saved value is never shown again. Names, destinations and authentication configuration are metadata; `list_secrets` returns those fields without values. No hosted credential service or prebuilt connector is required.
+The value is encrypted in Postgres `bot_secrets` using the deployment's `ENCRYPTION_KEY` (AES-256-GCM with record-bound authentication). Only the run's user can submit a reusable credential. It belongs to that user in that space, so every bot they own there can use it, still only at its saved origin. It survives later runs and the deletion of the bot that asked for it, and is deleted with its owner or space. Settings > Vault on web, desktop and mobile lists these credentials by name and site, adds one, replaces a value and deletes one; a saved value is never shown again. Names, destinations and authentication configuration are metadata; `list_secrets` returns those fields without values. No hosted credential service or prebuilt connector is required.
+
+## Sharing a key
+
+Only a key's owner chooses who can use it: in Settings > Vault (people of the space, or everyone in the space) or in a bot's share sheet (the keys that bot saved, shared with the bot's audience by ticking each one). Sharing a bot never shares a key by itself. People see the keys shared with them under "Shared with you", read-only and without values.
+
+One rule decides which saved keys a run may list or use, evaluated on every call (`usableSecretsWhere` in `packages/adapters/src/bot-secrets.ts`). A key is usable by a run on a bot, all in the run's space, when:
+
+- the run's user, the bot's owner and the key's owner are the same person; or
+- the run's user and the bot's owner are members of the space, the key's owner is a member who can see the bot, and the run's user and the bot's owner are each the key's owner, a person the key is shared with, or, when the key is shared with the whole space, any member.
+
+"Members" are the space's owners and members; any other role added later is excluded. Leaving the space removes the shares made to that person at once. When a key's owner leaves, the key stops serving others; if they rejoin, the shares they made apply again. Shared with the whole space, a key also serves people who join later, for as long as they are members, until the owner turns it off.
+
+Once shared, a key can serve every run that fits the rule, including webhook, routine and steered runs, and the shared person's own bots that the key's owner can see, always only at the key's saved origin. A name resolves to the run user's own key first, then to the oldest usable key with that name. A key that does not exist, is private, or is outside the rule gets the same answer, which names no owner. Saving a key with `request_secret` stays limited to the bot's owner.
 
 The bot uses `secret_request` to ask the backend to decrypt and inject the credential:
 
@@ -38,7 +51,7 @@ This boundary supports authenticated HTTP requests. Injecting credentials into a
 
 ## Site logins
 
-Settings > Vault also saves a site login: an exact HTTPS origin, a username stored in clear and a password encrypted like any other value. The bot sees the name, site, type and username through `list_secrets`. It signs in with `sign_in(name, usernameRef?, passwordRef?)`: it takes a page snapshot, passes the refs of the fields, and the backend fills them. The password goes to the computer on the page helper's standard input, never in its arguments or environment, and joins the run's redaction list before it is used. In the same page evaluation as the fill, the helper refuses unless the top frame's `location.origin` is exactly the saved origin and `passwordRef` is a password input. The bot gets back only that the login was filled, the address and a snapshot, with the password masked even if the page shows it. A two-step sign-in calls `sign_in` once per page.
+Settings > Vault also saves a site login: an exact HTTPS origin, a username stored in clear and a password encrypted like any other value. Site logins are private. Only Bearer, named-header and Basic API keys can be shared. Only runs by the login owner on their own bots can see its name, site, type and username through `list_secrets`. To sign in, the bot takes a page snapshot and calls `sign_in(name, usernameRef?, passwordRef?)` with the field refs. The backend fills the fields. The password goes to the computer on the page helper's standard input, never in its arguments or environment, and joins the run's redaction list before it is used. In the same page evaluation as the fill, the helper refuses unless the top frame's `location.origin` is exactly the saved origin and `passwordRef` is a password input. The bot gets back only that the login was filled, the address and a snapshot, with the password masked even if the page shows it. A two-step sign-in calls `sign_in` once per page.
 
 `sign_in` works only in a conversation or trusted routine the owner started on their own bot: it is refused on a bot shared with them, on a webhook, a messaging contact or another bot's message, and once someone else's message steered the run. A login never works with `secret_request`, `request_secret`, the shell or environment variables, and an API key never works with `sign_in`. When no login is saved, website sign-in uses `request_takeover`.
 
