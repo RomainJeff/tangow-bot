@@ -2,10 +2,9 @@ import { AVATAR_CHARACTERS, characterById } from "@tangow/contracts";
 import { useLocalSearchParams } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
 import { BotAvatar } from "../components/bot-avatar";
-import { SaveMeta } from "../components/bot-page/kit";
 import { NativeSymbol } from "../components/native-symbol";
 import { mobileTokens } from "../lib/appearance";
-import { type BotPageContext, shownSave, useBotPageContext, useBotSetting } from "../lib/bot-page";
+import { type BotPageContext, useBotPageContext, useBotSetting } from "../lib/bot-page";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens, useThemedStyles } from "../lib/native";
 
@@ -14,7 +13,10 @@ const ROWS = (["ball", "capsule", "block"] as const).map((shape) =>
   AVATAR_CHARACTERS.filter((entry) => entry.shape === shape),
 );
 
-/** The catalogue of clay characters; one tap chooses and saves, the sheet stays open. */
+/**
+ * The catalogue of clay characters; one tap chooses and saves, the sheet stays open. The save
+ * shows under the page's avatar, above the sheet, as on web.
+ */
 export default function BotAppearanceScreen() {
   const { botId = "" } = useLocalSearchParams<{ botId: string }>();
   const page = useBotPageContext(botId);
@@ -27,7 +29,6 @@ function CharacterPicker({ page }: { page: BotPageContext }) {
   const { t } = useI18n();
   const field = useBotSetting(page, "avatarCharacter");
   const chosen = characterById(field.value).id;
-  const meta = shownSave([field]);
   return (
     <View style={styles.sheet} accessibilityLabel={t("Appearance")}>
       {ROWS.map((row) => (
@@ -62,9 +63,6 @@ function CharacterPicker({ page }: { page: BotPageContext }) {
           })}
         </View>
       ))}
-      <View style={styles.meta}>
-        {meta ? <SaveMeta state={meta.state} onRetry={() => void meta.retry()} /> : null}
-      </View>
     </View>
   );
 }
@@ -72,8 +70,8 @@ function CharacterPicker({ page }: { page: BotPageContext }) {
 function createPickerStyles() {
   const tokens = mobileTokens();
   return StyleSheet.create({
-    sheet: { paddingHorizontal: 20, paddingTop: 32, paddingBottom: 12, gap: 14 },
-    row: { flexDirection: "row", justifyContent: "center", gap: 18 },
+    sheet: { paddingHorizontal: 20, paddingTop: 28, paddingBottom: 4, gap: 16 },
+    row: { flexDirection: "row", justifyContent: "center", gap: 16 },
     pressed: { opacity: 0.6 },
     check: {
       position: "absolute",
@@ -88,6 +86,5 @@ function createPickerStyles() {
       alignItems: "center",
       justifyContent: "center",
     },
-    meta: { minHeight: 18, alignItems: "center" },
   });
 }
