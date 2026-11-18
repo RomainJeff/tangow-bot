@@ -6,21 +6,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-11-17
+
+#### Added
+
+- **Auto-review on iOS and Android.** Settings on mobile now has the Auto-review bot actions switch, so actions flagged as dangerous wait for your confirmation without a trip to the web app.
+
+- **Host-specific Compose overrides for self-hosted servers.** An untracked `.env.tangow.compose.yml` at the checkout root is applied last by every `./tangow` command and by backup and restore, so a host tweak survives `./tangow update` without a dirty tree or a second restart. See [self-hosting](docs/self-host.md#host-specific-compose-tweaks).
+
+#### Changed
+
+- On web and desktop, the auto-review switch moves from Advanced to General settings, is called Auto-review bot actions, and suggests setting up a decision model when none is connected.
+
+- Search on web and desktop moves from the sidebar field to a search button beside Activity, which opens a larger ⌘K palette that finds bots, chats, messages, files, links, routines and settings sections.
+
+#### Fixed
+
+- On self-hosted servers, a run interrupted by a server update or restart while it is still starting now resumes within about a minute instead of staying stuck or failing.
+
 ### 2026-11-16
+
+#### Added
+
+- **Custom apps on iOS and Android.** Add an app by its MCP URL, choose which agents can use it, and manage its connection from the native Custom apps screen.
+
+#### Changed
+
+- MCP sources added under Integrations › Advanced now appear in Custom apps automatically, and the domain catalog search is gone.
+
+- MCP servers now have their own Custom apps section in Customize on web and desktop: paste a URL and Tangow signs in or asks for a token, replacing the MCP servers window.
+
+- The web app's browser tab, home screen and installed app icon now show the same "tw" mark as the desktop and iOS apps, instead of the blue face.
 
 #### Fixed
 
 - A bot's computer screen now shows on web and desktop when Tangow sits behind a sign-in proxy such as Cloudflare Access or oauth2-proxy, instead of staying black.
+- On iPhone, a failed reply's error now sits above the message field, where you can dismiss it, instead of covering the conversation.
 
 ### 2026-11-15
 
-#### Added
-
-- **Keep your API keys in a vault in Settings.** On web, desktop, iPhone and Android, Settings > Vault lists your API keys by name and site in the current space and lets you add one, replace its value or delete it; a saved value is never shown again, and the bot can no longer delete keys itself. You can share a key with chosen people, or with everyone in the space now and later, so bots shared between you can use it at its saved site.
-
 #### Changed
 
-- API keys you gave one bot are now usable by all your bots in the space, still only on their own site, and stay when that bot is deleted.
 - Pipedream Connect is no longer offered as a managed app catalog on web, desktop and iOS; server owners connect apps through Composio or MCP instead, and existing Pipedream connections are removed, so disconnect them before updating to also revoke their accounts at Pipedream.
 - OpenAPI and GraphQL tool sources are no longer offered in Integrations on web, desktop and mobile, and the ones already added are removed, so bots reach outside tools through apps and MCP servers.
 - In a browser, Settings no longer lists Updates, since the web app always runs the version its server serves; the desktop app keeps the section.

@@ -235,7 +235,6 @@ import {
   approvedReplayArgs,
   boundDirectApprovalDetails,
   boundDirectApprovalRequest,
-  catalogApprovalConnectorId,
   catalogApprovalDetails,
   catalogApprovalInnerArgs,
   catalogApprovalMatchesLiveRoute,
@@ -247,7 +246,6 @@ import {
   inputPausedToolResult,
   isFailedToolResult,
   isToolPauseResult,
-  parseCatalogApprovalTarget,
   replaceCompletedExternalEffectResult,
   resolveDuplicateEffectGate,
   SPAWN_BOT_CANCELLED_RESULT,
@@ -352,7 +350,6 @@ import {
   CATALOG_EXECUTE,
   catalogIndexText,
   EXACT_TOOL_SEARCH_TEXT,
-  uniquifyInstalledToolName,
 } from "./lazy-tool-catalog.js";
 import {
   buildMcpCredentialBlob,
@@ -830,7 +827,7 @@ export interface ExecutorDeps {
   secretHttp?: RemoteTransportDependencies;
   /** Per-Space decision provider. Omit or resolve null and browser_run stays hidden. */
   decisionProviders?: DecisionProviderResolver;
-  /** Aborted when createApp stop() begins so in-flight continueRun boot waits exit promptly. */
+  /** Aborted when the process stops: in-flight runs end, and those whose guest has not begun are handed back. */
   shutdownSignal?: AbortSignal;
   /** Serializes skill writes with the API's; production passes createPostgresSkillLock. */
   skillLock: SkillOwnerLock;
@@ -1073,26 +1070,11 @@ function approvedCall(
     }
     // Catalog shrank: wrapper is gone — resume as the matching direct tool.
     const innerArgs = catalogApprovalInnerArgs(catalog) ?? {};
-    if (exposed.has(effect.kind)) return { tool: effect.kind, args: innerArgs };
-    const target = parseCatalogApprovalTarget(catalog.args);
-    const connectorId = catalogApprovalConnectorId(catalog.toolName);
-    const uniquified =
-      target && connectorId === "installed"
-        ? uniquifyInstalledToolName(target.resourceId, target.toolName)
-        : undefined;
-    if (uniquified && exposed.has(uniquified)) return { tool: uniquified, args: innerArgs };
     return { tool: effect.kind, args: innerArgs };
   }
   const bound = boundDirectApprovalDetails(effect.request, CATALOG_APPROVAL_TOOL);
   if (bound) {
     if (!exposed || exposed.has(effect.kind)) return { tool: effect.kind, args: bound.args };
-    // Name collision uniquify can rename the direct tool while the catalog is still
-    // small — prefer that exposed name over a catalog wrapper that does not exist yet.
-    const uniquified =
-      bound.route.connectorId === "installed"
-        ? uniquifyInstalledToolName(bound.route.resourceId, bound.route.toolName)
-        : undefined;
-    if (uniquified && exposed.has(uniquified)) return { tool: uniquified, args: bound.args };
     const wrapper = catalogExecuteToolName(bound.route.connectorId);
     if (exposed.has(wrapper)) {
       return {
@@ -1100,7 +1082,7 @@ function approvedCall(
         args: { id: catalogIdForRoute(bound.route), arguments: bound.args },
       };
     }
-    return { tool: uniquified ?? effect.kind, args: bound.args };
+    return { tool: effect.kind, args: bound.args };
   }
   return approvedReplayCall(effect.kind, effect.request);
 }
@@ -1678,6 +1660,10 @@ export function createRunExecutor(deps: ExecutorDeps) {
       });
 
       let leaseValid = true;
+      // A guest that began can only resume from its pause snapshot, so a shutdown then fails the
+      // run as before; until then the run is handed back for another worker.
+      let guestBegun = false;
+      let handedBack = false;
       let lastLeaseCheckAt = 0;
       let retainComputerLease = false;
       const runComputer =
@@ -1911,8 +1897,16 @@ export function createRunExecutor(deps: ExecutorDeps) {
             : null;
         runAbortController = new AbortController();
         if (!leaseValid) runAbortController.abort();
-        if (deps.shutdownSignal?.aborted) runAbortController.abort(deps.shutdownSignal.reason);
-        const onShutdown = () => runAbortController?.abort(deps.shutdownSignal?.reason);
+        // A shutdown before the guest began gives the run up like a lost lease: `finally` hands it
+        // to the next worker.
+        const onShutdown = () => {
+          if (!guestBegun) {
+            handedBack = true;
+            leaseValid = false;
+          }
+          runAbortController?.abort(deps.shutdownSignal?.reason);
+        };
+        if (deps.shutdownSignal?.aborted) onShutdown();
         deps.shutdownSignal?.addEventListener("abort", onShutdown);
         detachShutdown = () => deps.shutdownSignal?.removeEventListener("abort", onShutdown);
         // The rows are the run's person's own accounts; a member gets only the apps declared.
@@ -3519,8 +3513,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               : undefined;
           const nextBound = boundDirectApprovalDetails(nextApprovedRequest, CATALOG_APPROVAL_TOOL);
           const nextCatalog = catalogApprovalDetails(nextApprovedRequest, CATALOG_APPROVAL_TOOL);
-          // After collision uniquify, the live tool name may differ from the stored effect
-          // kind while still targeting the same bound connector resource.
+          // A renamed server can expose a new name for the same bound resource.
           const sameBoundResource = Boolean(
             nextBound && liveRoute && approvalRoutesMatch(nextBound.route, liveRoute),
           );
@@ -6119,6 +6112,11 @@ export function createRunExecutor(deps: ExecutorDeps) {
                 ? {
                     persistence: {
                       ...persistence,
+                      async begin() {
+                        if (handedBack) throw new Error("The worker is stopping");
+                        guestBegun = true;
+                        await persistence.begin();
+                      },
                       async resolve() {
                         // The guest has validated its native state before any approved send leaves.
                         if (!(await sendApprovedDrafts())) {
@@ -6867,7 +6865,7 @@ export function createRunExecutor(deps: ExecutorDeps) {
               .catch((error) => getLogger().error("history.compact enqueue failed", error));
           }
         } catch (error) {
-          if (draftReopened) return;
+          if (draftReopened || handedBack) return;
           // A guest that could not start or was lost requeues the run like a failed setup.
           if (error instanceof AgentRuntimeUnavailableError) throw error;
           if (!terminalCheckpointComplete) {
@@ -7059,6 +7057,15 @@ export function createRunExecutor(deps: ExecutorDeps) {
             data: { status: "interrupted", finishedAt: new Date() },
           })
           .catch(() => undefined);
+        if (handedBack) {
+          // An expired lease lets the reconciler's next pass resume it, not the lease's end.
+          await deps.prisma.run
+            .updateMany({
+              where: { id: runId, status: "running", leaseOwner: workerId, leaseFence: fence },
+              data: { leaseExpiresAt: new Date() },
+            })
+            .catch(() => undefined);
+        }
       }
     },
   };

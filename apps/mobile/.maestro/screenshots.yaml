@@ -269,6 +269,14 @@ tags:
     timeout: 10000
 - takeScreenshot: "21-routine"
 
+# A failed run's error sits above the composer, out of the conversation, until dismissed.
+- openLink: "tangow:///thread?botId=${TANGOW_SCREENSHOT_FAILED_BOT_ID}&name=Support"
+- extendedWaitUntil:
+    visible: "Dismiss error"
+    timeout: 10000
+- assertVisible: "Draft the reply to the refund request."
+- takeScreenshot: "21b-thread-run-error"
+
 # A bot shared with this user: their own thread, the team save under the reply, the MCP card
 # pointing to web or desktop, and a title menu without the owner's screens.
 - openLink: "tangow:///thread?botId=${TANGOW_SCREENSHOT_SHARED_BOT_ID}&name=Release%20notes"
@@ -383,6 +391,14 @@ tags:
     visible: "The fixture workspace is ready."
     timeout: 10000
 - takeScreenshot: "26-thread-dark"
+
+- openLink: "tangow:///thread?botId=${TANGOW_SCREENSHOT_FAILED_BOT_ID}&name=Support"
+- extendedWaitUntil:
+    visible: "Dismiss error"
+    timeout: 10000
+- takeScreenshot: "26b-thread-run-error-dark"
+- tapOn: "Dismiss error"
+- assertNotVisible: "Dismiss error"
 
 - openLink: "tangow:///group-thread?groupId=${TANGOW_SCREENSHOT_GROUP_ID}&name=Launch%20team"
 - extendedWaitUntil:

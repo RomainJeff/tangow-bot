@@ -21,7 +21,8 @@ import {
   PickerInfoDialog,
   RenameBotSectionDialog,
 } from "./dialogs";
-import { botPageFor, FALLBACK_BOT_COLOR } from "./layout";
+import type { SidebarGroup } from "./layout";
+import { botPageFor, FALLBACK_BOT_COLOR, threadJumpLocation } from "./layout";
 import type { Panels } from "./use-panels";
 import type { Roster } from "./use-roster";
 import type { ShellOverlayState } from "./use-shell-overlays";
@@ -49,9 +50,6 @@ const PeerMessagesOverlay = lazy(() =>
 const CustomizeOverlay = lazy(() =>
   import("../CustomizeOverlay").then((module) => ({ default: module.CustomizeOverlay })),
 );
-const McpServersOverlay = lazy(() =>
-  import("../McpServersOverlay").then((module) => ({ default: module.McpServersOverlay })),
-);
 
 /** Everything that opens over the shell: context menus, confirmations, palette and overlays. */
 export function ShellOverlays({
@@ -65,6 +63,7 @@ export function ShellOverlays({
   runBotAction,
   refreshAgentSkills,
   openSpaceChat,
+  sidebarGroups,
   userName,
   initials,
   userImage,
@@ -80,6 +79,7 @@ export function ShellOverlays({
   runBotAction: (botId: string, action: BotAction) => void;
   refreshAgentSkills: () => void;
   openSpaceChat: (spaceId: string, path: string) => void;
+  sidebarGroups: SidebarGroup[];
   userName: string;
   initials: string;
   userImage: string | null;
@@ -445,10 +445,18 @@ export function ShellOverlays({
         <CommandPalette
           open={overlays.commandPaletteOpen}
           onOpenChange={overlays.setCommandPaletteOpen}
-          bots={bots}
-          onSelectBot={(id) => {
-            navigate(`/app/${id}`);
-          }}
+          groups={sidebarGroups}
+          userId={bootstrapMe?.userId}
+          initials={initials}
+          userImage={userImage}
+          onSelectChat={(item) =>
+            openSpaceChat(
+              item.chat.spaceId,
+              item.kind === "bot" ? `/app/${item.chat.id}` : `/app/g/${item.chat.id}`,
+            )
+          }
+          onSelectSettings={overlays.openSettings}
+          onSelectHit={(hit) => navigate(threadJumpLocation(hit))}
         />
 
         {overlays.newSpaceOpen ? (
@@ -501,14 +509,10 @@ export function ShellOverlays({
           <CustomizeOverlay
             activeBotId={roster.activeBotId.current}
             onClose={() => overlays.setCustomizeOpen(false)}
-            onOpenMcp={() => {
-              overlays.setCustomizeOpen(false);
-              overlays.setMcpOpen(true);
-            }}
+            initialSection={overlays.customizeSection}
             onSkillsChanged={refreshAgentSkills}
           />
         ) : null}
-        {overlays.mcpOpen ? <McpServersOverlay onClose={() => overlays.setMcpOpen(false)} /> : null}
         {overlays.messagingSettingsOpen ? (
           <MessagingSettingsOverlay onClose={() => overlays.setMessagingSettingsOpen(false)} />
         ) : null}
