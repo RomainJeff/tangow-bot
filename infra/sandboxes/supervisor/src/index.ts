@@ -443,8 +443,23 @@ app.post("/computers/:id/browser", async (c) => {
           .min(1)
           .max(24),
       }),
+      z
+        .object({
+          command: z.literal("sign_in"),
+          origin: z.string().url().max(2048),
+          usernameRef: z.string().min(1).max(200).optional(),
+          username: z.string().max(200).optional(),
+          passwordRef: z.string().min(1).max(200).optional(),
+          password: z.string().min(1).max(16_384).optional(),
+        })
+        .refine((value) => value.usernameRef || value.passwordRef)
+        .refine((value) => !value.passwordRef === !value.password),
     ])
     .parse(await c.req.json());
+  // The password reaches the helper on stdin only: argv and the environment are visible to
+  // other processes and to exec logs.
+  const password = body.command === "sign_in" ? body.password : undefined;
+  const command = { ...body, password: undefined };
   try {
     const { container, layout } = await managedScreen(
       c.req.param("id"),
@@ -455,7 +470,7 @@ app.post("/computers/:id/browser", async (c) => {
     );
     const result = await runContainerCommand(
       container,
-      ["/usr/local/bin/tangow-page-browser", body.command, JSON.stringify(body)],
+      ["/usr/local/bin/tangow-page-browser", command.command, JSON.stringify(command)],
       {
         env: [
           `DISPLAY=${layout.display}`,
@@ -465,6 +480,7 @@ app.post("/computers/:id/browser", async (c) => {
         ],
         timeoutMs: 25_000,
         signal,
+        ...(body.command === "sign_in" ? { input: `${JSON.stringify(password ?? null)}\n` } : {}),
       },
     );
     // A nonzero exit or malformed output cannot establish which mutations ran.
@@ -476,7 +492,7 @@ app.post("/computers/:id/browser", async (c) => {
     return c.json({
       ok: false,
       fallback: "computer_act",
-      uncertain: body.command === "act",
+      uncertain: body.command === "act" || body.command === "sign_in",
       error: "Page browser unavailable or interrupted. Inspect the screen before continuing.",
     });
   }
@@ -1604,7 +1620,14 @@ async function inspectSupervisorContainer() {
 async function runContainerCommand(
   container: Docker.Container,
   argv: string[],
-  options: { workingDir?: string; env?: string[]; timeoutMs?: number; signal?: AbortSignal } = {},
+  options: {
+    workingDir?: string;
+    env?: string[];
+    timeoutMs?: number;
+    signal?: AbortSignal;
+    /** Written to stdin first, which then stays open as the helper's cancellation pipe. */
+    input?: string;
+  } = {},
 ): Promise<{ stdout: string; stderr: string; code: number }> {
   options.signal?.throwIfAborted();
   const timeoutMs = options.timeoutMs;
@@ -1625,6 +1648,7 @@ async function runContainerCommand(
   });
   options.signal?.throwIfAborted();
   const stream = await exec.start({ hijack: true, stdin: Boolean(options.signal) });
+  if (options.input) stream.write(options.input);
   const chunks: Buffer[] = [];
   let onAbort: (() => void) | undefined;
   try {

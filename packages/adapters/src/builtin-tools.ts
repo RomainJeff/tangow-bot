@@ -205,6 +205,20 @@ export const builtinAgentTools: ConnectorTool[] = [
     },
   },
   {
+    name: "sign_in",
+    description:
+      "Fill a saved site login (list_secrets, type login) into the current sign-in page, without ever seeing the password. Take a browser_snapshot first and pass the refs of its username and password fields; for a sign-in split over two pages, call it once per page with the ref shown there. It fills only on the login's exact saved site and only a real password field, then returns the page; submit with browser_act.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Saved login name from list_secrets." },
+        usernameRef: { type: "string", description: "Ref of the username or email field." },
+        passwordRef: { type: "string", description: "Ref of the password field." },
+      },
+      required: ["name"],
+    },
+  },
+  {
     // Offered only when the Space has a decision provider (selectBuiltinToolsForRun).
     name: "browser_run",
     description:
@@ -408,7 +422,7 @@ that merely narrate internal operations.`,
   {
     name: "request_secret",
     description:
-      "Collect a credential in a masked field. Supply credential to save a named API credential for this bot and user at one HTTPS origin, or connectionId for a one-use connector code. Existing named credentials are reused unless replace is true. For website logins, CAPTCHA, passkeys, or anything that needs the live desktop, call request_takeover instead.",
+      "Collect a credential in a masked field. Supply credential to save a named API credential for this bot and user at one HTTPS origin, or connectionId for a one-use connector code. Existing named credentials are reused unless replace is true. For website logins, use sign_in with a login saved in Settings > Vault; for CAPTCHA, passkeys, a login not saved there, or anything that needs the live desktop, call request_takeover instead.",
     // Exactly one destination: credential XOR connectionId. Sibling optionals
     // looked schema-valid to models but the executor rejects both and neither.
     inputSchema: {

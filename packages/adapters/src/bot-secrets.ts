@@ -1,5 +1,11 @@
 import { randomBytes } from "node:crypto";
-import { BotSecretDestination, SecretHttpRequest } from "@tangow/contracts";
+import type { BrowserSignInRequest, PageBrowserResult } from "@tangow/adapter-kit";
+import {
+  BotSecretDestination,
+  BotSecretName,
+  SecretHttpRequest,
+  SHAREABLE_BOT_SECRET_AUTH_TYPES,
+} from "@tangow/contracts";
 import type { Prisma, PrismaClient } from "@tangow/db";
 import { combineSignals, redactConnectorPayload } from "./connector-safety.js";
 import { createSafeRemoteFetch, type RemoteTransportDependencies } from "./remote-mcp.js";
@@ -67,12 +73,15 @@ export async function findBotSecret(prisma: PrismaClient, scope: BotSecretScope,
 export const SHARING_ROLES = ["owner", "member"];
 
 const nothing: Prisma.BotSecretWhereInput = { id: { in: [] } };
+const shareableSecret: Prisma.BotSecretWhereInput = {
+  OR: SHAREABLE_BOT_SECRET_AUTH_TYPES.map((type) => ({ auth: { path: ["type"], equals: type } })),
+};
 
 /**
  * The only rule for which saved keys a run may use on a bot, evaluated on every call. A key K is
  * usable by run R on bot X, all three in R's space, when either:
  * - own: R, X's owner and K's owner are the same person; or
- * - shared: R and X's owner are members, K's owner is a member who can see X, and R and X's owner
+ * - shared (API keys only): R and X's owner are members, K's owner is a member who can see X, and R and X's owner
  *   are each K's owner, a person K is shared with, or (K shared with the whole space) any member.
  * Leaving the space, unsharing the bot or the key, or archiving the bot ends access on the next call.
  */
@@ -108,6 +117,7 @@ export async function usableSecretsWhere(
       ? [
           {
             ...seeBot,
+            AND: [shareableSecret],
             user: {
               members: {
                 some: { spaceMemberships: { some: { spaceId, role: { in: SHARING_ROLES } } } },
@@ -190,7 +200,7 @@ export async function storeBotSecret(input: {
   const { tx, secretStore, scope, plaintext } = input;
   if (!plaintext || plaintext.length > 16_384) throw new Error("Invalid credential length");
   const destination = normalizeSecretDestination(input.destination);
-  credentialHeader(destination, plaintext);
+  if (destination.auth.type !== "login") credentialHeader(destination, plaintext);
   await lockScope(tx, scope);
   const existing = await tx.botSecret.findFirst({
     where: { ...scopeFields(scope), name: destination.name },
@@ -249,6 +259,7 @@ export function listSecretsSharedWith(prisma: PrismaClient, scope: BotSecretScop
   return prisma.botSecret.findMany({
     where: {
       spaceId,
+      AND: [shareableSecret],
       userId: { not: userId },
       user: {
         members: { some: { spaceMemberships: { some: { spaceId, role: { in: SHARING_ROLES } } } } },
@@ -280,7 +291,7 @@ export async function shareBotSecret(
   await prisma.$transaction(async (tx) => {
     await lockScope(tx, scope);
     const secret = await tx.botSecret.findFirst({
-      where: { ...scopeFields(scope), name: input.name },
+      where: { ...scopeFields(scope), name: input.name, ...shareableSecret },
       select: { id: true },
     });
     if (!secret) throw new Error("Credential not found");
@@ -307,6 +318,63 @@ export async function removeBotSecret(prisma: PrismaClient, scope: BotSecretScop
   });
 }
 
+/**
+ * Fills a saved site login through `fill`, which the page browser checks against the saved origin
+ * and a real password field where it fills. The password is registered for redaction before it
+ * leaves this function, and the result carries only the page.
+ */
+export async function signInWithBotSecret(input: {
+  prisma: PrismaClient;
+  secretStore: EncryptedSecretStore;
+  scope: BotSecretScope;
+  args: Record<string, unknown>;
+  registerRedactions: (values: string[]) => void;
+  fill: (request: BrowserSignInRequest) => Promise<PageBrowserResult>;
+}): Promise<unknown> {
+  const ref = (value: unknown) =>
+    typeof value === "string" && value.trim() ? value.trim().slice(0, 200) : undefined;
+  const usernameRef = ref(input.args.usernameRef);
+  const passwordRef = ref(input.args.passwordRef);
+  if (!usernameRef && !passwordRef) return { error: "Pass usernameRef, passwordRef or both." };
+  const name = BotSecretName.safeParse(input.args.name);
+  const row = name.success
+    ? await input.prisma.botSecret.findFirst({
+        where: { ...scopeFields(input.scope), name: name.data },
+      })
+    : null;
+  if (!row) return { error: "No saved login has this name. Check list_secrets." };
+  const destination = normalizeSecretDestination(row);
+  if (destination.auth.type !== "login") {
+    return { error: "This is an API key. Use secret_request with it instead." };
+  }
+  const password = passwordRef ? input.secretStore.load(row.ciphertext, row.id) : undefined;
+  if (password) input.registerRedactions([password]);
+  const result = await input.fill({
+    origin: destination.origin,
+    usernameRef,
+    username: usernameRef ? destination.auth.username : undefined,
+    passwordRef,
+    password,
+  });
+  if (!result.ok || !result.filled) {
+    return redactConnectorPayload(
+      { error: result.error || "Could not fill the saved login.", url: result.url },
+      password ? [password] : [],
+    );
+  }
+  // Masked here, before the effect record, the log or the model can keep a page that shows it.
+  return redactConnectorPayload(
+    {
+      filled: true,
+      url: result.url,
+      title: result.title,
+      tree: result.tree,
+      elements: result.elements,
+    },
+    password ? [password] : [],
+  );
+}
+
 /** Credentials are resolved only inside this destination-bound HTTP boundary. */
 export async function requestWithBotSecret(input: {
   prisma: PrismaClient;
@@ -323,6 +391,9 @@ export async function requestWithBotSecret(input: {
   // Missing, someone's private key, or a shared key outside the rule: one answer, no owner.
   if (!row) return { error: "Credential is unavailable. Use request_secret to save it first." };
   const destination = normalizeSecretDestination(row);
+  if (destination.auth.type === "login") {
+    return { error: "This is a site login. Use sign_in on its sign-in page instead." };
+  }
   const url = new URL(request.url);
   if (url.origin !== destination.origin || url.username || url.password || url.hash) {
     return { error: "This credential cannot be sent to that destination." };

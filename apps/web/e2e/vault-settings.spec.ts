@@ -48,6 +48,34 @@ test("adds, replaces and deletes a vault key without ever showing its value", as
   await expect(row).toBeHidden();
 });
 
+test("adds a site login whose password is never shown again", async ({ page }, testInfo) => {
+  const stamp = Date.now();
+  const password = `fake-login-password-${stamp}`;
+  await signup(page, `vault-login-${stamp}@tangow.test`, "password12", `Login ${stamp}`);
+  await completeOnboarding(page);
+  const settings = await openUserSettings(page, "vault");
+  const dialog = page.getByTestId("vault-item-dialog");
+  const row = settings.getByRole("button", { name: /example_site/ });
+
+  await settings.getByRole("button", { name: "Add", exact: true }).click();
+  await dialog.getByRole("button", { name: "Login", exact: true }).click();
+  await expect(dialog.getByRole("heading", { name: "New login" })).toBeVisible();
+  await dialog.getByLabel("Site").fill("example.test");
+  await dialog.getByLabel("Name", { exact: true }).fill("example_site");
+  await dialog.getByLabel("Username").fill("me@example.test");
+  await dialog.getByLabel("Password").fill(password);
+  await captureScreenshot(page, testInfo, "vault-login-add");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(row).toContainText("example.test");
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await row.click();
+  await expect(dialog.getByLabel("Password")).toHaveValue("");
+  await expect(dialog.getByRole("button", { name: "Replace password" })).toBeVisible();
+  await captureScreenshot(page, testInfo, "vault-login-phone");
+  await expect(page.locator("body")).not.toContainText(password);
+});
+
 test("an owner shares the key a bot saved with someone, who sees it under Shared with you", async ({
   page,
   browser,

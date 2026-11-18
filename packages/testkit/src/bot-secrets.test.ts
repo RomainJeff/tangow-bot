@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AgentRuntimeEvent } from "@tangow/adapter-kit";
 import { ScriptedAgentRuntime } from "@tangow/adapters";
+import type { BotSecretDestination } from "@tangow/contracts";
 import { answerRunInput } from "@tangow/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { createApp } from "../../../apps/api/src/app.ts";
@@ -424,9 +425,15 @@ describeIntegration("reusable credential lifecycle", () => {
       return { cookie, userId: me.userId, email };
     }
 
-    async function put(person: Person, name: string, value: string, origin = destination.origin) {
+    async function put(
+      person: Person,
+      name: string,
+      value: string,
+      origin = destination.origin,
+      auth: BotSecretDestination["auth"] = { type: "bearer" },
+    ) {
       values.add(value);
-      await rpc(person.cookie, "vault/put", { ...destination, name, origin, value }, spaceId);
+      await rpc(person.cookie, "vault/put", { name, origin, auth, value }, spaceId);
     }
 
     const share = (person: Person, name: string, userIds: string[], space = false) =>
@@ -623,6 +630,87 @@ describeIntegration("reusable credential lifecycle", () => {
       });
       expect(JSON.stringify([await vault(a), await vault(b)])).not.toMatch(/fake-/);
     });
+
+    it("refuses to share a site login with a member or the whole space", async () => {
+      await put(a, "private_login", "fake-private-login", destination.origin, {
+        type: "login",
+        username: "site-user",
+      });
+      await expect(share(a, "private_login", [b.userId])).rejects.toThrow("(404)");
+      await expect(share(a, "private_login", [], true)).rejects.toThrow("(404)");
+    });
+
+    it("hides a site login from other members even if it has both kinds of sharing grants", async () => {
+      const name = "stale_shared_login";
+      await put(a, name, "fake-stale-shared-login", destination.origin, {
+        type: "login",
+        username: "site-user",
+      });
+      const { id } = await handles.prisma.botSecret.update({
+        where: { userId_spaceId_name: { userId: a.userId, spaceId, name } },
+        data: { sharedWithSpace: true },
+      });
+      try {
+        await handles.prisma.botSecretShare.create({
+          data: { secretId: id, spaceId, userId: b.userId },
+        });
+        const output = await use(b, x, name);
+        expect(output.listed).not.toContain(name);
+        expect(output.answer).toBe((await use(b, x, "unknown_login")).answer);
+        expect(output.sent).toBeNull();
+        expect((await vault(b)).shared).not.toContainEqual(expect.objectContaining({ name }));
+      } finally {
+        await handles.prisma.botSecret.delete({ where: { id } });
+      }
+    });
+
+    it("keeps the owner's login ahead of a shared API key with the same name", async () => {
+      await put(a, "same_name", "fake-owner-login", destination.origin, {
+        type: "login",
+        username: "site-user",
+      });
+      const otherOrigin = "https://other.example.test";
+      await put(b, "same_name", "fake-shared-same-name", otherOrigin);
+      await share(b, "same_name", [a.userId]);
+
+      const { listed, answer, sent } = await use(a, x, "same_name", otherOrigin);
+      expect(JSON.parse(listed)).toContainEqual({
+        name: "same_name",
+        origin: destination.origin,
+        auth: { type: "login", username: "site-user" },
+        shared: false,
+      });
+      expect(JSON.parse(answer)).toEqual({
+        error: "This is a site login. Use sign_in on its sign-in page instead.",
+      });
+      expect(sent).toBeNull();
+    });
+
+    it.each([
+      [{ type: "bearer" }, "Authorization", "Bearer fake-three-auth-types"],
+      [{ type: "header", name: "X-Api-Key" }, "X-Api-Key", "fake-three-auth-types"],
+      [
+        { type: "basic", username: "api-user" },
+        "Authorization",
+        `Basic ${Buffer.from("api-user:fake-three-auth-types").toString("base64")}`,
+      ],
+    ] as const)(
+      "shares and sends an API key with %j authentication",
+      async (auth, header, expected) => {
+        const name = `shared_${auth.type}`;
+        await put(a, name, "fake-three-auth-types", destination.origin, auth);
+        await share(a, name, [b.userId]);
+        const { listed } = await use(b, x, name);
+        expect(JSON.parse(listed)).toContainEqual({
+          name,
+          origin: destination.origin,
+          auth,
+          shared: true,
+        });
+        expect((await vault(b)).shared).toContainEqual(expect.objectContaining({ name, auth }));
+        expect(new Headers(fetch.mock.calls.at(-1)?.[1]?.headers).get(header)).toBe(expected);
+      },
+    );
 
     it("shares with the whole Space only when the owner ticks it, future members included", async () => {
       await put(a, "everyone", "fake-everyone");

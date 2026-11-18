@@ -121,6 +121,25 @@ describe("E2B page browser transport boundary", () => {
     });
   });
 
+  it("sends a sign-in password on stdin after the permit, never on the command line", async () => {
+    const password = 'fake-pa"ss\\word';
+    const f = fixture({ output: JSON.stringify({ ...snapshot, filled: true }) });
+    const result = await f.provider.pageBrowser(
+      computer,
+      { command: "sign_in", origin: "https://example.test", passwordRef: "e2", password },
+      context,
+    );
+    expect(result).toMatchObject({ ok: true, filled: true });
+    const run = vi.mocked(f.machine.sandbox.commands.run);
+    const command = run.mock.calls.find(([, options]) => options?.background)![0];
+    expect(command).toContain("sign_in");
+    expect(command).not.toContain("fake-pa");
+    expect(f.handle.sendStdin).toHaveBeenCalledWith(
+      `TANGOW_DESKTOP_OPERATION\n${JSON.stringify(password)}\n`,
+      expect.anything(),
+    );
+  });
+
   it("never sends the permit when startup fails before returning a handle", async () => {
     const f = fixture({
       start: () => {

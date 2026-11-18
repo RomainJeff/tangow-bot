@@ -74,8 +74,12 @@ describe("containsSecret", () => {
     expect(containsSecret({ nested: ["line\nbreak"] }, ["line\nbreak"])).toBe(true);
   });
 
-  it("does not confuse escaped text with the original control character", () => {
-    expect(containsSecret({ value: "literal\\ntext" }, ["\n"])).toBe(false);
+  it("detects a secret with a quote and a backslash that only appears JSON-escaped", () => {
+    const secret = 'pa"ss\\word';
+    const page = `{"field":${JSON.stringify(secret)}}`;
+    expect(page).not.toContain(secret);
+    expect(containsSecret({ tree: page }, [secret])).toBe(true);
+    expect(redactSecrets(page, [secret])).toBe('{"field":"[redacted]"}');
   });
 });
 

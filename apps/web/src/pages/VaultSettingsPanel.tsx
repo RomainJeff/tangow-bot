@@ -1,5 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import type { BotSecretDestination, SpaceMembers, VaultItem, VaultList } from "@tangow/contracts";
+import { isShareableBotSecret } from "@tangow/contracts";
 import {
   Button,
   Checkbox,
@@ -162,6 +163,7 @@ function VaultItemDialog({
     Boolean(value) &&
     (item !== null ||
       (Boolean(site.trim() && name) && (authType === "bearer" || Boolean(authField.trim()))));
+  const login = (item?.auth.type ?? authType) === "login";
 
   async function run(action: () => Promise<unknown>) {
     setBusy(true);
@@ -180,8 +182,8 @@ function VaultItemDialog({
     const auth: BotSecretDestination["auth"] =
       authType === "header"
         ? { type: "header", name: authField.trim() }
-        : authType === "basic"
-          ? { type: "basic", username: authField.trim() }
+        : authType === "basic" || authType === "login"
+          ? { type: authType, username: authField.trim() }
           : { type: "bearer" };
     const destination = item ?? { name, origin: siteOrigin(site), auth };
     // Cleared before the request, so the value is never shown again.
@@ -203,9 +205,9 @@ function VaultItemDialog({
     >
       <DialogContent data-testid="vault-item-dialog">
         <DialogHeader>
-          <DialogTitle>{item ? item.name : t`New API key`}</DialogTitle>
+          <DialogTitle>{item ? item.name : login ? t`New login` : t`New API key`}</DialogTitle>
         </DialogHeader>
-        {item && space && people.length > 0 ? (
+        {item && isShareableBotSecret(item) && space && people.length > 0 ? (
           <KeySharing item={item} space={space} people={people} onShared={onShared} />
         ) : null}
         <form
@@ -244,6 +246,7 @@ function VaultItemDialog({
                     { value: "bearer", label: "Bearer" },
                     { value: "header", label: t`Header` },
                     { value: "basic", label: "Basic" },
+                    { value: "login", label: t`Login` },
                   ]}
                   className="self-start"
                 />
@@ -255,13 +258,13 @@ function VaultItemDialog({
                   onChange={setAuthField}
                   placeholder="X-Api-Key"
                 />
-              ) : authType === "basic" ? (
+              ) : authType === "basic" || authType === "login" ? (
                 <LabeledInput label={t`Username`} value={authField} onChange={setAuthField} />
               ) : null}
             </>
           )}
           <LabeledInput
-            label={t`Key`}
+            label={login ? t`Password` : t`Key`}
             type="password"
             autoComplete="new-password"
             value={value}
@@ -285,7 +288,7 @@ function VaultItemDialog({
               {t`Cancel`}
             </Button>
             <Button type="submit" disabled={busy || !ready}>
-              {item ? t`Replace key` : t`Save`}
+              {item ? (login ? t`Replace password` : t`Replace key`) : t`Save`}
             </Button>
           </DialogFooter>
         </form>

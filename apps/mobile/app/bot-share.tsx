@@ -1,4 +1,5 @@
 import type { AgentSkillCatalogEntry, BotSharing, VaultItem, VaultList } from "@tangow/contracts";
+import { isShareableBotSecret } from "@tangow/contracts";
 import type { ShareableApp } from "@tangow/core";
 import {
   connectorKey,
@@ -66,7 +67,9 @@ export default function BotShareScreen() {
         () => undefined,
       );
     rpc<VaultList>("vault/list").then(
-      (vault) => live && setKeys(vault.mine.filter((key) => key.botId === botId)),
+      (vault) =>
+        live &&
+        setKeys(vault.mine.filter((key) => key.botId === botId && isShareableBotSecret(key))),
       () => undefined,
     );
     return () => {

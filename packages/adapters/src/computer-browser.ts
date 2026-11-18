@@ -5,6 +5,7 @@ import type {
   BrowserNavigateRequest,
   BrowserNavigateResult,
   BrowserProvider,
+  BrowserSignInRequest,
   BrowserSnapshotNode,
   BrowserSnapshotRequest,
   BrowserSnapshotResult,
@@ -153,6 +154,16 @@ export class ComputerBrowserProvider implements BrowserProvider {
     };
   }
 
+  async signIn(
+    computer: ComputerRef,
+    request: BrowserSignInRequest,
+    context: AdapterContext,
+  ): Promise<PageBrowserResult> {
+    if (this.canUseInProcess(computer)) return this.fake.signIn(computer, request, context);
+    const live = await this.runLive(computer, { command: "sign_in", ...request }, context);
+    return { ...live, ok: live.ok === true && live.filled === true };
+  }
+
   private canUseInProcess(computer: ComputerRef): boolean {
     return computer.kind === "fake";
   }
@@ -179,7 +190,7 @@ export class ComputerBrowserProvider implements BrowserProvider {
           throw new Error("Incomplete page browser response");
         }
         if (
-          request.command === "snapshot" &&
+          (request.command === "snapshot" || request.command === "sign_in") &&
           (typeof result.tree !== "string" || !Array.isArray(result.elements))
         ) {
           throw new Error("Incomplete page snapshot");

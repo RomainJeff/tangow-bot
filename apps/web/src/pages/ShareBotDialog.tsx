@@ -7,6 +7,7 @@ import type {
   SpaceMembers,
   VaultItem,
 } from "@tangow/contracts";
+import { isShareableBotSecret } from "@tangow/contracts";
 import type { ShareableApp } from "@tangow/core";
 import {
   connectorKey,
@@ -103,7 +104,9 @@ export function ShareBotDialog({
       () => undefined,
     );
     rpc.vault.list().then(
-      (vault) => live && setKeys(vault.mine.filter((key) => key.botId === bot.id)),
+      (vault) =>
+        live &&
+        setKeys(vault.mine.filter((key) => key.botId === bot.id && isShareableBotSecret(key))),
       () => undefined,
     );
     return () => {

@@ -247,6 +247,7 @@ const TOOL_ACTIVITY = new Map<string, string>([
   ["browser_snapshot", "Reading the page"],
   ["browser_act", "Clicking through a site"],
   ["browser_run", "Clicking through a site"],
+  ["sign_in", "Signing in"],
   ["computer_observe", "Glancing at the screen"],
   ["computer_act", "Taking the mouse"],
   ["run_subagent", "Briefing a helper"],

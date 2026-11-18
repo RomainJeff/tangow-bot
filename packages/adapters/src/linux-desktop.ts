@@ -86,6 +86,7 @@ const pageBrowserResultSchema = z.object({
   uncertain: z.boolean().optional(),
   error: z.string().optional(),
   fallback: z.literal("computer_act").optional(),
+  filled: z.literal(true).optional(),
 });
 
 /** Provider SDKs supply only command execution, workspace paths, and protected port URLs. */
@@ -205,17 +206,24 @@ export class LinuxDesktop {
       const { env, key } = await Promise.race([this.ensure(computer, boundedContext), cancelled]);
       signal.throwIfAborted();
       const timeoutMs = Math.max(1, deadline - Date.now());
+      // The command line carries argv and the environment, so the password goes on stdin.
+      const password = request.command === "sign_in" ? request.password : undefined;
+      const command = { ...request, password: undefined };
       const result = await this.host.run(
         computer,
         managedDesktopOperationCommand(
           key,
           context.screenLeaseId,
           env,
-          ["/usr/local/bin/tangow-page-browser", request.command, JSON.stringify(request)],
+          ["/usr/local/bin/tangow-page-browser", request.command, JSON.stringify(command)],
           timeoutMs,
         ),
         boundedContext,
-        { input: `${DESKTOP_OPERATION_PERMIT}\n`, deadline, maxOutputBytes: 512 * 1024 },
+        {
+          input: `${DESKTOP_OPERATION_PERMIT}\n${request.command === "sign_in" ? `${JSON.stringify(password ?? null)}\n` : ""}`,
+          deadline,
+          maxOutputBytes: 512 * 1024,
+        },
       );
       inputDispatched = result.inputDispatched === true;
       signal.throwIfAborted();

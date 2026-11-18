@@ -525,6 +525,28 @@ EVAL_HELPERS = r"""
       if (!el) throw new Error(`Unknown element ref: ${ref}`);
       return this.fill(ref, `${"value" in el ? el.value : el.textContent || ""}${text}`);
     },
+    // Checked in the same evaluation as the fill, so a navigation cannot slip in between.
+    signIn(origin, usernameRef, username, passwordRef, password) {
+      if (window !== window.top || location.origin !== origin) {
+        throw new Error("This page is not the saved site.");
+      }
+      const field = (ref) => {
+        const el = this.resolve(ref);
+        if (!el) throw new Error(`Unknown element ref: ${ref}`);
+        return el;
+      };
+      const userField = usernameRef ? field(usernameRef) : null;
+      const passwordField = passwordRef ? field(passwordRef) : null;
+      if (passwordField && !(passwordField instanceof HTMLInputElement && passwordField.type === "password")) {
+        throw new Error("passwordRef is not a password field.");
+      }
+      if (userField && userField instanceof HTMLInputElement && userField.type === "password") {
+        throw new Error("usernameRef is a password field.");
+      }
+      if (userField) this.fill(usernameRef, username);
+      if (passwordField) this.fill(passwordRef, password);
+      return { url: location.href, title: (document.title || "").slice(0, 200) };
+    },
   };
   return true;
 })()
@@ -626,6 +648,53 @@ def act(client: CdpClient, session_id: str, actions: list[dict[str, Any]]) -> di
                 "error": str(exc), "fallback": "computer_act"}
 
 
+def sign_in(client: CdpClient, session_id: str, args: dict[str, Any], password: str | None) -> dict[str, Any]:
+    origin = args.get("origin")
+    username_ref = args.get("usernameRef")
+    password_ref = args.get("passwordRef")
+    if not isinstance(origin, str) or not origin:
+        raise RuntimeError("origin is required")
+    if not username_ref and not password_ref:
+        raise RuntimeError("usernameRef or passwordRef is required")
+    if password_ref and not password:
+        raise RuntimeError("password is required on stdin")
+    ensure_helpers(client, session_id)
+    arguments = ", ".join(json.dumps(value) for value in (
+        origin, username_ref or None, args.get("username") or "", password_ref or None, password or ""))
+    data = eval_json(client, session_id, f"window.__tangowPageBrowser.signIn({arguments})")
+    if not isinstance(data, dict):
+        raise RuntimeError("Sign-in response unavailable")
+    return {**snapshot(client, session_id), "filled": True}
+
+
+def read_secret_line() -> str | None:
+    """sign_in's one stdin line: the password as JSON, or null. Read byte by byte so the EOF
+    watcher keeps the rest of the pipe."""
+    line = bytearray()
+    while len(line) <= 70_000:
+        byte = os.read(0, 1)
+        if not byte or byte == b"\n":
+            break
+        line.extend(byte)
+    value = json.loads(line.decode("utf-8"))
+    if value is not None and (not isinstance(value, str) or not value):
+        raise RuntimeError("invalid password line")
+    return value
+
+
+def output(result: Any, secret: str | None) -> str:
+    """The one place the helper prints. The password never leaves it."""
+    def scrub(value: Any) -> Any:
+        if isinstance(value, str):
+            return value.replace(secret, "[redacted]") if secret else value
+        if isinstance(value, list):
+            return [scrub(item) for item in value]
+        if isinstance(value, dict):
+            return {key: scrub(item) for key, item in value.items()}
+        return value
+    return json.dumps(scrub(result))
+
+
 def exit_when_stdin_closes() -> None:
     """The supervisor owns this pipe; losing it cancels this helper, not Chromium."""
     try:
@@ -636,6 +705,14 @@ def exit_when_stdin_closes() -> None:
 
 
 def run(argv: list[str]) -> int:
+    password: str | None = None
+    if len(argv) >= 2 and argv[1] == "sign_in":
+        # The password never travels in argv or the environment: sign_in's first stdin line.
+        try:
+            password = read_secret_line()
+        except Exception:  # noqa: BLE001
+            print(output({"ok": False, "error": "password line unreadable", "fallback": "computer_act"}, None))
+            return 2
     if os.environ.get("TANGOW_BROWSER_WATCH_STDIN") == "1":
         threading.Thread(target=exit_when_stdin_closes, daemon=True).start()
     if len(argv) < 2:
@@ -670,21 +747,23 @@ def run(argv: list[str]) -> int:
                 if not isinstance(actions, list):
                     raise RuntimeError("actions must be an array")
                 result = act(client, session_id, actions)
+            elif command == "sign_in":
+                result = sign_in(client, session_id, args, password)
             else:
                 result = {
                     "ok": False,
                     "error": f"unknown command: {command}",
                     "fallback": "computer_act",
                 }
-                print(json.dumps(result))
+                print(output(result, password))
                 return 2
-            print(json.dumps(result))
+            print(output(result, password))
             return 0  # Structured failures preserve partial action progress.
         finally:
             client.close()
     except Exception as exc:  # noqa: BLE001
-        print(json.dumps({"ok": False, "error": str(exc), "fallback": "computer_act",
-                              "uncertain": command == "act"}))
+        print(output({"ok": False, "error": str(exc), "fallback": "computer_act",
+                      "uncertain": command in ("act", "sign_in")}, password))
         return 0
 
 

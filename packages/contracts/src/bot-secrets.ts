@@ -24,6 +24,15 @@ export const BotSecretAuth = z.discriminatedUnion("type", [
       .max(200)
       .regex(/^[^:\r\n]+$/),
   }),
+  /** A site login: the bot fills it into that exact site's sign-in form with `sign_in` only. */
+  z.object({
+    type: z.literal("login"),
+    username: z
+      .string()
+      .min(1)
+      .max(200)
+      .regex(/^[^\r\n]+$/),
+  }),
 ]);
 
 export const BotSecretDestination = z.object({
@@ -49,6 +58,16 @@ export const BotSecretDestination = z.object({
   auth: BotSecretAuth,
 });
 export type BotSecretDestination = z.infer<typeof BotSecretDestination>;
+
+export const SHAREABLE_BOT_SECRET_AUTH_TYPES: readonly BotSecretDestination["auth"]["type"][] = [
+  "bearer",
+  "header",
+  "basic",
+];
+
+export function isShareableBotSecret({ auth }: Pick<BotSecretDestination, "auth">): boolean {
+  return SHAREABLE_BOT_SECRET_AUTH_TYPES.includes(auth.type);
+}
 
 /** Saves a credential from the vault screen. The value is write-only: no response returns it. */
 export const VaultPutInput = BotSecretDestination.extend({ value: z.string().min(1).max(16_384) });
