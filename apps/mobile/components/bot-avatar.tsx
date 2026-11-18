@@ -19,7 +19,6 @@ import Svg, { ClipPath, Defs, G, Path, Use } from "react-native-svg";
 import { CHAT_MOTION } from "../lib/chat-motion";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
-import { useAvatarStyle } from "./avatar-style";
 import { ClayAvatar } from "./clay-avatar";
 import { NativeSymbol } from "./native-symbol";
 
@@ -46,7 +45,7 @@ export const BotAvatar = memo(function BotAvatar({
   shapeSeed?: number | null;
   /**
    * Catalogue character, as on web. `null` is the neutral character and `undefined` the legacy
-   * renderer, which the avatar-style preview and unknown authors use. When defined, `variant`,
+   * renderer, which unknown authors use. When defined, `variant`,
    * `shapeSeed`, `glance` and `still` are ignored and the ring replaces the working dot.
    */
   character?: string | null;
@@ -68,7 +67,6 @@ export const BotAvatar = memo(function BotAvatar({
   const { t } = useI18n();
   const tokens = useMobileTokens();
   const isWorking = isWorkingStatus(status);
-  const { avatarStyle } = useAvatarStyle();
   const visorW = Math.round(size * 0.68);
   const visorH = Math.round(size * 0.44);
   const eyeW = Math.max(3, Math.round(size * 0.11));
@@ -78,7 +76,7 @@ export const BotAvatar = memo(function BotAvatar({
     <View style={{ width: size, height: size }}>
       {character !== undefined ? (
         <ClayAvatar character={character} size={size} isWorking={isWorking} />
-      ) : (variant ?? avatarStyle) === "organic" ? (
+      ) : variant !== "robot" ? (
         <OrganicAvatar
           color={color}
           identity={identity}
