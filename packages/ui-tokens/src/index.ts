@@ -328,7 +328,6 @@ export type MotionTokens = {
   arrive: number;
   press: number;
   hover: number;
-  breathe: number;
   caret: number;
   /** The send arrow pivoting in with the first character. */
   pivot: number;
@@ -352,7 +351,6 @@ export const motion: MotionTokens = {
   arrive: 240,
   press: 160,
   hover: 160,
-  breathe: 5600,
   caret: 1000,
   pivot: 320,
   morph: 260,

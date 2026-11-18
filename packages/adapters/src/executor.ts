@@ -161,7 +161,6 @@ import {
   routineCardSizeError,
   routineConfirmationBlock,
   runStartedByUser,
-  SHAPES,
   STORED_MODEL_UNAVAILABLE_MESSAGE,
   sandboxCommandTimeoutMs,
   secretRedactor,
@@ -7131,6 +7130,9 @@ export async function unreadConversationCount(
   return threads + groups;
 }
 
+// Shapes an app from before clay characters can draw.
+const LEGACY_PUSH_SHAPE_COUNT = 8;
+
 export async function notificationAvatar(
   prisma: PrismaClient,
   run: { spaceId: string; botId: string },
@@ -7144,7 +7146,7 @@ export async function notificationAvatar(
     character: characterById(bot.avatarCharacter).id,
     // An app older than the server ignores the character and draws this shape instead.
     color: botDisplayColor(bot),
-    shape: (bot.shapeSeed ?? avatarIdentitySeed(bot.id)) % SHAPES.length,
+    shape: (bot.shapeSeed ?? avatarIdentitySeed(bot.id)) % LEGACY_PUSH_SHAPE_COUNT,
   };
 }
 

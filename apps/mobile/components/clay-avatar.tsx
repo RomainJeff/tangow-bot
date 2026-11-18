@@ -5,6 +5,7 @@ import type { ImageSourcePropType } from "react-native";
 import { Animated, Easing, StyleSheet, View } from "react-native";
 import { useReducedMotion } from "react-native-reanimated";
 import Svg, { Circle, Image as SvgImage } from "react-native-svg";
+import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
 
 const IMAGES: Record<AvatarCharacterId, { full: ImageSourcePropType; mini: ImageSourcePropType }> =
@@ -74,11 +75,16 @@ export function ClayAvatar({
   size: number;
   isWorking: boolean;
 }) {
+  const { t } = useI18n();
   const tokens = useMobileTokens();
   const { id, crops } = characterById(character);
   const crop = crops[cropForSize(size)];
   return (
-    <View style={{ width: size, height: size }}>
+    <View
+      style={{ width: size, height: size }}
+      accessible={isWorking || undefined}
+      accessibilityLabel={isWorking ? t("Working") : undefined}
+    >
       <View
         style={[
           styles.disc,

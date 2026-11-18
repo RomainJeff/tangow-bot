@@ -63,7 +63,7 @@ Bot widgets use the shared [widget kit](../packages/core/src/widget/kit.ts) and 
 - `rk-press` on anything pressable; `duration-(--duration-hover)` for hover.
 - **Nothing loops continuously except the avatar of a bot that is working.**
 - `prefers-reduced-motion: reduce` stops `animate-arrive`, `rk-press`,
-  `rk-press-round`, `rk-press-tile`, `rk-bar`, `rk-dot`, `rk-shimmer` and the working ring's spin, and freezes every `useElapsed`
+  `rk-press-round`, `rk-press-tile`, `rk-bar`, `rk-dot`, `rk-shimmer`, `rk-buzz` and the working ring's spin, and freezes every `useElapsed`
   duration. The working ring stays, still.
 - `prefers-reduced-transparency: reduce` (Reduce Transparency on macOS and
   iOS, `AccessibilityInfo.isReduceTransparencyEnabled` on iPhone) turns every
