@@ -170,7 +170,7 @@ export default function Usage() {
                       pressed && styles.pressed,
                     ]}
                   >
-                    {dimension === "bots" && row.bot?.color ? (
+                    {dimension === "bots" && row.bot && !row.bot.deleted ? (
                       <BotAvatar character={row.bot.avatarCharacter} size={28} />
                     ) : dimension === "bots" ? (
                       <View style={styles.goneAvatar} />

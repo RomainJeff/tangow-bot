@@ -2,13 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { MessageBlock } from "@tangow/contracts";
-import {
-  avatarIdentitySeed,
-  BOT_DELEGATION_GUIDANCE,
-  BOT_OFFER_DEDICATED_BOT,
-  ONCE_ROUTINE_CRON,
-  SHAPES,
-} from "@tangow/core";
+import { BOT_DELEGATION_GUIDANCE, BOT_OFFER_DEDICATED_BOT, ONCE_ROUTINE_CRON } from "@tangow/core";
 import type { PrismaClient } from "@tangow/db";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -540,14 +534,14 @@ describe("run notification preference", () => {
       character: "atlas",
       // Atlas is a capsule: the clay colour, not the bot's own.
       color: "#8287AD",
-      shape: 11 % SHAPES.length,
+      shape: 3,
     });
     await expect(
       notificationAvatar(prismaFor({ shapeSeed: null, avatarCharacter: null }), run),
     ).resolves.toEqual({
       character: "scout",
       color: "#E5484D",
-      shape: avatarIdentitySeed("bot-1") % SHAPES.length,
+      shape: 3,
     });
     await expect(notificationAvatar(prismaFor(null), run)).resolves.toBeUndefined();
   });

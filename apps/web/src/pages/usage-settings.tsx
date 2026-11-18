@@ -169,7 +169,7 @@ export function UsageSettingsPanel({ panelRef }: { panelRef?: RefObject<HTMLDivE
                   className={index > 0 ? "border-t border-border" : undefined}
                   leading={
                     shown === "bots" ? (
-                      row.bot?.color ? (
+                      row.bot && !row.bot.deleted ? (
                         <BotAvatar character={row.bot.avatarCharacter} size={28} />
                       ) : (
                         <span
