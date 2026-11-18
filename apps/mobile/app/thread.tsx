@@ -194,7 +194,7 @@ import {
   confirmDeleteBot,
 } from "../lib/bot-lifecycle";
 import { botMessageCard } from "../lib/bot-message-card";
-import { noteBotRunEnded } from "../lib/bot-page-state";
+import { noteBotRunEnded, subscribeBotSaved, withSavedAvatar } from "../lib/bot-page-state";
 import { CHAT_MOTION } from "../lib/chat-motion";
 import { useDebugMode } from "../lib/debug-mode";
 import type { CardEdits } from "../lib/draft-edit";
@@ -639,6 +639,7 @@ function Thread() {
           id: bot.id,
           name: bot.name,
           color: bot.color,
+          avatarCharacter: bot.avatarCharacter,
         })),
         groups: mentionGroups.map((group) => ({
           id: group.id,
@@ -764,6 +765,11 @@ function Thread() {
     setThreadScrollState(scrollBehavior.current.state());
   }, [threadKey]);
 
+  useEffect(
+    () => subscribeBotSaved((saved) => setMentionBots((list) => withSavedAvatar(list, saved))),
+    [],
+  );
+
   const refreshMentionBots = useCallback(async () => {
     if (!botId && !groupId) return;
     const generation = ++mentionBotsRefreshGeneration.current;
@@ -883,9 +889,8 @@ function Thread() {
   const groupAvatarItems = useMemo(
     () =>
       (snap?.members ?? []).map((member) => ({
-        color: member.color,
         identity: member.botId,
-        shapeSeed: member.shapeSeed,
+        character: member.avatarCharacter,
         working: workingBotIds.has(member.botId),
       })),
     [snap?.members, workingBotIds],
@@ -944,20 +949,16 @@ function Thread() {
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             {!inGroup && currentBot ? (
               <BotAvatar
-                color={currentBot.color}
-                identity={currentBot.id}
-                shapeSeed={currentBot.shapeSeed}
+                character={currentBot.avatarCharacter}
                 size={34}
                 status={currentBotStatus}
                 muted={rosterMuted(currentBot)}
-                still
               />
             ) : null}
             {inGroup && groupAvatarItems.length > 0 ? (
               <StackedAvatars
                 items={groupAvatarItems}
                 size={28}
-                still
                 pillOverflow
                 label={groupMemberNames || undefined}
               />
@@ -2132,15 +2133,14 @@ function Thread() {
     return props;
   }
 
-  /** Colour, name and shape of the bot behind a message: the group roster
+  /** Name and character of the bot behind a message: the group roster
    * first, the bot list second, the route name last. */
   function messageBot(id: string | undefined) {
     const member = snap?.members?.find((candidate) => candidate.botId === id);
     const bot = mentionBots.find((candidate) => candidate.id === id);
     return {
-      color: member?.color ?? bot?.color ?? tokens.mutedForeground,
       name: member?.name ?? bot?.name ?? displayName ?? t("Bot"),
-      shapeSeed: member?.shapeSeed ?? bot?.shapeSeed,
+      avatarCharacter: member ? member.avatarCharacter : bot?.avatarCharacter,
     };
   }
 
@@ -2399,12 +2399,9 @@ function Thread() {
           <MessageRow
             avatar={
               <BotAvatar
-                color={author.color}
-                identity={authorBotId}
-                shapeSeed={author.shapeSeed}
+                character={author.avatarCharacter}
                 size={sizes.message}
                 status={authorStatus}
-                still
               />
             }
             author={author.name}
@@ -2499,8 +2496,7 @@ function Thread() {
           {
             botId: currentBot.id,
             name: currentBot.name,
-            color: currentBot.color,
-            shapeSeed: currentBot.shapeSeed,
+            avatarCharacter: currentBot.avatarCharacter,
             status: currentBotStatus,
           },
         ]
@@ -2513,9 +2509,7 @@ function Thread() {
   const workingAvatar =
     workingBotsForLine.length === 1 ? (
       <BotAvatar
-        color={workingBotsForLine[0]?.color ?? tokens.mutedForeground}
-        identity={workingBotsForLine[0]?.botId}
-        shapeSeed={workingBotsForLine[0]?.shapeSeed}
+        character={workingBotsForLine[0]?.avatarCharacter}
         size={sizes.message}
         status="running"
       />
@@ -3568,15 +3562,7 @@ function MentionChipIcon({ mention }: { mention: ComposerMention }) {
       </View>
     );
   }
-  return (
-    <BotAvatar
-      color={mention.color ?? tokens.mutedForeground}
-      identity={mention.id}
-      shapeSeed={mention.shapeSeed}
-      size={sizes.chip}
-      still
-    />
-  );
+  return <BotAvatar character={mention.avatarCharacter} size={sizes.chip} />;
 }
 
 function previewMessageText(message: MobileMessage): string {
@@ -4271,15 +4257,15 @@ const ItemRow = memo(function ItemRow({
   const router = useRouter();
   const [session, setSession] = useState<OpenedSession | null>(null);
   const { item } = row;
-  const botColorOf = (id: string | undefined) =>
-    bots.find((bot) => bot.id === id)?.color ??
-    members?.find((member) => member.botId === id)?.color ??
-    tokens.mutedForeground;
-  const avatarOf = (id: string | undefined) => ({
-    color: botColorOf(id),
-    identity: id,
-    shapeSeed: members?.find((member) => member.botId === id)?.shapeSeed,
-  });
+  const avatarOf = (id: string | undefined) => {
+    const member = members?.find((candidate) => candidate.botId === id);
+    return {
+      identity: id,
+      character: member
+        ? member.avatarCharacter
+        : bots.find((bot) => bot.id === id)?.avatarCharacter,
+    };
+  };
   const openPeerMessages = readOnly
     ? undefined
     : (ownBotId: string, peerBotId: string, peer: string) =>
@@ -4288,12 +4274,10 @@ const ItemRow = memo(function ItemRow({
           params: {
             botId: ownBotId,
             botName: memberName(members, ownBotId) ?? botName ?? "",
-            botColor: botColorOf(ownBotId),
-            botShapeSeed: avatarOf(ownBotId).shapeSeed?.toString() ?? "",
+            botCharacter: avatarOf(ownBotId).character ?? undefined,
             peerBotId,
             peerBotName: peer,
-            peerColor: botColorOf(peerBotId),
-            peerShapeSeed: avatarOf(peerBotId).shapeSeed?.toString() ?? "",
+            peerCharacter: avatarOf(peerBotId).character ?? undefined,
           },
         });
   const body = (() => {
@@ -4309,7 +4293,7 @@ const ItemRow = memo(function ItemRow({
             <>
               {inGroup ? null : <OriginText title={item.name} alignEnd={false} onPress={openRun} />}
               <MessageRow
-                avatar={<BotAvatar {...avatarOf(item.botId)} size={sizes.message} still />}
+                avatar={<BotAvatar {...avatarOf(item.botId)} size={sizes.message} />}
                 author={
                   <>
                     {memberName(members, item.botId) ?? botName}
@@ -4359,14 +4343,11 @@ const ItemRow = memo(function ItemRow({
         const card = botMessageCard(item);
         const peerThread = readOnly ? null : card.peerThread;
         const pair = sent ? [ownBotId, peerBotId] : [peerBotId, ownBotId];
-        const pairItems = pair.map((id, index) => ({
-          ...avatarOf(id),
-          ...(isNew ? { glance: index === 0 ? ("right" as const) : ("left" as const) } : {}),
-        }));
+        const pairItems = pair.map(avatarOf);
         return (
           <Interstitial
             accessibilityLabel={card.label}
-            avatars={<StackedAvatars items={pairItems} size={sizes.interstitial} still />}
+            avatars={<StackedAvatars items={pairItems} size={sizes.interstitial} />}
             hitSlop={{ top: 5, bottom: 5, left: 8, right: 8 }}
             style={card.muted ? { opacity: 0.6 } : undefined}
             onPress={

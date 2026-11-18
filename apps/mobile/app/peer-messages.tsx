@@ -45,25 +45,15 @@ export default function PeerMessages() {
   const tokens = mobileTokens();
   const colorScheme = useResolvedAppearance();
   const insets = useSafeAreaInsets();
-  const {
-    botId,
-    botName,
-    botColor,
-    botShapeSeed,
-    peerBotId,
-    peerBotName,
-    peerColor,
-    peerShapeSeed,
-  } = useLocalSearchParams<{
-    botId?: string;
-    botName?: string;
-    botColor?: string;
-    botShapeSeed?: string;
-    peerBotId?: string;
-    peerBotName?: string;
-    peerColor?: string;
-    peerShapeSeed?: string;
-  }>();
+  const { botId, botName, botCharacter, peerBotId, peerBotName, peerCharacter } =
+    useLocalSearchParams<{
+      botId?: string;
+      botName?: string;
+      botCharacter?: string;
+      peerBotId?: string;
+      peerBotName?: string;
+      peerCharacter?: string;
+    }>();
   const [entries, setEntries] = useState<readonly ThreadEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -107,10 +97,6 @@ export default function PeerMessages() {
   );
   const peer = conversation?.peerBotName ?? peerBotName ?? t("Bot");
   const own = botName ?? t("Bot");
-  const parsedShapeSeed = Number(botShapeSeed);
-  const ownShapeSeed =
-    botShapeSeed && Number.isFinite(parsedShapeSeed) ? parsedShapeSeed : undefined;
-  const otherShapeSeed = peerShapeSeed ? Number(peerShapeSeed) : undefined;
 
   const peerMessages = conversation?.messages ?? [];
   const groups = useMemo(() => {
@@ -131,16 +117,8 @@ export default function PeerMessages() {
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10, maxWidth: 240 }}>
               <StackedAvatars
                 items={[
-                  {
-                    color: botColor ?? tokens.mutedForeground,
-                    identity: botId,
-                    shapeSeed: ownShapeSeed,
-                  },
-                  {
-                    color: peerColor ?? tokens.mutedForeground,
-                    identity: peerBotId,
-                    shapeSeed: otherShapeSeed,
-                  },
+                  { identity: botId, character: botCharacter },
+                  { identity: peerBotId, character: peerCharacter },
                 ]}
                 size={28}
               />
@@ -187,9 +165,7 @@ export default function PeerMessages() {
             : "";
           const sent = peerMessage.direction === "sent";
           const name = sent ? own : peer;
-          const color = (sent ? botColor : peerColor) ?? tokens.mutedForeground;
-          const identity = sent ? botId : peerBotId;
-          const shapeSeed = sent ? ownShapeSeed : otherShapeSeed;
+          const character = sent ? botCharacter : peerCharacter;
           return (
             <View
               key={`${peerMessage.messageId}-${index}`}
@@ -208,16 +184,7 @@ export default function PeerMessages() {
                 </Text>
               ) : null}
               <MessageRow
-                avatar={
-                  <BotAvatar
-                    color={color}
-                    identity={identity}
-                    shapeSeed={shapeSeed}
-                    size={sizes.message}
-                    // One drawn frame each: a loop per message saturated the JS thread.
-                    still
-                  />
-                }
+                avatar={<BotAvatar character={character} size={sizes.message} />}
                 author={name}
                 showAuthor={group.isFirstOfGroup}
                 showAvatar={group.isLastOfGroup}

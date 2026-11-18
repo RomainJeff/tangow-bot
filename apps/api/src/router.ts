@@ -99,6 +99,7 @@ import type {
 } from "@tangow/contracts";
 import {
   appContract,
+  botDisplayColor,
   IntegrationProviderIdSchema,
   ModelCategorySchema,
   OPENAI_COMPATIBLE_PROVIDER_ID,
@@ -1413,6 +1414,7 @@ export function createRouter(deps: RouterDeps) {
             notifyOnFinish: input.notifyOnFinish,
             color: input.color,
             shapeSeed: input.shapeSeed,
+            avatarCharacter: input.avatarCharacter,
             pinned: input.pinned,
             memoryScope: input.memoryScope,
             sectionId: input.sectionId,
@@ -5129,8 +5131,9 @@ async function spaceNavigationDto(
           spaceId: bot.spaceId,
           name: bot.name,
           title: bot.title,
-          color: bot.color,
+          color: botDisplayColor(bot),
           shapeSeed: bot.shapeSeed,
+          avatarCharacter: bot.avatarCharacter,
           notifyOnFinish: bot.notifyOnFinish,
           pinned: bot.pinned,
           sectionId: bot.sectionId,

@@ -22,7 +22,7 @@ import {
   RenameBotSectionDialog,
 } from "./dialogs";
 import type { SidebarGroup } from "./layout";
-import { botPageFor, FALLBACK_BOT_COLOR, threadJumpLocation } from "./layout";
+import { botPageFor, threadJumpLocation } from "./layout";
 import type { Panels } from "./use-panels";
 import type { Roster } from "./use-roster";
 import type { ShellOverlayState } from "./use-shell-overlays";
@@ -526,16 +526,11 @@ export function ShellOverlays({
             image={userImage}
             email={email}
             initialSection={overlays.settingsSection}
-            avatarStyle={bootstrapMe?.avatarStyle ?? "organic"}
             isDeploymentOwner={bootstrapMe?.isDeploymentOwner === true}
             messagingEnabled={overlays.messagingSurfaceEnabled}
             onOpenMessaging={() => {
               overlays.setSettingsOpen(false);
               overlays.setMessagingSettingsOpen(true);
-            }}
-            onAvatarStyleChange={async (avatarStyle) => {
-              const nextMe = await rpc.preferences.update({ avatarStyle });
-              roster.setBootstrapMe(nextMe);
             }}
             memoryConfig={overlays.memoryProviderConfig}
             onMemoryConfigChange={overlays.changeMemoryConfig}
@@ -554,14 +549,12 @@ export function ShellOverlays({
           <PeerMessagesOverlay
             botId={active.id}
             botName={active.name}
-            botColor={active.color}
-            botShapeSeed={active.shapeSeed}
+            botAvatarCharacter={active.avatarCharacter}
             peerBotId={peerConversation.peerBotId}
             peerBotName={peerConversation.peerBotName}
-            peerBotColor={
-              thread.resolveTranscriptBot(peerConversation.peerBotId)?.color ?? FALLBACK_BOT_COLOR
+            peerBotAvatarCharacter={
+              thread.resolveTranscriptBot(peerConversation.peerBotId)?.avatarCharacter
             }
-            peerBotShapeSeed={thread.resolveTranscriptBot(peerConversation.peerBotId)?.shapeSeed}
             onClose={() => setPeerConversation(null)}
           />
         ) : null}

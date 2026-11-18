@@ -61,4 +61,5 @@ We don't take pull requests. Have your agent [open an issue](https://github.com/
 For security vulnerabilities, follow [SECURITY.md](./SECURITY.md) instead of filing a public
 issue.
 
-Tangow is licensed under the [Apache License 2.0](./LICENSE).
+Tangow is licensed under the [Apache License 2.0](./LICENSE). The Tangow characters and their
+images in [`packages/avatars`](./packages/avatars/LICENSE) are not: all rights to them are reserved.

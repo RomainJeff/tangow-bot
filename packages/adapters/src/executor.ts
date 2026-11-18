@@ -59,6 +59,8 @@ import {
   BOT_TITLE_MAX_LENGTH,
   BotSecretName,
   BotSecretSubmission,
+  botDisplayColor,
+  characterById,
   EntryId,
   FactualRunRecapFactsSchema,
   isAttachmentImageMimeType,
@@ -159,7 +161,6 @@ import {
   routineCardSizeError,
   routineConfirmationBlock,
   runStartedByUser,
-  SHAPES,
   STORED_MODEL_UNAVAILABLE_MESSAGE,
   sandboxCommandTimeoutMs,
   secretRedactor,
@@ -7129,21 +7130,23 @@ export async function unreadConversationCount(
   return threads + groups;
 }
 
+// Shapes an app from before clay characters can draw.
+const LEGACY_PUSH_SHAPE_COUNT = 8;
+
 export async function notificationAvatar(
   prisma: PrismaClient,
-  run: { spaceId: string; userId: string; botId: string },
+  run: { spaceId: string; botId: string },
 ): Promise<NotificationMessage["avatar"]> {
-  const [bot, user] = await Promise.all([
-    prisma.bot.findFirst({
-      where: { id: run.botId, spaceId: run.spaceId },
-      select: { id: true, color: true, shapeSeed: true },
-    }),
-    prisma.user.findUnique({ where: { id: run.userId }, select: { avatarStyle: true } }),
-  ]);
-  if (!bot || user?.avatarStyle !== "organic") return undefined;
+  const bot = await prisma.bot.findFirst({
+    where: { id: run.botId, spaceId: run.spaceId },
+    select: { id: true, color: true, shapeSeed: true, avatarCharacter: true },
+  });
+  if (!bot) return undefined;
   return {
-    color: bot.color,
-    shape: (bot.shapeSeed ?? avatarIdentitySeed(bot.id)) % SHAPES.length,
+    character: characterById(bot.avatarCharacter).id,
+    // An app older than the server ignores the character and draws this shape instead.
+    color: botDisplayColor(bot),
+    shape: (bot.shapeSeed ?? avatarIdentitySeed(bot.id)) % LEGACY_PUSH_SHAPE_COUNT,
   };
 }
 

@@ -12,7 +12,7 @@ export type ComposerMention = {
   name: string;
   subtitle?: string;
   color?: string;
-  shapeSeed?: number | null;
+  avatarCharacter?: string | null;
   /** Owning bot for routine chips (test-run lands on that bot). */
   botId?: string;
   /** Connected connection row id when kind is connector + connected. */
@@ -24,7 +24,7 @@ export type MentionPickerBot = {
   id: string;
   name: string;
   color?: string;
-  shapeSeed?: number | null;
+  avatarCharacter?: string | null;
 };
 export type MentionPickerGroup = { id: string; name: string };
 export type MentionPickerRoutine = {
@@ -183,7 +183,7 @@ export function buildComposerMentionOptions(input: {
       name: bot.name,
       subtitle: "Bot",
       color: bot.color,
-      shapeSeed: bot.shapeSeed,
+      avatarCharacter: bot.avatarCharacter,
     });
   }
 

@@ -1,0 +1,31 @@
+import { renderToString } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+import { BotAvatar } from "./bot-avatar.js";
+
+describe("BotAvatar character", () => {
+  it.each([
+    ["missing", undefined],
+    ["null", null],
+    ["unknown", "no-such-character"],
+  ])("draws the neutral character when the character is %s", (_label, character) => {
+    const html = renderToString(<BotAvatar character={character} size={40} />);
+    expect(html).toContain("tangow-clay-avatar");
+    expect(html).toContain("scout");
+  });
+
+  it("serves the mini image up to 20 px and the full image above", () => {
+    const small = renderToString(<BotAvatar character="scout" size={20} />);
+    const larger = renderToString(<BotAvatar character="scout" size={21} />);
+    expect(small).toContain("scout-mini");
+    expect(larger).not.toContain("scout-mini");
+  });
+
+  it("spins the ring of a working bot and keeps it mounted, still, when idle", () => {
+    // Which statuses count as working is owned by `isWorkingStatus` (core run-state tests).
+    const working = renderToString(<BotAvatar character="atlas" status="running" />);
+    const idle = renderToString(<BotAvatar character="atlas" status="idle" />);
+    expect(working).toContain('data-working="true"');
+    expect(idle).toContain('data-working="false"');
+    expect(idle).toContain("tangow-bot-avatar-ring");
+  });
+});

@@ -1,5 +1,5 @@
 import { useLingui } from "@lingui/react/macro";
-import type { AvatarStyle, ComputerListItem, SpaceMemoryConfig } from "@tangow/contracts";
+import type { ComputerListItem, SpaceMemoryConfig } from "@tangow/contracts";
 import {
   Button,
   Dialog,
@@ -54,8 +54,6 @@ export function SettingsOverlay({
   initials,
   image,
   initialSection = null,
-  avatarStyle,
-  onAvatarStyleChange,
   isDeploymentOwner = false,
   messagingEnabled = false,
   onOpenMessaging,
@@ -73,8 +71,6 @@ export function SettingsOverlay({
   initials: string;
   image: string | null;
   initialSection?: SettingsSection | null;
-  avatarStyle: AvatarStyle;
-  onAvatarStyleChange: (style: AvatarStyle) => Promise<void>;
   isDeploymentOwner?: boolean;
   messagingEnabled?: boolean;
   onOpenMessaging?: () => void;
@@ -313,8 +309,6 @@ export function SettingsOverlay({
                   email={email}
                   name={name}
                   initials={initials}
-                  avatarStyle={avatarStyle}
-                  onAvatarStyleChange={onAvatarStyleChange}
                   isDeploymentOwner={isDeploymentOwner}
                 />
               ) : null}
