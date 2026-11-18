@@ -1,12 +1,4 @@
 import { BotAvatar } from "@tangow/ui-web";
 import { createRoot } from "react-dom/client";
 
-createRoot(document.getElementById("root")!).render(
-  <BotAvatar
-    color="#D9508A"
-    identity="reduced-motion"
-    size={120}
-    status="running"
-    variant="robot"
-  />,
-);
+createRoot(document.getElementById("root")!).render(<BotAvatar size={120} status="running" />);

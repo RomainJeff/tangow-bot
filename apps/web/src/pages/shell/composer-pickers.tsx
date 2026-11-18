@@ -12,7 +12,6 @@ import {
 import { BotAvatar } from "@tangow/ui-web";
 import { Box, Clock, Puzzle, Settings, X } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
-import { FALLBACK_BOT_COLOR } from "./layout";
 
 /** The `@` and `/` pickers: what the draft is asking for and what they offer for it. */
 export function useComposerPickers({
@@ -326,14 +325,7 @@ function MentionOptionIcon({ mention }: { mention: ComposerMention }) {
       </span>
     );
   }
-  return (
-    <BotAvatar
-      color={mention.color ?? FALLBACK_BOT_COLOR}
-      identity={mention.id}
-      shapeSeed={mention.shapeSeed}
-      size={16}
-    />
-  );
+  return <BotAvatar character={mention.avatarCharacter} size={16} />;
 }
 
 /** The 18 px avatar sized for the Quiet mention chip (see docs/design-system.md). */
@@ -351,12 +343,5 @@ function MentionChipIcon({ mention }: { mention: ComposerMention }) {
       </span>
     );
   }
-  return (
-    <BotAvatar
-      color={mention.color ?? FALLBACK_BOT_COLOR}
-      identity={mention.id}
-      shapeSeed={mention.shapeSeed}
-      size={18}
-    />
-  );
+  return <BotAvatar character={mention.avatarCharacter} size={18} />;
 }

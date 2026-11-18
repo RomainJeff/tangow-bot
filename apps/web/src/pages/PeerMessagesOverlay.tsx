@@ -23,22 +23,18 @@ import { WindowChrome } from "./WindowChrome";
 export function PeerMessagesOverlay({
   botId,
   botName,
-  botColor,
-  botShapeSeed,
+  botAvatarCharacter,
   peerBotId,
   peerBotName: initialPeerBotName,
-  peerBotColor,
-  peerBotShapeSeed,
+  peerBotAvatarCharacter,
   onClose,
 }: {
   botId: string;
   botName: string;
-  botColor: string;
-  botShapeSeed?: number | null;
+  botAvatarCharacter?: string | null;
   peerBotId: string;
   peerBotName: string;
-  peerBotColor: string;
-  peerBotShapeSeed?: number | null;
+  peerBotAvatarCharacter?: string | null;
   onClose: () => void;
 }) {
   const { t } = useLingui();
@@ -117,13 +113,8 @@ export function PeerMessagesOverlay({
             {/* The overlay covers the shell header, so it reserves room for the window controls itself. */}
             {desktopBridge() ? <WindowChrome /> : null}
             <div className="flex items-center -space-x-2">
-              <BotAvatar color={botColor} identity={botId} shapeSeed={botShapeSeed} size={28} />
-              <BotAvatar
-                color={peerBotColor}
-                identity={peerBotId}
-                shapeSeed={peerBotShapeSeed}
-                size={28}
-              />
+              <BotAvatar character={botAvatarCharacter} size={28} />
+              <BotAvatar character={peerBotAvatarCharacter} size={28} />
             </div>
             <DialogTitle className="truncate text-[15.5px] font-medium text-foreground" dir="auto">
               {title}
@@ -168,9 +159,7 @@ export function PeerMessagesOverlay({
               const group = peerGroups[index]!;
               const sent = peerMessage.direction === "sent";
               const name = sent ? botName : peerBotName;
-              const color = sent ? botColor : peerBotColor;
-              const shapeSeed = sent ? botShapeSeed : peerBotShapeSeed;
-              const identity = sent ? botId : peerBotId;
+              const avatarCharacter = sent ? botAvatarCharacter : peerBotAvatarCharacter;
               const timeMarker = showsTimeMarker(
                 conversation.messages[index - 1]?.createdAt,
                 peerMessage.createdAt,
@@ -198,12 +187,7 @@ export function PeerMessagesOverlay({
                   <div className={`flex items-end gap-2${group.isFirstOfGroup ? "" : " -mt-2.75"}`}>
                     <div className="w-message shrink-0">
                       {group.isLastOfGroup ? (
-                        <BotAvatar
-                          color={color}
-                          identity={identity}
-                          shapeSeed={shapeSeed}
-                          size={26}
-                        />
+                        <BotAvatar character={avatarCharacter} size={26} />
                       ) : null}
                     </div>
                     <div className="min-w-0 flex-1">
