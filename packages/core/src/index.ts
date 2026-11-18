@@ -51,7 +51,6 @@ export * from "./group-picks.js";
 export * from "./helper-profile.js";
 export * from "./http-response.js";
 export * from "./image-stack.js";
-export * from "./launch-choreography.js";
 export * from "./link-preview.js";
 export * from "./mcp.js";
 export * from "./message-grouping.js";

@@ -171,14 +171,7 @@ export default function Usage() {
                     ]}
                   >
                     {dimension === "bots" && row.bot?.color ? (
-                      <BotAvatar
-                        color={row.bot.color}
-                        identity={row.bot.id}
-                        shapeSeed={row.bot.shapeSeed}
-                        character={row.bot.avatarCharacter}
-                        size={28}
-                        still
-                      />
+                      <BotAvatar character={row.bot.avatarCharacter} size={28} />
                     ) : dimension === "bots" ? (
                       <View style={styles.goneAvatar} />
                     ) : (

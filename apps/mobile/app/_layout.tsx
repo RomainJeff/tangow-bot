@@ -9,11 +9,10 @@ import {
 } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { ComputerUpdateProgress } from "../components/computer-update-progress";
-import { LaunchSplash } from "../components/launch-splash";
 import { currentApiBase, loadApiBase, loadSessionToken, selectedSpaceId } from "../lib/api";
 import { loadAppearancePreference, mobileTokens } from "../lib/appearance";
 import { useChatReducedMotion } from "../lib/chat-motion";
@@ -29,15 +28,12 @@ import { native, useResolvedAppearance } from "../lib/native";
 
 configureForegroundNotifications();
 
-// The animated `LaunchSplash` takes over immediately (see below); keep the
-// native splash frozen until it has mounted, so the native → JS handoff has
-// no flash of an empty screen.
+// Keep the native splash up until the app is ready (see `Layout`).
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 export default function Layout() {
   const { t } = useI18n();
   const [ready, setReady] = useState(false);
-  const [splashDone, setSplashDone] = useState(false);
   const resolved = useResolvedAppearance();
   const reducedMotion = useChatReducedMotion();
   const router = useRouter();
@@ -95,12 +91,9 @@ export default function Layout() {
     }
   }, [notificationResponse, ready, router]);
 
-  // The animated splash mirrors the native one pixel-for-pixel, so the native
-  // screen can come down as soon as ours has laid out — no gap, no flash.
-  const revealSplash = useCallback(() => {
-    void SplashScreen.hideAsync().catch(() => undefined);
-  }, []);
-  const handleSplashHidden = useCallback(() => setSplashDone(true), []);
+  useEffect(() => {
+    if (ready) void SplashScreen.hideAsync().catch(() => undefined);
+  }, [ready]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -245,9 +238,6 @@ export default function Layout() {
             <ComputerUpdateProgress />
           </ThemeProvider>
         ) : null}
-        {splashDone ? null : (
-          <LaunchSplash ready={ready} onHidden={handleSplashHidden} onLayout={revealSplash} />
-        )}
       </KeyboardProvider>
     </GestureHandlerRootView>
   );

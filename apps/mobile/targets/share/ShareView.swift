@@ -325,13 +325,8 @@ extension UIColor {
 }
 
 extension ShareTarget {
-  /// The bot's character, or its bloub on the app's dark square when the server predates
-  /// characters. Groups have none.
+  /// The bot's character, the neutral one when the server sent none. Groups have none.
   var avatar: UIImage? {
-    if let character { return AvatarRenderer.character(character) }
-    guard let color = color.flatMap(UIColor.init(hex:)) else { return nil }
-    return AvatarRenderer.image(
-      shape: AvatarRenderer.shape(seed: shapeSeed, botId: targetId), color: color, side: 256,
-      bodyShare: 0.3, background: UIColor(hex: avatarBackground))
+    kind == .bot ? AvatarRenderer.character(character) : nil
   }
 }

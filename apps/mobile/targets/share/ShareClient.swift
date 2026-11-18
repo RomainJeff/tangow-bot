@@ -8,11 +8,8 @@ struct ShareTarget: Identifiable, Hashable {
   let kind: Kind
   let targetId: String
   let name: String
-  /// The bot's character; groups have none. A server that predates characters sends only the
-  /// identity color and picked bloub.
+  /// The bot's character; groups have none.
   let character: String?
-  let color: String?
-  let shapeSeed: Int?
   let spaceId: String
   /// Shown only when the person belongs to more than one space.
   let spaceName: String?
@@ -126,13 +123,12 @@ struct ShareClient {
       let bots = space.bots.map { bot in
         ShareTarget(
           kind: .bot, targetId: bot.id, name: bot.name, character: bot.avatarCharacter,
-          color: bot.color, shapeSeed: bot.shapeSeed, spaceId: space.id, spaceName: label,
-          updatedAt: bot.updatedAt)
+          spaceId: space.id, spaceName: label, updatedAt: bot.updatedAt)
       }
       let groups = space.groups.map { group in
         ShareTarget(
-          kind: .group, targetId: group.id, name: group.name, character: nil, color: nil,
-          shapeSeed: nil, spaceId: space.id, spaceName: label, updatedAt: group.updatedAt)
+          kind: .group, targetId: group.id, name: group.name, character: nil,
+          spaceId: space.id, spaceName: label, updatedAt: group.updatedAt)
       }
       return bots + groups
     }
@@ -164,8 +160,6 @@ struct ShareClient {
     let id: String
     let name: String
     let avatarCharacter: String?
-    let color: String?
-    let shapeSeed: Int?
     let updatedAt: String
   }
 

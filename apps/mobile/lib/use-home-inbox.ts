@@ -26,7 +26,6 @@ import {
   unreadConversationCount,
 } from "./inbox-spaces";
 import { syncAppBadge } from "./live-notifications";
-import { saveMainBotCache } from "./main-bot-cache";
 import { setProfilePhoto } from "./profile-photo";
 import { registerPushToken } from "./push";
 import { querySpaceSearch } from "./search";
@@ -89,7 +88,6 @@ export function useHomeInbox() {
       }
       if (requestId !== inboxRequestId.current) return;
       setBots(navigation.current.bots);
-      void saveMainBotCache(navigation.current.bots);
       setBotSections(navigation.current.botSections);
       setGroups(navigation.current.groups);
       setSpaces(navigation.spaces);
