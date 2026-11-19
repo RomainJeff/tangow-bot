@@ -44,8 +44,7 @@ const IMAGES: Record<AvatarCharacterId, { full: string; mini: string }> = {
 
 /**
  * A clay character in a round disc: the still image, or with a `face` the body with its face
- * drawn live, once the body is decoded; at 20 px and below always the simplified still. A
- * working bot gets the spinning ring in ink, which holds still under reduced motion.
+ * drawn live, once the body is decoded. At 20 px and below it is always the simplified still.
  */
 export function ClayAvatar({
   character,
@@ -92,23 +91,6 @@ export function ClayAvatar({
           />
         )}
       </div>
-      <svg
-        aria-hidden="true"
-        className="tangow-bot-avatar-ring pointer-events-none absolute text-foreground"
-        style={{ inset: -4, width: size + 8, height: size + 8 }}
-        viewBox="0 0 48 48"
-        fill="none"
-      >
-        <circle
-          cx="24"
-          cy="24"
-          r="22"
-          stroke="currentColor"
-          strokeWidth="3.2"
-          strokeLinecap="round"
-          strokeDasharray="45 80"
-        />
-      </svg>
     </div>
   );
 }

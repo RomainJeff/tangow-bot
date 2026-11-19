@@ -34,6 +34,12 @@ for (const size of [80, 28]) {
   });
 }
 
+test("a working bot comes alive wherever it is shown", async ({ page }) => {
+  await page.goto(`${FIXTURE}?status=running&live=none&size=28`);
+  await expect(liveFaces(page, "still")).toHaveCount(CHARACTERS);
+  await expect(page.locator('.tangow-clay-avatar[data-working="true"]')).toHaveCount(CHARACTERS);
+});
+
 test("all live faces share one frame loop, and none runs while no face is live", async ({
   page,
 }) => {
@@ -83,27 +89,4 @@ test("reduced motion holds a live face still, also when turned on mid-session", 
   await page.mouse.move(0, 0);
   await page.waitForTimeout(400);
   expect(await pose(page)).toBe(held);
-});
-
-test("bot avatar ring stays still when reduced motion is enabled", async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto(`${FIXTURE}?status=running&live=none`);
-
-  const avatar = page.locator(".tangow-bot-avatar").first();
-  await expect(avatar).toBeVisible();
-  await expect(avatar).toHaveAttribute("data-working", "true");
-
-  const ring = avatar.locator(".tangow-bot-avatar-ring");
-  await expect(ring).toBeVisible();
-  const snapshot = () =>
-    ring.evaluate((el: SVGElement) => ({
-      animationName: getComputedStyle(el).animationName,
-      transform: getComputedStyle(el).transform,
-    }));
-  const first = await snapshot();
-  await page.waitForTimeout(300);
-  const second = await snapshot();
-
-  expect(first.animationName).toBe("none");
-  expect(second).toEqual(first);
 });
