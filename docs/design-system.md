@@ -66,7 +66,7 @@ Bot widgets use the shared [widget kit](../packages/core/src/widget/kit.ts) and 
   and for its brief end-of-run reaction, never at 20 px and below. All live
   faces share one frame loop, which stops when none is left.
 - `prefers-reduced-motion: reduce` stops `animate-arrive`, `rk-press`,
-  `rk-press-round`, `rk-press-tile`, `rk-bar`, `rk-dot`, `rk-shimmer` and `rk-buzz`, freezes every `useElapsed`
+  `rk-press-round`, `rk-press-tile`, `rk-bar`, `rk-dot` and `rk-shimmer`, freezes every `useElapsed`
   duration and holds every live face still: no blink or glance, and an
   expression changes without a fade.
 - `prefers-reduced-transparency: reduce` (Reduce Transparency on macOS and

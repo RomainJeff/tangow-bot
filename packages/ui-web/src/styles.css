@@ -450,20 +450,6 @@
   }
 }
 
-/* A working bot buzzes: a steady, linear left-right jitter. */
-@keyframes rk-buzz {
-  from {
-    transform: translateX(-1.5px) rotate(-2deg);
-  }
-  to {
-    transform: translateX(1.5px) rotate(2deg);
-  }
-}
-
-.rk-buzz {
-  animation: rk-buzz 120ms linear infinite alternate;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .animate-arrive,
   .animate-pivot,
@@ -474,7 +460,6 @@
   .rk-bar,
   .rk-dot,
   .rk-halo,
-  .rk-buzz,
   .rk-shimmer,
   .rk-word-in {
     animation: none;
