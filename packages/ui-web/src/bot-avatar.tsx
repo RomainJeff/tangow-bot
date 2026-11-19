@@ -8,6 +8,8 @@ export interface BotAvatarProps {
   status?: string;
   /** Catalogue character; missing or unknown shows the neutral character. */
   character?: string | null;
+  /** Draws the face over the body instead of the still image (the bot page hero). */
+  live?: boolean;
   className?: string;
 }
 
@@ -15,6 +17,7 @@ export const BotAvatar = memo(function BotAvatar({
   size = 38,
   status,
   character,
+  live = false,
   className,
 }: BotAvatarProps) {
   return (
@@ -22,6 +25,7 @@ export const BotAvatar = memo(function BotAvatar({
       character={character ?? null}
       size={size}
       isWorking={isWorkingStatus(status)}
+      live={live}
       className={className}
     />
   );
