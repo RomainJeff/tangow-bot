@@ -19,8 +19,20 @@ test("a bot at rest is its still image, and one kept live is drawn over its body
   await expect(page.locator('[data-face="still"] img')).toHaveCount(CHARACTERS);
 });
 
+test("a live bot whose body fails to load keeps its still image", async ({ page }) => {
+  let failed = 0;
+  await page.route("**/bodies/**", (route) => {
+    failed += 1;
+    return route.abort();
+  });
+  await page.goto(FIXTURE);
+  await expect.poll(() => failed).toBe(CHARACTERS);
+  await expect(page.locator('[data-face="live"] img')).toHaveCount(CHARACTERS);
+  await expect(liveFaces(page, "live")).toHaveCount(0);
+});
+
 for (const size of [80, 28]) {
-  test(`a live face at rest looks like the still image, ${size} px`, async ({ page }, testInfo) => {
+  test(`captures the still and live faces side by side, ${size} px`, async ({ page }, testInfo) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto(`${FIXTURE}?size=${size}`);
     await expect(liveFaces(page, "live")).toHaveCount(CHARACTERS);
