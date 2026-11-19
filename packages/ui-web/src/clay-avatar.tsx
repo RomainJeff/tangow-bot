@@ -22,6 +22,9 @@ import viking from "@tangow/avatars/characters/viking.webp";
 import vikingMini from "@tangow/avatars/characters/viking-mini.webp";
 import type { AvatarCharacterId } from "@tangow/contracts";
 import { CLAY_MINI_MAX_SIZE, characterById, cropForSize } from "@tangow/contracts";
+import { BODIES, useClayBody } from "./clay-body.js";
+import { ClayFace } from "./clay-face.js";
+import { faceFor } from "./clay-face-data.js";
 import { cn } from "./lib/utils.js";
 import "./styles.css";
 
@@ -40,22 +43,28 @@ const IMAGES: Record<AvatarCharacterId, { full: string; mini: string }> = {
 };
 
 /**
- * A clay character in a round disc. A working bot gets the spinning ring in ink, which holds
- * still under reduced motion.
+ * A clay character in a round disc: the still image, or when `live` its body with the face drawn
+ * on top, once the body is decoded; at 20 px and below always the simplified still. A working
+ * bot gets the spinning ring in ink, which holds still under reduced motion.
  */
 export function ClayAvatar({
   character,
   size,
   isWorking,
+  live = false,
   className,
 }: {
   character: string | null;
   size: number;
   isWorking: boolean;
+  live?: boolean;
   className?: string;
 }) {
   const { id, crops } = characterById(character);
   const crop = crops[cropForSize(size)];
+  const mini = size <= CLAY_MINI_MAX_SIZE;
+  const body = BODIES[id];
+  const bodyReady = useClayBody(body, live && !mini);
   return (
     <div
       className={cn(
@@ -66,18 +75,22 @@ export function ClayAvatar({
       style={{ width: size, height: size }}
     >
       <div className="relative size-full overflow-hidden rounded-full bg-muted">
-        <img
-          src={IMAGES[id][size <= CLAY_MINI_MAX_SIZE ? "mini" : "full"]}
-          alt=""
-          aria-hidden="true"
-          draggable={false}
-          className="absolute max-w-none"
-          style={{
-            width: `${(1024 / crop.side) * 100}%`,
-            left: `${(-crop.x / crop.side) * 100}%`,
-            top: `${(-crop.y / crop.side) * 100}%`,
-          }}
-        />
+        {bodyReady ? (
+          <ClayFace face={faceFor(id)} body={body} crop={crop} />
+        ) : (
+          <img
+            src={IMAGES[id][mini ? "mini" : "full"]}
+            alt=""
+            aria-hidden="true"
+            draggable={false}
+            className="absolute max-w-none"
+            style={{
+              width: `${(1024 / crop.side) * 100}%`,
+              left: `${(-crop.x / crop.side) * 100}%`,
+              top: `${(-crop.y / crop.side) * 100}%`,
+            }}
+          />
+        )}
       </div>
       <svg
         aria-hidden="true"
