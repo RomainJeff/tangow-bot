@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-11-19
+
+#### Changed
+
+- Each clay character now shows its own expression, matching its personality (curious, haughty, puzzled…), everywhere it appears on web, desktop and iOS, including iOS notifications.
+
 ### 2026-11-18
 
 #### Added
