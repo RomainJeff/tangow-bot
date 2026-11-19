@@ -21,7 +21,9 @@ test("a bot at rest is its still image, and one kept live is drawn over its body
 
 test("a live bot whose body fails to load keeps its still image", async ({ page }) => {
   let failed = 0;
+  // In dev, Vite also serves each body's module under /bodies/: only fail the image itself.
   await page.route("**/bodies/**", (route) => {
+    if (route.request().resourceType() !== "image") return route.continue();
     failed += 1;
     return route.abort();
   });
