@@ -209,7 +209,7 @@ not count as an elevation.
 ## Sizes
 
 Avatars: `receipt 14`, `stackXs 16`, `interstitial 17`, `chip 18`, `stack 20`,
-`message 26`, `row 28`, `call 120`. Controls: `hoverIcon 28`, `quickReply 32`,
+`message 32`, `row 28`, `call 120`. Controls: `hoverIcon 28`, `quickReply 32`,
 `composerIcon 34`, `capsule 36`, `mobileStack 44`, `callButton 52`. Mobile composer:
 `composerAttach 48` (the detached + bubble), `composerTarget 44` (a button's
 touch target in the capsule), `composerAction 36` (the send / stop disc).

@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 #### Added
 
-- **Clay characters come alive on web and desktop.** On a bot's page and in the conversation header, its character blinks, glances around and follows your pointer; everywhere else it comes alive while the bot works, reading with a focused look, then shows for a moment whether the task went well or failed. This replaces the spinning ring and the shaking avatar beside a working bot's status, and the face holds still when the system asks to reduce motion.
+- **Clay characters come alive on web and desktop.** On a bot's page and in the conversation header, its character blinks, glances around and follows your pointer; in lists and beside a working bot it comes alive while the bot works, reading with a focused look, then shows for a moment whether the task went well or failed. This replaces the spinning ring and the shaking avatar beside a working bot's status, and the face holds still when the system asks to reduce motion.
 
 #### Changed
 
