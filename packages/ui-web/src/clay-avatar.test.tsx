@@ -22,6 +22,13 @@ describe("BotAvatar character", () => {
     expect(larger).not.toContain("scout-mini");
   });
 
+  it("keeps the still image of a live bot until its body is decoded", () => {
+    const html = renderToString(<BotAvatar character="atlas" size={80} live />);
+    expect(html).toContain("characters/atlas.webp");
+    expect(html).not.toContain("bodies/atlas");
+    expect(html).not.toContain("tangow-clay-face");
+  });
+
   it("marks a working bot, which shows its still until its body is decoded", () => {
     // Which statuses count as working is owned by `isWorkingStatus` (core run-state tests).
     const working = renderToString(<BotAvatar character="atlas" status="running" />);

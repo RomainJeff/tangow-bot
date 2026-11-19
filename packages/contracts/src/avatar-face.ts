@@ -112,6 +112,7 @@ export interface ExpressionsFile {
   expressions: Record<string, { reglages: ExpressionSettings }>;
 }
 
+// These and the web face's gradient stops mirror the brand generator, not its export.
 /** The face's own highlight and shade, drawn over every character's colours. */
 export const FACE_LIGHT = "#FFF";
 export const FACE_SHADE = "#000";

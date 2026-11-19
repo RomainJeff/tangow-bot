@@ -30,20 +30,24 @@ function scene(t: number): FaceScene {
 }
 
 function tick(t: number) {
+  // Asked first, so a face that throws cannot stop the loop the others share.
+  frameId = requestAnimationFrame(tick);
   const now = scene(t);
   const frames = now.reduced ? 60 : Math.min(30, (t - (last || t)) / 16.7);
   last = t;
   const ease = (rate: number) => 1 - (1 - rate) ** frames;
   // Every rectangle is read before any face writes, so a frame lays out once.
   const live = [...faces];
-  const boxes = now.pointer ? live.map((face) => face.svg.getBoundingClientRect()) : null;
+  const follows = now.pointer && !now.reduced;
+  const boxes = follows ? live.map((face) => face.svg.getBoundingClientRect()) : null;
   live.forEach((face, i) => {
     face.frame(t, ease, now, boxes?.[i] ?? null);
   });
-  frameId = requestAnimationFrame(tick);
 }
 
 function onPointer(event: PointerEvent) {
+  // A finger scrolling the page is not something to look at.
+  if (event.pointerType === "touch") return;
   pointer = { x: event.clientX, y: event.clientY, at: performance.now() };
 }
 
