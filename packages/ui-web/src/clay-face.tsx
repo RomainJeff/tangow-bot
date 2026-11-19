@@ -1,8 +1,9 @@
-import type { AvatarCrop, CharacterFace, FaceEyeAnchor } from "@tangow/contracts";
+import type { AvatarCrop, CharacterFace, FaceEyeAnchor, FaceState } from "@tangow/contracts";
 import { FACE_LIGHT, FACE_SHADE } from "@tangow/contracts";
 import { useId, useLayoutEffect, useRef } from "react";
 import { FACES } from "./clay-face-data.js";
-import { drawFace, faceParts, poseOf } from "./face-pose.js";
+import { faceAnimator } from "./face-animator.js";
+import { addLiveFace } from "./face-loop.js";
 
 type Stop = [offset: number, color: string, opacity: number];
 
@@ -181,29 +182,29 @@ function Mouth({ face }: { face: CharacterFace }) {
 }
 
 /**
- * The character's body with its face drawn on top in its default expression, cut to the body's
- * outline, framed like the still image. Decorative: the avatar carries the name.
+ * The character's body with its face drawn live on top, cut to the body's outline, framed like
+ * the still image. Decorative: the avatar carries the name.
  */
 export function ClayFace({
   face,
   body,
   crop,
+  state,
 }: {
   face: CharacterFace;
   body: string;
   crop: AvatarCrop;
+  state: FaceState;
 }) {
   const id = `clay-face${useId().replace(/[^\w-]/g, "")}`;
   const svg = useRef<SVGSVGElement>(null);
+  const latest = useRef(state);
+  latest.current = state;
 
-  useLayoutEffect(() => {
-    drawFace(faceParts(svg.current!, face), poseOf(face, face.defaut), {
-      closure: 0,
-      gx: 0,
-      gy: 0,
-      jitter: 0,
-    });
-  }, [face]);
+  useLayoutEffect(
+    () => addLiveFace(faceAnimator(svg.current!, face, () => latest.current)),
+    [face],
+  );
 
   const shadow = face.couleurs.lisere;
   return (

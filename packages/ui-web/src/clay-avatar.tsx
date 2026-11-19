@@ -20,7 +20,7 @@ import toutankit from "@tangow/avatars/characters/toutankit.webp";
 import toutankitMini from "@tangow/avatars/characters/toutankit-mini.webp";
 import viking from "@tangow/avatars/characters/viking.webp";
 import vikingMini from "@tangow/avatars/characters/viking-mini.webp";
-import type { AvatarCharacterId } from "@tangow/contracts";
+import type { AvatarCharacterId, FaceState } from "@tangow/contracts";
 import { CLAY_MINI_MAX_SIZE, characterById, cropForSize } from "@tangow/contracts";
 import { BODIES, useClayBody } from "./clay-body.js";
 import { ClayFace } from "./clay-face.js";
@@ -43,28 +43,28 @@ const IMAGES: Record<AvatarCharacterId, { full: string; mini: string }> = {
 };
 
 /**
- * A clay character in a round disc: the still image, or when `live` its body with the face drawn
- * on top, once the body is decoded; at 20 px and below always the simplified still. A working
- * bot gets the spinning ring in ink, which holds still under reduced motion.
+ * A clay character in a round disc: the still image, or with a `face` the body with its face
+ * drawn live, once the body is decoded; at 20 px and below always the simplified still. A
+ * working bot gets the spinning ring in ink, which holds still under reduced motion.
  */
 export function ClayAvatar({
   character,
   size,
   isWorking,
-  live = false,
+  face = null,
   className,
 }: {
   character: string | null;
   size: number;
   isWorking: boolean;
-  live?: boolean;
+  face?: FaceState | null;
   className?: string;
 }) {
   const { id, crops } = characterById(character);
   const crop = crops[cropForSize(size)];
   const mini = size <= CLAY_MINI_MAX_SIZE;
   const body = BODIES[id];
-  const bodyReady = useClayBody(body, live && !mini);
+  const bodyReady = useClayBody(body, face !== null && !mini);
   return (
     <div
       className={cn(
@@ -75,8 +75,8 @@ export function ClayAvatar({
       style={{ width: size, height: size }}
     >
       <div className="relative size-full overflow-hidden rounded-full bg-muted">
-        {bodyReady ? (
-          <ClayFace face={faceFor(id)} body={body} crop={crop} />
+        {face && bodyReady ? (
+          <ClayFace face={faceFor(id)} body={body} crop={crop} state={face} />
         ) : (
           <img
             src={IMAGES[id][mini ? "mini" : "full"]}
