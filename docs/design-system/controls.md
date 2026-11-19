@@ -174,11 +174,15 @@ class. Ported from beautifului.dev
 A bot's clay character in a round disc: the catalogue image (`characterById`,
 neutral Scout when the character is missing or unknown) cropped by size, on the
 `bg-muted` disc on web and the `avatarDisc` veil on iPhone. Sizes up to 20 px
-use the mini image. A working bot gets a spinning ink ring around the disc,
-held still under reduced motion.
+use the mini image. Above 20 px on web, the face comes alive over the faceless
+body (`ClayFace`) while the bot works and for two seconds after a run it saw
+complete or fail; `live` keeps it alive at rest too, on the bot page hero and
+in the conversation header. It is the still image otherwise, and until the body
+is decoded. `data-working` marks a working bot. The iPhone keeps the still
+image and its working ring for now.
 
-Props: `character?`, `size?`, `status?`. It carries no accessible name: the
-name beside it does.
+Props: `character?`, `size?`, `status?`, `live?`. It carries no accessible
+name: the name beside it does.
 
 ## SettingRow
 

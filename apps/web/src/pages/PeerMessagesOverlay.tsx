@@ -187,7 +187,7 @@ export function PeerMessagesOverlay({
                   <div className={`flex items-end gap-2${group.isFirstOfGroup ? "" : " -mt-2.75"}`}>
                     <div className="w-message shrink-0">
                       {group.isLastOfGroup ? (
-                        <BotAvatar character={avatarCharacter} size={26} />
+                        <BotAvatar character={avatarCharacter} size={32} />
                       ) : null}
                     </div>
                     <div className="min-w-0 flex-1">
