@@ -289,7 +289,7 @@ const CARD_ONLY_BLOCK_KINDS = new Set<string>([
  * between two consecutive asides. */
 const GROUP_GAP = 14;
 const WITHIN_GROUP_GAP = 3;
-/** Avatar column (`sizes.message`, 26) plus its gap (8): a bot row's
+/** Avatar column (`sizes.message`, 32) plus its gap (8): a bot row's
  * reactions, and a card's indent, line up under its group's prose in multi.
  * 0 in mono, which has no avatar column. */
 const FRAMED_INDENT = sizes.message + 8;

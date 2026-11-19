@@ -389,7 +389,7 @@ export const sizes = {
   interstitial: 17,
   chip: 18,
   stack: 20,
-  message: 26,
+  message: 32,
   row: 28,
   call: 120,
   hoverIcon: 28,
