@@ -1,10 +1,12 @@
 import type { AvatarCrop, CharacterFace, FaceState } from "@tangow/contracts";
 import { eyesCentre, eyeVeil, gazeOffsets } from "@tangow/contracts";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ImageSourcePropType } from "react-native";
-import { StyleSheet, View } from "react-native";
+import { Easing, StyleSheet, View } from "react-native";
+import { useReducedMotion } from "react-native-reanimated";
 import Svg, { Image as SvgImage } from "react-native-svg";
-import { FACES, poseOf } from "../lib/clay-face";
+import type { FacePose } from "../lib/clay-face";
+import { FACES, mixPose, poseOf, samePose } from "../lib/clay-face";
 import type { Frame } from "./clay-face-layers";
 import {
   ClosedLid,
@@ -17,6 +19,33 @@ import {
   Under,
   UpperLid,
 } from "./clay-face-layers";
+
+const EXPRESSION_MS = 300;
+const EXPRESSION_EASING = Easing.bezier(0.23, 1, 0.32, 1);
+
+/** The pose drawn: from the still's, eased into each new expression; snapped under Reduce Motion. */
+function useFacePose(face: CharacterFace, target: FacePose, reduced: boolean): FacePose {
+  const [pose, setPose] = useState(() => poseOf(face, { expression: face.defaut, gaze: "free" }));
+  const shown = useRef(pose);
+  shown.current = pose;
+  useEffect(() => {
+    const from = shown.current;
+    if (reduced || samePose(from, target)) {
+      setPose(target);
+      return;
+    }
+    const start = performance.now();
+    let frame = 0;
+    const step = (now: number) => {
+      const k = Math.min(1, (now - start) / EXPRESSION_MS);
+      setPose(k === 1 ? target : mixPose(from, target, EXPRESSION_EASING(k)));
+      if (k < 1) frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [target, reduced]);
+  return pose;
+}
 
 /**
  * The character's faceless body with its face drawn live on top, framed like the still image.
@@ -39,10 +68,12 @@ export function ClayFace({
   onReady: () => void;
 }) {
   const [loaded, setLoaded] = useState(false);
-  const pose = useMemo(
+  const reduced = useReducedMotion();
+  const target = useMemo(
     () => poseOf(face, { expression: state.expression, gaze: state.gaze }),
     [face, state.expression, state.gaze],
   );
+  const pose = useFacePose(face, target, reduced);
   const frame: Frame = { crop, k: size / crop.side };
   const { k } = frame;
   const offsets = gazeOffsets(face);
