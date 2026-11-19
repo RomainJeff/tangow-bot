@@ -1,6 +1,7 @@
 import { isWorkingStatus } from "@tangow/core";
 import { memo } from "react";
 import { ClayAvatar } from "./clay-avatar.js";
+import { faceFor } from "./clay-face-data.js";
 import { cn } from "./lib/utils.js";
 
 export interface BotAvatarProps {
@@ -8,7 +9,7 @@ export interface BotAvatarProps {
   status?: string;
   /** Catalogue character; missing or unknown shows the neutral character. */
   character?: string | null;
-  /** Draws the face over the body instead of the still image (the bot page hero). */
+  /** Keeps the face alive at rest, over its body, instead of the still image. */
   live?: boolean;
   className?: string;
 }
@@ -25,7 +26,9 @@ export const BotAvatar = memo(function BotAvatar({
       character={character ?? null}
       size={size}
       isWorking={isWorkingStatus(status)}
-      live={live}
+      face={
+        live ? { expression: faceFor(character).defaut, gaze: "free", motion: "expression" } : null
+      }
       className={className}
     />
   );
