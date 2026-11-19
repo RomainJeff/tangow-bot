@@ -12,8 +12,8 @@ import { useChatReducedMotion } from "../lib/chat-motion";
 
 /**
  * A working bot buzzes: a steady, linear left-right jitter of its avatar,
- * mounted only while the typing bubble shows. Mirrors `rk-buzz` in
- * `packages/ui-web/src/styles.css`; reduced motion keeps it still.
+ * mounted only while the typing bubble shows (the web dropped its jitter for
+ * the live clay face); reduced motion keeps it still.
  */
 export function BuzzingAvatar({ children }: { children: ReactNode }) {
   const reducedMotion = useChatReducedMotion();

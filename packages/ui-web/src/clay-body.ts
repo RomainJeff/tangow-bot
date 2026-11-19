@@ -10,6 +10,7 @@ import sorciere from "@tangow/avatars/bodies/sorciere.webp";
 import toutankit from "@tangow/avatars/bodies/toutankit.webp";
 import viking from "@tangow/avatars/bodies/viking.webp";
 import type { AvatarCharacterId } from "@tangow/contracts";
+import { characterById } from "@tangow/contracts";
 import { useEffect, useState } from "react";
 
 /** The characters without a face, for the live face to sit on. */
@@ -51,6 +52,11 @@ function loadBody(src: string): Promise<boolean> {
     loading.set(src, load);
   }
   return load;
+}
+
+/** Decodes the bodies of these characters ahead, so a face that comes alive does not wait. */
+export function preloadClayBodies(characters: Iterable<string | null | undefined>): void {
+  for (const character of characters) void loadBody(BODIES[characterById(character).id]);
 }
 
 /** Whether the body is decoded, loading it when wanted; until then the still image stays. */

@@ -97,7 +97,9 @@ test("create group from + and see two bots in one transcript", async ({ page }, 
   await expect(groupAvatar.locator(".tangow-clay-avatar")).toHaveCount(2);
   const workingAvatar = groupAvatar.locator('.tangow-clay-avatar[data-working="true"]');
   await expect(workingAvatar).toHaveCount(1);
-  await expect(workingAvatar).toHaveAttribute("data-working", "true");
+  // A member in the sidebar's stack is under 20 px: the simplified still, even while it works.
+  await expect(workingAvatar.locator("img")).toHaveAttribute("src", /-mini\.webp/);
+  await expect(groupAvatar.locator(".tangow-clay-face")).toHaveCount(0);
   await captureScreenshot(page, testInfo, "group-avatar-active");
   await page.unroute("**/rpc/groups/list");
   await page.unroute("**/rpc/threads/get");

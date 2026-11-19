@@ -15,6 +15,9 @@ export interface FaceState {
   motion: FaceMotion;
 }
 
+/** How long a face shows how a run it watched ended. */
+export const FACE_REACTION_MS = 2000;
+
 /** The pointer is followed while it moved this recently. */
 export const FACE_POINTER_MS = 2500;
 

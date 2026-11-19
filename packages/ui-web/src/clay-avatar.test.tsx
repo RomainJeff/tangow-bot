@@ -7,6 +7,8 @@ describe("BotAvatar character", () => {
     ["missing", undefined],
     ["null", null],
     ["unknown", "no-such-character"],
+    ["hostile", "<svg/onload=1>"],
+    ["a prototype key", "__proto__"],
   ])("draws the neutral character when the character is %s", (_label, character) => {
     const html = renderToString(<BotAvatar character={character} size={40} />);
     expect(html).toContain("tangow-clay-avatar");
@@ -27,12 +29,12 @@ describe("BotAvatar character", () => {
     expect(html).not.toContain("tangow-clay-face");
   });
 
-  it("spins the ring of a working bot and keeps it mounted, still, when idle", () => {
+  it("marks a working bot, which shows its still until its body is decoded", () => {
     // Which statuses count as working is owned by `isWorkingStatus` (core run-state tests).
     const working = renderToString(<BotAvatar character="atlas" status="running" />);
-    const idle = renderToString(<BotAvatar character="atlas" status="idle" />);
+    const idle = renderToString(<BotAvatar character="atlas" status="idle" live />);
     expect(working).toContain('data-working="true"');
+    expect(working).toContain("characters/atlas.webp");
     expect(idle).toContain('data-working="false"');
-    expect(idle).toContain("tangow-bot-avatar-ring");
   });
 });

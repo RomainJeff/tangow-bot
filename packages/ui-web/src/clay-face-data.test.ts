@@ -1,4 +1,5 @@
 import { AVATAR_CHARACTERS } from "@tangow/contracts";
+import { faceReactionFor, faceStateFor } from "@tangow/core";
 import { describe, expect, it } from "vitest";
 import { EXPRESSIONS, faceFor } from "./clay-face-data.js";
 
@@ -11,10 +12,13 @@ describe("clay face data", () => {
     expect(faceFor(id).id).toBe("scout");
   });
 
-  it("knows every character's default expression", () => {
-    const missing = AVATAR_CHARACTERS.map(({ id }) => faceFor(id).defaut).filter(
-      (key) => !(key in EXPRESSIONS.expressions),
-    );
-    expect(missing).toEqual([]);
+  it("knows every expression a character or a run status can ask for", () => {
+    const asked = [
+      ...AVATAR_CHARACTERS.map(({ id }) => faceFor(id).defaut),
+      faceStateFor("running", "").expression,
+      faceReactionFor("running", "completed")!.expression,
+      faceReactionFor("running", "failed")!.expression,
+    ];
+    expect(asked.filter((key) => !(key in EXPRESSIONS.expressions))).toEqual([]);
   });
 });
