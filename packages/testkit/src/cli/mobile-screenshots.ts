@@ -77,7 +77,8 @@ async function main() {
 
   try {
     await waitForHealth(`${HOST_API_URL}/health`, 15_000);
-    for (const flow of ["screenshots", "notification-demo"]) {
+    const flows = process.argv.slice(2);
+    for (const flow of flows.length ? flows : ["screenshots", "notification-demo"]) {
       await runProcess(
         "maestro",
         [
