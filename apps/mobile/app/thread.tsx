@@ -953,6 +953,7 @@ function Thread() {
                 size={34}
                 status={currentBotStatus}
                 muted={rosterMuted(currentBot)}
+                live
               />
             ) : null}
             {inGroup && groupAvatarItems.length > 0 ? (

@@ -1,6 +1,7 @@
-import { isWorkingStatus } from "@tangow/core";
+import { faceStateFor, isWorkingStatus } from "@tangow/core";
 import { memo } from "react";
 import { View } from "react-native";
+import { faceFor } from "../lib/clay-face";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
 import { ClayAvatar } from "./clay-avatar";
@@ -12,17 +13,25 @@ export const BotAvatar = memo(function BotAvatar({
   status,
   character,
   muted = false,
+  live = false,
 }: {
   size?: number;
   status?: string;
   character?: string | null;
   muted?: boolean;
+  /** Draws the face live over the body, as on the bot page hero and the thread header. */
+  live?: boolean;
 }) {
   const { t } = useI18n();
   const tokens = useMobileTokens();
   return (
     <View style={{ width: size, height: size }}>
-      <ClayAvatar character={character ?? null} size={size} isWorking={isWorkingStatus(status)} />
+      <ClayAvatar
+        character={character ?? null}
+        size={size}
+        isWorking={isWorkingStatus(status)}
+        face={live ? faceStateFor(status, faceFor(character).defaut) : null}
+      />
       {muted ? (
         <View
           accessible

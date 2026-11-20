@@ -1,12 +1,14 @@
-import type { AvatarCharacterId } from "@tangow/contracts";
+import type { AvatarCharacterId, FaceState } from "@tangow/contracts";
 import { CLAY_MINI_MAX_SIZE, characterById, cropForSize } from "@tangow/contracts";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ImageSourcePropType } from "react-native";
 import { Animated, Easing, StyleSheet, View } from "react-native";
 import { useReducedMotion } from "react-native-reanimated";
 import Svg, { Circle, Image as SvgImage } from "react-native-svg";
+import { faceFor } from "../lib/clay-face";
 import { useI18n } from "../lib/i18n";
 import { useMobileTokens } from "../lib/native";
+import { ClayFace } from "./clay-face";
 
 const IMAGES: Record<AvatarCharacterId, { full: ImageSourcePropType; mini: ImageSourcePropType }> =
   {
@@ -56,29 +58,53 @@ const IMAGES: Record<AvatarCharacterId, { full: ImageSourcePropType; mini: Image
     },
   };
 
+/** The characters without a face, for the live face to sit on. */
+const BODIES: Record<AvatarCharacterId, ImageSourcePropType> = {
+  scout: require("@tangow/avatars/bodies/scout.webp"),
+  atlas: require("@tangow/avatars/bodies/atlas.webp"),
+  ivy: require("@tangow/avatars/bodies/ivy.webp"),
+  "saint-demon": require("@tangow/avatars/bodies/saint-demon.webp"),
+  sorciere: require("@tangow/avatars/bodies/sorciere.webp"),
+  roi: require("@tangow/avatars/bodies/roi.webp"),
+  mariachi: require("@tangow/avatars/bodies/mariachi.webp"),
+  viking: require("@tangow/avatars/bodies/viking.webp"),
+  monstre: require("@tangow/avatars/bodies/monstre.webp"),
+  toutankit: require("@tangow/avatars/bodies/toutankit.webp"),
+  "docteur-disquette": require("@tangow/avatars/bodies/docteur-disquette.webp"),
+};
+
 /** The exported images are cropped from a 1024 px square. */
 const SOURCE_SIDE = 1024;
 const RING_INSET = 4;
 
 /**
- * A clay character in a round disc, as on web. A working bot gets the spinning ink ring, which
- * holds still under Reduce Motion. The image is drawn in SVG, framed by the crop's viewBox: a
- * native `Image` in the thread's transparent header title blurred the whole thread on iOS 26+.
- * The disc is the translucent `avatarDisc` veil, so it holds over every part of the ambient light.
+ * A clay character in a round disc, as on web: the still image, or with a `face` the body with
+ * its face drawn live, once the body has loaded. At 20 pt and below it is always the simplified
+ * still. A working bot gets the spinning ink ring, which holds still under Reduce Motion. Images
+ * are drawn in SVG, framed by the crop's viewBox: a native `Image` in the thread's transparent
+ * header title blurred the whole thread on iOS 26+. The disc is the translucent `avatarDisc`
+ * veil, so it holds over every part of the ambient light.
  */
 export function ClayAvatar({
   character,
   size,
   isWorking,
+  face = null,
 }: {
   character: string | null;
   size: number;
   isWorking: boolean;
+  face?: FaceState | null;
 }) {
   const { t } = useI18n();
   const tokens = useMobileTokens();
   const { id, crops } = characterById(character);
   const crop = crops[cropForSize(size)];
+  const mini = size <= CLAY_MINI_MAX_SIZE;
+  const live = face !== null && !mini;
+  // The still stays mounted under a live face, so it shows at once when the face goes still.
+  const [ready, setReady] = useState<string | null>(null);
+  if (!live && ready !== null) setReady(null);
   return (
     <View
       style={{ width: size, height: size }}
@@ -91,13 +117,26 @@ export function ClayAvatar({
           { width: size, height: size, borderRadius: size / 2, backgroundColor: tokens.avatarDisc },
         ]}
       >
-        <Svg width={size} height={size} viewBox={`${crop.x} ${crop.y} ${crop.side} ${crop.side}`}>
-          <SvgImage
-            href={IMAGES[id][size <= CLAY_MINI_MAX_SIZE ? "mini" : "full"]}
-            width={SOURCE_SIDE}
-            height={SOURCE_SIDE}
+        <View style={{ opacity: live && ready === id ? 0 : 1 }}>
+          <Svg width={size} height={size} viewBox={`${crop.x} ${crop.y} ${crop.side} ${crop.side}`}>
+            <SvgImage
+              href={IMAGES[id][mini ? "mini" : "full"]}
+              width={SOURCE_SIDE}
+              height={SOURCE_SIDE}
+            />
+          </Svg>
+        </View>
+        {live ? (
+          <ClayFace
+            key={id}
+            face={faceFor(id)}
+            body={BODIES[id]}
+            crop={crop}
+            size={size}
+            state={face}
+            onReady={() => setReady(id)}
           />
-        </Svg>
+        ) : null}
       </View>
       {isWorking ? <WorkingRing size={size} color={tokens.foreground} /> : null}
     </View>
