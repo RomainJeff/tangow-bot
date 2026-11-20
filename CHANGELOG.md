@@ -86,6 +86,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The macOS desktop app now finds new Tangow versions on GitHub at launch and every hour, downloads them in the background and installs them on restart, instead of reporting that no desktop release was published.
 - When DuckDuckGo blocks the bot's built-in web search with a bot check, the bot now opens the search on its computer and asks you to solve the check, instead of treating every search as returning nothing.
 - When the computer service refuses to start a reply's or a routine's computer, the run now fails within seconds with the real reason, instead of after 15 minutes with an unrelated message.
+- On a Docker-hosted Team Computer, a screen that fails to start now shows an error with Retry screen instead of staying on Connecting forever.
 
 ### 2026-11-14
 
