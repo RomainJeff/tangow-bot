@@ -1,7 +1,7 @@
 import { i18n } from "@lingui/core";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { ChatMarkdown } from "@tangow/chat-ui/web";
-import type { ThreadEntry } from "@tangow/contracts";
+import type { EntryId, ThreadEntry } from "@tangow/contracts";
 import {
   computeMessageGroups,
   peerConversations,
@@ -12,7 +12,6 @@ import {
 import { BotAvatar, Button, Dialog, DialogClose, DialogContent, DialogTitle } from "@tangow/ui-web";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { desktopBridge } from "../lib/desktop";
-import { loadPeerHistory } from "../lib/peer-history";
 import { rpc } from "../lib/rpc";
 import { WindowChrome } from "./WindowChrome";
 
@@ -42,6 +41,9 @@ export function PeerMessagesOverlay({
   const [historyReady, setHistoryReady] = useState(false);
   const [historyFailed, setHistoryFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const olderCursor = useRef<EntryId | null>(null);
+  const loadingOlder = useRef(false);
+  const heightBeforeOlder = useRef<number | null>(null);
   const conversation = useMemo(() => {
     if (!historyReady) return null;
     return peerConversations(entries).find((entry) => entry.peerBotId === peerBotId) ?? null;
@@ -65,23 +67,28 @@ export function PeerMessagesOverlay({
   // Oldest-first order stays, but the view opens on the latest exchange.
   useLayoutEffect(() => {
     const element = transcriptRef.current;
-    if (!element || !conversation) return;
-    element.scrollTop = element.scrollHeight;
-  }, [conversation]);
+    if (element && historyReady) element.scrollTop = element.scrollHeight;
+  }, [historyReady]);
+
+  useLayoutEffect(() => {
+    const element = transcriptRef.current;
+    if (!element || heightBeforeOlder.current === null) return;
+    element.scrollTop += element.scrollHeight - heightBeforeOlder.current;
+    heightBeforeOlder.current = null;
+  }, [entries]);
 
   useEffect(() => {
     const abort = new AbortController();
     setHistoryReady(false);
     setHistoryFailed(false);
     setEntries([]);
-    void loadPeerHistory({
-      signal: abort.signal,
-      loadPage: (before, signal) =>
-        rpc.threads.messages({ botId, before, includePeerRuns: true }, { signal }),
-    })
-      .then((loaded) => {
+    olderCursor.current = null;
+    rpc.threads
+      .peerMessages({ botId, peerBotId }, { signal: abort.signal })
+      .then((page) => {
         if (abort.signal.aborted) return;
-        setEntries(loaded);
+        setEntries(page.entries);
+        olderCursor.current = page.olderCursor;
         setHistoryReady(true);
       })
       .catch(() => {
@@ -92,7 +99,23 @@ export function PeerMessagesOverlay({
     return () => {
       abort.abort();
     };
-  }, [botId, reloadKey]);
+  }, [botId, peerBotId, reloadKey]);
+
+  async function loadOlder() {
+    const element = transcriptRef.current;
+    const before = olderCursor.current;
+    if (!element || before === null || loadingOlder.current) return;
+    loadingOlder.current = true;
+    try {
+      const page = await rpc.threads.peerMessages({ botId, peerBotId, before });
+      heightBeforeOlder.current = element.scrollHeight;
+      setEntries((held) => [...page.entries, ...held]);
+      olderCursor.current = page.olderCursor;
+    } catch {
+    } finally {
+      loadingOlder.current = false;
+    }
+  }
 
   const title = `${botName} · ${peerBotName}`;
 
@@ -153,6 +176,9 @@ export function PeerMessagesOverlay({
           <div
             ref={transcriptRef}
             data-testid="peer-conversation-transcript"
+            onScroll={(event) => {
+              if (event.currentTarget.scrollTop < 400) void loadOlder();
+            }}
             className="rk-scroll flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-4 py-5 md:px-7 md:py-6"
           >
             {conversation.messages.map((peerMessage, index) => {
@@ -171,7 +197,7 @@ export function PeerMessagesOverlay({
                   })
                 : "";
               return (
-                <Fragment key={`${peerMessage.messageId}-${index}`}>
+                <Fragment key={peerMessage.messageId}>
                   {timeMarker ? (
                     <time
                       dateTime={peerMessage.createdAt}

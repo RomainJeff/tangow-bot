@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-11-20
+
+#### Fixed
+
+- A chat between two bots now opens right away on its latest messages, on web, desktop and iOS, and loads earlier ones as you scroll up, instead of reading the bot's whole history first and opening at the top on iOS.
+
 ### 2026-11-19
 
 #### Added
