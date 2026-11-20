@@ -39,3 +39,32 @@ export function poseOf(
     mouth: mouthShape(face.bouche, face.yeux[0]!.r, settings),
   };
 }
+
+function mix<T extends object>(from: T, to: T, k: number): T {
+  const out = { ...from };
+  for (const key of Object.keys(to) as Array<keyof T>) {
+    const a = from[key] as number;
+    (out[key] as number) = a + ((to[key] as number) - a) * k;
+  }
+  return out;
+}
+
+/** The pose `k` of the way from one pose to another. */
+export function mixPose(from: FacePose, to: FacePose, k: number): FacePose {
+  return {
+    eyes: from.eyes.map((eye, i) => mix(eye, to.eyes[i]!, k)),
+    head: mix(from.head, to.head, k),
+    mouth: mix(from.mouth, to.mouth, k),
+  };
+}
+
+/** Whether two poses are drawn the same, so there is nothing to ease. */
+export function samePose(a: FacePose, b: FacePose): boolean {
+  const same = (x: object, y: object) =>
+    Object.entries(x).every(([key, value]) => (y as Record<string, unknown>)[key] === value);
+  return (
+    a.eyes.every((eye, i) => same(eye, b.eyes[i]!)) &&
+    same(a.head, b.head) &&
+    same(a.mouth, b.mouth)
+  );
+}

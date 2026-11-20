@@ -123,7 +123,6 @@ import { AnimatedMessageBubble, MessageArrival } from "../components/animated-me
 import { BotAvatar } from "../components/bot-avatar";
 import type { BotBubbleMeta } from "../components/bot-bubble";
 import { BotBubble, BubbleMeta } from "../components/bot-bubble";
-import { BuzzingAvatar } from "../components/buzzing-avatar";
 import { ComposerAttachment } from "../components/composer-attachment";
 import { ComposerLinkPreview } from "../components/composer-link-preview";
 import { ComposerAttachBubble, ComposerShell } from "../components/composer-shell";
@@ -2563,11 +2562,7 @@ function Thread() {
       onLayout={() => performScroll(scrollBehavior.current.onTailChanged())}
     >
       <MessageRow
-        avatar={
-          <BuzzingAvatar>
-            {workingActive ? workingAvatar : lastWorking.current.avatar}
-          </BuzzingAvatar>
-        }
+        avatar={workingActive ? workingAvatar : lastWorking.current.avatar}
         author={workingActive ? workingName : lastWorking.current.name}
         showAuthor={inGroup}
         showAvatar={inGroup}
