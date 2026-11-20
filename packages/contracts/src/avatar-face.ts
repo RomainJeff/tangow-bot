@@ -194,12 +194,13 @@ export function pupilReach(eye: FaceEyeAnchor, ps: number): number {
 
 /**
  * A lid's edge, a parabola of curve `c` (-1 a cup, 1 a cap) over ±1.6 r, and the plate it
- * bounds, reaching 2.4 r above (upper lid) or below (lower lid) the eye.
+ * bounds, reaching `reach` eye radii above (upper lid) or below (lower lid) the eye.
  */
 export function lidEdge(
   eye: FaceEyeAnchor,
   c: number,
   side: "upper" | "lower",
+  reach = 2.4,
 ): { edge: string; plate: string } {
   const X = 1.6 * eye.r;
   const B = (c * 0.12 * eye.r * X * X) / (eye.r + 6) ** 2;
@@ -209,10 +210,10 @@ export function lidEdge(
   const yq = n1(eye.cy - B);
   const edge = `M${x0} ${y} Q${n1(eye.cx)} ${yq} ${x1} ${y}`;
   if (side === "lower") {
-    const bottom = n1(eye.cy + 2.4 * eye.r);
+    const bottom = n1(eye.cy + reach * eye.r);
     return { edge, plate: `${edge} L${x1} ${bottom} L${x0} ${bottom} Z` };
   }
-  const top = n1(eye.cy - 2.4 * eye.r);
+  const top = n1(eye.cy - reach * eye.r);
   return {
     edge,
     plate: `M${x0} ${top} L${x1} ${top} L${x1} ${y} Q${n1(eye.cx)} ${yq} ${x0} ${y} Z`,

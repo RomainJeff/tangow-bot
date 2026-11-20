@@ -63,8 +63,9 @@ Bot widgets use the shared [widget kit](../packages/core/src/widget/kit.ts) and 
 - `rk-press` on anything pressable; `duration-(--duration-hover)` for hover.
 - **Nothing loops continuously except a live clay face**: always on the bot
   page hero and in the conversation header, elsewhere only while its bot works
-  and for its brief end-of-run reaction, never at 20 px and below. All live
-  faces share one frame loop, which stops when none is left.
+  and for its brief end-of-run reaction, never at 20 px and below. On web all
+  live faces share one frame loop, which stops when none is left; on iPhone
+  each face runs native animations that stop when it unmounts.
 - `prefers-reduced-motion: reduce` stops `animate-arrive`, `rk-press`,
   `rk-press-round`, `rk-press-tile`, `rk-bar`, `rk-dot` and `rk-shimmer`, freezes every `useElapsed`
   duration and holds every live face still: no blink or glance, and an

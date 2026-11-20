@@ -174,12 +174,14 @@ class. Ported from beautifului.dev
 A bot's clay character in a round disc: the catalogue image (`characterById`,
 neutral Scout when the character is missing or unknown) cropped by size, on the
 `bg-muted` disc on web and the `avatarDisc` veil on iPhone. Sizes up to 20 px
-use the mini image. Above 20 px on web, the face comes alive over the faceless
-body (`ClayFace`) while the bot works and for two seconds after a run it saw
+use the mini image. Above 20 px, the face comes alive over the faceless body
+(`ClayFace`) while the bot works and for two seconds after a run it saw
 complete or fail; `live` keeps it alive at rest too, on the bot page hero and
 in the conversation header. It is the still image otherwise, and until the body
-is decoded. `data-working` marks a working bot. The iPhone keeps the still
-image and its working ring for now.
+is loaded. `data-working` marks a working bot on web; on iPhone the avatar of a
+working bot reads "Working" to VoiceOver. The iPhone face moves on the native
+driver: its paths are drawn again only when the expression changes, and gaze,
+blinks and mouth motions are transforms of round clipped layers.
 
 Props: `character?`, `size?`, `status?`, `live?`. It carries no accessible
 name: the name beside it does.
