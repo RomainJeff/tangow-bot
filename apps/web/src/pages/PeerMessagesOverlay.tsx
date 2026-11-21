@@ -9,7 +9,16 @@ import {
   stripPeerAddressPrefix,
   threadTimeMarkerLabel,
 } from "@tangow/core";
-import { BotAvatar, Button, Dialog, DialogClose, DialogContent, DialogTitle } from "@tangow/ui-web";
+import {
+  BotAvatar,
+  Button,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+  MessageBubble,
+  MessageRow,
+} from "@tangow/ui-web";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { desktopBridge } from "../lib/desktop";
 import { rpc } from "../lib/rpc";
@@ -179,63 +188,50 @@ export function PeerMessagesOverlay({
             onScroll={(event) => {
               if (event.currentTarget.scrollTop < 400) void loadOlder();
             }}
-            className="rk-scroll flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-4 py-5 md:px-7 md:py-6"
+            className="rk-scroll flex min-h-0 flex-1 flex-col overflow-y-auto py-5 md:py-6"
           >
-            {conversation.messages.map((peerMessage, index) => {
-              const group = peerGroups[index]!;
-              const sent = peerMessage.direction === "sent";
-              const name = sent ? botName : peerBotName;
-              const avatarCharacter = sent ? botAvatarCharacter : peerBotAvatarCharacter;
-              const timeMarker = showsTimeMarker(
-                conversation.messages[index - 1]?.createdAt,
-                peerMessage.createdAt,
-              )
-                ? threadTimeMarkerLabel(peerMessage.createdAt, {
-                    locale: i18n.locale || "en",
-                    today: t`Today`,
-                    yesterday: t`Yesterday`,
-                  })
-                : "";
-              return (
-                <Fragment key={peerMessage.messageId}>
-                  {timeMarker ? (
-                    <time
-                      dateTime={peerMessage.createdAt}
-                      className="self-center text-label tabular-nums text-muted-foreground"
-                    >
-                      {timeMarker}
-                    </time>
-                  ) : null}
-                  {/* 14px between groups (the container's own `gap-3.5`),
-                      narrowed to 3px within a group. Both sides render on the
-                      left, in `muted` bubbles — never the dark `chatUser`
-                      fill, which is reserved for the human. */}
-                  <div className={`flex items-end gap-2${group.isFirstOfGroup ? "" : " -mt-2.75"}`}>
-                    <div className="w-message shrink-0">
-                      {group.isLastOfGroup ? (
-                        <BotAvatar character={avatarCharacter} size={32} />
-                      ) : null}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      {group.isFirstOfGroup ? (
-                        <div className="mb-0.25 ps-3">
-                          <span className="text-author text-foreground" dir="auto">
-                            {name}
-                          </span>
-                        </div>
-                      ) : null}
-                      <div
-                        data-slot="message-row-bubble"
-                        className="w-fit max-w-22/25 rounded-bubble bg-chat-bot px-4 py-3 text-foreground shadow-bubble"
-                        dir="auto"
+            <div className="mx-auto flex w-full max-w-thread flex-col gap-3.5 px-6.5">
+              {conversation.messages.map((peerMessage, index) => {
+                const group = peerGroups[index]!;
+                const sent = peerMessage.direction === "sent";
+                const name = sent ? botName : peerBotName;
+                const avatarCharacter = sent ? botAvatarCharacter : peerBotAvatarCharacter;
+                const timeMarker = showsTimeMarker(
+                  conversation.messages[index - 1]?.createdAt,
+                  peerMessage.createdAt,
+                )
+                  ? threadTimeMarkerLabel(peerMessage.createdAt, {
+                      locale: i18n.locale || "en",
+                      today: t`Today`,
+                      yesterday: t`Yesterday`,
+                    })
+                  : "";
+                return (
+                  <Fragment key={peerMessage.messageId}>
+                    {timeMarker ? (
+                      <time
+                        dateTime={peerMessage.createdAt}
+                        className="self-center text-label tabular-nums text-muted-foreground"
                       >
+                        {timeMarker}
+                      </time>
+                    ) : null}
+                    {/* Both sides render as bot rows: the dark `chatUser` fill is the human's. */}
+                    <MessageRow
+                      avatar={<BotAvatar character={avatarCharacter} size={32} />}
+                      author={<span dir="auto">{name}</span>}
+                      showAuthor={group.isFirstOfGroup}
+                      showAvatar={group.isLastOfGroup}
+                      className={group.isFirstOfGroup ? undefined : "-mt-2.75"}
+                    >
+                      <MessageBubble inGroup dir="auto">
                         <ChatMarkdown>{stripPeerAddressPrefix(peerMessage.text)}</ChatMarkdown>
-                      </div>
-                    </div>
-                  </div>
-                </Fragment>
-              );
-            })}
+                      </MessageBubble>
+                    </MessageRow>
+                  </Fragment>
+                );
+              })}
+            </div>
           </div>
         )}
 
