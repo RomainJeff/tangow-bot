@@ -1,4 +1,4 @@
-import type { ThreadItem } from "@tangow/contracts";
+import type { MessageBlock, ThreadItem } from "@tangow/contracts";
 
 export type RoutineItem = Extract<ThreadItem, { kind: "routine" }>;
 
@@ -16,6 +16,14 @@ export function routineShownText(
   finished: { status?: string; result?: string } | null | undefined,
 ): string | null {
   return (finished?.status === "completed" && finished.result?.trim()) || null;
+}
+
+/** The shown text as the message block a reply or a reaction to the routine's message targets. */
+export function routineResultBlocks(
+  finished: Parameters<typeof routineShownText>[0],
+): MessageBlock[] {
+  const text = routineShownText(finished);
+  return text ? [{ kind: "text", text }] : [];
 }
 
 export function routineRoles(items: readonly ThreadItem[]): {

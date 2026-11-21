@@ -27,6 +27,7 @@ import {
   groupLeadBotId,
   isActive,
   resolveGroupTargetBotIds,
+  routineResultBlocks,
   runFailureError,
 } from "@tangow/core";
 import type { DraftLeft } from "@tangow/db";
@@ -48,6 +49,7 @@ import {
   progressSinceLastEntry,
   resumeAskWithComposerTextInTransaction,
   runsOfMessage,
+  sessionEntryFromRow,
   sharedBotThread,
   type ThreadEvents,
   threadEntryByNonce,
@@ -176,7 +178,7 @@ function isPeerRunRow(run: { trigger: string }): boolean {
   return run.trigger === "bot_message";
 }
 
-/** The blocks of the message a reply targets in the thread: a person's, or a bot's whole run. */
+/** The blocks of the message a reply targets in the thread: a person's, a bot's whole run, or a routine's result. */
 async function repliedBlocks(
   tx: Prisma.TransactionClient,
   threadId: string,
@@ -189,11 +191,18 @@ async function repliedBlocks(
   if (!target) return null;
   if (!target.runId) return blocksOf(target);
   const run = await tx.sessionEntry.findMany({
-    where: { sessionId: target.sessionId, runId: target.runId, type: "assistant.text" },
+    where: {
+      sessionId: target.sessionId,
+      runId: target.runId,
+      type: { in: ["assistant.text", "routine.finished"] },
+    },
     orderBy: { seq: "asc" },
-    select: { payload: true },
   });
-  return run.flatMap(blocksOf);
+  return run.flatMap((row) => {
+    if (row.type !== "routine.finished") return blocksOf(row);
+    const entry = sessionEntryFromRow(row);
+    return entry.type === "routine.finished" ? routineResultBlocks(entry.payload) : [];
+  });
 }
 
 function quoteAppearsInBlocks(quote: string, blocks: MessageBlock[]): boolean {

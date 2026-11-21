@@ -13,6 +13,7 @@ import { isInferenceEntry, needsThePerson, REPLY_QUOTE_MAX_LENGTH } from "@tango
 import { blocksToAgentHistoryText } from "../attachments.js";
 import { escapeDirectoryField, escapePromptData, renderBotMessageBlock } from "../bot-messages.js";
 import { messageReaction } from "../message-reactions.js";
+import { routineResultBlocks } from "../routine-roles.js";
 import type { ChildSession } from "./child-sessions.js";
 import { childSessionsOf } from "./child-sessions.js";
 import { foldRuns, toolAnswers } from "./run-fold.js";
@@ -379,7 +380,7 @@ function triggerContext(trigger: SessionRunTrigger): string | undefined {
 /**
  * What a user message can reply to: an earlier user message, a bot's words outside a run, or a
  * bot's run by any of its entries, so a reply to the run's message or an answer to its question
- * quotes the whole run.
+ * quotes the whole run. A routine's run is its final words, which the thread shows as its message.
  */
 function replyTargets(
   chain: readonly SessionEntry[],
@@ -389,6 +390,10 @@ function replyTargets(
   for (const segment of segments) {
     if (segment.type !== "run.message") continue;
     runs.set(segment.runId, [...(runs.get(segment.runId) ?? []), ...segment.blocks]);
+  }
+  for (const entry of chain) {
+    const blocks = entry.type === "routine.finished" ? routineResultBlocks(entry.payload) : [];
+    if (blocks.length > 0 && entry.runId !== undefined) runs.set(entry.runId, blocks);
   }
   const targets = new Map<string, ReplyTarget>();
   for (const entry of chain) {
