@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 2026-11-21
+
+#### Fixed
+
+- A routine's result in a conversation now has a bot message's actions on web, desktop and iOS (time, reply, react, copy, read aloud), and the bot knows which result you reply or react to.
+
 ### 2026-11-20
 
 #### Added
