@@ -53,6 +53,7 @@ import {
   type RoutineItem,
   resolveComposerSendPlan,
   routineCardSettlement,
+  routineResultMessage,
   SLASH_ACTIONS,
   type SlashActionId,
   selectedAskActionLabel,
@@ -2110,6 +2111,8 @@ function Thread() {
       new WeakMap<MobileMessage, { messageId: EntryId | undefined; props: MessageActionProps }>(),
     [locale, viewerUserId, creatorId, sharedHistory],
   );
+  // One message per routine item, so its action props stay cached and `ItemRow` skips re-renders.
+  const routineMessages = useMemo(() => new WeakMap<RoutineItem, MobileMessage>(), []);
   function messageActionProps(
     message: MobileMessage,
     messageId: EntryId | undefined,
@@ -2170,7 +2173,8 @@ function Thread() {
     const row = rowId === undefined ? undefined : rows[rowIndex.get(rowId) ?? -1];
     const item =
       row?.imageStack?.front.messageId === entryId ? row.imageStack.front.item : row?.item;
-    return item?.kind === "message" ? item : undefined;
+    if (item?.kind === "message") return item;
+    return row ? routineMessage(row) : undefined;
   }
 
   function renderRow(row: ThreadRow, options?: { enableJump?: boolean; previous?: ThreadRow }) {
@@ -2227,22 +2231,70 @@ function Thread() {
           {item.kind === "message" ? (
             renderMessage(row, item, isNew, options?.enableJump)
           ) : (
-            <ItemRow
-              row={row}
-              botId={botId ?? snap?.members?.[0]?.botId ?? ""}
-              groupId={groupId}
-              botName={displayName}
-              bots={mentionBots}
-              members={snap?.members}
-              isNew={isNew}
-              canAnswer={item.id === answerableAskMessageId}
-              viewerUserId={viewerUserId}
-              onAnswer={answerMessage}
-            />
+            <>
+              <ItemRow
+                row={row}
+                botId={botId ?? snap?.members?.[0]?.botId ?? ""}
+                groupId={groupId}
+                botName={displayName}
+                bots={mentionBots}
+                members={snap?.members}
+                isNew={isNew}
+                canAnswer={item.id === answerableAskMessageId}
+                viewerUserId={viewerUserId}
+                onAnswer={answerMessage}
+                actionProps={routineActionProps(row)}
+              />
+              {item.kind === "routine" && row.routine?.kind === "message"
+                ? renderReactions(row, inGroup ? FRAMED_INDENT : 0, false)
+                : null}
+            </>
           )}
         </View>
       </View>
     );
+  }
+
+  function renderReactions(row: ThreadRow, marginStart: number, mine: boolean) {
+    if (row.reactions.length === 0) return null;
+    return (
+      <View
+        style={{
+          flexDirection: "row",
+          flexWrap: "wrap",
+          gap: 4,
+          marginTop: 6,
+          marginStart,
+          justifyContent: mine ? "flex-end" : "flex-start",
+        }}
+      >
+        {row.reactions.map(([emoji, count]) => (
+          <ReactionPill
+            key={emoji}
+            emoji={emoji}
+            count={count}
+            pop={poppedReactionKeys.has(reactionPopKey(row.item.id, emoji))}
+          />
+        ))}
+      </View>
+    );
+  }
+
+  /** A routine's shown result acts as the bot message it reads as: the run's start entry is its target. */
+  function routineActionProps(row: ThreadRow): MessageActionProps | undefined {
+    const message = routineMessage(row);
+    return message && messageActionProps(message, row.messageId ?? message.id);
+  }
+
+  function routineMessage(row: ThreadRow): MobileMessage | undefined {
+    const { item, routine } = row;
+    if (item.kind !== "routine" || routine?.kind !== "message") return undefined;
+    let message = routineMessages.get(item);
+    if (!message) {
+      message = routineResultMessage(item, routine.text);
+      routineMessages.set(item, message);
+    }
+    return message;
   }
 
   function renderMessage(
@@ -2257,7 +2309,6 @@ function Thread() {
     const frontActionProps = stack
       ? messageActionProps(stack.front.item, stack.front.messageId)
       : actionProps;
-    const messageReactions = row.reactions;
     const drawnBlocks = visibleMessageBlocks(message.blocks, showSteps);
     const chrome: MessageChrome = isAsideOnlyMessage(drawnBlocks) ? "aside" : "row";
     const authorBotId = message.role === "bot" ? message.botId : botId;
@@ -2464,27 +2515,7 @@ function Thread() {
         ) : (
           <View>{bubble}</View>
         )}
-        {messageReactions.length > 0 ? (
-          <View
-            style={{
-              flexDirection: "row",
-              flexWrap: "wrap",
-              gap: 4,
-              marginTop: 6,
-              marginStart: chrome === "row" && !mine && inGroup ? FRAMED_INDENT : 0,
-              justifyContent: mine ? "flex-end" : "flex-start",
-            }}
-          >
-            {messageReactions.map(([emoji, count]) => (
-              <ReactionPill
-                key={emoji}
-                emoji={emoji}
-                count={count}
-                pop={poppedReactionKeys.has(reactionPopKey(message.id, emoji))}
-              />
-            ))}
-          </View>
-        ) : null}
+        {renderReactions(row, chrome === "row" && !mine && inGroup ? FRAMED_INDENT : 0, mine)}
       </>
     );
   }
@@ -4234,6 +4265,7 @@ const ItemRow = memo(function ItemRow({
   canAnswer,
   viewerUserId,
   onAnswer,
+  actionProps,
   readOnly = false,
 }: {
   row: ThreadRow;
@@ -4246,6 +4278,8 @@ const ItemRow = memo(function ItemRow({
   canAnswer: boolean;
   viewerUserId?: string;
   onAnswer?: (item: { id: string }, answer: string, edits?: CardEdits) => Promise<void>;
+  /** The actions of a routine's shown result; a row without them keeps its entrance only. */
+  actionProps?: MessageActionProps;
   readOnly?: boolean;
 }) {
   const tokens = mobileTokens();
@@ -4312,6 +4346,7 @@ const ItemRow = memo(function ItemRow({
                   botId={botId}
                   isNew={isNew}
                   mono={!inGroup}
+                  actionProps={actionProps}
                 />
               </MessageRow>
             </>
@@ -4893,6 +4928,7 @@ function RoutineBubble({
   botId,
   isNew,
   mono,
+  actionProps,
 }: {
   item: RoutineItem;
   text: string;
@@ -4900,6 +4936,7 @@ function RoutineBubble({
   botId: string | undefined;
   isNew: boolean;
   mono: boolean;
+  actionProps: MessageActionProps | undefined;
 }) {
   const tokens = mobileTokens();
   const colorScheme = useResolvedAppearance();
@@ -4923,11 +4960,23 @@ function RoutineBubble({
   const card = linkPreviewCardOf({ role: "bot", blocks: links });
   // Without the line that is only the card's link, as a message's bubble draws it.
   const shown = card ? textWithoutPreviewedLinkLine(text, card.url) : text;
+  const press = actionProps ?? NO_ACTIONS;
   return (
-    <MessageArrival isNew={isNew}>
-      <View style={{ gap: 4 }}>
-        {shown ? (
-          <BotBubble mono={mono}>
+    <View style={{ gap: 4 }}>
+      {shown ? (
+        <AnimatedMessageBubble
+          variant="bot"
+          isNew={isNew}
+          entranceOnly={!actionProps}
+          onLongPress={press.onLongPress}
+          accessibilityActions={press.accessibilityActions}
+          onAccessibilityAction={press.onAccessibilityAction}
+        >
+          <BotBubble
+            mono={mono}
+            accessibilityActions={press.accessibilityActions}
+            onAccessibilityAction={press.onAccessibilityAction}
+          >
             <ChatMarkdown
               allowImages={false}
               palette={tokens}
@@ -4938,10 +4987,22 @@ function RoutineBubble({
               {truncateMarkdownForRender(shown)}
             </ChatMarkdown>
           </BotBubble>
-        ) : null}
-        {card ? <LinkPreviewCard card={card} target={target} mono={mono} align="start" /> : null}
-      </View>
-    </MessageArrival>
+        </AnimatedMessageBubble>
+      ) : null}
+      {card ? (
+        <MessageArrival isNew={isNew}>
+          <LinkPreviewCard
+            card={card}
+            target={target}
+            mono={mono}
+            align="start"
+            onLongPress={press.onLongPress}
+            accessibilityActions={press.accessibilityActions}
+            onAccessibilityAction={press.onAccessibilityAction}
+          />
+        </MessageArrival>
+      ) : null}
+    </View>
   );
 }
 
