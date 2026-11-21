@@ -26,6 +26,22 @@ export function routineResultBlocks(
   return text ? [{ kind: "text", text }] : [];
 }
 
+/** A routine's shown result as the bot message it reads as, keyed by the routine's own entry. */
+export function routineResultMessage(
+  item: RoutineItem,
+  text: string,
+): Extract<ThreadItem, { kind: "message" }> {
+  return {
+    kind: "message",
+    role: "bot",
+    id: item.id,
+    ts: item.ts,
+    botId: item.botId,
+    ...(item.runId ? { runId: item.runId } : {}),
+    blocks: [{ kind: "text", text }],
+  };
+}
+
 export function routineRoles(items: readonly ThreadItem[]): {
   roles: ReadonlyMap<string, RoutineRole>;
   hidden: ReadonlySet<string>;

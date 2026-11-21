@@ -2,7 +2,7 @@ import { i18n } from "@lingui/core";
 import { useLingui } from "@lingui/react/macro";
 import type { MessageReaction, ThreadItem } from "@tangow/contracts";
 import type { SkillSourceBlock, ThreadView } from "@tangow/core";
-import { isToolActivityBlock } from "@tangow/core";
+import { isToolActivityBlock, routineResultMessage } from "@tangow/core";
 import type { GroupAvatarMember } from "@tangow/ui-web";
 import { cn } from "@tangow/ui-web";
 import type { RefObject } from "react";
@@ -40,19 +40,12 @@ function actionTarget(item: ThreadItem): MessageItem | null {
   };
 }
 
-/** A routine's result takes the actions of a bot message, keyed by the routine's own entry. */
+/** A routine's result takes the actions of a bot message. */
 function routineTarget(row: ThreadView["rows"][number]): MessageItem | null {
   const { item, routine } = row;
-  if (item.kind !== "routine" || routine?.kind !== "message") return null;
-  return {
-    kind: "message",
-    role: "bot",
-    id: item.id,
-    ts: item.ts,
-    botId: item.botId,
-    ...(item.runId ? { runId: item.runId } : {}),
-    blocks: [{ kind: "text", text: routine.text }],
-  };
+  return item.kind === "routine" && routine?.kind === "message"
+    ? routineResultMessage(item, routine.text)
+    : null;
 }
 
 /**
