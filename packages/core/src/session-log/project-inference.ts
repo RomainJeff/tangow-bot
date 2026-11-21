@@ -380,7 +380,7 @@ function triggerContext(trigger: SessionRunTrigger): string | undefined {
 /**
  * What a user message can reply to: an earlier user message, a bot's words outside a run, or a
  * bot's run by any of its entries, so a reply to the run's message or an answer to its question
- * quotes the whole run. A routine's run is its final words, which the thread shows as its message.
+ * quotes the whole run. A routine's own entries quote its final words, which the thread shows as its message.
  */
 function replyTargets(
   chain: readonly SessionEntry[],
@@ -391,9 +391,10 @@ function replyTargets(
     if (segment.type !== "run.message") continue;
     runs.set(segment.runId, [...(runs.get(segment.runId) ?? []), ...segment.blocks]);
   }
+  const results = new Map<string, MessageBlock[]>();
   for (const entry of chain) {
     const blocks = entry.type === "routine.finished" ? routineResultBlocks(entry.payload) : [];
-    if (blocks.length > 0 && entry.runId !== undefined) runs.set(entry.runId, blocks);
+    if (blocks.length > 0 && entry.runId !== undefined) results.set(entry.runId, blocks);
   }
   const targets = new Map<string, ReplyTarget>();
   for (const entry of chain) {
@@ -402,7 +403,9 @@ function replyTargets(
       targets.set(entry.id, { role, blocks: entry.payload.blocks });
       continue;
     }
-    const blocks = entry.runId === undefined ? undefined : runs.get(entry.runId);
+    if (entry.runId === undefined) continue;
+    const routine = entry.type === "routine.started" || entry.type === "routine.finished";
+    const blocks = (routine ? results : runs).get(entry.runId);
     if (blocks) targets.set(entry.id, { role: "bot", blocks });
   }
   return targets;
